@@ -1,0 +1,33 @@
+{
+  "name": "ai-hub-apps",
+  "version": "1.0.0",
+  "description": "AI Hub Applications Platform",
+  "type": "module",
+  "scripts": {
+    "server": "cd server && node server.js",
+    "client": "cd client && npm run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "install:all": "npm install && cd client && npm install",
+    "build": "cd client && npm run build",
+    "start": "cd server && node server.js"
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "chatbot",
+    "applications"
+  ],
+  "dependencies": {
+    "concurrently": "^8.0.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

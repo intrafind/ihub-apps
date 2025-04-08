@@ -1,0 +1,96 @@
+[
+  {
+    "id": "chat",
+    "name": "AI Chat",
+    "description": "General purpose AI chatbot assistant",
+    "color": "#4F46E5",
+    "icon": "chat-bubbles",
+    "system": "You are a helpful AI assistant. Answer the user's questions accurately and concisely.",
+    "tokenLimit": 4000,
+    "preferredModel": "gpt-3.5-turbo",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.7
+  },
+  {
+    "id": "translator",
+    "name": "Translator",
+    "description": "Translate text between different languages",
+    "color": "#0EA5E9",
+    "icon": "globe",
+    "system": "You are a helpful translation assistant. Translate the text to the requested language, maintaining the original meaning and tone. If no language is specified, ask which language to translate to.",
+    "tokenLimit": 4000,
+    "preferredModel": "gemini-1.5-flash",
+    "preferredOutputFormat": "text",
+    "preferredStyle": "keep",
+    "preferredTemperature": 0.3,
+    "prompt": "Translate the following text to {{language}}:\n\n{{content}}",
+    "variables": [
+      {
+        "name": "language",
+        "label": "Target Language",
+        "type": "string",
+        "description": "Select the target language for translation.",
+        "defaultValue": "English",
+        "required": true,
+        "predefinedValues": [
+          {"label": "English", "value": "English"},
+          {"label": "Spanish", "value": "Spanish"},
+          {"label": "French", "value": "French"},
+          {"label": "German", "value": "German"},
+          {"label": "Chinese", "value": "Chinese"},
+          {"label": "Japanese", "value": "Japanese"}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "summarizer",
+    "name": "Content Summarizer",
+    "description": "Summarize long documents and articles",
+    "color": "#F59E0B",
+    "icon": "document-text",
+    "system": "You are a summarization assistant. Provide a concise summary of the content while maintaining all key information.",
+    "tokenLimit": 8000,
+    "preferredModel": "gpt-4",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.5,
+    "prompt": "Please {{action}} the following content:\n\n{{content}}",
+    "variables": [
+      {
+        "name": "action",
+        "label": "Action",
+        "type": "string",
+        "predefinedValues": [
+          {"label": "Summarize", "value": "summarize"},
+          {"label": "Extract key facts", "value": "extract the key facts from"},
+          {"label": "Highlight action items", "value": "highlight the action items in"},
+          {"label": "List decisions", "value": "list all decisions mentioned in"},
+          {"label": "Summarize and recommend", "value": "summarize and provide recommendations based on"}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "custom",
+    "name": "Custom Prompt",
+    "description": "Create your own custom prompts",
+    "color": "#EC4899",
+    "icon": "sparkles",
+    "system": "{{system}}",
+    "tokenLimit": 8000,
+    "preferredModel": "gpt-4",
+    "preferredStyle": "normal",
+    "preferredOutputFormat": "markdown",
+    "preferredTemperature": 0.8,
+    "prompt": "{{content}}",
+    "variables": [
+      {
+        "name": "system",
+        "label": "System Prompt",
+        "type": "string"
+      }
+    ]
+  }
+] 
