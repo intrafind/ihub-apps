@@ -51,8 +51,8 @@ const GoogleAdapter = {
     
     // Build Gemini API URL with API key
     const url = stream 
-      ? `${model.url}?key=${apiKey}`
-      : `https://generativelanguage.googleapis.com/v1beta/models/${model.modelId}:generateContent?key=${apiKey}`;
+      ? `${model.url}?alt=sse&key=${apiKey}`
+      : `https://generativelanguage.googleapis.com/v1beta/models/${model.modelId}:streamGenerateContent?alt=sse&key=${apiKey}`;
     
     // Build request body
     const requestBody = {
@@ -83,71 +83,57 @@ const GoogleAdapter = {
   /**
    * Process streaming response from Gemini
    */
-  processResponseBuffer(buffer, res) {
+  processResponseBuffer(buffer) {
     console.log('Processing buffer:', buffer);
     try {
-      // The Gemini response format in stream mode is a JSON array with multiple objects
+      // Initialize result object
+      const result = {
+        content: [],
+        complete: false,
+        error: false,
+        errorMessage: null
+      };
       
-      // Skip processing empty buffers or just commas (array separators)
-      if (!buffer.trim() || buffer.trim() === ',') {
-        return;
-      }
-      
-      // Clean up the buffer - handle the specific format Gemini returns
-      let cleanBuffer = buffer;
-      
-      // Handle the case where we get the opening bracket of the array
-      if (cleanBuffer.trim() === '[') {
-        return; // Skip just the array opening
-      }
-      
-      // Handle the case where we get the closing bracket of the array
-      if (cleanBuffer.trim() === ']') {
-        // This is the end of the response, send the done event
-        console.log('End of Gemini response (closing bracket found)');
-        sendSSE(res, 'done', {});
-        return;
-      }
-      
-      // Try to parse the buffer as JSON
-      let jsonObject;
-      try {
-        // Strip trailing commas which would make the JSON invalid
-        if (cleanBuffer.trim().endsWith(',')) {
-          cleanBuffer = cleanBuffer.trim().slice(0, -1);
+      // If the buffer is just whitespace, opening/closing bracket or a comma, ignore it
+      if (!buffer.trim() || buffer.trim() === '[' || buffer.trim() === ']' || buffer.trim() === ',') {
+        // If it's a closing bracket, signal completion
+        if (buffer.trim() === ']') {
+          console.log('End of Gemini response detected (closing bracket)');
+          result.complete = true;
         }
-        
-        jsonObject = JSON.parse(cleanBuffer);
-      } catch (parseError) {
-        console.log(`JSON parse error: ${parseError.message}`);
-        // If we can't parse as JSON, check if it might be part of a chunked response
-        return;
+        return result;
       }
       
-      // Process the JSON object to extract any content
-      if (jsonObject && jsonObject.candidates && jsonObject.candidates.length > 0) {
-        const candidate = jsonObject.candidates[0];
-        
-        if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-          // Extract the text from each part
-          for (const part of candidate.content.parts) {
-            if (part.text) {
-              console.log('Sending chunk to client:', part.text);
-              sendSSE(res, 'chunk', { content: part.text });
-            }
-          }
+      // Extract text content using regex
+      const textMatches = buffer.match(/"text":\s*"([^"]*)"/g);
+      if (textMatches) {
+        for (const match of textMatches) {
+          // Extract the actual text content from the match
+          const textContent = match.replace(/"text":\s*"/, '').replace(/"$/, '');
+          const cleanText = textContent.replace(/\\n/g, '\n').replace(/\\"/g, '"');
           
-          // If we have a finish reason, this is the last chunk
-          if (candidate.finishReason === 'STOP') {
-            console.log('Response complete, finishReason:', candidate.finishReason);
-            // Don't send the done event here, as we'll get the closing bracket later
+          if (cleanText.trim()) {
+            console.log('Extracted text:', cleanText);
+            result.content.push(cleanText);
           }
         }
       }
+      
+      // Check if we have a finishReason in this buffer, which indicates completion
+      const isComplete = buffer.includes('"finishReason": "STOP"') || buffer.includes('"finishReason":"STOP"');
+      if (isComplete) {
+        result.complete = true;
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error processing Gemini response:', error);
-      // Send error to client so they know something went wrong
-      sendSSE(res, 'error', { message: `Error processing model response: ${error.message}` });
+      return {
+        content: [],
+        complete: true,
+        error: true,
+        errorMessage: `Error processing model response: ${error.message}`
+      };
     }
   }
 };

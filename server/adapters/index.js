@@ -37,11 +37,11 @@ export function createCompletionRequest(model, messages, apiKey, options = {}) {
  * Process a streaming response from the model
  * @param {string} provider - The provider name
  * @param {string} buffer - The response buffer to process
- * @param {Object} res - The Express response object to send chunks to
+ * @returns {Object} Result containing content and completion status
  */
-export function processResponseBuffer(provider, buffer, res) {
+export function processResponseBuffer(provider, buffer) {
   const adapter = getAdapter(provider);
-  adapter.processResponseBuffer(buffer, res);
+  return adapter.processResponseBuffer(buffer);
 }
 
 /**
@@ -53,4 +53,4 @@ export function processResponseBuffer(provider, buffer, res) {
 export function formatMessages(provider, messages) {
   const adapter = getAdapter(provider);
   return adapter.formatMessages(messages);
-} 
+}

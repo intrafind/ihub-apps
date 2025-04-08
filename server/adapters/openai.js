@@ -37,11 +37,24 @@ const OpenAIAdapter = {
   /**
    * Process streaming response from OpenAI
    */
-  processResponseBuffer(buffer, res) {
+  processResponseBuffer(buffer) {
+    const result = {
+      content: [],
+      complete: false,
+      error: false,
+      errorMessage: null
+    };
+    
     const lines = buffer.split('\n');
     
     for (const line of lines) {
-      if (line.trim() === '' || line.trim() === 'data: [DONE]') continue;
+      // Check for completion signal
+      if (line.trim() === 'data: [DONE]') {
+        result.complete = true;
+        continue;
+      }
+      
+      if (line.trim() === '') continue;
       
       try {
         // Extract the JSON data part from "data: {json}"
@@ -51,13 +64,22 @@ const OpenAIAdapter = {
         const data = JSON.parse(dataMatch[1]);
         
         if (data.choices && data.choices[0]?.delta?.content) {
-          sendSSE(res, 'chunk', { content: data.choices[0].delta.content });
+          result.content.push(data.choices[0].delta.content);
+        }
+        
+        // Check if this is the last chunk
+        if (data.choices && data.choices[0]?.finish_reason) {
+          result.complete = true;
         }
       } catch (error) {
         console.error('Error parsing OpenAI response chunk:', error);
+        result.error = true;
+        result.errorMessage = `Error parsing OpenAI response: ${error.message}`;
       }
     }
+    
+    return result;
   }
 };
 
-export default OpenAIAdapter; 
+export default OpenAIAdapter;

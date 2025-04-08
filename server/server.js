@@ -472,29 +472,30 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
           
           // Decode the chunk and add to buffer
           const chunk = decoder.decode(value, { stream: true });
-          buffer += chunk;
           
-          // For Gemini, we need to handle the special format: JSON array with objects
-          if (model.provider === 'google') {
-            // For Gemini, process as we receive data but maintain the buffer
-            processResponseBuffer(model.provider, chunk, clientRes);
-          } else {
-            // For other providers, process and clear buffer as before
-            processResponseBuffer(model.provider, buffer, clientRes);
-            buffer = ''; // Only clear buffer for non-Gemini providers
+          // Process the chunk with the appropriate adapter
+          // For Google/Gemini, process each chunk individually
+          const result = processResponseBuffer(model.provider, chunk);
+          console.log(`Processing chunk: ${chunk} => ${JSON.stringify(result ? result : {})}`);
+          
+          // Send any extracted content to the client
+          if (result && result.content && result.content.length > 0) {
+            for (const textContent of result.content) {
+              sendSSE(clientRes, 'chunk', { content: textContent });
+            }
           }
-        }
-        
-        // Process any remaining data in the buffer at the end
-        if (buffer.length > 0) {
-          console.log('Processing final buffer:', buffer);
-          processResponseBuffer(model.provider, buffer, clientRes);
-        }
-        
-        // Send completion event only for non-Google providers
-        // For Google/Gemini, the adapter will send the done event when it detects the closing bracket
-        if (model.provider !== 'google') {
-          sendSSE(clientRes, 'done', {});
+          
+          // Handle errors if any occurred during processing
+          if (result && result.error) {
+            sendSSE(clientRes, 'error', { message: result.errorMessage || 'Error processing response' });
+            break;
+          }
+          
+          // Check for completion
+          if (result && result.complete) {
+            sendSSE(clientRes, 'done', {});
+            break; // Stop processing more chunks
+          }
         }
       } catch (error) {
         console.error('Error processing response stream:', error);

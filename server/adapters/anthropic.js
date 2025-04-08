@@ -38,11 +38,24 @@ const AnthropicAdapter = {
   /**
    * Process streaming response from Anthropic
    */
-  processResponseBuffer(buffer, res) {
+  processResponseBuffer(buffer) {
+    const result = {
+      content: [],
+      complete: false,
+      error: false,
+      errorMessage: null
+    };
+    
     const lines = buffer.split('\n\n');
     
     for (const line of lines) {
-      if (line.trim() === '' || line.includes('data: [DONE]')) continue;
+      // Check for completion signal
+      if (line.includes('data: [DONE]')) {
+        result.complete = true;
+        continue;
+      }
+      
+      if (line.trim() === '') continue;
       
       try {
         // Extract the JSON data part from "data: {json}"
@@ -53,17 +66,26 @@ const AnthropicAdapter = {
         
         // Check if this is a content block with text
         if (data.type === 'content_block_delta' && data.delta && data.delta.text) {
-          sendSSE(res, 'chunk', { content: data.delta.text });
+          result.content.push(data.delta.text);
         }
         // Check for message delta (different format in some Claude API versions)
         else if (data.type === 'message_delta' && data.delta && data.delta.content) {
-          sendSSE(res, 'chunk', { content: data.delta.content });
+          result.content.push(data.delta.content);
+        }
+        
+        // Check for completion signal
+        if (data.type === 'message_stop') {
+          result.complete = true;
         }
       } catch (parseError) {
         console.error('Error parsing Claude response chunk:', parseError);
+        result.error = true;
+        result.errorMessage = `Error parsing Claude response: ${parseError.message}`;
       }
     }
+    
+    return result;
   }
 };
 
-export default AnthropicAdapter; 
+export default AnthropicAdapter;
