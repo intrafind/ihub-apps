@@ -52,11 +52,12 @@ const AppChat = () => {
         // Set default style
         setSelectedStyle(appData.preferredStyle || 'normal');
         
-        // Initialize variables object from app.variables
+        // Initialize variables object from app.variables with default values
         if (appData.variables) {
           const initialVars = {};
           appData.variables.forEach(variable => {
-            initialVars[variable.name] = '';
+            // Set default value if provided in config, otherwise empty string
+            initialVars[variable.name] = variable.defaultValue || '';
           });
           setVariables(initialVars);
         }
@@ -98,7 +99,21 @@ const AppChat = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Check if we have content to send
     if (!input.trim() && Object.keys(variables).length === 0) return;
+    
+    // Validate that all required variables have values
+    if (app?.variables) {
+      const missingRequiredVars = app.variables
+        .filter(v => v.required)
+        .filter(v => !variables[v.name]);
+      
+      if (missingRequiredVars.length > 0) {
+        // Show error for missing required fields
+        setError(`Please fill in all required fields: ${missingRequiredVars.map(v => v.label).join(', ')}`);
+        return;
+      }
+    }
     
     try {
       setProcessing(true);
@@ -107,11 +122,15 @@ const AppChat = () => {
       
       // If this is a custom prompt with variables, process it
       let userMessage = input;
+      let userVariables = {};
       
       if (app && app.prompt) {
         // Replace variables in the prompt template
         userMessage = app.prompt;
         let processedVariables = {...variables};
+        
+        // Store the variables for display
+        userVariables = {...variables};
         
         // If the app uses a content variable but it's not explicitly defined in variables,
         // use the input box text as the content
@@ -125,13 +144,16 @@ const AppChat = () => {
         }
       }
       
-      // Add user message to chat
-      const newUserMessage = { role: 'user', content: userMessage };
+      // Add user message to chat with variables for context
+      const newUserMessage = { 
+        role: 'user', 
+        content: userMessage,
+        variables: userVariables // Store variables with the message
+      };
       setMessages(prev => [...prev, newUserMessage]);
       
-      // Clear input
+      // Clear input field but keep variable values - don't reset them to defaults
       setInput('');
-      setVariables({});
       
       // Need to manually add the message since we're updating state
       const updatedMessages = [...messages, newUserMessage];
@@ -371,8 +393,8 @@ const AppChat = () => {
         )}
       </div>
       
-      {/* Variables Form */}
-      {app?.variables && app.variables.length > 0 && !messages.length && (
+      {/* Variables Form - Always visible if app has variables */}
+      {app?.variables && app.variables.length > 0 && (
         <div className="mb-4 p-4 bg-gray-50 rounded-lg">
           <h3 className="font-medium mb-3">Input Parameters</h3>
           <div className="space-y-3">
@@ -380,6 +402,7 @@ const AppChat = () => {
               <div key={variable.name} className="flex flex-col">
                 <label className="mb-1 text-sm font-medium text-gray-700">
                   {variable.label}
+                  {variable.required && <span className="text-red-500 ml-1">*</span>}
                 </label>
                 {variable.predefinedValues ? (
                   <select
@@ -389,6 +412,7 @@ const AppChat = () => {
                       [variable.name]: e.target.value
                     })}
                     className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
+                    required={variable.required}
                   >
                     <option value="">Select {variable.label}</option>
                     {variable.predefinedValues.map((option) => (
@@ -408,6 +432,7 @@ const AppChat = () => {
                       rows={4}
                       className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
                       placeholder={`Enter ${variable.label.toLowerCase()}`}
+                      required={variable.required}
                     />
                   ) : (
                     <input
@@ -419,6 +444,7 @@ const AppChat = () => {
                       })}
                       className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
                       placeholder={`Enter ${variable.label.toLowerCase()}`}
+                      required={variable.required}
                     />
                   )
                 )}

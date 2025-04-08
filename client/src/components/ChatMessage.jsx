@@ -6,6 +6,7 @@ import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 const ChatMessage = ({ message, outputFormat = 'markdown' }) => {
   const isUser = message.role === 'user';
   const isError = message.error === true;
+  const hasVariables = message.variables && Object.keys(message.variables).length > 0;
   
   // Render the message content based on the output format
   const renderContent = () => {
@@ -60,6 +61,23 @@ const ChatMessage = ({ message, outputFormat = 'markdown' }) => {
     return <div>{message.content}</div>;
   };
 
+  // Render variables if they exist (like target language)
+  const renderVariables = () => {
+    if (!hasVariables) return null;
+    
+    return (
+      <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          {Object.entries(message.variables).map(([key, value]) => (
+            <div key={key} className="inline-block mr-3">
+              <span className="font-medium">{key}:</span> {value}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div 
@@ -72,6 +90,7 @@ const ChatMessage = ({ message, outputFormat = 'markdown' }) => {
         }`}
       >
         {renderContent()}
+        {isUser && hasVariables && renderVariables()}
       </div>
     </div>
   );
