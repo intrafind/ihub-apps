@@ -320,10 +320,24 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       // Copy messages to avoid modifying the original
       let llmMessages = [...messages];
       
+      // Check for variables from the most recent message that might need to be applied to system prompt
+      let userVariables = {};
+      const lastUserMessage = llmMessages.findLast(msg => msg.role === 'user');
+      if (lastUserMessage && lastUserMessage.variables) {
+        userVariables = lastUserMessage.variables;
+      }
+      
       // Apply prompt template if the app has one and there's no system message
       if (!llmMessages.some(msg => msg.role === 'system')) {
         // Add application system prompt with style modifications if applicable
         let systemPrompt = app.system || '';
+        
+        // Replace variable placeholders in the system prompt
+        if (Object.keys(userVariables).length > 0) {
+          for (const [key, value] of Object.entries(userVariables)) {
+            systemPrompt = systemPrompt.replace(`{{${key}}}`, value || '');
+          }
+        }
         
         // Apply style modifications if specified
         if (style) {
@@ -407,10 +421,24 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     // Copy messages to avoid modifying the original
     let llmMessages = [...messages];
     
+    // Check for variables from the most recent message that might need to be applied to system prompt
+    let userVariables = {};
+    const lastUserMessage = llmMessages.findLast(msg => msg.role === 'user');
+    if (lastUserMessage && lastUserMessage.variables) {
+      userVariables = lastUserMessage.variables;
+    }
+    
     // Apply prompt template if the app has one and there's no system message
     if (!llmMessages.some(msg => msg.role === 'system')) {
       // Add application system prompt with style modifications if applicable
       let systemPrompt = app.system || '';
+      
+      // Replace variable placeholders in the system prompt
+      if (Object.keys(userVariables).length > 0) {
+        for (const [key, value] of Object.entries(userVariables)) {
+          systemPrompt = systemPrompt.replace(`{{${key}}}`, value || '');
+        }
+      }
       
       // Apply style modifications if specified
       if (style) {
