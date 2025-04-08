@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { fetchDisclaimer } from '../api/api';
+import { useHeaderColor } from './HeaderColorContext';
 
 const Layout = () => {
   const [disclaimer, setDisclaimer] = useState(null);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const { headerColor } = useHeaderColor();
 
   useEffect(() => {
     const loadDisclaimer = async () => {
@@ -34,8 +36,8 @@ const Layout = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-indigo-600 shadow-md">
+      {/* Header with dynamic background color */}
+      <header style={{ backgroundColor: headerColor }} className="shadow-md transition-colors duration-300">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <Link to="/" className="text-white text-2xl font-bold flex items-center">
             <svg className="w-8 h-8 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -46,12 +48,12 @@ const Layout = () => {
           <nav>
             <ul className="flex space-x-6">
               <li>
-                <Link to="/" className="text-white hover:text-indigo-200">
+                <Link to="/" className="text-white hover:text-opacity-80">
                   Apps
                 </Link>
               </li>
               <li>
-                <Link to="/models/gpt-3.5-turbo" className="text-white hover:text-indigo-200">
+                <Link to="/models/gpt-3.5-turbo" className="text-white hover:text-opacity-80">
                   Direct Chat
                 </Link>
               </li>
@@ -97,4 +99,4 @@ const Layout = () => {
   );
 };
 
-export default Layout; 
+export default Layout;

@@ -5,21 +5,24 @@ import AppsList from './pages/AppsList';
 import AppChat from './pages/AppChat';
 import DirectChat from './pages/DirectChat';
 import NotFound from './pages/NotFound';
+import { HeaderColorProvider } from './components/HeaderColorContext';
 import './App.css';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<AppsList />} />
-          <Route path="apps/:appId" element={<AppChat />} />
-          <Route path="models/:modelId" element={<DirectChat />} />
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
-    </Router>
+    <HeaderColorProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<AppsList />} />
+            <Route path="apps/:appId" element={<AppChat />} />
+            <Route path="models/:modelId" element={<DirectChat />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Routes>
+      </Router>
+    </HeaderColorProvider>
   );
 }
 
-export default App; 
+export default App;

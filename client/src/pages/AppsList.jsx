@@ -2,13 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchApps } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { useHeaderColor } from '../components/HeaderColorContext';
 
 const AppsList = () => {
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { resetHeaderColor } = useHeaderColor();
 
   useEffect(() => {
+    // Reset header color when returning to the apps list
+    resetHeaderColor();
+    
     const loadApps = async () => {
       try {
         setLoading(true);
@@ -24,7 +29,7 @@ const AppsList = () => {
     };
 
     loadApps();
-  }, []);
+  }, [resetHeaderColor]);
 
   if (loading) {
     return <LoadingSpinner message="Loading apps..." />;
@@ -46,7 +51,7 @@ const AppsList = () => {
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-12rem)]">
-      <h1 className="text-3xl font-bold mb-8 text-center">AI Applications</h1>
+      <h1 className="text-3xl font-bold mb-8 text-center">Applications</h1>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 flex-grow">
         {apps.map(app => (

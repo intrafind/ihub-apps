@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { fetchModels, sendDirectModelMessage, fetchModelDetails } from '../api/api';
 import ChatMessage from '../components/ChatMessage';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { useHeaderColor } from '../components/HeaderColorContext';
 
 const DirectChat = () => {
   const { modelId } = useParams();
@@ -19,9 +20,13 @@ const DirectChat = () => {
   const [error, setError] = useState(null);
   const chatContainerRef = useRef(null);
   const messageEndRef = useRef(null);
+  const { resetHeaderColor } = useHeaderColor();
 
   // Fetch model details and models when component mounts
   useEffect(() => {
+    // Reset header color when accessing DirectChat
+    resetHeaderColor();
+    
     const loadData = async () => {
       try {
         const modelsData = await fetchModels();
@@ -47,7 +52,7 @@ const DirectChat = () => {
     };
     
     loadData();
-  }, [modelId]);
+  }, [modelId, resetHeaderColor]);
 
   // Update the selected model when it changes
   useEffect(() => {
