@@ -71,9 +71,9 @@ const AppsList = () => {
                   </div>
                   <h2 className="text-xl font-semibold">{app.name}</h2>
                 </div>
-                <p className="text-gray-600">{app.description}</p>
+                <p className="text-gray-600 line-clamp-2 h-12 overflow-hidden">{app.description}</p>
               </div>
-              <div className="px-6 py-3 bg-gray-50 text-sm">
+              <div className="px-6 py-3 bg-gray-50 text-sm mt-auto">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-500">Model: {app.preferredModel}</span>
                   <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-xs">
