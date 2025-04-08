@@ -115,37 +115,31 @@ const AppChat = () => {
       setProcessing(true);
       setError(null);
 
-      let userMessage = input;
-      let userVariables = {};
-
-      if (app && app.prompt) {
-        userMessage = app.prompt;
-        let processedVariables = { ...variables };
-
-        userVariables = { ...variables };
-
-        if (
-          app.prompt.includes('{{content}}') &&
-          !app.variables?.some((v) => v.name === 'content')
-        ) {
-          processedVariables.content = input;
-        }
-
-        for (const [key, value] of Object.entries(processedVariables)) {
-          userMessage = userMessage.replace(`{{${key}}}`, value || '');
-        }
-      }
-
+      // Store the original user input for display in chat history
+      const originalUserInput = input;
+      
+      // Create a user message that shows just the actual input in the UI
       const newUserMessage = {
         role: 'user',
-        content: userMessage,
-        variables: userVariables,
+        content: originalUserInput,
       };
+      
+      // Add the new user message to the chat history
       setMessages((prev) => [...prev, newUserMessage]);
-
       setInput('');
 
-      const updatedMessages = [...messages, newUserMessage];
+      // For the API call, we send both the original input and the prompt template with variables
+      // This keeps the displayed message clean while providing the server with everything needed
+      const messageForAPI = {
+        role: 'user',
+        content: originalUserInput,
+        // Include the prompt template and variables separately for server-side processing
+        promptTemplate: app?.prompt || null,
+        variables: { ...variables },
+      };
+
+      // Create a copy of messages for the API call that includes our special messageForAPI
+      const messagesForAPI = [...messages, messageForAPI];
 
       const assistantMessageId = Date.now();
       setMessages((prev) => [
@@ -171,7 +165,8 @@ const AppChat = () => {
         console.log('SSE connection established, sending chat message');
 
         try {
-          await sendAppChatMessage(appId, chatId.current, updatedMessages, {
+          // Use the messagesForAPI array which includes the prompt template and variables
+          await sendAppChatMessage(appId, chatId.current, messagesForAPI, {
             modelId: selectedModel,
             style: selectedStyle,
             temperature,

@@ -244,41 +244,6 @@ app.get('/api/styles', async (req, res) => {
     }
   });
 
-// // POST /api/apps/{appId}/chat - Start a new chat session
-// app.post('/api/apps/:appId/chat', async (req, res) => {
-//   try {
-//     const { appId } = req.params;
-//     const apps = await loadConfig('apps.json');
-    
-//     if (!apps) {
-//       return res.status(500).json({ error: 'Failed to load apps configuration' });
-//     }
-    
-//     const app = apps.find(a => a.id === appId);
-//     if (!app) {
-//       return res.status(404).json({ error: 'App not found' });
-//     }
-    
-//     // Generate a unique chat ID
-//     const chatId = Date.now().toString();
-    
-//     res.json({ 
-//       chatId, 
-//       appId, 
-//       status: 'created',
-//       app: {
-//         name: app.name,
-//         description: app.description,
-//         system: app.system,
-//         tokenLimit: app.tokenLimit
-//       }
-//     });
-//   } catch (error) {
-//     console.error('Error creating chat session:', error);
-//     res.status(500).json({ error: 'Internal server error' });
-//   }
-// });
-
 // POST /api/apps/{appId}/chat/{chatId} - Process chat messages
 app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
   try {
@@ -318,11 +283,30 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       }
       
       // Copy messages to avoid modifying the original
-      let llmMessages = [...messages];
+      let llmMessages = [...messages].map(msg => {
+        // Process user messages with prompt templates and variables
+        if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
+          // Start with the prompt template or original content if no template
+          let processedContent = msg.promptTemplate || msg.content;
+          
+          // Replace variable placeholders in the prompt
+          if (msg.variables && Object.keys(msg.variables).length > 0) {
+            for (const [key, value] of Object.entries(msg.variables)) {
+              processedContent = processedContent.replace(`{{${key}}}`, value || '');
+            }
+          }
+          
+          // Replace the content with the processed template
+          return { role: 'user', content: processedContent };
+        }
+        
+        // For non-user messages or messages without templates, keep as is
+        return { role: msg.role, content: msg.content };
+      });
       
       // Check for variables from the most recent message that might need to be applied to system prompt
       let userVariables = {};
-      const lastUserMessage = llmMessages.findLast(msg => msg.role === 'user');
+      const lastUserMessage = messages.findLast(msg => msg.role === 'user');
       if (lastUserMessage && lastUserMessage.variables) {
         userVariables = lastUserMessage.variables;
       }
@@ -419,11 +403,30 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     }
     
     // Copy messages to avoid modifying the original
-    let llmMessages = [...messages];
+    let llmMessages = [...messages].map(msg => {
+      // Process user messages with prompt templates and variables
+      if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
+        // Start with the prompt template or original content if no template
+        let processedContent = msg.promptTemplate || msg.content;
+        
+        // Replace variable placeholders in the prompt
+        if (msg.variables && Object.keys(msg.variables).length > 0) {
+          for (const [key, value] of Object.entries(msg.variables)) {
+            processedContent = processedContent.replace(`{{${key}}}`, value || '');
+          }
+        }
+        
+        // Replace the content with the processed template
+        return { role: 'user', content: processedContent };
+      }
+      
+      // For non-user messages or messages without templates, keep as is
+      return { role: msg.role, content: msg.content };
+    });
     
     // Check for variables from the most recent message that might need to be applied to system prompt
     let userVariables = {};
-    const lastUserMessage = llmMessages.findLast(msg => msg.role === 'user');
+    const lastUserMessage = messages.findLast(msg => msg.role === 'user');
     if (lastUserMessage && lastUserMessage.variables) {
       userVariables = lastUserMessage.variables;
     }
