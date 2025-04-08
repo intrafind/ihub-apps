@@ -92,5 +92,330 @@
         "type": "string"
       }
     ]
+  },
+  {
+    "id": "email-composer",
+    "name": "Email Composer",
+    "description": "Draft professional emails with the right tone and structure",
+    "color": "#2563EB",
+    "icon": "mail",
+    "system": "You are an email writing assistant. Help users write professional, clear, and effective emails for various business and personal contexts. Ensure the tone is appropriate for the intended audience.",
+    "tokenLimit": 4000,
+    "preferredModel": "gpt-4",
+    "preferredOutputFormat": "text",
+    "preferredStyle": "professional",
+    "preferredTemperature": 0.6,
+    "prompt": "Write a {{type}} email to {{recipient}} regarding {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}",
+    "variables": [
+      {
+        "name": "type",
+        "label": "Email Type",
+        "type": "string",
+        "defaultValue": "professional",
+        "required": true,
+        "predefinedValues": [
+          {"label": "Professional", "value": "professional"},
+          {"label": "Follow-up", "value": "follow-up"},
+          {"label": "Request", "value": "request"},
+          {"label": "Thank you", "value": "thank you"},
+          {"label": "Introduction", "value": "introduction"},
+          {"label": "Complaint", "value": "complaint resolution"},
+          {"label": "Application", "value": "job application"}
+        ]
+      },
+      {
+        "name": "recipient",
+        "label": "Recipient",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "subject",
+        "label": "Subject",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "tone",
+        "label": "Tone",
+        "type": "string",
+        "defaultValue": "Use a professional tone.",
+        "predefinedValues": [
+          {"label": "Professional", "value": "Use a professional tone."},
+          {"label": "Friendly", "value": "Use a friendly and approachable tone."},
+          {"label": "Formal", "value": "Use a formal tone."},
+          {"label": "Casual", "value": "Use a casual tone."},
+          {"label": "Assertive", "value": "Use an assertive and confident tone."}
+        ]
+      },
+      {
+        "name": "additional_instructions",
+        "label": "Additional Instructions",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "id": "meeting-assistant",
+    "name": "Meeting Assistant",
+    "description": "Generate agendas, minutes, and action items",
+    "color": "#8B5CF6",
+    "icon": "calendar",
+    "system": "You are a meeting assistant. Help users prepare for meetings and document outcomes. Create well-structured agendas, detailed minutes, and clear action items based on the provided information.",
+    "tokenLimit": 6000,
+    "preferredModel": "gpt-4",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.4,
+    "prompt": "{{action}} for a {{meeting_type}} meeting with the following details:\n\nMeeting Title: {{meeting_title}}\nParticipants: {{participants}}\nDuration: {{duration}}\n\n{{content}}",
+    "variables": [
+      {
+        "name": "action",
+        "label": "Task",
+        "type": "string",
+        "required": true,
+        "predefinedValues": [
+          {"label": "Create an agenda", "value": "Create an agenda"},
+          {"label": "Generate meeting minutes", "value": "Generate detailed meeting minutes"},
+          {"label": "Extract action items", "value": "Extract and format action items"},
+          {"label": "Write a follow-up email", "value": "Write a follow-up email summarizing"}
+        ]
+      },
+      {
+        "name": "meeting_type",
+        "label": "Meeting Type",
+        "type": "string",
+        "required": true,
+        "predefinedValues": [
+          {"label": "Team", "value": "team"},
+          {"label": "Client", "value": "client"},
+          {"label": "Project", "value": "project"},
+          {"label": "Board", "value": "board"},
+          {"label": "One-on-one", "value": "one-on-one"},
+          {"label": "Standup", "value": "daily standup"}
+        ]
+      },
+      {
+        "name": "meeting_title",
+        "label": "Meeting Title",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "participants",
+        "label": "Participants",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "duration",
+        "label": "Duration",
+        "type": "string",
+        "required": true,
+        "defaultValue": "30 minutes"
+      }
+    ]
+  },
+  {
+    "id": "social-media",
+    "name": "Social Media Content",
+    "description": "Create engaging posts for various social platforms",
+    "color": "#F43F5E",
+    "icon": "share",
+    "system": "You are a social media content creator. Help users draft engaging, platform-specific posts that grab attention and drive engagement. Consider character limits and best practices for each platform.",
+    "tokenLimit": 4000,
+    "preferredModel": "gpt-3.5-turbo",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "creative",
+    "preferredTemperature": 0.8,
+    "prompt": "Create {{count}} {{post_type}} for {{platform}} about {{topic}}. {{tone}} {{additional_instructions}}",
+    "variables": [
+      {
+        "name": "count",
+        "label": "Number of Posts",
+        "type": "string",
+        "required": true,
+        "defaultValue": "3",
+        "predefinedValues": [
+          {"label": "1 post", "value": "1"},
+          {"label": "3 posts", "value": "3"},
+          {"label": "5 posts", "value": "5"}
+        ]
+      },
+      {
+        "name": "post_type",
+        "label": "Post Type",
+        "type": "string",
+        "required": true,
+        "predefinedValues": [
+          {"label": "Text posts", "value": "text posts"},
+          {"label": "Caption ideas", "value": "caption ideas"},
+          {"label": "Promotional posts", "value": "promotional posts"},
+          {"label": "Educational posts", "value": "educational posts"},
+          {"label": "Engagement questions", "value": "engagement questions"},
+          {"label": "Trending topic posts", "value": "posts related to trending topics"}
+        ]
+      },
+      {
+        "name": "platform",
+        "label": "Platform",
+        "type": "string",
+        "required": true,
+        "predefinedValues": [
+          {"label": "LinkedIn", "value": "LinkedIn"},
+          {"label": "Twitter/X", "value": "Twitter"},
+          {"label": "Instagram", "value": "Instagram"},
+          {"label": "Facebook", "value": "Facebook"},
+          {"label": "TikTok", "value": "TikTok"}
+        ]
+      },
+      {
+        "name": "topic",
+        "label": "Topic",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "tone",
+        "label": "Tone",
+        "type": "string",
+        "defaultValue": "Use an engaging and conversational tone.",
+        "predefinedValues": [
+          {"label": "Professional", "value": "Use a professional and authoritative tone."},
+          {"label": "Casual", "value": "Use a casual and friendly tone."},
+          {"label": "Humorous", "value": "Use a humorous and lighthearted tone."},
+          {"label": "Inspirational", "value": "Use an inspirational and motivational tone."},
+          {"label": "Educational", "value": "Use an educational and informative tone."}
+        ]
+      },
+      {
+        "name": "additional_instructions",
+        "label": "Additional Instructions",
+        "type": "text"
+      }
+    ]
+  },
+  {
+    "id": "research-assistant",
+    "name": "Research Assistant",
+    "description": "Organize research, create summaries and outlines",
+    "color": "#0891B2",
+    "icon": "document-search",
+    "system": "You are a research assistant. Help users organize information, create summaries, outline research papers, generate literature reviews, and extract key findings from complex topics.",
+    "tokenLimit": 8000,
+    "preferredModel": "gpt-4",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "academic",
+    "preferredTemperature": 0.2,
+    "prompt": "{{action}} on the topic of {{topic}}. {{format}}\n\n{{content}}",
+    "variables": [
+      {
+        "name": "action",
+        "label": "Action",
+        "type": "string",
+        "required": true,
+        "predefinedValues": [
+          {"label": "Create an outline", "value": "Create a detailed outline for a research paper"},
+          {"label": "Generate a literature review", "value": "Generate a literature review"},
+          {"label": "Summarize research", "value": "Summarize the following research"},
+          {"label": "Analyze methodology", "value": "Analyze the methodology in"},
+          {"label": "Extract key findings", "value": "Extract key findings from"},
+          {"label": "Create research questions", "value": "Create research questions for"}
+        ]
+      },
+      {
+        "name": "topic",
+        "label": "Topic/Research Area",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "format",
+        "label": "Format Instructions",
+        "type": "string",
+        "defaultValue": "Include sections with headings and bullet points where appropriate.",
+        "predefinedValues": [
+          {"label": "Academic", "value": "Format in an academic style with proper citations where needed."},
+          {"label": "Bullet Points", "value": "Format as bullet points for easy scanning."},
+          {"label": "Executive Summary", "value": "Format as an executive summary with key points highlighted."},
+          {"label": "Detailed Analysis", "value": "Provide a detailed analysis with sections and subsections."},
+          {"label": "Pros and Cons", "value": "Organize information into pros and cons or advantages and disadvantages."}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "hr-assistant",
+    "name": "HR Assistant",
+    "description": "Create job descriptions, interview questions, and other",
+    "color": "#6366F1",
+    "icon": "users",
+    "system": "You are an HR assistant specialized in helping human resource professionals with common tasks like creating job descriptions, interview questions, performance reviews, and employee communications. Provide professional, clear, and compliant content tailored to the specific industry and role requirements.",
+    "tokenLimit": 6000,
+    "preferredModel": "gpt-4",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "professional",
+    "preferredTemperature": 0.4,
+    "prompt": "Create a {{document_type}} for {{role}} {{additional_context}}.\n\n{{content}}",
+    "variables": [
+      {
+        "name": "document_type",
+        "label": "Document Type",
+        "type": "string",
+        "required": true,
+        "predefinedValues": [
+          {"label": "Job Description (LinkedIn)", "value": "professional job description formatted for LinkedIn"},
+          {"label": "Job Description (General)", "value": "detailed job description"},
+          {"label": "Interview Questions", "value": "set of structured interview questions"},
+          {"label": "Performance Review Template", "value": "performance review template"},
+          {"label": "Offer Letter", "value": "formal job offer letter"},
+          {"label": "Onboarding Checklist", "value": "new employee onboarding checklist"},
+          {"label": "Rejection Email", "value": "polite rejection email"}
+        ]
+      },
+      {
+        "name": "role",
+        "label": "Position/Role",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "industry",
+        "label": "Industry",
+        "type": "string",
+        "defaultValue": "Technology"
+      },
+      {
+        "name": "experience_level",
+        "label": "Experience Level",
+        "type": "string",
+        "predefinedValues": [
+          {"label": "Entry Level", "value": "entry level"},
+          {"label": "Mid Level", "value": "mid level"},
+          {"label": "Senior", "value": "senior level"},
+          {"label": "Manager", "value": "management level"},
+          {"label": "Executive", "value": "executive level"}
+        ]
+      },
+      {
+        "name": "employment_type",
+        "label": "Employment Type",
+        "type": "string",
+        "predefinedValues": [
+          {"label": "Full-time", "value": "full-time"},
+          {"label": "Part-time", "value": "part-time"},
+          {"label": "Contract", "value": "contract"},
+          {"label": "Temporary", "value": "temporary"},
+          {"label": "Internship", "value": "internship"},
+          {"label": "Remote", "value": "remote"}
+        ]
+      },
+      {
+        "name": "additional_context",
+        "label": "Additional Context",
+        "type": "text",
+        "description": "Include any specific requirements, company information, or other relevant details."
+      }
+    ]
   }
-] 
+]

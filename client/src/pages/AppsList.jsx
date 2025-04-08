@@ -45,10 +45,10 @@ const AppsList = () => {
   }
 
   return (
-    <div>
+    <div className="flex flex-col min-h-[calc(100vh-12rem)]">
       <h1 className="text-3xl font-bold mb-8 text-center">AI Applications</h1>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 flex-grow">
         {apps.map(app => (
           <Link 
             key={app.id}
@@ -89,4 +89,4 @@ const AppsList = () => {
   );
 };
 
-export default AppsList; 
+export default AppsList;
