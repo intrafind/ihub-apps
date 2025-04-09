@@ -60,9 +60,9 @@ export const fetchStyles = async () => {
   return response.data;
 };
 
-// Disclaimer
-export const fetchDisclaimer = async () => {
-  const response = await apiClient.get('/disclaimer');
+// UI Configuration
+export const fetchUIConfig = async () => {
+  const response = await apiClient.get('/ui');
   return response.data;
 };
 
@@ -82,4 +82,4 @@ export const stopAppChatStream = async (appId, chatId) => {
 export const checkAppChatStatus = async (appId, chatId) => {
   const response = await apiClient.get(`/apps/${appId}/chat/${chatId}/status`);
   return response.data;
-}; 
+};

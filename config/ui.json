@@ -1,0 +1,51 @@
+{
+  "title": "AI Hub",
+  "header": {
+    "links": [
+      {
+        "name": "Home",
+        "url": "/"
+      },
+      {
+        "name": "Documentation",
+        "url": "https://github.com/ai-hub/docs"
+      },
+      {
+        "name": "GitHub",
+        "url": "https://github.com/ai-hub/ai-hub-apps"
+      }
+    ]
+  },
+  "footer": {
+    "text": "© 2025 AI Hub. All rights reserved.",
+    "links": [
+      {
+        "name": "Privacy Policy",
+        "url": "/privacy"
+      },
+      {
+        "name": "Terms of Service",
+        "url": "/terms"
+      },
+      {
+        "name": "Contact",
+        "url": "mailto:contact@ai-hub.example.com"
+      }
+    ]
+  },
+  "disclaimer": {
+    "text": "Disclaimer: This application uses artificial intelligence language models that generate content based on their training data and the inputs provided. The responses may not always be accurate, appropriate, or complete. The AI does not have knowledge of events after its training cut-off date and does not access real-time information. Users should verify important information and exercise critical judgment when using AI-generated content. This application logs user interactions for service improvement and analytics purposes.",
+    "version": "1.0",
+    "updated": "2023-01-01"
+  },
+  "pages": {
+    "privacy": {
+      "title": "Privacy Policy",
+      "content": "# Privacy Policy\n\n**Last Updated: April 9, 2025**\n\n## Introduction\n\nThis Privacy Policy describes how AI Hub (\"we,\" \"our,\" or \"us\") collects, uses, and shares information about you when you use our website, applications, and services (collectively, the \"Services\"). By using our Services, you agree to the terms of this Privacy Policy and our Terms of Service.\n\n## Information We Collect\n\n### Information You Provide\n\n- **Account Information**: When you create an account, we collect your name, email address, and password.\n- **User Content**: We collect the content you submit to our Services, including messages sent to our AI models.\n- **Feedback**: Information you provide when participating in surveys or contacting our support team.\n\n### Information Automatically Collected\n\n- **Usage Information**: How you interact with our Services, including features used and time spent.\n- **Device Information**: Information about your device, operating system, browser type, and IP address.\n- **Cookies and Similar Technologies**: We use cookies and similar tracking technologies to collect information about your browsing activities.\n\n## How We Use Your Information\n\nWe use the information we collect to:\n\n- Provide, maintain, and improve our Services\n- Develop new products and features\n- Personalize your experience\n- Communicate with you about our Services\n- Monitor and analyze trends and usage\n- Detect and prevent fraud and abuse\n\n## Data Sharing and Disclosure\n\nWe may share information about you in the following circumstances:\n\n- With third-party service providers who perform services on our behalf\n- To comply with legal obligations\n- In connection with a merger, sale, or acquisition\n- With your consent or at your direction\n\n## Your Rights and Choices\n\nDepending on your location, you may have certain rights regarding your personal information, including:\n\n- Accessing, correcting, or deleting your information\n- Restricting or objecting to our processing of your information\n- Portability of your information\n- Withdrawing consent\n\nTo exercise these rights, please contact us using the information provided below.\n\n## Data Security\n\nWe implement reasonable security measures to protect your information. However, no security system is impenetrable, and we cannot guarantee the security of your information.\n\n## International Data Transfers\n\nYour information may be transferred to and processed in countries other than your own, where privacy laws may be different from those in your jurisdiction.\n\n## Children's Privacy\n\nOur Services are not directed to children under 13, and we do not knowingly collect information from children under 13.\n\n## Changes to This Privacy Policy\n\nWe may update this Privacy Policy from time to time. We will notify you of any material changes by posting the new Privacy Policy on this page and updating the \"Last Updated\" date.\n\n## Contact Us\n\nIf you have any questions about this Privacy Policy, please contact us at privacy@ai-hub.example.com."
+    },
+    "terms": {
+      "title": "Terms of Service",
+      "content": "# Terms of Service\n\n**Last Updated: April 9, 2025**\n\n## Introduction\n\nWelcome to AI Hub! These Terms of Service (\"Terms\") govern your use of our website, applications, and services (collectively, the \"Services\") operated by AI Hub (\"we,\" \"our,\" or \"us\"). By accessing or using our Services, you agree to be bound by these Terms.\n\n## Account Registration\n\nTo access certain features of our Services, you may need to register for an account. You agree to provide accurate, current, and complete information and to keep this information updated. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.\n\n## Acceptable Use\n\nWhen using our Services, you agree not to:\n\n- Violate any applicable laws or regulations\n- Infringe on the intellectual property rights of others\n- Use our Services to transmit harmful code or content\n- Attempt to gain unauthorized access to our systems or user accounts\n- Use our Services to generate content that is harmful, abusive, or violates our content policies\n- Interfere with the proper functioning of our Services\n\n## AI-Generated Content\n\nOur Services utilize artificial intelligence to generate content. You acknowledge that:\n\n- AI-generated content may not always be accurate, appropriate, or complete\n- You should not rely on AI-generated content for critical decisions without verification\n- You are responsible for reviewing and ensuring the appropriateness of content you generate using our Services\n\n## Intellectual Property\n\n### Our Rights\n\nThe Services and their contents, including but not limited to text, graphics, logos, and software, are owned by us or our licensors and are protected by copyright, trademark, and other intellectual property laws.\n\n### Your Rights\n\nYou retain ownership of the content you create using our Services. However, you grant us a worldwide, non-exclusive, royalty-free license to use, reproduce, modify, and display your content for the purpose of operating and improving our Services.\n\n## Limitation of Liability\n\nTo the maximum extent permitted by law, we shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising out of or relating to your use of our Services.\n\n## Indemnification\n\nYou agree to indemnify and hold harmless AI Hub and its officers, directors, employees, and agents from any claims, damages, liabilities, costs, or expenses arising from your use of our Services or violation of these Terms.\n\n## Termination\n\nWe may terminate or suspend your access to our Services at any time, without prior notice or liability, for any reason, including if you breach these Terms.\n\n## Changes to These Terms\n\nWe may update these Terms from time to time. We will notify you of any material changes by posting the new Terms on this page and updating the \"Last Updated\" date.\n\n## Governing Law\n\nThese Terms shall be governed by and construed in accordance with the laws of [Jurisdiction], without regard to its conflict of law provisions.\n\n## Contact Us\n\nIf you have any questions about these Terms, please contact us at legal@ai-hub.example.com."
+    }
+  }
+}

@@ -216,20 +216,6 @@ app.get('/api/apps/:appId/chat/:chatId', async (req, res) => {
   }
 });
 
-// GET /api/disclaimer - Fetch disclaimer text
-app.get('/api/disclaimer', async (req, res) => {
-  try {
-    const disclaimer = await loadConfig('disclaimer.json');
-    if (!disclaimer) {
-      return res.status(500).json({ error: 'Failed to load disclaimer configuration' });
-    }
-    res.json(disclaimer);
-  } catch (error) {
-    console.error('Error fetching disclaimer:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 // GET /api/styles  - Fetch styles text
 app.get('/api/styles', async (req, res) => {
     try {
@@ -243,6 +229,20 @@ app.get('/api/styles', async (req, res) => {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+// GET /api/ui - Fetch UI configuration (title, footer, header links, disclaimer)
+app.get('/api/ui', async (req, res) => {
+  try {
+    const uiConfig = await loadConfig('ui.json');
+    if (!uiConfig) {
+      return res.status(500).json({ error: 'Failed to load UI configuration' });
+    }
+    res.json(uiConfig);
+  } catch (error) {
+    console.error('Error fetching UI configuration:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // POST /api/apps/{appId}/chat/{chatId} - Process chat messages
 app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
