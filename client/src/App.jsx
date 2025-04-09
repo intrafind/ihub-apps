@@ -5,8 +5,7 @@ import AppsList from './pages/AppsList';
 import AppChat from './pages/AppChat';
 import DirectChat from './pages/DirectChat';
 import NotFound from './pages/NotFound';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import TermsOfService from './pages/TermsOfService';
+import MarkdownPage from './pages/MarkdownPage';
 import { HeaderColorProvider } from './components/HeaderColorContext';
 import './App.css';
 
@@ -19,8 +18,8 @@ function App() {
             <Route index element={<AppsList />} />
             <Route path="apps/:appId" element={<AppChat />} />
             <Route path="models/:modelId" element={<DirectChat />} />
-            <Route path="privacy" element={<PrivacyPolicy />} />
-            <Route path="terms" element={<TermsOfService />} />
+            {/* Dynamic route for markdown pages defined in ui.json */}
+            <Route path="page/:pageId" element={<MarkdownPage />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

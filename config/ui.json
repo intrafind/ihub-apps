@@ -7,6 +7,10 @@
         "url": "/"
       },
       {
+        "name": "FAQ",
+        "url": "/page/faq"
+      },
+      {
         "name": "Documentation",
         "url": "https://github.com/ai-hub/docs"
       },
@@ -21,11 +25,11 @@
     "links": [
       {
         "name": "Privacy Policy",
-        "url": "/privacy"
+        "url": "/page/privacy"
       },
       {
         "name": "Terms of Service",
-        "url": "/terms"
+        "url": "/page/terms"
       },
       {
         "name": "Contact",
@@ -46,6 +50,10 @@
     "terms": {
       "title": "Terms of Service",
       "content": "# Terms of Service\n\n**Last Updated: April 9, 2025**\n\n## Introduction\n\nWelcome to AI Hub! These Terms of Service (\"Terms\") govern your use of our website, applications, and services (collectively, the \"Services\") operated by AI Hub (\"we,\" \"our,\" or \"us\"). By accessing or using our Services, you agree to be bound by these Terms.\n\n## Account Registration\n\nTo access certain features of our Services, you may need to register for an account. You agree to provide accurate, current, and complete information and to keep this information updated. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.\n\n## Acceptable Use\n\nWhen using our Services, you agree not to:\n\n- Violate any applicable laws or regulations\n- Infringe on the intellectual property rights of others\n- Use our Services to transmit harmful code or content\n- Attempt to gain unauthorized access to our systems or user accounts\n- Use our Services to generate content that is harmful, abusive, or violates our content policies\n- Interfere with the proper functioning of our Services\n\n## AI-Generated Content\n\nOur Services utilize artificial intelligence to generate content. You acknowledge that:\n\n- AI-generated content may not always be accurate, appropriate, or complete\n- You should not rely on AI-generated content for critical decisions without verification\n- You are responsible for reviewing and ensuring the appropriateness of content you generate using our Services\n\n## Intellectual Property\n\n### Our Rights\n\nThe Services and their contents, including but not limited to text, graphics, logos, and software, are owned by us or our licensors and are protected by copyright, trademark, and other intellectual property laws.\n\n### Your Rights\n\nYou retain ownership of the content you create using our Services. However, you grant us a worldwide, non-exclusive, royalty-free license to use, reproduce, modify, and display your content for the purpose of operating and improving our Services.\n\n## Limitation of Liability\n\nTo the maximum extent permitted by law, we shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising out of or relating to your use of our Services.\n\n## Indemnification\n\nYou agree to indemnify and hold harmless AI Hub and its officers, directors, employees, and agents from any claims, damages, liabilities, costs, or expenses arising from your use of our Services or violation of these Terms.\n\n## Termination\n\nWe may terminate or suspend your access to our Services at any time, without prior notice or liability, for any reason, including if you breach these Terms.\n\n## Changes to These Terms\n\nWe may update these Terms from time to time. We will notify you of any material changes by posting the new Terms on this page and updating the \"Last Updated\" date.\n\n## Governing Law\n\nThese Terms shall be governed by and construed in accordance with the laws of [Jurisdiction], without regard to its conflict of law provisions.\n\n## Contact Us\n\nIf you have any questions about these Terms, please contact us at legal@ai-hub.example.com."
+    },
+    "faq": {
+      "title": "Frequently Asked Questions",
+      "content": "# Frequently Asked Questions\n\n**Last Updated: April 9, 2025**\n\n## General Questions\n\n### What is AI Hub?\n\nAI Hub is a platform that allows you to interact with various AI models through a simple, consistent interface. You can use our pre-configured apps or create your own to solve specific tasks.\n\n### How do I get started?\n\nTo get started, simply browse our collection of apps on the home page and click on one that interests you. No account is required for basic usage.\n\n### Is AI Hub free to use?\n\nAI Hub offers both free and premium features. Basic access to standard models is free, while access to more advanced models and higher usage limits requires a subscription.\n\n## Technical Questions\n\n### Which AI models does AI Hub support?\n\nAI Hub currently supports models from OpenAI (GPT-4, GPT-3.5), Anthropic (Claude), and Google (Gemini).\n\n### Can I use my own API keys?\n\nYes! You can provide your own API keys for any supported provider in the settings. This allows you to use your existing quotas and billing arrangements.\n\n### How do I create my own custom app?\n\nCustom app creation is available to premium users. Navigate to the 'Create App' section from the dashboard, define your prompt templates, choose allowed models, and configure any variables your app needs.\n\n## Privacy & Security\n\n### How is my data handled?\n\nWe take data privacy seriously. Please refer to our [Privacy Policy](/page/privacy) for detailed information on how we collect, use, and protect your data.\n\n### Are my conversations stored?\n\nBy default, conversations are stored in your browser's local storage only. Premium users have the option to enable cloud sync for access across devices.\n\n### Can I delete my data?\n\nYes, you can clear your local conversation history at any time from the settings menu. Premium users can also request complete deletion of any cloud-stored data.\n\n## Billing & Support\n\n### How do I upgrade to premium?\n\nClick on the 'Upgrade' button in the top navigation bar to view our subscription options and complete the payment process.\n\n### What payment methods are accepted?\n\nWe accept all major credit cards, PayPal, and selected cryptocurrency payments.\n\n### How do I get support?\n\nFor technical issues or questions, please email support@ai-hub.example.com. Premium users have access to priority support through our in-app chat system."
     }
   }
 }
