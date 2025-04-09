@@ -4,8 +4,10 @@ import { fetchModels, sendDirectModelMessage, fetchModelDetails } from '../api/a
 import ChatMessage from '../components/ChatMessage';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useHeaderColor } from '../components/HeaderColorContext';
+import { useTranslation } from 'react-i18next';
 
 const DirectChat = () => {
+  const { t } = useTranslation();
   const { modelId } = useParams();
   const navigate = useNavigate();
   const [model, setModel] = useState(null);
@@ -158,7 +160,7 @@ const DirectChat = () => {
   };
 
   if (isLoading) {
-    return <LoadingSpinner message="Loading model..." />;
+    return <LoadingSpinner message={t('app.loading')} />;
   }
 
   if (error) {
@@ -169,13 +171,13 @@ const DirectChat = () => {
           className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mr-4"
           onClick={() => window.location.reload()}
         >
-          Retry
+          {t('app.retry')}
         </button>
         <button 
           className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
           onClick={() => navigate('/')}
         >
-          Back to Models
+          {t('common.back')}
         </button>
       </div>
     );
@@ -184,12 +186,12 @@ const DirectChat = () => {
   if (!model) {
     return (
       <div className="text-center py-12">
-        <div className="text-red-500 mb-4">Model not found.</div>
+        <div className="text-red-500 mb-4">{t('error.modelNotFound')}</div>
         <button 
           className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
           onClick={() => navigate('/')}
         >
-          Back to Models
+          {t('common.back')}
         </button>
       </div>
     );
@@ -211,7 +213,7 @@ const DirectChat = () => {
             </svg>
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Direct Chat with {model?.name}</h1>
+            <h1 className="text-2xl font-bold">{t('pages.directChat.title', 'Direct Chat with')} {model?.name}</h1>
             <p className="text-gray-600 text-sm">{model?.description}</p>
           </div>
         </div>
@@ -223,7 +225,7 @@ const DirectChat = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          Settings
+          {t('settings.title')}
         </button>
       </div>
       
@@ -232,7 +234,7 @@ const DirectChat = () => {
         <div className="bg-gray-100 p-4 rounded-lg mb-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('appConfig.model', 'Model')}</label>
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
@@ -248,7 +250,7 @@ const DirectChat = () => {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Temperature</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('models.temperature')}</label>
               <input
                 type="range"
                 min="0"
@@ -260,8 +262,8 @@ const DirectChat = () => {
                 disabled={isSending}
               />
               <div className="text-xs text-gray-500 flex justify-between">
-                <span>Precise ({temperature})</span>
-                <span>Creative</span>
+                <span>{t('common.precise')} ({temperature})</span>
+                <span>{t('common.creative')}</span>
               </div>
             </div>
           </div>
@@ -286,7 +288,7 @@ const DirectChat = () => {
             <svg className="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <p>Start the conversation by sending a message below.</p>
+            <p>{t('pages.directChat.startConversation', 'Start the conversation by sending a message below.')}</p>
           </div>
         )}
       </div>
@@ -299,7 +301,7 @@ const DirectChat = () => {
           onChange={handleMessageChange}
           disabled={isSending}
           className="flex-1 p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-          placeholder={isSending ? "Generating response..." : "Type your message..."}
+          placeholder={isSending ? t('pages.appChat.thinking') : t('pages.appChat.messagePlaceholder')}
         />
         <button
           type="submit"
@@ -318,7 +320,7 @@ const DirectChat = () => {
             </svg>
           ) : (
             <>
-              <span>Send</span>
+              <span>{t('common.send')}</span>
               <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
               </svg>

@@ -1,11 +1,20 @@
 [
   {
     "id": "chat",
-    "name": "AI Chat",
-    "description": "General purpose AI chatbot assistant",
+    "name": {
+      "en": "AI Chat",
+      "de": "KI-Chat"
+    },
+    "description": {
+      "en": "General purpose AI chatbot assistant",
+      "de": "Allzweck KI-Chatbot-Assistent"
+    },
     "color": "#4F46E5",
     "icon": "chat-bubbles",
-    "system": "You are a helpful AI assistant. Answer the user's questions accurately and concisely.",
+    "system": {
+      "en": "You are a helpful AI assistant. Answer the user's questions accurately and concisely.",
+      "de": "Du bist ein hilfreicher KI-Assistent. Beantworte die Fragen des Nutzers präzise und knapp."
+    },
     "tokenLimit": 4000,
     "preferredModel": "gpt-3.5-turbo",
     "preferredOutputFormat": "markdown",
@@ -15,415 +24,625 @@
   },
   {
     "id": "translator",
-    "name": "Translator",
-    "description": "Translate text between different languages",
+    "name": {
+      "en": "Translator",
+      "de": "Übersetzer"
+    },
+    "description": {
+      "en": "Translate text between different languages",
+      "de": "Text zwischen verschiedenen Sprachen übersetzen"
+    },
     "color": "#0EA5E9",
     "icon": "globe",
-    "system": "You are a helpful translation assistant. Translate the text to the requested language, maintaining the original meaning and tone. If no language is specified, ask which language to translate to.",
+    "system": {
+      "en": "You are a helpful translation assistant. Translate the text to the requested language, maintaining the original meaning and tone. If no language is specified, ask which language to translate to.",
+      "de": "Du bist ein hilfreicher Übersetzungsassistent. Übersetze den Text in die angeforderte Sprache und behalte die ursprüngliche Bedeutung und den Ton bei. Wenn keine Sprache angegeben ist, frage nach, in welche Sprache übersetzt werden soll."
+    },
     "tokenLimit": 4000,
     "preferredModel": "gemini-1.5-flash",
     "preferredOutputFormat": "text",
     "preferredStyle": "keep",
     "preferredTemperature": 0.3,
     "sendChatHistory": false,
-    "prompt": "Translate the following text to {{language}}:\n\n{{content}}",
+    "prompt": {
+      "en": "Translate the following text to {{language}}:\n\n{{content}}",
+      "de": "Übersetze den folgenden Text ins {{language}}:\n\n{{content}}"
+    },
     "variables": [
       {
         "name": "language",
-        "label": "Target Language",
+        "label": {
+          "en": "Target Language",
+          "de": "Zielsprache"
+        },
         "type": "string",
-        "description": "Select the target language for translation.",
-        "defaultValue": "English",
+        "description": {
+          "en": "Select the target language for translation.",
+          "de": "Wähle die Zielsprache für die Übersetzung."
+        },
+        "defaultValue": {
+          "en": "English",
+          "de": "Englisch"
+        },
         "required": true,
         "predefinedValues": [
-          {"label": "English", "value": "English"},
-          {"label": "Spanish", "value": "Spanish"},
-          {"label": "French", "value": "French"},
-          {"label": "German", "value": "German"},
-          {"label": "Chinese", "value": "Chinese"},
-          {"label": "Japanese", "value": "Japanese"}
+          {"label": {"en": "English", "de": "Englisch"}, "value": "English"},
+          {"label": {"en": "Spanish", "de": "Spanisch"}, "value": "Spanish"},
+          {"label": {"en": "French", "de": "Französisch"}, "value": "French"},
+          {"label": {"en": "German", "de": "Deutsch"}, "value": "German"},
+          {"label": {"en": "Chinese", "de": "Chinesisch"}, "value": "Chinese"},
+          {"label": {"en": "Japanese", "de": "Japanisch"}, "value": "Japanese"}
         ]
       }
     ]
   },
   {
     "id": "summarizer",
-    "name": "Content Summarizer",
-    "description": "Summarize long documents and articles",
+    "name": {
+      "en": "Content Summarizer",
+      "de": "Inhaltszusammenfassung"
+    },
+    "description": {
+      "en": "Summarize long documents and articles",
+      "de": "Lange Dokumente und Artikel zusammenfassen"
+    },
     "color": "#F59E0B",
     "icon": "document-text",
-    "system": "You are a summarization assistant. Provide a concise summary of the content while maintaining all key information.",
+    "system": {
+      "en": "You are a summarization assistant. Provide a concise summary of the content while maintaining all key information.",
+      "de": "Du bist ein Assistent für Zusammenfassungen. Erstelle eine prägnante Zusammenfassung des Inhalts und behalte alle wichtigen Informationen bei."
+    },
     "tokenLimit": 8000,
     "preferredModel": "gpt-4",
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.5,
     "sendChatHistory": false,
-    "prompt": "Please {{action}} the following content:\n\n{{content}}",
+    "prompt": {
+      "en": "Please {{action}} the following content:\n\n{{content}}",
+      "de": "Bitte {{action}} den folgenden Inhalt:\n\n{{content}}"
+    },
     "variables": [
       {
         "name": "action",
-        "label": "Action",
+        "label": {
+          "en": "Action",
+          "de": "Aktion"
+        },
         "type": "string",
         "predefinedValues": [
-          {"label": "Summarize", "value": "summarize"},
-          {"label": "Extract key facts", "value": "extract the key facts from"},
-          {"label": "Highlight action items", "value": "highlight the action items in"},
-          {"label": "List decisions", "value": "list all decisions mentioned in"},
-          {"label": "Summarize and recommend", "value": "summarize and provide recommendations based on"}
+          {"label": {"en": "Summarize", "de": "Zusammenfassen"}, "value": "summarize"},
+          {"label": {"en": "Extract key facts", "de": "Wichtige Fakten extrahieren"}, "value": "extract the key facts from"},
+          {"label": {"en": "Highlight action items", "de": "Aktionspunkte hervorheben"}, "value": "highlight the action items in"},
+          {"label": {"en": "List decisions", "de": "Entscheidungen auflisten"}, "value": "list all decisions mentioned in"},
+          {"label": {"en": "Summarize and recommend", "de": "Zusammenfassen und Empfehlungen geben"}, "value": "summarize and provide recommendations based on"}
         ]
       }
     ]
   },
   {
     "id": "custom",
-    "name": "Custom Prompt",
-    "description": "Create your own custom prompts",
+    "name": {
+      "en": "Custom Prompt",
+      "de": "Benutzerdefinierte Eingabeaufforderung"
+    },
+    "description": {
+      "en": "Create your own custom prompts",
+      "de": "Erstelle eigene benutzerdefinierte Eingabeaufforderungen"
+    },
     "color": "#EC4899",
     "icon": "sparkles",
-    "system": "{{system}}",
+    "system": {
+      "en": "{{system}}",
+      "de": "{{system}}"
+    },
     "tokenLimit": 8000,
     "preferredModel": "gpt-4",
     "preferredStyle": "normal",
     "preferredOutputFormat": "markdown",
     "preferredTemperature": 0.8,
     "sendChatHistory": false,
-    "prompt": "{{content}}",
+    "prompt": {
+      "en": "{{content}}",
+      "de": "{{content}}"
+    },
     "variables": [
       {
         "name": "system",
-        "label": "System Prompt",
+        "label": {
+          "en": "System Prompt",
+          "de": "Systemaufforderung"
+        },
         "type": "string"
       }
     ]
   },
   {
     "id": "email-composer",
-    "name": "Email Composer",
-    "description": "Draft professional emails with the right tone and structure",
+    "name": {
+      "en": "Email Composer",
+      "de": "E-Mail-Verfasser"
+    },
+    "description": {
+      "en": "Draft professional emails with the right tone and structure",
+      "de": "Erstelle professionelle E-Mails mit dem richtigen Ton und der richtigen Struktur"
+    },
     "color": "#2563EB",
     "icon": "mail",
-    "system": "You are an email writing assistant. Help users write professional, clear, and effective emails for various business and personal contexts. Ensure the tone is appropriate for the intended audience.",
+    "system": {
+      "en": "You are an email writing assistant. Help users write professional, clear, and effective emails for various business and personal contexts. Ensure the tone is appropriate for the intended audience.",
+      "de": "Du bist ein Assistent für das Schreiben von E-Mails. Hilf Nutzern, professionelle, klare und effektive E-Mails für verschiedene geschäftliche und persönliche Kontexte zu verfassen. Stelle sicher, dass der Ton für die Zielgruppe geeignet ist."
+    },
     "tokenLimit": 4000,
     "preferredModel": "gpt-4",
     "preferredOutputFormat": "text",
     "preferredStyle": "professional",
     "preferredTemperature": 0.6,
     "sendChatHistory": false,
-    "prompt": "Write a {{type}} email to {{recipient}} regarding {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}",
+    "prompt": {
+      "en": "Write a {{type}} email to {{recipient}} regarding {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}",
+      "de": "Schreibe eine {{type}} E-Mail an {{recipient}} bezüglich {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}"
+    },
     "variables": [
       {
         "name": "type",
-        "label": "Email Type",
+        "label": {
+          "en": "Email Type",
+          "de": "E-Mail-Typ"
+        },
         "type": "string",
-        "defaultValue": "professional",
+        "defaultValue": {
+          "en": "professional",
+          "de": "professionell"
+        },
         "required": true,
         "predefinedValues": [
-          {"label": "Professional", "value": "professional"},
-          {"label": "Follow-up", "value": "follow-up"},
-          {"label": "Request", "value": "request"},
-          {"label": "Thank you", "value": "thank you"},
-          {"label": "Introduction", "value": "introduction"},
-          {"label": "Complaint", "value": "complaint resolution"},
-          {"label": "Application", "value": "job application"}
+          {"label": {"en": "Professional", "de": "Professionell"}, "value": "professional"},
+          {"label": {"en": "Follow-up", "de": "Nachverfolgung"}, "value": "follow-up"},
+          {"label": {"en": "Request", "de": "Anfrage"}, "value": "request"},
+          {"label": {"en": "Thank you", "de": "Danke"}, "value": "thank you"},
+          {"label": {"en": "Introduction", "de": "Einführung"}, "value": "introduction"},
+          {"label": {"en": "Complaint", "de": "Beschwerde"}, "value": "complaint resolution"},
+          {"label": {"en": "Application", "de": "Bewerbung"}, "value": "job application"}
         ]
       },
       {
         "name": "recipient",
-        "label": "Recipient",
+        "label": {
+          "en": "Recipient",
+          "de": "Empfänger"
+        },
         "type": "string",
         "required": true
       },
       {
         "name": "subject",
-        "label": "Subject",
+        "label": {
+          "en": "Subject",
+          "de": "Betreff"
+        },
         "type": "string",
         "required": true
       },
       {
         "name": "tone",
-        "label": "Tone",
+        "label": {
+          "en": "Tone",
+          "de": "Ton"
+        },
         "type": "string",
-        "defaultValue": "Use a professional tone.",
+        "defaultValue": {
+          "en": "Use a professional tone.",
+          "de": "Verwende einen professionellen Ton."
+        },
         "predefinedValues": [
-          {"label": "Professional", "value": "Use a professional tone."},
-          {"label": "Friendly", "value": "Use a friendly and approachable tone."},
-          {"label": "Formal", "value": "Use a formal tone."},
-          {"label": "Casual", "value": "Use a casual tone."},
-          {"label": "Assertive", "value": "Use an assertive and confident tone."}
+          {"label": {"en": "Professional", "de": "Professionell"}, "value": "Use a professional tone."},
+          {"label": {"en": "Friendly", "de": "Freundlich"}, "value": "Use a friendly and approachable tone."},
+          {"label": {"en": "Formal", "de": "Formell"}, "value": "Use a formal tone."},
+          {"label": {"en": "Casual", "de": "Lässig"}, "value": "Use a casual tone."},
+          {"label": {"en": "Assertive", "de": "Bestimmend"}, "value": "Use an assertive and confident tone."}
         ]
       },
       {
         "name": "additional_instructions",
-        "label": "Additional Instructions",
+        "label": {
+          "en": "Additional Instructions",
+          "de": "Zusätzliche Anweisungen"
+        },
         "type": "text"
       }
     ]
   },
   {
     "id": "meeting-assistant",
-    "name": "Meeting Assistant",
-    "description": "Generate agendas, minutes, and action items",
+    "name": {
+      "en": "Meeting Assistant",
+      "de": "Besprechungsassistent"
+    },
+    "description": {
+      "en": "Generate agendas, minutes, and action items",
+      "de": "Erstelle Tagesordnungen, Protokolle und Aktionspunkte"
+    },
     "color": "#8B5CF6",
     "icon": "calendar",
-    "system": "You are a meeting assistant. Help users prepare for meetings and document outcomes. Create well-structured agendas, detailed minutes, and clear action items based on the provided information.",
+    "system": {
+      "en": "You are a meeting assistant. Help users prepare for meetings and document outcomes. Create well-structured agendas, detailed minutes, and clear action items based on the provided information.",
+      "de": "Du bist ein Besprechungsassistent. Hilf Nutzern, sich auf Besprechungen vorzubereiten und Ergebnisse zu dokumentieren. Erstelle gut strukturierte Tagesordnungen, detaillierte Protokolle und klare Aktionspunkte basierend auf den bereitgestellten Informationen."
+    },
     "tokenLimit": 6000,
     "preferredModel": "gpt-4",
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.4,
     "sendChatHistory": false,
-    "prompt": "{{action}} for a {{meeting_type}} meeting with the following details:\n\nMeeting Title: {{meeting_title}}\nParticipants: {{participants}}\nDuration: {{duration}}\n\n{{content}}",
+    "prompt": {
+      "en": "{{action}} for a {{meeting_type}} meeting with the following details:\n\nMeeting Title: {{meeting_title}}\nParticipants: {{participants}}\nDuration: {{duration}}\n\n{{content}}",
+      "de": "{{action}} für eine {{meeting_type}} Besprechung mit den folgenden Details:\n\nBesprechungstitel: {{meeting_title}}\nTeilnehmer: {{participants}}\nDauer: {{duration}}\n\n{{content}}"
+    },
     "variables": [
       {
         "name": "action",
-        "label": "Task",
+        "label": {
+          "en": "Task",
+          "de": "Aufgabe"
+        },
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": "Create an agenda", "value": "Create an agenda"},
-          {"label": "Generate meeting minutes", "value": "Generate detailed meeting minutes"},
-          {"label": "Extract action items", "value": "Extract and format action items"},
-          {"label": "Write a follow-up email", "value": "Write a follow-up email summarizing"}
+          {"label": {"en": "Create an agenda", "de": "Eine Tagesordnung erstellen"}, "value": "Create an agenda"},
+          {"label": {"en": "Generate meeting minutes", "de": "Besprechungsprotokoll erstellen"}, "value": "Generate detailed meeting minutes"},
+          {"label": {"en": "Extract action items", "de": "Aktionspunkte extrahieren"}, "value": "Extract and format action items"},
+          {"label": {"en": "Write a follow-up email", "de": "Eine Nachfass-E-Mail schreiben"}, "value": "Write a follow-up email summarizing"}
         ]
       },
       {
         "name": "meeting_type",
-        "label": "Meeting Type",
+        "label": {
+          "en": "Meeting Type",
+          "de": "Besprechungstyp"
+        },
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": "Team", "value": "team"},
-          {"label": "Client", "value": "client"},
-          {"label": "Project", "value": "project"},
-          {"label": "Board", "value": "board"},
-          {"label": "One-on-one", "value": "one-on-one"},
-          {"label": "Standup", "value": "daily standup"}
+          {"label": {"en": "Team", "de": "Team"}, "value": "team"},
+          {"label": {"en": "Client", "de": "Kunde"}, "value": "client"},
+          {"label": {"en": "Project", "de": "Projekt"}, "value": "project"},
+          {"label": {"en": "Board", "de": "Vorstand"}, "value": "board"},
+          {"label": {"en": "One-on-one", "de": "Eins-zu-eins"}, "value": "one-on-one"},
+          {"label": {"en": "Standup", "de": "Tägliches Standup"}, "value": "daily standup"}
         ]
       },
       {
         "name": "meeting_title",
-        "label": "Meeting Title",
+        "label": {
+          "en": "Meeting Title",
+          "de": "Besprechungstitel"
+        },
         "type": "string",
         "required": true
       },
       {
         "name": "participants",
-        "label": "Participants",
+        "label": {
+          "en": "Participants",
+          "de": "Teilnehmer"
+        },
         "type": "string",
         "required": true
       },
       {
         "name": "duration",
-        "label": "Duration",
+        "label": {
+          "en": "Duration",
+          "de": "Dauer"
+        },
         "type": "string",
         "required": true,
-        "defaultValue": "30 minutes"
+        "defaultValue": {
+          "en": "30 minutes",
+          "de": "30 Minuten"
+        }
       }
     ]
   },
   {
     "id": "social-media",
-    "name": "Social Media Content",
-    "description": "Create engaging posts for various social platforms",
+    "name": {
+      "en": "Social Media Content",
+      "de": "Social-Media-Inhalte"
+    },
+    "description": {
+      "en": "Create engaging posts for various social platforms",
+      "de": "Erstelle ansprechende Beiträge für verschiedene soziale Plattformen"
+    },
     "color": "#F43F5E",
     "icon": "share",
-    "system": "You are a social media content creator. Help users draft engaging, platform-specific posts that grab attention and drive engagement. Consider character limits and best practices for each platform.",
+    "system": {
+      "en": "You are a social media content creator. Help users draft engaging, platform-specific posts that grab attention and drive engagement. Consider character limits and best practices for each platform.",
+      "de": "Du bist ein Social-Media-Inhaltsersteller. Hilf Nutzern, ansprechende, plattformspezifische Beiträge zu erstellen, die Aufmerksamkeit erregen und Engagement fördern. Berücksichtige Zeichenlimits und bewährte Praktiken für jede Plattform."
+    },
     "tokenLimit": 4000,
     "preferredModel": "gpt-3.5-turbo",
     "preferredOutputFormat": "markdown",
     "preferredStyle": "creative",
     "preferredTemperature": 0.8,
     "sendChatHistory": false,
-    "prompt": "Create {{count}} {{post_type}} for {{platform}} about {{topic}}. {{tone}} {{additional_instructions}}",
+    "prompt": {
+      "en": "Create {{count}} {{post_type}} for {{platform}} about {{topic}}. {{tone}} {{additional_instructions}}",
+      "de": "Erstelle {{count}} {{post_type}} für {{platform}} über {{topic}}. {{tone}} {{additional_instructions}}"
+    },
     "variables": [
       {
         "name": "count",
-        "label": "Number of Posts",
+        "label": {
+          "en": "Number of Posts",
+          "de": "Anzahl der Beiträge"
+        },
         "type": "string",
         "required": true,
-        "defaultValue": "3",
+        "defaultValue": {
+          "en": "3",
+          "de": "3"
+        },
         "predefinedValues": [
-          {"label": "1 post", "value": "1"},
-          {"label": "3 posts", "value": "3"},
-          {"label": "5 posts", "value": "5"}
+          {"label": {"en": "1 post", "de": "1 Beitrag"}, "value": "1"},
+          {"label": {"en": "3 posts", "de": "3 Beiträge"}, "value": "3"},
+          {"label": {"en": "5 posts", "de": "5 Beiträge"}, "value": "5"}
         ]
       },
       {
         "name": "post_type",
-        "label": "Post Type",
+        "label": {
+          "en": "Post Type",
+          "de": "Beitragstyp"
+        },
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": "Text posts", "value": "text posts"},
-          {"label": "Caption ideas", "value": "caption ideas"},
-          {"label": "Promotional posts", "value": "promotional posts"},
-          {"label": "Educational posts", "value": "educational posts"},
-          {"label": "Engagement questions", "value": "engagement questions"},
-          {"label": "Trending topic posts", "value": "posts related to trending topics"}
+          {"label": {"en": "Text posts", "de": "Textbeiträge"}, "value": "text posts"},
+          {"label": {"en": "Caption ideas", "de": "Bildunterschriften-Ideen"}, "value": "caption ideas"},
+          {"label": {"en": "Promotional posts", "de": "Werbebeiträge"}, "value": "promotional posts"},
+          {"label": {"en": "Educational posts", "de": "Bildungsbeiträge"}, "value": "educational posts"},
+          {"label": {"en": "Engagement questions", "de": "Engagement-Fragen"}, "value": "engagement questions"},
+          {"label": {"en": "Trending topic posts", "de": "Beiträge zu aktuellen Themen"}, "value": "posts related to trending topics"}
         ]
       },
       {
         "name": "platform",
-        "label": "Platform",
+        "label": {
+          "en": "Platform",
+          "de": "Plattform"
+        },
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": "LinkedIn", "value": "LinkedIn"},
-          {"label": "Twitter/X", "value": "Twitter"},
-          {"label": "Instagram", "value": "Instagram"},
-          {"label": "Facebook", "value": "Facebook"},
-          {"label": "TikTok", "value": "TikTok"}
+          {"label": {"en": "LinkedIn", "de": "LinkedIn"}, "value": "LinkedIn"},
+          {"label": {"en": "Twitter/X", "de": "Twitter/X"}, "value": "Twitter"},
+          {"label": {"en": "Instagram", "de": "Instagram"}, "value": "Instagram"},
+          {"label": {"en": "Facebook", "de": "Facebook"}, "value": "Facebook"},
+          {"label": {"en": "TikTok", "de": "TikTok"}, "value": "TikTok"}
         ]
       },
       {
         "name": "topic",
-        "label": "Topic",
+        "label": {
+          "en": "Topic",
+          "de": "Thema"
+        },
         "type": "string",
         "required": true
       },
       {
         "name": "tone",
-        "label": "Tone",
+        "label": {
+          "en": "Tone",
+          "de": "Ton"
+        },
         "type": "string",
-        "defaultValue": "Use an engaging and conversational tone.",
+        "defaultValue": {
+          "en": "Use an engaging and conversational tone.",
+          "de": "Verwende einen ansprechenden und gesprächigen Ton."
+        },
         "predefinedValues": [
-          {"label": "Professional", "value": "Use a professional and authoritative tone."},
-          {"label": "Casual", "value": "Use a casual and friendly tone."},
-          {"label": "Humorous", "value": "Use a humorous and lighthearted tone."},
-          {"label": "Inspirational", "value": "Use an inspirational and motivational tone."},
-          {"label": "Educational", "value": "Use an educational and informative tone."}
+          {"label": {"en": "Professional", "de": "Professionell"}, "value": "Use a professional and authoritative tone."},
+          {"label": {"en": "Casual", "de": "Lässig"}, "value": "Use a casual and friendly tone."},
+          {"label": {"en": "Humorous", "de": "Humorvoll"}, "value": "Use a humorous and lighthearted tone."},
+          {"label": {"en": "Inspirational", "de": "Inspirierend"}, "value": "Use an inspirational and motivational tone."},
+          {"label": {"en": "Educational", "de": "Bildend"}, "value": "Use an educational and informative tone."}
         ]
       },
       {
         "name": "additional_instructions",
-        "label": "Additional Instructions",
+        "label": {
+          "en": "Additional Instructions",
+          "de": "Zusätzliche Anweisungen"
+        },
         "type": "text"
       }
     ]
   },
   {
     "id": "research-assistant",
-    "name": "Research Assistant",
-    "description": "Organize research, create summaries and outlines",
+    "name": {
+      "en": "Research Assistant",
+      "de": "Forschungsassistent"
+    },
+    "description": {
+      "en": "Organize research, create summaries and outlines",
+      "de": "Forschung organisieren, Zusammenfassungen und Gliederungen erstellen"
+    },
     "color": "#0891B2",
     "icon": "document-search",
-    "system": "You are a research assistant. Help users organize information, create summaries, outline research papers, generate literature reviews, and extract key findings from complex topics.",
+    "system": {
+      "en": "You are a research assistant. Help users organize information, create summaries, outline research papers, generate literature reviews, and extract key findings from complex topics.",
+      "de": "Du bist ein Forschungsassistent. Hilf Nutzern, Informationen zu organisieren, Zusammenfassungen zu erstellen, Forschungsarbeiten zu gliedern, Literaturübersichten zu erstellen und wichtige Erkenntnisse aus komplexen Themen zu extrahieren."
+    },
     "tokenLimit": 8000,
     "preferredModel": "gpt-4",
     "preferredOutputFormat": "markdown",
     "preferredStyle": "academic",
     "preferredTemperature": 0.2,
     "sendChatHistory": false,
-    "prompt": "{{action}} on the topic of {{topic}}. {{format}}\n\n{{content}}",
+    "prompt": {
+      "en": "{{action}} on the topic of {{topic}}. {{format}}\n\n{{content}}",
+      "de": "{{action}} zum Thema {{topic}}. {{format}}\n\n{{content}}"
+    },
     "variables": [
       {
         "name": "action",
-        "label": "Action",
+        "label": {
+          "en": "Action",
+          "de": "Aktion"
+        },
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": "Create an outline", "value": "Create a detailed outline for a research paper"},
-          {"label": "Generate a literature review", "value": "Generate a literature review"},
-          {"label": "Summarize research", "value": "Summarize the following research"},
-          {"label": "Analyze methodology", "value": "Analyze the methodology in"},
-          {"label": "Extract key findings", "value": "Extract key findings from"},
-          {"label": "Create research questions", "value": "Create research questions for"}
+          {"label": {"en": "Create an outline", "de": "Eine Gliederung erstellen"}, "value": "Create a detailed outline for a research paper"},
+          {"label": {"en": "Generate a literature review", "de": "Eine Literaturübersicht erstellen"}, "value": "Generate a literature review"},
+          {"label": {"en": "Summarize research", "de": "Forschung zusammenfassen"}, "value": "Summarize the following research"},
+          {"label": {"en": "Analyze methodology", "de": "Methodik analysieren"}, "value": "Analyze the methodology in"},
+          {"label": {"en": "Extract key findings", "de": "Wichtige Erkenntnisse extrahieren"}, "value": "Extract key findings from"},
+          {"label": {"en": "Create research questions", "de": "Forschungsfragen erstellen"}, "value": "Create research questions for"}
         ]
       },
       {
         "name": "topic",
-        "label": "Topic/Research Area",
+        "label": {
+          "en": "Topic/Research Area",
+          "de": "Thema/Forschungsbereich"
+        },
         "type": "string",
         "required": true
       },
       {
         "name": "format",
-        "label": "Format Instructions",
+        "label": {
+          "en": "Format Instructions",
+          "de": "Formatierungsanweisungen"
+        },
         "type": "string",
-        "defaultValue": "Include sections with headings and bullet points where appropriate.",
+        "defaultValue": {
+          "en": "Include sections with headings and bullet points where appropriate.",
+          "de": "Abschnitte mit Überschriften und Aufzählungspunkten einfügen, wo angebracht."
+        },
         "predefinedValues": [
-          {"label": "Academic", "value": "Format in an academic style with proper citations where needed."},
-          {"label": "Bullet Points", "value": "Format as bullet points for easy scanning."},
-          {"label": "Executive Summary", "value": "Format as an executive summary with key points highlighted."},
-          {"label": "Detailed Analysis", "value": "Provide a detailed analysis with sections and subsections."},
-          {"label": "Pros and Cons", "value": "Organize information into pros and cons or advantages and disadvantages."}
+          {"label": {"en": "Academic", "de": "Akademisch"}, "value": "Format in an academic style with proper citations where needed."},
+          {"label": {"en": "Bullet Points", "de": "Aufzählungspunkte"}, "value": "Format as bullet points for easy scanning."},
+          {"label": {"en": "Executive Summary", "de": "Management-Zusammenfassung"}, "value": "Format as an executive summary with key points highlighted."},
+          {"label": {"en": "Detailed Analysis", "de": "Detaillierte Analyse"}, "value": "Provide a detailed analysis with sections and subsections."},
+          {"label": {"en": "Pros and Cons", "de": "Vor- und Nachteile"}, "value": "Organize information into pros and cons or advantages and disadvantages."}
         ]
       }
     ]
   },
   {
     "id": "hr-assistant",
-    "name": "HR Assistant",
-    "description": "Create job descriptions, interview questions, and other",
+    "name": {
+      "en": "HR Assistant",
+      "de": "HR-Assistent"
+    },
+    "description": {
+      "en": "Create job descriptions, interview questions, and other",
+      "de": "Erstelle Stellenbeschreibungen, Interviewfragen und andere"
+    },
     "color": "#6366F1",
     "icon": "users",
-    "system": "You are an HR assistant specialized in helping human resource professionals with common tasks like creating job descriptions, interview questions, performance reviews, and employee communications. Provide professional, clear, and compliant content tailored to the specific industry and role requirements.",
+    "system": {
+      "en": "You are an HR assistant specialized in helping human resource professionals with common tasks like creating job descriptions, interview questions, performance reviews, and employee communications. Provide professional, clear, and compliant content tailored to the specific industry and role requirements.",
+      "de": "Du bist ein HR-Assistent, der sich darauf spezialisiert hat, Personalverantwortlichen bei gängigen Aufgaben wie der Erstellung von Stellenbeschreibungen, Interviewfragen, Leistungsbewertungen und Mitarbeiterkommunikation zu helfen. Stelle professionellen, klaren und konformen Inhalt bereit, der auf die spezifischen Anforderungen der Branche und der Rolle zugeschnitten ist."
+    },
     "tokenLimit": 6000,
     "preferredModel": "gpt-4",
     "preferredOutputFormat": "markdown",
     "preferredStyle": "professional",
     "preferredTemperature": 0.4,
     "sendChatHistory": false,
-    "prompt": "Create a {{document_type}} for {{role}} {{additional_context}}.\n\n{{content}}",
+    "prompt": {
+      "en": "Create a {{document_type}} for {{role}} {{additional_context}}.\n\n{{content}}",
+      "de": "Erstelle ein {{document_type}} für {{role}} {{additional_context}}.\n\n{{content}}"
+    },
     "variables": [
       {
         "name": "document_type",
-        "label": "Document Type",
+        "label": {
+          "en": "Document Type",
+          "de": "Dokumenttyp"
+        },
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": "Job Description (LinkedIn)", "value": "professional job description formatted for LinkedIn"},
-          {"label": "Job Description (General)", "value": "detailed job description"},
-          {"label": "Interview Questions", "value": "set of structured interview questions"},
-          {"label": "Performance Review Template", "value": "performance review template"},
-          {"label": "Offer Letter", "value": "formal job offer letter"},
-          {"label": "Onboarding Checklist", "value": "new employee onboarding checklist"},
-          {"label": "Rejection Email", "value": "polite rejection email"}
+          {"label": {"en": "Job Description (LinkedIn)", "de": "Stellenbeschreibung (LinkedIn)"}, "value": "professional job description formatted for LinkedIn"},
+          {"label": {"en": "Job Description (General)", "de": "Stellenbeschreibung (Allgemein)"}, "value": "detailed job description"},
+          {"label": {"en": "Interview Questions", "de": "Interviewfragen"}, "value": "set of structured interview questions"},
+          {"label": {"en": "Performance Review Template", "de": "Leistungsbewertungsvorlage"}, "value": "performance review template"},
+          {"label": {"en": "Offer Letter", "de": "Angebotsschreiben"}, "value": "formal job offer letter"},
+          {"label": {"en": "Onboarding Checklist", "de": "Onboarding-Checkliste"}, "value": "new employee onboarding checklist"},
+          {"label": {"en": "Rejection Email", "de": "Ablehnungsschreiben"}, "value": "polite rejection email"}
         ]
       },
       {
         "name": "role",
-        "label": "Position/Role",
+        "label": {
+          "en": "Position/Role",
+          "de": "Position/Rolle"
+        },
         "type": "string",
         "required": true
       },
       {
         "name": "industry",
-        "label": "Industry",
+        "label": {
+          "en": "Industry",
+          "de": "Branche"
+        },
         "type": "string",
-        "defaultValue": "Technology"
+        "defaultValue": {
+          "en": "Technology",
+          "de": "Technologie"
+        }
       },
       {
         "name": "experience_level",
-        "label": "Experience Level",
+        "label": {
+          "en": "Experience Level",
+          "de": "Erfahrungslevel"
+        },
         "type": "string",
         "predefinedValues": [
-          {"label": "Entry Level", "value": "entry level"},
-          {"label": "Mid Level", "value": "mid level"},
-          {"label": "Senior", "value": "senior level"},
-          {"label": "Manager", "value": "management level"},
-          {"label": "Executive", "value": "executive level"}
+          {"label": {"en": "Entry Level", "de": "Einsteiger"}, "value": "entry level"},
+          {"label": {"en": "Mid Level", "de": "Mittleres Level"}, "value": "mid level"},
+          {"label": {"en": "Senior", "de": "Senior"}, "value": "senior level"},
+          {"label": {"en": "Manager", "de": "Manager"}, "value": "management level"},
+          {"label": {"en": "Executive", "de": "Führungskraft"}, "value": "executive level"}
         ]
       },
       {
         "name": "employment_type",
-        "label": "Employment Type",
+        "label": {
+          "en": "Employment Type",
+          "de": "Beschäftigungsart"
+        },
         "type": "string",
         "predefinedValues": [
-          {"label": "Full-time", "value": "full-time"},
-          {"label": "Part-time", "value": "part-time"},
-          {"label": "Contract", "value": "contract"},
-          {"label": "Temporary", "value": "temporary"},
-          {"label": "Internship", "value": "internship"},
-          {"label": "Remote", "value": "remote"}
+          {"label": {"en": "Full-time", "de": "Vollzeit"}, "value": "full-time"},
+          {"label": {"en": "Part-time", "de": "Teilzeit"}, "value": "part-time"},
+          {"label": {"en": "Contract", "de": "Vertrag"}, "value": "contract"},
+          {"label": {"en": "Temporary", "de": "Temporär"}, "value": "temporary"},
+          {"label": {"en": "Internship", "de": "Praktikum"}, "value": "internship"},
+          {"label": {"en": "Remote", "de": "Fernarbeit"}, "value": "remote"}
         ]
       },
       {
         "name": "additional_context",
-        "label": "Additional Context",
+        "label": {
+          "en": "Additional Context",
+          "de": "Zusätzlicher Kontext"
+        },
         "type": "text",
-        "description": "Include any specific requirements, company information, or other relevant details."
+        "description": {
+          "en": "Include any specific requirements, company information, or other relevant details.",
+          "de": "Füge spezifische Anforderungen, Unternehmensinformationen oder andere relevante Details hinzu."
+        }
       }
     ]
   }
