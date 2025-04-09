@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchAppDetails, fetchModels, fetchStyles, sendAppChatMessage } from '../api/api';
+import { fetchAppDetails, fetchModels, fetchStyles, sendAppChatMessage, stopAppChatStream, checkAppChatStatus, isTimeoutError } from '../api/api';
 import ChatMessage from '../components/ChatMessage';
 import AppConfigForm from '../components/AppConfigForm';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -34,17 +34,102 @@ const AppChat = () => {
   const chatContainerRef = useRef(null);
   const chatId = useRef(`chat-${Date.now()}`);
   const eventSourceRef = useRef(null);
-  
-  // Computed property to check if we have variables to send
+  const connectionTimeoutRef = useRef(null);
+  const heartbeatIntervalRef = useRef(null);
+
   const hasVariablesToSend = app?.variables && Object.keys(variables).length > 0;
 
-  useEffect(() => {
+  // Enhanced cleanup function to properly handle all resources
+  const cleanupEventSource = useCallback(() => {
+    if (eventSourceRef.current) {
+      try {
+        // Stop any running heartbeat checks
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = null;
+        }
+
+        // Clear any pending connection timeouts
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+
+        // Tell the server to stop processing this chat session
+        if (appId && chatId.current) {
+          stopAppChatStream(appId, chatId.current).catch((err) =>
+            console.warn('Failed to stop chat stream:', err)
+          );
+        }
+
+        // Close the event source connection
+        const eventSource = eventSourceRef.current;
+        eventSourceRef.current = null; // Set to null first to prevent potential recursion issues
+
+        // Remove all event listeners to prevent memory leaks
+        eventSource.removeEventListener('connected', eventSource.onconnected);
+        eventSource.removeEventListener('chunk', eventSource.onchunk);
+        eventSource.removeEventListener('done', eventSource.ondone);
+        eventSource.removeEventListener('error', eventSource.onerror);
+
+        // Finally close the connection
+        eventSource.close();
+
+        console.log('Successfully cleaned up event source for chat:', chatId.current);
+      } catch (err) {
+        console.error('Error cleaning up event source:', err);
+      }
+    }
+  }, [appId]);
+
+  // Start a heartbeat check to ensure server connection is still alive
+  const startHeartbeat = useCallback(() => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+    }
+
+    heartbeatIntervalRef.current = setInterval(async () => {
+      if (!eventSourceRef.current || !appId || !chatId.current) {
+        return;
+      }
+
+      try {
+        const status = await checkAppChatStatus(appId, chatId.current);
+        if (!status || !status.active) {
+          console.warn('Chat session no longer active on server, cleaning up');
+          cleanupEventSource();
+          setProcessing(false);
+        }
+      } catch (error) {
+        console.warn('Error checking chat status:', error);
+        // Don't cleanup on error check - it might be a temporary network issue
+      }
+    }, 30000); // Check every 30 seconds
+
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
       }
     };
-  }, []);
+  }, [appId, cleanupEventSource]);
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      cleanupEventSource();
+
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
+
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+        connectionTimeoutRef.current = null;
+      }
+    };
+  }, [cleanupEventSource]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -66,11 +151,10 @@ const AppChat = () => {
         if (appData.variables) {
           const initialVars = {};
           appData.variables.forEach((variable) => {
-            // Process localized default values
-            const localizedDefaultValue = typeof variable.defaultValue === 'object' 
-              ? getLocalizedContent(variable.defaultValue, i18n.language) 
-              : variable.defaultValue || '';
-            
+            const localizedDefaultValue =
+              typeof variable.defaultValue === 'object'
+                ? getLocalizedContent(variable.defaultValue, i18n.language)
+                : variable.defaultValue || '';
             initialVars[variable.name] = localizedDefaultValue;
           });
           setVariables(initialVars);
@@ -94,14 +178,16 @@ const AppChat = () => {
         setError(null);
       } catch (err) {
         console.error('Error loading app data:', err);
-        setError('Failed to load application data. Please try again later.');
+        setError(
+          t('error.failedToLoadApp', 'Failed to load application data. Please try again later.')
+        );
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, [appId, setHeaderColor]);
+  }, [appId, setHeaderColor, i18n.language, t]);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -133,6 +219,8 @@ const AppChat = () => {
     if (messageToEdit.role === 'user') {
       (async () => {
         try {
+          cleanupEventSource();
+
           setProcessing(true);
           setError(null);
 
@@ -150,12 +238,10 @@ const AppChat = () => {
           const messagesForAPI =
             sendChatHistory === false
               ? [messageForAPI]
-              : [
-                  ...currentMessages.map((msg) => {
-                    const { id, loading, error, ...apiMsg } = msg;
-                    return apiMsg;
-                  }),
-                ];
+              : currentMessages.map((msg) => {
+                  const { id, loading, error, ...apiMsg } = msg;
+                  return apiMsg;
+                });
 
           const assistantMessageId = Date.now();
           setMessages((prev) => [
@@ -174,9 +260,33 @@ const AppChat = () => {
           eventSourceRef.current = eventSource;
 
           let fullContent = '';
+          let connectionEstablished = false;
+
+          connectionTimeoutRef.current = setTimeout(() => {
+            if (!connectionEstablished) {
+              console.error('SSE connection timeout');
+              eventSource.close();
+
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? {
+                        ...msg,
+                        content: t('error.connectionTimeout', 'Connection timeout. Please try again.'),
+                        loading: false,
+                        error: true,
+                      }
+                    : msg
+                )
+              );
+
+              setProcessing(false);
+            }
+          }, 10000);
 
           eventSource.addEventListener('connected', async () => {
             connectionEstablished = true;
+            clearTimeout(connectionTimeoutRef.current);
 
             try {
               await sendAppChatMessage(appId, chatId.current, messagesForAPI, {
@@ -193,8 +303,10 @@ const AppChat = () => {
                   msg.id === assistantMessageId
                     ? {
                         ...msg,
-                        content:
-                          'Error: Failed to generate response. Please try again or select a different model.',
+                        content: t(
+                          'error.failedToGenerateResponse',
+                          'Error: Failed to generate response. Please try again or select a different model.'
+                        ),
                         loading: false,
                         error: true,
                       }
@@ -203,21 +315,26 @@ const AppChat = () => {
               );
 
               eventSource.close();
+              eventSourceRef.current = null;
               setProcessing(false);
             }
           });
 
           eventSource.addEventListener('chunk', (event) => {
-            const data = JSON.parse(event.data);
-            fullContent += data.content;
+            try {
+              const data = JSON.parse(event.data);
+              fullContent += data.content || '';
 
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMessageId
-                  ? { ...msg, content: fullContent, loading: true }
-                  : msg
-              )
-            );
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: fullContent, loading: true }
+                    : msg
+                )
+              );
+            } catch (error) {
+              console.error('Error processing chunk:', error);
+            }
           });
 
           eventSource.addEventListener('done', () => {
@@ -226,28 +343,35 @@ const AppChat = () => {
                 msg.id === assistantMessageId ? { ...msg, loading: false } : msg
               )
             );
+
             eventSource.close();
+            eventSourceRef.current = null;
             setProcessing(false);
           });
 
           eventSource.addEventListener('error', (event) => {
             console.error('SSE Error:', event);
 
-            let errorMessage = 'Error receiving response. Please try again.';
+            let errorMessage = t(
+              'error.responseError',
+              'Error receiving response. Please try again.'
+            );
+
             try {
               if (event.data) {
                 const errorData = JSON.parse(event.data);
                 if (errorData.message) {
                   if (errorData.message.includes('API key not found')) {
-                    errorMessage = `${errorData.message}. Please check your API configuration.`;
+                    errorMessage = `${errorData.message}. ${t(
+                      'error.checkApiConfig',
+                      'Please check your API configuration.'
+                    )}`;
                   } else {
                     errorMessage = errorData.message;
                   }
                 }
               }
-            } catch (e) {
-              // Silently handle parse errors
-            }
+            } catch (e) {}
 
             setMessages((prev) =>
               prev.map((msg) =>
@@ -263,8 +387,11 @@ const AppChat = () => {
             );
 
             eventSource.close();
+            eventSourceRef.current = null;
             setProcessing(false);
           });
+
+          startHeartbeat();
         } catch (err) {
           console.error('Error sending message:', err);
 
@@ -273,8 +400,11 @@ const AppChat = () => {
             {
               id: Date.now(),
               role: 'system',
-              content: `Error: Failed to send message. ${
-                err.message || 'Please try again.'
+              content: `Error: ${t(
+                'error.sendMessageFailed',
+                'Failed to send message.'
+              )} ${
+                err.message || t('error.tryAgain', 'Please try again.')
               }`,
               error: true,
             },
@@ -305,47 +435,85 @@ const AppChat = () => {
     if (
       window.confirm(
         t(
-          'pages.appChat.clearConfirmation',
+          'pages.appChat.confirmClear',
           'Are you sure you want to clear the entire chat history?'
         )
       )
     ) {
+      cleanupEventSource();
+
       setMessages([]);
       chatId.current = `chat-${Date.now()}`;
     }
   };
 
+  const cancelGeneration = useCallback(() => {
+    cleanupEventSource();
+
+    setMessages((prev) => {
+      const lastMessageIndex = prev.length - 1;
+      if (lastMessageIndex >= 0 && prev[lastMessageIndex].loading) {
+        const updatedMessages = [...prev];
+        updatedMessages[lastMessageIndex] = {
+          ...updatedMessages[lastMessageIndex],
+          content:
+            updatedMessages[lastMessageIndex].content +
+            t('message.generationCancelled', ' [Generation cancelled]'),
+          loading: false,
+        };
+        return updatedMessages;
+      }
+      return prev;
+    });
+
+    setProcessing(false);
+  }, [cleanupEventSource, t]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Replace the condition to separately check for variables
-    // The intent is to allow submission if there are variables, even if input is empty
-    const hasInputText = input.trim().length > 0;
-    
-    // Only prevent submission if both input is empty AND we have no variables
-    if (!hasInputText && !hasVariablesToSend) return;
+    // Ensure input isn't empty before proceeding
+    if (!input.trim()) {
+      return;
+    }
 
+    // Check for required variables
     if (app?.variables) {
       const missingRequiredVars = app.variables
         .filter((v) => v.required)
-        .filter((v) => !variables[v.name]);
+        .filter((v) => !variables[v.name] || variables[v.name].trim() === '');
 
       if (missingRequiredVars.length > 0) {
-        setError(
-          t(
-            'pages.appChat.missingFields',
-            'Please fill in all required fields:'
-          ) +
-            ' ' +
-            missingRequiredVars.map((v) => v.label).join(', ')
-        );
+        // Show inline error instead of using setError
+        const errorMessage = t(
+          'error.missingRequiredFields',
+          'Please fill in all required fields:'
+        ) + ' ' + missingRequiredVars.map((v) => getLocalizedContent(v.label, currentLanguage)).join(', ');
+        
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          role: 'system',
+          content: errorMessage,
+          error: true,
+          isErrorMessage: true
+        }]);
+        
+        // Highlight missing fields by scrolling to parameters section on mobile
+        if (window.innerWidth < 768 && !showParameters) {
+          toggleParameters();
+        }
+        
         return;
       }
     }
 
+    // Clear any error message when proceeding
+    setError(null);
+
     try {
+      cleanupEventSource();
+
       setProcessing(true);
-      setError(null);
 
       const originalUserInput = input;
 
@@ -373,7 +541,10 @@ const AppChat = () => {
       const messagesForAPI =
         sendChatHistory === false
           ? [messageForAPI]
-          : [...messages, messageForAPI];
+          : messages.concat(messageForAPI).map((msg) => {
+              const { id, loading, error, ...apiMsg } = msg;
+              return apiMsg;
+            });
 
       const assistantMessageId = userMessageId + 1;
       setMessages((prev) => [
@@ -394,8 +565,31 @@ const AppChat = () => {
       let fullContent = '';
       let connectionEstablished = false;
 
+      connectionTimeoutRef.current = setTimeout(() => {
+        if (!connectionEstablished) {
+          console.error('SSE connection timeout');
+          eventSource.close();
+
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? {
+                    ...msg,
+                    content: t('error.connectionTimeout', 'Connection timeout. Please try again.'),
+                    loading: false,
+                    error: true,
+                  }
+                : msg
+            )
+          );
+
+          setProcessing(false);
+        }
+      }, 10000);
+
       eventSource.addEventListener('connected', async () => {
         connectionEstablished = true;
+        clearTimeout(connectionTimeoutRef.current);
 
         try {
           await sendAppChatMessage(appId, chatId.current, messagesForAPI, {
@@ -413,7 +607,7 @@ const AppChat = () => {
                 ? {
                     ...msg,
                     content: t(
-                      'pages.appChat.errorResponse',
+                      'error.failedToGenerateResponse',
                       'Error: Failed to generate response. Please try again or select a different model.'
                     ),
                     loading: false,
@@ -424,21 +618,26 @@ const AppChat = () => {
           );
 
           eventSource.close();
+          eventSourceRef.current = null;
           setProcessing(false);
         }
       });
 
       eventSource.addEventListener('chunk', (event) => {
-        const data = JSON.parse(event.data);
-        fullContent += data.content;
+        try {
+          const data = JSON.parse(event.data);
+          fullContent += data.content || '';
 
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMessageId
-              ? { ...msg, content: fullContent, loading: true }
-              : msg
-          )
-        );
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, content: fullContent, loading: true }
+                : msg
+            )
+          );
+        } catch (error) {
+          console.error('Error processing chunk:', error);
+        }
       });
 
       eventSource.addEventListener('done', () => {
@@ -447,24 +646,28 @@ const AppChat = () => {
             msg.id === assistantMessageId ? { ...msg, loading: false } : msg
           )
         );
+
         eventSource.close();
+        eventSourceRef.current = null;
         setProcessing(false);
       });
 
       eventSource.addEventListener('error', (event) => {
         console.error('SSE Error:', event);
+        clearTimeout(connectionTimeoutRef.current);
 
         let errorMessage = t(
-          'pages.appChat.errorReceivingResponse',
+          'error.responseError',
           'Error receiving response. Please try again.'
         );
+
         try {
           if (event.data) {
             const errorData = JSON.parse(event.data);
             if (errorData.message) {
               if (errorData.message.includes('API key not found')) {
                 errorMessage = `${errorData.message}. ${t(
-                  'pages.appChat.checkAPIConfig',
+                  'error.checkApiConfig',
                   'Please check your API configuration.'
                 )}`;
               } else {
@@ -472,9 +675,7 @@ const AppChat = () => {
               }
             }
           }
-        } catch (e) {
-          // Silently handle parse errors
-        }
+        } catch (e) {}
 
         setMessages((prev) =>
           prev.map((msg) =>
@@ -490,8 +691,11 @@ const AppChat = () => {
         );
 
         eventSource.close();
+        eventSourceRef.current = null;
         setProcessing(false);
       });
+
+      startHeartbeat();
     } catch (err) {
       console.error('Error sending message:', err);
 
@@ -501,10 +705,10 @@ const AppChat = () => {
           id: Date.now(),
           role: 'system',
           content: `Error: ${t(
-            'pages.appChat.failedToSendMessage',
+            'error.sendMessageFailed',
             'Failed to send message.'
           )} ${
-            err.message || t('pages.appChat.tryAgain', 'Please try again.')
+            err.message || t('error.tryAgain', 'Please try again.')
           }`,
           error: true,
         },
@@ -527,7 +731,7 @@ const AppChat = () => {
 
     return variables.map((variable) => ({
       ...variable,
-      localizedLabel: getLocalizedContent(variable.label, currentLanguage),
+      localizedLabel: getLocalizedContent(variable.label, currentLanguage) || variable.name,
       localizedDescription: getLocalizedContent(
         variable.description,
         currentLanguage
@@ -539,7 +743,7 @@ const AppChat = () => {
       predefinedValues: variable.predefinedValues
         ? variable.predefinedValues.map((option) => ({
             ...option,
-            localizedLabel: getLocalizedContent(option.label, currentLanguage),
+            localizedLabel: getLocalizedContent(option.label, currentLanguage) || option.value,
           }))
         : undefined,
     }));
@@ -574,7 +778,6 @@ const AppChat = () => {
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)]">
       <div className="flex flex-col mb-4 pb-4 border-b">
-        {/* App Header - Icon and Title */}
         <div className="flex items-center mb-3">
           <div
             className="w-10 h-10 rounded-full flex items-center justify-center mr-3"
@@ -597,15 +800,14 @@ const AppChat = () => {
           </div>
           <div>
             <h1 className="text-2xl font-bold">
-              {getLocalizedContent(app?.name, currentLanguage)}
+              {getLocalizedContent(app?.name, currentLanguage) || app?.id}
             </h1>
             <p className="text-gray-600 text-sm">
-              {getLocalizedContent(app?.description, currentLanguage)}
+              {getLocalizedContent(app?.description, currentLanguage) || ''}
             </p>
           </div>
         </div>
-        
-        {/* Mobile buttons (shown below header on small screens) */}
+
         <div className="md:hidden flex flex-wrap gap-2">
           {localizedVariables.length > 0 && (
             <button
@@ -679,8 +881,7 @@ const AppChat = () => {
             </button>
           )}
         </div>
-        
-        {/* Desktop buttons (horizontal) */}
+
         <div className="hidden md:flex space-x-2 ml-auto">
           {messages.length > 0 && (
             <button
@@ -896,36 +1097,35 @@ const AppChat = () => {
               }
             />
             <button
-              type="submit"
-              disabled={
-                processing || (!input.trim() && !hasVariablesToSend)
-              }
+              type={processing ? 'button' : 'submit'}
+              onClick={processing ? cancelGeneration : undefined}
+              disabled={!processing && !input.trim()}
               className={`px-4 py-2 rounded-lg font-medium flex items-center justify-center ${
-                processing || (!input.trim() && !hasVariablesToSend)
+                !processing && !input.trim()
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : processing
+                  ? 'bg-red-600 text-white hover:bg-red-700'
                   : 'bg-indigo-600 text-white hover:bg-indigo-700'
               }`}
             >
               {processing ? (
-                <svg
-                  className="animate-spin h-5 w-5 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
+                <>
+                  <svg
+                    className="w-5 h-5 mr-1"
+                    fill="none"
                     stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                  <span>{t('common.cancel')}</span>
+                </>
               ) : (
                 <>
                   <span>{t('common.send')}</span>

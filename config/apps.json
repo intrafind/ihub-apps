@@ -45,8 +45,8 @@
     "preferredTemperature": 0.3,
     "sendChatHistory": false,
     "prompt": {
-      "en": "Translate the following text to {{language}}:\n\n{{content}}",
-      "de": "Übersetze den folgenden Text ins {{language}}:\n\n{{content}}"
+      "en": "Language: {{language}} - Text to translate: \"{{content}}\"",
+      "de": "Sprache: {{language}} - Text zum Übersetzen \"{{content}}\""
     },
     "variables": [
       {
@@ -99,8 +99,8 @@
     "preferredTemperature": 0.5,
     "sendChatHistory": false,
     "prompt": {
-      "en": "Please {{action}} the following content:\n\n{{content}}",
-      "de": "Bitte {{action}} den folgenden Inhalt:\n\n{{content}}"
+      "en": "Please {{action}} the following content: \"{{content}}\"",
+      "de": "Bitte {{action}} den folgenden Inhalt: \"{{content}}\""
     },
     "variables": [
       {

@@ -22,8 +22,12 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configure request timeouts
+const DEFAULT_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || '60000', 10); // 60 seconds default
+
 // Store active client connections
 const clients = new Map();
+const activeRequests = new Map();
 
 /**
  * Gets the localized value from a potentially multi-language object
@@ -85,6 +89,26 @@ function getLocalizedContent(content, language = 'en', fallbackLanguage = 'en') 
   }
 }
 
+// Check if API keys are configured and log warnings at startup
+function validateApiKeys() {
+  const providers = ['openai', 'anthropic', 'google'];
+  const missingKeys = [];
+  
+  for (const provider of providers) {
+    const envVar = `${provider.toUpperCase()}_API_KEY`;
+    if (!process.env[envVar]) {
+      missingKeys.push(provider);
+    }
+  }
+  
+  if (missingKeys.length > 0) {
+    console.warn(`⚠️ WARNING: Missing API keys for providers: ${missingKeys.join(', ')}`);
+    console.warn('Some models may not work. Please check your .env file configuration.');
+  } else {
+    console.log('✓ All provider API keys are configured');
+  }
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -100,6 +124,26 @@ async function loadConfig(filename) {
     console.error(`Error loading ${filename}:`, error);
     return null;
   }
+}
+
+// Helper to verify API key exists for a model and provide a meaningful error
+function verifyApiKey(model, res, clientRes = null) {
+  const apiKey = getApiKeyForModel(model.id);
+  
+  if (!apiKey) {
+    const errorMessage = `API key not found for model: ${model.id} (${model.provider}). Please set ${model.provider.toUpperCase()}_API_KEY in your environment.`;
+    console.error(errorMessage);
+    
+    if (clientRes) {
+      sendSSE(clientRes, 'error', { message: errorMessage });
+    }
+    
+    // Don't automatically send a response here, just return false
+    // Let the calling code handle sending the appropriate response
+    return false;
+  }
+  
+  return apiKey;
 }
 
 // --- API Endpoints ---
@@ -198,36 +242,61 @@ app.get('/api/models/:modelId/chat/test', async (req, res) => {
       return res.status(404).json({ error: 'Model not found' });
     }
 
-    // Get API key from environment
-    const apiKey = getApiKeyForModel(modelId);
+    // Get and verify API key for model
+    const apiKey = verifyApiKey(model, res);
     if (!apiKey) {
       return res.status(500).json({ 
-        error: `API key not found for model ${model.id}`
+        error: `API key not found for model: ${model.id} (${model.provider})`,
+        provider: model.provider
       });
     }
 
     // Create request using appropriate adapter
     const request = createCompletionRequest(model, messages, apiKey, { stream: false });
     
-    // Execute request
-    const response = await fetch(request.url, {
-      method: 'POST',
-      headers: request.headers,
-      body: JSON.stringify(request.body)
+    // Set up timeout for the request
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT/1000} seconds`));
+      }, DEFAULT_TIMEOUT);
     });
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`${model.provider} API error:`, errorText);
-      return res.status(response.status).json({ 
-        error: `${model.provider} API error: ${response.status}`,
-        details: errorText
+    // Race between the fetch and the timeout
+    try {
+      const responsePromise = fetch(request.url, {
+        method: 'POST',
+        headers: request.headers,
+        body: JSON.stringify(request.body)
       });
+      
+      const response = await Promise.race([responsePromise, timeoutPromise]);
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`${model.provider} API error:`, errorText);
+        return res.status(response.status).json({ 
+          error: `${model.provider} API error: ${response.status}`,
+          details: errorText
+        });
+      }
+      
+      const responseData = await response.json();
+      res.json({ success: true, response: responseData });
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.message.includes('timed out')) {
+        return res.status(504).json({ 
+          error: 'Request timed out', 
+          message: `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT/1000} seconds`
+        });
+      } else {
+        throw fetchError; // Re-throw for the catch block below
+      }
     }
-    
-    const responseData = await response.json();
-    res.json({ success: true, response: responseData });
-
   } catch (error) {
     console.error('Error in test chat completion:', error);
     res.status(500).json({ error: 'Internal server error', message: error.message });
@@ -247,7 +316,8 @@ app.get('/api/apps/:appId/chat/:chatId', async (req, res) => {
     // Register client
     clients.set(chatId, {
       response: res,
-      lastActivity: new Date()
+      lastActivity: new Date(),
+      appId: appId
     });
     
     // Send initial connection event
@@ -257,6 +327,18 @@ app.get('/api/apps/:appId/chat/:chatId', async (req, res) => {
     req.on('close', () => {
       // Clean up when client disconnects
       if (clients.has(chatId)) {
+        // Cancel any active request for this chat
+        if (activeRequests.has(chatId)) {
+          try {
+            const controller = activeRequests.get(chatId);
+            controller.abort();
+            activeRequests.delete(chatId);
+            console.log(`Aborted request for chat ID: ${chatId}`);
+          } catch (e) {
+            console.error(`Error aborting request for chat ID: ${chatId}`, e);
+          }
+        }
+        
         clients.delete(chatId);
         console.log(`Client disconnected: ${chatId}`);
       }
@@ -278,17 +360,17 @@ app.get('/api/apps/:appId/chat/:chatId', async (req, res) => {
 
 // GET /api/styles  - Fetch styles text
 app.get('/api/styles', async (req, res) => {
-    try {
-      const styles = await loadConfig('styles.json');
-      if (!styles) {
-        return res.status(500).json({ error: 'Failed to load styles configuration' });
-      }
-      res.json(styles);
-    } catch (error) {
-      console.error('Error fetching styles:', error);
-      res.status(500).json({ error: 'Internal server error' });
+  try {
+    const styles = await loadConfig('styles.json');
+    if (!styles) {
+      return res.status(500).json({ error: 'Failed to load styles configuration' });
     }
-  });
+    res.json(styles);
+  } catch (error) {
+    console.error('Error fetching styles:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // GET /api/ui - Fetch UI configuration (title, footer, header links, disclaimer)
 app.get('/api/ui', async (req, res) => {
@@ -308,7 +390,7 @@ app.get('/api/ui', async (req, res) => {
 app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
   try {
     const { appId, chatId } = req.params;
-    const { messages, modelId, temperature, style } = req.body;
+    const { messages, modelId, temperature, style, outputFormat } = req.body;
     
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
@@ -342,90 +424,12 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         return res.status(404).json({ error: 'Model not found' });
       }
       
-      // Copy messages to avoid modifying the original
-      let llmMessages = [...messages].map(msg => {
-        // Process user messages with prompt templates and variables
-        if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
-          // Start with the prompt template or original content if no template
-          // Handle localized content in prompt templates
-          let processedContent = typeof msg.promptTemplate === 'object' 
-            ? getLocalizedContent(msg.promptTemplate) 
-            : (msg.promptTemplate || msg.content);
-          
-          // Log debugging info if needed
-          if (typeof processedContent !== 'string') {
-            console.log(`Type of processedContent is not string: ${typeof processedContent}`);
-            console.log('Value of processedContent:', JSON.stringify(processedContent));
-            processedContent = String(processedContent || '');
-          }
-          
-          // Ensure the original user content is available as {{content}} variable
-          const variables = { ...msg.variables, content: msg.content };
-          
-          // Replace variable placeholders in the prompt
-          if (variables && Object.keys(variables).length > 0) {
-            for (const [key, value] of Object.entries(variables)) {
-              // Ensure value is a string before using replace
-              const strValue = typeof value === 'string' ? value : String(value || '');
-              processedContent = processedContent.replace(`{{${key}}}`, strValue);
-            }
-          }
-          
-          // Replace the content with the processed template
-          return { role: 'user', content: processedContent };
-        }
-        
-        // For non-user messages or messages without templates, keep as is
-        return { role: msg.role, content: msg.content };
-      });
+      // Prepare messages with proper formatting
+      const llmMessages = processMessageTemplates(messages, app, style, outputFormat);
       
-      // Check for variables from the most recent message that might need to be applied to system prompt
-      let userVariables = {};
-      const lastUserMessage = messages.findLast(msg => msg.role === 'user');
-      if (lastUserMessage && lastUserMessage.variables) {
-        userVariables = lastUserMessage.variables;
-      }
-      
-      // Apply prompt template if the app has one and there's no system message
-      if (!llmMessages.some(msg => msg.role === 'system')) {
-        // Add application system prompt with style modifications if applicable
-        // Handle localized content in system prompt
-        let systemPrompt = typeof app.system === 'object' 
-          ? getLocalizedContent(app.system) 
-          : (app.system || '');
-        
-        // Log debugging info if needed
-        if (typeof systemPrompt !== 'string') {
-          console.log(`Type of systemPrompt is not string: ${typeof systemPrompt}`);
-          console.log('Value of systemPrompt:', JSON.stringify(systemPrompt));
-          systemPrompt = String(systemPrompt || '');
-        }
-        
-        // Replace variable placeholders in the system prompt
-        if (Object.keys(userVariables).length > 0) {
-          for (const [key, value] of Object.entries(userVariables)) {
-            // Ensure value is a string before using replace
-            const strValue = typeof value === 'string' ? value : String(value || '');
-            systemPrompt = systemPrompt.replace(`{{${key}}}`, strValue);
-          }
-        }
-        
-        // Apply style modifications if specified
-        if (style) {
-          const styles = await loadConfig('styles.json');
-          if (styles && styles[style]) {
-            systemPrompt += `\n\n${styles[style]}`;
-          }
-        }
-        
-        llmMessages.unshift({ role: 'system', content: systemPrompt });
-      }
-      
-      // Get API key for model
-      const apiKey = getApiKeyForModel(model.id);
-      if (!apiKey) {
-        return res.status(500).json({ error: `API key not found for model: ${model.id}` });
-      }
+      // Get and verify API key for model
+      const apiKey = verifyApiKey(model, res);
+      if (!apiKey) return; // Function will handle sending error response
       
       // Create request without streaming
       const request = createCompletionRequest(model, llmMessages, apiKey, { 
@@ -433,24 +437,50 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         stream: false
       });
       
-      // Execute request to LLM API
-      const llmResponse = await fetch(request.url, {
-        method: 'POST',
-        headers: request.headers,
-        body: JSON.stringify(request.body)
+      // Set up timeout for the request
+      let timeoutId;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT/1000} seconds`));
+        }, DEFAULT_TIMEOUT);
       });
       
-      if (!llmResponse.ok) {
-        const errorBody = await llmResponse.text();
-        console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
-        return res.status(llmResponse.status).json({ 
-          error: `LLM API request failed with status ${llmResponse.status}` 
+      // Execute request to LLM API with timeout
+      try {
+        const responsePromise = fetch(request.url, {
+          method: 'POST',
+          headers: request.headers,
+          body: JSON.stringify(request.body)
         });
+        
+        const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
+        
+        clearTimeout(timeoutId);
+        
+        if (!llmResponse.ok) {
+          const errorBody = await llmResponse.text();
+          console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
+          return res.status(llmResponse.status).json({ 
+            error: `LLM API request failed with status ${llmResponse.status}`,
+            details: errorBody
+          });
+        }
+        
+        // Return the complete response
+        const responseData = await llmResponse.json();
+        return res.json(responseData);
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.message.includes('timed out')) {
+          return res.status(504).json({ 
+            error: 'Request timed out', 
+            message: `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT/1000} seconds`
+          });
+        } else {
+          throw fetchError; // Re-throw for the catch block below
+        }
       }
-      
-      // Return the complete response
-      const responseData = await llmResponse.json();
-      return res.json(responseData);
     }
     
     // If we have an SSE connection, stream the response
@@ -458,7 +488,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     
     // Update last activity timestamp
     clients.set(chatId, {
-      response: clientRes,
+      ...clients.get(chatId),
       lastActivity: new Date()
     });
     
@@ -489,89 +519,13 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       return res.json({ status: 'error', message: 'Model not found' });
     }
     
-    // Copy messages to avoid modifying the original
-    let llmMessages = [...messages].map(msg => {
-      // Process user messages with prompt templates and variables
-      if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
-        // Start with the prompt template or original content if no template
-        // Handle localized content in prompt templates
-        let processedContent = typeof msg.promptTemplate === 'object' 
-          ? getLocalizedContent(msg.promptTemplate) 
-          : (msg.promptTemplate || msg.content);
-        
-        // Log debugging info if needed
-        if (typeof processedContent !== 'string') {
-          console.log(`Type of processedContent is not string: ${typeof processedContent}`);
-          console.log('Value of processedContent:', JSON.stringify(processedContent));
-          processedContent = String(processedContent || '');
-        }
-        
-        // Ensure the original user content is available as {{content}} variable
-        const variables = { ...msg.variables, content: msg.content };
-        
-        // Replace variable placeholders in the prompt
-        if (variables && Object.keys(variables).length > 0) {
-          for (const [key, value] of Object.entries(variables)) {
-            // Ensure value is a string before using replace
-            const strValue = typeof value === 'string' ? value : String(value || '');
-            processedContent = processedContent.replace(`{{${key}}}`, strValue);
-          }
-        }
-        
-        // Replace the content with the processed template
-        return { role: 'user', content: processedContent };
-      }
-      
-      // For non-user messages or messages without templates, keep as is
-      return { role: msg.role, content: msg.content };
-    });
+    // Prepare messages with proper formatting
+    const llmMessages = processMessageTemplates(messages, app, style, outputFormat);
     
-    // Check for variables from the most recent message that might need to be applied to system prompt
-    let userVariables = {};
-    const lastUserMessage = messages.findLast(msg => msg.role === 'user');
-    if (lastUserMessage && lastUserMessage.variables) {
-      userVariables = lastUserMessage.variables;
-    }
-    
-    // Apply prompt template if the app has one and there's no system message
-    if (!llmMessages.some(msg => msg.role === 'system')) {
-      // Add application system prompt with style modifications if applicable
-      // Handle localized content in system prompt
-      let systemPrompt = typeof app.system === 'object' 
-        ? getLocalizedContent(app.system) 
-        : (app.system || '');
-      
-      // Log debugging info if needed
-      if (typeof systemPrompt !== 'string') {
-        console.log(`Type of systemPrompt is not string: ${typeof systemPrompt}`);
-        console.log('Value of systemPrompt:', JSON.stringify(systemPrompt));
-        systemPrompt = String(systemPrompt || '');
-      }
-      
-      // Replace variable placeholders in the system prompt
-      if (Object.keys(userVariables).length > 0) {
-        for (const [key, value] of Object.entries(userVariables)) {
-          // Ensure value is a string before using replace
-          const strValue = typeof value === 'string' ? value : String(value || '');
-          systemPrompt = systemPrompt.replace(`{{${key}}}`, strValue);
-        }
-      }
-      
-      // Apply style modifications if specified
-      if (style) {
-        const styles = await loadConfig('styles.json');
-        if (styles && styles[style]) {
-          systemPrompt += `\n\n${styles[style]}`;
-        }
-      }
-      
-      llmMessages.unshift({ role: 'system', content: systemPrompt });
-    }
-    
-    // Get API key for model
-    const apiKey = getApiKeyForModel(model.id);
+    // Get and verify API key with proper error handling for SSE
+    const apiKey = verifyApiKey(model, null, clientRes);
     if (!apiKey) {
-      sendSSE(clientRes, 'error', { message: `API key not found for model: ${model.id}` });
+      // Already sent error via SSE, just return response to the HTTP request
       return res.json({ status: 'error', message: `API key not found for model: ${model.id}` });
     }
     
@@ -584,24 +538,53 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     // Send processing event
     sendSSE(clientRes, 'processing', { message: 'Processing your request...' });
     
+    // Set up abort controller for this request
+    const controller = new AbortController();
+    activeRequests.set(chatId, controller);
+    
+    // Set up timeout for the request
+    const timeoutId = setTimeout(() => {
+      console.log(`Request timeout for chat ${chatId}`);
+      controller.abort();
+      sendSSE(clientRes, 'error', { 
+        message: `Request timed out after ${DEFAULT_TIMEOUT/1000} seconds. The model may be experiencing high load.` 
+      });
+      activeRequests.delete(chatId);
+    }, DEFAULT_TIMEOUT);
+    
     // Execute request to LLM API in the background
     fetch(request.url, {
       method: 'POST',
       headers: request.headers,
-      body: JSON.stringify(request.body)
+      body: JSON.stringify(request.body),
+      signal: controller.signal
     }).then(async (llmResponse) => {
+      // Clear timeout as we got a response
+      clearTimeout(timeoutId);
+      
       if (!llmResponse.ok) {
         // Handle error case
         const errorBody = await llmResponse.text();
         console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
-        sendSSE(clientRes, 'error', { message: `LLM API request failed with status ${llmResponse.status}` });
+        let errorMessage = `LLM API request failed with status ${llmResponse.status}`;
+        
+        // Provide more helpful error messages for common errors
+        if (llmResponse.status === 401) {
+          errorMessage = `Authentication failed for ${model.provider} API. Please check your API key.`;
+        } else if (llmResponse.status === 429) {
+          errorMessage = `Rate limit exceeded for ${model.provider} API. Please try again later.`;
+        } else if (llmResponse.status >= 500) {
+          errorMessage = `${model.provider} API service error. The service may be experiencing issues.`;
+        }
+        
+        sendSSE(clientRes, 'error', { message: errorMessage, details: errorBody });
+        activeRequests.delete(chatId);
         return;
       }
       
       // Stream the response back to the client
       const reader = llmResponse.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
       
       try {
         while (true) {
@@ -619,7 +602,6 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
           const chunk = decoder.decode(value, { stream: true });
           
           // Process the chunk with the appropriate adapter
-          // For Google/Gemini, process each chunk individually
           const result = processResponseBuffer(model.provider, chunk);
           
           // Send any extracted content to the client
@@ -642,12 +624,28 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
           }
         }
       } catch (error) {
-        console.error('Error processing response stream:', error);
-        sendSSE(clientRes, 'error', { message: `Error processing response stream: ${error.message}` });
+        if (error.name === 'AbortError') {
+          console.log(`Request aborted for chat ${chatId}`);
+          // Don't send an error event if timeout already sent one
+        } else {
+          console.error('Error processing response stream:', error);
+          sendSSE(clientRes, 'error', { message: `Error processing response stream: ${error.message}` });
+        }
+      } finally {
+        activeRequests.delete(chatId);
       }
     }).catch(error => {
-      console.error('Error executing LLM request:', error);
-      sendSSE(clientRes, 'error', { message: 'Error executing LLM request' });
+      clearTimeout(timeoutId);
+      
+      if (error.name === 'AbortError') {
+        console.log(`Request aborted for chat ${chatId}`);
+        // Don't log or send event if it was an intentional abort
+      } else {
+        console.error('Error executing LLM request:', error);
+        sendSSE(clientRes, 'error', { message: `Error executing LLM request: ${error.message}` });
+      }
+      
+      activeRequests.delete(chatId);
     });
     
     // Return immediate response to the POST request
@@ -655,7 +653,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     
   } catch (error) {
     console.error('Error in app chat:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 });
 
@@ -664,6 +662,18 @@ app.post('/api/apps/:appId/chat/:chatId/stop', (req, res) => {
   const { chatId } = req.params;
   
   if (clients.has(chatId)) {
+    // Abort any ongoing request
+    if (activeRequests.has(chatId)) {
+      try {
+        const controller = activeRequests.get(chatId);
+        controller.abort();
+        activeRequests.delete(chatId);
+        console.log(`Aborted request for chat ID: ${chatId}`);
+      } catch (e) {
+        console.error(`Error aborting request for chat ID: ${chatId}`, e);
+      }
+    }
+    
     const client = clients.get(chatId);
     
     // Send a final event indicating the stream was stopped
@@ -689,18 +699,118 @@ app.get('/api/apps/:appId/chat/:chatId/status', (req, res) => {
   if (clients.has(chatId)) {
     return res.status(200).json({ 
       active: true, 
-      lastActivity: clients.get(chatId).lastActivity 
+      lastActivity: clients.get(chatId).lastActivity,
+      processing: activeRequests.has(chatId)
     });
   }
   
   return res.status(200).json({ active: false });
 });
 
+// Helper function to extract messages and format them
+function processMessageTemplates(messages, app, style = null, outputFormat = null) {
+  // Copy messages to avoid modifying the original
+  let llmMessages = [...messages].map(msg => {
+    // Process user messages with prompt templates and variables
+    if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
+      // Start with the prompt template or original content if no template
+      // Handle localized content in prompt templates
+      let processedContent = typeof msg.promptTemplate === 'object'
+        ? getLocalizedContent(msg.promptTemplate)
+        : (msg.promptTemplate || msg.content);
+      
+      if (typeof processedContent !== 'string') {
+        console.log(`Type of processedContent is not string: ${typeof processedContent}`);
+        processedContent = String(processedContent || '');
+      }
+      
+      // Ensure the original user content is available as {{content}} variable
+      const variables = { ...msg.variables, content: msg.content };
+      
+      // Replace variable placeholders in the prompt
+      if (variables && Object.keys(variables).length > 0) {
+        for (const [key, value] of Object.entries(variables)) {
+          // Ensure value is a string before using replace
+          const strValue = typeof value === 'string' ? value : String(value || '');
+          processedContent = processedContent.replace(`{{${key}}}`, strValue);
+        }
+      }
+      
+      // Replace the content with the processed template
+      return { role: 'user', content: processedContent };
+    }
+    
+    // For non-user messages or messages without templates, keep as is
+    return { role: msg.role, content: msg.content };
+  });
+  
+  // Check for variables from the most recent message that might need to be applied to system prompt
+  let userVariables = {};
+  const lastUserMessage = messages.findLast(msg => msg.role === 'user');
+  if (lastUserMessage && lastUserMessage.variables) {
+    userVariables = lastUserMessage.variables;
+  }
+  
+  // Apply prompt template if the app has one and there's no system message
+  if (app && !llmMessages.some(msg => msg.role === 'system')) {
+    // Add application system prompt with style modifications if applicable
+    // Handle localized content in system prompt
+    let systemPrompt = typeof app.system === 'object'
+      ? getLocalizedContent(app.system)
+      : (app.system || '');
+    
+    if (typeof systemPrompt !== 'string') {
+      console.log(`Type of systemPrompt is not string: ${typeof systemPrompt}`);
+      systemPrompt = String(systemPrompt || '');
+    }
+    
+    // Replace variable placeholders in the system prompt
+    if (Object.keys(userVariables).length > 0) {
+      for (const [key, value] of Object.entries(userVariables)) {
+        // Ensure value is a string before using replace
+        const strValue = typeof value === 'string' ? value : String(value || '');
+        systemPrompt = systemPrompt.replace(`{{${key}}}`, strValue);
+      }
+    }
+    
+    // Apply style modifications if specified
+    if (style) {
+      loadConfig('styles.json').then(styles => {
+        if (styles && styles[style]) {
+          systemPrompt += `\n\n${styles[style]}`;
+        }
+      }).catch(err => console.error('Error loading styles:', err));
+    }
+    
+    // Add output format instructions if specified
+    if (outputFormat === 'markdown') {
+      systemPrompt += '\n\nPlease format your response using Markdown syntax for better readability.';
+    } else if (outputFormat === 'html') {
+      systemPrompt += '\n\nPlease format your response using HTML tags for better readability and structure.';
+    }
+    
+    llmMessages.unshift({ role: 'system', content: systemPrompt });
+  }
+  
+  return llmMessages;
+}
+
 // Cleanup inactive clients every minute
 setInterval(() => {
   const now = new Date();
   for (const [chatId, client] of clients.entries()) {
     if (now - client.lastActivity > 5 * 60 * 1000) { // 5 minutes
+      // Abort any ongoing request
+      if (activeRequests.has(chatId)) {
+        try {
+          const controller = activeRequests.get(chatId);
+          controller.abort();
+          activeRequests.delete(chatId);
+        } catch (e) {
+          console.error(`Error aborting request for chat ID: ${chatId}`, e);
+        }
+      }
+      
       client.response.end();
       clients.delete(chatId);
       console.log(`Removed inactive client: ${chatId}`);
@@ -713,7 +823,11 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
+// Validate API keys at startup
+validateApiKeys();
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log(`Open http://localhost:${PORT} in your browser to use AI Hub Apps`);
 });

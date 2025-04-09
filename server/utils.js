@@ -14,19 +14,60 @@ export function sendSSE(res, event, data) {
  * @param {string} modelId - The model ID
  * @returns {string|null} The API key or null if not found
  */
-export function getApiKeyForModel(modelId) {
-  switch (modelId) {
-    case 'gpt-3.5-turbo':
-      return process.env.GPT_3_5_TURBO_API_KEY;
-    case 'gpt-4':
-      return process.env.GPT_4_API_KEY;
-    case 'claude-3-opus':
-      return process.env.CLAUDE_3_OPUS_API_KEY;
-    case 'claude-3-sonnet':
-      return process.env.CLAUDE_3_SONNET_API_KEY;
-    case 'gemini-1.5-flash':
-      return process.env.GEMINI_API_KEY;
-    default:
+export async function getApiKeyForModel(modelId) {
+  try {
+    // Load models configuration to find the provider
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    
+    const filePath = path.join(__dirname, '../config/models.json');
+    const data = await fs.readFile(filePath, 'utf8');
+    const models = JSON.parse(data);
+    
+    // Find the model by ID
+    const model = models.find(m => m.id === modelId);
+    if (!model) {
+      console.error(`Model not found: ${modelId}`);
       return null;
+    }
+    
+    // Get the provider for this model
+    const provider = model.provider;
+    
+    // Check for provider-specific API keys
+    switch (provider) {
+      case 'openai':
+        return process.env.OPENAI_API_KEY;
+      case 'anthropic':
+        return process.env.ANTHROPIC_API_KEY;
+      case 'google':
+        return process.env.GOOGLE_API_KEY;
+      case 'local':
+        // For local models, check if there's a specific LOCAL_API_KEY or return a default empty string
+        // This allows local models to work without authentication in many cases
+        return process.env.LOCAL_API_KEY || '';
+      default:
+        // Try to find a generic API key based on provider name (e.g., COHERE_API_KEY for provider 'cohere')
+        const genericKey = process.env[`${provider.toUpperCase()}_API_KEY`];
+        if (genericKey) {
+          return genericKey;
+        }
+        
+        // Check for a default API key as last resort
+        if (process.env.DEFAULT_API_KEY) {
+          console.log(`Using DEFAULT_API_KEY for provider: ${provider}`);
+          return process.env.DEFAULT_API_KEY;
+        }
+        
+        console.error(`No API key found for provider: ${provider}`);
+        return null;
+    }
+  } catch (error) {
+    console.error('Error getting API key for model:', error);
+    return null;
   }
-} 
+}

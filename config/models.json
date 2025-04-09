@@ -43,5 +43,14 @@
     "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent",
     "provider": "google", 
     "tokenLimit": 32768
+  },
+  {
+    "id": "local-vllm",
+    "modelId": "stelterlab_Mistral-Small-24B-Instruct-2501-AWQ",
+    "name": "Local vLLM",
+    "description": "Advanced model with strong reasoning and knowledge capabilities",
+    "url": "http://localhost:8080/v1/chat/completions",
+    "provider": "openai",
+    "tokenLimit": 8192
   }
 ] 

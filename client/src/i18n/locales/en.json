@@ -11,12 +11,6 @@
     "documentation": "Documentation",
     "github": "GitHub"
   },
-  "footer": {
-    "copyright": "© 2025 AI Hub. All rights reserved.",
-    "privacyPolicy": "Privacy Policy",
-    "termsOfService": "Terms of Service",
-    "contact": "Contact"
-  },
   "common": {
     "send": "Send",
     "cancel": "Cancel",
@@ -53,7 +47,8 @@
       "allCategories": "All Categories",
       "favorite": "Add to favorites",
       "unfavorite": "Remove from favorites",
-      "favorites": "Favorites"
+      "favorites": "Favorites",
+      "clearFilters": "Clear filters"
     },
     "appChat": {
       "messagePlaceholder": "Type your message here...",
@@ -61,6 +56,7 @@
       "thinking": "Thinking...",
       "regenerate": "Regenerate response",
       "clear": "Clear chat",
+      "confirmClear": "Are you sure you want to clear the chat?",
       "shareConversation": "Share conversation",
       "copyToClipboard": "Copy to clipboard",
       "copied": "Copied to clipboard!",
@@ -103,7 +99,8 @@
     "notFound": "Resource not found.",
     "apiKeyMissing": "API key for model not found",
     "modelNotFound": "Model not found",
-    "appNotFound": "Application not found"
+    "appNotFound": "Application not found",
+    "missingRequiredFields": "Missing required fields:"
   },
   "languages": {
     "en": "English",

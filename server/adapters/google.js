@@ -104,17 +104,29 @@ const GoogleAdapter = {
         return result;
       }
       
-      // Extract text content using regex
-      const textMatches = buffer.match(/"text":\s*"([^"]*)"/g);
-      if (textMatches) {
-        for (const match of textMatches) {
-          // Extract the actual text content from the match
-          const textContent = match.replace(/"text":\s*"/, '').replace(/"$/, '');
-          const cleanText = textContent.replace(/\\n/g, '\n').replace(/\\"/g, '"');
-          
-          if (cleanText.trim()) {
-            console.log('Extracted text:', cleanText);
-            result.content.push(cleanText);
+      // Extract text content from JSON response
+      if (buffer.includes('"text"')) {
+        try {
+          // Parse the JSON to extract the text directly
+          const data = JSON.parse(buffer.replace('data: ', ''));
+          if (data.candidates && data.candidates[0]?.content?.parts) {
+            for (const part of data.candidates[0].content.parts) {
+              if (part.text) {
+                console.log('Extracted text:', part.text);
+                result.content.push(part.text);
+              }
+            }
+          }
+        } catch (jsonError) {
+          // Fallback to regex if JSON parsing fails
+          const textMatches = buffer.match(/"text":\s*"([^"]*)"/g);
+          if (textMatches) {
+            for (const match of textMatches) {
+              // Extract the actual text content from the match
+              const textContent = match.replace(/"text":\s*"/, '').replace(/"$/, '');
+              console.log('Extracted text (regex fallback):', textContent);
+              result.content.push(textContent);
+            }
           }
         }
       }

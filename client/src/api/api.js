@@ -1,92 +1,349 @@
 import axios from 'axios';
+import cache, { DEFAULT_CACHE_TTL, CACHE_KEYS, buildCacheKey } from '../utils/cache';
 
 // When using Vite's proxy feature, we should use a relative URL for development
 // The direct URL (like http://localhost:3000/api) should only be used when not using the proxy
 // or in production environments
 const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_REQUEST_TIMEOUT = 30000; // 30 seconds timeout
 
-// Create axios instance
+// Create axios instance with request timeout
 const apiClient = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  timeout: API_REQUEST_TIMEOUT
 });
 
-// Apps
-export const fetchApps = async () => {
+// Keep track of pending requests for deduplication
+const pendingRequests = new Map();
+
+// Enhanced retry mechanism for failed requests
+apiClient.interceptors.response.use(null, async (error) => {
+  const originalRequest = error.config;
+  
+  // Only retry GET requests, and only once
+  if (originalRequest.method === 'get' && !originalRequest._retry && !error.response) {
+    originalRequest._retry = true;
+    console.log('Network error, retrying request once:', originalRequest.url);
+    
+    // Wait a moment before retrying
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    return apiClient(originalRequest);
+  }
+  
+  return Promise.reject(error);
+});
+
+// Handle API responses and errors consistently
+const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_TTL.MEDIUM, deduplicate = true) => {
   try {
-    const response = await apiClient.get('/apps');
-    return response.data;
+    // Check cache first if cacheKey is provided
+    if (cacheKey) {
+      const cachedData = cache.get(cacheKey);
+      if (cachedData) {
+        console.log(`Cache hit for: ${cacheKey}`);
+        return cachedData;
+      }
+    }
+
+    // Request deduplication - if we're already making this exact same request, reuse the promise
+    // This prevents sending multiple identical requests simultaneously
+    if (deduplicate && cacheKey) {
+      const pendingRequest = pendingRequests.get(cacheKey);
+      if (pendingRequest) {
+        console.log(`Deduplicating request for: ${cacheKey}`);
+        return pendingRequest;
+      }
+    }
+    
+    // Create a promise for the API call
+    const requestPromise = (async () => {
+      try {
+        // Make the API call
+        const response = await apiCall();
+        const data = response.data;
+        
+        // Cache the response if cacheKey is provided
+        if (cacheKey && data) {
+          cache.set(cacheKey, data, ttl);
+        }
+        
+        return data;
+      } catch (error) {
+        // Enhance error object with useful information
+        const enhancedError = new Error(
+          error.response?.data?.error || error.message || 'An unexpected error occurred'
+        );
+        enhancedError.status = error.response?.status || 500;
+        enhancedError.originalError = error;
+        
+        // Add request details to error for better debugging
+        enhancedError.requestDetails = {
+          url: error.config?.url,
+          method: error.config?.method,
+          timestamp: new Date().toISOString()
+        };
+        
+        console.error(`API Error: ${enhancedError.message}`, { 
+          status: enhancedError.status,
+          details: error.response?.data,
+          url: error.config?.url
+        });
+        
+        // For 5xx server errors, store a minimal placeholder in cache with shorter TTL
+        // to prevent overwhelming the server with retries on error
+        if (error.response?.status >= 500 && cacheKey) {
+          const errorPlaceholder = { error: enhancedError.message, isErrorPlaceholder: true };
+          cache.set(cacheKey, errorPlaceholder, DEFAULT_CACHE_TTL.SHORT);
+        }
+        
+        throw enhancedError;
+      } finally {
+        // Always clear the pending request reference when done
+        if (cacheKey) {
+          pendingRequests.delete(cacheKey);
+        }
+      }
+    })();
+    
+    // Store the promise for deduplication
+    if (deduplicate && cacheKey) {
+      pendingRequests.set(cacheKey, requestPromise);
+      
+      // Set a timeout to remove the pending request if it takes too long
+      setTimeout(() => {
+        if (pendingRequests.get(cacheKey) === requestPromise) {
+          pendingRequests.delete(cacheKey);
+        }
+      }, API_REQUEST_TIMEOUT + 1000); // Slightly longer than the actual timeout
+    }
+    
+    return requestPromise;
   } catch (error) {
-    console.error('Error fetching apps:', error);
+    console.error('Error in handleApiResponse wrapper:', error);
     throw error;
   }
 };
 
-export const fetchAppDetails = async (appId) => {
-  const response = await apiClient.get(`/apps/${appId}`);
-  return response.data;
+// Apps
+export const fetchApps = async (options = {}) => {
+  const { skipCache = false, language = null } = options;
+  const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.APPS_LIST, { language });
+  
+  return handleApiResponse(
+    () => apiClient.get('/apps', { params: { language } }),
+    cacheKey,
+    DEFAULT_CACHE_TTL.MEDIUM
+  );
+};
+
+export const fetchAppDetails = async (appId, options = {}) => {
+  const { skipCache = false, language = null } = options;
+  const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.APP_DETAILS, { id: appId, language });
+  
+  return handleApiResponse(
+    () => apiClient.get(`/apps/${appId}`, { params: { language } }),
+    cacheKey,
+    DEFAULT_CACHE_TTL.MEDIUM
+  );
 };
 
 // Models
-export const fetchModels = async () => {
-  const response = await apiClient.get('/models');
-  return response.data;
+export const fetchModels = async (options = {}) => {
+  const { skipCache = false } = options;
+  const cacheKey = skipCache ? null : CACHE_KEYS.MODELS_LIST;
+  
+  return handleApiResponse(
+    () => apiClient.get('/models'),
+    cacheKey,
+    DEFAULT_CACHE_TTL.MEDIUM
+  );
 };
 
-export const fetchModelDetails = async (modelId) => {
-  const response = await apiClient.get(`/models/${modelId}`);
-  return response.data;
+export const fetchModelDetails = async (modelId, options = {}) => {
+  const { skipCache = false } = options;
+  const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.MODEL_DETAILS, { id: modelId });
+  
+  return handleApiResponse(
+    () => apiClient.get(`/models/${modelId}`),
+    cacheKey,
+    DEFAULT_CACHE_TTL.MEDIUM
+  );
 };
 
-// Chat
+// Chat - no caching for chat operations as they're dynamic
 export const streamAppChat = async (appId, chatId) => {
   return new EventSource(`${API_URL}/apps/${appId}/chat/${chatId}`);
 };
 
 export const sendAppChatMessage = async (appId, chatId, messages, options = {}) => {
-  const response = await apiClient.post(`/apps/${appId}/chat/${chatId}`, {
-    messages,
-    ...options
-  });
-  return response.data;
+  return handleApiResponse(() => 
+    apiClient.post(`/apps/${appId}/chat/${chatId}`, {
+      messages,
+      ...options
+    }),
+    null, // No caching for chat messages
+    null,
+    false // Don't deduplicate chat requests
+  );
 };
 
 export const sendDirectModelMessage = async (modelId, messages, options = {}) => {
-  const response = await apiClient.post(`/models/${modelId}/chat`, {
-    messages,
-    ...options
-  });
-  return response.data;
+  return handleApiResponse(() => 
+    apiClient.post(`/models/${modelId}/chat`, {
+      messages,
+      ...options
+    }),
+    null, // No caching for chat messages
+    null,
+    false // Don't deduplicate chat requests
+  );
 };
 
 // Styles
-export const fetchStyles = async () => {
-  const response = await apiClient.get('/styles');
-  return response.data;
+export const fetchStyles = async (options = {}) => {
+  const { skipCache = false } = options;
+  const cacheKey = skipCache ? null : CACHE_KEYS.STYLES;
+  
+  return handleApiResponse(
+    () => apiClient.get('/styles'),
+    cacheKey,
+    DEFAULT_CACHE_TTL.LONG
+  );
 };
 
 // UI Configuration
-export const fetchUIConfig = async () => {
-  const response = await apiClient.get('/ui');
-  return response.data;
+export const fetchUIConfig = async (options = {}) => {
+  const { skipCache = false, language = null } = options;
+  const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.UI_CONFIG, { language });
+  
+  return handleApiResponse(
+    () => apiClient.get('/ui', { params: { language } }),
+    cacheKey,
+    DEFAULT_CACHE_TTL.LONG
+  );
 };
 
 // Test model
 export const testModel = async (modelId) => {
-  const response = await apiClient.get(`/models/${modelId}/chat/test`);
-  return response.data;
+  return handleApiResponse(() => 
+    apiClient.get(`/models/${modelId}/chat/test`),
+    null, // No caching for test calls
+    null,
+    false // Don't deduplicate test requests
+  );
 };
 
 // Stop an ongoing streaming chat session
 export const stopAppChatStream = async (appId, chatId) => {
-  const response = await apiClient.post(`/apps/${appId}/chat/${chatId}/stop`);
-  return response.data;
+  return handleApiResponse(() => 
+    apiClient.post(`/apps/${appId}/chat/${chatId}/stop`),
+    null, // No caching
+    null,
+    false // Don't deduplicate
+  );
 };
 
 // Check if a chat session is still active
 export const checkAppChatStatus = async (appId, chatId) => {
-  const response = await apiClient.get(`/apps/${appId}/chat/${chatId}/status`);
-  return response.data;
+  return handleApiResponse(() => 
+    apiClient.get(`/apps/${appId}/chat/${chatId}/status`),
+    null, // Don't cache status checks
+    null,
+    false // Don't deduplicate status checks
+  );
+};
+
+// Clear the API cache - useful when user actions might invalidate the cache
+export const clearApiCache = (key = null) => {
+  if (key) {
+    cache.delete(key);
+  } else {
+    cache.clear();
+  }
+  console.log(key ? `Cleared cache for ${key}` : 'Cleared entire API cache');
+};
+
+// Invalidate specific cache entries based on prefix or pattern
+export const invalidateCacheByPattern = (pattern) => {
+  const invalidatedCount = cache.invalidateByPattern(pattern);
+  console.log(`Invalidated ${invalidatedCount} cache entries matching: ${pattern}`);
+  return invalidatedCount;
+};
+
+// Advanced cache operations
+export const prefetchData = async () => {
+  try {
+    console.log('Prefetching common data...');
+    // Fetch common data in parallel
+    await Promise.all([
+      fetchUIConfig(),
+      fetchStyles(),
+      fetchModels(),
+      fetchApps()
+    ]);
+    console.log('Prefetch completed successfully');
+    return true;
+  } catch (error) {
+    console.error('Prefetch failed:', error);
+    return false;
+  }
+};
+
+// Request timeout detection
+export const isTimeoutError = (error) => {
+  return error?.message?.includes('timeout') || 
+    error?.originalError?.message?.includes('timeout') || 
+    error?.code === 'ECONNABORTED';
+};
+
+// Force refresh data from server
+export const forceRefresh = async (type, id = null) => {
+  let cacheKey;
+  let fetchFunction;
+  let options = { skipCache: true };
+  
+  switch (type) {
+    case 'app':
+      if (!id) throw new Error('App ID is required for refreshing app details');
+      cacheKey = buildCacheKey(CACHE_KEYS.APP_DETAILS, { id });
+      fetchFunction = () => fetchAppDetails(id, options);
+      break;
+    case 'apps':
+      cacheKey = CACHE_KEYS.APPS_LIST;
+      fetchFunction = () => fetchApps(options);
+      break;
+    case 'model':
+      if (!id) throw new Error('Model ID is required for refreshing model details');
+      cacheKey = buildCacheKey(CACHE_KEYS.MODEL_DETAILS, { id });
+      fetchFunction = () => fetchModelDetails(id, options);
+      break;
+    case 'models':
+      cacheKey = CACHE_KEYS.MODELS_LIST;
+      fetchFunction = () => fetchModels(options);
+      break;
+    case 'ui':
+      cacheKey = CACHE_KEYS.UI_CONFIG;
+      fetchFunction = () => fetchUIConfig(options);
+      break;
+    case 'styles':
+      cacheKey = CACHE_KEYS.STYLES;
+      fetchFunction = () => fetchStyles(options);
+      break;
+    default:
+      throw new Error(`Unknown refresh type: ${type}`);
+  }
+  
+  // First clear the cache
+  cache.delete(cacheKey);
+  
+  // Then fetch fresh data
+  const freshData = await fetchFunction();
+  
+  // Update the cache with fresh data
+  cache.set(cacheKey, freshData);
+  
+  return freshData;
 };
