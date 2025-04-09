@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 const AppConfigForm = ({ 
   app, 
@@ -15,6 +16,8 @@ const AppConfigForm = ({
   onSendChatHistoryChange, 
   onTemperatureChange 
 }) => {
+  const { t } = useTranslation();
+  
   // Filter models if app has allowedModels specified
   const availableModels = app?.allowedModels && app.allowedModels.length > 0
     ? models.filter(model => app.allowedModels.includes(model.id))
@@ -22,9 +25,9 @@ const AppConfigForm = ({
 
   // Available output formats
   const outputFormats = [
-    { id: 'markdown', name: 'Markdown' },
-    { id: 'text', name: 'Plain Text' },
-    { id: 'json', name: 'JSON' }
+    { id: 'markdown', name: t('appConfig.markdown', 'Markdown') },
+    { id: 'text', name: t('appConfig.plainText', 'Plain Text') },
+    { id: 'json', name: t('appConfig.json', 'JSON') }
   ];
 
   return (
@@ -32,7 +35,7 @@ const AppConfigForm = ({
       {/* Model Selection */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Model
+          {t('appConfig.model', 'Model')}
         </label>
         <select
           value={selectedModel}
@@ -50,7 +53,7 @@ const AppConfigForm = ({
       {/* Style Selection */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Response Style
+          {t('appConfig.responseStyle', 'Response Style')}
         </label>
         <select
           value={selectedStyle}
@@ -68,7 +71,7 @@ const AppConfigForm = ({
       {/* Temperature */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Temperature: {temperature}
+          {t('models.temperature')}: {temperature}
         </label>
         <input
           type="range"
@@ -80,15 +83,15 @@ const AppConfigForm = ({
           className="w-full"
         />
         <div className="flex justify-between text-xs text-gray-500">
-          <span>Precise</span>
-          <span>Creative</span>
+          <span>{t('common.precise')}</span>
+          <span>{t('common.creative')}</span>
         </div>
       </div>
 
       {/* Output Format */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Output Format
+          {t('appConfig.outputFormat', 'Output Format')}
         </label>
         <select
           value={selectedOutputFormat}
@@ -112,7 +115,7 @@ const AppConfigForm = ({
             onChange={(e) => onSendChatHistoryChange(e.target.checked)}
             className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
           />
-          Include chat history in requests
+          {t('appConfig.includeChatHistory', 'Include chat history in requests')}
         </label>
       </div>
     </div>

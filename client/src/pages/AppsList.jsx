@@ -2,37 +2,140 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchApps } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { useHeaderColor } from '../components/HeaderColorContext';
+import { useTranslation } from 'react-i18next';
+import { getLocalizedContent } from '../utils/localizeContent';
+import { getFavoriteApps, isAppFavorite, toggleFavoriteApp } from '../utils/favoriteApps';
 
 const AppsList = () => {
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
+  
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { resetHeaderColor } = useHeaderColor();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [categories, setCategories] = useState([]);
+  const [favoriteApps, setFavoriteApps] = useState([]);
 
   useEffect(() => {
-    // Reset header color when returning to the apps list
-    resetHeaderColor();
-    
     const loadApps = async () => {
+      console.log('Loading apps...');
       try {
         setLoading(true);
-        const data = await fetchApps();
-        setApps(data);
+        const appsData = await fetchApps();
+        console.log('Apps data received:', appsData); // Debug output
+        
+        // Safety check for empty or invalid data
+        if (!appsData || !Array.isArray(appsData)) {
+          console.error('Invalid apps data received:', appsData);
+          setError('Failed to load applications: Invalid data format');
+          setApps([]);
+          return;
+        }
+        
+        setApps(appsData);
+        
+        // Extract unique categories
+        const uniqueCategories = [...new Set(appsData
+          .filter(app => app.category)
+          .map(app => app.category))
+        ];
+        setCategories(uniqueCategories);
+        
+        // Load favorite apps from localStorage
+        setFavoriteApps(getFavoriteApps());
+        
         setError(null);
       } catch (err) {
         console.error('Error loading apps:', err);
-        setError('Failed to load apps. Please try again later.');
+        setError('Failed to load applications. Please try again later.');
+        setApps([]); // Ensure apps is initialized as empty array on error
       } finally {
         setLoading(false);
       }
     };
-
+    
     loadApps();
-  }, [resetHeaderColor]);
+  }, []);
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const handleCategoryChange = (category) => {
+    setSelectedCategory(category);
+  };
+
+  const handleToggleFavorite = (e, appId) => {
+    e.preventDefault(); // Stop event propagation to avoid navigating to the app
+    e.stopPropagation();
+    
+    const newStatus = toggleFavoriteApp(appId);
+    // Update the favorite apps list in state
+    if (newStatus) {
+      setFavoriteApps(prev => [...prev, appId]);
+    } else {
+      setFavoriteApps(prev => prev.filter(id => id !== appId));
+    }
+  };
+
+  // Filter apps based on search term and selected category
+  // Updated with more robust error handling
+  const filteredApps = apps.filter(app => {
+    try {
+      // Safety check
+      if (!app) return false;
+      
+      // Skip filtering if search and category are empty/default
+      if (searchTerm === '' && selectedCategory === 'all') {
+        return true;
+      }
+      
+      // Safely get localized content with fallbacks
+      const appName = app.name ? getLocalizedContent(app.name, currentLanguage) || '' : '';
+      const appDescription = app.description ? getLocalizedContent(app.description, currentLanguage) || '' : '';
+      
+      const nameMatches = searchTerm === '' || 
+                          appName.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const descriptionMatches = searchTerm === '' || 
+                                appDescription.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const categoryMatches = selectedCategory === 'all' || app.category === selectedCategory;
+      
+      return (nameMatches || descriptionMatches) && categoryMatches;
+    } catch (err) {
+      console.error('Error filtering app:', app, err);
+      return false;
+    }
+  });
+  
+  // Sort apps to show favorites first
+  const sortedApps = [...filteredApps].sort((a, b) => {
+    const aIsFavorite = favoriteApps.includes(a.id);
+    const bIsFavorite = favoriteApps.includes(b.id);
+    
+    if (aIsFavorite && !bIsFavorite) return -1;
+    if (!aIsFavorite && bIsFavorite) return 1;
+    
+    // Secondary sort by name if favorite status is the same
+    const aName = getLocalizedContent(a.name, currentLanguage) || '';
+    const bName = getLocalizedContent(b.name, currentLanguage) || '';
+    return aName.localeCompare(bName);
+  });
+  
+  // Debug output after filtering
+  useEffect(() => {
+    if (!loading) {
+      console.log('Original apps count:', apps.length);
+      console.log('Filtered apps count:', filteredApps.length);
+      console.log('Favorite apps count:', favoriteApps.length);
+    }
+  }, [loading, apps, filteredApps, favoriteApps, searchTerm, selectedCategory]);
 
   if (loading) {
-    return <LoadingSpinner message="Loading apps..." />;
+    return <LoadingSpinner message={t('app.loading')} />;
   }
 
   if (error) {
@@ -43,53 +146,163 @@ const AppsList = () => {
           className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
           onClick={() => window.location.reload()}
         >
-          Retry
+          {t('app.retry')}
+        </button>
+      </div>
+    );
+  }
+
+  // Always show debugging info when no apps are available
+  if (apps.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-yellow-500 mb-4">No apps available from server</div>
+        <p className="mb-4">Check if the server is running and returning data correctly.</p>
+        <button 
+          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          onClick={() => window.location.reload()}
+        >
+          {t('app.retry')}
         </button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-12rem)]">
-      <h1 className="text-3xl font-bold mb-8 text-center">Applications</h1>
+    <div className="container mx-auto py-8 px-4">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold mb-2">{t('pages.appsList.title')}</h1>
+        <p className="text-gray-600">{t('pages.appsList.subtitle')}</p>
+      </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 flex-grow">
-        {apps.map(app => (
-          <Link 
-            key={app.id}
-            to={`/apps/${app.id}`}
-            className="block"
-          >
-            <div 
-              className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
-              style={{ borderTop: `4px solid ${app.color}` }}
+      <div className="flex flex-col md:flex-row mb-6 gap-4">
+        <div className="w-full md:w-2/3">
+          <input
+            type="text"
+            placeholder={t('pages.appsList.searchPlaceholder')}
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        </div>
+        
+        {categories.length > 0 && (
+          <div className="w-full md:w-1/3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('pages.appsList.categories')}</label>
+            <select
+              value={selectedCategory}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             >
-              <div className="p-6">
-                <div className="flex items-center mb-4">
-                  <div 
-                    className="w-10 h-10 rounded-full flex items-center justify-center mr-3"
-                    style={{ backgroundColor: app.color }}
-                  >
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              <option value="all">{t('pages.appsList.allCategories')}</option>
+              {categories.map(category => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {sortedApps.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-gray-500">{t('pages.appsList.noApps')}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {sortedApps.map(app => (
+            <div
+              key={app.id}
+              className="relative bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300"
+            >
+              <button 
+                onClick={(e) => handleToggleFavorite(e, app.id)}
+                className="absolute top-2 right-2 z-10 p-1 bg-white bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
+                title={favoriteApps.includes(app.id) ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
+              >
+                <svg 
+                  className={`w-5 h-5 ${favoriteApps.includes(app.id) ? 'text-yellow-500' : 'text-gray-400'}`} 
+                  fill={favoriteApps.includes(app.id) ? 'currentColor' : 'none'} 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24" 
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={1.5} 
+                    d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" 
+                  />
+                </svg>
+              </button>
+              <Link
+                to={`/apps/${app.id}`}
+                className="block"
+              >
+                <div 
+                  className="h-24 rounded-t-lg flex items-center justify-center"
+                  style={{ backgroundColor: app.color }}
+                >
+                  <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      {app.icon === 'chat-bubbles' && (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                      )}
+                      {app.icon === 'document-text' && (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      )}
+                      {app.icon === 'globe' && (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      )}
+                      {app.icon === 'sparkles' && (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                      )}
+                      {app.icon === 'mail' && (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      )}
+                      {app.icon === 'calendar' && (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      )}
+                      {app.icon === 'share' && (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                      )}
+                      {app.icon === 'document-search' && (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z" />
+                      )}
+                      {app.icon === 'users' && (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                      )}
+                      {/* Default icon if none of the above match */}
+                      {!['chat-bubbles', 'document-text', 'globe', 'sparkles', 'mail', 'calendar', 'share', 'document-search', 'users'].includes(app.icon) && (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      )}
                     </svg>
                   </div>
-                  <h2 className="text-xl font-semibold">{app.name}</h2>
                 </div>
-                <p className="text-gray-600 line-clamp-2 h-12 overflow-hidden">{app.description}</p>
-              </div>
-              <div className="px-6 py-3 bg-gray-50 text-sm mt-auto">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500">Model: {app.preferredModel}</span>
-                  <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-xs">
-                    Try It
-                  </span>
+                <div className="p-4">
+                  <h3 className="font-bold text-lg mb-1">
+                    {getLocalizedContent(app.name, currentLanguage)}
+                    {favoriteApps.includes(app.id) && (
+                      <span className="ml-2 inline-block">
+                        <svg 
+                          className="w-4 h-4 text-yellow-500 inline-block" 
+                          fill="currentColor" 
+                          viewBox="0 0 24 24" 
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                        </svg>
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-gray-600 text-sm">{getLocalizedContent(app.description, currentLanguage)}</p>
                 </div>
-              </div>
+              </Link>
             </div>
-          </Link>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

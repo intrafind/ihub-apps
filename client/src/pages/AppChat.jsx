@@ -5,8 +5,12 @@ import ChatMessage from '../components/ChatMessage';
 import AppConfigForm from '../components/AppConfigForm';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useHeaderColor } from '../components/HeaderColorContext';
+import { useTranslation } from 'react-i18next';
+import { getLocalizedContent } from '../utils/localizeContent';
 
 const AppChat = () => {
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const { appId } = useParams();
   const navigate = useNavigate();
   const [app, setApp] = useState(null);
@@ -47,7 +51,6 @@ const AppChat = () => {
         const appData = await fetchAppDetails(appId);
         setApp(appData);
 
-        // Set the header color based on the app's color
         if (appData?.color) {
           setHeaderColor(appData.color);
         }
@@ -60,7 +63,12 @@ const AppChat = () => {
         if (appData.variables) {
           const initialVars = {};
           appData.variables.forEach((variable) => {
-            initialVars[variable.name] = variable.defaultValue || '';
+            // Process localized default values
+            const localizedDefaultValue = typeof variable.defaultValue === 'object' 
+              ? getLocalizedContent(variable.defaultValue, i18n.language) 
+              : variable.defaultValue || '';
+            
+            initialVars[variable.name] = localizedDefaultValue;
           });
           setVariables(initialVars);
         }
@@ -68,15 +76,13 @@ const AppChat = () => {
         const modelsData = await fetchModels();
         setModels(modelsData);
 
-        // Choose a model - if app has allowedModels and the preferred model is not in that list,
-        // use the first allowed model instead
         let modelToSelect = appData.preferredModel;
         if (appData.allowedModels && appData.allowedModels.length > 0) {
           if (!appData.allowedModels.includes(appData.preferredModel)) {
             modelToSelect = appData.allowedModels[0];
           }
         }
-        
+
         setSelectedModel(modelToSelect);
 
         const stylesData = await fetchStyles();
@@ -105,61 +111,49 @@ const AppChat = () => {
   };
 
   const handleDeleteMessage = (messageId) => {
-    setMessages(prev => prev.filter(message => message.id !== messageId));
+    setMessages((prev) => prev.filter((message) => message.id !== messageId));
   };
 
   const handleEditMessage = (messageId, newContent) => {
-    const messageToEdit = messages.find(msg => msg.id === messageId);
+    const messageToEdit = messages.find((msg) => msg.id === messageId);
     if (!messageToEdit) return;
-    
-    // Find the index of the message being edited
-    const messageIndex = messages.findIndex(msg => msg.id === messageId);
-    
-    // Keep only messages up to and including the edited message
+
+    const messageIndex = messages.findIndex((msg) => msg.id === messageId);
     const previousMessages = messages.slice(0, messageIndex + 1);
-    
-    // Update the edited message content
-    setMessages(previousMessages.map(message => 
-      message.id === messageId 
-        ? { ...message, content: newContent } 
-        : message
-    ));
-    
-    // If this is a user message, create a new AI response without duplicating the user message
+
+    setMessages(
+      previousMessages.map((message) =>
+        message.id === messageId ? { ...message, content: newContent } : message
+      )
+    );
+
     if (messageToEdit.role === 'user') {
-      // Create a request with the edited message content
-      // but don't update the input field to prevent the handleSubmit from adding a duplicate message
-      
-      // Execute immediately to prevent timing issues
       (async () => {
         try {
           setProcessing(true);
           setError(null);
-          
-          // For the API call, use the existing messages which include the edited message
-          const currentMessages = previousMessages.map(message => 
-            message.id === messageId 
-              ? { ...message, content: newContent } 
-              : message
+
+          const currentMessages = previousMessages.map((message) =>
+            message.id === messageId ? { ...message, content: newContent } : message
           );
-          
-          // Create a message for API that includes template and variables
+
           const messageForAPI = {
             role: 'user',
             content: newContent,
             promptTemplate: app?.prompt || null,
             variables: { ...variables },
           };
-          
-          // Create a copy of messages for the API call
-          const messagesForAPI = sendChatHistory === false 
-            ? [messageForAPI] 
-            : [...currentMessages.map(msg => {
-                // Strip out properties that shouldn't go to the API
-                const { id, loading, error, ...apiMsg } = msg;
-                return apiMsg;
-              })];
-          
+
+          const messagesForAPI =
+            sendChatHistory === false
+              ? [messageForAPI]
+              : [
+                  ...currentMessages.map((msg) => {
+                    const { id, loading, error, ...apiMsg } = msg;
+                    return apiMsg;
+                  }),
+                ];
+
           const assistantMessageId = Date.now();
           setMessages((prev) => [
             ...prev,
@@ -170,27 +164,27 @@ const AppChat = () => {
               loading: true,
             },
           ]);
-        
+
           const eventSource = new EventSource(
             `/api/apps/${appId}/chat/${chatId.current}`
           );
           eventSourceRef.current = eventSource;
-        
+
           let fullContent = '';
-          
+
           eventSource.addEventListener('connected', async () => {
             console.log('SSE connection established, sending edited chat message');
-        
+
             try {
               await sendAppChatMessage(appId, chatId.current, messagesForAPI, {
                 modelId: selectedModel,
                 style: selectedStyle,
                 temperature,
-                outputFormat: selectedOutputFormat
+                outputFormat: selectedOutputFormat,
               });
             } catch (postError) {
               console.error('Error sending chat message:', postError);
-        
+
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === assistantMessageId
@@ -204,16 +198,16 @@ const AppChat = () => {
                     : msg
                 )
               );
-        
+
               eventSource.close();
               setProcessing(false);
             }
           });
-        
+
           eventSource.addEventListener('chunk', (event) => {
             const data = JSON.parse(event.data);
             fullContent += data.content;
-        
+
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantMessageId
@@ -222,7 +216,7 @@ const AppChat = () => {
               )
             );
           });
-        
+
           eventSource.addEventListener('done', () => {
             setMessages((prev) =>
               prev.map((msg) =>
@@ -232,10 +226,10 @@ const AppChat = () => {
             eventSource.close();
             setProcessing(false);
           });
-        
+
           eventSource.addEventListener('error', (event) => {
             console.error('SSE Error:', event);
-        
+
             let errorMessage = 'Error receiving response. Please try again.';
             try {
               if (event.data) {
@@ -251,7 +245,7 @@ const AppChat = () => {
             } catch (e) {
               console.log('Could not parse error data:', e);
             }
-        
+
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantMessageId
@@ -264,14 +258,13 @@ const AppChat = () => {
                   : msg
               )
             );
-        
+
             eventSource.close();
             setProcessing(false);
           });
-          
         } catch (err) {
           console.error('Error sending message:', err);
-        
+
           setMessages((prev) => [
             ...prev,
             {
@@ -283,7 +276,7 @@ const AppChat = () => {
               error: true,
             },
           ]);
-        
+
           setProcessing(false);
         }
       })();
@@ -291,15 +284,11 @@ const AppChat = () => {
   };
 
   const handleResendMessage = (messageId) => {
-    // Find the message to resend
-    const messageToResend = messages.find(msg => msg.id === messageId);
+    const messageToResend = messages.find((msg) => msg.id === messageId);
     if (!messageToResend) return;
-    
-    // Instead of filtering messages, just set the input to the message content
-    // and let the normal submit process add it to the end of the conversation
+
     setInput(messageToResend.content);
-    
-    // Use setTimeout to allow state update to complete before submitting
+
     setTimeout(() => {
       const form = document.querySelector('form');
       if (form) {
@@ -310,9 +299,15 @@ const AppChat = () => {
   };
 
   const clearChat = () => {
-    if (window.confirm('Are you sure you want to clear the entire chat history?')) {
+    if (
+      window.confirm(
+        t(
+          'pages.appChat.clearConfirmation',
+          'Are you sure you want to clear the entire chat history?'
+        )
+      )
+    ) {
       setMessages([]);
-      // Generate new chat ID to ensure a fresh conversation with the API
       chatId.current = `chat-${Date.now()}`;
     }
   };
@@ -329,9 +324,12 @@ const AppChat = () => {
 
       if (missingRequiredVars.length > 0) {
         setError(
-          `Please fill in all required fields: ${missingRequiredVars
-            .map((v) => v.label)
-            .join(', ')}`
+          t(
+            'pages.appChat.missingFields',
+            'Please fill in all required fields:'
+          ) +
+            ' ' +
+            missingRequiredVars.map((v) => v.label).join(', ')
         );
         return;
       }
@@ -341,39 +339,34 @@ const AppChat = () => {
       setProcessing(true);
       setError(null);
 
-      // Store the original user input for display in chat history
       const originalUserInput = input;
-      
-      // Create a user message with a unique ID
+
       const userMessageId = Date.now();
       const newUserMessage = {
         id: userMessageId,
         role: 'user',
         content: originalUserInput,
-        variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined
+        variables:
+          app?.variables && app.variables.length > 0
+            ? { ...variables }
+            : undefined,
       };
-      
-      // Add the new user message to the chat history
+
       setMessages((prev) => [...prev, newUserMessage]);
       setInput('');
 
-      // For the API call, we send both the original input and the prompt template with variables
-      // This keeps the displayed message clean while providing the server with everything needed
       const messageForAPI = {
         role: 'user',
         content: originalUserInput,
-        // Include the prompt template and variables separately for server-side processing
         promptTemplate: app?.prompt || null,
         variables: { ...variables },
       };
 
-      // Create a copy of messages for the API call that includes our special messageForAPI
-      // Only include the history if app.sendChatHistory is true
-      const messagesForAPI = sendChatHistory === false 
-        ? [messageForAPI] 
-        : [...messages, messageForAPI];
+      const messagesForAPI =
+        sendChatHistory === false
+          ? [messageForAPI]
+          : [...messages, messageForAPI];
 
-      // Ensure assistant message has a different ID by adding 1 to the user message ID
       const assistantMessageId = userMessageId + 1;
       setMessages((prev) => [
         ...prev,
@@ -398,12 +391,11 @@ const AppChat = () => {
         console.log('SSE connection established, sending chat message');
 
         try {
-          // Use the messagesForAPI array which includes the prompt template and variables
           await sendAppChatMessage(appId, chatId.current, messagesForAPI, {
             modelId: selectedModel,
             style: selectedStyle,
             temperature,
-            outputFormat: selectedOutputFormat
+            outputFormat: selectedOutputFormat,
           });
         } catch (postError) {
           console.error('Error sending chat message:', postError);
@@ -413,8 +405,10 @@ const AppChat = () => {
               msg.id === assistantMessageId
                 ? {
                     ...msg,
-                    content:
-                      'Error: Failed to generate response. Please try again or select a different model.',
+                    content: t(
+                      'pages.appChat.errorResponse',
+                      'Error: Failed to generate response. Please try again or select a different model.'
+                    ),
                     loading: false,
                     error: true,
                   }
@@ -453,13 +447,19 @@ const AppChat = () => {
       eventSource.addEventListener('error', (event) => {
         console.error('SSE Error:', event);
 
-        let errorMessage = 'Error receiving response. Please try again.';
+        let errorMessage = t(
+          'pages.appChat.errorReceivingResponse',
+          'Error receiving response. Please try again.'
+        );
         try {
           if (event.data) {
             const errorData = JSON.parse(event.data);
             if (errorData.message) {
               if (errorData.message.includes('API key not found')) {
-                errorMessage = `${errorData.message}. Please check your API configuration.`;
+                errorMessage = `${errorData.message}. ${t(
+                  'pages.appChat.checkAPIConfig',
+                  'Please check your API configuration.'
+                )}`;
               } else {
                 errorMessage = errorData.message;
               }
@@ -493,8 +493,11 @@ const AppChat = () => {
         {
           id: Date.now(),
           role: 'system',
-          content: `Error: Failed to send message. ${
-            err.message || 'Please try again.'
+          content: `Error: ${t(
+            'pages.appChat.failedToSendMessage',
+            'Failed to send message.'
+          )} ${
+            err.message || t('pages.appChat.tryAgain', 'Please try again.')
           }`,
           error: true,
         },
@@ -512,8 +515,33 @@ const AppChat = () => {
     setShowParameters(!showParameters);
   };
 
+  const localizeVariables = (variables) => {
+    if (!variables || !Array.isArray(variables)) return [];
+
+    return variables.map((variable) => ({
+      ...variable,
+      localizedLabel: getLocalizedContent(variable.label, currentLanguage),
+      localizedDescription: getLocalizedContent(
+        variable.description,
+        currentLanguage
+      ),
+      localizedDefaultValue: getLocalizedContent(
+        variable.defaultValue,
+        currentLanguage
+      ),
+      predefinedValues: variable.predefinedValues
+        ? variable.predefinedValues.map((option) => ({
+            ...option,
+            localizedLabel: getLocalizedContent(option.label, currentLanguage),
+          }))
+        : undefined,
+    }));
+  };
+
+  const localizedVariables = app?.variables ? localizeVariables(app.variables) : [];
+
   if (loading) {
-    return <LoadingSpinner message="Loading application..." />;
+    return <LoadingSpinner message={t('app.loading')} />;
   }
 
   if (error) {
@@ -524,13 +552,13 @@ const AppChat = () => {
           className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mr-4"
           onClick={() => window.location.reload()}
         >
-          Retry
+          {t('app.retry')}
         </button>
         <button
           className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
           onClick={() => navigate('/')}
         >
-          Back to Apps
+          {t('common.back')}
         </button>
       </div>
     );
@@ -538,8 +566,9 @@ const AppChat = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)]">
-      <div className="flex justify-between items-center mb-4 pb-4 border-b">
-        <div className="flex items-center">
+      <div className="flex flex-col mb-4 pb-4 border-b">
+        {/* App Header - Icon and Title */}
+        <div className="flex items-center mb-3">
           <div
             className="w-10 h-10 rounded-full flex items-center justify-center mr-3"
             style={{ backgroundColor: app?.color }}
@@ -560,24 +589,97 @@ const AppChat = () => {
             </svg>
           </div>
           <div>
-            <h1 className="text-2xl font-bold">{app?.name}</h1>
-            <p className="text-gray-600 text-sm">{app?.description}</p>
+            <h1 className="text-2xl font-bold">
+              {getLocalizedContent(app?.name, currentLanguage)}
+            </h1>
+            <p className="text-gray-600 text-sm">
+              {getLocalizedContent(app?.description, currentLanguage)}
+            </p>
           </div>
         </div>
-        <div className="flex space-x-2">
-          {app?.variables && app.variables.length > 0 && (
+        
+        {/* Mobile buttons (shown below header on small screens) */}
+        <div className="md:hidden flex flex-wrap gap-2">
+          {localizedVariables.length > 0 && (
             <button
               onClick={toggleParameters}
-              className="md:hidden bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center text-sm"
             >
-              Parameters
+              <svg
+                className="w-4 h-4 mr-1"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 11l5-5m0 0l5 5m-5-5v12"
+                />
+              </svg>
+              {t('pages.appChat.parameters')}
             </button>
           )}
+          <button
+            onClick={toggleConfig}
+            className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center text-sm"
+          >
+            <svg
+              className="w-4 h-4 mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            {t('settings.title')}
+          </button>
+          {messages.length > 0 && (
+            <button
+              onClick={clearChat}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center text-sm"
+              title={t('pages.appChat.clearChat')}
+            >
+              <svg
+                className="w-4 h-4 mr-1"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+              {t('pages.appChat.clear')}
+            </button>
+          )}
+        </div>
+        
+        {/* Desktop buttons (horizontal) */}
+        <div className="hidden md:flex space-x-2 ml-auto">
           {messages.length > 0 && (
             <button
               onClick={clearChat}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
-              title="Clear chat history"
+              title={t('pages.appChat.clearChat')}
             >
               <svg
                 className="w-5 h-5 mr-1"
@@ -593,7 +695,7 @@ const AppChat = () => {
                   d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                 />
               </svg>
-              Clear
+              {t('pages.appChat.clear')}
             </button>
           )}
           <button
@@ -620,7 +722,7 @@ const AppChat = () => {
                 d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
               />
             </svg>
-            Settings
+            {t('settings.title')}
           </button>
         </div>
       </div>
@@ -641,6 +743,7 @@ const AppChat = () => {
             onOutputFormatChange={setSelectedOutputFormat}
             onSendChatHistoryChange={setSendChatHistory}
             onTemperatureChange={setTemperature}
+            currentLanguage={currentLanguage}
           />
         </div>
       )}
@@ -648,7 +751,7 @@ const AppChat = () => {
       {app?.variables && app.variables.length > 0 && showParameters && (
         <div className="md:hidden mb-4 p-4 bg-gray-50 rounded-lg">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="font-medium">Input Parameters</h3>
+            <h3 className="font-medium">{t('pages.appChat.inputParameters')}</h3>
             <button
               onClick={toggleParameters}
               className="text-gray-500 hover:text-gray-700"
@@ -670,10 +773,10 @@ const AppChat = () => {
             </button>
           </div>
           <div className="space-y-3">
-            {app.variables.map((variable) => (
+            {localizedVariables.map((variable) => (
               <div key={variable.name} className="flex flex-col">
                 <label className="mb-1 text-sm font-medium text-gray-700">
-                  {variable.label}
+                  {variable.localizedLabel}
                   {variable.required && (
                     <span className="text-red-500 ml-1">*</span>
                   )}
@@ -690,10 +793,10 @@ const AppChat = () => {
                     className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
                     required={variable.required}
                   >
-                    <option value="">Select {variable.label}</option>
+                    <option value="">{t('common.select')} {variable.localizedLabel}</option>
                     {variable.predefinedValues.map((option) => (
                       <option key={option.value} value={option.value}>
-                        {option.label}
+                        {option.localizedLabel}
                       </option>
                     ))}
                   </select>
@@ -708,7 +811,7 @@ const AppChat = () => {
                     }
                     rows={4}
                     className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder={`Enter ${variable.label.toLowerCase()}`}
+                    placeholder={t('variables.enter') + ' ' + variable.localizedLabel.toLowerCase()}
                     required={variable.required}
                   />
                 ) : (
@@ -722,9 +825,12 @@ const AppChat = () => {
                       })
                     }
                     className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder={`Enter ${variable.label.toLowerCase()}`}
+                    placeholder={t('variables.enter') + ' ' + variable.localizedLabel.toLowerCase()}
                     required={variable.required}
                   />
+                )}
+                {variable.localizedDescription && (
+                  <p className="mt-1 text-xs text-gray-500">{variable.localizedDescription}</p>
                 )}
               </div>
             ))}
@@ -766,7 +872,7 @@ const AppChat = () => {
                     d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
                   />
                 </svg>
-                <p>Start the conversation by sending a message below.</p>
+                <p>{t('pages.appChat.startConversation')}</p>
               </div>
             )}
           </div>
@@ -779,7 +885,7 @@ const AppChat = () => {
               disabled={processing}
               className="flex-1 p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               placeholder={
-                processing ? 'Processing...' : 'Type your message...'
+                processing ? t('pages.appChat.thinking') : t('pages.appChat.messagePlaceholder')
               }
             />
             <button
@@ -815,7 +921,7 @@ const AppChat = () => {
                 </svg>
               ) : (
                 <>
-                  <span>Send</span>
+                  <span>{t('common.send')}</span>
                   <svg
                     className="w-5 h-5 ml-1"
                     fill="none"
@@ -838,12 +944,12 @@ const AppChat = () => {
 
         {app?.variables && app.variables.length > 0 && (
           <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-medium mb-3">Input Parameters</h3>
+            <h3 className="font-medium mb-3">{t('pages.appChat.inputParameters')}</h3>
             <div className="space-y-3">
-              {app.variables.map((variable) => (
+              {localizedVariables.map((variable) => (
                 <div key={variable.name} className="flex flex-col">
                   <label className="mb-1 text-sm font-medium text-gray-700">
-                    {variable.label}
+                    {variable.localizedLabel}
                     {variable.required && (
                       <span className="text-red-500 ml-1">*</span>
                     )}
@@ -860,10 +966,10 @@ const AppChat = () => {
                       className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
                       required={variable.required}
                     >
-                      <option value="">Select {variable.label}</option>
+                      <option value="">{t('common.select')} {variable.localizedLabel}</option>
                       {variable.predefinedValues.map((option) => (
                         <option key={option.value} value={option.value}>
-                          {option.label}
+                          {option.localizedLabel}
                         </option>
                       ))}
                     </select>
@@ -878,7 +984,7 @@ const AppChat = () => {
                       }
                       rows={4}
                       className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder={`Enter ${variable.label.toLowerCase()}`}
+                      placeholder={t('variables.enter') + ' ' + variable.localizedLabel.toLowerCase()}
                       required={variable.required}
                     />
                   ) : (
@@ -892,9 +998,12 @@ const AppChat = () => {
                         })
                       }
                       className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder={`Enter ${variable.label.toLowerCase()}`}
+                      placeholder={t('variables.enter') + ' ' + variable.localizedLabel.toLowerCase()}
                       required={variable.required}
                     />
+                  )}
+                  {variable.localizedDescription && (
+                    <p className="mt-1 text-xs text-gray-500">{variable.localizedDescription}</p>
                   )}
                 </div>
               ))}

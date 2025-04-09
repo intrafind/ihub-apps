@@ -32,7 +32,10 @@
     "all": "Alle",
     "default": "Standard",
     "precise": "Präzise",
-    "creative": "Kreativ"
+    "creative": "Kreativ",
+    "select": "Auswählen",
+    "favorite": "Favorisieren",
+    "unfavorite": "Defavorisieren"
   },
   "pages": {
     "home": {
@@ -47,18 +50,24 @@
       "noApps": "Keine Anwendungen gefunden",
       "searchPlaceholder": "Anwendungen durchsuchen...",
       "categories": "Kategorien",
-      "allCategories": "Alle Kategorien"
+      "allCategories": "Alle Kategorien",
+      "favorite": "Zu Favoriten hinzufügen",
+      "unfavorite": "Aus Favoriten entfernen",
+      "favorites": "Favoriten"
     },
     "appChat": {
       "messagePlaceholder": "Gib deine Nachricht hier ein...",
       "send": "Senden",
       "thinking": "Denkt nach...",
       "regenerate": "Antwort neu generieren",
-      "clearChat": "Chat löschen",
+      "clear": "Chat löschen",
       "shareConversation": "Unterhaltung teilen",
       "copyToClipboard": "In die Zwischenablage kopieren",
       "copied": "In die Zwischenablage kopiert!",
-      "configureApp": "Konfigurieren"
+      "configureApp": "Konfigurieren",
+      "inputParameters": "Eingabeparameter",
+      "parameters": "Parameter",
+      "startConversation": "Unterhaltung starten"
     },
     "notFound": {
       "title": "Seite nicht gefunden",
@@ -76,7 +85,8 @@
     "language": "Sprache",
     "format": "Format",
     "tone": "Tonfall",
-    "length": "Länge"
+    "length": "Länge",
+    "enter": "Eingeben"
   },
   "settings": {
     "title": "Einstellungen",

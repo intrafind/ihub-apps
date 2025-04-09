@@ -7,7 +7,9 @@
  * @returns {string} - The localized content
  */
 export const getLocalizedContent = (content, language, fallbackLanguage = 'en') => {
-  if (!content) {
+  // Handle null or undefined content
+  if (content === null || content === undefined) {
+    // console.log('Content is null or undefined');
     return '';
   }
   
@@ -17,24 +19,38 @@ export const getLocalizedContent = (content, language, fallbackLanguage = 'en') 
   }
   
   // If content is an object with language keys
-  if (typeof content === 'object' && content !== null) {
-    // Try to get the content in the requested language
-    if (content[language]) {
-      return content[language];
-    }
-    
-    // Fall back to the fallback language
-    if (content[fallbackLanguage]) {
-      return content[fallbackLanguage];
-    }
-    
-    // If neither the requested language nor fallback exist, get the first available translation
-    const availableLanguage = Object.keys(content)[0];
-    if (availableLanguage) {
-      return content[availableLanguage];
+  if (typeof content === 'object') {
+    try {
+      // Try to get the content in the requested language
+      if (content[language]) {
+        return content[language];
+      }
+      
+      // Fall back to the fallback language
+      if (content[fallbackLanguage]) {
+        return content[fallbackLanguage];
+      }
+      
+      // If neither the requested language nor fallback exist, get the first available translation
+      const availableLanguages = Object.keys(content);
+      if (availableLanguages.length > 0) {
+        return content[availableLanguages[0]];
+      }
+      
+      // If the object exists but has no language keys, return empty string
+      console.log('Content object has no language keys:', content);
+      return '';
+    } catch (error) {
+      console.error('Error accessing content object:', error, content);
+      return '';
     }
   }
   
-  // If all fails, return empty string
-  return '';
+  // For any other type, convert to string
+  try {
+    return String(content);
+  } catch (e) {
+    console.error('Failed to convert content to string:', e);
+    return '';
+  }
 };

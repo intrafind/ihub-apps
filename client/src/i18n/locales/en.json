@@ -32,7 +32,10 @@
     "all": "All",
     "default": "Default",
     "precise": "Precise",
-    "creative": "Creative"
+    "creative": "Creative",
+    "select": "Select",
+    "favorite": "Favorite",
+    "unfavorite": "Unfavorite"
   },
   "pages": {
     "home": {
@@ -47,18 +50,24 @@
       "noApps": "No applications found",
       "searchPlaceholder": "Search apps...",
       "categories": "Categories",
-      "allCategories": "All Categories"
+      "allCategories": "All Categories",
+      "favorite": "Add to favorites",
+      "unfavorite": "Remove from favorites",
+      "favorites": "Favorites"
     },
     "appChat": {
       "messagePlaceholder": "Type your message here...",
       "send": "Send",
       "thinking": "Thinking...",
       "regenerate": "Regenerate response",
-      "clearChat": "Clear chat",
+      "clear": "Clear chat",
       "shareConversation": "Share conversation",
       "copyToClipboard": "Copy to clipboard",
       "copied": "Copied to clipboard!",
-      "configureApp": "Configure"
+      "configureApp": "Configure",
+      "parameters": "Parameters",
+      "inputParameters": "Input Parameters",
+      "startConversation": "Start conversation"
     },
     "notFound": {
       "title": "Page Not Found",
@@ -76,7 +85,8 @@
     "language": "Language",
     "format": "Format",
     "tone": "Tone",
-    "length": "Length"
+    "length": "Length",
+    "enter": "Enter"
   },
   "settings": {
     "title": "Settings",
