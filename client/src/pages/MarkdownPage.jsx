@@ -55,7 +55,6 @@ const MarkdownPage = () => {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="bg-white p-6 md:p-8 rounded-lg shadow-md">
-        <h1 className="text-3xl font-bold mb-6">{title}</h1>
         <article className="prose prose-slate lg:prose-lg max-w-none">
           <ReactMarkdown>{pageContent}</ReactMarkdown>
         </article>

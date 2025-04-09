@@ -289,9 +289,12 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
           // Start with the prompt template or original content if no template
           let processedContent = msg.promptTemplate || msg.content;
           
+          // Ensure the original user content is available as {{content}} variable
+          const variables = { ...msg.variables, content: msg.content };
+          
           // Replace variable placeholders in the prompt
-          if (msg.variables && Object.keys(msg.variables).length > 0) {
-            for (const [key, value] of Object.entries(msg.variables)) {
+          if (variables && Object.keys(variables).length > 0) {
+            for (const [key, value] of Object.entries(variables)) {
               processedContent = processedContent.replace(`{{${key}}}`, value || '');
             }
           }
@@ -409,9 +412,12 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         // Start with the prompt template or original content if no template
         let processedContent = msg.promptTemplate || msg.content;
         
+        // Ensure the original user content is available as {{content}} variable
+        const variables = { ...msg.variables, content: msg.content };
+        
         // Replace variable placeholders in the prompt
-        if (msg.variables && Object.keys(msg.variables).length > 0) {
-          for (const [key, value] of Object.entries(msg.variables)) {
+        if (variables && Object.keys(variables).length > 0) {
+          for (const [key, value] of Object.entries(variables)) {
             processedContent = processedContent.replace(`{{${key}}}`, value || '');
           }
         }
