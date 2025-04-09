@@ -20,6 +20,8 @@ const AppChat = () => {
   const [showConfig, setShowConfig] = useState(false);
   const [selectedModel, setSelectedModel] = useState(null);
   const [selectedStyle, setSelectedStyle] = useState('normal');
+  const [selectedOutputFormat, setSelectedOutputFormat] = useState('markdown');
+  const [sendChatHistory, setSendChatHistory] = useState(true);
   const [temperature, setTemperature] = useState(0.7);
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(true);
@@ -52,6 +54,8 @@ const AppChat = () => {
 
         setTemperature(appData.preferredTemperature || 0.7);
         setSelectedStyle(appData.preferredStyle || 'normal');
+        setSelectedOutputFormat(appData.preferredOutputFormat || 'markdown');
+        setSendChatHistory(appData.sendChatHistory !== undefined ? appData.sendChatHistory : true);
 
         if (appData.variables) {
           const initialVars = {};
@@ -64,7 +68,16 @@ const AppChat = () => {
         const modelsData = await fetchModels();
         setModels(modelsData);
 
-        setSelectedModel(appData.preferredModel);
+        // Choose a model - if app has allowedModels and the preferred model is not in that list,
+        // use the first allowed model instead
+        let modelToSelect = appData.preferredModel;
+        if (appData.allowedModels && appData.allowedModels.length > 0) {
+          if (!appData.allowedModels.includes(appData.preferredModel)) {
+            modelToSelect = appData.allowedModels[0];
+          }
+        }
+        
+        setSelectedModel(modelToSelect);
 
         const stylesData = await fetchStyles();
         setStyles(stylesData);
@@ -89,6 +102,50 @@ const AppChat = () => {
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
+  };
+
+  const handleDeleteMessage = (messageId) => {
+    setMessages(prev => prev.filter(message => message.id !== messageId));
+  };
+
+  const handleEditMessage = (messageId, newContent) => {
+    setMessages(prev => 
+      prev.map(message => 
+        message.id === messageId 
+          ? { ...message, content: newContent } 
+          : message
+      )
+    );
+  };
+
+  const handleResendMessage = (messageId) => {
+    // Find the message to resend
+    const messageToResend = messages.find(msg => msg.id === messageId);
+    if (!messageToResend) return;
+    
+    // Filter out all messages after the resent message
+    const previousMessages = messages.slice(0, messages.findIndex(msg => msg.id === messageId));
+    setMessages(previousMessages);
+    
+    // Set the content as the new input and submit
+    setInput(messageToResend.content);
+    
+    // Use setTimeout to allow state update to complete before submitting
+    setTimeout(() => {
+      const form = document.querySelector('form');
+      if (form) {
+        const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+        form.dispatchEvent(submitEvent);
+      }
+    }, 0);
+  };
+
+  const clearChat = () => {
+    if (window.confirm('Are you sure you want to clear the entire chat history?')) {
+      setMessages([]);
+      // Generate new chat ID to ensure a fresh conversation with the API
+      chatId.current = `chat-${Date.now()}`;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -118,10 +175,12 @@ const AppChat = () => {
       // Store the original user input for display in chat history
       const originalUserInput = input;
       
-      // Create a user message that shows just the actual input in the UI
+      // Create a user message with ID for the UI operations
       const newUserMessage = {
+        id: Date.now(),
         role: 'user',
         content: originalUserInput,
+        variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined
       };
       
       // Add the new user message to the chat history
@@ -139,7 +198,10 @@ const AppChat = () => {
       };
 
       // Create a copy of messages for the API call that includes our special messageForAPI
-      const messagesForAPI = [...messages, messageForAPI];
+      // Only include the history if app.sendChatHistory is true
+      const messagesForAPI = sendChatHistory === false 
+        ? [messageForAPI] 
+        : [...messages, messageForAPI];
 
       const assistantMessageId = Date.now();
       setMessages((prev) => [
@@ -170,6 +232,7 @@ const AppChat = () => {
             modelId: selectedModel,
             style: selectedStyle,
             temperature,
+            outputFormat: selectedOutputFormat
           });
         } catch (postError) {
           console.error('Error sending chat message:', postError);
@@ -339,6 +402,29 @@ const AppChat = () => {
               Parameters
             </button>
           )}
+          {messages.length > 0 && (
+            <button
+              onClick={clearChat}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
+              title="Clear chat history"
+            >
+              <svg
+                className="w-5 h-5 mr-1"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+              Clear
+            </button>
+          )}
           <button
             onClick={toggleConfig}
             className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
@@ -376,9 +462,13 @@ const AppChat = () => {
             styles={styles}
             selectedModel={selectedModel}
             selectedStyle={selectedStyle}
+            selectedOutputFormat={selectedOutputFormat}
+            sendChatHistory={sendChatHistory}
             temperature={temperature}
             onModelChange={setSelectedModel}
             onStyleChange={setSelectedStyle}
+            onOutputFormatChange={setSelectedOutputFormat}
+            onSendChatHistoryChange={setSendChatHistory}
             onTemperatureChange={setTemperature}
           />
         </div>
@@ -482,7 +572,11 @@ const AppChat = () => {
                 <ChatMessage
                   key={index}
                   message={message}
-                  outputFormat={app?.preferredOutputFormat}
+                  outputFormat={selectedOutputFormat}
+                  onDelete={handleDeleteMessage}
+                  onEdit={handleEditMessage}
+                  onResend={handleResendMessage}
+                  editable={true}
                 />
               ))
             ) : (

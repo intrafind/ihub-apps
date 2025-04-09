@@ -10,7 +10,8 @@
     "preferredModel": "gpt-3.5-turbo",
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
-    "preferredTemperature": 0.7
+    "preferredTemperature": 0.7,
+    "sendChatHistory": true
   },
   {
     "id": "translator",
@@ -24,6 +25,7 @@
     "preferredOutputFormat": "text",
     "preferredStyle": "keep",
     "preferredTemperature": 0.3,
+    "sendChatHistory": false,
     "prompt": "Translate the following text to {{language}}:\n\n{{content}}",
     "variables": [
       {
@@ -56,6 +58,7 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.5,
+    "sendChatHistory": false,
     "prompt": "Please {{action}} the following content:\n\n{{content}}",
     "variables": [
       {
@@ -84,6 +87,7 @@
     "preferredStyle": "normal",
     "preferredOutputFormat": "markdown",
     "preferredTemperature": 0.8,
+    "sendChatHistory": false,
     "prompt": "{{content}}",
     "variables": [
       {
@@ -105,6 +109,7 @@
     "preferredOutputFormat": "text",
     "preferredStyle": "professional",
     "preferredTemperature": 0.6,
+    "sendChatHistory": false,
     "prompt": "Write a {{type}} email to {{recipient}} regarding {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}",
     "variables": [
       {
@@ -167,6 +172,7 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.4,
+    "sendChatHistory": false,
     "prompt": "{{action}} for a {{meeting_type}} meeting with the following details:\n\nMeeting Title: {{meeting_title}}\nParticipants: {{participants}}\nDuration: {{duration}}\n\n{{content}}",
     "variables": [
       {
@@ -228,6 +234,7 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "creative",
     "preferredTemperature": 0.8,
+    "sendChatHistory": false,
     "prompt": "Create {{count}} {{post_type}} for {{platform}} about {{topic}}. {{tone}} {{additional_instructions}}",
     "variables": [
       {
@@ -307,6 +314,7 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "academic",
     "preferredTemperature": 0.2,
+    "sendChatHistory": false,
     "prompt": "{{action}} on the topic of {{topic}}. {{format}}\n\n{{content}}",
     "variables": [
       {
@@ -356,6 +364,7 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "professional",
     "preferredTemperature": 0.4,
+    "sendChatHistory": false,
     "prompt": "Create a {{document_type}} for {{role}} {{additional_context}}.\n\n{{content}}",
     "variables": [
       {

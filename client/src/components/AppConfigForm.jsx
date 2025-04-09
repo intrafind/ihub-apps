@@ -6,11 +6,27 @@ const AppConfigForm = ({
   styles, 
   selectedModel, 
   selectedStyle, 
+  selectedOutputFormat,
+  sendChatHistory,
   temperature,
   onModelChange, 
-  onStyleChange, 
+  onStyleChange,
+  onOutputFormatChange,
+  onSendChatHistoryChange, 
   onTemperatureChange 
 }) => {
+  // Filter models if app has allowedModels specified
+  const availableModels = app?.allowedModels && app.allowedModels.length > 0
+    ? models.filter(model => app.allowedModels.includes(model.id))
+    : models;
+
+  // Available output formats
+  const outputFormats = [
+    { id: 'markdown', name: 'Markdown' },
+    { id: 'text', name: 'Plain Text' },
+    { id: 'json', name: 'JSON' }
+  ];
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {/* Model Selection */}
@@ -23,7 +39,7 @@ const AppConfigForm = ({
           onChange={(e) => onModelChange(e.target.value)}
           className="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
         >
-          {models.map((model) => (
+          {availableModels.map((model) => (
             <option key={model.id} value={model.id}>
               {model.name}
             </option>
@@ -68,8 +84,39 @@ const AppConfigForm = ({
           <span>Creative</span>
         </div>
       </div>
+
+      {/* Output Format */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Output Format
+        </label>
+        <select
+          value={selectedOutputFormat}
+          onChange={(e) => onOutputFormatChange(e.target.value)}
+          className="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          {outputFormats.map((format) => (
+            <option key={format.id} value={format.id}>
+              {format.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Chat History Toggle */}
+      <div className="flex items-center">
+        <label className="flex items-center text-sm font-medium text-gray-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={sendChatHistory}
+            onChange={(e) => onSendChatHistoryChange(e.target.checked)}
+            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
+          />
+          Include chat history in requests
+        </label>
+      </div>
     </div>
   );
 };
 
-export default AppConfigForm; 
+export default AppConfigForm;
