@@ -26,6 +26,7 @@
     "@types/react-dom": "^18.0.11",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.14",
+    "pkg": "^5.8.1",
     "postcss": "^8.4.23",
     "vite": "^4.2.0"
   }

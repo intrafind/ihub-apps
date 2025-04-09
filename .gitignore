@@ -16,6 +16,7 @@ yarn.lock
 # Vite build output
 dist/
 dist-ssr/
+dist-bin/
 build/
 
 # Logs

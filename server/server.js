@@ -5,6 +5,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import http from 'http';
+import https from 'https';
 
 // Import adapters and utilities
 import { createCompletionRequest, processResponseBuffer, formatMessages } from './adapters/index.js';
@@ -13,14 +15,31 @@ import { sendSSE, getApiKeyForModel } from './utils.js';
 // Initialize environment variables
 dotenv.config();
 
+// Determine if we're running from a packaged binary
+// Either via process.pkg (when using pkg directly) or APP_ROOT_DIR env var (our shell script approach)
+const isPackaged = process.pkg !== undefined || process.env.APP_ROOT_DIR !== undefined;
+
 // Set up directory paths
 const __filename = fileURLToPath(import.meta.url);
 const { dirname } = path;
 const __dirname = dirname(__filename);
 
+// Handle paths differently when running from a packaged binary vs normal execution
+// In packaged mode, use APP_ROOT_DIR environment variable if available
+let rootDir;
+if (isPackaged) {
+  rootDir = process.env.APP_ROOT_DIR || path.dirname(process.execPath);
+  console.log(`Running in packaged binary mode with APP_ROOT_DIR: ${rootDir}`);
+} else {
+  rootDir = path.join(__dirname, '..');
+  console.log(`Running in normal mode`);
+}
+console.log(`Root directory: ${rootDir}`);
+
 // Create Express application
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0'; // Default to all interfaces
 
 // Configure request timeouts
 const DEFAULT_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || '60000', 10); // 60 seconds default
@@ -112,7 +131,22 @@ function validateApiKeys() {
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../client/dist')));
+
+// Determine static file path based on environment and packaging
+let staticPath;
+if (isPackaged) {
+  // When running as a packaged binary, serve from the public directory next to the executable
+  staticPath = path.join(rootDir, 'public');
+} else if (process.env.NODE_ENV === 'production') {
+  // In production but not packaged, use relative path
+  staticPath = path.join(__dirname, '../public');
+} else {
+  // In development, serve from client/dist
+  staticPath = path.join(__dirname, '../client/dist');
+}
+
+console.log(`Serving static files from: ${staticPath}`);
+app.use(express.static(staticPath));
 
 // Helper function to load configuration files with caching
 const configCache = new Map();
@@ -132,17 +166,27 @@ async function loadConfig(filename) {
     // First normalize the path to prevent traversal attacks (removes ../, etc)
     const normalizedPath = path.normalize(filename).replace(/^(\.\.[\/\\])+/, '');
     
-    // Construct the full path within our config directory
-    const filePath = path.join(__dirname, '../config', normalizedPath);
+    // Determine config directory path based on packaging
+    let configPath;
+    if (isPackaged) {
+      configPath = path.join(rootDir, 'config', normalizedPath);
+    } else {
+      configPath = path.join(__dirname, '../config', normalizedPath);
+    }
+    
+    console.log(`Loading config from: ${configPath}`);
     
     // Verify the path is still within our config directory (extra security check)
-    const configDirPath = path.join(__dirname, '../config');
-    if (!filePath.startsWith(configDirPath)) {
+    const configDirPath = isPackaged 
+      ? path.join(rootDir, 'config')
+      : path.join(__dirname, '../config');
+      
+    if (!configPath.startsWith(configDirPath)) {
       console.error(`Security warning: Attempted to access file outside config directory: ${filename}`);
       return null;
     }
     
-    const data = await fs.readFile(filePath, 'utf8');
+    const data = await fs.readFile(configPath, 'utf8');
     const parsedData = JSON.parse(data);
     
     // Update cache
@@ -924,14 +968,58 @@ setInterval(() => {
 
 // Fall back to client-side routing for SPA
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  // Determine the index.html path based on packaging mode
+  let indexPath;
+  if (isPackaged) {
+    indexPath = path.join(rootDir, 'public/index.html');
+  } else if (process.env.NODE_ENV === 'production') {
+    indexPath = path.join(__dirname, '../public/index.html');
+  } else {
+    indexPath = path.join(__dirname, '../client/dist/index.html');
+  }
+  
+  console.log(`Serving SPA from: ${indexPath}`);
+  res.sendFile(indexPath);
 });
 
 // Validate API keys at startup
 validateApiKeys();
 
+// Check for SSL configuration
+let server;
+if (process.env.SSL_KEY && process.env.SSL_CERT) {
+  try {
+    // Import synchronous file system operations for SSL cert loading
+    const fsSync = await import('fs');
+    
+    // SSL configuration
+    const httpsOptions = {
+      key: fsSync.readFileSync(process.env.SSL_KEY),
+      cert: fsSync.readFileSync(process.env.SSL_CERT)
+    };
+    
+    // Add CA certificate if provided
+    if (process.env.SSL_CA) {
+      httpsOptions.ca = fsSync.readFileSync(process.env.SSL_CA);
+    }
+    
+    // Create HTTPS server
+    server = https.createServer(httpsOptions, app);
+    console.log(`Starting HTTPS server with SSL certificate from ${process.env.SSL_CERT}`);
+  } catch (error) {
+    console.error('Error setting up HTTPS server:', error);
+    console.log('Falling back to HTTP server');
+    server = http.createServer(app);
+  }
+} else {
+  // Create regular HTTP server
+  server = http.createServer(app);
+  console.log('Starting HTTP server (no SSL configuration provided)');
+}
+
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Open http://localhost:${PORT} in your browser to use AI Hub Apps`);
+server.listen(PORT, HOST, () => {
+  const protocol = server instanceof https.Server ? 'https' : 'http';
+  console.log(`Server is running on ${protocol}://${HOST}:${PORT}`);
+  console.log(`Open ${protocol}://${HOST}:${PORT} in your browser to use AI Hub Apps`);
 });

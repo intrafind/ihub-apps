@@ -1,0 +1,2 @@
+- count token usage for analytics, but also to limit them per user (per session or whatever)
+- allow login as well as anonymous but still be able to track a session
