@@ -175,19 +175,37 @@ const AppsList = () => {
         <p className="text-gray-600">{t('pages.appsList.subtitle')}</p>
       </div>
       
-      <div className="flex flex-col md:flex-row mb-6 gap-4">
-        <div className="w-full md:w-2/3">
-          <input
-            type="text"
-            placeholder={t('pages.appsList.searchPlaceholder')}
-            value={searchTerm}
-            onChange={handleSearchChange}
-            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          />
+      <div className="flex flex-col md:flex-row justify-center mb-6 gap-4 max-w-3xl mx-auto">
+        <div className="w-full md:w-1/2 lg:w-3/5">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder={t('pages.appsList.searchPlaceholder')}
+              value={searchTerm}
+              onChange={handleSearchChange}
+              className="w-full pl-10 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                aria-label="Clear search"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
         
         {categories.length > 0 && (
-          <div className="w-full md:w-1/3">
+          <div className="w-full md:w-1/2 lg:w-2/5">
             <label className="block text-sm font-medium text-gray-700 mb-1">{t('pages.appsList.categories')}</label>
             <select
               value={selectedCategory}
