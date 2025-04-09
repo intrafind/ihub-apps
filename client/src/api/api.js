@@ -278,11 +278,17 @@ export const prefetchData = async () => {
   try {
     console.log('Prefetching common data...');
     // Fetch common data in parallel
+    
+    // Get current language from localStorage and normalize it
+    const rawLanguage = localStorage.getItem('i18nextLng') || 'en';
+    const currentLanguage = rawLanguage.split('-')[0].toLowerCase();
+    
     await Promise.all([
       fetchUIConfig(),
       fetchStyles(),
       fetchModels(),
-      fetchApps()
+      fetchApps(),
+      fetchTranslations(currentLanguage)
     ]);
     console.log('Prefetch completed successfully');
     return true;
@@ -346,4 +352,16 @@ export const forceRefresh = async (type, id = null) => {
   cache.set(cacheKey, freshData);
   
   return freshData;
+};
+
+// Translations
+export const fetchTranslations = async (language, options = {}) => {
+  const { skipCache = false } = options;
+  const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.TRANSLATIONS, { language });
+  
+  return handleApiResponse(
+    () => apiClient.get(`/translations/${language}`),
+    cacheKey,
+    DEFAULT_CACHE_TTL.LONG
+  );
 };

@@ -114,12 +114,44 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
-// Helper function to load configuration files
+// Helper function to load configuration files with caching
+const configCache = new Map();
+const CONFIG_CACHE_TTL = 60 * 1000; // 60 seconds cache
+
 async function loadConfig(filename) {
   try {
-    const filePath = path.join(__dirname, '../config', filename);
+    // Cache key based on the full requested path
+    const cacheKey = filename;
+    const cachedEntry = configCache.get(cacheKey);
+    
+    if (cachedEntry && (Date.now() - cachedEntry.timestamp) < CONFIG_CACHE_TTL) {
+      return cachedEntry.data;
+    }
+    
+    // Safely handle paths with subdirectories while preventing traversal
+    // First normalize the path to prevent traversal attacks (removes ../, etc)
+    const normalizedPath = path.normalize(filename).replace(/^(\.\.[\/\\])+/, '');
+    
+    // Construct the full path within our config directory
+    const filePath = path.join(__dirname, '../config', normalizedPath);
+    
+    // Verify the path is still within our config directory (extra security check)
+    const configDirPath = path.join(__dirname, '../config');
+    if (!filePath.startsWith(configDirPath)) {
+      console.error(`Security warning: Attempted to access file outside config directory: ${filename}`);
+      return null;
+    }
+    
     const data = await fs.readFile(filePath, 'utf8');
-    return JSON.parse(data);
+    const parsedData = JSON.parse(data);
+    
+    // Update cache
+    configCache.set(cacheKey, {
+      data: parsedData,
+      timestamp: Date.now()
+    });
+    
+    return parsedData;
   } catch (error) {
     console.error(`Error loading ${filename}:`, error);
     return null;
@@ -381,6 +413,68 @@ app.get('/api/styles', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// GET /api/translations/:lang - Fetch translations for a specific language
+app.get('/api/translations/:lang', async (req, res) => {
+  try {
+    let { lang } = req.params;
+    
+    // Sanitize language parameter to prevent path traversal
+    // Only allow alphanumeric characters and hyphens, limit length
+    if (!/^[a-zA-Z0-9-]{1,10}$/.test(lang)) {
+      console.warn(`Suspicious language parameter received: ${lang}`);
+      lang = 'en'; // Default to English for suspicious inputs
+    }
+    
+    const supportedLanguages = ['en', 'de']; // Add more as needed
+    
+    // Handle complex language codes (e.g., 'en-US', 'en-GB', 'de-DE')
+    // Extract the base language code
+    const baseLanguage = lang.split('-')[0].toLowerCase();
+    
+    // If the requested language isn't directly supported, try falling back to the base language
+    if (!supportedLanguages.includes(lang) && supportedLanguages.includes(baseLanguage)) {
+      console.log(`Language '${lang}' not directly supported, falling back to '${baseLanguage}'`);
+      lang = baseLanguage;
+    }
+    
+    // Validate language parameter
+    if (!supportedLanguages.includes(lang)) {
+      console.log(`Language '${lang}' not supported, falling back to default language 'en'`);
+      lang = 'en'; // Default fallback
+    }
+    
+    // Load translations (corrected path to include locales directory)
+    const translations = await loadConfig(`locales/${lang}.json`);
+    if (!translations) {
+      console.error(`Failed to load translations for language: ${lang}`);
+      // Fall back to English if translation file can't be loaded
+      if (lang !== 'en') {
+        const enTranslations = await loadConfig('locales/en.json');
+        if (enTranslations) {
+          return res.json(enTranslations);
+        }
+      }
+      return res.status(500).json({ error: `Failed to load translations for language: ${lang}` });
+    }
+    
+    res.json(translations);
+  } catch (error) {
+    console.error(`Error fetching translations for language ${req.params.lang}:`, error);
+    // Try to return English translations as fallback on error
+    try {
+      const enTranslations = await loadConfig('locales/en.json');
+      if (enTranslations) {
+        return res.json(enTranslations);
+      }
+    } catch (fallbackError) {
+      console.error('Failed to load fallback translations:', fallbackError);
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- UI Configuration ---
 
 // GET /api/ui - Fetch UI configuration (title, footer, header links, disclaimer)
 app.get('/api/ui', async (req, res) => {

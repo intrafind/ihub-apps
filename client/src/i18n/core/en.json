@@ -1,0 +1,16 @@
+{
+  "app": {
+    "title": "AI Hub",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error"
+  },
+  "languages": {
+    "en": "English",
+    "de": "German"
+  }
+}

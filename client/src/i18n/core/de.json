@@ -1,0 +1,16 @@
+{
+  "app": {
+    "title": "AI Hub",
+    "loading": "Wird geladen...",
+    "error": "Ein Fehler ist aufgetreten",
+    "retry": "Wiederholen"
+  },
+  "common": {
+    "loading": "Wird geladen...",
+    "error": "Fehler"
+  },
+  "languages": {
+    "en": "Englisch",
+    "de": "Deutsch"
+  }
+}

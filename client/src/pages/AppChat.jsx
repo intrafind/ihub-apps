@@ -151,11 +151,29 @@ const AppChat = () => {
         if (appData.variables) {
           const initialVars = {};
           appData.variables.forEach((variable) => {
-            const localizedDefaultValue =
-              typeof variable.defaultValue === 'object'
-                ? getLocalizedContent(variable.defaultValue, i18n.language)
-                : variable.defaultValue || '';
-            initialVars[variable.name] = localizedDefaultValue;
+            // For select variables with predefined values, ensure we store the value, not the label
+            if (variable.predefinedValues && variable.defaultValue) {
+              // If defaultValue is an object with language keys
+              if (typeof variable.defaultValue === 'object') {
+                const localizedLabel = getLocalizedContent(variable.defaultValue, i18n.language);
+                // Find the matching value for the localized label
+                const matchingOption = variable.predefinedValues.find(
+                  option => getLocalizedContent(option.label, i18n.language) === localizedLabel
+                );
+                // Use the value from predefined values if found, otherwise use the localized label
+                initialVars[variable.name] = matchingOption ? matchingOption.value : localizedLabel;
+              } else {
+                // If defaultValue is a direct string, use it as is
+                initialVars[variable.name] = variable.defaultValue;
+              }
+            } else {
+              // For other variables, use standard localization
+              const localizedDefaultValue =
+                typeof variable.defaultValue === 'object'
+                  ? getLocalizedContent(variable.defaultValue, i18n.language)
+                  : variable.defaultValue || '';
+              initialVars[variable.name] = localizedDefaultValue;
+            }
           });
           setVariables(initialVars);
         }

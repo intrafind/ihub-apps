@@ -45,8 +45,8 @@
     "preferredTemperature": 0.3,
     "sendChatHistory": false,
     "prompt": {
-      "en": "Language: {{language}} - Text to translate: \"{{content}}\"",
-      "de": "Sprache: {{language}} - Text zum Übersetzen \"{{content}}\""
+      "en": "Selected Language: \"{{language}}\" - Text to translate: \"{{content}}\"",
+      "de": "Ausgewählte Sprache in die Übersetzt werden soll: \"{{language}}\" - Text der übersetzt werden soll: \"{{content}}\""
     },
     "variables": [
       {
@@ -153,7 +153,7 @@
           "en": "System Prompt",
           "de": "Systemaufforderung"
         },
-        "type": "string"
+        "type": "text"
       }
     ]
   },
