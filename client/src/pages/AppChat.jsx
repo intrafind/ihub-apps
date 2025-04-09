@@ -109,13 +109,185 @@ const AppChat = () => {
   };
 
   const handleEditMessage = (messageId, newContent) => {
-    setMessages(prev => 
-      prev.map(message => 
-        message.id === messageId 
-          ? { ...message, content: newContent } 
-          : message
-      )
-    );
+    const messageToEdit = messages.find(msg => msg.id === messageId);
+    if (!messageToEdit) return;
+    
+    // Find the index of the message being edited
+    const messageIndex = messages.findIndex(msg => msg.id === messageId);
+    
+    // Keep only messages up to and including the edited message
+    const previousMessages = messages.slice(0, messageIndex + 1);
+    
+    // Update the edited message content
+    setMessages(previousMessages.map(message => 
+      message.id === messageId 
+        ? { ...message, content: newContent } 
+        : message
+    ));
+    
+    // If this is a user message, create a new AI response without duplicating the user message
+    if (messageToEdit.role === 'user') {
+      // Create a request with the edited message content
+      // but don't update the input field to prevent the handleSubmit from adding a duplicate message
+      
+      // Execute immediately to prevent timing issues
+      (async () => {
+        try {
+          setProcessing(true);
+          setError(null);
+          
+          // For the API call, use the existing messages which include the edited message
+          const currentMessages = previousMessages.map(message => 
+            message.id === messageId 
+              ? { ...message, content: newContent } 
+              : message
+          );
+          
+          // Create a message for API that includes template and variables
+          const messageForAPI = {
+            role: 'user',
+            content: newContent,
+            promptTemplate: app?.prompt || null,
+            variables: { ...variables },
+          };
+          
+          // Create a copy of messages for the API call
+          const messagesForAPI = sendChatHistory === false 
+            ? [messageForAPI] 
+            : [...currentMessages.map(msg => {
+                // Strip out properties that shouldn't go to the API
+                const { id, loading, error, ...apiMsg } = msg;
+                return apiMsg;
+              })];
+          
+          const assistantMessageId = Date.now();
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: assistantMessageId,
+              role: 'assistant',
+              content: '',
+              loading: true,
+            },
+          ]);
+        
+          const eventSource = new EventSource(
+            `/api/apps/${appId}/chat/${chatId.current}`
+          );
+          eventSourceRef.current = eventSource;
+        
+          let fullContent = '';
+          
+          eventSource.addEventListener('connected', async () => {
+            console.log('SSE connection established, sending edited chat message');
+        
+            try {
+              await sendAppChatMessage(appId, chatId.current, messagesForAPI, {
+                modelId: selectedModel,
+                style: selectedStyle,
+                temperature,
+                outputFormat: selectedOutputFormat
+              });
+            } catch (postError) {
+              console.error('Error sending chat message:', postError);
+        
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? {
+                        ...msg,
+                        content:
+                          'Error: Failed to generate response. Please try again or select a different model.',
+                        loading: false,
+                        error: true,
+                      }
+                    : msg
+                )
+              );
+        
+              eventSource.close();
+              setProcessing(false);
+            }
+          });
+        
+          eventSource.addEventListener('chunk', (event) => {
+            const data = JSON.parse(event.data);
+            fullContent += data.content;
+        
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessageId
+                  ? { ...msg, content: fullContent, loading: true }
+                  : msg
+              )
+            );
+          });
+        
+          eventSource.addEventListener('done', () => {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessageId ? { ...msg, loading: false } : msg
+              )
+            );
+            eventSource.close();
+            setProcessing(false);
+          });
+        
+          eventSource.addEventListener('error', (event) => {
+            console.error('SSE Error:', event);
+        
+            let errorMessage = 'Error receiving response. Please try again.';
+            try {
+              if (event.data) {
+                const errorData = JSON.parse(event.data);
+                if (errorData.message) {
+                  if (errorData.message.includes('API key not found')) {
+                    errorMessage = `${errorData.message}. Please check your API configuration.`;
+                  } else {
+                    errorMessage = errorData.message;
+                  }
+                }
+              }
+            } catch (e) {
+              console.log('Could not parse error data:', e);
+            }
+        
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessageId
+                  ? {
+                      ...msg,
+                      content: `Error: ${errorMessage}`,
+                      loading: false,
+                      error: true,
+                    }
+                  : msg
+              )
+            );
+        
+            eventSource.close();
+            setProcessing(false);
+          });
+          
+        } catch (err) {
+          console.error('Error sending message:', err);
+        
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: Date.now(),
+              role: 'system',
+              content: `Error: Failed to send message. ${
+                err.message || 'Please try again.'
+              }`,
+              error: true,
+            },
+          ]);
+        
+          setProcessing(false);
+        }
+      })();
+    }
   };
 
   const handleResendMessage = (messageId) => {
@@ -123,11 +295,8 @@ const AppChat = () => {
     const messageToResend = messages.find(msg => msg.id === messageId);
     if (!messageToResend) return;
     
-    // Filter out all messages after the resent message
-    const previousMessages = messages.slice(0, messages.findIndex(msg => msg.id === messageId));
-    setMessages(previousMessages);
-    
-    // Set the content as the new input and submit
+    // Instead of filtering messages, just set the input to the message content
+    // and let the normal submit process add it to the end of the conversation
     setInput(messageToResend.content);
     
     // Use setTimeout to allow state update to complete before submitting
@@ -175,9 +344,10 @@ const AppChat = () => {
       // Store the original user input for display in chat history
       const originalUserInput = input;
       
-      // Create a user message with ID for the UI operations
+      // Create a user message with a unique ID
+      const userMessageId = Date.now();
       const newUserMessage = {
-        id: Date.now(),
+        id: userMessageId,
         role: 'user',
         content: originalUserInput,
         variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined
@@ -203,7 +373,8 @@ const AppChat = () => {
         ? [messageForAPI] 
         : [...messages, messageForAPI];
 
-      const assistantMessageId = Date.now();
+      // Ensure assistant message has a different ID by adding 1 to the user message ID
+      const assistantMessageId = userMessageId + 1;
       setMessages((prev) => [
         ...prev,
         {
@@ -568,9 +739,9 @@ const AppChat = () => {
             className="flex-1 overflow-y-auto mb-4 space-y-4 p-4 bg-gray-50 rounded-lg"
           >
             {messages.length > 0 ? (
-              messages.map((message, index) => (
+              messages.map((message) => (
                 <ChatMessage
-                  key={index}
+                  key={message.id}
                   message={message}
                   outputFormat={selectedOutputFormat}
                   onDelete={handleDeleteMessage}
