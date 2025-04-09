@@ -68,7 +68,7 @@ const GoogleAdapter = {
       requestBody.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
     
-    console.log('Request URL:', url);
+    console.log('Request URL:', url.replace(apiKey, '[REDACTED]'));
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
     
     return {

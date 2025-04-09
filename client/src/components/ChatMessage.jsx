@@ -1,8 +1,6 @@
-import React, { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { marked } from 'marked';
 
 const ChatMessage = ({ 
   message, 
@@ -20,6 +18,21 @@ const ChatMessage = ({
   const [editedContent, setEditedContent] = useState(message.content);
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Configure marked options to properly handle tables 
+  useEffect(() => {
+    marked.setOptions({
+      gfm: true,            // Enable GitHub Flavored Markdown
+      breaks: true,         // Add <br> on single line breaks
+      headerIds: true,      // Generate IDs for headings
+      mangle: false,        // Don't escape autolinked email addresses
+      pedantic: false,      // Conform to markdown.pl (compatibility)
+      sanitize: false,      // Don't sanitize HTML
+      smartLists: true,     // Use smart ordered lists
+      smartypants: false,   // Use smart quotes, etc.
+      xhtml: false          // Don't close all tags
+    });
+  }, []);
 
   const handleCopyToClipboard = () => {
     navigator.clipboard.writeText(message.content)
@@ -114,28 +127,12 @@ const ChatMessage = ({
     }
     
     if (outputFormat === 'markdown' && !isUser) {
+      // Use marked to parse markdown including tables
+      const parsedContent = marked(message.content);
+      
       return (
-        <ReactMarkdown
-          children={message.content}
-          components={{
-            code({ node, inline, className, children, ...props }) {
-              const match = /language-(\w+)/.exec(className || '');
-              return !inline && match ? (
-                <SyntaxHighlighter
-                  children={String(children).replace(/\n$/, '')}
-                  style={atomDark}
-                  language={match[1]}
-                  PreTag="div"
-                  {...props}
-                />
-              ) : (
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              );
-            }
-          }}
-        />
+        <div className="markdown-content" 
+             dangerouslySetInnerHTML={{ __html: parsedContent }}></div>
       );
     }
     

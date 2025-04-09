@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import LoadingSpinner from '../components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { fetchUIConfig } from '../api/api';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { marked } from 'marked';
 
 const MarkdownPage = () => {
   const { t, i18n } = useTranslation();
@@ -16,6 +14,21 @@ const MarkdownPage = () => {
   const [pageData, setPageData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Configure marked options when component mounts
+  useEffect(() => {
+    marked.setOptions({
+      gfm: true,            // Enable GitHub Flavored Markdown
+      breaks: true,         // Add <br> on single line breaks
+      headerIds: true,      // Generate IDs for headings
+      mangle: false,        // Don't escape autolinked email addresses
+      pedantic: false,      // Conform to markdown.pl (compatibility)
+      sanitize: false,      // Don't sanitize HTML
+      smartLists: true,     // Use smart ordered lists
+      smartypants: false,   // Use smart quotes, etc.
+      xhtml: false          // Don't close all tags
+    });
+  }, []);
 
   useEffect(() => {
     const fetchPageContent = async () => {
@@ -63,40 +76,15 @@ const MarkdownPage = () => {
   // Get localized title and content
   const pageTitle = getLocalizedContent(pageData?.title, currentLanguage);
   const pageContent = getLocalizedContent(pageData?.content, currentLanguage);
+  
+  // Parse the markdown content using marked
+  const parsedContent = marked(pageContent || '');
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
       <div className="prose prose-sm sm:prose lg:prose-lg mx-auto">
-        <ReactMarkdown
-          children={pageContent}
-          components={{
-            h1: ({node, ...props}) => <h1 className="text-3xl font-bold mb-6" {...props} />,
-            h2: ({node, ...props}) => <h2 className="text-2xl font-bold mt-8 mb-4" {...props} />,
-            h3: ({node, ...props}) => <h3 className="text-xl font-bold mt-6 mb-3" {...props} />,
-            p: ({node, ...props}) => <p className="mb-4" {...props} />,
-            ul: ({node, ...props}) => <ul className="list-disc pl-6 mb-4" {...props} />,
-            ol: ({node, ...props}) => <ol className="list-decimal pl-6 mb-4" {...props} />,
-            li: ({node, ...props}) => <li className="mb-1" {...props} />,
-            a: ({node, ...props}) => <a className="text-indigo-600 hover:underline" {...props} />,
-            blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-300 pl-4 italic" {...props} />,
-            code({node, inline, className, children, ...props}) {
-              const match = /language-(\w+)/.exec(className || '')
-              return !inline && match ? (
-                <SyntaxHighlighter
-                  children={String(children).replace(/\n$/, '')}
-                  style={atomDark}
-                  language={match[1]}
-                  PreTag="div"
-                  {...props}
-                />
-              ) : (
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              )
-            }
-          }}
-        />
+        <div className="markdown-content" 
+             dangerouslySetInnerHTML={{ __html: parsedContent }}></div>
       </div>
     </div>
   );

@@ -127,23 +127,33 @@ async function loadConfig(filename) {
 }
 
 // Helper to verify API key exists for a model and provide a meaningful error
-function verifyApiKey(model, res, clientRes = null) {
-  const apiKey = getApiKeyForModel(model.id);
-  
-  if (!apiKey) {
-    const errorMessage = `API key not found for model: ${model.id} (${model.provider}). Please set ${model.provider.toUpperCase()}_API_KEY in your environment.`;
-    console.error(errorMessage);
+async function verifyApiKey(model, res, clientRes = null) {
+  try {
+    const apiKey = await getApiKeyForModel(model.id);
     
-    if (clientRes) {
-      sendSSE(clientRes, 'error', { message: errorMessage });
+    if (!apiKey) {
+      const errorMessage = `API key not found for model: ${model.id} (${model.provider}). Please set ${model.provider.toUpperCase()}_API_KEY in your environment.`;
+      console.error(errorMessage);
+      
+      if (clientRes) {
+        sendSSE(clientRes, 'error', { message: errorMessage });
+      }
+      
+      // Don't automatically send a response here, just return false
+      // Let the calling code handle sending the appropriate response
+      return false;
     }
     
-    // Don't automatically send a response here, just return false
-    // Let the calling code handle sending the appropriate response
+    return apiKey;
+  } catch (error) {
+    console.error(`Error getting API key for model ${model.id}:`, error);
+    
+    if (clientRes) {
+      sendSSE(clientRes, 'error', { message: `Error getting API key: ${error.message}` });
+    }
+    
     return false;
   }
-  
-  return apiKey;
 }
 
 // --- API Endpoints ---
@@ -243,7 +253,7 @@ app.get('/api/models/:modelId/chat/test', async (req, res) => {
     }
 
     // Get and verify API key for model
-    const apiKey = verifyApiKey(model, res);
+    const apiKey = await verifyApiKey(model, res);
     if (!apiKey) {
       return res.status(500).json({ 
         error: `API key not found for model: ${model.id} (${model.provider})`,
@@ -428,7 +438,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       const llmMessages = processMessageTemplates(messages, app, style, outputFormat);
       
       // Get and verify API key for model
-      const apiKey = verifyApiKey(model, res);
+      const apiKey = await verifyApiKey(model, res);
       if (!apiKey) return; // Function will handle sending error response
       
       // Create request without streaming
@@ -523,7 +533,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     const llmMessages = processMessageTemplates(messages, app, style, outputFormat);
     
     // Get and verify API key with proper error handling for SSE
-    const apiKey = verifyApiKey(model, null, clientRes);
+    const apiKey = await verifyApiKey(model, null, clientRes);
     if (!apiKey) {
       // Already sent error via SSE, just return response to the HTTP request
       return res.json({ status: 'error', message: `API key not found for model: ${model.id}` });
