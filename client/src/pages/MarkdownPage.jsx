@@ -6,6 +6,7 @@ import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
+import { fetchUIConfig } from '../api/api';
 
 const MarkdownPage = () => {
   const { t, i18n } = useTranslation();
@@ -20,21 +21,15 @@ const MarkdownPage = () => {
     const fetchPageContent = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/pages');
-        if (!response.ok) {
-          throw new Error('Failed to fetch pages data');
-        }
+        const uiConfig = await fetchUIConfig();
         
-        const pagesData = await response.json();
-        const page = pagesData.pages[pageId];
-        
-        if (!page) {
+        if (!uiConfig || !uiConfig.pages || !uiConfig.pages[pageId]) {
           setError('Page not found');
           setLoading(false);
           return;
         }
         
-        setPageData(page);
+        setPageData(uiConfig.pages[pageId]);
         setError(null);
       } catch (err) {
         console.error('Error fetching page:', err);

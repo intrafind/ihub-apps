@@ -25,6 +25,66 @@ const PORT = process.env.PORT || 3000;
 // Store active client connections
 const clients = new Map();
 
+/**
+ * Gets the localized value from a potentially multi-language object
+ * Similar to client-side getLocalizedContent utility
+ * 
+ * @param {Object|string} content - Content that might be a translation object or direct string
+ * @param {string} language - Current language code (e.g., 'en', 'de')
+ * @param {string} [fallbackLanguage='en'] - Fallback language if requested language is not available
+ * @returns {string} - The localized content
+ */
+function getLocalizedContent(content, language = 'en', fallbackLanguage = 'en') {
+  // Handle null or undefined content
+  if (content === null || content === undefined) {
+    return '';
+  }
+  
+  // If the content is a string, return it directly
+  if (typeof content === 'string') {
+    return content;
+  }
+  
+  // If content is an object with language keys
+  if (typeof content === 'object') {
+    try {
+      // Try to get the content in the requested language
+      if (content[language]) {
+        return content[language];
+      }
+      
+      // Fall back to the fallback language
+      if (content[fallbackLanguage]) {
+        return content[fallbackLanguage];
+      }
+      
+      // If neither the requested language nor fallback exist, get the first available translation
+      const availableLanguages = Object.keys(content);
+      if (availableLanguages.length > 0) {
+        // Only log missing keys for non-English languages to reduce noise
+        if (language !== 'en') {
+          console.error(`Missing translation for language: ${language}`);
+        }
+        return content[availableLanguages[0]];
+      }
+      
+      return '';
+    } catch (error) {
+      // Keep error logging for actual errors
+      console.error('Error accessing content object:', error);
+      return '';
+    }
+  }
+  
+  // For any other type, convert to string
+  try {
+    return String(content);
+  } catch (e) {
+    console.error('Failed to convert content to string:', e);
+    return '';
+  }
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -287,7 +347,17 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         // Process user messages with prompt templates and variables
         if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
           // Start with the prompt template or original content if no template
-          let processedContent = msg.promptTemplate || msg.content;
+          // Handle localized content in prompt templates
+          let processedContent = typeof msg.promptTemplate === 'object' 
+            ? getLocalizedContent(msg.promptTemplate) 
+            : (msg.promptTemplate || msg.content);
+          
+          // Log debugging info if needed
+          if (typeof processedContent !== 'string') {
+            console.log(`Type of processedContent is not string: ${typeof processedContent}`);
+            console.log('Value of processedContent:', JSON.stringify(processedContent));
+            processedContent = String(processedContent || '');
+          }
           
           // Ensure the original user content is available as {{content}} variable
           const variables = { ...msg.variables, content: msg.content };
@@ -295,7 +365,9 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
           // Replace variable placeholders in the prompt
           if (variables && Object.keys(variables).length > 0) {
             for (const [key, value] of Object.entries(variables)) {
-              processedContent = processedContent.replace(`{{${key}}}`, value || '');
+              // Ensure value is a string before using replace
+              const strValue = typeof value === 'string' ? value : String(value || '');
+              processedContent = processedContent.replace(`{{${key}}}`, strValue);
             }
           }
           
@@ -317,12 +389,24 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       // Apply prompt template if the app has one and there's no system message
       if (!llmMessages.some(msg => msg.role === 'system')) {
         // Add application system prompt with style modifications if applicable
-        let systemPrompt = app.system || '';
+        // Handle localized content in system prompt
+        let systemPrompt = typeof app.system === 'object' 
+          ? getLocalizedContent(app.system) 
+          : (app.system || '');
+        
+        // Log debugging info if needed
+        if (typeof systemPrompt !== 'string') {
+          console.log(`Type of systemPrompt is not string: ${typeof systemPrompt}`);
+          console.log('Value of systemPrompt:', JSON.stringify(systemPrompt));
+          systemPrompt = String(systemPrompt || '');
+        }
         
         // Replace variable placeholders in the system prompt
         if (Object.keys(userVariables).length > 0) {
           for (const [key, value] of Object.entries(userVariables)) {
-            systemPrompt = systemPrompt.replace(`{{${key}}}`, value || '');
+            // Ensure value is a string before using replace
+            const strValue = typeof value === 'string' ? value : String(value || '');
+            systemPrompt = systemPrompt.replace(`{{${key}}}`, strValue);
           }
         }
         
@@ -410,7 +494,17 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       // Process user messages with prompt templates and variables
       if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
         // Start with the prompt template or original content if no template
-        let processedContent = msg.promptTemplate || msg.content;
+        // Handle localized content in prompt templates
+        let processedContent = typeof msg.promptTemplate === 'object' 
+          ? getLocalizedContent(msg.promptTemplate) 
+          : (msg.promptTemplate || msg.content);
+        
+        // Log debugging info if needed
+        if (typeof processedContent !== 'string') {
+          console.log(`Type of processedContent is not string: ${typeof processedContent}`);
+          console.log('Value of processedContent:', JSON.stringify(processedContent));
+          processedContent = String(processedContent || '');
+        }
         
         // Ensure the original user content is available as {{content}} variable
         const variables = { ...msg.variables, content: msg.content };
@@ -418,7 +512,9 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         // Replace variable placeholders in the prompt
         if (variables && Object.keys(variables).length > 0) {
           for (const [key, value] of Object.entries(variables)) {
-            processedContent = processedContent.replace(`{{${key}}}`, value || '');
+            // Ensure value is a string before using replace
+            const strValue = typeof value === 'string' ? value : String(value || '');
+            processedContent = processedContent.replace(`{{${key}}}`, strValue);
           }
         }
         
@@ -440,12 +536,24 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     // Apply prompt template if the app has one and there's no system message
     if (!llmMessages.some(msg => msg.role === 'system')) {
       // Add application system prompt with style modifications if applicable
-      let systemPrompt = app.system || '';
+      // Handle localized content in system prompt
+      let systemPrompt = typeof app.system === 'object' 
+        ? getLocalizedContent(app.system) 
+        : (app.system || '');
+      
+      // Log debugging info if needed
+      if (typeof systemPrompt !== 'string') {
+        console.log(`Type of systemPrompt is not string: ${typeof systemPrompt}`);
+        console.log('Value of systemPrompt:', JSON.stringify(systemPrompt));
+        systemPrompt = String(systemPrompt || '');
+      }
       
       // Replace variable placeholders in the system prompt
       if (Object.keys(userVariables).length > 0) {
         for (const [key, value] of Object.entries(userVariables)) {
-          systemPrompt = systemPrompt.replace(`{{${key}}}`, value || '');
+          // Ensure value is a string before using replace
+          const strValue = typeof value === 'string' ? value : String(value || '');
+          systemPrompt = systemPrompt.replace(`{{${key}}}`, strValue);
         }
       }
       
@@ -513,7 +621,6 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
           // Process the chunk with the appropriate adapter
           // For Google/Gemini, process each chunk individually
           const result = processResponseBuffer(model.provider, chunk);
-          console.log(`Processing chunk: ${chunk} => ${JSON.stringify(result ? result : {})}`);
           
           // Send any extracted content to the client
           if (result && result.content && result.content.length > 0) {

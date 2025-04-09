@@ -4,7 +4,6 @@ import axios from 'axios';
 // The direct URL (like http://localhost:3000/api) should only be used when not using the proxy
 // or in production environments
 const API_URL = import.meta.env.VITE_API_URL || '/api';
-console.log('Using API URL:', API_URL);
 
 // Create axios instance
 const apiClient = axios.create({
@@ -17,9 +16,7 @@ const apiClient = axios.create({
 // Apps
 export const fetchApps = async () => {
   try {
-    console.log('Fetching apps from:', `${API_URL}/apps`);
     const response = await apiClient.get('/apps');
-    console.log('Apps response:', response);
     return response.data;
   } catch (error) {
     console.error('Error fetching apps:', error);

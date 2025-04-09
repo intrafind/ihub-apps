@@ -47,6 +47,7 @@ const DirectChat = () => {
         
         setIsLoading(false);
       } catch (error) {
+        // Keep error logging for critical errors
         console.error('Error loading model data:', error);
         setError('Failed to load model data. Please try again later.');
         setIsLoading(false);

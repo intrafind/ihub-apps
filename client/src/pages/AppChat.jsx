@@ -34,6 +34,9 @@ const AppChat = () => {
   const chatContainerRef = useRef(null);
   const chatId = useRef(`chat-${Date.now()}`);
   const eventSourceRef = useRef(null);
+  
+  // Computed property to check if we have variables to send
+  const hasVariablesToSend = app?.variables && Object.keys(variables).length > 0;
 
   useEffect(() => {
     return () => {
@@ -173,7 +176,7 @@ const AppChat = () => {
           let fullContent = '';
 
           eventSource.addEventListener('connected', async () => {
-            console.log('SSE connection established, sending edited chat message');
+            connectionEstablished = true;
 
             try {
               await sendAppChatMessage(appId, chatId.current, messagesForAPI, {
@@ -243,7 +246,7 @@ const AppChat = () => {
                 }
               }
             } catch (e) {
-              console.log('Could not parse error data:', e);
+              // Silently handle parse errors
             }
 
             setMessages((prev) =>
@@ -315,7 +318,12 @@ const AppChat = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!input.trim() && Object.keys(variables).length === 0) return;
+    // Replace the condition to separately check for variables
+    // The intent is to allow submission if there are variables, even if input is empty
+    const hasInputText = input.trim().length > 0;
+    
+    // Only prevent submission if both input is empty AND we have no variables
+    if (!hasInputText && !hasVariablesToSend) return;
 
     if (app?.variables) {
       const missingRequiredVars = app.variables
@@ -388,7 +396,6 @@ const AppChat = () => {
 
       eventSource.addEventListener('connected', async () => {
         connectionEstablished = true;
-        console.log('SSE connection established, sending chat message');
 
         try {
           await sendAppChatMessage(appId, chatId.current, messagesForAPI, {
@@ -466,7 +473,7 @@ const AppChat = () => {
             }
           }
         } catch (e) {
-          console.log('Could not parse error data:', e);
+          // Silently handle parse errors
         }
 
         setMessages((prev) =>
@@ -891,10 +898,10 @@ const AppChat = () => {
             <button
               type="submit"
               disabled={
-                processing || (!input.trim() && Object.keys(variables).length === 0)
+                processing || (!input.trim() && !hasVariablesToSend)
               }
               className={`px-4 py-2 rounded-lg font-medium flex items-center justify-center ${
-                processing || (!input.trim() && Object.keys(variables).length === 0)
+                processing || (!input.trim() && !hasVariablesToSend)
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-indigo-600 text-white hover:bg-indigo-700'
               }`}

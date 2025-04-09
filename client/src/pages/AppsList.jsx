@@ -20,11 +20,11 @@ const AppsList = () => {
 
   useEffect(() => {
     const loadApps = async () => {
-      console.log('Loading apps...');
+      // console.log('Loading apps...');
       try {
         setLoading(true);
         const appsData = await fetchApps();
-        console.log('Apps data received:', appsData); // Debug output
+        // console.log('Apps data received:', appsData); // Debug output
         
         // Safety check for empty or invalid data
         if (!appsData || !Array.isArray(appsData)) {
@@ -126,13 +126,13 @@ const AppsList = () => {
   });
   
   // Debug output after filtering
-  useEffect(() => {
-    if (!loading) {
-      console.log('Original apps count:', apps.length);
-      console.log('Filtered apps count:', filteredApps.length);
-      console.log('Favorite apps count:', favoriteApps.length);
-    }
-  }, [loading, apps, filteredApps, favoriteApps, searchTerm, selectedCategory]);
+  // useEffect(() => {
+  //   if (!loading) {
+  //     console.log('Original apps count:', apps.length);
+  //     console.log('Filtered apps count:', filteredApps.length);
+  //     console.log('Favorite apps count:', favoriteApps.length);
+  //   }
+  // }, [loading, apps, filteredApps, favoriteApps, searchTerm, selectedCategory]);
 
   if (loading) {
     return <LoadingSpinner message={t('app.loading')} />;

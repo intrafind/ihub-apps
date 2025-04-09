@@ -34,11 +34,14 @@ export const getLocalizedContent = (content, language, fallbackLanguage = 'en') 
       // If neither the requested language nor fallback exist, get the first available translation
       const availableLanguages = Object.keys(content);
       if (availableLanguages.length > 0) {
+        // Only log missing keys for non-English languages to reduce noise
+        if (language !== 'en') {
+          console.log('Content object has no language keys for requested language:', language);
+        }
         return content[availableLanguages[0]];
       }
       
       // If the object exists but has no language keys, return empty string
-      console.log('Content object has no language keys:', content);
       return '';
     } catch (error) {
       console.error('Error accessing content object:', error, content);
