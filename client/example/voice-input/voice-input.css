@@ -1,0 +1,133 @@
+/* Voice Input Button */
+.voice-input-button {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: var(--color-text);
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    opacity: 0.7;
+}
+
+.voice-input-button:hover {
+    background-color: var(--color-messageBackground);
+    opacity: 1;
+}
+
+.voice-input-button.active {
+    color: #dc3545;
+    opacity: 1;
+    animation: pulse 2s infinite;
+}
+
+/* Voice Feedback */
+.voice-feedback {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+}
+
+.voice-feedback.active {
+    display: flex;
+}
+
+.voice-feedback-content {
+    background-color: var(--color-background);
+    padding: 24px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+.voice-waves {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.wave {
+    width: 4px;
+    height: 20px;
+    background-color: var(--color-primary);
+    border-radius: 2px;
+    animation: wave 1s ease-in-out infinite;
+}
+
+.wave:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.wave:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+.voice-text {
+    font-size: 1.2em;
+    margin-bottom: 8px;
+    color: var(--color-text);
+}
+
+.voice-instructions {
+    font-size: 0.9em;
+    opacity: 0.7;
+    color: var(--color-text);
+}
+
+/* Animations */
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes wave {
+    0%, 100% {
+        height: 20px;
+    }
+    50% {
+        height: 40px;
+    }
+}
+
+/* Mobile Optimization */
+@media (max-width: 768px) {
+    .voice-feedback-content {
+        width: 90%;
+        max-width: 300px;
+        padding: 16px;
+    }
+
+    .voice-text {
+        font-size: 1.1em;
+    }
+
+    .voice-instructions {
+        font-size: 0.8em;
+    }
+}
+
+/* Dark Theme Support */
+[data-theme="dark"] .voice-feedback-content {
+    background-color: #2d3236;
+}
+
+[data-theme="dark"] .wave {
+    background-color: #0d6efd;
+}

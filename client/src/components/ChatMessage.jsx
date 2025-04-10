@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { marked } from 'marked';
 
@@ -18,9 +18,48 @@ const ChatMessage = ({
   const [editedContent, setEditedContent] = useState(message.content);
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedCodeBlockId, setCopiedCodeBlockId] = useState(null);
 
-  // Configure marked options to properly handle tables 
+  // Configure marked options to properly handle tables and customize code blocks
   useEffect(() => {
+    // Create a custom renderer to add copy buttons to code blocks
+    const renderer = new marked.Renderer();
+    
+    // Store the original code renderer
+    const originalCodeRenderer = renderer.code;
+    
+    // Override the code method to add copy buttons
+    renderer.code = function(code, language, isEscaped) {
+      // Generate a unique ID for this code block
+      const codeBlockId = `code-block-${Math.random().toString(36).substring(2, 15)}`;
+      
+      // Get the original HTML from the default renderer
+      const originalHtml = originalCodeRenderer.call(this, code, language, isEscaped);
+      
+      // Add the dark theme classes to the code block
+      const enhancedHtml = originalHtml.replace(
+        '<pre>',
+        '<pre class="bg-gray-800 text-gray-100 rounded-md p-4">'
+      );
+      
+      // Wrap it with a container that includes a copy button
+      return `
+        <div class="code-block-container relative group">
+          ${enhancedHtml}
+          <button 
+            class="code-copy-btn absolute top-2 right-2 p-1 rounded text-xs bg-gray-700 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+            data-code-id="${codeBlockId}"
+            data-code-content="${encodeURIComponent(code)}"
+            type="button"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+            </svg>
+          </button>
+        </div>
+      `;
+    };
+
     marked.setOptions({
       gfm: true,            // Enable GitHub Flavored Markdown
       breaks: true,         // Add <br> on single line breaks
@@ -30,9 +69,113 @@ const ChatMessage = ({
       sanitize: false,      // Don't sanitize HTML
       smartLists: true,     // Use smart ordered lists
       smartypants: false,   // Use smart quotes, etc.
-      xhtml: false          // Don't close all tags
+      xhtml: false,         // Don't close all tags
+      highlight: function(code, lang) {
+        // Re-add syntax highlighting
+        if (lang && window.hljs && window.hljs.getLanguage(lang)) {
+          try {
+            return window.hljs.highlight(code, { language: lang }).value;
+          } catch (e) {
+            console.error("Highlighting error:", e);
+          }
+        }
+        return code; // Use default highlighting
+      },
+      renderer: renderer    // Use our custom renderer
     });
   }, []);
+
+  // Add event listener for the copy code buttons after rendering markdown
+  useEffect(() => {
+    if (outputFormat === 'markdown' && !isUser && !isEditing) {
+      const handleCodeCopyClick = (e) => {
+        // Check if the click was on a copy button or its child elements
+        const button = e.target.closest('.code-copy-btn');
+        if (!button) return;
+        
+        // Get the code content from the data attribute
+        const codeContent = decodeURIComponent(button.dataset.codeContent);
+        const codeId = button.dataset.codeId;
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(codeContent)
+          .then(() => {
+            setCopiedCodeBlockId(codeId);
+            setTimeout(() => setCopiedCodeBlockId(null), 2000);
+            console.log('Code block copied to clipboard');
+          })
+          .catch(err => {
+            console.error('Failed to copy code block: ', err);
+          });
+      };
+
+      // Add the event listener to the document to catch all code copy buttons
+      document.addEventListener('click', handleCodeCopyClick);
+      
+      // Clean up
+      return () => {
+        document.removeEventListener('click', handleCodeCopyClick);
+      };
+    }
+  }, [outputFormat, isUser, isEditing]);
+
+  // Style the copy buttons based on the copied state
+  useEffect(() => {
+    const allButtons = document.querySelectorAll('.code-copy-btn');
+    
+    allButtons.forEach(button => {
+      const isCopied = button.dataset.codeId === copiedCodeBlockId;
+      
+      // Update button appearance
+      if (isCopied) {
+        button.innerHTML = `
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+        `;
+        button.classList.add('bg-green-600');
+        button.classList.remove('bg-gray-700');
+      } else {
+        button.innerHTML = `
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+          </svg>
+        `;
+        button.classList.add('bg-gray-700');
+        button.classList.remove('bg-green-600');
+      }
+    });
+  }, [copiedCodeBlockId]);
+
+  // Post-process the rendered markdown to add target="_blank" to external links
+  useEffect(() => {
+    if (outputFormat === 'markdown' && !isUser && !isEditing) {
+      // Get all links in the rendered markdown
+      const markdownContainer = document.querySelector('.markdown-content');
+      if (!markdownContainer) return;
+      
+      const links = markdownContainer.querySelectorAll('a');
+      const currentDomain = window.location.hostname;
+      
+      links.forEach(link => {
+        const href = link.getAttribute('href');
+        
+        // Check if the link is external
+        if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+          try {
+            const url = new URL(href);
+            // If the hostname is different from the current domain, open in a new tab
+            if (url.hostname !== currentDomain) {
+              link.setAttribute('target', '_blank');
+              link.setAttribute('rel', 'noopener noreferrer');
+            }
+          } catch (e) {
+            console.error("Error parsing URL:", href, e);
+          }
+        }
+      });
+    }
+  }, [outputFormat, isUser, isEditing, message.content]);
 
   const handleCopyToClipboard = () => {
     navigator.clipboard.writeText(message.content)

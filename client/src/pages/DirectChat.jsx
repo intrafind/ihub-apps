@@ -5,6 +5,7 @@ import ChatMessage from '../components/ChatMessage';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useHeaderColor } from '../components/HeaderColorContext';
 import { useTranslation } from 'react-i18next';
+import VoiceInputComponent from '../components/VoiceInputComponent';
 
 const DirectChat = () => {
   const { t } = useTranslation();
@@ -81,8 +82,12 @@ const DirectChat = () => {
     }
   }, [messages]);
 
-  const handleMessageChange = (e) => {
+  const handleInputChange = (e) => {
     setCurrentMessage(e.target.value);
+  };
+
+  const handleVoiceInput = (text) => {
+    setCurrentMessage(text);
   };
 
   const handleSendMessage = async (e) => {
@@ -154,6 +159,36 @@ const DirectChat = () => {
       }
       return updated;
     });
+  };
+
+  // Handle voice commands
+  const handleVoiceCommand = (command) => {
+    console.log('Voice command detected:', command);
+    
+    switch (command) {
+      case 'clearChat':
+        // Clear the chat
+        if (messages.length > 0) {
+          if (window.confirm(t('pages.directChat.confirmClear', 'Are you sure you want to clear the entire chat history?'))) {
+            setMessages([]);
+          }
+        }
+        break;
+        
+      case 'sendMessage':
+        // Send the current message if there's text in the input field
+        if (currentMessage.trim() && !isSending) {
+          const form = document.querySelector('form');
+          if (form) {
+            const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+            form.dispatchEvent(submitEvent);
+          }
+        }
+        break;
+        
+      default:
+        console.log('Unknown command:', command);
+    }
   };
 
   const toggleConfig = () => {
@@ -296,14 +331,25 @@ const DirectChat = () => {
       
       {/* Message Input */}
       <form onSubmit={handleSendMessage} className="flex space-x-2">
-        <input
-          type="text"
-          value={currentMessage}
-          onChange={handleMessageChange}
-          disabled={isSending}
-          className="flex-1 p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-          placeholder={isSending ? t('pages.appChat.thinking') : t('pages.appChat.messagePlaceholder')}
-        />
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            value={currentMessage}
+            onChange={handleInputChange}
+            disabled={isSending}
+            className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 pr-10"
+            placeholder={isSending ? t('pages.appChat.thinking') : t('pages.appChat.messagePlaceholder')}
+            ref={(input) => { if (input) input.id = 'direct-chat-input'; }}
+          />
+          <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+            <VoiceInputComponent 
+              inputRef={{ current: document.getElementById('direct-chat-input') }}
+              onSpeechResult={handleVoiceInput}
+              disabled={isSending}
+              onCommand={handleVoiceCommand}
+            />
+          </div>
+        </div>
         <button
           type="submit"
           disabled={isSending || !currentMessage.trim()}

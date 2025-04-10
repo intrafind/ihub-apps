@@ -9,3 +9,11 @@
 - the app generator
 - ground an app with a file from the backend (like a knowledge-base.md)
 - be able to setup the order for the apps
+- check if the prompts are loaded from the backend and not taken from the frontend
+- improve conversation handling for prompt generator and apps generator
+- Microphone
+- Logo
+- Docker Image?
+- Feedback
+- Logging
+- Ai hub

@@ -12,5 +12,20 @@
   "languages": {
     "en": "English",
     "de": "German"
+  },
+  "voiceInput": {
+    "listening": "Listening...",
+    "instructions": "Speak clearly and naturally",
+    "messagePlaceholder": "Type your message here...",
+    "tooltip": "Voice input (Ctrl+M)",
+    "ariaLabel": "Toggle voice input",
+    "error": {
+      "permissionDenied": "Please allow microphone access and try again.",
+      "noMicrophone": "No microphone found. Please check your device settings.",
+      "network": "Network error. Please check your connection.",
+      "noSpeech": "No speech detected. Please try again.",
+      "startError": "Error starting voice input. Please try again.",
+      "general": "Voice input error. Please try again."
+    }
   }
 }

@@ -12,5 +12,20 @@
   "languages": {
     "en": "Englisch",
     "de": "Deutsch"
+  },
+  "voiceInput": {
+    "listening": "Ich höre zu...",
+    "instructions": "Sprechen Sie klar und deutlich",
+    "messagePlaceholder": "Geben Sie Ihre Nachricht hier ein...",
+    "tooltip": "Spracheingabe (Strg+M)",
+    "ariaLabel": "Spracheingabe umschalten",
+    "error": {
+      "permissionDenied": "Bitte erlauben Sie den Mikrofonzugriff und versuchen Sie es erneut.",
+      "noMicrophone": "Kein Mikrofon gefunden. Bitte überprüfen Sie Ihre Geräteeinstellungen.",
+      "network": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung.",
+      "noSpeech": "Keine Sprache erkannt. Bitte versuchen Sie es erneut.",
+      "startError": "Fehler beim Starten der Spracheingabe. Bitte versuchen Sie es erneut.",
+      "general": "Fehler bei der Spracheingabe. Bitte versuchen Sie es erneut."
+    }
   }
 }
