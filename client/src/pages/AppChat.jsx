@@ -765,6 +765,240 @@ const AppChat = () => {
     }
   };
 
+  // Handle app action buttons
+  const handleAction = useCallback((actionId) => {
+    if (!app || !app.actions) return;
+    
+    const action = app.actions.find(action => action.id === actionId);
+    if (!action) return;
+    
+    // Check for required variables
+    if (app?.variables) {
+      const missingRequiredVars = app.variables
+        .filter((v) => v.required)
+        .filter((v) => !variables[v.name] || variables[v.name].trim() === '');
+
+      if (missingRequiredVars.length > 0) {
+        // Show inline error instead of using setError
+        const errorMessage = t(
+          'error.missingRequiredFields',
+          'Please fill in all required fields:'
+        ) + ' ' + missingRequiredVars.map((v) => getLocalizedContent(v.label, currentLanguage)).join(', ');
+        
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          role: 'system',
+          content: errorMessage,
+          error: true,
+          isErrorMessage: true
+        }]);
+        
+        // Highlight missing fields by scrolling to parameters section on mobile
+        if (window.innerWidth < 768 && !showParameters) {
+          setShowParameters(true); // directly use state setter instead of the toggle function
+        }
+        
+        return;
+      }
+    }
+
+    // Clear input field
+    setInput('');
+    
+    // Process the action directly
+    cleanupEventSource();
+    setProcessing(true);
+    setError(null);
+    
+    const userMessageId = Date.now();
+    const actionLabel = getLocalizedContent(action.label, currentLanguage) || action.id;
+    
+    // Create user message that indicates an action was triggered
+    const newUserMessage = {
+      id: userMessageId,
+      role: 'user',
+      content: `[${actionLabel}]`, // Show the action name as user message content
+      actionId: actionId, // Include the action ID so the server knows this is an action
+      variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined,
+    };
+
+    setMessages(prev => [...prev, newUserMessage]);
+    
+    // Create message to send to API
+    const messageForAPI = {
+      role: 'user',
+      content: '', // Empty content for action
+      actionId: actionId, // This tells the server it's an action button request
+      promptTemplate: app?.prompt || null,
+      variables: { ...variables },
+    };
+
+    const messagesForAPI = sendChatHistory === false
+      ? [messageForAPI]
+      : messages.concat(messageForAPI).map((msg) => {
+          const { id, loading, error, ...apiMsg } = msg;
+          return apiMsg;
+        });
+
+    const assistantMessageId = userMessageId + 1;
+    setMessages(prev => [
+      ...prev,
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        loading: true,
+      }
+    ]);
+
+    // Create event source for streaming response
+    const eventSource = new EventSource(`/api/apps/${appId}/chat/${chatId.current}`);
+    eventSourceRef.current = eventSource;
+
+    let fullContent = '';
+    let connectionEstablished = false;
+
+    connectionTimeoutRef.current = setTimeout(() => {
+      if (!connectionEstablished) {
+        console.error('SSE connection timeout');
+        eventSource.close();
+
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === assistantMessageId
+              ? {
+                  ...msg,
+                  content: t('error.connectionTimeout', 'Connection timeout. Please try again.'),
+                  loading: false,
+                  error: true,
+                }
+              : msg
+          )
+        );
+
+        setProcessing(false);
+      }
+    }, 10000);
+
+    // Set up event handlers
+    eventSource.addEventListener('connected', async () => {
+      connectionEstablished = true;
+      clearTimeout(connectionTimeoutRef.current);
+
+      try {
+        // Log the parameters being sent to the server
+        const requestParams = {
+          modelId: selectedModel,
+          style: selectedStyle,
+          temperature,
+          outputFormat: selectedOutputFormat,
+          language: currentLanguage,
+        };
+        console.log('Sending action with parameters:', requestParams);
+        
+        await sendAppChatMessage(appId, chatId.current, messagesForAPI, requestParams);
+      } catch (error) {
+        console.error('Error sending action:', error);
+
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === assistantMessageId
+              ? {
+                  ...msg,
+                  content: t(
+                    'error.failedToGenerateResponse',
+                    'Error: Failed to generate response. Please try again or select a different model.'
+                  ),
+                  loading: false,
+                  error: true,
+                }
+              : msg
+          )
+        );
+
+        eventSource.close();
+        eventSourceRef.current = null;
+        setProcessing(false);
+      }
+    });
+
+    eventSource.addEventListener('chunk', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        fullContent += data.content || '';
+
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: fullContent, loading: true }
+              : msg
+          )
+        );
+      } catch (error) {
+        console.error('Error processing chunk:', error);
+      }
+    });
+
+    eventSource.addEventListener('done', () => {
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === assistantMessageId ? { ...msg, loading: false } : msg
+        )
+      );
+
+      eventSource.close();
+      eventSourceRef.current = null;
+      setProcessing(false);
+    });
+
+    eventSource.addEventListener('error', (event) => {
+      console.error('SSE Error:', event);
+      clearTimeout(connectionTimeoutRef.current);
+
+      let errorMessage = t(
+        'error.responseError',
+        'Error receiving response. Please try again.'
+      );
+
+      try {
+        if (event.data) {
+          const errorData = JSON.parse(event.data);
+          if (errorData.message) {
+            if (errorData.message.includes('API key not found')) {
+              errorMessage = `${errorData.message}. ${t(
+                'error.checkApiConfig',
+                'Please check your API configuration.'
+              )}`;
+            } else {
+              errorMessage = errorData.message;
+            }
+          }
+        }
+      } catch (e) {}
+
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === assistantMessageId
+            ? {
+                ...msg,
+                content: `Error: ${errorMessage}`,
+                loading: false,
+                error: true,
+              }
+            : msg
+        )
+      );
+
+      eventSource.close();
+      eventSourceRef.current = null;
+      setProcessing(false);
+    });
+
+    startHeartbeat();
+    
+  }, [app, variables, currentLanguage, showParameters, messages, cleanupEventSource, setProcessing, 
+      appId, selectedModel, selectedStyle, temperature, selectedOutputFormat, sendChatHistory, startHeartbeat, t]);
+
   const toggleConfig = () => {
     setShowConfig(!showConfig);
   };
@@ -927,6 +1161,18 @@ const AppChat = () => {
               {t('pages.appChat.clear')}
             </button>
           )}
+          {/* Action buttons for mobile */}
+          {app?.actions && app.actions.length > 0 && (
+            app.actions.map(action => (
+              <button
+                key={action.id}
+                onClick={() => handleAction(action.id)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded flex items-center text-sm"
+              >
+                {getLocalizedContent(action.label, currentLanguage)}
+              </button>
+            ))
+          )}
         </div>
 
         <div className="hidden md:flex space-x-2 ml-auto">
@@ -979,6 +1225,18 @@ const AppChat = () => {
             </svg>
             {t('settings.title')}
           </button>
+          {/* Action buttons for desktop */}
+          {app?.actions && app.actions.length > 0 && (
+            app.actions.map(action => (
+              <button
+                key={action.id}
+                onClick={() => handleAction(action.id)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded flex items-center"
+              >
+                {getLocalizedContent(action.label, currentLanguage)}
+              </button>
+            ))
+          )}
         </div>
       </div>
 
@@ -1140,15 +1398,15 @@ const AppChat = () => {
               disabled={processing}
               className="flex-1 p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
               placeholder={
-                processing ? t('pages.appChat.thinking') : t('pages.appChat.messagePlaceholder')
+                processing ? t('pages.appChat.thinking') : app?.allowEmptyContent ? t('pages.appChat.optionalMessagePlaceholder', 'Type a message (optional)...') : t('pages.appChat.messagePlaceholder')
               }
             />
             <button
               type={processing ? 'button' : 'submit'}
               onClick={processing ? cancelGeneration : undefined}
-              disabled={!processing && !input.trim()}
+              disabled={!processing && !input.trim() && !app?.allowEmptyContent}
               className={`px-4 py-2 rounded-lg font-medium flex items-center justify-center ${
-                !processing && !input.trim()
+                !processing && !input.trim() && !app?.allowEmptyContent
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : processing
                   ? 'bg-red-600 text-white hover:bg-red-700'

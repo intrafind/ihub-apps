@@ -683,8 +683,8 @@
     "color": "#059669",
     "icon": "light-bulb",
     "system": {
-      "en": "You are a prompt engineering expert. Help users create highly effective prompts for various AI tasks and models. Craft clear, specific, and well-structured prompts that will get the best results from AI systems. Provide guidance on prompt structure, language, and techniques for optimizing AI responses.",
-      "de": "Du bist ein Experte für Prompt-Engineering. Hilf Nutzern, hocheffektive Prompts für verschiedene KI-Aufgaben und Modelle zu erstellen. Entwirf klare, spezifische und gut strukturierte Prompts, die die besten Ergebnisse von KI-Systemen erzielen. Biete Anleitung zur Prompt-Struktur, Sprache und Techniken zur Optimierung von KI-Antworten."
+      "en": "You are a prompt engineering expert. Help users create highly effective prompts for various AI tasks and models. Craft clear, specific, and well-structured prompts that will get the best results from AI systems. Provide guidance on prompt structure, language, and techniques for optimizing AI responses.\n\nIf the user submits a message after receiving an initial prompt design, engage in a conversational mode to help refine the prompt based on their feedback. Be responsive to their specific needs and adjust the prompt accordingly.",
+      "de": "Du bist ein Experte für Prompt-Engineering. Hilf Nutzern, hocheffektive Prompts für verschiedene KI-Aufgaben und Modelle zu erstellen. Entwirf klare, spezifische und gut strukturierte Prompts, die die besten Ergebnisse von KI-Systemen erzielen. Biete Anleitung zur Prompt-Struktur, Sprache und Techniken zur Optimierung von KI-Antworten.\n\nWenn der Benutzer nach Erhalt eines ersten Prompt-Entwurfs eine Nachricht sendet, wechsle in einen Gesprächsmodus, um den Prompt basierend auf seinem Feedback zu verfeinern. Gehe auf seine spezifischen Bedürfnisse ein und passe den Prompt entsprechend an."
     },
     "tokenLimit": 5000,
     "preferredModel": "gpt-4",
@@ -693,8 +693,8 @@
     "preferredTemperature": 0.6,
     "sendChatHistory": true,
     "prompt": {
-      "en": "Create a {{prompt_type}} prompt for {{task}}. The target AI model is {{model}}. {{additional_requirements}}\n\n{{content}}",
-      "de": "Erstelle einen {{prompt_type}} Prompt für {{task}}. Das Ziel-KI-Modell ist {{model}}. {{additional_requirements}}\n\n{{content}}"
+      "en": "Create a {{prompt_type}} prompt for {{task}}. The target AI model is {{model}}. {{additional_requirements}}\n\n{{#if content}}User refinement request: {{content}}{{else}}Please provide a well-structured, effective prompt that follows best practices for this model and use case.{{/if}}",
+      "de": "Erstelle einen {{prompt_type}} Prompt für {{task}}. Das Ziel-KI-Modell ist {{model}}. {{additional_requirements}}\n\n{{#if content}}Verfeinerungsanfrage des Benutzers: {{content}}{{else}}Bitte erstelle einen gut strukturierten, effektiven Prompt, der den Best Practices für dieses Modell und diesen Anwendungsfall folgt.{{/if}}"
     },
     "variables": [
       {
@@ -762,7 +762,21 @@
           "de": "Füge spezifische Anforderungen, Einschränkungen oder Techniken hinzu, die du einbauen möchtest."
         }
       }
-    ]
+    ],
+    "actions": [
+      {
+        "id": "create-prompt",
+        "label": {
+          "en": "Create Prompt",
+          "de": "Prompt erstellen"
+        },
+        "description": {
+          "en": "Generate a prompt based on the current parameters without needing to type a message",
+          "de": "Erstelle einen Prompt basierend auf den aktuellen Parametern ohne eine Nachricht eingeben zu müssen"
+        }
+      }
+    ],
+    "allowEmptyContent": true
   },
   {
     "id": "app-generator",
@@ -876,7 +890,6 @@
           "de": "Eingabevariablen"
         },
         "type": "text",
-        "required": true,
         "description": {
           "en": "List the variables that users should be able to customize (e.g., name, type, options).",
           "de": "Liste die Variablen auf, die Benutzer anpassen können sollten (z.B. Name, Typ, Optionen)."
@@ -894,6 +907,20 @@
           "de": "Weitere Details oder spezielle Anforderungen für deine App."
         }
       }
-    ]
+    ],
+    "actions": [
+      {
+        "id": "generate-app",
+        "label": {
+          "en": "Generate App",
+          "de": "App generieren"
+        },
+        "description": {
+          "en": "Generate app JSON based on the current parameters without needing to type a message",
+          "de": "App-JSON basierend auf den aktuellen Parametern generieren, ohne eine Nachricht eingeben zu müssen"
+        }
+      }
+    ],
+    "allowEmptyContent": true
   }
 ]
