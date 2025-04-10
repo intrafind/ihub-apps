@@ -11,6 +11,7 @@ const Layout = () => {
   const { headerColor } = useHeaderColor();
   const [uiConfig, setUiConfig] = useState(null);
   const location = useLocation();
+  const [translationsLoaded, setTranslationsLoaded] = useState(false);
 
   const headerColorStyle = {
     backgroundColor: headerColor || '#4f46e5',
@@ -31,6 +32,24 @@ const Layout = () => {
 
     fetchUiConfig();
   }, []);
+
+  // Effect to monitor translation loading completeness
+  useEffect(() => {
+    // Subscribe to i18next's "loaded" event
+    const handleTranslationsLoaded = (loaded) => {
+      if (loaded) {
+        // Force a re-render when translations are fully loaded
+        setTranslationsLoaded(true);
+        setTimeout(() => setTranslationsLoaded(false), 100);
+      }
+    };
+
+    i18n.on('loaded', handleTranslationsLoaded);
+    
+    return () => {
+      i18n.off('loaded', handleTranslationsLoaded);
+    };
+  }, [i18n]);
 
   return (
     <div className="flex flex-col min-h-screen">

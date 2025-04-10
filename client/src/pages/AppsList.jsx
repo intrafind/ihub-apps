@@ -23,6 +23,7 @@ const AppsList = () => {
   const [categories, setCategories] = useState([]);
   const [favoriteApps, setFavoriteApps] = useState([]);
   const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY_COUNT);
+  const [translationsLoaded, setTranslationsLoaded] = useState(false);
 
   // Load apps with debounced search
   useEffect(() => {
@@ -63,6 +64,24 @@ const AppsList = () => {
     
     loadApps();
   }, [t]);
+
+  // Effect to monitor translation loading completeness
+  useEffect(() => {
+    // Subscribe to i18next's "loaded" event
+    const handleTranslationsLoaded = (loaded) => {
+      if (loaded) {
+        // Force a re-render when translations are fully loaded
+        setTranslationsLoaded(true);
+        setTimeout(() => setTranslationsLoaded(false), 100);
+      }
+    };
+
+    i18n.on('loaded', handleTranslationsLoaded);
+    
+    return () => {
+      i18n.off('loaded', handleTranslationsLoaded);
+    };
+  }, [i18n]);
 
   // Reset display count when search or category changes
   useEffect(() => {

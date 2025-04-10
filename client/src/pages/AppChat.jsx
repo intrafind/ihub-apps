@@ -30,12 +30,31 @@ const AppChat = () => {
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(true);
   const { setHeaderColor } = useHeaderColor();
+  const [translationsLoaded, setTranslationsLoaded] = useState(false);
 
   const chatContainerRef = useRef(null);
   const chatId = useRef(`chat-${Date.now()}`);
   const eventSourceRef = useRef(null);
   const connectionTimeoutRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);
+
+  // Effect to handle translation loading completeness
+  useEffect(() => {
+    // Subscribe to i18next's "loaded" event
+    const handleTranslationsLoaded = (loaded) => {
+      if (loaded) {
+        // Force a re-render when translations are fully loaded
+        setTranslationsLoaded(true);
+        setTimeout(() => setTranslationsLoaded(false), 100);
+      }
+    };
+
+    i18n.on('loaded', handleTranslationsLoaded);
+    
+    return () => {
+      i18n.off('loaded', handleTranslationsLoaded);
+    };
+  }, [i18n]);
 
   const hasVariablesToSend = app?.variables && Object.keys(variables).length > 0;
 
@@ -307,12 +326,17 @@ const AppChat = () => {
             clearTimeout(connectionTimeoutRef.current);
 
             try {
-              await sendAppChatMessage(appId, chatId.current, messagesForAPI, {
+              // Log the parameters being sent to the server for debugging
+              const requestParams = {
                 modelId: selectedModel,
                 style: selectedStyle,
                 temperature,
                 outputFormat: selectedOutputFormat,
-              });
+                language: currentLanguage,
+              };
+              console.log('Sending chat message with parameters:', requestParams);
+              
+              await sendAppChatMessage(appId, chatId.current, messagesForAPI, requestParams);
             } catch (postError) {
               console.error('Error sending chat message:', postError);
 
@@ -610,12 +634,17 @@ const AppChat = () => {
         clearTimeout(connectionTimeoutRef.current);
 
         try {
-          await sendAppChatMessage(appId, chatId.current, messagesForAPI, {
+          // Log the parameters being sent to the server for debugging
+          const requestParams = {
             modelId: selectedModel,
             style: selectedStyle,
             temperature,
             outputFormat: selectedOutputFormat,
-          });
+            language: currentLanguage,
+          };
+          console.log('Sending chat message with parameters:', requestParams);
+          
+          await sendAppChatMessage(appId, chatId.current, messagesForAPI, requestParams);
         } catch (postError) {
           console.error('Error sending chat message:', postError);
 

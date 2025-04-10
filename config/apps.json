@@ -645,5 +645,255 @@
         }
       }
     ]
+  },
+  {
+    "id": "joker",
+    "name": {
+      "en": "Joke Generator",
+      "de": "Witze-Generator"
+    },
+    "description": {
+      "en": "Turns any request into a joke response",
+      "de": "Verwandelt jede Anfrage in eine witzige Antwort"
+    },
+    "color": "#8B5CF6",
+    "icon": "sparkles",
+    "system": {
+      "en": "You are a comedian AI assistant. Instead of directly answering the user's request, you should turn their request into a joke and respond with humor. No matter what the user asks for, never provide a serious answer - always respond with a joke that incorporates elements from their request. Be witty, playful, and entertaining. Keep jokes appropriate and avoid offensive content.",
+      "de": "Du bist ein Komiker-KI-Assistent. Anstatt die Anfrage des Nutzers direkt zu beantworten, sollst du ihre Anfrage in einen Witz verwandeln und mit Humor antworten. Egal was der Nutzer fragt, gib niemals eine ernsthafte Antwort - antworte immer mit einem Witz, der Elemente aus ihrer Anfrage enthält. Sei geistreich, verspielt und unterhaltsam. Halte Witze angemessen und vermeide anstößige Inhalte."
+    },
+    "tokenLimit": 4000,
+    "preferredModel": "gemini-1.5-flash",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "creative",
+    "preferredTemperature": 1.0,
+    "sendChatHistory": false,
+    "allowedModels": ["local-vllm", "gemini-1.5-flash"]
+  },
+  {
+    "id": "prompt-generator",
+    "name": {
+      "en": "Prompt Generator",
+      "de": "Prompt-Generator"
+    },
+    "description": {
+      "en": "Create effective prompts for any AI use case",
+      "de": "Erstelle effektive Prompts für jeden KI-Anwendungsfall"
+    },
+    "color": "#059669",
+    "icon": "light-bulb",
+    "system": {
+      "en": "You are a prompt engineering expert. Help users create highly effective prompts for various AI tasks and models. Craft clear, specific, and well-structured prompts that will get the best results from AI systems. Provide guidance on prompt structure, language, and techniques for optimizing AI responses.",
+      "de": "Du bist ein Experte für Prompt-Engineering. Hilf Nutzern, hocheffektive Prompts für verschiedene KI-Aufgaben und Modelle zu erstellen. Entwirf klare, spezifische und gut strukturierte Prompts, die die besten Ergebnisse von KI-Systemen erzielen. Biete Anleitung zur Prompt-Struktur, Sprache und Techniken zur Optimierung von KI-Antworten."
+    },
+    "tokenLimit": 5000,
+    "preferredModel": "gpt-4",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.6,
+    "sendChatHistory": true,
+    "prompt": {
+      "en": "Create a {{prompt_type}} prompt for {{task}}. The target AI model is {{model}}. {{additional_requirements}}\n\n{{content}}",
+      "de": "Erstelle einen {{prompt_type}} Prompt für {{task}}. Das Ziel-KI-Modell ist {{model}}. {{additional_requirements}}\n\n{{content}}"
+    },
+    "variables": [
+      {
+        "name": "prompt_type",
+        "label": {
+          "en": "Prompt Type",
+          "de": "Prompt-Typ"
+        },
+        "type": "string",
+        "required": true,
+        "predefinedValues": [
+          {"label": {"en": "Instructional", "de": "Anleitend"}, "value": "instructional"},
+          {"label": {"en": "Creative", "de": "Kreativ"}, "value": "creative"},
+          {"label": {"en": "Analytical", "de": "Analytisch"}, "value": "analytical"},
+          {"label": {"en": "Conversational", "de": "Gesprächig"}, "value": "conversational"},
+          {"label": {"en": "Problem-solving", "de": "Problemlösend"}, "value": "problem-solving"},
+          {"label": {"en": "Coding", "de": "Programmierung"}, "value": "coding"},
+          {"label": {"en": "Technical", "de": "Technisch"}, "value": "technical"}
+        ]
+      },
+      {
+        "name": "task",
+        "label": {
+          "en": "Task/Goal",
+          "de": "Aufgabe/Ziel"
+        },
+        "type": "string",
+        "required": true,
+        "description": {
+          "en": "Describe what you want the AI to accomplish with this prompt.",
+          "de": "Beschreibe, was die KI mit diesem Prompt erreichen soll."
+        }
+      },
+      {
+        "name": "model",
+        "label": {
+          "en": "Target AI Model",
+          "de": "Ziel-KI-Modell"
+        },
+        "type": "string",
+        "required": true,
+        "defaultValue": {
+          "en": "GPT-4",
+          "de": "GPT-4"
+        },
+        "predefinedValues": [
+          {"label": {"en": "GPT-4", "de": "GPT-4"}, "value": "GPT-4"},
+          {"label": {"en": "GPT-3.5 Turbo", "de": "GPT-3.5 Turbo"}, "value": "GPT-3.5 Turbo"},
+          {"label": {"en": "Claude", "de": "Claude"}, "value": "Claude"},
+          {"label": {"en": "Gemini", "de": "Gemini"}, "value": "Gemini"},
+          {"label": {"en": "DALL-E", "de": "DALL-E"}, "value": "DALL-E"},
+          {"label": {"en": "Midjourney", "de": "Midjourney"}, "value": "Midjourney"},
+          {"label": {"en": "Custom", "de": "Benutzerdefiniert"}, "value": "a custom AI model"}
+        ]
+      },
+      {
+        "name": "additional_requirements",
+        "label": {
+          "en": "Additional Requirements",
+          "de": "Zusätzliche Anforderungen"
+        },
+        "type": "text",
+        "description": {
+          "en": "Include any specific requirements, constraints, or techniques you want to incorporate.",
+          "de": "Füge spezifische Anforderungen, Einschränkungen oder Techniken hinzu, die du einbauen möchtest."
+        }
+      }
+    ]
+  },
+  {
+    "id": "app-generator",
+    "name": {
+      "en": "App Generator",
+      "de": "App-Generator"
+    },
+    "description": {
+      "en": "Generate JSON for a new AI Hub App based on your description",
+      "de": "Generiere JSON für eine neue AI Hub App basierend auf deiner Beschreibung"
+    },
+    "color": "#7C3AED",
+    "icon": "code",
+    "system": {
+      "en": "You are an expert in the AI Hub Apps platform. Your job is to help users create complete and valid JSON configurations for new apps based on their descriptions. Generate well-structured app configurations with appropriate system prompts, variables, and settings. Ensure the JSON follows the correct schema and includes all necessary fields for the app to function properly.",
+      "de": "Du bist ein Experte für die AI Hub Apps-Plattform. Deine Aufgabe ist es, Benutzern zu helfen, vollständige und gültige JSON-Konfigurationen für neue Apps auf Basis ihrer Beschreibungen zu erstellen. Generiere gut strukturierte App-Konfigurationen mit passenden System-Prompts, Variablen und Einstellungen. Stelle sicher, dass das JSON dem korrekten Schema folgt und alle notwendigen Felder enthält, damit die App ordnungsgemäß funktioniert."
+    },
+    "tokenLimit": 8000,
+    "preferredModel": "gpt-4",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.4,
+    "sendChatHistory": true,
+    "prompt": {
+      "en": "Generate a complete JSON configuration for an AI Hub App with the following details:\n\nApp Name: {{app_name}}\nPurpose: {{app_purpose}}\nPreferred Model: {{preferred_model}}\nPreferred Temperature: {{preferred_temperature}}\n\nFeatures and functionality needed: {{app_features}}\n\nUser input variables required: {{input_variables}}\n\n{{additional_details}}",
+      "de": "Generiere eine vollständige JSON-Konfiguration für eine AI Hub App mit den folgenden Details:\n\nApp-Name: {{app_name}}\nZweck: {{app_purpose}}\nBevorzugtes Modell: {{preferred_model}}\nBevorzugte Temperatur: {{preferred_temperature}}\n\nBenötigte Funktionen: {{app_features}}\n\nErforderliche Benutzereingabe-Variablen: {{input_variables}}\n\n{{additional_details}}"
+    },
+    "variables": [
+      {
+        "name": "app_name",
+        "label": {
+          "en": "App Name",
+          "de": "App-Name"
+        },
+        "type": "string",
+        "required": true,
+        "description": {
+          "en": "A short, descriptive name for your app.",
+          "de": "Ein kurzer, beschreibender Name für deine App."
+        }
+      },
+      {
+        "name": "app_purpose",
+        "label": {
+          "en": "App Purpose",
+          "de": "App-Zweck"
+        },
+        "type": "text",
+        "required": true,
+        "description": {
+          "en": "Describe what your app will do and the problem it solves.",
+          "de": "Beschreibe, was deine App tun wird und welches Problem sie löst."
+        }
+      },
+      {
+        "name": "preferred_model",
+        "label": {
+          "en": "Preferred AI Model",
+          "de": "Bevorzugtes KI-Modell"
+        },
+        "type": "string",
+        "required": true,
+        "defaultValue": {
+          "en": "gpt-4",
+          "de": "gpt-4"
+        },
+        "predefinedValues": [
+          {"label": {"en": "GPT-4", "de": "GPT-4"}, "value": "gpt-4"},
+          {"label": {"en": "GPT-3.5 Turbo", "de": "GPT-3.5 Turbo"}, "value": "gpt-3.5-turbo"},
+          {"label": {"en": "Claude", "de": "Claude"}, "value": "claude-3-opus-20240229"},
+          {"label": {"en": "Gemini 1.5 Flash", "de": "Gemini 1.5 Flash"}, "value": "gemini-1.5-flash"}
+        ]
+      },
+      {
+        "name": "preferred_temperature",
+        "label": {
+          "en": "Preferred Temperature",
+          "de": "Bevorzugte Temperatur"
+        },
+        "type": "string",
+        "required": true,
+        "defaultValue": {
+          "en": "0.7",
+          "de": "0.7"
+        },
+        "predefinedValues": [
+          {"label": {"en": "0.2 (Precise)", "de": "0.2 (Präzise)"}, "value": "0.2"},
+          {"label": {"en": "0.5 (Balanced)", "de": "0.5 (Ausgewogen)"}, "value": "0.5"},
+          {"label": {"en": "0.7 (Default)", "de": "0.7 (Standard)"}, "value": "0.7"},
+          {"label": {"en": "0.9 (Creative)", "de": "0.9 (Kreativ)"}, "value": "0.9"},
+          {"label": {"en": "1.0 (Very Creative)", "de": "1.0 (Sehr kreativ)"}, "value": "1.0"}
+        ]
+      },
+      {
+        "name": "app_features",
+        "label": {
+          "en": "App Features",
+          "de": "App-Funktionen"
+        },
+        "type": "text",
+        "required": true,
+        "description": {
+          "en": "List the key features and functionalities of your app.",
+          "de": "Liste die wichtigsten Funktionen deiner App auf."
+        }
+      },
+      {
+        "name": "input_variables",
+        "label": {
+          "en": "Input Variables",
+          "de": "Eingabevariablen"
+        },
+        "type": "text",
+        "required": true,
+        "description": {
+          "en": "List the variables that users should be able to customize (e.g., name, type, options).",
+          "de": "Liste die Variablen auf, die Benutzer anpassen können sollten (z.B. Name, Typ, Optionen)."
+        }
+      },
+      {
+        "name": "additional_details",
+        "label": {
+          "en": "Additional Details",
+          "de": "Zusätzliche Details"
+        },
+        "type": "text",
+        "description": {
+          "en": "Any other details or special requirements for your app.",
+          "de": "Weitere Details oder spezielle Anforderungen für deine App."
+        }
+      }
+    ]
   }
 ]

@@ -10,7 +10,7 @@ import https from 'https';
 
 // Import adapters and utilities
 import { createCompletionRequest, processResponseBuffer, formatMessages } from './adapters/index.js';
-import { sendSSE, getApiKeyForModel } from './utils.js';
+import { sendSSE, getApiKeyForModel, getModelInfo, getErrorDetails } from './utils.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -356,21 +356,22 @@ app.get('/api/models/:modelId/chat/test', async (req, res) => {
         body: JSON.stringify(request.body)
       });
       
-      const response = await Promise.race([responsePromise, timeoutPromise]);
+      const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
       
       clearTimeout(timeoutId);
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`${model.provider} API error:`, errorText);
-        return res.status(response.status).json({ 
-          error: `${model.provider} API error: ${response.status}`,
-          details: errorText
+      if (!llmResponse.ok) {
+        const errorBody = await llmResponse.text();
+        console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
+        return res.status(llmResponse.status).json({ 
+          error: `LLM API request failed with status ${llmResponse.status}`,
+          details: errorBody
         });
       }
       
-      const responseData = await response.json();
-      res.json({ success: true, response: responseData });
+      // Return the complete response
+      const responseData = await llmResponse.json();
+      return res.json(responseData);
     } catch (fetchError) {
       clearTimeout(timeoutId);
       
@@ -380,7 +381,17 @@ app.get('/api/models/:modelId/chat/test', async (req, res) => {
           message: `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT/1000} seconds`
         });
       } else {
-        throw fetchError; // Re-throw for the catch block below
+        // Get enhanced error details for the non-streaming case
+        const errorDetails = getErrorDetails(fetchError, model);
+        
+        return res.status(500).json({ 
+          error: errorDetails.message,
+          code: errorDetails.code,
+          modelId: model.id,
+          provider: model.provider,
+          recommendation: errorDetails.recommendation,
+          details: fetchError.message
+        });
       }
     }
   } catch (error) {
@@ -538,7 +549,10 @@ app.get('/api/ui', async (req, res) => {
 app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
   try {
     const { appId, chatId } = req.params;
-    const { messages, modelId, temperature, style, outputFormat } = req.body;
+    const { messages, modelId, temperature, style, outputFormat, language } = req.body;
+    
+    // Log the language being used for debugging
+    console.log(`Processing chat with language: ${language || 'en'}`);
     
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
@@ -573,7 +587,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       }
       
       // Prepare messages with proper formatting
-      const llmMessages = processMessageTemplates(messages, app, style, outputFormat);
+      const llmMessages = processMessageTemplates(messages, app, style, outputFormat, language);
       
       // Get and verify API key for model
       const apiKey = await verifyApiKey(model, res);
@@ -626,7 +640,17 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
             message: `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT/1000} seconds`
           });
         } else {
-          throw fetchError; // Re-throw for the catch block below
+          // Get enhanced error details for the non-streaming case
+          const errorDetails = getErrorDetails(fetchError, model);
+          
+          return res.status(500).json({ 
+            error: errorDetails.message,
+            code: errorDetails.code,
+            modelId: model.id,
+            provider: model.provider,
+            recommendation: errorDetails.recommendation,
+            details: fetchError.message
+          });
         }
       }
     }
@@ -668,7 +692,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     }
     
     // Prepare messages with proper formatting
-    const llmMessages = processMessageTemplates(messages, app, style, outputFormat);
+    const llmMessages = processMessageTemplates(messages, app, style, outputFormat, language);
     
     // Get and verify API key with proper error handling for SSE
     const apiKey = await verifyApiKey(model, null, clientRes);
@@ -790,7 +814,20 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         // Don't log or send event if it was an intentional abort
       } else {
         console.error('Error executing LLM request:', error);
-        sendSSE(clientRes, 'error', { message: `Error executing LLM request: ${error.message}` });
+        
+        // Get enhanced error details
+        const errorDetails = getErrorDetails(error, model);
+        
+        // Send a more helpful error message to the client
+        const errorMessage = {
+          message: errorDetails.message,
+          modelId: model.id,
+          provider: model.provider,
+          recommendation: errorDetails.recommendation,
+          details: error.message
+        };
+        
+        sendSSE(clientRes, 'error', errorMessage);
       }
       
       activeRequests.delete(chatId);
@@ -856,15 +893,18 @@ app.get('/api/apps/:appId/chat/:chatId/status', (req, res) => {
 });
 
 // Helper function to extract messages and format them
-function processMessageTemplates(messages, app, style = null, outputFormat = null) {
+function processMessageTemplates(messages, app, style = null, outputFormat = null, language = 'en') {
+  // Log the language being used for localization 
+  console.log(`Using language '${language}' for message templates`);
+  
   // Copy messages to avoid modifying the original
   let llmMessages = [...messages].map(msg => {
     // Process user messages with prompt templates and variables
     if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
       // Start with the prompt template or original content if no template
-      // Handle localized content in prompt templates
+      // Handle localized content in prompt templates with the specified language
       let processedContent = typeof msg.promptTemplate === 'object'
-        ? getLocalizedContent(msg.promptTemplate)
+        ? getLocalizedContent(msg.promptTemplate, language)
         : (msg.promptTemplate || msg.content);
       
       if (typeof processedContent !== 'string') {
@@ -902,9 +942,9 @@ function processMessageTemplates(messages, app, style = null, outputFormat = nul
   // Apply prompt template if the app has one and there's no system message
   if (app && !llmMessages.some(msg => msg.role === 'system')) {
     // Add application system prompt with style modifications if applicable
-    // Handle localized content in system prompt
+    // Handle localized content in system prompt with the specified language
     let systemPrompt = typeof app.system === 'object'
-      ? getLocalizedContent(app.system)
+      ? getLocalizedContent(app.system, language)
       : (app.system || '');
     
     if (typeof systemPrompt !== 'string') {

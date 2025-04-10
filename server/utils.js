@@ -71,3 +71,84 @@ export async function getApiKeyForModel(modelId) {
     return null;
   }
 }
+
+/**
+ * Get model information by ID
+ * @param {string} modelId - The model ID
+ * @returns {Object|null} The model information or null if not found
+ */
+export async function getModelInfo(modelId) {
+  try {
+    // Load models configuration
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    
+    const filePath = path.join(__dirname, '../config/models.json');
+    const data = await fs.readFile(filePath, 'utf8');
+    const models = JSON.parse(data);
+    
+    // Find the model by ID
+    return models.find(m => m.id === modelId) || null;
+  } catch (error) {
+    console.error('Error getting model info:', error);
+    return null;
+  }
+}
+
+/**
+ * Get detailed error information from fetch errors
+ * @param {Error} error - The error object
+ * @param {Object} model - The model information
+ * @returns {Object} Enhanced error details with user-friendly messages
+ */
+export function getErrorDetails(error, model) {
+  const errorDetails = {
+    message: error.message,
+    code: error.code || 'UNKNOWN_ERROR',
+    modelId: model?.id || 'unknown',
+    modelProvider: model?.provider || 'unknown',
+    isConnectionError: false,
+    isTimeout: false,
+    recommendation: ''
+  };
+  
+  // Check if it's a connection error
+  if (error.code === 'ECONNREFUSED' || 
+      (error.cause && error.cause.code === 'ECONNREFUSED') ||
+      error.message.includes('ECONNREFUSED')) {
+    errorDetails.isConnectionError = true;
+    errorDetails.code = 'ECONNREFUSED';
+    
+    // Create user-friendly messages based on the model provider
+    if (model?.provider === 'local') {
+      errorDetails.message = `Could not connect to local model server (${model.id}). Is the local model server running?`;
+      errorDetails.recommendation = 'Please ensure your local model server is running and properly configured.';
+    } else {
+      errorDetails.message = `Connection refused while trying to access ${model?.provider || 'unknown'} API for model ${model?.id || 'unknown'}.`;
+      errorDetails.recommendation = 'Please check your network connection and firewall settings.';
+    }
+  }
+  
+  // Check if it's a timeout error
+  if (error.code === 'ETIMEDOUT' || 
+      (error.cause && error.cause.code === 'ETIMEDOUT') ||
+      error.message.includes('timed out') ||
+      error.message.includes('timeout')) {
+    errorDetails.isTimeout = true;
+    errorDetails.code = 'ETIMEDOUT';
+    errorDetails.message = `Request to ${model?.provider || 'unknown'} API timed out for model ${model?.id || 'unknown'}.`;
+    errorDetails.recommendation = 'The service might be experiencing high load. Please try again later.';
+  }
+  
+  // Additional provider-specific error handling
+  if (model?.provider === 'local' && errorDetails.isConnectionError) {
+    errorDetails.message = `Could not connect to local model server for ${model.id}. Make sure the server is running on the configured address and port.`;
+    errorDetails.recommendation = `If you wanted to use a cloud model instead, you can modify your app's configuration to use a different model.`;
+  }
+  
+  return errorDetails;
+}

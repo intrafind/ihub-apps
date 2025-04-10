@@ -60,10 +60,14 @@ const loadFullTranslations = async (language) => {
       // Add the full translations, merging with core translations
       i18n.addResourceBundle(language, 'translation', translations, true, true);
       console.log(`Successfully loaded translations for: ${language}`);
+      
+      // Emit an event that translations are loaded
+      i18n.emit('loaded', true);
     }
   } catch (error) {
     console.error(`Failed to load translations for language: ${language}`, error);
     // Continue with core translations on error
+    i18n.emit('loaded', false);
   }
 };
 
