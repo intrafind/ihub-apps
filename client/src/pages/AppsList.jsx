@@ -171,13 +171,27 @@ const AppsList = () => {
   // Memoized sorted apps to avoid recomputing on every render
   const sortedApps = useMemo(() => {
     return [...filteredApps].sort((a, b) => {
+      // First sort by favorite status
       const aIsFavorite = favoriteApps.includes(a.id);
       const bIsFavorite = favoriteApps.includes(b.id);
       
       if (aIsFavorite && !bIsFavorite) return -1;
       if (!aIsFavorite && bIsFavorite) return 1;
       
-      // Secondary sort by name if favorite status is the same
+      // Then sort by order if available
+      const aHasOrder = a.order !== undefined && a.order !== null;
+      const bHasOrder = b.order !== undefined && b.order !== null;
+      
+      // If both have order, compare by order
+      if (aHasOrder && bHasOrder) {
+        return a.order - b.order;
+      }
+      
+      // If only one has order, prioritize the one with order
+      if (aHasOrder && !bHasOrder) return -1;
+      if (!aHasOrder && bHasOrder) return 1;
+      
+      // Finally, sort by name if same favorite status and neither has order or both have same order
       const aName = getLocalizedContent(a.name, currentLanguage) || '';
       const bName = getLocalizedContent(b.name, currentLanguage) || '';
       return aName.localeCompare(bName);

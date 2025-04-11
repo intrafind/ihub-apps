@@ -1,6 +1,7 @@
 [
   {
     "id": "chat",
+    "order": 2,
     "name": {
       "en": "AI Chat",
       "de": "KI-Chat"
@@ -24,6 +25,7 @@
   },
   {
     "id": "translator",
+    "order": 3,
     "name": {
       "en": "Translator",
       "de": "Übersetzer"
@@ -78,6 +80,7 @@
   },
   {
     "id": "summarizer",
+    "order": 4,
     "name": {
       "en": "Content Summarizer",
       "de": "Inhaltszusammenfassung"
@@ -159,6 +162,7 @@
   },
   {
     "id": "email-composer",
+    "order": 5,
     "name": {
       "en": "Email Composer",
       "de": "E-Mail-Verfasser"
@@ -648,6 +652,7 @@
   },
   {
     "id": "joker",
+    "order": 1,
     "name": {
       "en": "Joke Generator",
       "de": "Witze-Generator"
@@ -672,6 +677,7 @@
   },
   {
     "id": "prompt-generator",
+    "order": 6,
     "name": {
       "en": "Prompt Generator",
       "de": "Prompt-Generator"
@@ -780,6 +786,7 @@
   },
   {
     "id": "app-generator",
+    "order": 7,
     "name": {
       "en": "App Generator",
       "de": "App-Generator"

@@ -152,3 +152,216 @@ export function getErrorDetails(error, model) {
   
   return errorDetails;
 }
+
+/**
+ * Logs user interactions with the AI Hub
+ * 
+ * @param {Object} data - The interaction data to log
+ * @param {string} data.appId - The ID of the app being used
+ * @param {string} data.modelId - The ID of the model being used
+ * @param {string} data.sessionId - The user's session ID (chatId)
+ * @param {string} [data.userSessionId] - The user's browser session ID
+ * @param {Array} [data.messages] - The conversation messages
+ * @param {Object} [data.options] - Additional options like temperature, style, etc.
+ * @param {string} [data.responseType] - Type of response (error, success, feedback)
+ * @param {string} [data.response] - The AI's response if available
+ * @param {Error} [data.error] - Error object if there was an error
+ * @param {Object} [data.feedback] - Feedback data if this is a feedback log
+ * @param {string} [data.messageId] - Unique ID for the message (used for linking request, response, and feedback)
+ * @returns {Promise<void>}
+ */
+export async function logInteraction(interactionType, data) {
+  try {
+    const timestamp = new Date().toISOString();
+    
+    // Determine the log entry type based on data provided
+    let logType = interactionType || 'unknown'; // Use the provided interactionType or default to 'interaction'
+    
+    // CRITICAL CHANGE: For feedback logs, use the exact messageId that was provided
+    // This ensures the feedback log has the same interactionId as the request/response logs
+    let interactionId;
+    
+    if (logType === 'feedback' && data.messageId) {
+      // For feedback, use the exact messageId that was provided without modification
+      interactionId = data.messageId;
+    } else if (data.messageId) {
+      // For other types, use the messageId if provided, but ensure it has the 'msg-' prefix
+      interactionId = data.messageId.startsWith('msg-') ? data.messageId : `msg-${data.messageId}`;
+    } else {
+      // If no messageId provided, generate a new one
+      interactionId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    }
+    
+    // Build the log entry with standard fields
+    const logEntry = {
+      type: logType,
+      timestamp,
+      interactionId, // Add consistent ID for linking related logs
+      appId: data.appId || 'direct',
+      modelId: data.modelId,
+      sessionId: data.sessionId, // This is the chatId
+      userSessionId: data.userSessionId, // This is the browser session ID
+    };
+    
+    // Extract the user's query (last user message) if messages exist
+    if (data.messages && Array.isArray(data.messages)) {
+      const userMessages = data.messages.filter(m => m.role === 'user');
+      const userQuery = userMessages.length > 0 ? userMessages[userMessages.length - 1].content : '';
+      
+      logEntry.query = userQuery;
+      logEntry.messageCount = data.messages.length;
+    }
+    
+    // Add options if provided
+    if (data.options) {
+      logEntry.options = data.options;
+    }
+    
+    // Add response if provided
+    if (data.response) {
+      logEntry.response = data.response.substring(0, 1000); // Store response content, truncated if needed
+    }
+    
+    // Add error if provided
+    if (data.error) {
+      logEntry.responseType = 'error'; // Mark this explicitly as an error response
+      logEntry.error = {
+        message: data.error.message,
+        code: data.error.code
+      };
+    }
+    
+    // Add feedback if provided
+    if (data.feedback) {
+      logEntry.feedback = data.feedback;
+    }
+    
+    // For debugging purposes, log to console with appropriate type prefix
+    if (logType === 'feedback') {
+      console.log(`[FEEDBACK] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} | Rating: ${data.feedback?.rating || 'unknown'}`);
+    } else if (logType === 'chat_response') {
+      console.log(`[CHAT_RESPONSE] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId}`);
+    } else if (logType === 'chat_request') {
+      const queryPreview = logEntry.query ? `| Query: ${logEntry.query.substring(0, 50)}${logEntry.query.length > 50 ? '...' : ''}` : '';
+      console.log(`[CHAT_REQUEST] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${queryPreview}`);
+    } else {
+      console.log(`[INTERACTION] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId}`);
+    }
+    
+    // Write to log file
+    await appendToLogFile(logEntry);
+    
+    // Return the interaction ID so it can be used to link requests, responses, and feedback
+    return interactionId;
+    
+  } catch (error) {
+    // Don't let logging errors affect the main application flow
+    console.error('Error logging interaction:', error);
+    return null;
+  }
+}
+
+/**
+ * Append log entry to the log file
+ * 
+ * @param {Object} logEntry - The log entry to append
+ * @returns {Promise<void>}
+ */
+async function appendToLogFile(logEntry) {
+  try {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    
+    // Create logs directory if it doesn't exist
+    const logsDir = path.join(__dirname, '../logs');
+    try {
+      await fs.mkdir(logsDir, { recursive: true });
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+    }
+    
+    // Create log file path with today's date
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const logFilePath = path.join(logsDir, `interactions-${today}.log`);
+    
+    // Append log entry to file
+    await fs.appendFile(
+      logFilePath, 
+      JSON.stringify(logEntry) + '\n',
+      'utf8'
+    );
+  } catch (error) {
+    console.error('Error writing to log file:', error);
+  }
+}
+
+/**
+ * Create a session tracker for chat sessions
+ * 
+ * @param {string} chatId - The chat/session ID
+ * @param {Object} info - Additional session info
+ * @returns {string} The session ID
+ */
+export function trackSession(chatId, info = {}) {
+  try {
+    // Log chat session start, including both chatId and userSessionId if available
+    const userSessionId = info.userSessionId || 'unknown';
+    
+    console.log(`[CHAT STARTED] Chat ID: ${chatId} | User Session: ${userSessionId} | App: ${info.appId || 'unknown'}`);
+    
+    // Store the chat session info in a log file
+    appendToLogFile({
+      type: 'chat_started',
+      timestamp: new Date().toISOString(),
+      chatId: chatId,
+      userSessionId: userSessionId,
+      appId: info.appId || 'unknown',
+      userAgent: info.userAgent || 'unknown'
+    }).catch(error => {
+      console.error('Error logging chat session start:', error);
+    });
+    
+    return chatId;
+  } catch (error) {
+    console.error('Error tracking chat session:', error);
+    return chatId;
+  }
+}
+
+/**
+ * Logs a new user session when it begins
+ * 
+ * @param {string} chatId - The chat/session ID
+ * @param {string} appId - The app being used
+ * @param {Object} metadata - Additional metadata about the session
+ * @returns {Promise<void>}
+ */
+export async function logNewSession(chatId, appId, metadata = {}) {
+  try {
+    const timestamp = new Date().toISOString();
+    
+    // Build the log entry
+    const logEntry = {
+      type: 'session_start',
+      timestamp,
+      sessionId: chatId,
+      appId: appId || 'unknown',
+      userAgent: metadata.userAgent || 'unknown',
+      ipAddress: metadata.ipAddress || 'unknown',
+      language: metadata.language || 'en',
+      referrer: metadata.referrer || 'unknown'
+    };
+    
+    console.log(`[NEW SESSION] ${timestamp} | Session ID: ${chatId} | App: ${appId}`);
+    
+    // Write to log file
+    await appendToLogFile(logEntry);
+  } catch (error) {
+    // Don't let logging errors affect the main application flow
+    console.error('Error logging new session:', error);
+  }
+}

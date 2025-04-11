@@ -1,5 +1,6 @@
 import axios from 'axios';
 import cache, { DEFAULT_CACHE_TTL, CACHE_KEYS, buildCacheKey } from '../utils/cache';
+import { getSessionId, shouldRenewSession, renewSession } from '../utils/sessionManager';
 
 // When using Vite's proxy feature, we should use a relative URL for development
 // The direct URL (like http://localhost:3000/api) should only be used when not using the proxy
@@ -14,6 +15,22 @@ const apiClient = axios.create({
     'Content-Type': 'application/json'
   },
   timeout: API_REQUEST_TIMEOUT
+});
+
+// Add request interceptor to include session ID header
+apiClient.interceptors.request.use(config => {
+  // Get session ID (creates a new one if needed)
+  const sessionId = getSessionId();
+  
+  // Renew session if it's close to expiry
+  if (shouldRenewSession()) {
+    renewSession();
+  }
+  
+  // Add session ID to request headers
+  config.headers['X-Session-ID'] = sessionId;
+  
+  return config;
 });
 
 // Keep track of pending requests for deduplication
@@ -178,15 +195,52 @@ export const streamAppChat = async (appId, chatId) => {
   return new EventSource(`${API_URL}/apps/${appId}/chat/${chatId}`);
 };
 
-export const sendAppChatMessage = async (appId, chatId, messages, options = {}) => {
-  return handleApiResponse(() => 
-    apiClient.post(`/apps/${appId}/chat/${chatId}`, {
+/**
+ * Sends a chat message to an app
+ * 
+ * @param {string} appId - The ID of the app to chat with
+ * @param {string} chatId - The ID of the chat session
+ * @param {Array} messages - Array of message objects with role and content
+ * @param {Object} options - Additional options
+ * @returns {Promise<Response>} - Response from the API
+ */
+export async function sendAppChatMessage(appId, chatId, messages, options = {}) {
+  // Ensure the last message in the array includes the messageId if available
+  if (messages && messages.length > 0) {
+    const lastMessage = messages[messages.length - 1];
+    
+    // Log the messageId if it's being sent through
+    if (lastMessage && lastMessage.messageId) {
+      console.log(`Sending message with ID: ${lastMessage.messageId}`);
+    } else {
+      console.warn('No messageId found in the last message');
+    }
+  }
+
+  if (!appId || !chatId || !messages) {
+    throw new Error('Missing required parameters');
+  }
+
+  return await fetch(`/api/apps/${appId}/chat/${chatId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Session-ID': getSessionId()
+    },
+    body: JSON.stringify({
       messages,
       ...options
-    }),
-    null, // No caching for chat messages
+    })
+  });
+}
+
+// Send message feedback (thumbs up/down with optional comments)
+export const sendMessageFeedback = async (feedbackData) => {
+  return handleApiResponse(() => 
+    apiClient.post('/feedback', feedbackData),
+    null, // No caching for feedback
     null,
-    false // Don't deduplicate chat requests
+    false // Don't deduplicate feedback requests
   );
 };
 

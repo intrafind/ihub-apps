@@ -7,11 +7,27 @@
   },
   "common": {
     "loading": "Wird geladen...",
-    "error": "Fehler"
+    "error": "Fehler",
+    "save": "Speichern",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "cancel": "Abbrechen"
   },
   "languages": {
     "en": "Englisch",
     "de": "Deutsch"
+  },
+  "feedback": {
+    "thumbsUp": "Diese Antwort war hilfreich",
+    "thumbsDown": "Diese Antwort war nicht hilfreich",
+    "helpful": "Hilfreich",
+    "notHelpful": "Nicht hilfreich",
+    "positiveHeading": "Was war hilfreich an dieser Antwort?",
+    "negativeHeading": "Was war nicht hilfreich an dieser Antwort?",
+    "placeholder": "Ihr Feedback hilft uns, uns zu verbessern (optional)",
+    "thankYou": "Vielen Dank für Ihr Feedback!",
+    "sending": "Wird gesendet...",
+    "sendFeedback": "Feedback senden"
   },
   "voiceInput": {
     "listening": "Ich höre zu...",
@@ -27,5 +43,13 @@
       "startError": "Fehler beim Starten der Spracheingabe. Bitte versuchen Sie es erneut.",
       "general": "Fehler bei der Spracheingabe. Bitte versuchen Sie es erneut."
     }
+  },
+  "chatMessage": {
+    "copy": "Kopieren",
+    "copied": "Kopiert!",
+    "editMessage": "Nachricht bearbeiten",
+    "resendMessage": "Nachricht erneut senden",
+    "deleteMessage": "Nachricht löschen",
+    "resend": "Erneut senden"
   }
 }

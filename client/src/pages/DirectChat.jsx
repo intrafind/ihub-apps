@@ -105,7 +105,7 @@ const DirectChat = () => {
       setCurrentMessage('');
       
       // Add placeholder for assistant's response
-      setMessages([...newMessages, { role: 'assistant', content: '', loading: true }]);
+      setMessages([...newMessages, { role: 'assistant', content: '', loading: true, id: `msg-${Date.now()}` }]);
       
       // Send the message to the API
       const options = {
@@ -120,7 +120,9 @@ const DirectChat = () => {
         // Remove the loading indicator and update with the actual response
         updated[updated.length - 1] = {
           role: 'assistant',
-          content: response.choices[0].message.content
+          content: response.choices[0].message.content,
+          // Store the messageId from the response for feedback submissions
+          messageId: response.messageId
         };
         return updated;
       });
@@ -317,6 +319,9 @@ const DirectChat = () => {
               key={index} 
               message={message} 
               outputFormat="markdown"
+              appId="direct-chat"
+              chatId={modelId || "default"}
+              modelId={selectedModel}
             />
           ))
         ) : (

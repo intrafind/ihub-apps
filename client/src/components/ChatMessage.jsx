@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { marked } from 'marked';
+import { sendMessageFeedback } from '../api/api';
 
 const ChatMessage = ({ 
   message, 
@@ -8,7 +9,10 @@ const ChatMessage = ({
   onDelete, 
   onEdit, 
   onResend, 
-  editable = true 
+  editable = true,
+  appId,
+  chatId,
+  modelId
 }) => {
   const { t } = useTranslation();
   const isUser = message.role === 'user';
@@ -19,6 +23,12 @@ const ChatMessage = ({
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedCodeBlockId, setCopiedCodeBlockId] = useState(null);
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackRating, setFeedbackRating] = useState(null);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [activeFeedback, setActiveFeedback] = useState(null); // Track active feedback button
 
   // Configure marked options to properly handle tables and customize code blocks
   useEffect(() => {
@@ -217,7 +227,68 @@ const ChatMessage = ({
     setIsEditing(false);
     setEditedContent(message.content);
   };
+
+  // Handle feedback submission
+  const handleFeedbackSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!feedbackRating) return;
+    
+    setSubmittingFeedback(true);
+    
+    try {
+      // Ensure we're using exactly the same message ID that was initially created
+      // Use the messageId property if available, otherwise fall back to id
+      const exactMessageId = message.messageId || message.id;
+      
+      console.log(`Submitting feedback with exact messageId: ${exactMessageId}`);
+      
+      await sendMessageFeedback({
+        messageId: exactMessageId,
+        appId,
+        chatId,
+        modelId,
+        rating: feedbackRating, // 'positive' or 'negative'
+        feedback: feedbackText,
+        messageContent: message.content.substring(0, 300) // Send a snippet for context
+      });
+      
+      // Keep the feedback button activated only after successful submission
+      setActiveFeedback(feedbackRating);
+      
+      setFeedbackSubmitted(true);
+      setTimeout(() => {
+        setShowFeedbackForm(false);
+        // Reset after hiding the form
+        setTimeout(() => {
+          setFeedbackSubmitted(false);
+          setFeedbackText('');
+        }, 300);
+      }, 1500);
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      alert(t('error.feedbackSubmission', 'Error submitting feedback. Please try again.'));
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
   
+  // Handle showing feedback form
+  const handleFeedbackClick = (rating) => {
+    // Only set a temporary rating - don't activate the button yet
+    setFeedbackRating(rating);
+    setShowFeedbackForm(true);
+  };
+  
+  // Reset feedback when modal is closed without submission
+  const handleCloseModal = () => {
+    // Only reset if feedback wasn't submitted
+    if (!feedbackSubmitted) {
+      setFeedbackRating(null);
+    }
+    setShowFeedbackForm(false);
+  };
+
   // Render the message content based on the output format
   const renderContent = () => {
     if (isEditing) {
@@ -299,76 +370,6 @@ const ChatMessage = ({
     );
   };
 
-  // Render message actions
-  const renderActions = () => {
-    if (message.loading) return null;
-    
-    return (
-      <div className={`flex justify-end items-center gap-3 text-xs transition-opacity duration-200 ${
-        showActions ? 'opacity-100' : 'opacity-0'
-      } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}>
-        <button
-          onClick={handleCopyToClipboard}
-          className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-          title={t('pages.appChat.copyToClipboard')}
-        >
-          {copied ? (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span>{t('chatMessage.copied')}</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-              </svg>
-              <span>{t('chatMessage.copy')}</span>
-            </>
-          )}
-        </button>
-        
-        {isUser && editable && (
-          <>
-            <button 
-              onClick={handleEdit} 
-              className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150" 
-              title={t('chatMessage.editMessage', 'Edit message')}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-              <span>{t('common.edit')}</span>
-            </button>
-            
-            <button 
-              onClick={handleResend} 
-              className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150" 
-              title={t('chatMessage.resendMessage', 'Resend message')}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>{t('chatMessage.resend', 'Resend')}</span>
-            </button>
-          </>
-        )}
-        
-        <button 
-          onClick={handleDelete} 
-          className="flex items-center gap-1 hover:text-red-500 transition-colors duration-150" 
-          title={t('chatMessage.deleteMessage', 'Delete message')}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-          <span>{t('common.delete')}</span>
-        </button>
-      </div>
-    );
-  };
-
   return (
     <div 
       className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
@@ -388,10 +389,167 @@ const ChatMessage = ({
         {isUser && hasVariables && renderVariables()}
       </div>
       
-      {/* Action icons row below the message */}
+      {/* Combined action icons and feedback buttons in a single row */}
       <div className="mt-1 px-1">
-        {renderActions()}
+        <div className={`flex items-center gap-3 text-xs transition-opacity duration-200 ${
+          showActions ? 'opacity-100' : 'opacity-0'
+        } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}>
+          {/* Standard actions first */}
+          <button
+            onClick={handleCopyToClipboard}
+            className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+            title={t('pages.appChat.copyToClipboard')}
+          >
+            {copied ? (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>{t('chatMessage.copied')}</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+                <span>{t('chatMessage.copy')}</span>
+              </>
+            )}
+          </button>
+          
+          {isUser && editable && (
+            <>
+              <button 
+                onClick={handleEdit} 
+                className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150" 
+                title={t('chatMessage.editMessage', 'Edit message')}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+                <span>{t('common.edit')}</span>
+              </button>
+              
+              <button 
+                onClick={handleResend} 
+                className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150" 
+                title={t('chatMessage.resendMessage', 'Resend message')}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>{t('chatMessage.resend', 'Resend')}</span>
+              </button>
+            </>
+          )}
+          
+          <button 
+            onClick={handleDelete} 
+            className="flex items-center gap-1 hover:text-red-500 transition-colors duration-150" 
+            title={t('chatMessage.deleteMessage', 'Delete message')}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>{t('common.delete')}</span>
+          </button>
+          
+          {/* Add feedback buttons for AI responses only */}
+          {!isUser && !isError && !message.loading && (
+            <>
+              <div className="mx-2 h-4 border-l border-gray-300"></div>
+              <button
+                onClick={() => {
+                  setFeedbackRating('positive');
+                  handleFeedbackClick('positive');
+                }}
+                className={`p-1 flex items-center gap-1 ${activeFeedback === 'positive' ? 'text-green-600' : 'text-gray-500 hover:text-green-600'} transition-colors duration-150`}
+                title={t('feedback.thumbsUp', 'This response was helpful')}
+              >
+                <svg className="w-4 h-4" fill={activeFeedback === 'positive' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905a3.61 3.61 0 01-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                </svg>
+                <span>{t('feedback.helpful', 'Helpful')}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setFeedbackRating('negative');
+                  handleFeedbackClick('negative');
+                }}
+                className={`p-1 flex items-center gap-1 ${activeFeedback === 'negative' ? 'text-red-600' : 'text-gray-500 hover:text-red-600'} transition-colors duration-150`}
+                title={t('feedback.thumbsDown', 'This response was not helpful')}
+              >
+                {/* Fixed thumbs down icon using transform rotate-180 */}
+                <svg className="w-4 h-4 transform rotate-180" fill={activeFeedback === 'negative' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905a3.61 3.61 0 01-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                </svg>
+                <span>{t('feedback.notHelpful', 'Not helpful')}</span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
+      
+      {/* Feedback form modal */}
+      {showFeedbackForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 animate-fade-in mx-4">
+            <h3 className="text-lg font-medium mb-4">
+              {feedbackRating === 'positive' 
+                ? t('feedback.positiveHeading', 'What was helpful about this response?')
+                : t('feedback.negativeHeading', 'What was unhelpful about this response?')
+              }
+            </h3>
+            
+            {feedbackSubmitted ? (
+              <div className="text-center py-4">
+                <svg className="w-16 h-16 text-green-500 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p>{t('feedback.thankYou', 'Thank you for your feedback!')}</p>
+              </div>
+            ) : (
+              <form onSubmit={handleFeedbackSubmit}>
+                <textarea
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-4"
+                  rows={4}
+                  placeholder={t('feedback.placeholder', 'Your feedback helps us improve (optional)')}
+                ></textarea>
+                
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-colors"
+                    disabled={submittingFeedback}
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center"
+                    disabled={submittingFeedback}
+                  >
+                    {submittingFeedback ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        {t('feedback.sending', 'Sending...')}
+                      </>
+                    ) : (
+                      t('feedback.sendFeedback', 'Send Feedback')
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -7,11 +7,27 @@
   },
   "common": {
     "loading": "Loading...",
-    "error": "Error"
+    "error": "Error",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete",
+    "cancel": "Cancel"
   },
   "languages": {
     "en": "English",
     "de": "German"
+  },
+  "feedback": {
+    "thumbsUp": "This response was helpful",
+    "thumbsDown": "This response was not helpful",
+    "helpful": "Helpful",
+    "notHelpful": "Not helpful",
+    "positiveHeading": "What was helpful about this response?",
+    "negativeHeading": "What was unhelpful about this response?",
+    "placeholder": "Your feedback helps us improve (optional)",
+    "thankYou": "Thank you for your feedback!",
+    "sending": "Sending...",
+    "sendFeedback": "Send Feedback"
   },
   "voiceInput": {
     "listening": "Listening...",
@@ -27,5 +43,13 @@
       "startError": "Error starting voice input. Please try again.",
       "general": "Voice input error. Please try again."
     }
+  },
+  "chatMessage": {
+    "copy": "Copy",
+    "copied": "Copied!",
+    "editMessage": "Edit message",
+    "resendMessage": "Resend message",
+    "deleteMessage": "Delete message",
+    "resend": "Resend"
   }
 }

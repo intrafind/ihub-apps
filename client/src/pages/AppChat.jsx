@@ -372,9 +372,13 @@ const AppChat = () => {
 
       const originalUserInput = input;
 
-      const userMessageId = Date.now();
+      // Generate a single message ID for the entire exchange (request, response, and feedback)
+      const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      console.log('Generated exchange ID:', exchangeId);
+      
+      // Create the user message
       const newUserMessage = {
-        id: userMessageId,
+        id: `user-${exchangeId}`, // Prefix with user- but use the same base exchangeId
         role: 'user',
         content: originalUserInput,
         variables:
@@ -391,6 +395,7 @@ const AppChat = () => {
         content: originalUserInput,
         promptTemplate: app?.prompt || null,
         variables: { ...variables },
+        messageId: exchangeId, // Send the exchangeId to the server
       };
 
       const messagesForAPI =
@@ -401,16 +406,19 @@ const AppChat = () => {
               return apiMsg;
             });
 
-      const assistantMessageId = userMessageId + 1;
+      // Use the same exchangeId for the assistant message
       setMessages((prev) => [
         ...prev,
         {
-          id: assistantMessageId,
+          id: exchangeId,
           role: 'assistant',
           content: '',
           loading: true,
         },
       ]);
+
+      // Store the exchangeId in a window property for debugging
+      window.lastMessageId = exchangeId;
 
       const eventSource = new EventSource(
         `/api/apps/${appId}/chat/${chatId.current}`
@@ -427,7 +435,7 @@ const AppChat = () => {
 
           setMessages((prev) =>
             prev.map((msg) =>
-              msg.id === assistantMessageId
+              msg.id === exchangeId
                 ? {
                     ...msg,
                     content: t('error.connectionTimeout', 'Connection timeout. Please try again.'),
@@ -463,7 +471,7 @@ const AppChat = () => {
 
           setMessages((prev) =>
             prev.map((msg) =>
-              msg.id === assistantMessageId
+              msg.id === exchangeId
                 ? {
                     ...msg,
                     content: t(
@@ -490,7 +498,7 @@ const AppChat = () => {
 
           setMessages((prev) =>
             prev.map((msg) =>
-              msg.id === assistantMessageId
+              msg.id === exchangeId
                 ? { ...msg, content: fullContent, loading: true }
                 : msg
             )
@@ -503,7 +511,7 @@ const AppChat = () => {
       eventSource.addEventListener('done', () => {
         setMessages((prev) =>
           prev.map((msg) =>
-            msg.id === assistantMessageId ? { ...msg, loading: false } : msg
+            msg.id === exchangeId ? { ...msg, loading: false } : msg
           )
         );
 
@@ -539,7 +547,7 @@ const AppChat = () => {
 
         setMessages((prev) =>
           prev.map((msg) =>
-            msg.id === assistantMessageId
+            msg.id === exchangeId
               ? {
                   ...msg,
                   content: `Error: ${errorMessage}`,
@@ -653,7 +661,7 @@ const AppChat = () => {
           return apiMsg;
         });
 
-    const assistantMessageId = userMessageId + 1;
+    const assistantMessageId = `msg-${userMessageId + 1}`;
     setMessages(prev => [
       ...prev,
       {
@@ -870,6 +878,8 @@ const AppChat = () => {
             setProcessing(true);
 
             const userMessageId = Date.now();
+            const assistantMessageId = `msg-${userMessageId}-${Math.floor(Math.random() * 1000)}`;
+            
             const newUserMessage = {
               id: userMessageId,
               role: 'user',
@@ -894,7 +904,6 @@ const AppChat = () => {
                   return apiMsg;
                 });
 
-            const assistantMessageId = userMessageId + 1;
             setMessages((prev) => [
               ...prev,
               {
@@ -1446,6 +1455,9 @@ const AppChat = () => {
                   onEdit={handleEditMessage}
                   onResend={handleResendMessage}
                   editable={true}
+                  appId={appId}
+                  chatId={chatId.current}
+                  modelId={selectedModel}
                 />
               ))
             ) : (

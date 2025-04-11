@@ -10,7 +10,7 @@ import https from 'https';
 
 // Import adapters and utilities
 import { createCompletionRequest, processResponseBuffer, formatMessages } from './adapters/index.js';
-import { sendSSE, getApiKeyForModel, getModelInfo, getErrorDetails } from './utils.js';
+import { sendSSE, getApiKeyForModel, getModelInfo, getErrorDetails, logInteraction, trackSession, logNewSession } from './utils.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -371,6 +371,10 @@ app.get('/api/models/:modelId/chat/test', async (req, res) => {
       
       // Return the complete response
       const responseData = await llmResponse.json();
+      
+      // Add messageId to the response for client-side feedback
+      responseData.messageId = messageId;
+      
       return res.json(responseData);
     } catch (fetchError) {
       clearTimeout(timeoutId);
@@ -417,6 +421,15 @@ app.get('/api/apps/:appId/chat/:chatId', async (req, res) => {
       appId: appId
     });
     
+    // // Log the new session creation
+    // TODO check if we want to track the creations of the event source
+    // await logNewSession(chatId, appId, {
+    //   userAgent: req.headers['user-agent'],
+    //   ipAddress: req.ip || req.connection.remoteAddress,
+    //   language: req.headers['accept-language'],
+    //   referrer: req.headers['referer'] || 'direct'
+    // });
+    
     // Send initial connection event
     sendSSE(res, 'connected', { chatId });
     
@@ -452,6 +465,47 @@ app.get('/api/apps/:appId/chat/:chatId', async (req, res) => {
     // Otherwise use SSE to report error
     sendSSE(res, 'error', { message: 'Internal server error' });
     res.end();
+  }
+});
+
+// POST /api/feedback - Submit user feedback for a message
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const { messageId, appId, chatId, messageContent, rating, feedback, modelId } = req.body;
+    
+    if (!messageId || !rating || !appId || !chatId) {
+      return res.status(400).json({ error: 'Missing required fields: messageId, appId, chatId, and rating are required' });
+    }
+    
+    // Get the session ID from request headers
+    const userSessionId = req.headers['x-session-id'];
+    
+    // IMPORTANT: Use the exact messageId without any modification to ensure consistency in logs
+    
+    // Log the feedback to interactions log
+    await logInteraction(
+      "feedback",
+    {
+      messageId, // Use the exact messageId as received from the client
+      appId,
+      modelId,
+      sessionId: chatId,
+      userSessionId,
+      responseType: 'feedback',
+      feedback: {
+        messageId, // Also store the same messageId in the feedback object
+        rating, // 'positive' or 'negative'
+        comment: feedback || '',
+        contentSnippet: messageContent ? messageContent.substring(0, 300) : ''
+      }
+    });
+    
+    console.log(`Feedback received for message ${messageId} in chat ${chatId}: ${rating}`);
+    
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error processing feedback:', error);
+    return res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 });
 
@@ -551,12 +605,29 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     const { appId, chatId } = req.params;
     const { messages, modelId, temperature, style, outputFormat, language } = req.body;
     
+    // Check for messageId in the last user message - this is our consistent ID for tracking
+    // This is sent from the client in the messageForAPI object
+    let messageId = null;
+    if (messages && Array.isArray(messages) && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && lastMessage.messageId) {
+        messageId = lastMessage.messageId;
+        console.log(`Using client-provided messageId: ${messageId}`);
+      }
+    }
+    
+    // Get the session ID from request headers
+    const userSessionId = req.headers['x-session-id'];
+    
     // Log the language being used for debugging
     console.log(`Processing chat with language: ${language || 'en'}`);
     
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
     }
+
+    // Track the session for analytics
+    trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
     
     // Check if client has an SSE connection
     if (!clients.has(chatId)) {
@@ -588,6 +659,25 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       
       // Prepare messages with proper formatting
       const llmMessages = processMessageTemplates(messages, app, style, outputFormat, language);
+      
+      // Log the interaction before sending to LLM - use the exact client-provided messageId
+      await logInteraction(
+        "chat_request",
+      {
+        messageId, // Use client-provided ID
+        appId,
+        modelId: model.id,
+        sessionId: chatId,
+        userSessionId,
+        messages: llmMessages,
+        options: {
+          temperature,
+          style,
+          outputFormat,
+          language,
+          streaming: false
+        }
+      });
       
       // Get and verify API key for model
       const apiKey = await verifyApiKey(model, res);
@@ -622,6 +712,31 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         if (!llmResponse.ok) {
           const errorBody = await llmResponse.text();
           console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
+
+          // Log error interaction
+          await logInteraction(
+            "chat_error",
+          {
+            messageId, // Use the same ID to link these logs
+            appId,
+            modelId: model.id,
+            sessionId: chatId,
+            userSessionId,
+            messages: llmMessages,
+            options: {
+              temperature,
+              style,
+              outputFormat,
+              language,
+              streaming: false
+            },
+            responseType: 'error',
+            error: {
+              message: `LLM API request failed with status ${llmResponse.status}`,
+              code: llmResponse.status.toString()
+            }
+          });
+          
           return res.status(llmResponse.status).json({ 
             error: `LLM API request failed with status ${llmResponse.status}`,
             details: errorBody
@@ -630,11 +745,66 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         
         // Return the complete response
         const responseData = await llmResponse.json();
+        
+        // Add messageId to the response for client-side feedback
+        responseData.messageId = messageId;
+        
+        // Extract and log the model's response
+        let aiResponse = '';
+        if (responseData.choices && responseData.choices.length > 0) {
+          aiResponse = responseData.choices[0].message?.content || '';
+        }
+
+        // Log successful interaction with response
+        await logInteraction(
+          "chat_response",
+        {
+          messageId, // Use the same ID to link these logs
+          appId,
+          modelId: model.id,
+          sessionId: chatId,
+          userSessionId,
+          messages: llmMessages,
+          options: {
+            temperature,
+            style,
+            outputFormat,
+            language,
+            streaming: false
+          },
+          responseType: 'success',
+          response: aiResponse.substring(0, 1000) // Truncate long responses
+        });
+        
         return res.json(responseData);
       } catch (fetchError) {
         clearTimeout(timeoutId);
         
         if (fetchError.message.includes('timed out')) {
+          // Log timeout error
+          await logInteraction(
+            "chat_error",
+          {
+            messageId, // Use the same ID to link these logs
+            appId,
+            modelId: model.id,
+            sessionId: chatId,
+            userSessionId,
+            messages: llmMessages,
+            options: {
+              temperature,
+              style, 
+              outputFormat,
+              language,
+              streaming: false
+            },
+            responseType: 'error',
+            error: {
+              message: `Request timed out after ${DEFAULT_TIMEOUT/1000} seconds`,
+              code: 'TIMEOUT'
+            }
+          });
+          
           return res.status(504).json({ 
             error: 'Request timed out', 
             message: `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT/1000} seconds`
@@ -642,6 +812,30 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         } else {
           // Get enhanced error details for the non-streaming case
           const errorDetails = getErrorDetails(fetchError, model);
+          
+          // Log detailed error
+          await logInteraction(
+            "chat_error",
+          {
+            messageId, // Use the same ID to link these logs
+            appId,
+            modelId: model.id,
+            sessionId: chatId,
+            userSessionId,
+            messages: llmMessages,
+            options: {
+              temperature,
+              style,
+              outputFormat,
+              language,
+              streaming: false
+            },
+            responseType: 'error',
+            error: {
+              message: errorDetails.message,
+              code: errorDetails.code
+            }
+          });
           
           return res.status(500).json({ 
             error: errorDetails.message,
@@ -694,9 +888,52 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     // Prepare messages with proper formatting
     const llmMessages = processMessageTemplates(messages, app, style, outputFormat, language);
     
+    // Log the interaction before sending to LLM
+    await logInteraction(
+      "chat_request",
+    {
+      messageId, // Use client-provided ID
+      appId,
+      modelId: model.id,
+      sessionId: chatId,
+      userSessionId,
+      messages: llmMessages,
+      options: {
+        temperature,
+        style,
+        outputFormat,
+        language,
+        streaming: true
+      }
+    });
+    
     // Get and verify API key with proper error handling for SSE
     const apiKey = await verifyApiKey(model, null, clientRes);
     if (!apiKey) {
+      // Log the API key error
+      await logInteraction(
+        "chat_error",
+      {
+        messageId, // Use the same ID to link these logs
+        appId,
+        modelId: model.id,
+        sessionId: chatId,
+        userSessionId,
+        messages: llmMessages,
+        options: {
+          temperature,
+          style,
+          outputFormat,
+          language,
+          streaming: true
+        },
+        responseType: 'error',
+        error: {
+          message: `API key not found for model: ${model.id}`,
+          code: 'API_KEY_NOT_FOUND'
+        }
+      });
+      
       // Already sent error via SSE, just return response to the HTTP request
       return res.json({ status: 'error', message: `API key not found for model: ${model.id}` });
     }
@@ -749,6 +986,31 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
           errorMessage = `${model.provider} API service error. The service may be experiencing issues.`;
         }
         
+        // Log the LLM error
+        await logInteraction(
+          "chat_error",
+        {
+          messageId, // Use the same ID to link these logs
+          appId,
+          modelId: model.id,
+          sessionId: chatId,
+          userSessionId,
+          messages: llmMessages,
+          options: {
+            temperature,
+            style,
+            outputFormat,
+            language,
+            streaming: true
+          },
+          responseType: 'error',
+          error: {
+            message: errorMessage,
+            code: llmResponse.status.toString(),
+            details: errorBody
+          }
+        });
+        
         sendSSE(clientRes, 'error', { message: errorMessage, details: errorBody });
         activeRequests.delete(chatId);
         return;
@@ -757,6 +1019,9 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       // Stream the response back to the client
       const reader = llmResponse.body.getReader();
       const decoder = new TextDecoder();
+      
+      // Collect the entire response for logging
+      let fullResponse = '';
       
       try {
         while (true) {
@@ -780,11 +1045,38 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
           if (result && result.content && result.content.length > 0) {
             for (const textContent of result.content) {
               sendSSE(clientRes, 'chunk', { content: textContent });
+              // Accumulate the full response for logging
+              fullResponse += textContent;
             }
           }
           
           // Handle errors if any occurred during processing
           if (result && result.error) {
+            // Log processing error
+            await logInteraction(
+              "chat_error",
+            {
+              messageId, // Use the same ID to link these logs
+              appId,
+              modelId: model.id,
+              sessionId: chatId,
+              userSessionId,
+              messages: llmMessages,
+              options: {
+                temperature,
+                style,
+                outputFormat,
+                language,
+                streaming: true
+              },
+              responseType: 'error',
+              error: {
+                message: result.errorMessage || 'Error processing response',
+                code: 'PROCESSING_ERROR'
+              },
+              response: fullResponse // Include any partial response received before the error
+            });
+            
             sendSSE(clientRes, 'error', { message: result.errorMessage || 'Error processing response' });
             break;
           }
@@ -792,6 +1084,28 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
           // Check for completion
           if (result && result.complete) {
             sendSSE(clientRes, 'done', {});
+            
+            // Log the completed interaction with the full response
+            await logInteraction(
+              "chat_response",
+              {
+              messageId, // Use the same ID to link these logs
+              appId,
+              modelId: model.id,
+              sessionId: chatId,
+              userSessionId,
+              messages: llmMessages,
+              options: {
+                temperature,
+                style,
+                outputFormat,
+                language,
+                streaming: true
+              },
+              responseType: 'success',
+              response: fullResponse
+            });
+            
             break; // Stop processing more chunks
           }
         }
@@ -817,6 +1131,32 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         
         // Get enhanced error details
         const errorDetails = getErrorDetails(error, model);
+        
+        // Log the error
+        logInteraction(
+          "chat_error",
+        {
+          messageId, // Use the same ID to link these logs
+          appId,
+          modelId: model.id,
+          sessionId: chatId,
+          userSessionId,
+          messages: llmMessages,
+          options: {
+            temperature,
+            style,
+            outputFormat,
+            language,
+            streaming: true
+          },
+          responseType: 'error',
+          error: {
+            message: errorDetails.message,
+            code: errorDetails.code
+          }
+        }).catch(logError => {
+          console.error('Error logging interaction error:', logError);
+        });
         
         // Send a more helpful error message to the client
         const errorMessage = {
@@ -890,6 +1230,39 @@ app.get('/api/apps/:appId/chat/:chatId/status', (req, res) => {
   }
   
   return res.status(200).json({ active: false });
+});
+
+// --- Session Management ---
+
+// POST /api/session/start - Log a new user session when the application loads
+app.post('/api/session/start', async (req, res) => {
+  try {
+    const { sessionId, type, metadata } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID is required' });
+    }
+    
+    // Add IP and user agent data from the request
+    const enrichedMetadata = {
+      ...metadata,
+      userAgent: req.headers['user-agent'] || metadata?.userAgent || 'unknown',
+      ipAddress: req.ip || req.connection.remoteAddress || 'unknown',
+      language: req.headers['accept-language'] || metadata?.language || 'en',
+      referrer: req.headers['referer'] || metadata?.referrer || 'direct'
+    };
+    
+    // Log the application initialization with session ID
+    console.log(`[APP LOADED] New session started: ${sessionId} | IP: ${enrichedMetadata.ipAddress.split(':').pop()}`);
+    
+    // Store in log file
+    await logNewSession(sessionId, 'app_loaded', enrichedMetadata);
+    
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error logging session start:', error);
+    res.status(500).json({ error: 'Failed to log session start' });
+  }
 });
 
 // Helper function to extract messages and format them

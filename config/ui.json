@@ -4,6 +4,14 @@
     "de": "KI-Hub"
   },
   "header": {
+    "defaultColor": "rgb(0, 53, 87)",
+    "logo": {
+      "url": "/public/logo-bmas-2.png",
+      "alt": {
+        "en": "AI Hub Logo",
+        "de": "KI-Hub Logo"
+      }
+    },
     "links": [
       {
         "name": {
