@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchApps } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { getFavoriteApps, isAppFavorite, toggleFavoriteApp } from '../utils/favoriteApps';
-import { useHeaderColor } from '../components/HeaderColorContext';
+import { useUIConfig } from '../components/UIConfigContext';
 import Icon from '../components/Icon';
 
 const INITIAL_DISPLAY_COUNT = 9; // Number of apps to show initially
@@ -14,7 +14,7 @@ const LOAD_MORE_COUNT = 6; // Number of apps to load each time "Load more" is cl
 const AppsList = () => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const { resetHeaderColor } = useHeaderColor();
+  const { resetHeaderColor } = useUIConfig();
   
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,12 +26,27 @@ const AppsList = () => {
   const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY_COUNT);
   const [translationsLoaded, setTranslationsLoaded] = useState(false);
 
-  // Load apps with debounced search
+  // Load apps only once on mount and when language changes
   useEffect(() => {
+    // Store mounted state to prevent state updates after unmount
+    let isMounted = true;
+    
     const loadApps = async () => {
       try {
         setLoading(true);
+        
+        // Add a small delay to allow i18n to fully initialize
+        // This helps prevent the rapid re-renders
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Only proceed if still mounted
+        if (!isMounted) return;
+        
+        console.log('Fetching apps data...');
         const appsData = await fetchApps();
+        
+        // Bail out if component unmounted during fetch
+        if (!isMounted) return;
         
         // Safety check for empty or invalid data
         if (!appsData || !Array.isArray(appsData)) {
@@ -41,48 +56,42 @@ const AppsList = () => {
           return;
         }
         
-        setApps(appsData);
-        
-        // Extract unique categories
+        // Extract unique categories before setting state
         const uniqueCategories = [...new Set(appsData
           .filter(app => app.category)
           .map(app => app.category))
         ];
-        setCategories(uniqueCategories);
         
         // Load favorite apps from localStorage
-        setFavoriteApps(getFavoriteApps());
+        const favorites = getFavoriteApps();
         
-        setError(null);
+        // Batch our state updates to prevent multiple renders
+        if (isMounted) {
+          setApps(appsData);
+          setCategories(uniqueCategories);
+          setFavoriteApps(favorites);
+          setError(null);
+        }
       } catch (err) {
         console.error('Error loading apps:', err);
-        setError(t('error.loadingFailed', 'Failed to load applications. Please try again later.'));
-        setApps([]); // Ensure apps is initialized as empty array on error
+        if (isMounted) {
+          setError(t('error.loadingFailed', 'Failed to load applications. Please try again later.'));
+          setApps([]); // Ensure apps is initialized as empty array on error
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
     
     loadApps();
-  }, [t]);
-
-  // Effect to monitor translation loading completeness
-  useEffect(() => {
-    // Subscribe to i18next's "loaded" event
-    const handleTranslationsLoaded = (loaded) => {
-      if (loaded) {
-        // Force a re-render when translations are fully loaded
-        setTranslationsLoaded(true);
-        setTimeout(() => setTranslationsLoaded(false), 100);
-      }
-    };
-
-    i18n.on('loaded', handleTranslationsLoaded);
     
+    // Cleanup function to handle component unmount
     return () => {
-      i18n.off('loaded', handleTranslationsLoaded);
+      isMounted = false;
     };
-  }, [i18n]);
+  }, [currentLanguage]); // Only depend on language changes, not t function
 
   // Reset display count when search or category changes
   useEffect(() => {
@@ -90,14 +99,16 @@ const AppsList = () => {
   }, [searchTerm, selectedCategory]);
 
   // Language change handler to ensure proper UI updates
+  // Only re-render on actual language changes, not on every render
+  const prevLanguageRef = useRef(currentLanguage);
+  
   useEffect(() => {
-    // Force re-render when language changes to update all localized content
-    const handleLanguageChange = () => {
-      // Simply updating a state will trigger a re-render
-      setDisplayCount(prev => prev);
-    };
-    
-    handleLanguageChange();
+    // Only update if the language actually changed from the previous value
+    if (prevLanguageRef.current !== currentLanguage) {
+      prevLanguageRef.current = currentLanguage;
+      // No need to force a re-render - React will re-render naturally
+      // when the language changes since the component uses translated content
+    }
   }, [currentLanguage]);
 
   // Reset header color when component mounts

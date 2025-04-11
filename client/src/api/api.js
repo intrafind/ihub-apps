@@ -204,7 +204,7 @@ export const streamAppChat = async (appId, chatId) => {
  * @param {Object} options - Additional options
  * @returns {Promise<Response>} - Response from the API
  */
-export async function sendAppChatMessage(appId, chatId, messages, options = {}) {
+export const sendAppChatMessage = async (appId, chatId, messages, options = {}) => {
   // Ensure the last message in the array includes the messageId if available
   if (messages && messages.length > 0) {
     const lastMessage = messages[messages.length - 1];
@@ -220,19 +220,18 @@ export async function sendAppChatMessage(appId, chatId, messages, options = {}) 
   if (!appId || !chatId || !messages) {
     throw new Error('Missing required parameters');
   }
-
-  return await fetch(`/api/apps/${appId}/chat/${chatId}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Session-ID': getSessionId()
-    },
-    body: JSON.stringify({
+  
+  // Using apiClient instead of direct fetch
+  return handleApiResponse(() => 
+    apiClient.post(`/apps/${appId}/chat/${chatId}`, {
       messages,
       ...options
-    })
-  });
-}
+    }),
+    null, // No caching for chat messages
+    null,
+    false // Don't deduplicate chat requests
+  );
+};
 
 // Send message feedback (thumbs up/down with optional comments)
 export const sendMessageFeedback = async (feedbackData) => {
@@ -419,3 +418,81 @@ export const fetchTranslations = async (language, options = {}) => {
     DEFAULT_CACHE_TTL.LONG
   );
 };
+
+// Centralized API service
+const apiService = {
+  /**
+   * Get UI configuration settings
+   * @returns {Promise} Promise resolving to UI config data
+   */
+  getUIConfig: async () => {
+    try {
+      const response = await axios.get('/api/ui');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching UI configuration:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get available applications
+   * @returns {Promise} Promise resolving to apps data
+   */
+  getApps: async () => {
+    try {
+      const response = await axios.get('/api/apps');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching apps:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Get available models
+   * @returns {Promise} Promise resolving to models data
+   */
+  getModels: async () => {
+    try {
+      const response = await axios.get('/api/models');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching models:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Log session start
+   * @param {Object} sessionData - Session data to log
+   * @returns {Promise} Promise resolving to response data
+   */
+  logSessionStart: async (sessionData) => {
+    try {
+      const response = await axios.post('/api/session/start', sessionData);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to log session start:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Send a chat message
+   * @param {string} endpoint - API endpoint for the specific chat
+   * @param {Object} messageData - Message data to send
+   * @returns {Promise} Promise resolving to response data
+   */
+  sendChatMessage: async (endpoint, messageData) => {
+    try {
+      const response = await axios.post(endpoint, messageData);
+      return response.data;
+    } catch (error) {
+      console.error('Error sending chat message:', error);
+      throw error;
+    }
+  }
+};
+
+export default apiService;

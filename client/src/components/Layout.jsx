@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
-import { useHeaderColor } from './HeaderColorContext';
 import { useUIConfig } from './UIConfigContext';
 import LanguageSelector from './LanguageSelector';
 import { useTranslation } from 'react-i18next';
@@ -9,33 +8,13 @@ import { getLocalizedContent } from '../utils/localizeContent';
 const Layout = () => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const { headerColor } = useHeaderColor();
-  const { uiConfig } = useUIConfig();
+  const { headerColor, uiConfig } = useUIConfig();
   const location = useLocation();
-  const [translationsLoaded, setTranslationsLoaded] = useState(false);
 
   const headerColorStyle = {
     backgroundColor: headerColor || '#4f46e5',
     transition: 'background-color 0.3s ease'
   };
-
-  // Effect to monitor translation loading completeness
-  useEffect(() => {
-    // Subscribe to i18next's "loaded" event
-    const handleTranslationsLoaded = (loaded) => {
-      if (loaded) {
-        // Force a re-render when translations are fully loaded
-        setTranslationsLoaded(true);
-        setTimeout(() => setTranslationsLoaded(false), 100);
-      }
-    };
-
-    i18n.on('loaded', handleTranslationsLoaded);
-    
-    return () => {
-      i18n.off('loaded', handleTranslationsLoaded);
-    };
-  }, [i18n]);
 
   // Function to render the header logo
   const renderAppIcon = () => {

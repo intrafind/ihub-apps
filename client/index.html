@@ -6,13 +6,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Hub Apps</title>
     <meta name="description" content="A platform for AI-powered applications" />
-    <!-- Import font -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Import local font -->
+    <link rel="stylesheet" href="/fonts/Inter Web/inter.css">
+    <style>
+      /* Fallback font settings */
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      }
+      /* Support for variable fonts if available */
+      @supports (font-variation-settings: normal) {
+        body {
+          font-family: 'Inter var', sans-serif;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/index.jsx"></script>
   </body>
-</html> 
+</html>

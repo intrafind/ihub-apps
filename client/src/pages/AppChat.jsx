@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAppDetails, fetchModels, fetchStyles, sendAppChatMessage, isTimeoutError } from '../api/api';
 import AppConfigForm from '../components/AppConfigForm';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { useHeaderColor } from '../components/HeaderColorContext';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 
@@ -15,6 +14,7 @@ import ChatHeader from '../components/chat/ChatHeader';
 import ChatInput from '../components/chat/ChatInput';
 import ChatMessageList from '../components/chat/ChatMessageList';
 import InputVariables from '../components/chat/InputVariables';
+import { useUIConfig } from '../components/UIConfigContext';
 
 const AppChat = () => {
   const { t, i18n } = useTranslation();
@@ -36,12 +36,15 @@ const AppChat = () => {
   const [temperature, setTemperature] = useState(0.7);
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(true);
-  const { setHeaderColor } = useHeaderColor();
+  const { setHeaderColor } = useUIConfig();
   const [translationsLoaded, setTranslationsLoaded] = useState(false);
 
   const inputRef = useRef(null);
   const chatId = useRef(`chat-${Date.now()}`);
   const currentVoiceTextRef = useRef('');
+
+  // Language tracking
+  const prevLanguageRef = useRef(currentLanguage);
 
   // Use our custom chat messages hook for managing messages
   const {
@@ -136,54 +139,61 @@ const AppChat = () => {
     onConfirmClear: () => window.confirm(t('pages.appChat.confirmClear', 'Are you sure you want to clear the entire chat history?'))
   });
 
-  // Effect to handle translation loading completeness
-  useEffect(() => {
-    // Subscribe to i18next's "loaded" event
-    const handleTranslationsLoaded = (loaded) => {
-      if (loaded) {
-        // Force a re-render when translations are fully loaded
-        setTranslationsLoaded(true);
-        setTimeout(() => setTranslationsLoaded(false), 100);
-      }
-    };
-
-    i18n.on('loaded', handleTranslationsLoaded);
-    
-    return () => {
-      i18n.off('loaded', handleTranslationsLoaded);
-    };
-  }, [i18n]);
-
   const hasVariablesToSend = app?.variables && Object.keys(variables).length > 0;
 
   useEffect(() => {
+    // Store mounted state to prevent state updates after unmount
+    let isMounted = true;
+    
     const loadData = async () => {
       try {
         setLoading(true);
-
+        
+        // Add a small delay to allow i18n to fully initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Only proceed if still mounted
+        if (!isMounted) return;
+  
+        console.log('Fetching app data for:', appId);
         const appData = await fetchAppDetails(appId);
-        setApp(appData);
-
+        
+        // Safety check for component unmounting during async operations
+        if (!isMounted) return;
+        
         if (appData?.color) {
           setHeaderColor(appData.color);
         }
-
-        setTemperature(appData.preferredTemperature || 0.7);
-        setSelectedStyle(appData.preferredStyle || 'normal');
-        setSelectedOutputFormat(appData.preferredOutputFormat || 'markdown');
-        setSendChatHistory(appData.sendChatHistory !== undefined ? appData.sendChatHistory : true);
-
-        if (appData.variables) {
+        
+        // Batch related state updates
+        const initialState = {
+          app: appData,
+          temperature: appData.preferredTemperature || 0.7,
+          selectedStyle: appData.preferredStyle || 'normal',
+          selectedOutputFormat: appData.preferredOutputFormat || 'markdown',
+          sendChatHistory: appData.sendChatHistory !== undefined ? appData.sendChatHistory : true,
+        };
+        
+        if (isMounted) {
+          setApp(initialState.app);
+          setTemperature(initialState.temperature);
+          setSelectedStyle(initialState.selectedStyle);
+          setSelectedOutputFormat(initialState.selectedOutputFormat);
+          setSendChatHistory(initialState.sendChatHistory);
+        }
+  
+        // Process variables if available
+        if (appData.variables && isMounted) {
           const initialVars = {};
           appData.variables.forEach((variable) => {
             // For select variables with predefined values, ensure we store the value, not the label
             if (variable.predefinedValues && variable.defaultValue) {
               // If defaultValue is an object with language keys
               if (typeof variable.defaultValue === 'object') {
-                const localizedLabel = getLocalizedContent(variable.defaultValue, i18n.language);
+                const localizedLabel = getLocalizedContent(variable.defaultValue, currentLanguage);
                 // Find the matching value for the localized label
                 const matchingOption = variable.predefinedValues.find(
-                  option => getLocalizedContent(option.label, i18n.language) === localizedLabel
+                  option => getLocalizedContent(option.label, currentLanguage) === localizedLabel
                 );
                 // Use the value from predefined values if found, otherwise use the localized label
                 initialVars[variable.name] = matchingOption ? matchingOption.value : localizedLabel;
@@ -195,42 +205,61 @@ const AppChat = () => {
               // For other variables, use standard localization
               const localizedDefaultValue =
                 typeof variable.defaultValue === 'object'
-                  ? getLocalizedContent(variable.defaultValue, i18n.language)
+                  ? getLocalizedContent(variable.defaultValue, currentLanguage)
                   : variable.defaultValue || '';
               initialVars[variable.name] = localizedDefaultValue;
             }
           });
-          setVariables(initialVars);
+          
+          if (isMounted) {
+            setVariables(initialVars);
+          }
         }
-
-        const modelsData = await fetchModels();
-        setModels(modelsData);
-
+  
+        // Fetch models and styles in parallel to optimize loading
+        const [modelsData, stylesData] = await Promise.all([
+          fetchModels(),
+          fetchStyles()
+        ]);
+        
+        // Exit if component unmounted during fetch
+        if (!isMounted) return;
+        
+        // Determine model to select
         let modelToSelect = appData.preferredModel;
         if (appData.allowedModels && appData.allowedModels.length > 0) {
           if (!appData.allowedModels.includes(appData.preferredModel)) {
             modelToSelect = appData.allowedModels[0];
           }
         }
-
-        setSelectedModel(modelToSelect);
-
-        const stylesData = await fetchStyles();
-        setStyles(stylesData);
-
-        setError(null);
+  
+        if (isMounted) {
+          setModels(modelsData);
+          setStyles(stylesData);
+          setSelectedModel(modelToSelect);
+          setError(null);
+        }
       } catch (err) {
         console.error('Error loading app data:', err);
-        setError(
-          t('error.failedToLoadApp', 'Failed to load application data. Please try again later.')
-        );
+        if (isMounted) {
+          setError(
+            t('error.failedToLoadApp', 'Failed to load application data. Please try again later.')
+          );
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
-
+  
     loadData();
-  }, [appId, setHeaderColor, i18n.language, t]);
+    
+    // Cleanup function to handle component unmount
+    return () => {
+      isMounted = false;
+    };
+  }, [appId, currentLanguage, setHeaderColor]); // Remove t from dependencies
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
@@ -512,7 +541,29 @@ const AppChat = () => {
     }));
   };
 
-  const localizedVariables = app?.variables ? localizeVariables(app.variables) : [];
+  // Memoize localizedVariables calculation to prevent unnecessary work on every render
+  const localizedVariables = useMemo(() => {
+    if (!app?.variables || !Array.isArray(app.variables)) return [];
+
+    return app.variables.map((variable) => ({
+      ...variable,
+      localizedLabel: getLocalizedContent(variable.label, currentLanguage) || variable.name,
+      localizedDescription: getLocalizedContent(
+        variable.description,
+        currentLanguage
+      ),
+      localizedDefaultValue: getLocalizedContent(
+        variable.defaultValue,
+        currentLanguage
+      ),
+      predefinedValues: variable.predefinedValues
+        ? variable.predefinedValues.map((option) => ({
+            ...option,
+            localizedLabel: getLocalizedContent(option.label, currentLanguage) || option.value,
+          }))
+        : undefined,
+    }));
+  }, [app?.variables, currentLanguage]);
 
   if (loading) {
     return <LoadingSpinner message={t('app.loading')} />;

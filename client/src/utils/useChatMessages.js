@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 /**
  * Custom hook for managing chat messages
@@ -7,6 +7,14 @@ import { useState, useCallback } from 'react';
  */
 function useChatMessages() {
   const [messages, setMessages] = useState([]);
+  
+  // Use a ref to store a copy of messages for read-only operations
+  const messagesRef = useRef(messages);
+  
+  // Update the ref whenever state changes
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   /**
    * Add a user message to the chat
@@ -84,12 +92,13 @@ function useChatMessages() {
    * @param {string} messageId - The ID of the message to delete
    */
   const deleteMessage = useCallback((messageId) => {
-    const messageIndex = messages.findIndex(msg => msg.id === messageId);
+    // Using messagesRef instead of messages dependency
+    const messageIndex = messagesRef.current.findIndex(msg => msg.id === messageId);
     if (messageIndex !== -1) {
-      const newMessages = messages.slice(0, messageIndex);
+      const newMessages = messagesRef.current.slice(0, messageIndex);
       setMessages(newMessages);
     }
-  }, [messages]);
+  }, []); // No dependency on messages anymore
 
   /**
    * Edit a message's content
@@ -143,7 +152,8 @@ function useChatMessages() {
    * @returns {Array} Messages formatted for API consumption
    */
   const getMessagesForApi = useCallback((includeFull = true, additionalMessage = null) => {
-    let messagesForApi = includeFull ? [...messages] : [];
+    // Using messagesRef instead of messages dependency
+    let messagesForApi = includeFull ? [...messagesRef.current] : [];
     
     if (additionalMessage) {
       messagesForApi = [...messagesForApi, additionalMessage];
@@ -154,7 +164,7 @@ function useChatMessages() {
       const { id, loading, error, isErrorMessage, ...apiMsg } = msg;
       return apiMsg;
     });
-  }, [messages]);
+  }, []); // No dependency on messages anymore
 
   return {
     messages,

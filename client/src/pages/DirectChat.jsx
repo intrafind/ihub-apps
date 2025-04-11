@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchModels, sendDirectModelMessage, fetchModelDetails } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { useHeaderColor } from '../components/HeaderColorContext';
 import { useTranslation } from 'react-i18next';
 
 // Import our custom hooks and components
@@ -11,6 +10,7 @@ import useVoiceCommands from '../utils/useVoiceCommands';
 import ChatHeader from '../components/chat/ChatHeader';
 import ChatInput from '../components/chat/ChatInput';
 import ChatMessageList from '../components/chat/ChatMessageList';
+import { useUIConfig } from '../components/UIConfigContext';
 
 const DirectChat = () => {
   const { t } = useTranslation();
@@ -26,7 +26,7 @@ const DirectChat = () => {
   const [showConfig, setShowConfig] = useState(false);
   const [error, setError] = useState(null);
   const inputRef = useRef(null);
-  const { resetHeaderColor } = useHeaderColor();
+  const { resetHeaderColor } = useUIConfig();
 
   // Use our custom chat messages hook
   const {

@@ -10,15 +10,17 @@ import { useCallback, useRef } from 'react';
  * @param {boolean} options.isProcessing - Whether a message is currently being processed
  * @param {string} options.currentText - Current text in the input field
  * @param {Function} options.onConfirmClear - Custom confirmation callback for clear chat
+ * @param {Object} options.customCommands - Additional custom commands and handlers
  * @returns {Object} Voice command handler functions
  */
 function useVoiceCommands({
-  messages,
-  clearChat,
-  sendMessage,
-  isProcessing,
-  currentText,
-  onConfirmClear
+  messages = [],
+  clearChat = () => {},
+  sendMessage = () => {},
+  isProcessing = false,
+  currentText = '',
+  onConfirmClear,
+  customCommands = {}
 }) {
   // Store the latest recognized text in a ref for immediate access outside React's state system
   const currentVoiceTextRef = useRef('');
@@ -44,6 +46,12 @@ function useVoiceCommands({
   const handleVoiceCommand = useCallback((command) => {
     console.log('Voice command detected:', command);
     
+    // Check for custom commands first
+    if (customCommands[command]) {
+      return customCommands[command]();
+    }
+    
+    // Handle built-in commands
     switch (command) {
       case 'clearChat':
         // Clear the chat after confirming with the user
@@ -73,7 +81,7 @@ function useVoiceCommands({
       default:
         console.log('Unknown command:', command);
     }
-  }, [messages, clearChat, sendMessage, isProcessing, currentText, onConfirmClear]);
+  }, [messages, clearChat, sendMessage, isProcessing, currentText, onConfirmClear, customCommands]);
 
   return {
     handleVoiceInput,

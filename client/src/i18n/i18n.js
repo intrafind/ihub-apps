@@ -7,8 +7,8 @@ import { fetchTranslations } from '../api/api';
 import enCoreTranslations from './core/en.json';
 import deCoreTranslations from './core/de.json';
 
-// Configuration for i18next
-i18n
+// Initialize i18next instance
+const i18nInstance = i18n
   // Detect user language
   .use(LanguageDetector)
   // Pass i18n instance to react-i18next
@@ -58,26 +58,57 @@ const loadFullTranslations = async (language) => {
     
     if (translations) {
       // Add the full translations, merging with core translations
-      i18n.addResourceBundle(language, 'translation', translations, true, true);
-      console.log(`Successfully loaded translations for: ${language}`);
+      i18n.addResourceBundle(normalizedLanguage, 'translation', translations, true, true);
+      console.log(`Successfully loaded translations for: ${normalizedLanguage}`);
+      
+      // Make sure we use the normalized language code for consistency
+      if (language !== normalizedLanguage) {
+        i18n.addResourceBundle(language, 'translation', translations, true, true);
+      }
       
       // Emit an event that translations are loaded
-      i18n.emit('loaded', true);
+      if (typeof i18n.emit === 'function') {
+        i18n.emit('loaded', true);
+      }
     }
   } catch (error) {
     console.error(`Failed to load translations for language: ${language}`, error);
     // Continue with core translations on error
-    i18n.emit('loaded', false);
+    if (typeof i18n.emit === 'function') {
+      i18n.emit('loaded', false);
+    }
   }
 };
 
-// Load full translations for the current language
+// Make sure we have the changeLanguage method properly available
+if (typeof i18n.changeLanguage === 'function') {
+  // Store original method
+  const originalChangeLanguage = i18n.changeLanguage;
+  
+  // Override with our enhanced version
+  i18n.changeLanguage = async (lng) => {
+    console.log(`Changing language to: ${lng}`);
+    // First change the language using the original method
+    const result = await originalChangeLanguage.call(i18n, lng);
+    
+    // Then load the full translations for this language
+    await loadFullTranslations(lng);
+    
+    return result;
+  };
+}
+
+// Load full translations for the current language on initialization
 const currentLanguage = i18n.language || 'en';
+console.log(`Initial language detected: ${currentLanguage}`);
 loadFullTranslations(currentLanguage);
 
 // Listen for language changes to load appropriate translations
-i18n.on('languageChanged', (newLanguage) => {
-  loadFullTranslations(newLanguage);
-});
+if (typeof i18n.on === 'function') {
+  i18n.on('languageChanged', (newLanguage) => {
+    console.log(`Language changed to: ${newLanguage}`);
+    loadFullTranslations(newLanguage);
+  });
+}
 
 export default i18n;
