@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { getFavoriteApps, isAppFavorite, toggleFavoriteApp } from '../utils/favoriteApps';
 import { useHeaderColor } from '../components/HeaderColorContext';
+import Icon from '../components/Icon';
 
 const INITIAL_DISPLAY_COUNT = 9; // Number of apps to show initially
 const LOAD_MORE_COUNT = 6; // Number of apps to load each time "Load more" is clicked
@@ -255,9 +256,7 @@ const AppsList = () => {
         <div className="w-full md:w-1/2 lg:w-3/5">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+              <Icon name="search" className="text-gray-400" />
             </div>
             <input
               type="text"
@@ -272,9 +271,7 @@ const AppsList = () => {
                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
                 aria-label="Clear search"
               >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <Icon name="x" />
               </button>
             )}
           </div>
@@ -329,21 +326,11 @@ const AppsList = () => {
                   title={favoriteApps.includes(app.id) ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
                   aria-label={favoriteApps.includes(app.id) ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
                 >
-                  <svg 
-                    className={`w-5 h-5 ${favoriteApps.includes(app.id) ? 'text-yellow-500' : 'text-gray-400'}`} 
-                    fill={favoriteApps.includes(app.id) ? 'currentColor' : 'none'} 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24" 
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={1.5} 
-                      d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" 
-                    />
-                  </svg>
+                  <Icon 
+                    name="star" 
+                    className={favoriteApps.includes(app.id) ? 'text-yellow-500' : 'text-gray-400'}
+                    solid={favoriteApps.includes(app.id)}
+                  />
                 </button>
                 <Link
                   to={`/apps/${app.id}`}
@@ -355,39 +342,7 @@ const AppsList = () => {
                     style={{ backgroundColor: app.color || '#4f46e5' }}
                   >
                     <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
-                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        {app.icon === 'chat-bubbles' && (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                        )}
-                        {app.icon === 'document-text' && (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        )}
-                        {app.icon === 'globe' && (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        )}
-                        {app.icon === 'sparkles' && (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                        )}
-                        {app.icon === 'mail' && (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        )}
-                        {app.icon === 'calendar' && (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        )}
-                        {app.icon === 'share' && (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                        )}
-                        {app.icon === 'document-search' && (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z" />
-                        )}
-                        {app.icon === 'users' && (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                        )}
-                        {/* Default icon if none of the above match */}
-                        {!['chat-bubbles', 'document-text', 'globe', 'sparkles', 'mail', 'calendar', 'share', 'document-search', 'users'].includes(app.icon) && (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        )}
-                      </svg>
+                      <Icon name={app.icon || 'lightning-bolt'} size="xl" className="text-white" />
                     </div>
                   </div>
                   <div className="p-4 h-[calc(100%-6rem)] flex flex-col">
@@ -395,15 +350,7 @@ const AppsList = () => {
                       {getLocalizedContent(app.name, currentLanguage) || app.id}
                       {favoriteApps.includes(app.id) && (
                         <span className="ml-2 inline-block" aria-label="Favorite">
-                          <svg 
-                            className="w-4 h-4 text-yellow-500 inline-block" 
-                            fill="currentColor" 
-                            viewBox="0 0 24 24" 
-                            xmlns="http://www.w3.org/2000/svg"
-                            aria-hidden="true"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                          </svg>
+                          <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
                         </span>
                       )}
                     </h3>

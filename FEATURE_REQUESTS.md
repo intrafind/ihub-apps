@@ -11,7 +11,6 @@
 - Docker Image?
 - Ai hub
 - Dokumente hochladen
-- eml generieren?
 
 Done
 - Microphone
@@ -21,4 +20,5 @@ Done
 - Feedback
 - be able to setup the order for the apps
 - the app generator
+- eml or mailto generate via prompt tuning
 

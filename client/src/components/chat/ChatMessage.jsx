@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { marked } from 'marked';
-import { sendMessageFeedback } from '../api/api';
-import Icon from './Icon';
+import { sendMessageFeedback } from '../../api/api';
+import MessageVariables from './MessageVariables';
+import Icon from '../Icon';
 
 const ChatMessage = ({ 
   message, 
@@ -62,10 +63,9 @@ const ChatMessage = ({
             data-code-id="${codeBlockId}"
             data-code-content="${encodeURIComponent(code)}"
             type="button"
+            aria-label="Copy code"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
-            </svg>
+            <span class="icon-copy-code"></span>
           </button>
         </div>
       `;
@@ -137,23 +137,16 @@ const ChatMessage = ({
     allButtons.forEach(button => {
       const isCopied = button.dataset.codeId === copiedCodeBlockId;
       
-      // Update button appearance
-      if (isCopied) {
-        button.innerHTML = `
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-          </svg>
-        `;
-        button.classList.add('bg-green-600');
-        button.classList.remove('bg-gray-700');
-      } else {
-        button.innerHTML = `
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
-          </svg>
-        `;
-        button.classList.add('bg-gray-700');
-        button.classList.remove('bg-green-600');
+      // Update button appearance using span content instead of direct SVG
+      const iconSpan = button.querySelector('.icon-copy-code');
+      if (iconSpan) {
+        if (isCopied) {
+          button.classList.add('bg-green-600');
+          button.classList.remove('bg-gray-700');
+        } else {
+          button.classList.add('bg-gray-700');
+          button.classList.remove('bg-green-600');
+        }
       }
     });
   }, [copiedCodeBlockId]);
@@ -343,7 +336,9 @@ const ChatMessage = ({
     if (isError) {
       return (
         <div className="flex items-center">
-          <Icon name="exclamation-circle" className="mr-1.5 text-red-500 flex-shrink-0" />
+          <svg className="w-5 h-5 mr-1.5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
           <span className="break-all">{message.content}</span>
         </div>
       );
@@ -362,23 +357,6 @@ const ChatMessage = ({
     return <div className="break-words whitespace-pre-wrap">{message.content}</div>;
   };
 
-  // Render variables if they exist (like target language)
-  const renderVariables = () => {
-    if (!hasVariables) return null;
-    
-    return (
-      <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          {Object.entries(message.variables).map(([key, value]) => (
-            <div key={key} className="inline-block mr-3">
-              <span className="font-medium">{key}:</span> {value}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div 
       className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
@@ -395,7 +373,7 @@ const ChatMessage = ({
         }`}
       >
         {renderContent()}
-        {isUser && hasVariables && renderVariables()}
+        {isUser && hasVariables && <MessageVariables variables={message.variables} />}
       </div>
       
       {/* Combined action icons and feedback buttons in a single row */}
@@ -411,12 +389,16 @@ const ChatMessage = ({
           >
             {copied ? (
               <>
-                <Icon name="check" size="sm" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
                 <span>{t('chatMessage.copied')}</span>
               </>
             ) : (
               <>
-                <Icon name="copy" size="sm" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
                 <span>{t('chatMessage.copy')}</span>
               </>
             )}
@@ -429,7 +411,9 @@ const ChatMessage = ({
                 className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150" 
                 title={t('chatMessage.editMessage', 'Edit message')}
               >
-                <Icon name="edit" size="sm" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
                 <span>{t('common.edit')}</span>
               </button>
               
@@ -438,7 +422,9 @@ const ChatMessage = ({
                 className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150" 
                 title={t('chatMessage.resendMessage', 'Resend message')}
               >
-                <Icon name="refresh" size="sm" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
                 <span>{t('chatMessage.resend', 'Resend')}</span>
               </button>
             </>
@@ -449,7 +435,9 @@ const ChatMessage = ({
             className="flex items-center gap-1 hover:text-red-500 transition-colors duration-150" 
             title={t('chatMessage.deleteMessage', 'Delete message')}
           >
-            <Icon name="trash" size="sm" />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
             <span>{t('common.delete')}</span>
           </button>
           
@@ -465,12 +453,9 @@ const ChatMessage = ({
                 className={`p-1 flex items-center gap-1 ${activeFeedback === 'positive' ? 'text-green-600' : 'text-gray-500 hover:text-green-600'} transition-colors duration-150`}
                 title={t('feedback.thumbsUp', 'This response was helpful')}
               >
-                <Icon 
-                  name="thumbs-up" 
-                  size="sm" 
-                  solid={activeFeedback === 'positive'}
-                  className="flex-shrink-0" 
-                />
+                <svg className="w-4 h-4" fill={activeFeedback === 'positive' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905a3.61 3.61 0 01-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                </svg>
                 <span>{t('feedback.helpful', 'Helpful')}</span>
               </button>
               <button
@@ -481,12 +466,10 @@ const ChatMessage = ({
                 className={`p-1 flex items-center gap-1 ${activeFeedback === 'negative' ? 'text-red-600' : 'text-gray-500 hover:text-red-600'} transition-colors duration-150`}
                 title={t('feedback.thumbsDown', 'This response was not helpful')}
               >
-                <Icon 
-                  name="thumbs-down" 
-                  size="sm" 
-                  solid={activeFeedback === 'negative'}
-                  className="flex-shrink-0 transform rotate-180" 
-                />
+                {/* Fixed thumbs down icon using transform rotate-180 */}
+                <svg className="w-4 h-4 transform rotate-180" fill={activeFeedback === 'negative' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905a3.61 3.61 0 01-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                </svg>
                 <span>{t('feedback.notHelpful', 'Not helpful')}</span>
               </button>
             </>
@@ -536,10 +519,9 @@ const ChatMessage = ({
                   >
                     {submittingFeedback ? (
                       <>
-                        <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
+                        <div className="animate-spin h-5 w-5 mr-2 flex items-center justify-center">
+                          <Icon name="refresh" className="text-white" />
+                        </div>
                         {t('feedback.sending', 'Sending...')}
                       </>
                     ) : (
