@@ -108,6 +108,53 @@ function getLocalizedContent(content, language = 'en', fallbackLanguage = 'en') 
   }
 }
 
+/**
+ * Gets a localized error message from the translations
+ * 
+ * @param {string} errorKey - The key for the error message in serverErrors
+ * @param {Object} params - Parameters to replace in the message
+ * @param {string} language - The language code
+ * @returns {string} - The localized error message
+ */
+async function getLocalizedError(errorKey, params = {}, language = 'en') {
+  try {
+    // Load translations for the requested language
+    const translations = await loadConfig(`locales/${language}.json`);
+    
+    if (!translations || !translations.serverErrors || !translations.serverErrors[errorKey]) {
+      // Try English as fallback
+      if (language !== 'en') {
+        const enTranslations = await loadConfig('locales/en.json');
+        if (enTranslations && enTranslations.serverErrors && enTranslations.serverErrors[errorKey]) {
+          let message = enTranslations.serverErrors[errorKey];
+          
+          // Replace any parameters in the message
+          Object.entries(params).forEach(([key, value]) => {
+            message = message.replace(`{${key}}`, value);
+          });
+          
+          return message;
+        }
+      }
+      
+      // Default fallback message if nothing else works
+      return `Error: ${errorKey}`;
+    }
+    
+    let message = translations.serverErrors[errorKey];
+    
+    // Replace any parameters in the message
+    Object.entries(params).forEach(([key, value]) => {
+      message = message.replace(`{${key}}`, value);
+    });
+    
+    return message;
+  } catch (error) {
+    console.error(`Error getting localized error message for ${errorKey}:`, error);
+    return `Error: ${errorKey}`; // Fallback
+  }
+}
+
 // Check if API keys are configured and log warnings at startup
 function validateApiKeys() {
   const providers = ['openai', 'anthropic', 'google'];
@@ -203,16 +250,22 @@ async function loadConfig(filename) {
 }
 
 // Helper to verify API key exists for a model and provide a meaningful error
-async function verifyApiKey(model, res, clientRes = null) {
+async function verifyApiKey(model, res, clientRes = null, language = 'en') {
   try {
     const apiKey = await getApiKeyForModel(model.id);
     
     if (!apiKey) {
-      const errorMessage = `API key not found for model: ${model.id} (${model.provider}). Please set ${model.provider.toUpperCase()}_API_KEY in your environment.`;
-      console.error(errorMessage);
+      // Log the error in English for server logs
+      console.error(`API key not found for model: ${model.id} (${model.provider}). Please set ${model.provider.toUpperCase()}_API_KEY in your environment.`);
       
+      // Get a localized error message for the client
+      const localizedErrorMessage = await getLocalizedError('apiKeyNotFound', 
+        { provider: model.provider }, 
+        language);
+      
+      // Send a localized error via SSE if we have a streaming connection
       if (clientRes) {
-        sendSSE(clientRes, 'error', { message: errorMessage });
+        sendSSE(clientRes, 'error', { message: localizedErrorMessage });
       }
       
       // Don't automatically send a response here, just return false
@@ -224,8 +277,13 @@ async function verifyApiKey(model, res, clientRes = null) {
   } catch (error) {
     console.error(`Error getting API key for model ${model.id}:`, error);
     
+    // Get a localized error message for unexpected errors
+    const localizedErrorMessage = await getLocalizedError('internalError',
+      {},
+      language);
+    
     if (clientRes) {
-      sendSSE(clientRes, 'error', { message: `Error getting API key: ${error.message}` });
+      sendSSE(clientRes, 'error', { message: localizedErrorMessage });
     }
     
     return false;
@@ -252,6 +310,7 @@ app.get('/api/apps', async (req, res) => {
 app.get('/api/apps/:appId', async (req, res) => {
   try {
     const { appId } = req.params;
+    const language = req.headers['accept-language']?.split(',')[0] || 'en'; // Extract language from headers
     const apps = await loadConfig('apps.json');
     
     if (!apps) {
@@ -260,7 +319,8 @@ app.get('/api/apps/:appId', async (req, res) => {
     
     const app = apps.find(a => a.id === appId);
     if (!app) {
-      return res.status(404).json({ error: 'App not found' });
+      const errorMessage = await getLocalizedError('appNotFound', {}, language);
+      return res.status(404).json({ error: errorMessage });
     }
     
     res.json(app);
@@ -288,6 +348,7 @@ app.get('/api/models', async (req, res) => {
 app.get('/api/models/:modelId', async (req, res) => {
   try {
     const { modelId } = req.params;
+    const language = req.headers['accept-language']?.split(',')[0] || 'en'; // Extract language from headers
     const models = await loadConfig('models.json');
     
     if (!models) {
@@ -296,7 +357,8 @@ app.get('/api/models/:modelId', async (req, res) => {
     
     const model = models.find(m => m.id === modelId);
     if (!model) {
-      return res.status(404).json({ error: 'Model not found' });
+      const errorMessage = await getLocalizedError('modelNotFound', {}, language);
+      return res.status(404).json({ error: errorMessage });
     }
     
     res.json(model);
@@ -329,7 +391,7 @@ app.get('/api/models/:modelId/chat/test', async (req, res) => {
     }
 
     // Get and verify API key for model
-    const apiKey = await verifyApiKey(model, res);
+    const apiKey = await verifyApiKey(model, res, null, req.headers['accept-language']?.split(',')[0] || 'en');
     if (!apiKey) {
       return res.status(500).json({ 
         error: `API key not found for model: ${model.id} (${model.provider})`,
@@ -472,9 +534,11 @@ app.get('/api/apps/:appId/chat/:chatId', async (req, res) => {
 app.post('/api/feedback', async (req, res) => {
   try {
     const { messageId, appId, chatId, messageContent, rating, feedback, modelId } = req.body;
+    const language = req.headers['accept-language']?.split(',')[0] || 'en'; // Extract language from headers
     
     if (!messageId || !rating || !appId || !chatId) {
-      return res.status(400).json({ error: 'Missing required fields: messageId, appId, chatId, and rating are required' });
+      const errorMessage = await getLocalizedError('missingFeedbackFields', {}, language);
+      return res.status(400).json({ error: errorMessage });
     }
     
     // Get the session ID from request headers
@@ -603,7 +667,10 @@ app.get('/api/ui', async (req, res) => {
 app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
   try {
     const { appId, chatId } = req.params;
-    const { messages, modelId, temperature, style, outputFormat, language } = req.body;
+    const { messages, modelId, temperature, style, outputFormat, language, maxTokens } = req.body;
+    
+    // Extract client language from request headers or use provided language in the request
+    const clientLanguage = language || req.headers['accept-language']?.split(',')[0] || 'en';
     
     // Check for messageId in the last user message - this is our consistent ID for tracking
     // This is sent from the client in the messageForAPI object
@@ -620,10 +687,11 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     const userSessionId = req.headers['x-session-id'];
     
     // Log the language being used for debugging
-    console.log(`Processing chat with language: ${language || 'en'}`);
+    console.log(`Processing chat with language: ${clientLanguage}`);
     
     if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: 'Messages array is required' });
+      const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
+      return res.status(400).json({ error: errorMessage });
     }
 
     // Track the session for analytics
@@ -642,7 +710,8 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       
       const app = apps.find(a => a.id === appId);
       if (!app) {
-        return res.status(404).json({ error: 'App not found' });
+        const errorMessage = await getLocalizedError('appNotFound', {}, clientLanguage);
+        return res.status(404).json({ error: errorMessage });
       }
       
       // Load models
@@ -654,11 +723,12 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       // Determine which model to use
       const model = models.find(m => m.id === (modelId || app.preferredModel));
       if (!model) {
-        return res.status(404).json({ error: 'Model not found' });
+        const errorMessage = await getLocalizedError('modelNotFound', {}, clientLanguage);
+        return res.status(404).json({ error: errorMessage });
       }
       
       // Prepare messages with proper formatting
-      const llmMessages = processMessageTemplates(messages, app, style, outputFormat, language);
+      const llmMessages = processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
       
       // Log the interaction before sending to LLM - use the exact client-provided messageId
       await logInteraction(
@@ -672,20 +742,29 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         messages: llmMessages,
         options: {
           temperature,
+          maxTokens: parseInt(maxTokens) || app.tokenLimit || 1024,
           style,
           outputFormat,
-          language,
+          language: clientLanguage,
           streaming: false
         }
       });
       
       // Get and verify API key for model
-      const apiKey = await verifyApiKey(model, res);
-      if (!apiKey) return; // Function will handle sending error response
+      const apiKey = await verifyApiKey(model, res, null, clientLanguage);
+      if (!apiKey) {
+        const errorMessage = await getLocalizedError('apiKeyNotFound', { provider: model.provider }, clientLanguage);
+        return res.status(500).json({ error: errorMessage });
+      }
+
+      const requestedTokens = parseInt(maxTokens) || app.tokenLimit || 1024;
+      const modelTokenLimit = model.tokenLimit || requestedTokens;
+      const finalTokens = Math.min(requestedTokens, modelTokenLimit);
       
       // Create request without streaming
       const request = createCompletionRequest(model, llmMessages, apiKey, { 
         temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
+        maxTokens: finalTokens,
         stream: false
       });
       
@@ -727,7 +806,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
               temperature,
               style,
               outputFormat,
-              language,
+              language: clientLanguage,
               streaming: false
             },
             responseType: 'error',
@@ -769,7 +848,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
             temperature,
             style,
             outputFormat,
-            language,
+            language: clientLanguage,
             streaming: false
           },
           responseType: 'success',
@@ -795,7 +874,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
               temperature,
               style, 
               outputFormat,
-              language,
+              language: clientLanguage,
               streaming: false
             },
             responseType: 'error',
@@ -827,7 +906,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
               temperature,
               style,
               outputFormat,
-              language,
+              language: clientLanguage,
               streaming: false
             },
             responseType: 'error',
@@ -847,74 +926,55 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
           });
         }
       }
-    }
-    
-    // If we have an SSE connection, stream the response
-    const clientRes = clients.get(chatId).response;
-    
-    // Update last activity timestamp
-    clients.set(chatId, {
-      ...clients.get(chatId),
-      lastActivity: new Date()
-    });
-    
-    // Load app details
-    const apps = await loadConfig('apps.json');
-    if (!apps) {
-      sendSSE(clientRes, 'error', { message: 'Failed to load apps configuration' });
-      return res.json({ status: 'error', message: 'Failed to load apps configuration' });
-    }
-    
-    const app = apps.find(a => a.id === appId);
-    if (!app) {
-      sendSSE(clientRes, 'error', { message: 'App not found' });
-      return res.json({ status: 'error', message: 'App not found' });
-    }
-    
-    // Load models
-    const models = await loadConfig('models.json');
-    if (!models) {
-      sendSSE(clientRes, 'error', { message: 'Failed to load models configuration' });
-      return res.json({ status: 'error', message: 'Failed to load models configuration' });
-    }
-    
-    // Determine which model to use
-    const model = models.find(m => m.id === (modelId || app.preferredModel));
-    if (!model) {
-      sendSSE(clientRes, 'error', { message: 'Model not found' });
-      return res.json({ status: 'error', message: 'Model not found' });
-    }
-    
-    // Prepare messages with proper formatting
-    const llmMessages = processMessageTemplates(messages, app, style, outputFormat, language);
-    
-    // Log the interaction before sending to LLM
-    await logInteraction(
-      "chat_request",
-    {
-      messageId, // Use client-provided ID
-      appId,
-      modelId: model.id,
-      sessionId: chatId,
-      userSessionId,
-      messages: llmMessages,
-      options: {
-        temperature,
-        style,
-        outputFormat,
-        language,
-        streaming: true
+    } else {
+      // If we have an SSE connection, stream the response
+      const clientRes = clients.get(chatId).response;
+      
+      // Update last activity timestamp
+      clients.set(chatId, {
+        ...clients.get(chatId),
+        lastActivity: new Date()
+      });
+      
+      // Load app details
+      const apps = await loadConfig('apps.json');
+      if (!apps) {
+        const errorMessage = await getLocalizedError('internalError', {}, clientLanguage);
+        sendSSE(clientRes, 'error', { message: errorMessage });
+        return res.json({ status: 'error', message: errorMessage });
       }
-    });
-    
-    // Get and verify API key with proper error handling for SSE
-    const apiKey = await verifyApiKey(model, null, clientRes);
-    if (!apiKey) {
-      // Log the API key error
+      
+      const app = apps.find(a => a.id === appId);
+      if (!app) {
+        const errorMessage = await getLocalizedError('appNotFound', {}, clientLanguage);
+        sendSSE(clientRes, 'error', { message: errorMessage });
+        return res.json({ status: 'error', message: errorMessage });
+      }
+      
+      // Load models
+      const models = await loadConfig('models.json');
+      if (!models) {
+        const errorMessage = await getLocalizedError('internalError', {}, clientLanguage);
+        sendSSE(clientRes, 'error', { message: errorMessage });
+        return res.json({ status: 'error', message: errorMessage });
+      }
+      
+      // Determine which model to use
+      const model = models.find(m => m.id === (modelId || app.preferredModel));
+      if (!model) {
+        const errorMessage = await getLocalizedError('modelNotFound', {}, clientLanguage);
+        sendSSE(clientRes, 'error', { message: errorMessage });
+        return res.json({ status: 'error', message: errorMessage });
+      }
+      
+      // Prepare messages with proper formatting
+      const llmMessages = processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
+      
+      // Log the interaction before sending to LLM
       await logInteraction(
-        "chat_error",
+        "chat_request",
       {
-        messageId, // Use the same ID to link these logs
+        messageId, // Use client-provided ID
         appId,
         modelId: model.id,
         sessionId: chatId,
@@ -924,69 +984,15 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
           temperature,
           style,
           outputFormat,
-          language,
+          language: clientLanguage,
           streaming: true
-        },
-        responseType: 'error',
-        error: {
-          message: `API key not found for model: ${model.id}`,
-          code: 'API_KEY_NOT_FOUND'
         }
       });
       
-      // Already sent error via SSE, just return response to the HTTP request
-      return res.json({ status: 'error', message: `API key not found for model: ${model.id}` });
-    }
-    
-    // Create request using appropriate adapter
-    const request = createCompletionRequest(model, llmMessages, apiKey, { 
-      temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
-      stream: true
-    });
-    
-    // Send processing event
-    sendSSE(clientRes, 'processing', { message: 'Processing your request...' });
-    
-    // Set up abort controller for this request
-    const controller = new AbortController();
-    activeRequests.set(chatId, controller);
-    
-    // Set up timeout for the request
-    const timeoutId = setTimeout(() => {
-      console.log(`Request timeout for chat ${chatId}`);
-      controller.abort();
-      sendSSE(clientRes, 'error', { 
-        message: `Request timed out after ${DEFAULT_TIMEOUT/1000} seconds. The model may be experiencing high load.` 
-      });
-      activeRequests.delete(chatId);
-    }, DEFAULT_TIMEOUT);
-    
-    // Execute request to LLM API in the background
-    fetch(request.url, {
-      method: 'POST',
-      headers: request.headers,
-      body: JSON.stringify(request.body),
-      signal: controller.signal
-    }).then(async (llmResponse) => {
-      // Clear timeout as we got a response
-      clearTimeout(timeoutId);
-      
-      if (!llmResponse.ok) {
-        // Handle error case
-        const errorBody = await llmResponse.text();
-        console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
-        let errorMessage = `LLM API request failed with status ${llmResponse.status}`;
-        
-        // Provide more helpful error messages for common errors
-        if (llmResponse.status === 401) {
-          errorMessage = `Authentication failed for ${model.provider} API. Please check your API key.`;
-        } else if (llmResponse.status === 429) {
-          errorMessage = `Rate limit exceeded for ${model.provider} API. Please try again later.`;
-        } else if (llmResponse.status >= 500) {
-          errorMessage = `${model.provider} API service error. The service may be experiencing issues.`;
-        }
-        
-        // Log the LLM error
+      // Get and verify API key with proper error handling for SSE
+      const apiKey = await verifyApiKey(model, null, clientRes, clientLanguage);
+      if (!apiKey) {
+        // Log the API key error
         await logInteraction(
           "chat_error",
         {
@@ -1000,60 +1006,230 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
             temperature,
             style,
             outputFormat,
-            language,
+            language: clientLanguage,
             streaming: true
           },
           responseType: 'error',
           error: {
-            message: errorMessage,
-            code: llmResponse.status.toString(),
-            details: errorBody
+            message: `API key not found for model: ${model.id}`,
+            code: 'API_KEY_NOT_FOUND'
           }
         });
         
-        sendSSE(clientRes, 'error', { message: errorMessage, details: errorBody });
-        activeRequests.delete(chatId);
-        return;
+        // Already sent error via SSE, just return response to the HTTP request
+        return res.json({ status: 'error', message: `API key not found for model: ${model.id}` });
       }
       
-      // Stream the response back to the client
-      const reader = llmResponse.body.getReader();
-      const decoder = new TextDecoder();
+      // Create request using appropriate adapter
+      // Ensure maxTokens doesn't exceed model's token limit
+      const requestedTokens = parseInt(maxTokens) || app.tokenLimit || 1024;
+      const modelTokenLimit = model.tokenLimit || requestedTokens;
+      const finalTokens = Math.min(requestedTokens, modelTokenLimit);
       
-      // Collect the entire response for logging
-      let fullResponse = '';
+      const request = createCompletionRequest(model, llmMessages, apiKey, { 
+        temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
+        maxTokens: finalTokens,
+        stream: true
+      });
       
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
+      // Send processing event
+      sendSSE(clientRes, 'processing', { message: 'Processing your request...' });
+      
+      // Set up abort controller for this request
+      const controller = new AbortController();
+      activeRequests.set(chatId, controller);
+      
+      // Set up timeout for the request
+      const timeoutId = setTimeout(async () => {
+        console.log(`Request timeout for chat ${chatId}`);
+        controller.abort();
+        const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT/1000 }, clientLanguage);
+        sendSSE(clientRes, 'error', { 
+          message: errorMessage 
+        });
+        activeRequests.delete(chatId);
+      }, DEFAULT_TIMEOUT);
+      
+      // Execute request to LLM API in the background
+      fetch(request.url, {
+        method: 'POST',
+        headers: request.headers,
+        body: JSON.stringify(request.body),
+        signal: controller.signal
+      }).then(async (llmResponse) => {
+        // Clear timeout as we got a response
+        clearTimeout(timeoutId);
+        
+        if (!llmResponse.ok) {
+          // Handle error case
+          const errorBody = await llmResponse.text();
+          console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
+          let errorMessage = await getLocalizedError('llmApiError', { status: llmResponse.status }, clientLanguage);
           
-          // Check if client is still connected
-          if (!clients.has(chatId)) {
-            reader.cancel();
-            break;
+          // Provide more helpful error messages for common errors
+          if (llmResponse.status === 401) {
+            errorMessage = await getLocalizedError('authenticationFailed', { provider: model.provider }, clientLanguage);
+          } else if (llmResponse.status === 429) {
+            errorMessage = await getLocalizedError('rateLimitExceeded', { provider: model.provider }, clientLanguage);
+          } else if (llmResponse.status >= 500) {
+            errorMessage = await getLocalizedError('serviceError', { provider: model.provider }, clientLanguage);
           }
           
-          if (done) break;
+          // Log the LLM error
+          await logInteraction(
+            "chat_error",
+          {
+            messageId, // Use the same ID to link these logs
+            appId,
+            modelId: model.id,
+            sessionId: chatId,
+            userSessionId,
+            messages: llmMessages,
+            options: {
+              temperature,
+              style,
+              outputFormat,
+              language: clientLanguage,
+              streaming: true
+            },
+            responseType: 'error',
+            error: {
+              message: errorMessage,
+              code: llmResponse.status.toString(),
+              details: errorBody
+            }
+          });
           
-          // Decode the chunk and add to buffer
-          const chunk = decoder.decode(value, { stream: true });
-          
-          // Process the chunk with the appropriate adapter
-          const result = processResponseBuffer(model.provider, chunk);
-          
-          // Send any extracted content to the client
-          if (result && result.content && result.content.length > 0) {
-            for (const textContent of result.content) {
-              sendSSE(clientRes, 'chunk', { content: textContent });
-              // Accumulate the full response for logging
-              fullResponse += textContent;
+          sendSSE(clientRes, 'error', { message: errorMessage, details: errorBody });
+          activeRequests.delete(chatId);
+          return;
+        }
+        
+        // Stream the response back to the client
+        const reader = llmResponse.body.getReader();
+        const decoder = new TextDecoder();
+        
+        // Collect the entire response for logging
+        let fullResponse = '';
+        
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            // Check if client is still connected
+            if (!clients.has(chatId)) {
+              reader.cancel();
+              break;
+            }
+            
+            if (done) break;
+            
+            // Decode the chunk and add to buffer
+            const chunk = decoder.decode(value, { stream: true });
+            
+            // Process the chunk with the appropriate adapter
+            const result = processResponseBuffer(model.provider, chunk);
+            
+            // Send any extracted content to the client
+            if (result && result.content && result.content.length > 0) {
+              for (const textContent of result.content) {
+                sendSSE(clientRes, 'chunk', { content: textContent });
+                // Accumulate the full response for logging
+                fullResponse += textContent;
+              }
+            }
+            
+            // Handle errors if any occurred during processing
+            if (result && result.error) {
+              // Log processing error
+              await logInteraction(
+                "chat_error",
+              {
+                messageId, // Use the same ID to link these logs
+                appId,
+                modelId: model.id,
+                sessionId: chatId,
+                userSessionId,
+                messages: llmMessages,
+                options: {
+                  temperature,
+                  style,
+                  outputFormat,
+                  language: clientLanguage,
+                  streaming: true
+                },
+                responseType: 'error',
+                error: {
+                  message: result.errorMessage || 'Error processing response',
+                  code: 'PROCESSING_ERROR'
+                },
+                response: fullResponse // Include any partial response received before the error
+              });
+              
+              sendSSE(clientRes, 'error', { message: result.errorMessage || 'Error processing response' });
+              break;
+            }
+            
+            // Check for completion
+            if (result && result.complete) {
+              sendSSE(clientRes, 'done', {});
+              
+              // Log the completed interaction with the full response
+              await logInteraction(
+                "chat_response",
+                {
+                messageId, // Use the same ID to link these logs
+                appId,
+                modelId: model.id,
+                sessionId: chatId,
+                userSessionId,
+                messages: llmMessages,
+                options: {
+                  temperature,
+                  style,
+                  outputFormat,
+                  language: clientLanguage,
+                  streaming: true
+                },
+                responseType: 'success',
+                response: fullResponse
+              });
+              
+              break; // Stop processing more chunks
             }
           }
+        } catch (error) {
+          if (error.name === 'AbortError') {
+            console.log(`Request aborted for chat ${chatId}`);
+            // Don't send an error event if timeout already sent one
+          } else {
+            console.error('Error processing response stream:', error);
+            const errorMessage = await getLocalizedError('responseStreamError', { error: error.message }, clientLanguage);
+            sendSSE(clientRes, 'error', { message: errorMessage });
+          }
+        } finally {
+          activeRequests.delete(chatId);
+        }
+      }).catch(async (error) => {
+        clearTimeout(timeoutId);
+        
+        if (error.name === 'AbortError') {
+          console.log(`Request aborted for chat ${chatId}`);
+          // Don't log or send event if it was an intentional abort
+        } else {
+          console.error('Error executing LLM request:', error);
           
-          // Handle errors if any occurred during processing
-          if (result && result.error) {
-            // Log processing error
-            await logInteraction(
+          // Get enhanced error details
+          const errorDetails = getErrorDetails(error, model);
+          
+          // Check for connection refused errors
+          if (errorDetails.code === 'ECONNREFUSED') {
+            const errorMessage = await getLocalizedError('connectionRefused', 
+              { provider: model.provider, model: model.id }, 
+              clientLanguage);
+            
+            // Log the connection error
+            logInteraction(
               "chat_error",
             {
               messageId, // Use the same ID to link these logs
@@ -1066,29 +1242,30 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
                 temperature,
                 style,
                 outputFormat,
-                language,
+                language: clientLanguage,
                 streaming: true
               },
               responseType: 'error',
               error: {
-                message: result.errorMessage || 'Error processing response',
-                code: 'PROCESSING_ERROR'
-              },
-              response: fullResponse // Include any partial response received before the error
+                message: errorMessage,
+                code: errorDetails.code
+              }
+            }).catch(logError => {
+              console.error('Error logging interaction error:', logError);
             });
             
-            sendSSE(clientRes, 'error', { message: result.errorMessage || 'Error processing response' });
-            break;
-          }
-          
-          // Check for completion
-          if (result && result.complete) {
-            sendSSE(clientRes, 'done', {});
-            
-            // Log the completed interaction with the full response
-            await logInteraction(
-              "chat_response",
-              {
+            // Send localized error message to the client
+            sendSSE(clientRes, 'error', { 
+              message: errorMessage,
+              modelId: model.id,
+              provider: model.provider,
+              recommendation: errorDetails.recommendation
+            });
+          } else {
+            // Handle other types of errors with existing code
+            logInteraction(
+              "chat_error",
+            {
               messageId, // Use the same ID to link these logs
               appId,
               modelId: model.id,
@@ -1099,82 +1276,37 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
                 temperature,
                 style,
                 outputFormat,
-                language,
+                language: clientLanguage,
                 streaming: true
               },
-              responseType: 'success',
-              response: fullResponse
+              responseType: 'error',
+              error: {
+                message: errorDetails.message,
+                code: errorDetails.code
+              }
+            }).catch(logError => {
+              console.error('Error logging interaction error:', logError);
             });
             
-            break; // Stop processing more chunks
+            // Send a more helpful error message to the client
+            const errorMessage = {
+              message: errorDetails.message,
+              modelId: model.id,
+              provider: model.provider,
+              recommendation: errorDetails.recommendation,
+              details: error.message
+            };
+            
+            sendSSE(clientRes, 'error', errorMessage);
           }
         }
-      } catch (error) {
-        if (error.name === 'AbortError') {
-          console.log(`Request aborted for chat ${chatId}`);
-          // Don't send an error event if timeout already sent one
-        } else {
-          console.error('Error processing response stream:', error);
-          sendSSE(clientRes, 'error', { message: `Error processing response stream: ${error.message}` });
-        }
-      } finally {
+        
         activeRequests.delete(chatId);
-      }
-    }).catch(error => {
-      clearTimeout(timeoutId);
+      });
       
-      if (error.name === 'AbortError') {
-        console.log(`Request aborted for chat ${chatId}`);
-        // Don't log or send event if it was an intentional abort
-      } else {
-        console.error('Error executing LLM request:', error);
-        
-        // Get enhanced error details
-        const errorDetails = getErrorDetails(error, model);
-        
-        // Log the error
-        logInteraction(
-          "chat_error",
-        {
-          messageId, // Use the same ID to link these logs
-          appId,
-          modelId: model.id,
-          sessionId: chatId,
-          userSessionId,
-          messages: llmMessages,
-          options: {
-            temperature,
-            style,
-            outputFormat,
-            language,
-            streaming: true
-          },
-          responseType: 'error',
-          error: {
-            message: errorDetails.message,
-            code: errorDetails.code
-          }
-        }).catch(logError => {
-          console.error('Error logging interaction error:', logError);
-        });
-        
-        // Send a more helpful error message to the client
-        const errorMessage = {
-          message: errorDetails.message,
-          modelId: model.id,
-          provider: model.provider,
-          recommendation: errorDetails.recommendation,
-          details: error.message
-        };
-        
-        sendSSE(clientRes, 'error', errorMessage);
-      }
-      
-      activeRequests.delete(chatId);
-    });
-    
-    // Return immediate response to the POST request
-    return res.json({ status: 'streaming', chatId });
+      // Return immediate response to the POST request
+      return res.json({ status: 'streaming', chatId });
+    }
     
   } catch (error) {
     console.error('Error in app chat:', error);

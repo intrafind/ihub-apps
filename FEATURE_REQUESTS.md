@@ -10,6 +10,8 @@
 - improve conversation handling for prompt generator and apps generator
 - Docker Image?
 - Ai hub
+- Dokumente hochladen
+- eml generieren?
 
 Done
 - Microphone

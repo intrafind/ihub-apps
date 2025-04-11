@@ -51,5 +51,53 @@
     "resendMessage": "Nachricht erneut senden",
     "deleteMessage": "Nachricht löschen",
     "resend": "Erneut senden"
+  },
+  "models": {
+    "temperature": "Temperatur",
+    "provider": "Anbieter",
+    "descriptions": {
+      "gpt-3.5-turbo": "Schnelles und effizientes Modell für die meisten alltäglichen Aufgaben und Gespräche",
+      "gpt-4": "Fortschrittliches Modell mit starken Argumentations- und Wissensfähigkeiten",
+      "claude-3-opus": "Anthropics leistungsfähigstes Modell mit außergewöhnlichen Argumentationsfähigkeiten",
+      "claude-3-sonnet": "Ausgewogene Leistung und Wert für Unternehmens- und Alltagsaufgaben",
+      "gemini-1.5-flash": "Googles vielseitiges Modell, optimiert für Text- und Code-Aufgaben",
+      "local-vllm": "Fortschrittliches Modell mit starken Argumentations- und Wissensfähigkeiten"
+    },
+    "outputFormat": "Ausgabeformat"
+  },
+  "responseStyles": {
+    "title": "Antwortstil",
+    "keep": "Original beibehalten",
+    "normal": "Normal",
+    "concise": "Prägnant",
+    "formal": "Formal",
+    "explanatory": "Erklärend",
+    "creative": "Kreativ",
+    "persuasive": "Überzeugend",
+    "humorous": "Humorvoll",
+    "empathetic": "Einfühlsam",
+    "friendly": "Freundlich",
+    "technical": "Technisch",
+    "casual": "Locker",
+    "detailed": "Detailliert",
+    "analytical": "Analytisch",
+    "assertive": "Bestimmt",
+    "descriptions": {
+      "keep": "Behalte den ursprünglichen Stil des Textes bei.",
+      "normal": "Liefere ausgewogene Standardantworten.",
+      "concise": "Liefere kürzere und direktere Antworten. Sei kurz und präzise.",
+      "formal": "Liefere klare, professionelle und formelle Antworten in gehobener Sprache.",
+      "explanatory": "Liefere lehrreiche Antworten, die Konzepte klar erklären, als würdest du einen Schüler unterrichten.",
+      "creative": "Liefere fantasievolle und künstlerische Antworten unter Verwendung von Metaphern und Analogien.",
+      "persuasive": "Liefere überzeugende Antworten mit rhetorischen Techniken.",
+      "humorous": "Liefere unterhaltsame und lustige Antworten mit Witzen und Wortspielen.",
+      "empathetic": "Liefere mitfühlende und verständnisvolle Antworten, die Empathie und Unterstützung zeigen.",
+      "friendly": "Liefere warme und zugängliche Antworten in einem freundlichen Ton.",
+      "technical": "Liefere detaillierte und präzise Antworten unter Verwendung technischer Sprache.",
+      "casual": "Liefere entspannte und informelle Antworten in Alltagssprache.",
+      "detailed": "Liefere gründliche und umfassende Antworten, die alle Aspekte des Themas abdecken.",
+      "analytical": "Liefere logische und kritische Antworten, die das Thema tiefgehend analysieren.",
+      "assertive": "Liefere selbstbewusste und starke Antworten mit einer klaren Position."
+    }
   }
 }

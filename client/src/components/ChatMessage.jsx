@@ -221,6 +221,16 @@ const ChatMessage = ({
       onEdit(message.id, editedContent);
     }
     setIsEditing(false);
+    
+    // Automatically resend the message after editing
+    if (onResend && isUser) {
+      // Use a slightly longer delay to ensure state updates are processed
+      setTimeout(() => {
+        // Directly pass the edited content to parent component for resending
+        console.log('Resending edited message with content:', editedContent);
+        onResend(message.id, editedContent);  // Pass the edited content as a second parameter
+      }, 250); // Increased delay to ensure edit is processed first
+    }
   };
 
   const handleCancelEdit = () => {
@@ -335,7 +345,7 @@ const ChatMessage = ({
           <svg className="w-5 h-5 mr-1.5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>{message.content}</span>
+          <span className="break-all">{message.content}</span>
         </div>
       );
     }
@@ -345,12 +355,12 @@ const ChatMessage = ({
       const parsedContent = marked(message.content);
       
       return (
-        <div className="markdown-content" 
+        <div className="markdown-content break-words" 
              dangerouslySetInnerHTML={{ __html: parsedContent }}></div>
       );
     }
     
-    return <div>{message.content}</div>;
+    return <div className="break-words whitespace-pre-wrap">{message.content}</div>;
   };
 
   // Render variables if they exist (like target language)
@@ -377,7 +387,7 @@ const ChatMessage = ({
       onMouseLeave={() => setShowActions(false)}
     >
       <div 
-        className={`relative max-w-4xl rounded-lg px-4 py-3 ${
+        className={`relative max-w-4xl rounded-lg px-4 py-3 overflow-hidden ${
           isUser 
             ? 'bg-indigo-600 text-white' 
             : isError

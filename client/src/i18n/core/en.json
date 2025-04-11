@@ -51,5 +51,53 @@
     "resendMessage": "Resend message",
     "deleteMessage": "Delete message",
     "resend": "Resend"
+  },
+  "models": {
+    "temperature": "Temperature",
+    "provider": "Provider",
+    "descriptions": {
+      "gpt-3.5-turbo": "Fast and efficient model for most everyday tasks and conversations",
+      "gpt-4": "Advanced model with strong reasoning and knowledge capabilities",
+      "claude-3-opus": "Anthropic's most capable model with exceptional reasoning abilities",
+      "claude-3-sonnet": "Balanced performance and value for enterprise and everyday tasks",
+      "gemini-1.5-flash": "Google's versatile model optimized for text and code tasks",
+      "local-vllm": "Advanced model with strong reasoning and knowledge capabilities"
+    },
+    "outputFormat": "Output Format"
+  },
+  "responseStyles": {
+    "title": "Response Style",
+    "keep": "Keep Original",
+    "normal": "Normal",
+    "concise": "Concise",
+    "formal": "Formal",
+    "explanatory": "Explanatory",
+    "creative": "Creative",
+    "persuasive": "Persuasive",
+    "humorous": "Humorous",
+    "empathetic": "Empathetic",
+    "friendly": "Friendly",
+    "technical": "Technical",
+    "casual": "Casual",
+    "detailed": "Detailed",
+    "analytical": "Analytical",
+    "assertive": "Assertive",
+    "descriptions": {
+      "keep": "Keep the original style of the text.",
+      "normal": "Provide default, balanced responses.",
+      "concise": "Provide shorter and more direct responses. Be brief and to the point.",
+      "formal": "Provide clear, professional and polished responses using formal language.",
+      "explanatory": "Provide educational responses that explain concepts clearly, as if teaching a student.",
+      "creative": "Provide imaginative and artistic responses, using metaphors and analogies.",
+      "persuasive": "Provide convincing and compelling responses, using rhetorical techniques.",
+      "humorous": "Provide light-hearted and funny responses, using jokes and puns.",
+      "empathetic": "Provide compassionate and understanding responses, showing empathy and support.",
+      "friendly": "Provide warm and approachable responses, using a friendly tone.",
+      "technical": "Provide detailed and precise responses, using technical language.",
+      "casual": "Provide relaxed and informal responses, using everyday language.",
+      "detailed": "Provide thorough and comprehensive responses, covering all aspects of the topic.",
+      "analytical": "Provide logical and critical responses, analyzing the topic in depth.",
+      "assertive": "Provide confident and strong responses, taking a clear stance."
+    }
   }
 }

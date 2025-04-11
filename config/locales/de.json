@@ -73,7 +73,16 @@
   },
   "models": {
     "temperature": "Temperatur",
-    "provider": "Anbieter"
+    "provider": "Anbieter",
+    "descriptions": {
+      "gpt-3.5-turbo": "Schnelles und effizientes Modell für die meisten alltäglichen Aufgaben und Gespräche",
+      "gpt-4": "Fortschrittliches Modell mit starken Argumentations- und Wissensfähigkeiten",
+      "claude-3-opus": "Anthropics leistungsfähigstes Modell mit außergewöhnlichen Argumentationsfähigkeiten",
+      "claude-3-sonnet": "Ausgewogene Leistung und Wert für Unternehmens- und Alltagsaufgaben",
+      "gemini-1.5-flash": "Googles vielseitiges Modell, optimiert für Text- und Code-Aufgaben",
+      "local-vllm": "Fortschrittliches Modell mit starken Argumentations- und Wissensfähigkeiten"
+    },
+    "outputFormat": "Ausgabeformat"
   },
   "variables": {
     "content": "Inhalt",
@@ -128,5 +137,60 @@
     "fetchFailed": "Daten konnten nicht abgerufen werden",
     "sendFailed": "Nachricht konnte nicht gesendet werden",
     "configSaveFailed": "Konfiguration konnte nicht gespeichert werden"
+  },
+  "serverErrors": {
+    "appNotFound": "Anwendung nicht gefunden",
+    "modelNotFound": "Modell nicht gefunden",
+    "missingRequiredFields": "Erforderliche Felder fehlen",
+    "messagesRequired": "Nachrichten-Array ist erforderlich",
+    "missingSessionId": "Sitzungs-ID ist erforderlich",
+    "chatSessionNotFound": "Chat-Sitzung nicht gefunden",
+    "missingFeedbackFields": "Erforderliche Felder fehlen: messageId, appId, chatId und rating sind erforderlich",
+    "apiKeyNotFound": "API-Schlüssel nicht gefunden für Anbieter: {provider}",
+    "invalidProvider": "Ungültiger Anbieter: {provider}",
+    "invalidModel": "Ungültiges Modell: {model}",
+    "internalError": "Interner Serverfehler",
+    "authenticationFailed": "Authentifizierung fehlgeschlagen für {provider} API. Bitte überprüfen Sie Ihren API-Schlüssel.",
+    "rateLimitExceeded": "Ratelimit überschritten für {provider} API. Bitte versuchen Sie es später erneut.",
+    "serviceError": "{provider} API-Dienstfehler. Der Dienst könnte Probleme haben.",
+    "requestTimeout": "Anforderung nach {timeout} Sekunden abgelaufen. Das Modell könnte unter hoher Last stehen.",
+    "llmApiError": "LLM-API-Anfrage fehlgeschlagen mit Status {status}",
+    "responseStreamError": "Fehler bei der Verarbeitung des Antwortstreams: {error}",
+    "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration."
+  },
+  "responseStyles": {
+    "title": "Antwortstil",
+    "keep": "Original beibehalten",
+    "normal": "Normal",
+    "concise": "Prägnant",
+    "formal": "Formal",
+    "explanatory": "Erklärend",
+    "creative": "Kreativ",
+    "persuasive": "Überzeugend",
+    "humorous": "Humorvoll",
+    "empathetic": "Einfühlsam",
+    "friendly": "Freundlich",
+    "technical": "Technisch",
+    "casual": "Locker",
+    "detailed": "Detailliert",
+    "analytical": "Analytisch",
+    "assertive": "Bestimmt",
+    "descriptions": {
+      "keep": "Behalte den ursprünglichen Stil des Textes bei.",
+      "normal": "Liefere ausgewogene Standardantworten.",
+      "concise": "Liefere kürzere und direktere Antworten. Sei kurz und präzise.",
+      "formal": "Liefere klare, professionelle und formelle Antworten in gehobener Sprache.",
+      "explanatory": "Liefere lehrreiche Antworten, die Konzepte klar erklären, als würdest du einen Schüler unterrichten.",
+      "creative": "Liefere fantasievolle und künstlerische Antworten unter Verwendung von Metaphern und Analogien.",
+      "persuasive": "Liefere überzeugende Antworten mit rhetorischen Techniken.",
+      "humorous": "Liefere unterhaltsame und lustige Antworten mit Witzen und Wortspielen.",
+      "empathetic": "Liefere mitfühlende und verständnisvolle Antworten, die Empathie und Unterstützung zeigen.",
+      "friendly": "Liefere warme und zugängliche Antworten in einem freundlichen Ton.",
+      "technical": "Liefere detaillierte und präzise Antworten unter Verwendung technischer Sprache.",
+      "casual": "Liefere entspannte und informelle Antworten in Alltagssprache.",
+      "detailed": "Liefere gründliche und umfassende Antworten, die alle Aspekte des Themas abdecken.",
+      "analytical": "Liefere logische und kritische Antworten, die das Thema tiefgehend analysieren.",
+      "assertive": "Liefere selbstbewusste und starke Antworten mit einer klaren Position."
+    }
   }
 }

@@ -73,6 +73,23 @@
 
 .markdown-content code {
   @apply font-mono text-sm;
+  word-break: break-all;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+/* Specific styling for long unbroken strings like base64 */
+.markdown-content pre code {
+  @apply block;
+  word-break: break-all;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+/* Ensure inline code also wraps properly */
+.markdown-content p code {
+  word-break: break-all;
+  white-space: normal;
 }
 
 .markdown-content blockquote {
@@ -93,4 +110,5 @@
 
 .markdown-content td {
   @apply border px-4 py-2;
-} 
+  word-break: break-word;
+}

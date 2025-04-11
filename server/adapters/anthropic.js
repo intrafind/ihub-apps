@@ -8,30 +8,53 @@ const AnthropicAdapter = {
    * Format messages for Anthropic API
    */
   formatMessages(messages) {
-    // Anthropic format is already compatible
-    return messages;
+    // Extract system message and filter it out from the messages array
+    // Anthropic expects system messages as a separate parameter
+    const systemMessage = messages.find(msg => msg.role === 'system');
+    const filteredMessages = messages.filter(msg => msg.role !== 'system');
+    
+    return {
+      messages: filteredMessages,
+      systemPrompt: systemMessage?.content || ''
+    };
   },
 
   /**
    * Create a completion request for Anthropic
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true } = options;
+    const { temperature = 0.7, stream = true, maxTokens = 1024 } = options;
+    
+    // Format messages and extract system prompt
+    const { messages: formattedMessages, systemPrompt } = this.formatMessages(messages);
+    
+    // Note: We don't throw an error here for missing API keys
+    // Instead we let the server's verifyApiKey function handle this consistently
+    // This ensures proper localization of error messages
+    
+    const requestBody = {
+      model: model.modelId,
+      messages: formattedMessages,
+      stream,
+      temperature: parseFloat(temperature),
+      max_tokens: maxTokens
+    };
+    
+    // Only add system parameter if we have a system message
+    if (systemPrompt) {
+      requestBody.system = systemPrompt;
+    }
+
+    console.log('Anthropic request body:', requestBody);
     
     return {
       url: model.url,
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
+        'x-api-key': apiKey || '', // Provide empty string to avoid undefined
         'anthropic-version': '2023-06-01'
       },
-      body: {
-        model: model.modelId,
-        messages: this.formatMessages(messages),
-        stream,
-        temperature: parseFloat(temperature),
-        max_tokens: options.maxTokens || 1024
-      }
+      body: requestBody
     };
   },
 

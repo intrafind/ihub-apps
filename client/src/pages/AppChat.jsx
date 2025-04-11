@@ -271,15 +271,21 @@ const AppChat = () => {
     ));
   };
 
-  const handleResendMessage = (messageId) => {
+  const handleResendMessage = (messageId, editedContent) => {
     const messageToResend = messages.find((msg) => msg.id === messageId);
     if (!messageToResend) return;
 
-    setInput(messageToResend.content);
+    // Use the editedContent if provided directly from the ChatMessage component
+    // otherwise use the content from the found message
+    const contentToResend = editedContent !== undefined ? editedContent : messageToResend.content;
+    
+    // Set the input field to the current message content
+    setInput(contentToResend);
 
     setTimeout(() => {
       const form = document.querySelector('form');
       if (form) {
+        console.log('Submitting form with edited content:', contentToResend);
         const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
         form.dispatchEvent(submitEvent);
       }

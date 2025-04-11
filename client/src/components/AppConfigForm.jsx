@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { getLocalizedContent } from '../utils/localizeContent';
 
 const AppConfigForm = ({ 
   app, 
@@ -14,7 +15,8 @@ const AppConfigForm = ({
   onStyleChange,
   onOutputFormatChange,
   onSendChatHistoryChange, 
-  onTemperatureChange 
+  onTemperatureChange,
+  currentLanguage 
 }) => {
   const { t } = useTranslation();
   
@@ -45,6 +47,9 @@ const AppConfigForm = ({
           {availableModels.map((model) => (
             <option key={model.id} value={model.id}>
               {model.name}
+              {t(`models.descriptions.${model.id}`) !== `models.descriptions.${model.id}` ? 
+                ` - ${t(`models.descriptions.${model.id}`)}` : 
+                model.description ? ` - ${model.description}` : ''}
             </option>
           ))}
         </select>
@@ -53,7 +58,7 @@ const AppConfigForm = ({
       {/* Style Selection */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          {t('appConfig.responseStyle', 'Response Style')}
+          {t('responseStyles.title', 'Response Style')}
         </label>
         <select
           value={selectedStyle}
@@ -62,7 +67,7 @@ const AppConfigForm = ({
         >
           {Object.entries(styles).map(([id, description]) => (
             <option key={id} value={id}>
-              {id.charAt(0).toUpperCase() + id.slice(1)}
+              {t(`responseStyles.${id}`, id.charAt(0).toUpperCase() + id.slice(1))}
             </option>
           ))}
         </select>
@@ -91,7 +96,7 @@ const AppConfigForm = ({
       {/* Output Format */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          {t('appConfig.outputFormat', 'Output Format')}
+          {t('models.outputFormat', 'Output Format')}
         </label>
         <select
           value={selectedOutputFormat}
