@@ -16,6 +16,36 @@ import ChatMessageList from '../components/chat/ChatMessageList';
 import InputVariables from '../components/chat/InputVariables';
 import { useUIConfig } from '../components/UIConfigContext';
 
+/**
+ * Save app settings and variables to sessionStorage
+ * @param {string} appId - The ID of the app
+ * @param {Object} settings - Settings to save
+ */
+const saveAppSettings = (appId, settings) => {
+  try {
+    const key = `ai_hub_app_settings_${appId}`;
+    sessionStorage.setItem(key, JSON.stringify(settings));
+  } catch (error) {
+    console.error('Error saving app settings to sessionStorage:', error);
+  }
+};
+
+/**
+ * Load app settings and variables from sessionStorage
+ * @param {string} appId - The ID of the app
+ * @returns {Object|null} The saved settings or null if not found
+ */
+const loadAppSettings = (appId) => {
+  try {
+    const key = `ai_hub_app_settings_${appId}`;
+    const saved = sessionStorage.getItem(key);
+    return saved ? JSON.parse(saved) : null;
+  } catch (error) {
+    console.error('Error loading app settings from sessionStorage:', error);
+    return null;
+  }
+};
+
 const AppChat = () => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -46,6 +76,13 @@ const AppChat = () => {
   // Language tracking
   const prevLanguageRef = useRef(currentLanguage);
 
+  // Create a stable chat ID that persists across refreshes
+  const [stableChatId] = useState(() => {
+    // Use URL appId for consistency and stability
+    const persistentId = `app-${appId}`;
+    return persistentId;
+  });
+
   // Use our custom chat messages hook for managing messages
   const {
     messages,
@@ -58,7 +95,7 @@ const AppChat = () => {
     addSystemMessage,
     clearMessages,
     getMessagesForApi
-  } = useChatMessages();
+  } = useChatMessages(stableChatId);
 
   // Use our custom event source hook for SSE connections
   const {
@@ -260,6 +297,40 @@ const AppChat = () => {
       isMounted = false;
     };
   }, [appId, currentLanguage, setHeaderColor]); // Remove t from dependencies
+
+  // Load saved settings from sessionStorage when initializing
+  useEffect(() => {
+    if (app && !loading) {
+      const savedSettings = loadAppSettings(appId);
+      if (savedSettings) {
+        // Restore settings if they exist
+        if (savedSettings.selectedModel) setSelectedModel(savedSettings.selectedModel);
+        if (savedSettings.selectedStyle) setSelectedStyle(savedSettings.selectedStyle);
+        if (savedSettings.selectedOutputFormat) setSelectedOutputFormat(savedSettings.selectedOutputFormat);
+        if (savedSettings.sendChatHistory !== undefined) setSendChatHistory(savedSettings.sendChatHistory);
+        if (savedSettings.temperature) setTemperature(savedSettings.temperature);
+        if (savedSettings.variables) setVariables(savedSettings.variables);
+        
+        console.log('Restored app settings from sessionStorage:', savedSettings);
+      }
+    }
+  }, [app, loading, appId]);
+  
+  // Save settings to sessionStorage whenever they change
+  useEffect(() => {
+    if (app && !loading) {
+      const settings = {
+        selectedModel,
+        selectedStyle,
+        selectedOutputFormat,
+        sendChatHistory,
+        temperature,
+        variables
+      };
+      
+      saveAppSettings(appId, settings);
+    }
+  }, [app, loading, appId, selectedModel, selectedStyle, selectedOutputFormat, sendChatHistory, temperature, variables]);
 
   const handleInputChange = (e) => {
     setInput(e.target.value);

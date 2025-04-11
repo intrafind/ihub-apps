@@ -112,3 +112,69 @@
   @apply border px-4 py-2;
   word-break: break-word;
 }
+
+/* Rendered HTML content styling */
+.rendered-html-content {
+  @apply text-gray-800;
+}
+
+.rendered-html-content h1 {
+  @apply text-2xl font-bold mt-6 mb-4;
+}
+
+.rendered-html-content h2 {
+  @apply text-xl font-bold mt-5 mb-3;
+}
+
+.rendered-html-content h3 {
+  @apply text-lg font-bold mt-4 mb-2;
+}
+
+.rendered-html-content p {
+  @apply mb-4;
+}
+
+.rendered-html-content ul {
+  @apply list-disc pl-5 mb-4;
+}
+
+.rendered-html-content ol {
+  @apply list-decimal pl-5 mb-4;
+}
+
+.rendered-html-content li {
+  @apply mb-1;
+}
+
+.rendered-html-content a {
+  @apply text-indigo-600 hover:underline;
+}
+
+.rendered-html-content table {
+  @apply border-collapse table-auto w-full mb-4;
+}
+
+.rendered-html-content th {
+  @apply border px-4 py-2 bg-gray-100;
+}
+
+.rendered-html-content td {
+  @apply border px-4 py-2;
+  word-break: break-word;
+}
+
+.rendered-html-content img {
+  @apply max-w-full h-auto my-4 rounded;
+}
+
+.rendered-html-content div {
+  @apply mb-4;
+}
+
+.rendered-html-content form {
+  @apply p-4 border border-gray-300 rounded-lg mb-4;
+}
+
+.rendered-html-content input, .rendered-html-content select, .rendered-html-content textarea {
+  @apply border border-gray-300 rounded px-3 py-2 mb-2 w-full;
+}

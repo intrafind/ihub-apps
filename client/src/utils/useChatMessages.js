@@ -2,11 +2,28 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 /**
  * Custom hook for managing chat messages
+ * Messages will persist during page refreshes using sessionStorage
+ * Each new browser tab will start with a new chat session
  * 
+ * @param {string} chatId - The ID of the current chat for storage purposes
  * @returns {Object} Chat message management functions and state
  */
-function useChatMessages() {
-  const [messages, setMessages] = useState([]);
+function useChatMessages(chatId = 'default') {
+  // Use sessionStorage for persistence during page refreshes
+  const storageKey = `ai_hub_chat_messages_${chatId}`;
+  
+  // Initialize state from sessionStorage if available
+  const loadInitialMessages = () => {
+    try {
+      const storedMessages = sessionStorage.getItem(storageKey);
+      return storedMessages ? JSON.parse(storedMessages) : [];
+    } catch (error) {
+      console.error('Error loading messages from sessionStorage:', error);
+      return [];
+    }
+  };
+
+  const [messages, setMessages] = useState(loadInitialMessages);
   
   // Use a ref to store a copy of messages for read-only operations
   const messagesRef = useRef(messages);
@@ -15,6 +32,21 @@ function useChatMessages() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  // Save messages to sessionStorage whenever they change
+  useEffect(() => {
+    try {
+      // Only save if we have messages
+      if (messages.length > 0) {
+        sessionStorage.setItem(storageKey, JSON.stringify(messages));
+      } else {
+        // Clear storage if messages are empty
+        sessionStorage.removeItem(storageKey);
+      }
+    } catch (error) {
+      console.error('Error saving messages to sessionStorage:', error);
+    }
+  }, [messages, storageKey]);
 
   /**
    * Add a user message to the chat

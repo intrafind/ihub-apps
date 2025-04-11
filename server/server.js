@@ -290,6 +290,51 @@ async function verifyApiKey(model, res, clientRes = null, language = 'en') {
   }
 }
 
+/**
+ * Helper function to load file content for use in prompts (e.g., FAQ files)
+ * @param {string} filePath - The path to the file to load
+ * @returns {Promise<string>} - The content of the file or an error message
+ */
+async function loadFileContent(filePath) {
+  try {
+    // Normalize the path and prevent directory traversal
+    const normalizedPath = path.normalize(filePath).replace(/^(\.\.[\/\\])+/, '');
+    
+    // Only allow loading files from the contents directory
+    if (!normalizedPath.startsWith('/contents/') && !normalizedPath.startsWith('contents/')) {
+      console.error(`Security warning: Attempted to access file outside contents directory: ${filePath}`);
+      return "Error: For security reasons, only files in the contents directory can be accessed.";
+    }
+    
+    // Remove leading slash if present for consistency
+    const contentPath = normalizedPath.replace(/^\//, '');
+    
+    // Determine file path based on packaging
+    let fullPath;
+    if (isPackaged) {
+      fullPath = path.join(rootDir, contentPath);
+    } else {
+      fullPath = path.join(__dirname, '..', contentPath);
+    }
+    
+    console.log(`Loading file content from: ${fullPath}`);
+    
+    // Verify the path is not trying to access sensitive areas
+    if (normalizedPath.includes('node_modules') || 
+        normalizedPath.includes('.env') || 
+        normalizedPath.includes('package.json')) {
+      console.error(`Security warning: Attempted to access potentially sensitive file: ${filePath}`);
+      return "Error: Access to this file is restricted.";
+    }
+    
+    const content = await fs.readFile(fullPath, 'utf8');
+    return content;
+  } catch (error) {
+    console.error(`Error loading file content from ${filePath}:`, error);
+    return `Error loading content: ${error.message}`;
+  }
+}
+
 // --- API Endpoints ---
 
 // GET /api/apps - Fetch all available apps
@@ -728,7 +773,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       }
       
       // Prepare messages with proper formatting
-      const llmMessages = processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
+      const llmMessages = await processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
       
       // Log the interaction before sending to LLM - use the exact client-provided messageId
       await logInteraction(
@@ -968,7 +1013,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       }
       
       // Prepare messages with proper formatting
-      const llmMessages = processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
+      const llmMessages = await processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
       
       // Log the interaction before sending to LLM
       await logInteraction(
@@ -1398,7 +1443,7 @@ app.post('/api/session/start', async (req, res) => {
 });
 
 // Helper function to extract messages and format them
-function processMessageTemplates(messages, app, style = null, outputFormat = null, language = 'en') {
+async function processMessageTemplates(messages, app, style = null, outputFormat = null, language = 'en') {
   // Log the language being used for localization 
   console.log(`Using language '${language}' for message templates`);
   
@@ -1463,6 +1508,26 @@ function processMessageTemplates(messages, app, style = null, outputFormat = nul
         // Ensure value is a string before using replace
         const strValue = typeof value === 'string' ? value : String(value || '');
         systemPrompt = systemPrompt.replace(`{{${key}}}`, strValue);
+      }
+    }
+    
+    // Load file source content if app has a sourcePath (for FAQ bots, etc.)
+    if (app.sourcePath && systemPrompt.includes('{{source}}')) {
+      // Get the file path - either from user variables (if provided) or from app config
+      const sourcePath = userVariables.source_path || app.sourcePath;
+      
+      console.log(`Loading source content from file: ${sourcePath}`);
+      try {
+        // Load the file content
+        const sourceContent = await loadFileContent(sourcePath);
+        
+        // Replace the {{source}} placeholder with the file content
+        systemPrompt = systemPrompt.replace('{{source}}', sourceContent);
+        console.log(`Loaded source content (${sourceContent.length} characters)`);
+      } catch (error) {
+        console.error(`Error loading source content from ${sourcePath}:`, error);
+        systemPrompt = systemPrompt.replace('{{source}}', 
+          `Error loading content from ${sourcePath}: ${error.message}. Please check the file path and try again.`);
       }
     }
     

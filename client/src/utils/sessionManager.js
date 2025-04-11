@@ -1,6 +1,7 @@
 /**
  * Client-side session management utility
  * Handles generating, storing, and refreshing the user's session ID
+ * Uses sessionStorage to ensure a new session is created when a tab is closed and reopened
  */
 
 // Session timeout in milliseconds (8 hours)
@@ -24,8 +25,8 @@ const generateSessionId = () => {
  * @returns {string} The session ID
  */
 export const getSessionId = () => {
-  const existingSessionId = localStorage.getItem(SESSION_ID_KEY);
-  const expiryTime = localStorage.getItem(SESSION_EXPIRY_KEY);
+  const existingSessionId = sessionStorage.getItem(SESSION_ID_KEY);
+  const expiryTime = sessionStorage.getItem(SESSION_EXPIRY_KEY);
   const now = Date.now();
 
   // Check if we have a valid session
@@ -38,8 +39,8 @@ export const getSessionId = () => {
   const expiry = now + SESSION_TIMEOUT;
   
   // Store the session ID and its expiry time
-  localStorage.setItem(SESSION_ID_KEY, sessionId);
-  localStorage.setItem(SESSION_EXPIRY_KEY, expiry.toString());
+  sessionStorage.setItem(SESSION_ID_KEY, sessionId);
+  sessionStorage.setItem(SESSION_EXPIRY_KEY, expiry.toString());
   
   console.log('Created new session ID:', sessionId);
   return sessionId;
@@ -53,7 +54,7 @@ export const renewSession = () => {
   const sessionId = getSessionId(); // This will create a new session if needed
   const expiry = Date.now() + SESSION_TIMEOUT;
   
-  localStorage.setItem(SESSION_EXPIRY_KEY, expiry.toString());
+  sessionStorage.setItem(SESSION_EXPIRY_KEY, expiry.toString());
   return sessionId;
 };
 
@@ -62,7 +63,7 @@ export const renewSession = () => {
  * @returns {number} Milliseconds until session expiry
  */
 export const getSessionRemainingTime = () => {
-  const expiryTime = localStorage.getItem(SESSION_EXPIRY_KEY);
+  const expiryTime = sessionStorage.getItem(SESSION_EXPIRY_KEY);
   if (!expiryTime) {
     return 0;
   }
@@ -88,7 +89,7 @@ export const shouldRenewSession = () => {
  */
 export const getSessionInfo = () => {
   const sessionId = getSessionId();
-  const expiryTime = localStorage.getItem(SESSION_EXPIRY_KEY);
+  const expiryTime = sessionStorage.getItem(SESSION_EXPIRY_KEY);
   
   return {
     sessionId,

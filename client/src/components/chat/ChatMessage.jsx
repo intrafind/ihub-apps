@@ -31,6 +31,25 @@ const ChatMessage = ({
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState(null); // Track active feedback button
+  
+  // Detect if content is Gemini HTML
+  const isGeminiHtml = useCallback(() => {
+    // Check if content starts with ```html and ends with ```
+    return !isUser && 
+           message.content && 
+           message.content.trim().startsWith('```html') && 
+           message.content.trim().endsWith('```');
+  }, [isUser, message.content]);
+
+  // Extract HTML content from Gemini response
+  const extractHtmlContent = useCallback(() => {
+    if (!isGeminiHtml()) return '';
+    
+    // Extract the HTML content between the markdown code fence
+    const content = message.content.trim();
+    const htmlContent = content.substring(8, content.length - 3).trim();
+    return htmlContent;
+  }, [isGeminiHtml, message.content]);
 
   // Configure marked options to properly handle tables and customize code blocks
   useEffect(() => {
@@ -341,6 +360,14 @@ const ChatMessage = ({
           </svg>
           <span className="break-all">{message.content}</span>
         </div>
+      );
+    }
+    
+    // Check if this is a Gemini HTML response that should be rendered as HTML
+    if (isGeminiHtml()) {
+      const htmlContent = extractHtmlContent();
+      return (
+        <div className="rendered-html-content w-full" dangerouslySetInnerHTML={{ __html: htmlContent }}></div>
       );
     }
     

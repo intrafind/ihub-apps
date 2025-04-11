@@ -12,6 +12,36 @@ import ChatInput from '../components/chat/ChatInput';
 import ChatMessageList from '../components/chat/ChatMessageList';
 import { useUIConfig } from '../components/UIConfigContext';
 
+/**
+ * Save direct chat settings to sessionStorage
+ * @param {string} modelId - The ID of the model
+ * @param {Object} settings - Settings to save
+ */
+const saveDirectChatSettings = (modelId, settings) => {
+  try {
+    const key = `ai_hub_direct_chat_settings_${modelId}`;
+    sessionStorage.setItem(key, JSON.stringify(settings));
+  } catch (error) {
+    console.error('Error saving direct chat settings to sessionStorage:', error);
+  }
+};
+
+/**
+ * Load direct chat settings from sessionStorage
+ * @param {string} modelId - The ID of the model
+ * @returns {Object|null} The saved settings or null if not found
+ */
+const loadDirectChatSettings = (modelId) => {
+  try {
+    const key = `ai_hub_direct_chat_settings_${modelId}`;
+    const saved = sessionStorage.getItem(key);
+    return saved ? JSON.parse(saved) : null;
+  } catch (error) {
+    console.error('Error loading direct chat settings from sessionStorage:', error);
+    return null;
+  }
+};
+
 const DirectChat = () => {
   const { t } = useTranslation();
   const { modelId } = useParams();
@@ -28,6 +58,11 @@ const DirectChat = () => {
   const inputRef = useRef(null);
   const { resetHeaderColor } = useUIConfig();
 
+  // Create a stable chat ID that persists across refreshes
+  const [stableChatId] = useState(() => {
+    return `direct-chat-${selectedModel || modelId || "default"}`;
+  });
+
   // Use our custom chat messages hook
   const {
     messages,
@@ -36,7 +71,7 @@ const DirectChat = () => {
     updateAssistantMessage,
     setMessageError,
     clearMessages
-  } = useChatMessages();
+  } = useChatMessages(stableChatId);
 
   // Fetch model details and models when component mounts
   useEffect(() => {
@@ -87,6 +122,32 @@ const DirectChat = () => {
     
     updateModel();
   }, [selectedModel]);
+
+  // Load settings from sessionStorage when the component mounts or the model changes
+  useEffect(() => {
+    if (!isLoading && selectedModel) {
+      const savedSettings = loadDirectChatSettings(selectedModel);
+      if (savedSettings) {
+        // Restore settings if they exist
+        if (savedSettings.temperature !== undefined) {
+          setTemperature(savedSettings.temperature);
+        }
+        
+        console.log('Restored direct chat settings from sessionStorage:', savedSettings);
+      }
+    }
+  }, [isLoading, selectedModel]);
+  
+  // Save settings to sessionStorage whenever they change
+  useEffect(() => {
+    if (!isLoading && selectedModel) {
+      const settings = {
+        temperature,
+      };
+      
+      saveDirectChatSettings(selectedModel, settings);
+    }
+  }, [isLoading, selectedModel, temperature]);
 
   const handleInputChange = (e) => {
     setCurrentMessage(e.target.value);

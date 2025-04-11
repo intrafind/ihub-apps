@@ -5,7 +5,7 @@
  * - Memory usage limits
  * - Cache statistics
  * - Automated cleanup
- * - Persistent storage (optional)
+ * - Persistent storage (using sessionStorage to be tab-specific)
  */
 class Cache {
   constructor(options = {}) {
@@ -20,6 +20,7 @@ class Cache {
     };
     this.persistenceEnabled = options.persistence !== false;
     this.persistenceKey = options.persistenceKey || 'ai_hub_cache';
+    this.storageType = options.storageType || 'session'; // 'session' or 'local'
     
     // Start cleanup interval (every 5 minutes)
     this.cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
@@ -118,9 +119,9 @@ class Cache {
     // Clear persistent storage if enabled
     if (this.persistenceEnabled) {
       try {
-        localStorage.removeItem(this.persistenceKey);
+        this.getStorageObject().removeItem(this.persistenceKey);
       } catch (error) {
-        console.error('Failed to clear persistent cache storage:', error);
+        console.error(`Failed to clear persistent cache ${this.storageType}Storage:`, error);
       }
     }
   }
@@ -244,7 +245,15 @@ class Cache {
   }
   
   /**
-   * Save cache to localStorage
+   * Get the storage object based on configuration
+   * @private
+   */
+  getStorageObject() {
+    return this.storageType === 'local' ? localStorage : sessionStorage;
+  }
+  
+  /**
+   * Save cache to storage
    * @private
    */
   saveToStorage() {
@@ -270,26 +279,26 @@ class Cache {
           }];
         });
       
-      localStorage.setItem(this.persistenceKey, JSON.stringify(serializable));
+      this.getStorageObject().setItem(this.persistenceKey, JSON.stringify(serializable));
     } catch (error) {
-      console.error('Failed to save cache to localStorage:', error);
+      console.error(`Failed to save cache to ${this.storageType}Storage:`, error);
       // If storage fails, disable persistence to prevent further attempts
       if (error.name === 'QuotaExceededError') {
-        console.warn('localStorage quota exceeded, disabling cache persistence');
+        console.warn(`${this.storageType}Storage quota exceeded, disabling cache persistence`);
         this.persistenceEnabled = false;
       }
     }
   }
   
   /**
-   * Load cache from localStorage
+   * Load cache from storage
    * @private
    */
   loadFromStorage() {
     if (!this.persistenceEnabled) return;
     
     try {
-      const stored = localStorage.getItem(this.persistenceKey);
+      const stored = this.getStorageObject().getItem(this.persistenceKey);
       
       if (stored) {
         const parsed = JSON.parse(stored);
@@ -307,10 +316,10 @@ class Cache {
           });
         }
         
-        console.log(`Loaded ${this.store.size} items from persistent cache`);
+        console.log(`Loaded ${this.store.size} items from persistent cache (${this.storageType}Storage)`);
       }
     } catch (error) {
-      console.error('Failed to load cache from localStorage:', error);
+      console.error(`Failed to load cache from ${this.storageType}Storage:`, error);
     }
   }
   
@@ -365,10 +374,11 @@ export const buildCacheKey = (baseKey, params = {}) => {
   return paramsStr ? `${baseKey}?${paramsStr}` : baseKey;
 };
 
-// Create a singleton cache instance with persistence enabled
+// Create a singleton cache instance with persistence enabled using sessionStorage
 const cache = new Cache({ 
   persistence: true,
-  persistenceKey: 'ai_hub_apps_cache'
+  persistenceKey: 'ai_hub_apps_cache',
+  storageType: 'session'
 });
 
 // Add global access in development for debugging

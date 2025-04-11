@@ -21,4 +21,6 @@ Done
 - be able to setup the order for the apps
 - the app generator
 - eml or mailto generate via prompt tuning
+- session storage for session, cache, chats and settings
+- local storage for favorites
 
