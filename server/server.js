@@ -1004,6 +1004,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
         return res.json({ status: 'error', message: errorMessage });
       }
       
+      console.log(`Using modelId: ${modelId} || ${app.preferredModel}`);
       // Determine which model to use
       const model = models.find(m => m.id === (modelId || app.preferredModel));
       if (!model) {

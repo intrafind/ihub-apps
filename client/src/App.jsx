@@ -7,6 +7,7 @@ import AppChat from './pages/AppChat';
 import DirectChat from './pages/DirectChat';
 import NotFound from './pages/NotFound';
 import MarkdownPage from './pages/MarkdownPage';
+import WidgetPage from './pages/WidgetPage';
 import AppProviders from './components/AppProviders';
 import { withErrorBoundary } from './components/ErrorBoundary';
 import useSessionManagement from './utils/useSessionManagement';
@@ -16,6 +17,7 @@ const SafeAppsList = withErrorBoundary(AppsList);
 const SafeAppChat = withErrorBoundary(AppChat);
 const SafeDirectChat = withErrorBoundary(DirectChat);
 const SafeMarkdownPage = withErrorBoundary(MarkdownPage);
+const SafeWidgetPage = withErrorBoundary(WidgetPage);
 
 function App() {
   // Use the custom hook for session management
@@ -25,6 +27,10 @@ function App() {
     <AppProviders>
       <BrowserRouter>
         <Routes>
+          {/* Widget page should be outside of the regular Layout */}
+          <Route path="/widget/chat" element={<SafeWidgetPage />} />
+          
+          {/* Regular application routes */}
           <Route path="/" element={<Layout />}>
             <Route index element={<SafeAppsList />} />
             <Route path="apps/:appId" element={<SafeAppChat />} />

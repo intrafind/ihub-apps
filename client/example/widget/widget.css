@@ -1,0 +1,93 @@
+.rag-chat-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    transition: all 0.3s ease;
+}
+
+.rag-chat-widget .widget-toggle {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: #007bff;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+.rag-chat-widget .widget-toggle:hover {
+    background-color: #0056b3;
+    transform: scale(1.05);
+}
+
+.rag-chat-widget .widget-iframe-container {
+    display: none;
+    width: 380px;
+    height: 600px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.rag-chat-widget.open .widget-iframe-container {
+    display: block;
+}
+
+.rag-chat-widget .widget-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* Widget mode specific styles */
+.widget-mode {
+    max-width: 100% !important;
+    height: 100% !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+}
+
+.widget-mode .app-container {
+    border-radius: 10px !important;
+    max-height: 100vh !important;
+}
+
+.widget-mode .expert-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 350px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 480px) {
+    .rag-chat-widget {
+        bottom: 10px;
+        right: 10px;
+    }
+
+    .rag-chat-widget .widget-iframe-container {
+        width: calc(100vw - 20px);
+        height: calc(100vh - 80px);
+        position: fixed;
+        bottom: 80px;
+        right: 10px;
+    }
+}

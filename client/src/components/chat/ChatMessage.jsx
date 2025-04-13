@@ -14,7 +14,8 @@ const ChatMessage = ({
   editable = true,
   appId,
   chatId,
-  modelId
+  modelId,
+  compact = false  // New prop to indicate compact mode (for widget or mobile)
 }) => {
   const { t } = useTranslation();
   const isUser = message.role === 'user';
@@ -31,25 +32,6 @@ const ChatMessage = ({
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState(null); // Track active feedback button
-  
-  // Detect if content is Gemini HTML
-  const isGeminiHtml = useCallback(() => {
-    // Check if content starts with ```html and ends with ```
-    return !isUser && 
-           message.content && 
-           message.content.trim().startsWith('```html') && 
-           message.content.trim().endsWith('```');
-  }, [isUser, message.content]);
-
-  // Extract HTML content from Gemini response
-  const extractHtmlContent = useCallback(() => {
-    if (!isGeminiHtml()) return '';
-    
-    // Extract the HTML content between the markdown code fence
-    const content = message.content.trim();
-    const htmlContent = content.substring(8, content.length - 3).trim();
-    return htmlContent;
-  }, [isGeminiHtml, message.content]);
 
   // Configure marked options to properly handle tables and customize code blocks
   useEffect(() => {
@@ -355,19 +337,9 @@ const ChatMessage = ({
     if (isError) {
       return (
         <div className="flex items-center">
-          <svg className="w-5 h-5 mr-1.5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+          <Icon name="exclamation-circle" className="mr-1.5 text-red-500 flex-shrink-0" />
           <span className="break-all">{message.content}</span>
         </div>
-      );
-    }
-    
-    // Check if this is a Gemini HTML response that should be rendered as HTML
-    if (isGeminiHtml()) {
-      const htmlContent = extractHtmlContent();
-      return (
-        <div className="rendered-html-content w-full" dangerouslySetInnerHTML={{ __html: htmlContent }}></div>
       );
     }
     
@@ -386,17 +358,13 @@ const ChatMessage = ({
 
   return (
     <div 
-      className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
+      className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} chat-widget-message ${isUser ? 'user' : 'assistant'}`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
       <div 
-        className={`relative max-w-4xl rounded-lg px-4 py-3 overflow-hidden ${
-          isUser 
-            ? 'bg-indigo-600 text-white' 
-            : isError
-              ? 'bg-red-50 border border-red-200 text-red-700'
-              : 'bg-white border border-gray-200 text-gray-800'
+        className={`chat-widget-message-content ${
+          isError ? 'error' : ''
         }`}
       >
         {renderContent()}
@@ -405,7 +373,7 @@ const ChatMessage = ({
       
       {/* Combined action icons and feedback buttons in a single row */}
       <div className="mt-1 px-1">
-        <div className={`flex items-center gap-3 text-xs transition-opacity duration-200 ${
+        <div className={`flex items-center gap-${compact ? '1' : '3'} text-xs transition-opacity duration-200 ${
           showActions ? 'opacity-100' : 'opacity-0'
         } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}>
           {/* Standard actions first */}
@@ -416,17 +384,13 @@ const ChatMessage = ({
           >
             {copied ? (
               <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>{t('chatMessage.copied')}</span>
+                <Icon name="check" size="sm" />
+                {!compact && <span>{t('chatMessage.copied')}</span>}
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                </svg>
-                <span>{t('chatMessage.copy')}</span>
+                <Icon name="copy" size="sm" />
+                {!compact && <span>{t('chatMessage.copy')}</span>}
               </>
             )}
           </button>
@@ -438,10 +402,8 @@ const ChatMessage = ({
                 className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150" 
                 title={t('chatMessage.editMessage', 'Edit message')}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-                <span>{t('common.edit')}</span>
+                <Icon name="edit" size="sm" />
+                {!compact && <span>{t('common.edit')}</span>}
               </button>
               
               <button 
@@ -449,10 +411,8 @@ const ChatMessage = ({
                 className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150" 
                 title={t('chatMessage.resendMessage', 'Resend message')}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>{t('chatMessage.resend', 'Resend')}</span>
+                <Icon name="refresh" size="sm" />
+                {!compact && <span>{t('chatMessage.resend', 'Resend')}</span>}
               </button>
             </>
           )}
@@ -462,16 +422,14 @@ const ChatMessage = ({
             className="flex items-center gap-1 hover:text-red-500 transition-colors duration-150" 
             title={t('chatMessage.deleteMessage', 'Delete message')}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            <span>{t('common.delete')}</span>
+            <Icon name="trash" size="sm" />
+            {!compact && <span>{t('common.delete')}</span>}
           </button>
           
           {/* Add feedback buttons for AI responses only */}
           {!isUser && !isError && !message.loading && (
             <>
-              <div className="mx-2 h-4 border-l border-gray-300"></div>
+              {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
               <button
                 onClick={() => {
                   setFeedbackRating('positive');
@@ -480,10 +438,13 @@ const ChatMessage = ({
                 className={`p-1 flex items-center gap-1 ${activeFeedback === 'positive' ? 'text-green-600' : 'text-gray-500 hover:text-green-600'} transition-colors duration-150`}
                 title={t('feedback.thumbsUp', 'This response was helpful')}
               >
-                <svg className="w-4 h-4" fill={activeFeedback === 'positive' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905a3.61 3.61 0 01-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-                </svg>
-                <span>{t('feedback.helpful', 'Helpful')}</span>
+                <Icon 
+                  name="thumbs-up" 
+                  size="sm" 
+                  solid={activeFeedback === 'positive'}
+                  className="flex-shrink-0" 
+                />
+                {!compact && <span>{t('feedback.helpful', 'Helpful')}</span>}
               </button>
               <button
                 onClick={() => {
@@ -493,11 +454,13 @@ const ChatMessage = ({
                 className={`p-1 flex items-center gap-1 ${activeFeedback === 'negative' ? 'text-red-600' : 'text-gray-500 hover:text-red-600'} transition-colors duration-150`}
                 title={t('feedback.thumbsDown', 'This response was not helpful')}
               >
-                {/* Fixed thumbs down icon using transform rotate-180 */}
-                <svg className="w-4 h-4 transform rotate-180" fill={activeFeedback === 'negative' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905a3.61 3.61 0 01-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-                </svg>
-                <span>{t('feedback.notHelpful', 'Not helpful')}</span>
+                <Icon 
+                  name="thumbs-down" 
+                  size="sm" 
+                  solid={activeFeedback === 'negative'}
+                  className="flex-shrink-0 transform rotate-180" 
+                />
+                {!compact && <span>{t('feedback.notHelpful', 'Not helpful')}</span>}
               </button>
             </>
           )}

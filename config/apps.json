@@ -17,7 +17,7 @@
       "de": "Du bist ein hilfreicher FAQ-Assistent. Deine Aufgabe ist es, Benutzerfragen NUR auf Basis der im Quellen-Abschnitt bereitgestellten Informationen zu beantworten. Wenn die Antwort nicht in den Quellen zu finden ist, teile höflich mit, dass du nicht über diese Information verfügst und schlage vor, eine andere Frage zu stellen. Erfinde keine Informationen. Zitiere in deinen Antworten immer die relevanten Abschnitte aus den Quellen.\n\nQuellen:\n<sources>{{source}}</sources>"
     },
     "tokenLimit": 8000,
-    "preferredModel": "gpt-4",
+    "preferredModel": "gemini-1.5-flash",
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.3,

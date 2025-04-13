@@ -56,7 +56,13 @@ const DirectChat = () => {
   const [showConfig, setShowConfig] = useState(false);
   const [error, setError] = useState(null);
   const inputRef = useRef(null);
-  const { resetHeaderColor } = useUIConfig();
+  const { resetHeaderColor, uiConfig } = useUIConfig();
+  
+  // Reference to track if greeting has been added
+  const greetingAddedRef = useRef(false);
+  
+  // Get widget config for greeting fallback
+  const widgetConfig = uiConfig?.widget || {};
 
   // Create a stable chat ID that persists across refreshes
   const [stableChatId] = useState(() => {
@@ -148,6 +154,46 @@ const DirectChat = () => {
       saveDirectChatSettings(selectedModel, settings);
     }
   }, [isLoading, selectedModel, temperature]);
+
+  // Display greeting message when model is loaded and no messages exist yet
+  useEffect(() => {
+    // Only add greeting message when model is loaded, messages are empty, and we haven't added it yet
+    if (model && !isLoading && messages.length === 0 && !greetingAddedRef.current) {
+      console.log('[DirectChat] Adding greeting message when model loaded');
+      
+      // Get language for localization
+      const userLanguage = t.language?.split('-')[0].toLowerCase() || 'en';
+      
+      // Try to get model-specific greeting first
+      let greeting = null;
+      
+      // Check if model has its own greeting
+      if (model.greeting) {
+        greeting = typeof model.greeting === 'object' 
+          ? (model.greeting[userLanguage] || model.greeting.en)
+          : model.greeting;
+      }
+      
+      // Fall back to widget greeting if model doesn't have one
+      if (!greeting && widgetConfig.greeting) {
+        greeting = widgetConfig.greeting[userLanguage] || widgetConfig.greeting.en;
+      }
+      
+      // If we have a greeting, display it
+      if (greeting) {
+        // Create a greeting message and immediately mark it as not loading
+        const greetingId = addAssistantMessage();
+        updateAssistantMessage(greetingId, greeting, false);
+        
+        greetingAddedRef.current = true;
+      }
+    }
+    
+    // Reset the greeting flag when chat is cleared
+    if (messages.length === 0) {
+      greetingAddedRef.current = false;
+    }
+  }, [model, isLoading, messages.length, addAssistantMessage, updateAssistantMessage, t.language, widgetConfig]);
 
   const handleInputChange = (e) => {
     setCurrentMessage(e.target.value);

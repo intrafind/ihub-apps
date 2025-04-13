@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Hub Chat Widget Demo</title>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f9fafb;
+      color: #111827;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+    
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      color: rgb(0, 53, 87);
+    }
+    
+    p {
+      font-size: 1.1rem;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    
+    .demo-section {
+      background-color: white;
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      margin-bottom: 30px;
+    }
+    
+    h2 {
+      font-size: 1.5rem;
+      margin-top: 0;
+      margin-bottom: 20px;
+      color: rgb(0, 53, 87);
+    }
+    
+    pre {
+      background-color: #f3f4f6;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin-bottom: 20px;
+    }
+    
+    code {
+      font-family: monospace;
+      font-size: 14px;
+    }
+    
+    .button {
+      display: inline-block;
+      background-color: rgb(0, 53, 87);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 500;
+      margin-right: 10px;
+      cursor: pointer;
+      border: none;
+    }
+    
+    .button:hover {
+      opacity: 0.9;
+    }
+    
+    .button.secondary {
+      background-color: #e5e7eb;
+      color: #111827;
+    }
+  </style>
+  
+  <!-- Include the widget script in the head to ensure it's loaded before buttons are clicked -->
+  <script src="../../src/components/widget/ai-hub-widget.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>AI Hub Chat Widget Demo</h1>
+      <p>This page demonstrates how to integrate the AI Hub Chat Widget into your own website.</p>
+    </header>
+    
+    <div class="demo-section">
+      <h2>Try It Out</h2>
+      <p>Click the button in the bottom right corner to open the chat widget. You can interact with our AI assistant directly from this page.</p>
+      <p>The chat widget can be controlled programmatically:</p>
+      <div>
+        <button class="button" onclick="aiHubWidget.open()">Open Widget</button>
+        <button class="button secondary" onclick="aiHubWidget.close()">Close Widget</button>
+      </div>
+    </div>
+    
+    <div class="demo-section">
+      <h2>Installation</h2>
+      <p>To add the AI Hub Chat Widget to your website, include our script and initialize it with your configuration:</p>
+      <pre><code>&lt;!-- Add this to your HTML head or body --&gt;
+&lt;script src="https://your-domain.com/ai-hub-widget.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  // Initialize the widget once the page is loaded
+  document.addEventListener('DOMContentLoaded', function() {
+    aiHubWidget.init({
+      // Optional: Specify which app to use
+      appId: 'general-assistant',
+      
+      // Optional: Custom branding color
+      primaryColor: 'rgb(0, 53, 87)',
+      
+      // Optional: Widget position ('right' or 'left')
+      position: 'right',
+      
+      // Optional: Language ('en', 'de', etc.)
+      language: 'en'
+    });
+  });
+&lt;/script&gt;</code></pre>
+    </div>
+    
+    <div class="demo-section">
+      <h2>Customization</h2>
+      <p>You can customize the appearance and behavior of the widget through the initialization options:</p>
+      <ul>
+        <li><strong>appId</strong>: Specify which AI app to use (defaults to the system default)</li>
+        <li><strong>serverUrl</strong>: Set a custom server URL (defaults to the current domain)</li>
+        <li><strong>position</strong>: Position of the widget ('right' or 'left')</li>
+        <li><strong>primaryColor</strong>: The main color for the widget</li>
+        <li><strong>language</strong>: The language to use ('en', 'de', etc.)</li>
+      </ul>
+    </div>
+  </div>
+  
+  <!-- Remove the script tag from here since we've moved it to the head -->
+  <script>
+    // Initialize the widget when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+      aiHubWidget.init({
+        serverUrl: window.location.origin,
+        primaryColor: 'rgb(0, 53, 87)',
+        position: 'right',
+        language: 'en'
+      });
+    });
+  </script>
+</body>
+</html>

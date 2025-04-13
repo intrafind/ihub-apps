@@ -176,6 +176,13 @@ const AppChat = () => {
     onConfirmClear: () => window.confirm(t('pages.appChat.confirmClear', 'Are you sure you want to clear the entire chat history?'))
   });
 
+  // Reference to track if greeting has been added
+  const greetingAddedRef = useRef(false);
+  
+  // Get UI config for fallback to widget greeting
+  const { uiConfig } = useUIConfig();
+  const widgetConfig = uiConfig?.widget || {};
+
   const hasVariablesToSend = app?.variables && Object.keys(variables).length > 0;
 
   useEffect(() => {
@@ -331,6 +338,46 @@ const AppChat = () => {
       saveAppSettings(appId, settings);
     }
   }, [app, loading, appId, selectedModel, selectedStyle, selectedOutputFormat, sendChatHistory, temperature, variables]);
+
+  // Display greeting message when app is loaded and no messages exist yet
+  useEffect(() => {
+    // Only add greeting message when app is loaded, messages are empty, and we haven't added it yet
+    if (app && !loading && messages.length === 0 && !greetingAddedRef.current) {
+      console.log('[AppChat] Adding greeting message when app loaded');
+      
+      // Check for language specific greeting
+      const userLanguage = currentLanguage.split('-')[0].toLowerCase();
+      
+      // Try to get app-specific greeting first
+      let greeting = null;
+      
+      // Check if app has its own greeting
+      if (app.greeting) {
+        greeting = typeof app.greeting === 'object' 
+          ? (app.greeting[userLanguage] || app.greeting.en)
+          : app.greeting;
+      }
+      
+      // Fall back to widget greeting if app doesn't have one
+      if (!greeting && widgetConfig.greeting) {
+        greeting = widgetConfig.greeting[userLanguage] || widgetConfig.greeting.en;
+      }
+      
+      // If we have a greeting, display it
+      if (greeting) {
+        // Create a greeting message and immediately mark it as not loading
+        const greetingId = addAssistantMessage();
+        updateAssistantMessage(greetingId, greeting, false);
+        
+        greetingAddedRef.current = true;
+      }
+    }
+    
+    // Reset the greeting flag when chat is cleared
+    if (messages.length === 0) {
+      greetingAddedRef.current = false;
+    }
+  }, [app, loading, messages.length, addAssistantMessage, updateAssistantMessage, currentLanguage, widgetConfig]);
 
   const handleInputChange = (e) => {
     setInput(e.target.value);

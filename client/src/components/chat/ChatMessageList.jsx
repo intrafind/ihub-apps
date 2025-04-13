@@ -14,7 +14,8 @@ const ChatMessageList = ({
   appId,
   chatId,
   modelId,
-  editable = false
+  editable = false,
+  compact = false  // New prop for compact mode
 }) => {
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
@@ -44,6 +45,7 @@ const ChatMessageList = ({
             appId={appId}
             chatId={chatId}
             modelId={modelId}
+            compact={compact}  // Pass the compact prop to each ChatMessage
           />
         ))
       ) : (

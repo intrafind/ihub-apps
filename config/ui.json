@@ -80,6 +80,31 @@
     "version": "1.0",
     "updated": "2023-01-01"
   },
+  "widget": {
+    "defaultApp": "faq-bot",
+    "title": {
+      "en": "AI Hub Chat",
+      "de": "KI-Hub Chat"
+    },
+    "placeholder": {
+      "en": "Ask me anything...",
+      "de": "Frag mich etwas..."
+    },
+    "greeting": {
+      "en": "👋 Hello! How can I help you today?",
+      "de": "👋 Hallo! Wie kann ich Ihnen heute helfen?"
+    },
+    "sendButtonText": {
+      "en": "Send",
+      "de": "Senden"
+    },
+    "style": {
+      "primaryColor": "rgb(0, 53, 87)",
+      "secondaryColor": "#f3f4f6",
+      "fontFamily": "Inter, system-ui, sans-serif",
+      "borderRadius": "8px"
+    }
+  },
   "pages": {
     "privacy": {
       "title": {
