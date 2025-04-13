@@ -54,6 +54,10 @@
   flex-shrink: 0;
   padding: 15px;
   border-top: 1px solid #e0e0e0;
+  position: sticky;
+  bottom: 0;
+  background: white;
+  z-index: 2;
 }
 
 /* Hide the toggle button in the iframe context */
@@ -91,4 +95,20 @@
   display: block;
   height: 16px;
   width: 100%;
+}
+
+/* Fix fullheight issue on mobile devices */
+@media (max-width: 768px) {
+  .widget-page {
+    height: -webkit-fill-available;
+  }
+  
+  .widget-page .chat-widget-panel {
+    height: 100%;
+    max-height: -webkit-fill-available;
+  }
+  
+  .widget-page .chat-widget-messages {
+    max-height: calc(100vh - 120px);
+  }
 }

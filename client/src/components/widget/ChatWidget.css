@@ -69,6 +69,8 @@
   transform: scale(1);
   opacity: 1;
   pointer-events: all;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Header */
@@ -156,7 +158,7 @@
 
 /* Message Bubbles */
 .chat-widget-message {
-  max-width: 85%;
+  /* max-width: 85%; */
   display: flex;
   margin-bottom: 12px;
   position: relative;
@@ -332,6 +334,25 @@ chat-widget-typing-indicator span:nth-child(3) {
     width: calc(100vw - 40px);
     height: 60vh;
     bottom: 75px;
+  }
+
+  .chat-widget-panel.open {
+    height: 80vh; /* Limit height on mobile */
+    bottom: 65px;
+  }
+  
+  .chat-widget-messages {
+    flex: 1;
+    overflow-y: auto;
+    max-height: calc(80vh - 130px); /* Account for header and input area */
+  }
+  
+  .chat-widget-input {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    z-index: 5;
+    border-top: 1px solid #e0e0e0;
   }
 }
 

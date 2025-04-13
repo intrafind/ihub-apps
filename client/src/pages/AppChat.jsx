@@ -733,7 +733,7 @@ const AppChat = () => {
   );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)]">
+    <div className="flex flex-col h-[calc(100vh-12rem)] max-h-[calc(100vh-12rem)] min-h-0 overflow-hidden">
       {/* App Header - using our reusable ChatHeader component */}
       <ChatHeader
         title={app?.name}
@@ -742,8 +742,10 @@ const AppChat = () => {
         icon={appIcon}
         showClearButton={messages.length > 0}
         showConfigButton={true}
+        showParametersButton={app?.variables && app.variables.length > 0 && !showParameters}
         onClearChat={clearChat}
         onToggleConfig={toggleConfig}
+        onToggleParameters={toggleParameters}
         actions={headerActions}
         currentLanguage={currentLanguage}
         isMobile={window.innerWidth < 768}
@@ -802,8 +804,8 @@ const AppChat = () => {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row flex-1 gap-4 overflow-hidden">
-        <div className="flex flex-col flex-1">
+      <div className="flex flex-col md:flex-row flex-1 gap-4 overflow-hidden mx-auto w-full max-w-7xl">
+        <div className={`flex flex-col ${(!app?.variables || app.variables.length === 0) ? 'max-w-6xl mx-auto w-full h-full' : 'flex-1'}`}>
           {/* Chat Messages - using our reusable ChatMessageList component */}
           <ChatMessageList
             messages={messages}

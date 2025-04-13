@@ -13,8 +13,10 @@ const ChatHeader = ({
   icon,
   showClearButton = false,
   showConfigButton = true,
+  showParametersButton = false,
   onClearChat,
   onToggleConfig,
+  onToggleParameters,
   actions = [],
   currentLanguage,
   isMobile = false
@@ -49,13 +51,13 @@ const ChatHeader = ({
 
       {isMobile ? (
         <div className="flex flex-wrap gap-2">
-          {showConfigButton && (
+          {showParametersButton && (
             <button
-              onClick={onToggleConfig}
+              onClick={onToggleParameters}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center text-sm"
             >
-              <Icon name="settings" size="sm" className="mr-1" />
-              {t('settings.title')}
+              <Icon name="sliders" size="sm" className="mr-1" />
+              {t('pages.appChat.parameters', 'Parameters')}
             </button>
           )}
           {showClearButton && (
@@ -68,6 +70,16 @@ const ChatHeader = ({
               {t('pages.appChat.clear')}
             </button>
           )}
+          {showConfigButton && (
+            <button
+              onClick={onToggleConfig}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center text-sm"
+            >
+              <Icon name="settings" size="sm" className="mr-1" />
+              {t('settings.title')}
+            </button>
+          )}
+
           {/* Action buttons for mobile */}
           {actions.length > 0 &&
             actions.map(action => (
@@ -92,6 +104,15 @@ const ChatHeader = ({
             >
               <Icon name="trash" size="md" className="mr-1" />
               {t('pages.appChat.clear')}
+            </button>
+          )}
+          {showParametersButton && (
+            <button
+              onClick={onToggleParameters}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
+            >
+              <Icon name="sliders" size="md" className="mr-1" />
+              {t('pages.appChat.parameters', 'Parameters')}
             </button>
           )}
           {showConfigButton && (

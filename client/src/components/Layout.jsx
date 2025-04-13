@@ -36,23 +36,6 @@ const Layout = () => {
     );
   };
 
-  // Function to render the organization logo
-  const renderLogo = () => {
-    if (uiConfig?.header?.logo?.url) {
-      return (
-        <div className="flex items-center h-full pr-4 mr-4 border-r border-white/20">
-          <img 
-            src={uiConfig.header.logo.url} 
-            alt={getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'Organization Logo'} 
-            className="h-full w-auto"
-            style={{ maxHeight: '100%' }}
-          />
-        </div>
-      );
-    }
-    return null;
-  };
-
   return (
     <div className="flex flex-col min-h-screen">
       <header className="text-white" style={headerColorStyle}>
