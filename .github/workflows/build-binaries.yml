@@ -1,0 +1,235 @@
+name: Build and Release Binaries
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to attach binaries to (e.g., v1.0.0)'
+        required: true
+        default: ''
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            binary_name: ai-hub-apps-linux
+            pkg_target: node16-linux-x64
+          - os: macos-latest
+            platform: macos
+            binary_name: ai-hub-apps-macos
+            pkg_target: node16-macos-x64
+          - os: windows-latest
+            platform: win
+            binary_name: ai-hub-apps-win.exe
+            pkg_target: node16-win-x64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd client && npm ci && cd ..
+          cd server && npm ci && cd ..
+
+      - name: Build client
+        run: |
+          cd client
+          npm run build
+          cd ..
+
+      - name: Prepare build directories
+        run: |
+          mkdir -p dist/public dist/server dist/config
+          cp -r client/dist/* dist/public/
+          cp -r server/*.js dist/server/
+          cp server/*.cjs dist/server/
+          cp -r server/adapters dist/server/
+          cp server/package.json dist/server/
+          cp -r config/* dist/config/
+          cp package.json dist/
+        shell: bash
+
+      - name: Install production dependencies
+        run: |
+          cd dist
+          npm install --production
+          cd server
+          npm install --production
+          cd ../..
+        shell: bash
+
+      - name: Build binary
+        run: |
+          mkdir -p dist-bin
+          npx pkg . --target ${{ matrix.pkg_target }} --output dist-bin/${{ matrix.binary_name }} --options max_old_space_size=4096
+        shell: bash
+
+      - name: Copy assets for binary
+        run: |
+          mkdir -p dist-bin/public dist-bin/config
+          cp -r dist/public/* dist-bin/public/
+          cp -r dist/config/* dist-bin/config/
+          cp config.env dist-bin/
+        shell: bash
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.binary_name }}
+          path: dist-bin/${{ matrix.binary_name }}
+
+      - name: Create platform-specific archive
+        run: |
+          cd dist-bin
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            7z a -tzip ../${{ matrix.binary_name }}.zip .
+          else
+            tar -czf ../${{ matrix.binary_name }}.tar.gz .
+          fi
+          cd ..
+        shell: bash
+
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.binary_name }}-archive
+          path: |
+            ${{ matrix.binary_name }}.tar.gz
+            ${{ matrix.binary_name }}.zip
+
+  release:
+    name: Attach to Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: ./artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R ./artifacts
+        shell: bash
+
+      - name: Get Release
+        id: get_release
+        uses: bruceadams/get-release@v1.3.2
+        if: github.event_name == 'release'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get existing release for manual dispatch
+        id: get_manual_release
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "release_id=$(gh release view ${{ github.event.inputs.release_tag }} --json id -q .id)" >> $GITHUB_OUTPUT
+          echo "upload_url=$(gh release view ${{ github.event.inputs.release_tag }} --json uploadUrl -q .uploadUrl)" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux binary to release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux
+          asset_name: ai-hub-apps-linux
+          asset_content_type: application/octet-stream
+
+      - name: Upload Linux archive to release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux.tar.gz
+          asset_name: ai-hub-apps-linux.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload macOS binary to release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos
+          asset_name: ai-hub-apps-macos
+          asset_content_type: application/octet-stream
+
+      - name: Upload macOS archive to release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos.tar.gz
+          asset_name: ai-hub-apps-macos.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Windows binary to release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe
+          asset_name: ai-hub-apps-win.exe
+          asset_content_type: application/octet-stream
+
+      - name: Upload Windows archive to release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe.zip
+          asset_name: ai-hub-apps-win.exe.zip
+          asset_content_type: application/zip
+
+      # Manual workflow dispatch asset uploads
+      - name: Upload assets for manual workflow
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # Linux binary
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux
+          
+          # Linux archive
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux.tar.gz
+          
+          # macOS binary
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos
+          
+          # macOS archive
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos.tar.gz
+          
+          # Windows binary
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe
+          
+          # Windows archive
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -154,6 +154,22 @@ To run the binary:
 ./dist-bin/ai-hub-apps-win.exe # On Windows
 ```
 
+### Downloading Pre-built Binaries
+
+Pre-built binaries for all platforms are available on the [GitHub Releases](https://github.com/your-username/ai-hub-apps/releases) page. Each release includes:
+
+- **Standalone executables**:
+  - `ai-hub-apps-macos` - for macOS
+  - `ai-hub-apps-linux` - for Linux
+  - `ai-hub-apps-win.exe` - for Windows
+  
+- **Complete packages** (executable + configuration files):
+  - `ai-hub-apps-macos.tar.gz` - macOS package
+  - `ai-hub-apps-linux.tar.gz` - Linux package
+  - `ai-hub-apps-win.exe.zip` - Windows package
+
+For most users, downloading the complete package is recommended as it includes all necessary configuration files and assets.
+
 ## Configuration
 
 ### Server Configuration
