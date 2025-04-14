@@ -32,7 +32,12 @@ echo "Copying configuration files..."
 cp -r config/* dist/config/
 cp package.json dist/
 
-# Step 5: Copy .env file if it exists
+# Step 5: Copy contents files
+echo "Copying contents files..."
+mkdir -p dist/contents
+cp -r contents/* dist/contents/
+
+# Step 6: Copy .env file if it exists
 if [ -f .env ]; then
   echo "Copying .env file..."
   cp .env dist/
@@ -40,7 +45,7 @@ else
   echo "No .env file found, skipping..."
 fi
 
-# Step 6: Install production dependencies
+# Step 7: Install production dependencies
 echo "Installing production dependencies..."
 cd dist
 npm install --production
@@ -50,22 +55,22 @@ cd ../..
 
 echo "Production build completed successfully!"
 
-# Step 7: Create binary with pkg (if requested)
+# Step 8: Create binary with pkg (if requested)
 if [ "$1" == "--binary" ] || [ "$1" == "-b" ]; then
   echo "Creating binary executable..."
   
   # Determine target based on OS
   TARGET=""
   if [ "$2" == "--all" ] || [ "$2" == "-a" ]; then
-    TARGET="node16-macos-x64,node16-linux-x64,node16-win-x64"
+    TARGET="node18-macos-x64,node18-linux-x64,node18-win-x64"
     OUTPUT_NAME="ai-hub-apps"
     echo "Building for all platforms"
   else
     case "$(uname -s)" in
-      Darwin*)  TARGET="node16-macos-x64"; OUTPUT_NAME="ai-hub-apps-darwin" ;;
-      Linux*)   TARGET="node16-linux-x64"; OUTPUT_NAME="ai-hub-apps-linux" ;;
-      MINGW*|MSYS*|CYGWIN*)  TARGET="node16-win-x64"; OUTPUT_NAME="ai-hub-apps-win" ;;
-      *)        TARGET="node16-macos-x64,node16-linux-x64,node16-win-x64"; OUTPUT_NAME="ai-hub-apps" ;;
+      Darwin*)  TARGET="node18-macos-x64"; OUTPUT_NAME="ai-hub-apps-darwin" ;;
+      Linux*)   TARGET="node18-linux-x64"; OUTPUT_NAME="ai-hub-apps-linux" ;;
+      MINGW*|MSYS*|CYGWIN*)  TARGET="node18-win-x64"; OUTPUT_NAME="ai-hub-apps-win" ;;
+      *)        TARGET="node18-macos-x64,node18-linux-x64,node18-win-x64"; OUTPUT_NAME="ai-hub-apps" ;;
     esac
     echo "Building for target: $TARGET"
   fi
@@ -77,9 +82,15 @@ if [ "$1" == "--binary" ] || [ "$1" == "-b" ]; then
   
   # Copy public and config folders next to the binary
   echo "Copying assets for binary..."
-  mkdir -p dist-bin/public dist-bin/config
+  mkdir -p dist-bin/public dist-bin/config dist-bin/contents
   cp -r dist/public/* dist-bin/public/
   cp -r dist/config/* dist-bin/config/
+  
+  # Copy contents directory if it exists
+  if [ -d "dist/contents" ]; then
+    echo "Copying contents directory..."
+    cp -r dist/contents/* dist-bin/contents/
+  fi
   
   # Copy configuration template
   echo "Copying configuration template..."

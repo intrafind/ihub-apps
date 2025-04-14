@@ -7,7 +7,7 @@
     "ai-hub-apps": "./server/pkg-entry.cjs"
   },
   "pkg": {
-    "targets": ["node16-macos-x64", "node16-linux-x64", "node16-win-x64"],
+    "targets": ["node18-macos-x64", "node18-linux-x64", "node18-win-x64"],
     "outputPath": "dist-bin",
     "assets": [
       "dist/public/**/*",
@@ -24,10 +24,11 @@
     "client": "cd client && npm run dev",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "install:all": "npm install && cd client && npm install && cd ../server && npm install",
-    "build": "npm run build:clean && npm run build:client && npm run build:server && npm run build:config",
+    "build": "npm run build:clean && npm run build:client && npm run build:server && npm run build:config && npm run build:contents",
     "build:clean": "rimraf dist",
     "build:client": "cd client && npm run build && mkdir -p ../dist/public && cp -r dist/* ../dist/public/",
-    "build:server": "mkdir -p dist/server && cp -r server/*.js dist/server/ && cp server/package.json dist/server/ && cp -r server/adapters dist/server/",
+    "build:contents": "mkdir -p dist/contents && cp -r contents/* dist/contents/",
+    "build:server": "mkdir -p dist/server && cp -r server/*.js dist/server/ && cp server/*.cjs dist/server/ && cp server/package.json dist/server/ && cp -r server/adapters dist/server/",
     "build:config": "mkdir -p dist/config && cp -r config/* dist/config/ && cp package.json dist/ && npm run build:dotenv",
     "build:dotenv": "[ -f .env ] && cp .env dist/ || echo 'No .env file found, skipping'",
     "build:package": "cd dist && npm install --production && cd server && npm install --production",
@@ -36,9 +37,9 @@
     "prod:build": "npm run build && npm run build:package",
     "prod:deploy": "npm run prod:build && npm run start:prod",
     "build:binary": "npm run prod:build && pkg . --options max_old_space_size=4096 --no-bytecode",
-    "build:binary:macos": "npm run prod:build && pkg . --target node16-macos-x64 --options max_old_space_size=4096 --no-bytecode",
-    "build:binary:linux": "npm run prod:build && pkg . --target node16-linux-x64 --options max_old_space_size=4096 --no-bytecode",
-    "build:binary:windows": "npm run prod:build && pkg . --target node16-win-x64 --options max_old_space_size=4096 --no-bytecode"
+    "build:binary:macos": "npm run prod:build && pkg . --target node18-macos-x64 --options max_old_space_size=4096 --no-bytecode",
+    "build:binary:linux": "npm run prod:build && pkg . --target node18-linux-x64 --options max_old_space_size=4096 --no-bytecode",
+    "build:binary:windows": "npm run prod:build && pkg . --target node18-win-x64 --options max_old_space_size=4096 --no-bytecode"
   },
   "keywords": [
     "ai",
@@ -58,6 +59,6 @@
     "rimraf": "^6.0.1"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=20.0.0"
   }
 }
