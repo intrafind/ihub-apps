@@ -192,5 +192,10 @@
       "analytical": "Provide logical and critical responses, analyzing the topic in depth.",
       "assertive": "Provide confident and strong responses, taking a clear stance."
     }
+  },
+  "disclaimer": {
+    "title": "Disclaimer",
+    "accept": "I Understand",
+    "versionInfo": "Version {{version}}, Last Updated: {{date}}"
   }
 }

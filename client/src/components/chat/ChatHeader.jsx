@@ -28,103 +28,61 @@ const ChatHeader = ({
 
   return (
     <div className="flex flex-col mb-4 pb-4 border-b">
-      <div className="flex items-center mb-3">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center mr-3"
-          style={{ backgroundColor: color }}
-        >
-          {icon || defaultIcon}
+      <div className="flex items-start justify-between">
+        <div className="flex items-start">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center mr-3"
+            style={{ backgroundColor: color }}
+          >
+            {icon || defaultIcon}
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">
+              {typeof title === 'object' 
+                ? getLocalizedContent(title, currentLanguage) 
+                : title}
+            </h1>
+            <p className="text-gray-600 text-sm">
+              {typeof description === 'object'
+                ? getLocalizedContent(description, currentLanguage) 
+                : description}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">
-            {typeof title === 'object' 
-              ? getLocalizedContent(title, currentLanguage) 
-              : title}
-          </h1>
-          <p className="text-gray-600 text-sm">
-            {typeof description === 'object'
-              ? getLocalizedContent(description, currentLanguage) 
-              : description}
-          </p>
-        </div>
-      </div>
 
-      {isMobile ? (
-        <div className="flex flex-wrap gap-2">
-          {showParametersButton && (
-            <button
-              onClick={onToggleParameters}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center text-sm"
-            >
-              <Icon name="sliders" size="sm" className="mr-1" />
-              {t('pages.appChat.parameters', 'Parameters')}
-            </button>
-          )}
-          {showClearButton && (
-            <button
-              onClick={onClearChat}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center text-sm"
-              title={t('pages.appChat.clearChat')}
-            >
-              <Icon name="trash" size="sm" className="mr-1" />
-              {t('pages.appChat.clear')}
-            </button>
-          )}
-          {showConfigButton && (
-            <button
-              onClick={onToggleConfig}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center text-sm"
-            >
-              <Icon name="settings" size="sm" className="mr-1" />
-              {t('settings.title')}
-            </button>
-          )}
-
-          {/* Action buttons for mobile */}
-          {actions.length > 0 &&
-            actions.map(action => (
-              <button
-                key={action.id}
-                onClick={() => action.onClick(action.id)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded flex items-center text-sm"
-              >
-                {typeof action.label === 'object' 
-                  ? getLocalizedContent(action.label, currentLanguage) 
-                  : action.label}
-              </button>
-            ))}
-        </div>
-      ) : (
-        <div className="hidden md:flex space-x-2 ml-auto">
+        {/* Action buttons on the right */}
+        <div className="flex items-center space-x-2">
           {showClearButton && (
             <button
               onClick={onClearChat}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
               title={t('pages.appChat.clearChat')}
             >
-              <Icon name="trash" size="md" className="mr-1" />
-              {t('pages.appChat.clear')}
+              <Icon name="trash" size="sm" className="sm:mr-1" />
+              <span className="hidden sm:inline">{t('pages.appChat.clear')}</span>
             </button>
           )}
           {showParametersButton && (
             <button
               onClick={onToggleParameters}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
+              title={t('pages.appChat.parameters')}
             >
-              <Icon name="sliders" size="md" className="mr-1" />
-              {t('pages.appChat.parameters', 'Parameters')}
+              <Icon name="sliders" size="sm" className="sm:mr-1" />
+              <span className="hidden sm:inline">{t('pages.appChat.parameters', 'Parameters')}</span>
             </button>
           )}
           {showConfigButton && (
             <button
               onClick={onToggleConfig}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
+              title={t('settings.title')}
             >
-              <Icon name="settings" size="md" className="mr-1" />
-              {t('settings.title')}
+              <Icon name="settings" size="sm" className="sm:mr-1" />
+              <span className="hidden sm:inline">{t('settings.title')}</span>
             </button>
           )}
-          {/* Action buttons for desktop */}
+          {/* Action buttons */}
           {actions.length > 0 &&
             actions.map(action => (
               <button
@@ -138,7 +96,7 @@ const ChatHeader = ({
               </button>
             ))}
         </div>
-      )}
+      </div>
     </div>
   );
 };

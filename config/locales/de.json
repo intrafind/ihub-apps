@@ -192,5 +192,10 @@
       "analytical": "Liefere logische und kritische Antworten, die das Thema tiefgehend analysieren.",
       "assertive": "Liefere selbstbewusste und starke Antworten mit einer klaren Position."
     }
+  },
+  "disclaimer": {
+    "title": "Haftungsausschluss",
+    "accept": "Ich verstehe",
+    "versionInfo": "Version {{version}}, Zuletzt aktualisiert: {{date}}"
   }
 }

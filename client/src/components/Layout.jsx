@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useUIConfig } from './UIConfigContext';
 import LanguageSelector from './LanguageSelector';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
+import DisclaimerPopup from './DisclaimerPopup';
 
 const Layout = () => {
   const { t, i18n } = useTranslation();
@@ -37,8 +38,16 @@ const Layout = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="text-white" style={headerColorStyle}>
+    <div className="flex flex-col min-h-screen h-full w-full">
+      {/* Disclaimer Popup */}
+      {uiConfig?.disclaimer && (
+        <DisclaimerPopup 
+          disclaimer={uiConfig.disclaimer} 
+          currentLanguage={currentLanguage} 
+        />
+      )}
+      
+      <header className="text-white sticky top-0 z-10" style={headerColorStyle}>
         <div className="relative flex items-stretch h-16">
           {/* Logo section - positioned absolutely to be flush with left edge */}
           {uiConfig?.header?.logo?.url && (
@@ -97,11 +106,11 @@ const Layout = () => {
         </div>
       </header>
 
-      <main className="flex-grow container mx-auto px-4 py-6">
+      <main className="flex-grow container mx-auto px-4 py-6 overflow-y-auto">
         <Outlet />
       </main>
 
-      <footer className="bg-gray-800 text-white py-8">
+      <footer className="bg-gray-800 text-white py-4">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="mb-4 md:mb-0">
@@ -121,11 +130,7 @@ const Layout = () => {
               ))}
             </div>
           </div>
-          {uiConfig?.disclaimer && (
-            <div className="mt-6 text-sm text-gray-400 border-t border-gray-700 pt-4">
-              <p>{getLocalizedContent(uiConfig.disclaimer.text, currentLanguage)}</p>
-            </div>
-          )}
+          {/* Disclaimer removed from footer - now shown as a popup */}
         </div>
       </footer>
     </div>
