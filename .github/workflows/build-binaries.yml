@@ -33,10 +33,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '16'
           cache: 'npm'
@@ -89,7 +89,7 @@ jobs:
         shell: bash
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.binary_name }}
           path: dist-bin/${{ matrix.binary_name }}
@@ -106,7 +106,7 @@ jobs:
         shell: bash
 
       - name: Upload archive artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.binary_name }}-archive
           path: |
@@ -118,9 +118,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: ./artifacts
 
@@ -128,108 +130,38 @@ jobs:
         run: ls -R ./artifacts
         shell: bash
 
-      - name: Get Release
-        id: get_release
-        uses: bruceadams/get-release@v1.3.2
+      - name: Upload assets to release
+        uses: softprops/action-gh-release@v2
         if: github.event_name == 'release'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Get existing release for manual dispatch
-        id: get_manual_release
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          echo "release_id=$(gh release view ${{ github.event.inputs.release_tag }} --json id -q .id)" >> $GITHUB_OUTPUT
-          echo "upload_url=$(gh release view ${{ github.event.inputs.release_tag }} --json uploadUrl -q .uploadUrl)" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Linux binary to release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux
-          asset_name: ai-hub-apps-linux
-          asset_content_type: application/octet-stream
-
-      - name: Upload Linux archive to release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux.tar.gz
-          asset_name: ai-hub-apps-linux.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload macOS binary to release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos
-          asset_name: ai-hub-apps-macos
-          asset_content_type: application/octet-stream
-
-      - name: Upload macOS archive to release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos.tar.gz
-          asset_name: ai-hub-apps-macos.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload Windows binary to release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe
-          asset_name: ai-hub-apps-win.exe
-          asset_content_type: application/octet-stream
-
-      - name: Upload Windows archive to release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe.zip
-          asset_name: ai-hub-apps-win.exe.zip
-          asset_content_type: application/zip
+          files: |
+            ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux
+            ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux.tar.gz
+            ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos
+            ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos.tar.gz
+            ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe
+            ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe.zip
 
       # Manual workflow dispatch asset uploads
       - name: Upload assets for manual workflow
         if: github.event_name == 'workflow_dispatch'
         run: |
           # Linux binary
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux --clobber
           
           # Linux archive
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux.tar.gz
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux.tar.gz --clobber
           
           # macOS binary
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos --clobber
           
           # macOS archive
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos.tar.gz
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos.tar.gz --clobber
           
           # Windows binary
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe --clobber
           
           # Windows archive
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe.zip
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe.zip --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
