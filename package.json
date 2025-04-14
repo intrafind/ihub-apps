@@ -54,7 +54,7 @@
     "node-fetch": "^3.3.0"
   },
   "devDependencies": {
-    "nodemon": "^2.0.22",
+    "nodemon": "^3.1.9",
     "rimraf": "^5.0.10"
   },
   "engines": {
