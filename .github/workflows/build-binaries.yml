@@ -38,6 +38,13 @@ jobs:
           cd client && npm ci && cd ..
           cd server && npm ci && cd ..
 
+      - name: Install client dependencies with uuid package
+        run: |
+          cd client
+          npm install
+          npm install uuid
+          cd ..
+
       - name: Build client
         run: |
           cd client
@@ -94,7 +101,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
-          cd client && npm ci && cd ..
+          cd client && npm ci && npm install uuid && cd ..
           cd server && npm ci && cd ..
 
       - name: Build client
