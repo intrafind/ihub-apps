@@ -56,18 +56,24 @@ if [ "$1" == "--binary" ] || [ "$1" == "-b" ]; then
   
   # Determine target based on OS
   TARGET=""
-  case "$(uname -s)" in
-    Darwin*)  TARGET="node16-macos-x64" ;;
-    Linux*)   TARGET="node16-linux-x64" ;;
-    MINGW*|MSYS*|CYGWIN*)  TARGET="node16-win-x64" ;;
-    *)        TARGET="node16-macos-x64,node16-linux-x64,node16-win-x64" ;;
-  esac
+  if [ "$2" == "--all" ] || [ "$2" == "-a" ]; then
+    TARGET="node16-macos-x64,node16-linux-x64,node16-win-x64"
+    OUTPUT_NAME="ai-hub-apps"
+    echo "Building for all platforms"
+  else
+    case "$(uname -s)" in
+      Darwin*)  TARGET="node16-macos-x64"; OUTPUT_NAME="ai-hub-apps-darwin" ;;
+      Linux*)   TARGET="node16-linux-x64"; OUTPUT_NAME="ai-hub-apps-linux" ;;
+      MINGW*|MSYS*|CYGWIN*)  TARGET="node16-win-x64"; OUTPUT_NAME="ai-hub-apps-win" ;;
+      *)        TARGET="node16-macos-x64,node16-linux-x64,node16-win-x64"; OUTPUT_NAME="ai-hub-apps" ;;
+    esac
+    echo "Building for target: $TARGET"
+  fi
   
-  echo "Building for target: $TARGET"
   mkdir -p dist-bin
   
   # Run pkg - using the CommonJS entry point
-  npx pkg . --target $TARGET --output dist-bin/ai-hub-apps-$(uname -s | tr '[:upper:]' '[:lower:]') --options max_old_space_size=4096
+  npx pkg . --target $TARGET --output dist-bin/$OUTPUT_NAME --options max_old_space_size=4096
   
   # Copy public and config folders next to the binary
   echo "Copying assets for binary..."
@@ -86,7 +92,7 @@ if [ "$1" == "--binary" ] || [ "$1" == "-b" ]; then
   fi
   
   echo "Binary creation completed successfully!"
-  echo "Your binary is available at: dist-bin/ai-hub-apps-$(uname -s | tr '[:upper:]' '[:lower:]')"
+  echo "Your binary is available at: dist-bin/$OUTPUT_NAME"
 fi
 
 echo "Build process completed!"

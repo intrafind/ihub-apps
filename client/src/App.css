@@ -223,7 +223,6 @@
   .flex-1.overflow-y-auto {
     flex: 1 1 0%;
     min-height: 0;
-    max-height: calc(100vh - 270px);
   }
   
   /* Fix for when the parameters panel is open */

@@ -45,7 +45,7 @@
   background-color: var(--primary-color-hover, var(--primary-color));
 }
 
-/* Chat Panel */
+/* Chat Panel - Updated for better height handling */
 .chat-widget-panel {
   position: absolute;
   bottom: 75px;
@@ -71,7 +71,7 @@
   pointer-events: all;
   display: flex;
   flex-direction: column;
-}
+  }
 
 /* Header */
 .chat-widget-header {
@@ -119,9 +119,10 @@
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Messages Container */
+/* Messages Container - Improved flex behavior */
 .chat-widget-messages {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0; /* Critical for Firefox flex container */
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
@@ -247,14 +248,16 @@ chat-widget-typing-indicator span:nth-child(3) {
   }
 }
 
-/* Input Area */
+/* Input Area - Ensure it stays at bottom */
 .chat-widget-input {
+  flex: 0 0 auto;
   padding: 12px;
   display: flex;
   gap: 8px;
   border-top: 1px solid #e5e7eb;
   background-color: white;
   z-index: 1;
+  margin-top: auto; /* Push to bottom if content is short */
 }
 
 .chat-widget-input textarea {
@@ -339,12 +342,14 @@ chat-widget-typing-indicator span:nth-child(3) {
   .chat-widget-panel.open {
     height: 80vh; /* Limit height on mobile */
     bottom: 65px;
+    display: flex;
+    flex-direction: column;
   }
   
   .chat-widget-messages {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
-    max-height: calc(80vh - 130px); /* Account for header and input area */
   }
   
   .chat-widget-input {
@@ -353,6 +358,7 @@ chat-widget-typing-indicator span:nth-child(3) {
     background: white;
     z-index: 5;
     border-top: 1px solid #e0e0e0;
+    flex: 0 0 auto;
   }
 }
 
@@ -389,4 +395,95 @@ chat-widget-typing-indicator span:nth-child(3) {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Add specific styles for iframe mode */
+.chat-widget-container.iframe-mode {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.chat-widget-panel.iframe-mode {
+  position: relative !important;
+  height: 100% !important;
+  width: 100% !important;
+  max-height: none !important;
+  bottom: auto !important;
+  right: auto !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+.chat-widget-container.iframe-mode .chat-widget-messages {
+  flex: 1 1 auto !important;
+  min-height: 0 !important; /* Crucial for Firefox */
+  height: 100% !important;
+  max-height: unset !important;
+  overflow-y: auto !important;
+}
+
+.chat-widget-container.iframe-mode .chat-widget-header {
+  flex: 0 0 auto !important;
+}
+
+.chat-widget-container.iframe-mode .chat-widget-input {
+  flex: 0 0 auto !important;
+  margin-top: auto !important;
+  position: relative !important;
+  bottom: 0 !important;
+}
+
+/* Add specific styles for iframe mode using 100vh instead of flex */
+.chat-widget-container.iframe-mode {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100vh !important;
+  display: block !important; /* Remove flexbox */
+}
+
+.chat-widget-panel.iframe-mode {
+  position: relative !important;
+  height: 100vh !important;
+  width: 100% !important;
+  max-height: none !important;
+  bottom: auto !important;
+  right: auto !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+.chat-widget-container.iframe-mode .chat-widget-messages {
+  height: calc(100vh - 130px) !important; /* Fixed height calculation for message area */
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+
+.chat-widget-container.iframe-mode .chat-widget-header {
+  position: relative !important;
+}
+
+.chat-widget-container.iframe-mode .chat-widget-input {
+  position: relative !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  background: white;
 }

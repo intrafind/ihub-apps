@@ -28,6 +28,12 @@ const WidgetPage = () => {
     if (primaryColor) {
       document.documentElement.style.setProperty('--primary-color', decodeURIComponent(primaryColor));
     }
+    
+    // Make sure the html and body elements take full height
+    document.documentElement.style.height = '100%';
+    document.body.style.height = '100%';
+    document.body.style.margin = '0';
+    document.body.style.overflow = 'hidden';
   }, [primaryColor]);
   
   // Debugging helper
@@ -89,7 +95,7 @@ const WidgetPage = () => {
   };
   
   return (
-    <div className={`widget-page ${isOpen ? 'open' : 'closed'}`}>
+    <div className={`widget-page ${isOpen ? 'open' : 'closed'}`} style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <ChatWidget 
         forcedOpen={isOpen} 
         onClose={handleClose} 
@@ -98,6 +104,7 @@ const WidgetPage = () => {
         autoOpenTrigger={autoOpenTrigger}
         triggerOffset={triggerOffset}
         position={position}
+        isIframe={true}
       />
     </div>
   );

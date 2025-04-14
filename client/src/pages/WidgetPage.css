@@ -6,56 +6,59 @@
   padding: 0;
   margin: 0;
   background: white;
-  display: flex;
-  flex-direction: column;
+}
+
+/* Force full height to all elements */
+html, body, #root, .widget-page {
+  height: 100% !important;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 /* Make sure the widget takes up the full available space */
 .widget-page .chat-widget-container {
-  position: relative !important;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
   width: 100% !important;
-  height: 100% !important;
-  display: flex !important;
-  flex-direction: column !important;
-  opacity: 1 !important;
+  height: 100vh !important;
   margin: 0 !important;
 }
 
 /* No need for positioning in iframe context */
 .widget-page .chat-widget-panel {
   position: relative !important;
-  bottom: auto;
-  right: auto;
-  left: auto;
-  width: 100%;
-  height: 100%;
-  display: flex !important;
-  flex-direction: column !important;
-  max-height: 100vh;
-  box-shadow: none;
-  border-radius: 0;
+  bottom: auto !important;
+  right: auto !important;
+  left: auto !important;
+  width: 100% !important;
+  height: 100vh !important;
+  max-height: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
   transform: none !important;
   opacity: 1 !important;
 }
 
-/* Messages container should scroll properly */
+/* Messages container should scroll properly - using a fixed height calculation approach */
 .widget-page .chat-widget-messages {
-  flex: 1 !important;
+  height: calc(100vh - 130px) !important; /* Subtract header + input heights */
+  min-height: 0 !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
 }
 
 /* Input area should stay at the bottom */
 .widget-page .chat-widget-input {
-  flex-shrink: 0;
+  position: absolute !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
   padding: 15px;
   border-top: 1px solid #e0e0e0;
-  position: sticky;
-  bottom: 0;
   background: white;
   z-index: 2;
 }
@@ -67,7 +70,7 @@
 
 /* Ensure widget is visible regardless of trigger settings when in iframe */
 .widget-page .chat-widget-container.hidden {
-  display: flex !important;
+  display: block !important;
   opacity: 1 !important;
 }
 
@@ -79,8 +82,8 @@
   padding: 12px 16px;
   background-color: var(--primary-color, rgb(0, 53, 87));
   color: white;
-  flex-shrink: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative !important; 
 }
 
 .widget-page .chat-widget-header h3 {
@@ -89,26 +92,20 @@
   font-weight: 600;
 }
 
-/* Add visual indicator for scrolling capability */
-.widget-page .chat-widget-messages::after {
-  content: '';
-  display: block;
-  height: 16px;
-  width: 100%;
-}
-
 /* Fix fullheight issue on mobile devices */
 @media (max-width: 768px) {
   .widget-page {
+    height: 100vh;
     height: -webkit-fill-available;
   }
   
   .widget-page .chat-widget-panel {
-    height: 100%;
-    max-height: -webkit-fill-available;
+    height: 100vh;
+    height: -webkit-fill-available;
   }
   
   .widget-page .chat-widget-messages {
-    max-height: calc(100vh - 120px);
+    height: calc(100vh - 130px) !important;
+    height: calc(-webkit-fill-available - 130px) !important;
   }
 }

@@ -21,7 +21,8 @@ const ChatWidget = ({
   triggerElement,
   autoOpenTrigger,
   triggerOffset = 300,
-  position = 'right'
+  position = 'right',
+  isIframe = false
 }) => {
   const { uiConfig, isLoading } = useUIConfig();
   const [isOpen, setIsOpen] = useState(false);
@@ -337,31 +338,57 @@ const ChatWidget = ({
   };
 
   return (
-    <div className={`chat-widget-container ${!isVisible ? 'hidden' : ''}`} style={{
-      '--primary-color': widgetConfig?.style?.primaryColor || 'rgb(0, 53, 87)',
-      '--secondary-color': widgetConfig?.style?.secondaryColor || '#f3f4f6',
-      '--font-family': widgetConfig?.style?.fontFamily || 'Inter, system-ui, sans-serif',
-      '--border-radius': widgetConfig?.style?.borderRadius || '8px'
-    }}>
-      {/* Toggle button */}
-      <button 
-        className="chat-widget-toggle"
-        onClick={toggleWidget}
-        aria-label={isOpen ? "Close chat" : "Open chat"}
-      >
-        {isOpen ? (
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        ) : (
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M21 11.5C21 16.1944 16.9706 20 12 20C11.5 20 10.0318 19.8754 9 19.5C8.85394 19.4613 8.70414 19.4554 8.55456 19.483C8.40498 19.5107 8.26444 19.5712 8.15 19.66C7.45 20.2 5.25 22 3.5 22C3.5 22 5.5 19 4.5 16C3.2 14.8 2 13 2 11.5C2 6.80558 6.02944 3 11 3H13C17.9706 3 21 6.80558 21 11.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        )}
-      </button>
+    <div className={`chat-widget-container ${!isVisible ? 'hidden' : ''} ${isIframe ? 'iframe-mode' : ''}`} 
+      style={{
+        '--primary-color': widgetConfig?.style?.primaryColor || 'rgb(0, 53, 87)',
+        '--secondary-color': widgetConfig?.style?.secondaryColor || '#f3f4f6',
+        '--font-family': widgetConfig?.style?.fontFamily || 'Inter, system-ui, sans-serif',
+        '--border-radius': widgetConfig?.style?.borderRadius || '8px',
+        ...(isIframe && {
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: '100vh',
+          display: 'block', // Remove flexbox
+        })
+      }}
+      ref={containerRef}
+    >
+      {/* Toggle button - hide in iframe mode */}
+      {!isIframe && (
+        <button 
+          className="chat-widget-toggle"
+          onClick={toggleWidget}
+          aria-label={isOpen ? "Close chat" : "Open chat"}
+        >
+          {isOpen ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21 11.5C21 16.1944 16.9706 20 12 20C11.5 20 10.0318 19.8754 9 19.5C8.85394 19.4613 8.70414 19.4554 8.55456 19.483C8.40498 19.5107 8.26444 19.5712 8.15 19.66C7.45 20.2 5.25 22 3.5 22C3.5 22 5.5 19 4.5 16C3.2 14.8 2 13 2 11.5C2 6.80558 6.02944 3 11 3H13C17.9706 3 21 6.80558 21 11.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+        </button>
+      )}
       
-      {/* Widget panel */}
-      <div className={`chat-widget-panel ${isOpen ? 'open' : ''}`}>
+      {/* Widget panel - apply special styles for iframe mode */}
+      <div 
+        className={`chat-widget-panel ${isOpen ? 'open' : ''} ${isIframe ? 'iframe-mode' : ''}`}
+        style={isIframe ? {
+          position: 'relative',
+          height: '100vh',
+          width: '100%',
+          maxHeight: 'none',
+          bottom: 'auto',
+          right: 'auto',
+          boxShadow: 'none',
+          borderRadius: '0',
+        } : {}}
+      >
         {/* Header */}
         <div className="chat-widget-header">
           <div className="chat-widget-header-left">
@@ -380,8 +407,15 @@ const ChatWidget = ({
           </div>
         </div>
         
-        {/* Messages container - using existing ChatMessageList but with compact mode */}
-        <div className="chat-widget-messages">
+        {/* Messages container with improved styling for iframe mode */}
+        <div 
+          className="chat-widget-messages"
+          style={isIframe ? {
+            height: 'calc(100vh - 130px)',
+            minHeight: '0',
+            overflowY: 'auto',
+          } : {}}
+        >
           {isLoading ? (
             <div className="flex justify-center items-center h-full">
               <div className="loading-spinner"></div>
@@ -412,8 +446,17 @@ const ChatWidget = ({
           <div ref={messagesEndRef} />
         </div>
         
-        {/* Custom input area for the widget */}
-        <div className="chat-widget-input">
+        {/* Custom input area with improved styling for iframe mode */}
+        <div 
+          className="chat-widget-input"
+          style={isIframe ? {
+            position: 'absolute',
+            bottom: '0',
+            left: '0',
+            right: '0',
+            background: 'white',
+          } : {}}
+        >
           <textarea
             value={input}
             onChange={handleInputChange}

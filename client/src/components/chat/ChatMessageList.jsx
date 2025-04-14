@@ -30,7 +30,7 @@ const ChatMessageList = ({
   return (
     <div
       ref={chatContainerRef}
-      className="flex-1 overflow-y-auto mb-4 space-y-4 p-4 bg-gray-50 rounded-lg max-h-[calc(100vh-240px)] md:max-h-none"
+      className="flex-1 overflow-y-auto mb-4 space-y-4 p-4 bg-gray-50 rounded-lg md:max-h-none"
     >
       {messages.length > 0 ? (
         messages.map((message) => (
