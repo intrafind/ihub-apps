@@ -1,0 +1,98 @@
+
+{
+  "id": "email-composer",
+  "order": 5,
+  "name": {
+    "en": "Email Composer",
+    "de": "E-Mail-Verfasser"
+  },
+  "description": {
+    "en": "Draft professional emails with the right tone and structure",
+    "de": "Erstelle professionelle E-Mails mit dem richtigen Ton und der richtigen Struktur"
+  },
+  "color": "#2563EB",
+  "icon": "mail",
+  "system": {
+    "en": "You are an email writing assistant. Help users write professional, clear, and effective emails for various business and personal contexts. Ensure the tone is appropriate for the intended audience.",
+    "de": "Du bist ein Assistent für das Schreiben von E-Mails. Hilf Nutzern, professionelle, klare und effektive E-Mails für verschiedene geschäftliche und persönliche Kontexte zu verfassen. Stelle sicher, dass der Ton für die Zielgruppe geeignet ist."
+  },
+  "tokenLimit": 4000,
+  "preferredModel": "gpt-4",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "professional",
+  "preferredTemperature": 0.6,
+  "sendChatHistory": false,
+  "prompt": {
+    "en": "Write a {{type}} email to {{recipient}} regarding {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}",
+    "de": "Schreibe eine {{type}} E-Mail an {{recipient}} bezüglich {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}"
+  },
+  "variables": [
+    {
+      "name": "type",
+      "label": {
+        "en": "Email Type",
+        "de": "E-Mail-Typ"
+      },
+      "type": "string",
+      "defaultValue": {
+        "en": "professional",
+        "de": "professionell"
+      },
+      "required": true,
+      "predefinedValues": [
+        {"label": {"en": "Professional", "de": "Professionell"}, "value": "professional"},
+        {"label": {"en": "Follow-up", "de": "Nachverfolgung"}, "value": "follow-up"},
+        {"label": {"en": "Request", "de": "Anfrage"}, "value": "request"},
+        {"label": {"en": "Thank you", "de": "Danke"}, "value": "thank you"},
+        {"label": {"en": "Introduction", "de": "Einführung"}, "value": "introduction"},
+        {"label": {"en": "Complaint", "de": "Beschwerde"}, "value": "complaint resolution"},
+        {"label": {"en": "Application", "de": "Bewerbung"}, "value": "job application"}
+      ]
+    },
+    {
+      "name": "recipient",
+      "label": {
+        "en": "Recipient",
+        "de": "Empfänger"
+      },
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "subject",
+      "label": {
+        "en": "Subject",
+        "de": "Betreff"
+      },
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "tone",
+      "label": {
+        "en": "Tone",
+        "de": "Ton"
+      },
+      "type": "string",
+      "defaultValue": {
+        "en": "Use a professional tone.",
+        "de": "Verwende einen professionellen Ton."
+      },
+      "predefinedValues": [
+        {"label": {"en": "Professional", "de": "Professionell"}, "value": "Use a professional tone."},
+        {"label": {"en": "Friendly", "de": "Freundlich"}, "value": "Use a friendly and approachable tone."},
+        {"label": {"en": "Formal", "de": "Formell"}, "value": "Use a formal tone."},
+        {"label": {"en": "Casual", "de": "Lässig"}, "value": "Use a casual tone."},
+        {"label": {"en": "Assertive", "de": "Bestimmend"}, "value": "Use an assertive and confident tone."}
+      ]
+    },
+    {
+      "name": "additional_instructions",
+      "label": {
+        "en": "Additional Instructions",
+        "de": "Zusätzliche Anweisungen"
+      },
+      "type": "text"
+    }
+  ]
+}

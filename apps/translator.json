@@ -1,0 +1,56 @@
+
+{
+  "id": "translator",
+  "order": 3,
+  "name": {
+    "en": "Translator",
+    "de": "Übersetzer"
+  },
+  "description": {
+    "en": "Translate text between different languages",
+    "de": "Text zwischen verschiedenen Sprachen übersetzen"
+  },
+  "color": "#0EA5E9",
+  "icon": "globe",
+  "system": {
+    "en": "You are a helpful translation assistant. Translate the text to the requested language, maintaining the original meaning and tone. If no language is specified, ask which language to translate to.",
+    "de": "Du bist ein hilfreicher Übersetzungsassistent. Übersetze den Text in die angeforderte Sprache und behalte die ursprüngliche Bedeutung und den Ton bei. Wenn keine Sprache angegeben ist, frage nach, in welche Sprache übersetzt werden soll."
+  },
+  "tokenLimit": 4000,
+  "preferredModel": "gemini-1.5-flash",
+  "preferredOutputFormat": "text",
+  "preferredStyle": "keep",
+  "preferredTemperature": 0.3,
+  "sendChatHistory": false,
+  "prompt": {
+    "en": "Selected Language: \"{{language}}\" - Text to translate: \"{{content}}\"",
+    "de": "Ausgewählte Sprache in die Übersetzt werden soll: \"{{language}}\" - Text der übersetzt werden soll: \"{{content}}\""
+  },
+  "variables": [
+    {
+      "name": "language",
+      "label": {
+        "en": "Target Language",
+        "de": "Zielsprache"
+      },
+      "type": "string",
+      "description": {
+        "en": "Select the target language for translation.",
+        "de": "Wähle die Zielsprache für die Übersetzung."
+      },
+      "defaultValue": {
+        "en": "English",
+        "de": "Englisch"
+      },
+      "required": true,
+      "predefinedValues": [
+        {"label": {"en": "English", "de": "Englisch"}, "value": "English"},
+        {"label": {"en": "Spanish", "de": "Spanisch"}, "value": "Spanish"},
+        {"label": {"en": "French", "de": "Französisch"}, "value": "French"},
+        {"label": {"en": "German", "de": "Deutsch"}, "value": "German"},
+        {"label": {"en": "Chinese", "de": "Chinesisch"}, "value": "Chinese"},
+        {"label": {"en": "Japanese", "de": "Japanisch"}, "value": "Japanese"}
+      ]
+    }
+  ]
+}

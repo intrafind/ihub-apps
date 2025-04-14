@@ -1,0 +1,37 @@
+{
+  "id": "custom",
+  "name": {
+    "en": "Custom Prompt",
+    "de": "Benutzerdefinierte Eingabeaufforderung"
+  },
+  "description": {
+    "en": "Create your own custom prompts",
+    "de": "Erstelle eigene benutzerdefinierte Eingabeaufforderungen"
+  },
+  "color": "#EC4899",
+  "icon": "sparkles",
+  "system": {
+    "en": "{{system}}",
+    "de": "{{system}}"
+  },
+  "tokenLimit": 8000,
+  "preferredModel": "gpt-4",
+  "preferredStyle": "normal",
+  "preferredOutputFormat": "markdown",
+  "preferredTemperature": 0.8,
+  "sendChatHistory": false,
+  "prompt": {
+    "en": "{{content}}",
+    "de": "{{content}}"
+  },
+  "variables": [
+    {
+      "name": "system",
+      "label": {
+        "en": "System Prompt",
+        "de": "Systemaufforderung"
+      },
+      "type": "text"
+    }
+  ]
+}

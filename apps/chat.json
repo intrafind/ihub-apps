@@ -1,0 +1,25 @@
+
+{
+  "id": "chat",
+  "order": 2,
+  "name": {
+    "en": "AI Chat",
+    "de": "KI-Chat"
+  },
+  "description": {
+    "en": "General purpose AI chatbot assistant",
+    "de": "Allzweck KI-Chatbot-Assistent"
+  },
+  "color": "#4F46E5",
+  "icon": "chat-bubbles",
+  "system": {
+    "en": "You are a helpful AI assistant. Answer the user's questions accurately and concisely.",
+    "de": "Du bist ein hilfreicher KI-Assistent. Beantworte die Fragen des Nutzers präzise und knapp."
+  },
+  "tokenLimit": 4096,
+  "preferredModel": "gpt-3.5-turbo",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "normal",
+  "preferredTemperature": 0.7,
+  "sendChatHistory": true
+}
