@@ -8,9 +8,7 @@ import { getFavoriteApps, isAppFavorite, toggleFavoriteApp } from '../utils/favo
 import { useUIConfig } from '../components/UIConfigContext';
 import Icon from '../components/Icon';
 
-const INITIAL_DISPLAY_COUNT = 9; // Number of apps to show initially
-const LOAD_MORE_COUNT = 6; // Number of apps to load each time "Load more" is clicked
-
+// Instead of fixed values, we'll calculate based on viewport
 const AppsList = () => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -23,8 +21,55 @@ const AppsList = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [categories, setCategories] = useState([]);
   const [favoriteApps, setFavoriteApps] = useState([]);
-  const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY_COUNT);
+  const [displayCount, setDisplayCount] = useState(0);
   const [translationsLoaded, setTranslationsLoaded] = useState(false);
+  
+  const gridRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // Calculate how many apps can fit in the viewport
+  const calculateVisibleAppCount = useCallback(() => {
+    if (!gridRef.current || !containerRef.current) return 9; // Default fallback
+    
+    const gridRect = gridRef.current.getBoundingClientRect();
+    const containerRect = containerRef.current.getBoundingClientRect();
+    
+    // Calculate available height for the grid
+    // Consider the top part of the page and some padding for the load more button
+    const headerHeight = gridRect.top - containerRect.top;
+    const availableHeight = window.innerHeight - headerHeight - 120; // 120px for load more button and padding
+    
+    // Approximate height of each app card (you may need to adjust this)
+    const appCardHeight = 250; // Typical height in pixels including margins
+    
+    // Calculate visible rows based on available height
+    const visibleRows = Math.max(1, Math.floor(availableHeight / appCardHeight));
+    
+    // Calculate columns based on screen width (matches the grid-cols classes)
+    let columns = 1;
+    if (window.innerWidth >= 1024) columns = 3; // lg breakpoint
+    else if (window.innerWidth >= 640) columns = 2; // sm breakpoint
+    
+    return visibleRows * columns;
+  }, []);
+
+  // Update display count when window is resized
+  useEffect(() => {
+    const handleResize = () => {
+      const visibleCount = calculateVisibleAppCount();
+      setDisplayCount(visibleCount);
+    };
+    
+    // Calculate initial count
+    handleResize();
+    
+    // Add resize listener
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [calculateVisibleAppCount]);
 
   // Load apps only once on mount and when language changes
   useEffect(() => {
@@ -71,6 +116,10 @@ const AppsList = () => {
           setCategories(uniqueCategories);
           setFavoriteApps(favorites);
           setError(null);
+          
+          // Calculate visible app count after data is loaded
+          const visibleCount = calculateVisibleAppCount();
+          setDisplayCount(visibleCount);
         }
       } catch (err) {
         console.error('Error loading apps:', err);
@@ -91,12 +140,13 @@ const AppsList = () => {
     return () => {
       isMounted = false;
     };
-  }, [currentLanguage]); // Only depend on language changes, not t function
+  }, [currentLanguage, calculateVisibleAppCount]); // Added calculateVisibleAppCount as dependency
 
   // Reset display count when search or category changes
   useEffect(() => {
-    setDisplayCount(INITIAL_DISPLAY_COUNT);
-  }, [searchTerm, selectedCategory]);
+    const visibleCount = calculateVisibleAppCount();
+    setDisplayCount(visibleCount);
+  }, [searchTerm, selectedCategory, calculateVisibleAppCount]);
 
   // Language change handler to ensure proper UI updates
   // Only re-render on actual language changes, not on every render
@@ -145,8 +195,10 @@ const AppsList = () => {
 
   // Load more apps handler
   const handleLoadMore = useCallback(() => {
-    setDisplayCount(prev => prev + LOAD_MORE_COUNT);
-  }, []);
+    // Increase by another viewport's worth of apps
+    const increment = calculateVisibleAppCount();
+    setDisplayCount(prev => prev + increment);
+  }, [calculateVisibleAppCount]);
 
   // Memoized filtered apps to avoid recomputing on every render
   const filteredApps = useMemo(() => {
@@ -257,16 +309,17 @@ const AppsList = () => {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="text-center mb-8">
+    <div ref={containerRef} className="container mx-auto py-8 px-4 flex flex-col h-full">
+      <div className="text-center mb-4">
         <h1 className="text-3xl font-bold mb-2">{t('pages.appsList.title')}</h1>
         <p className="text-gray-600">{t('pages.appsList.subtitle')}</p>
       </div>
       
-      <div className="flex flex-col md:flex-row justify-center mb-6 gap-4 max-w-3xl mx-auto">
-        <div className="w-full md:w-1/2 lg:w-3/5">
+      {/* Responsive search container - full width on mobile, 1/3 width on larger screens */}
+      <div className="flex flex-col gap-6 mb-4 mx-auto w-full sm:w-2/3 lg:w-1/3">
+        <div className="w-full">
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
               <Icon name="search" className="text-gray-400" />
             </div>
             <input
@@ -274,27 +327,27 @@ const AppsList = () => {
               placeholder={t('pages.appsList.searchPlaceholder')}
               value={searchTerm}
               onChange={handleSearchChange}
-              className="w-full pl-10 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
             {searchTerm && (
               <button
                 onClick={clearSearch}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
                 aria-label="Clear search"
               >
-                <Icon name="x" />
+                <Icon name="x" className="w-5 h-5" />
               </button>
             )}
           </div>
         </div>
         
         {categories.length > 0 && (
-          <div className="w-full md:w-1/2 lg:w-2/5">
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('pages.appsList.categories')}</label>
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('pages.appsList.categories')}</label>
             <select
               value={selectedCategory}
               onChange={(e) => handleCategoryChange(e.target.value)}
-              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             >
               <option value="all">{t('pages.appsList.allCategories')}</option>
               {categories.map(category => (
@@ -324,7 +377,12 @@ const AppsList = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" role="list" aria-label="Apps list">
+          <div 
+            ref={gridRef} 
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" 
+            role="list" 
+            aria-label="Apps list"
+          >
             {displayedApps.map(app => (
               <div
                 key={app.id}
@@ -356,7 +414,7 @@ const AppsList = () => {
                       <Icon name={app.icon || 'lightning-bolt'} size="xl" className="text-white" />
                     </div>
                   </div>
-                  <div className="p-4 h-[calc(100%-6rem)] flex flex-col">
+                  <div className="px-4 p-2 h-[calc(100%-6rem)] flex flex-col">
                     <h3 className="font-bold text-lg mb-1 break-words">
                       {getLocalizedContent(app.name, currentLanguage) || app.id}
                       {favoriteApps.includes(app.id) && (
@@ -381,7 +439,7 @@ const AppsList = () => {
           
           {/* Load More Button */}
           {hasMoreApps && (
-            <div className="text-center mt-8">
+            <div className="text-center mt-6">
               <button
                 onClick={handleLoadMore}
                 className="bg-white hover:bg-gray-50 text-indigo-600 font-medium py-2 px-4 border border-indigo-500 rounded shadow-sm transition-colors"

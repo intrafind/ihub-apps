@@ -48,7 +48,9 @@
       "favorite": "Add to favorites",
       "unfavorite": "Remove from favorites",
       "favorites": "Favorites",
-      "clearFilters": "Clear filters"
+      "clearFilters": "Clear filters",
+      "loadMore": "Load More",
+      "showingCountOfTotal": "Showing {{displayed}} of {{total}} apps"
     },
     "appChat": {
       "messagePlaceholder": "Type your message here...",

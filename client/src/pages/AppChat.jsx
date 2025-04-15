@@ -733,7 +733,7 @@ const AppChat = () => {
   );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] max-h-[calc(100vh-12rem)] min-h-0 overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-9rem)] max-h-[calc(100vh-9rem)] min-h-0 overflow-hidden pt-8">
       {/* App Header - using our reusable ChatHeader component */}
       <ChatHeader
         title={app?.name}

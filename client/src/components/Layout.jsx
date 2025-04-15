@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useUIConfig } from './UIConfigContext';
 import LanguageSelector from './LanguageSelector';
@@ -11,10 +11,20 @@ const Layout = () => {
   const currentLanguage = i18n.language;
   const { headerColor, uiConfig } = useUIConfig();
   const location = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Check if we're viewing an app page to hide footer links
+  const isAppPage = useMemo(() => {
+    return location.pathname.startsWith('/apps/');
+  }, [location.pathname]);
 
   const headerColorStyle = {
     backgroundColor: headerColor || '#4f46e5',
     transition: 'background-color 0.3s ease'
+  };
+
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
   };
 
   // Function to render the header logo
@@ -85,7 +95,11 @@ const Layout = () => {
 
             <div className="flex items-center space-x-4">
               <LanguageSelector />
-              <button className="md:hidden text-white">
+              <button 
+                className="md:hidden text-white" 
+                onClick={toggleMobileMenu}
+                aria-label="Toggle menu"
+              >
                 <svg 
                   className="w-6 h-6" 
                   fill="none" 
@@ -104,9 +118,29 @@ const Layout = () => {
             </div>
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden bg-indigo-800 shadow-lg" style={headerColorStyle}>
+            <nav className="container mx-auto px-4 py-3 flex flex-col">
+              {uiConfig?.header?.links && uiConfig.header.links.map((link, index) => (
+                <Link 
+                  key={index}
+                  to={link.url} 
+                  className={`block py-2 ${location.pathname === link.url ? 'font-medium' : ''}`}
+                  target={link.url.startsWith('http') ? '_blank' : undefined}
+                  rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {getLocalizedContent(link.name, currentLanguage)}
+                </Link>
+              ))}
+            </nav>
+          </div>
+        )}
       </header>
 
-      <main className="flex-grow container mx-auto px-4 py-6 overflow-y-auto">
+      <main className="flex-grow container mx-auto px-4 overflow-y-auto">
         <Outlet />
       </main>
 
@@ -116,19 +150,22 @@ const Layout = () => {
             <div className="mb-4 md:mb-0">
               <p>{uiConfig?.footer?.text ? getLocalizedContent(uiConfig.footer.text, currentLanguage) : t('footer.copyright')}</p>
             </div>
-            <div className="flex flex-wrap justify-center gap-4 md:gap-6">
-              {uiConfig?.footer?.links && uiConfig.footer.links.map((link, index) => (
-                <Link 
-                  key={index}
-                  to={link.url} 
-                  className="hover:text-gray-300"
-                  target={link.url.startsWith('http') || link.url.startsWith('mailto:') ? '_blank' : undefined}
-                  rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                >
-                  {getLocalizedContent(link.name, currentLanguage)}
-                </Link>
-              ))}
-            </div>
+            {/* Only show footer links when NOT on an app page */}
+            {!isAppPage && (
+              <div className="flex flex-wrap justify-center gap-4 md:gap-6">
+                {uiConfig?.footer?.links && uiConfig.footer.links.map((link, index) => (
+                  <Link 
+                    key={index}
+                    to={link.url} 
+                    className="hover:text-gray-300"
+                    target={link.url.startsWith('http') || link.url.startsWith('mailto:') ? '_blank' : undefined}
+                    rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                  >
+                    {getLocalizedContent(link.name, currentLanguage)}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
           {/* Disclaimer removed from footer - now shown as a popup */}
         </div>
