@@ -112,7 +112,7 @@ jobs:
 
       - name: Prepare build directories
         run: |
-          mkdir -p dist/public dist/server dist/config
+          mkdir -p dist/public dist/server dist/config dist/contents
           cp -r client/dist/* dist/public/
           cp -r server/*.js dist/server/
           cp server/*.cjs dist/server/
@@ -120,6 +120,7 @@ jobs:
           cp server/package.json dist/server/
           cp -r config/* dist/config/
           cp package.json dist/
+          cp -r contents/* dist/contents/
         shell: bash
 
       - name: Install production dependencies
@@ -139,9 +140,10 @@ jobs:
 
       - name: Copy assets for binary
         run: |
-          mkdir -p dist-bin/public dist-bin/config
+          mkdir -p dist-bin/public dist-bin/config dist-bin/contents
           cp -r dist/public/* dist-bin/public/
           cp -r dist/config/* dist-bin/config/
+          cp -r contents/* dist-bin/contents/ 
           cp config.env dist-bin/
         shell: bash
 
