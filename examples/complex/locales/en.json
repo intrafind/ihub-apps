@@ -1,0 +1,203 @@
+{
+  "app": {
+    "title": "AI Hub",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry"
+  },
+  "header": {
+    "home": "Home",
+    "apps": "Apps",
+    "documentation": "Documentation",
+    "github": "GitHub"
+  },
+  "common": {
+    "send": "Send",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "search": "Search",
+    "notFound": "Not Found",
+    "back": "Back",
+    "all": "All",
+    "default": "Default",
+    "precise": "Precise",
+    "creative": "Creative",
+    "select": "Select",
+    "favorite": "Favorite",
+    "unfavorite": "Unfavorite"
+  },
+  "pages": {
+    "home": {
+      "title": "AI Hub",
+      "description": "Interact with various AI models through a simple interface",
+      "featured": "Featured Apps",
+      "viewAll": "View All Apps"
+    },
+    "appsList": {
+      "title": "AI Apps",
+      "subtitle": "Choose an application to start a conversation",
+      "noApps": "No applications found",
+      "searchPlaceholder": "Search apps...",
+      "categories": "Categories",
+      "allCategories": "All Categories",
+      "favorite": "Add to favorites",
+      "unfavorite": "Remove from favorites",
+      "favorites": "Favorites",
+      "clearFilters": "Clear filters",
+      "loadMore": "Load More",
+      "showingCountOfTotal": "Showing {{displayed}} of {{total}} apps"
+    },
+    "appChat": {
+      "messagePlaceholder": "Type your message here...",
+      "send": "Send",
+      "thinking": "Thinking...",
+      "regenerate": "Regenerate response",
+      "clear": "Clear chat",
+      "confirmClear": "Are you sure you want to clear the chat?",
+      "shareConversation": "Share conversation",
+      "copyToClipboard": "Copy to clipboard",
+      "copied": "Copied to clipboard!",
+      "configureApp": "Configure",
+      "parameters": "Parameters",
+      "inputParameters": "Input Parameters",
+      "startConversation": "Start conversation"
+    },
+    "notFound": {
+      "title": "Page Not Found",
+      "message": "We couldn't find the page you were looking for.",
+      "returnHome": "Return to Home"
+    }
+  },
+  "models": {
+    "temperature": "Temperature",
+    "provider": "Provider",
+    "descriptions": {
+      "gpt-3.5-turbo": "Fast and efficient model for most everyday tasks and conversations",
+      "gpt-4": "Advanced model with strong reasoning and knowledge capabilities",
+      "claude-3-opus": "Anthropic's most capable model with exceptional reasoning abilities",
+      "claude-3-sonnet": "Balanced performance and value for enterprise and everyday tasks",
+      "gemini-1.5-flash": "Google's versatile model optimized for text and code tasks",
+      "local-vllm": "Advanced model with strong reasoning and knowledge capabilities"
+    },
+    "outputFormat": "Output Format"
+  },
+  "variables": {
+    "content": "Content",
+    "topic": "Topic",
+    "language": "Language",
+    "format": "Format",
+    "tone": "Tone",
+    "length": "Length",
+    "enter": "Enter"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "lightMode": "Light",
+    "darkMode": "Dark",
+    "apiKeys": "API Keys",
+    "save": "Save Settings",
+    "reset": "Reset to Default"
+  },
+  "error": {
+    "general": "An error occurred. Please try again.",
+    "notFound": "Resource not found.",
+    "apiKeyMissing": "API key for model not found",
+    "modelNotFound": "Model not found",
+    "appNotFound": "Application not found",
+    "missingRequiredFields": "Missing required fields:"
+  },
+  "languages": {
+    "en": "English",
+    "de": "German"
+  },
+  "appConfig": {
+    "title": "Configuration",
+    "save": "Save",
+    "cancel": "Cancel",
+    "defaultModel": "Default Model",
+    "temperature": "Temperature",
+    "temperatureDescription": "Controls randomness: Lower values are more deterministic, higher values are more creative.",
+    "systemPrompt": "System Prompt",
+    "systemPromptDescription": "Instructions for the AI at the beginning of the conversation."
+  },
+  "chatMessage": {
+    "user": "You",
+    "assistant": "Assistant",
+    "system": "System",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "edit": "Edit"
+  },
+  "errors": {
+    "fetchFailed": "Failed to fetch data",
+    "sendFailed": "Failed to send message",
+    "configSaveFailed": "Failed to save configuration"
+  },
+  "serverErrors": {
+    "appNotFound": "App not found",
+    "modelNotFound": "Model not found",
+    "missingRequiredFields": "Missing required fields",
+    "messagesRequired": "Messages array is required",
+    "missingSessionId": "Session ID is required",
+    "chatSessionNotFound": "Chat session not found",
+    "missingFeedbackFields": "Missing required fields: messageId, appId, chatId, and rating are required",
+    "apiKeyNotFound": "API key not found for provider: {provider}",
+    "invalidProvider": "Invalid provider: {provider}",
+    "invalidModel": "Invalid model: {model}",
+    "internalError": "Internal server error",
+    "authenticationFailed": "Authentication failed for {provider} API. Please check your API key.",
+    "rateLimitExceeded": "Rate limit exceeded for {provider} API. Please try again later.",
+    "serviceError": "{provider} API service error. The service may be experiencing issues.",
+    "requestTimeout": "Request timed out after {timeout} seconds. The model may be experiencing high load.",
+    "llmApiError": "LLM API request failed with status {status}",
+    "responseStreamError": "Error processing response stream: {error}",
+    "connectionRefused": "Connection refused while trying to access {provider} API for model {model}. Please check your connection or server configuration."
+  },
+  "responseStyles": {
+    "title": "Response Style",
+    "keep": "Keep Original",
+    "normal": "Normal",
+    "concise": "Concise",
+    "formal": "Formal",
+    "explanatory": "Explanatory",
+    "creative": "Creative",
+    "persuasive": "Persuasive",
+    "humorous": "Humorous",
+    "empathetic": "Empathetic",
+    "friendly": "Friendly",
+    "technical": "Technical",
+    "casual": "Casual",
+    "detailed": "Detailed",
+    "analytical": "Analytical",
+    "assertive": "Assertive",
+    "descriptions": {
+      "keep": "Keep the original style of the text.",
+      "normal": "Provide default, balanced responses.",
+      "concise": "Provide shorter and more direct responses. Be brief and to the point.",
+      "formal": "Provide clear, professional and polished responses using formal language.",
+      "explanatory": "Provide educational responses that explain concepts clearly, as if teaching a student.",
+      "creative": "Provide imaginative and artistic responses, using metaphors and analogies.",
+      "persuasive": "Provide convincing and compelling responses, using rhetorical techniques.",
+      "humorous": "Provide light-hearted and funny responses, using jokes and puns.",
+      "empathetic": "Provide compassionate and understanding responses, showing empathy and support.",
+      "friendly": "Provide warm and approachable responses, using a friendly tone.",
+      "technical": "Provide detailed and precise responses, using technical language.",
+      "casual": "Provide relaxed and informal responses, using everyday language.",
+      "detailed": "Provide thorough and comprehensive responses, covering all aspects of the topic.",
+      "analytical": "Provide logical and critical responses, analyzing the topic in depth.",
+      "assertive": "Provide confident and strong responses, taking a clear stance."
+    }
+  },
+  "disclaimer": {
+    "title": "Disclaimer",
+    "accept": "I Understand",
+    "versionInfo": "Version {{version}}, Last Updated: {{date}}"
+  }
+}

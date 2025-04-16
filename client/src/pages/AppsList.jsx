@@ -379,7 +379,7 @@ const AppsList = () => {
         <>
           <div 
             ref={gridRef} 
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" 
+            className={`grid ${displayedApps.length <= 2 ? 'justify-items-center mx-auto max-w-3xl' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'} `}
             role="list" 
             aria-label="Apps list"
           >

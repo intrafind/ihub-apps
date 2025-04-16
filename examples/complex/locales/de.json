@@ -1,0 +1,203 @@
+{
+  "app": {
+    "title": "AI Hub",
+    "loading": "Wird geladen...",
+    "error": "Ein Fehler ist aufgetreten",
+    "retry": "Wiederholen"
+  },
+  "header": {
+    "home": "Startseite",
+    "apps": "Anwendungen",
+    "documentation": "Dokumentation",
+    "github": "GitHub"
+  },
+  "common": {
+    "send": "Senden",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "loading": "Wird geladen...",
+    "error": "Fehler",
+    "success": "Erfolg",
+    "search": "Suchen",
+    "notFound": "Nicht gefunden",
+    "back": "Zurück",
+    "all": "Alle",
+    "default": "Standard",
+    "precise": "Präzise",
+    "creative": "Kreativ",
+    "select": "Auswählen",
+    "favorite": "Favorisieren",
+    "unfavorite": "Defavorisieren"
+  },
+  "pages": {
+    "home": {
+      "title": "AI Hub",
+      "description": "Interagiere mit verschiedenen KI-Modellen über eine einfache Schnittstelle",
+      "featured": "Ausgewählte Anwendungen",
+      "viewAll": "Alle Anwendungen anzeigen"
+    },
+    "appsList": {
+      "title": "KI-Anwendungen",
+      "subtitle": "Wähle eine Anwendung, um eine Unterhaltung zu beginnen",
+      "noApps": "Keine Anwendungen gefunden",
+      "searchPlaceholder": "Anwendungen durchsuchen...",
+      "categories": "Kategorien",
+      "allCategories": "Alle Kategorien",
+      "favorite": "Zu Favoriten hinzufügen",
+      "unfavorite": "Aus Favoriten entfernen",
+      "favorites": "Favoriten",
+      "clearFilters": "Filter zurücksetzen",
+      "loadMore": "Mehr laden",
+      "showingCountOfTotal": "Zeige {{displayed}} von {{total}} Anwendungen"
+    },
+    "appChat": {
+      "messagePlaceholder": "Gib deine Nachricht hier ein...",
+      "send": "Senden",
+      "thinking": "Denkt nach...",
+      "regenerate": "Antwort neu generieren",
+      "clear": "Chat löschen",
+      "confirmClear": "Möchtest du den Chat wirklich löschen?",
+      "shareConversation": "Unterhaltung teilen",
+      "copyToClipboard": "In die Zwischenablage kopieren",
+      "copied": "In die Zwischenablage kopiert!",
+      "configureApp": "Konfigurieren",
+      "inputParameters": "Eingabeparameter",
+      "parameters": "Parameter",
+      "startConversation": "Unterhaltung starten"
+    },
+    "notFound": {
+      "title": "Seite nicht gefunden",
+      "message": "Wir konnten die gesuchte Seite nicht finden.",
+      "returnHome": "Zurück zur Startseite"
+    }
+  },
+  "models": {
+    "temperature": "Temperatur",
+    "provider": "Anbieter",
+    "descriptions": {
+      "gpt-3.5-turbo": "Schnelles und effizientes Modell für die meisten alltäglichen Aufgaben und Gespräche",
+      "gpt-4": "Fortschrittliches Modell mit starken Argumentations- und Wissensfähigkeiten",
+      "claude-3-opus": "Anthropics leistungsfähigstes Modell mit außergewöhnlichen Argumentationsfähigkeiten",
+      "claude-3-sonnet": "Ausgewogene Leistung und Wert für Unternehmens- und Alltagsaufgaben",
+      "gemini-1.5-flash": "Googles vielseitiges Modell, optimiert für Text- und Code-Aufgaben",
+      "local-vllm": "Fortschrittliches Modell mit starken Argumentations- und Wissensfähigkeiten"
+    },
+    "outputFormat": "Ausgabeformat"
+  },
+  "variables": {
+    "content": "Inhalt",
+    "topic": "Thema",
+    "language": "Sprache",
+    "format": "Format",
+    "tone": "Tonfall",
+    "length": "Länge",
+    "enter": "Eingeben"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "language": "Sprache",
+    "theme": "Design",
+    "lightMode": "Hell",
+    "darkMode": "Dunkel",
+    "apiKeys": "API-Schlüssel",
+    "save": "Einstellungen speichern",
+    "reset": "Auf Standard zurücksetzen"
+  },
+  "error": {
+    "general": "Ein Fehler ist aufgetreten. Bitte versuche es erneut.",
+    "notFound": "Ressource nicht gefunden.",
+    "apiKeyMissing": "API-Schlüssel für Modell nicht gefunden",
+    "modelNotFound": "Modell nicht gefunden",
+    "appNotFound": "Anwendung nicht gefunden",
+    "missingRequiredFields": "Erforderliche Felder fehlen:"
+  },
+  "languages": {
+    "en": "Englisch",
+    "de": "Deutsch"
+  },
+  "appConfig": {
+    "title": "Konfiguration",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "defaultModel": "Standardmodell",
+    "temperature": "Temperatur",
+    "temperatureDescription": "Steuert die Zufälligkeit: Niedrigere Werte sind deterministischer, höhere Werte sind kreativer.",
+    "systemPrompt": "System-Prompt",
+    "systemPromptDescription": "Anweisungen für die KI zu Beginn des Gesprächs."
+  },
+  "chatMessage": {
+    "user": "Du",
+    "assistant": "Assistent",
+    "system": "System",
+    "copy": "Kopieren",
+    "copied": "Kopiert!",
+    "edit": "Bearbeiten"
+  },
+  "errors": {
+    "fetchFailed": "Daten konnten nicht abgerufen werden",
+    "sendFailed": "Nachricht konnte nicht gesendet werden",
+    "configSaveFailed": "Konfiguration konnte nicht gespeichert werden"
+  },
+  "serverErrors": {
+    "appNotFound": "Anwendung nicht gefunden",
+    "modelNotFound": "Modell nicht gefunden",
+    "missingRequiredFields": "Erforderliche Felder fehlen",
+    "messagesRequired": "Nachrichten-Array ist erforderlich",
+    "missingSessionId": "Sitzungs-ID ist erforderlich",
+    "chatSessionNotFound": "Chat-Sitzung nicht gefunden",
+    "missingFeedbackFields": "Erforderliche Felder fehlen: messageId, appId, chatId und rating sind erforderlich",
+    "apiKeyNotFound": "API-Schlüssel nicht gefunden für Anbieter: {provider}",
+    "invalidProvider": "Ungültiger Anbieter: {provider}",
+    "invalidModel": "Ungültiges Modell: {model}",
+    "internalError": "Interner Serverfehler",
+    "authenticationFailed": "Authentifizierung fehlgeschlagen für {provider} API. Bitte überprüfen Sie Ihren API-Schlüssel.",
+    "rateLimitExceeded": "Ratelimit überschritten für {provider} API. Bitte versuchen Sie es später erneut.",
+    "serviceError": "{provider} API-Dienstfehler. Der Dienst könnte Probleme haben.",
+    "requestTimeout": "Anforderung nach {timeout} Sekunden abgelaufen. Das Modell könnte unter hoher Last stehen.",
+    "llmApiError": "LLM-API-Anfrage fehlgeschlagen mit Status {status}",
+    "responseStreamError": "Fehler bei der Verarbeitung des Antwortstreams: {error}",
+    "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration."
+  },
+  "responseStyles": {
+    "title": "Antwortstil",
+    "keep": "Original beibehalten",
+    "normal": "Normal",
+    "concise": "Prägnant",
+    "formal": "Formal",
+    "explanatory": "Erklärend",
+    "creative": "Kreativ",
+    "persuasive": "Überzeugend",
+    "humorous": "Humorvoll",
+    "empathetic": "Einfühlsam",
+    "friendly": "Freundlich",
+    "technical": "Technisch",
+    "casual": "Locker",
+    "detailed": "Detailliert",
+    "analytical": "Analytisch",
+    "assertive": "Bestimmt",
+    "descriptions": {
+      "keep": "Behalte den ursprünglichen Stil des Textes bei.",
+      "normal": "Liefere ausgewogene Standardantworten.",
+      "concise": "Liefere kürzere und direktere Antworten. Sei kurz und präzise.",
+      "formal": "Liefere klare, professionelle und formelle Antworten in gehobener Sprache.",
+      "explanatory": "Liefere lehrreiche Antworten, die Konzepte klar erklären, als würdest du einen Schüler unterrichten.",
+      "creative": "Liefere fantasievolle und künstlerische Antworten unter Verwendung von Metaphern und Analogien.",
+      "persuasive": "Liefere überzeugende Antworten mit rhetorischen Techniken.",
+      "humorous": "Liefere unterhaltsame und lustige Antworten mit Witzen und Wortspielen.",
+      "empathetic": "Liefere mitfühlende und verständnisvolle Antworten, die Empathie und Unterstützung zeigen.",
+      "friendly": "Liefere warme und zugängliche Antworten in einem freundlichen Ton.",
+      "technical": "Liefere detaillierte und präzise Antworten unter Verwendung technischer Sprache.",
+      "casual": "Liefere entspannte und informelle Antworten in Alltagssprache.",
+      "detailed": "Liefere gründliche und umfassende Antworten, die alle Aspekte des Themas abdecken.",
+      "analytical": "Liefere logische und kritische Antworten, die das Thema tiefgehend analysieren.",
+      "assertive": "Liefere selbstbewusste und starke Antworten mit einer klaren Position."
+    }
+  },
+  "disclaimer": {
+    "title": "Haftungsausschluss",
+    "accept": "Ich verstehe",
+    "versionInfo": "Version {{version}}, Zuletzt aktualisiert: {{date}}"
+  }
+}

@@ -24,7 +24,7 @@ export async function getApiKeyForModel(modelId) {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
     
-    const filePath = path.join(__dirname, '../config/models.json');
+    const filePath = path.join(__dirname, '../contents/config/models.json');
     const data = await fs.readFile(filePath, 'utf8');
     const models = JSON.parse(data);
     

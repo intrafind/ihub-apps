@@ -57,7 +57,7 @@ jobs:
           npm run prod:build
           
           # Verify the build was successful
-          if [ -d "dist" ] && [ -d "dist/public" ] && [ -d "dist/server" ]; then
+          if [ -d "dist" ] && [ -d "dist/public" ] && [ -d "dist/server" ] && [ -d "dist/contents" ]; then
             echo "✅ Build successful!"
           else
             echo "❌ Build failed! Missing expected output directories."
@@ -77,15 +77,15 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-            binary_name: ai-hub-apps-linux
+            binary_base_name: ai-hub-apps-linux
             pkg_target: node18-linux-x64
           - os: macos-latest
             platform: macos
-            binary_name: ai-hub-apps-macos
+            binary_base_name: ai-hub-apps-macos
             pkg_target: node18-macos-x64
           - os: windows-latest
             platform: win
-            binary_name: ai-hub-apps-win.exe
+            binary_base_name: ai-hub-apps-win.exe
             pkg_target: node18-win-x64
 
     steps:
@@ -112,15 +112,20 @@ jobs:
 
       - name: Prepare build directories
         run: |
-          mkdir -p dist/public dist/server dist/config dist/contents
+          # Create necessary directories
+          mkdir -p dist/public dist/server dist/contents dist/examples
+          # Copy public files from client build
           cp -r client/dist/* dist/public/
+          # Copy server files
           cp -r server/*.js dist/server/
           cp server/*.cjs dist/server/
           cp -r server/adapters dist/server/
           cp server/package.json dist/server/
-          cp -r config/* dist/config/
           cp package.json dist/
+          # Copy contents folder (with all subfolders)
           cp -r contents/* dist/contents/
+          # Copy examples folder
+          cp -r examples/* dist/examples/
         shell: bash
 
       - name: Install production dependencies
@@ -132,45 +137,65 @@ jobs:
           cd ../..
         shell: bash
 
+      - name: Set version
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          else
+            echo "VERSION=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
+          fi
+        shell: bash
+        
       - name: Build binary
         run: |
           mkdir -p dist-bin
-          npx pkg . --target ${{ matrix.pkg_target }} --output dist-bin/${{ matrix.binary_name }} --options max_old_space_size=4096
+          # Create versioned binary name
+          VERSIONED_NAME="${{ matrix.binary_base_name }}-${{ env.VERSION }}"
+          echo "VERSIONED_NAME=$VERSIONED_NAME" >> $GITHUB_ENV
+          npx pkg . --target ${{ matrix.pkg_target }} --output dist-bin/$VERSIONED_NAME --options max_old_space_size=4096
         shell: bash
 
       - name: Copy assets for binary
         run: |
-          mkdir -p dist-bin/public dist-bin/config dist-bin/contents
+          # Create necessary directories for binary assets
+          mkdir -p dist-bin/public dist-bin/contents dist-bin/examples
+          # Copy public files
           cp -r dist/public/* dist-bin/public/
-          cp -r dist/config/* dist-bin/config/
-          cp -r contents/* dist-bin/contents/ 
+          # Copy contents with subdirectories
+          cp -r dist/contents/* dist-bin/contents/
+          # Copy examples folder
+          cp -r dist/examples/* dist-bin/examples/
+          # Copy configuration template
           cp config.env dist-bin/
         shell: bash
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.binary_name }}
-          path: dist-bin/${{ matrix.binary_name }}
+          name: ${{ matrix.binary_base_name }}
+          path: dist-bin/${{ env.VERSIONED_NAME }}
 
       - name: Create platform-specific archive
         run: |
           cd dist-bin
+          # Create versioned archive name
+          VERSIONED_ARCHIVE_NAME="${{ matrix.binary_base_name }}-${{ env.VERSION }}"
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            7z a -tzip ../${{ matrix.binary_name }}.zip .
+            7z a -tzip ../$VERSIONED_ARCHIVE_NAME.zip .
           else
-            tar -czf ../${{ matrix.binary_name }}.tar.gz .
+            tar -czf ../$VERSIONED_ARCHIVE_NAME.tar.gz .
           fi
+          echo "VERSIONED_ARCHIVE_NAME=$VERSIONED_ARCHIVE_NAME" >> $GITHUB_ENV
           cd ..
         shell: bash
 
       - name: Upload archive artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.binary_name }}-archive
+          name: ${{ matrix.binary_base_name }}-archive
           path: |
-            ${{ matrix.binary_name }}.tar.gz
-            ${{ matrix.binary_name }}.zip
+            ${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz
+            ${{ env.VERSIONED_ARCHIVE_NAME }}.zip
 
   release:
     name: Attach to Release
@@ -182,7 +207,27 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set version for release job
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          else
+            echo "VERSION=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
+          fi
+        shell: bash
         
+      - name: Display structure of downloaded files
+        run: ls -R ./artifacts
+        shell: bash
+
+      - name: Setup GitHub CLI
+        run: |
+          echo "Setting up GitHub CLI authentication..."
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -197,33 +242,39 @@ jobs:
         if: github.event_name == 'release'
         with:
           files: |
-            ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux
-            ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux.tar.gz
-            ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos
-            ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos.tar.gz
-            ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe
-            ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe.zip
+            ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux-${{ env.VERSION }}
+            ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux-${{ env.VERSION }}.tar.gz
+            ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos-${{ env.VERSION }}
+            ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos-${{ env.VERSION }}.tar.gz
+            ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe-${{ env.VERSION }}
+            ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe-${{ env.VERSION }}.zip
 
       # Manual workflow dispatch asset uploads
       - name: Upload assets for manual workflow
         if: github.event_name == 'workflow_dispatch'
         run: |
+          # Check if the release exists
+          if ! gh release view ${{ github.event.inputs.release_tag }} &>/dev/null; then
+            echo "Release ${{ github.event.inputs.release_tag }} not found. Creating it..."
+            gh release create ${{ github.event.inputs.release_tag }} --title "Release ${{ github.event.inputs.release_tag }}" --notes "Automated release created by GitHub Actions"
+          fi
+          
           # Linux binary
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux --clobber
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux-${{ env.VERSION }} --clobber
           
           # Linux archive
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux.tar.gz --clobber
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux-${{ env.VERSION }}.tar.gz --clobber
           
           # macOS binary
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos --clobber
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos-${{ env.VERSION }} --clobber
           
           # macOS archive
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos.tar.gz --clobber
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos-${{ env.VERSION }}.tar.gz --clobber
           
           # Windows binary
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe --clobber
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe-${{ env.VERSION }} --clobber
           
           # Windows archive
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe.zip --clobber
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe-${{ env.VERSION }}.zip --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

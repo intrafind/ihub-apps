@@ -36,6 +36,10 @@ if (isPackaged) {
 }
 console.log(`Root directory: ${rootDir}`);
 
+// Get the contents directory, either from environment variable or use default 'contents'
+const contentsDir = process.env.CONTENTS_DIR || 'contents';
+console.log(`Using contents directory: ${contentsDir}`);
+
 // Create Express application
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -119,12 +123,12 @@ function getLocalizedContent(content, language = 'en', fallbackLanguage = 'en') 
 async function getLocalizedError(errorKey, params = {}, language = 'en') {
   try {
     // Load translations for the requested language
-    const translations = await loadConfig(`locales/${language}.json`);
+    const translations = await loadUnifiedContent(`locales/${language}.json`);
     
     if (!translations || !translations.serverErrors || !translations.serverErrors[errorKey]) {
       // Try English as fallback
       if (language !== 'en') {
-        const enTranslations = await loadConfig('locales/en.json');
+        const enTranslations = await loadUnifiedContent('locales/en.json');
         if (enTranslations && enTranslations.serverErrors && enTranslations.serverErrors[errorKey]) {
           let message = enTranslations.serverErrors[errorKey];
           
@@ -199,50 +203,106 @@ app.use(express.static(staticPath));
 const configCache = new Map();
 const CONFIG_CACHE_TTL = 60 * 1000; // 60 seconds cache
 
-async function loadConfig(filename) {
+/**
+ * Unified content loading function to handle both JSON and raw file content (like markdown)
+ * with caching for better performance.
+ * 
+ * @param {string} filename - The path to the file (relative to the contents directory or with prefix like config/)
+ * @param {Object} options - Options for content loading
+ * @param {boolean} options.parseJson - Whether to parse the content as JSON (default true)
+ * @param {boolean} options.useCache - Whether to use cache for this content (default true)
+ * @param {string} options.basePath - Base path to use instead of 'contents' (optional)
+ * @returns {Promise<any>} - The loaded content (parsed JSON or raw string)
+ */
+async function loadUnifiedContent(filename, options = {}) {
+  const { parseJson = true, useCache = true, basePath = null } = options;
+  
   try {
-    // Cache key based on the full requested path
-    const cacheKey = filename;
-    const cachedEntry = configCache.get(cacheKey);
+    // Cache key based on the full requested path and parse option to distinguish
+    const cacheKey = `${filename}:${parseJson}`;
     
-    if (cachedEntry && (Date.now() - cachedEntry.timestamp) < CONFIG_CACHE_TTL) {
-      return cachedEntry.data;
+    // Return cached content if available and caching is enabled
+    if (useCache) {
+      const cachedEntry = configCache.get(cacheKey);
+      if (cachedEntry && (Date.now() - cachedEntry.timestamp) < CONFIG_CACHE_TTL) {
+        return cachedEntry.data;
+      }
     }
     
     // Safely handle paths with subdirectories while preventing traversal
     // First normalize the path to prevent traversal attacks (removes ../, etc)
     const normalizedPath = path.normalize(filename).replace(/^(\.\.[\/\\])+/, '');
     
-    // Determine config directory path based on packaging
-    let configPath;
-    if (isPackaged) {
-      configPath = path.join(rootDir, 'config', normalizedPath);
+    // Handle cases where the file path already includes the base directory
+    const baseDir = basePath || contentsDir;
+    let fullPath;
+    
+    // If the path already starts with the base directory, don't add it again
+    const pathWithoutLeadingSlash = normalizedPath.replace(/^\//, '');
+    if (pathWithoutLeadingSlash.startsWith(`${baseDir}/`)) {
+      // The path already includes the base directory
+      if (isPackaged) {
+        fullPath = path.join(rootDir, pathWithoutLeadingSlash);
+      } else {
+        fullPath = path.join(__dirname, '..', pathWithoutLeadingSlash);
+      }
     } else {
-      configPath = path.join(__dirname, '../config', normalizedPath);
+      // Add the base directory to the path
+      if (isPackaged) {
+        fullPath = path.join(rootDir, baseDir, pathWithoutLeadingSlash);
+      } else {
+        fullPath = path.join(__dirname, '..', baseDir, pathWithoutLeadingSlash);
+      }
     }
     
-    console.log(`Loading config from: ${configPath}`);
+    console.log(`Loading content from: ${fullPath}`);
     
-    // Verify the path is still within our config directory (extra security check)
-    const configDirPath = isPackaged 
-      ? path.join(rootDir, 'config')
-      : path.join(__dirname, '../config');
-      
-    if (!configPath.startsWith(configDirPath)) {
-      console.error(`Security warning: Attempted to access file outside config directory: ${filename}`);
+    // Determine the allowed directory paths that content can be loaded from
+    const allowedDirPaths = [];
+    
+    // Add the standard path
+    if (isPackaged) {
+      allowedDirPaths.push(path.join(rootDir));
+    } else {
+      allowedDirPaths.push(path.join(__dirname, '..'));
+    }
+    
+    // Add the custom contents directory path if it's different
+    const customContentsPath = path.resolve(__dirname, '..', contentsDir);
+    if (customContentsPath !== path.join(__dirname, '..', 'contents')) {
+      allowedDirPaths.push(customContentsPath);
+    }
+    
+    // Check if the path is within any of the allowed directories
+    const isPathAllowed = allowedDirPaths.some(dirPath => fullPath.startsWith(dirPath));
+    
+    if (!isPathAllowed) {
+      console.error(`Security warning: Attempted to access file outside allowed directories: ${filename}`);
+      console.error(`Allowed paths: ${allowedDirPaths.join(', ')}`);
+      console.error(`Requested path: ${fullPath}`);
       return null;
     }
     
-    const data = await fs.readFile(configPath, 'utf8');
-    const parsedData = JSON.parse(data);
+    // Read the file content
+    const data = await fs.readFile(fullPath, 'utf8');
     
-    // Update cache
-    configCache.set(cacheKey, {
-      data: parsedData,
-      timestamp: Date.now()
-    });
+    // Parse as JSON if requested, otherwise return raw content
+    let result;
+    if (parseJson) {
+      result = JSON.parse(data);
+    } else {
+      result = data;
+    }
     
-    return parsedData;
+    // Update cache if caching is enabled
+    if (useCache) {
+      configCache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now()
+      });
+    }
+    
+    return result;
   } catch (error) {
     console.error(`Error loading ${filename}:`, error);
     return null;
@@ -290,57 +350,12 @@ async function verifyApiKey(model, res, clientRes = null, language = 'en') {
   }
 }
 
-/**
- * Helper function to load file content for use in prompts (e.g., FAQ files)
- * @param {string} filePath - The path to the file to load
- * @returns {Promise<string>} - The content of the file or an error message
- */
-async function loadFileContent(filePath) {
-  try {
-    // Normalize the path and prevent directory traversal
-    const normalizedPath = path.normalize(filePath).replace(/^(\.\.[\/\\])+/, '');
-    
-    // Only allow loading files from the contents directory
-    if (!normalizedPath.startsWith('/contents/') && !normalizedPath.startsWith('contents/')) {
-      console.error(`Security warning: Attempted to access file outside contents directory: ${filePath}`);
-      return "Error: For security reasons, only files in the contents directory can be accessed.";
-    }
-    
-    // Remove leading slash if present for consistency
-    const contentPath = normalizedPath.replace(/^\//, '');
-    
-    // Determine file path based on packaging
-    let fullPath;
-    if (isPackaged) {
-      fullPath = path.join(rootDir, contentPath);
-    } else {
-      fullPath = path.join(__dirname, '..', contentPath);
-    }
-    
-    console.log(`Loading file content from: ${fullPath}`);
-    
-    // Verify the path is not trying to access sensitive areas
-    if (normalizedPath.includes('node_modules') || 
-        normalizedPath.includes('.env') || 
-        normalizedPath.includes('package.json')) {
-      console.error(`Security warning: Attempted to access potentially sensitive file: ${filePath}`);
-      return "Error: Access to this file is restricted.";
-    }
-    
-    const content = await fs.readFile(fullPath, 'utf8');
-    return content;
-  } catch (error) {
-    console.error(`Error loading file content from ${filePath}:`, error);
-    return `Error loading content: ${error.message}`;
-  }
-}
-
 // --- API Endpoints ---
 
 // GET /api/apps - Fetch all available apps
 app.get('/api/apps', async (req, res) => {
   try {
-    const apps = await loadConfig('apps.json');
+    const apps = await loadUnifiedContent('config/apps.json');
     if (!apps) {
       return res.status(500).json({ error: 'Failed to load apps configuration' });
     }
@@ -356,7 +371,7 @@ app.get('/api/apps/:appId', async (req, res) => {
   try {
     const { appId } = req.params;
     const language = req.headers['accept-language']?.split(',')[0] || 'en'; // Extract language from headers
-    const apps = await loadConfig('apps.json');
+    const apps = await loadUnifiedContent('config/apps.json');
     
     if (!apps) {
       return res.status(500).json({ error: 'Failed to load apps configuration' });
@@ -378,7 +393,7 @@ app.get('/api/apps/:appId', async (req, res) => {
 // GET /api/models - Fetch all available models
 app.get('/api/models', async (req, res) => {
   try {
-    const models = await loadConfig('models.json');
+    const models = await loadUnifiedContent('config/models.json');
     if (!models) {
       return res.status(500).json({ error: 'Failed to load models configuration' });
     }
@@ -394,7 +409,7 @@ app.get('/api/models/:modelId', async (req, res) => {
   try {
     const { modelId } = req.params;
     const language = req.headers['accept-language']?.split(',')[0] || 'en'; // Extract language from headers
-    const models = await loadConfig('models.json');
+    const models = await loadUnifiedContent('config/models.json');
     
     if (!models) {
       return res.status(500).json({ error: 'Failed to load models configuration' });
@@ -413,6 +428,46 @@ app.get('/api/models/:modelId', async (req, res) => {
   }
 });
 
+// API endpoint to fetch page content by ID
+app.get('/api/pages/:pageId', async (req, res) => {
+  const { pageId } = req.params;
+  const lang = req.query.lang || 'en'; // Default to English if no language specified
+  
+  try {
+    // Load UI configuration using the unified content loader
+    const uiConfig = await loadUnifiedContent('config/ui.json');
+    
+    if (!uiConfig || !uiConfig.pages || !uiConfig.pages[pageId]) {
+      return res.status(404).json({ error: 'Page not found' });
+    }
+    
+    // Get the file path for the requested language
+    const pageConfig = uiConfig.pages[pageId];
+    const langFilePath = pageConfig.filePath[lang] || pageConfig.filePath['en']; // Fallback to English
+    
+    if (!langFilePath) {
+      return res.status(404).json({ error: 'Page content not available for the requested language' });
+    }
+    
+    // Load the markdown content using the unified content loader
+    const content = await loadUnifiedContent(langFilePath, { parseJson: false });
+    
+    if (!content) {
+      return res.status(404).json({ error: 'Page content file not found' });
+    }
+    
+    // Return the page content and metadata
+    res.json({
+      id: pageId,
+      title: pageConfig.title[lang] || pageConfig.title['en'],
+      content
+    });
+  } catch (error) {
+    console.error('Error fetching page content:', error);
+    res.status(500).json({ error: 'Failed to fetch page content' });
+  }
+});
+
 // GET /api/models/{modelId}/chat/test - Test model chat completion without streaming
 app.get('/api/models/:modelId/chat/test', async (req, res) => {
   try {
@@ -424,7 +479,7 @@ app.get('/api/models/:modelId/chat/test', async (req, res) => {
     ];
 
     // Load models configuration
-    const models = await loadConfig('models.json');
+    const models = await loadUnifiedContent('config/models.json');
     if (!models) {
       return res.status(500).json({ error: 'Failed to load models configuration' });
     }
@@ -528,15 +583,6 @@ app.get('/api/apps/:appId/chat/:chatId', async (req, res) => {
       appId: appId
     });
     
-    // // Log the new session creation
-    // TODO check if we want to track the creations of the event source
-    // await logNewSession(chatId, appId, {
-    //   userAgent: req.headers['user-agent'],
-    //   ipAddress: req.ip || req.connection.remoteAddress,
-    //   language: req.headers['accept-language'],
-    //   referrer: req.headers['referer'] || 'direct'
-    // });
-    
     // Send initial connection event
     sendSSE(res, 'connected', { chatId });
     
@@ -621,7 +667,7 @@ app.post('/api/feedback', async (req, res) => {
 // GET /api/styles  - Fetch styles text
 app.get('/api/styles', async (req, res) => {
   try {
-    const styles = await loadConfig('styles.json');
+    const styles = await loadUnifiedContent('config/styles.json');
     if (!styles) {
       return res.status(500).json({ error: 'Failed to load styles configuration' });
     }
@@ -663,12 +709,12 @@ app.get('/api/translations/:lang', async (req, res) => {
     }
     
     // Load translations (corrected path to include locales directory)
-    const translations = await loadConfig(`locales/${lang}.json`);
+    const translations = await loadUnifiedContent(`locales/${lang}.json`);
     if (!translations) {
       console.error(`Failed to load translations for language: ${lang}`);
       // Fall back to English if translation file can't be loaded
       if (lang !== 'en') {
-        const enTranslations = await loadConfig('locales/en.json');
+        const enTranslations = await loadUnifiedContent('locales/en.json');
         if (enTranslations) {
           return res.json(enTranslations);
         }
@@ -681,7 +727,7 @@ app.get('/api/translations/:lang', async (req, res) => {
     console.error(`Error fetching translations for language ${req.params.lang}:`, error);
     // Try to return English translations as fallback on error
     try {
-      const enTranslations = await loadConfig('locales/en.json');
+      const enTranslations = await loadUnifiedContent('locales/en.json');
       if (enTranslations) {
         return res.json(enTranslations);
       }
@@ -697,7 +743,7 @@ app.get('/api/translations/:lang', async (req, res) => {
 // GET /api/ui - Fetch UI configuration (title, footer, header links, disclaimer)
 app.get('/api/ui', async (req, res) => {
   try {
-    const uiConfig = await loadConfig('ui.json');
+    const uiConfig = await loadUnifiedContent('config/ui.json');
     if (!uiConfig) {
       return res.status(500).json({ error: 'Failed to load UI configuration' });
     }
@@ -748,7 +794,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       
       // Process without streaming if no SSE connection exists
       // Load app details
-      const apps = await loadConfig('apps.json');
+      const apps = await loadUnifiedContent('config/apps.json');
       if (!apps) {
         return res.status(500).json({ error: 'Failed to load apps configuration' });
       }
@@ -760,7 +806,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       }
       
       // Load models
-      const models = await loadConfig('models.json');
+      const models = await loadUnifiedContent('config/models.json');
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }
@@ -982,7 +1028,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       });
       
       // Load app details
-      const apps = await loadConfig('apps.json');
+      const apps = await loadUnifiedContent('config/apps.json');
       if (!apps) {
         const errorMessage = await getLocalizedError('internalError', {}, clientLanguage);
         sendSSE(clientRes, 'error', { message: errorMessage });
@@ -997,7 +1043,7 @@ app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
       }
       
       // Load models
-      const models = await loadConfig('models.json');
+      const models = await loadUnifiedContent('config/models.json');
       if (!models) {
         const errorMessage = await getLocalizedError('internalError', {}, clientLanguage);
         sendSSE(clientRes, 'error', { message: errorMessage });
@@ -1519,12 +1565,12 @@ async function processMessageTemplates(messages, app, style = null, outputFormat
       
       console.log(`Loading source content from file: ${sourcePath}`);
       try {
-        // Load the file content
-        const sourceContent = await loadFileContent(sourcePath);
+        // Load the file content using unified content loader
+        const sourceContent = await loadUnifiedContent(sourcePath.replace(/^\//, ''), { parseJson: false });
         
         // Replace the {{source}} placeholder with the file content
-        systemPrompt = systemPrompt.replace('{{source}}', sourceContent);
-        console.log(`Loaded source content (${sourceContent.length} characters)`);
+        systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');
+        console.log(`Loaded source content (${sourceContent?.length || 0} characters)`);
       } catch (error) {
         console.error(`Error loading source content from ${sourcePath}:`, error);
         systemPrompt = systemPrompt.replace('{{source}}', 
@@ -1534,11 +1580,14 @@ async function processMessageTemplates(messages, app, style = null, outputFormat
     
     // Apply style modifications if specified
     if (style) {
-      loadConfig('styles.json').then(styles => {
+      try {
+        const styles = await loadUnifiedContent('config/styles.json');
         if (styles && styles[style]) {
           systemPrompt += `\n\n${styles[style]}`;
         }
-      }).catch(err => console.error('Error loading styles:', err));
+      } catch (err) {
+        console.error('Error loading styles:', err);
+      }
     }
     
     // Add output format instructions if specified
@@ -1634,3 +1683,7 @@ server.listen(PORT, HOST, () => {
   console.log(`Server is running on ${protocol}://${HOST}:${PORT}`);
   console.log(`Open ${protocol}://${HOST}:${PORT} in your browser to use AI Hub Apps`);
 });
+
+// Import necessary modules
+const fsSync = await import('fs');
+const pathSync = await import('path');

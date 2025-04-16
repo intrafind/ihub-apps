@@ -11,7 +11,7 @@
     "outputPath": "dist-bin",
     "assets": [
       "dist/public/**/*",
-      "dist/config/**/*",
+      "dist/contents/**/*",
       "dist/server/**/*"
     ],
     "scripts": [
@@ -29,7 +29,7 @@
     "build:client": "cd client && npm run build && mkdir -p ../dist/public && cp -r dist/* ../dist/public/",
     "build:contents": "mkdir -p dist/contents && cp -r contents/* dist/contents/",
     "build:server": "mkdir -p dist/server && cp -r server/*.js dist/server/ && cp server/*.cjs dist/server/ && cp server/package.json dist/server/ && cp -r server/adapters dist/server/",
-    "build:config": "mkdir -p dist/config && cp -r config/* dist/config/ && cp package.json dist/ && npm run build:dotenv",
+    "build:config": "cp package.json dist/ && npm run build:dotenv",
     "build:dotenv": "[ -f .env ] && cp .env dist/ || echo 'No .env file found, skipping'",
     "build:package": "cd dist && npm install --production && cd server && npm install --production",
     "start": "cd server && node server.js",
