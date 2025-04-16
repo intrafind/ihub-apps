@@ -180,7 +180,7 @@ jobs:
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.VERSIONED_NAME }}
+          name: binary-${{ matrix.os }}-${{ env.VERSIONED_NAME }}
           path: dist-bin/${{ env.VERSIONED_NAME }}
 
       - name: Create platform-specific archive
@@ -201,7 +201,7 @@ jobs:
       - name: Upload archive artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.VERSIONED_ARCHIVE_NAME }}
+          name: archive-${{ matrix.os }}-${{ env.VERSIONED_ARCHIVE_NAME }}
           path: |
             ${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz
             ${{ env.VERSIONED_ARCHIVE_NAME }}.zip
