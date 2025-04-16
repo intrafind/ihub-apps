@@ -227,7 +227,7 @@ jobs:
         shell: bash
 
       - name: Setup GitHub CLI
-        uses: cli/cli@v2
+        uses: cli/cli@v2.22.2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           
