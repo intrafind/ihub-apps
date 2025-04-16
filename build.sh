@@ -5,8 +5,9 @@
 # Exit on error
 set -e
 
-# Print what we're doing
-echo "Building AI Hub Apps for production..."
+# Get version from package.json
+VERSION=$(node -p "require('./package.json').version")
+echo "Building AI Hub Apps v$VERSION for production..."
 
 # Step 1: Clean previous builds
 echo "Cleaning previous builds..."
@@ -78,6 +79,10 @@ if [ "$1" == "--binary" ] || [ "$1" == "-b" ]; then
     esac
     echo "Building for target: $TARGET"
   fi
+  
+  # Add version to output name
+  OUTPUT_NAME="${OUTPUT_NAME}-v${VERSION}"
+  echo "Output binary name: $OUTPUT_NAME"
   
   mkdir -p dist-bin
   
