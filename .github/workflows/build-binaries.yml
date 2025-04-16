@@ -121,15 +121,11 @@ jobs:
           cp server/*.cjs dist/server/
           cp -r server/adapters dist/server/
           cp server/package.json dist/server/
-          # Copy configuration files
-          cp -r config/* dist/config/
           cp package.json dist/
           # Copy contents folder (with all subfolders)
           cp -r contents/* dist/contents/
           # Copy examples folder
           cp -r examples/* dist/examples/
-          # Create necessary subdirectories for contents
-          mkdir -p dist/contents/config dist/contents/locales dist/contents/pages/en dist/contents/pages/de dist/contents/sources
         shell: bash
 
       - name: Install production dependencies
