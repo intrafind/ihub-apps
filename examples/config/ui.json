@@ -1,0 +1,140 @@
+{
+  "title": {
+    "en": "AI Hub",
+    "de": "KI-Hub"
+  },
+  "header": {
+    "defaultColor": "rgb(0, 53, 87)",
+    "logo": {
+      "url": "/logo-bmas-2.png",
+      "alt": {
+        "en": "AI Hub Logo",
+        "de": "KI-Hub Logo"
+      }
+    },
+    "links": [
+      {
+        "name": {
+          "en": "Home",
+          "de": "Startseite"
+        },
+        "url": "/"
+      },
+      {
+        "name": {
+          "en": "FAQ",
+          "de": "FAQ"
+        },
+        "url": "/page/faq"
+      },
+      {
+        "name": {
+          "en": "Documentation",
+          "de": "Dokumentation"
+        },
+        "url": "https://github.com/ai-hub/docs"
+      },
+      {
+        "name": {
+          "en": "GitHub",
+          "de": "GitHub"
+        },
+        "url": "https://github.com/ai-hub/ai-hub-apps"
+      }
+    ]
+  },
+  "footer": {
+    "text": {
+      "en": "© 2025 AI Hub. All rights reserved.",
+      "de": "© 2025 KI-Hub. Alle Rechte vorbehalten."
+    },
+    "links": [
+      {
+        "name": {
+          "en": "Privacy Policy",
+          "de": "Datenschutzerklärung"
+        },
+        "url": "/page/privacy"
+      },
+      {
+        "name": {
+          "en": "Terms of Service",
+          "de": "Nutzungsbedingungen"
+        },
+        "url": "/page/terms"
+      },
+      {
+        "name": {
+          "en": "Contact",
+          "de": "Kontakt"
+        },
+        "url": "mailto:contact@ai-hub.example.com"
+      }
+    ]
+  },
+  "disclaimer": {
+    "text": {
+      "en": "Disclaimer: This application uses artificial intelligence language models that generate content based on their training data and the inputs provided. The responses may not always be accurate, appropriate, or complete. The AI does not have knowledge of events after its training cut-off date and does not access real-time information. Users should verify important information and exercise critical judgment when using AI-generated content. This application logs user interactions for service improvement and analytics purposes.",
+      "de": "Haftungsausschluss: Diese Anwendung verwendet künstliche Intelligenz-Sprachmodelle, die Inhalte basierend auf ihren Trainingsdaten und den bereitgestellten Eingaben generieren. Die Antworten sind möglicherweise nicht immer korrekt, angemessen oder vollständig. Die KI hat keine Kenntnis von Ereignissen nach ihrem Trainingsstichtag und greift nicht auf Echtzeit-Informationen zu. Benutzer sollten wichtige Informationen überprüfen und kritisches Urteilsvermögen bei der Nutzung von KI-generierten Inhalten anwenden. Diese Anwendung protokolliert Benutzerinteraktionen zur Verbesserung des Dienstes und zu Analysezwecken."
+    },
+    "version": "1.0",
+    "updated": "2023-01-01"
+  },
+  "widget": {
+    "defaultApp": "faq-bot",
+    "title": {
+      "en": "AI Hub Chat",
+      "de": "KI-Hub Chat"
+    },
+    "placeholder": {
+      "en": "Ask me anything...",
+      "de": "Frag mich etwas..."
+    },
+    "greeting": {
+      "en": "👋 Hello! How can I help you today?",
+      "de": "👋 Hallo! Wie kann ich Ihnen heute helfen?"
+    },
+    "sendButtonText": {
+      "en": "Send",
+      "de": "Senden"
+    },
+    "style": {
+      "primaryColor": "rgb(0, 53, 87)",
+      "secondaryColor": "#f3f4f6",
+      "fontFamily": "Inter, system-ui, sans-serif",
+      "borderRadius": "8px"
+    }
+  },
+  "pages": {
+    "privacy": {
+      "title": {
+        "en": "Privacy Policy",
+        "de": "Datenschutzerklärung"
+      },
+      "filePath": {
+        "en": "contents/pages/en/privacy.md",
+        "de": "contents/pages/de/privacy.md"
+      }
+    },
+    "terms": {
+      "title": {
+        "en": "Terms of Service",
+        "de": "Nutzungsbedingungen"
+      },
+      "filePath": {
+        "en": "contents/pages/en/terms.md",
+        "de": "contents/pages/de/terms.md"
+      }
+    },
+    "faq": {
+      "title": {
+        "en": "Frequently Asked Questions",
+        "de": "Häufig gestellte Fragen"
+      },
+      "filePath": {
+        "en": "contents/pages/en/faq.md",
+        "de": "contents/pages/de/faq.md"
+      }
+    }
+  }
+}

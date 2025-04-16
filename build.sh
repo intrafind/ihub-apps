@@ -34,8 +34,12 @@ cp package.json dist/
 
 # Step 5: Copy contents files
 echo "Copying contents files..."
-mkdir -p dist/contents
+mkdir -p dist/contents/sources dist/contents/pages
 cp -r contents/* dist/contents/
+
+# Ensure the pages directory exists in the output
+mkdir -p dist/contents/pages/en dist/contents/pages/de
+mkdir -p dist/contents/sources
 
 # Step 6: Copy .env file if it exists
 if [ -f .env ]; then
@@ -82,7 +86,7 @@ if [ "$1" == "--binary" ] || [ "$1" == "-b" ]; then
   
   # Copy public and config folders next to the binary
   echo "Copying assets for binary..."
-  mkdir -p dist-bin/public dist-bin/config dist-bin/contents
+  mkdir -p dist-bin/public dist-bin/config dist-bin/contents/pages/en dist-bin/contents/pages/de dist-bin/contents/sources
   cp -r dist/public/* dist-bin/public/
   cp -r dist/config/* dist-bin/config/
   

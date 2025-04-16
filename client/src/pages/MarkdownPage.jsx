@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getLocalizedContent } from '../utils/localizeContent';
-import { fetchUIConfig } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { marked } from 'marked';
 
@@ -11,7 +9,8 @@ const MarkdownPage = () => {
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const { pageId } = useParams();
-  const [pageData, setPageData] = useState(null);
+  const [pageTitle, setPageTitle] = useState('');
+  const [markdownContent, setMarkdownContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -34,15 +33,23 @@ const MarkdownPage = () => {
     const fetchPageContent = async () => {
       try {
         setLoading(true);
-        const uiConfig = await fetchUIConfig();
         
-        if (!uiConfig || !uiConfig.pages || !uiConfig.pages[pageId]) {
-          setError('Page not found');
+        // Use the new API endpoint to fetch page content
+        const response = await fetch(`/api/pages/${pageId}?lang=${currentLanguage}`);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            setError('Page not found');
+          } else {
+            throw new Error(`Failed to load page: ${response.status} ${response.statusText}`);
+          }
           setLoading(false);
           return;
         }
         
-        setPageData(uiConfig.pages[pageId]);
+        const pageData = await response.json();
+        setPageTitle(pageData.title || '');
+        setMarkdownContent(pageData.content || '');
         setError(null);
       } catch (err) {
         console.error('Error fetching page:', err);
@@ -53,7 +60,7 @@ const MarkdownPage = () => {
     };
 
     fetchPageContent();
-  }, [pageId]);
+  }, [pageId, currentLanguage]);
 
   if (loading) {
     return <LoadingSpinner message={t('app.loading')} />;
@@ -72,13 +79,9 @@ const MarkdownPage = () => {
       </div>
     );
   }
-
-  // Get localized title and content
-  const pageTitle = getLocalizedContent(pageData?.title, currentLanguage);
-  const pageContent = getLocalizedContent(pageData?.content, currentLanguage);
   
   // Parse the markdown content using marked
-  const parsedContent = marked(pageContent || '');
+  const parsedContent = marked(markdownContent || '');
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">

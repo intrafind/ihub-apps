@@ -1,4 +1,3 @@
-
 {
   "id": "faq-bot",
   "order": 0,
@@ -22,7 +21,7 @@
   "preferredStyle": "normal",
   "preferredTemperature": 0.3,
   "sendChatHistory": true,
-  "sourcePath": "/contents/faq.md",
+  "sourcePath": "/contents/sources/faq.md",
   "prompt": {
     "en": "{{content}}",
     "de": "{{content}}"
