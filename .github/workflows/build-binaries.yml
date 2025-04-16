@@ -149,8 +149,16 @@ jobs:
       - name: Build binary
         run: |
           mkdir -p dist-bin
-          # Create versioned binary name
-          VERSIONED_NAME="${{ matrix.binary_base_name }}-${{ env.VERSION }}"
+          # Create versioned binary name for the file
+          VERSIONED_NAME="${{ matrix.binary_base_name }}"
+          # For Windows files, ensure the version is before the file extension
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            # Split the name and extension for Windows
+            VERSIONED_NAME="ai-hub-apps-win-${{ env.VERSION }}.exe"
+          else
+            # For non-Windows platforms, add version normally
+            VERSIONED_NAME="${{ matrix.binary_base_name }}-${{ env.VERSION }}"
+          fi
           echo "VERSIONED_NAME=$VERSIONED_NAME" >> $GITHUB_ENV
           npx pkg . --target ${{ matrix.pkg_target }} --output dist-bin/$VERSIONED_NAME --options max_old_space_size=4096
         shell: bash
@@ -218,7 +226,11 @@ jobs:
         shell: bash
 
       - name: Setup GitHub CLI
-        uses: cli/gh-action-setup@v1
+        run: |
+          echo "Setting up GitHub CLI..."
+          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -238,7 +250,7 @@ jobs:
             ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux-${{ env.VERSION }}.tar.gz
             ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos-${{ env.VERSION }}
             ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos-${{ env.VERSION }}.tar.gz
-            ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe-${{ env.VERSION }}
+            ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win-${{ env.VERSION }}.exe
             ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe-${{ env.VERSION }}.zip
 
       # Manual workflow dispatch asset uploads
@@ -264,9 +276,9 @@ jobs:
           gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos-${{ env.VERSION }}.tar.gz --clobber
           
           # Windows binary
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win.exe-${{ env.VERSION }} --clobber
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win-${{ env.VERSION }}.exe --clobber
           
           # Windows archive
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe-${{ env.VERSION }}.zip --clobber
+          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win-${{ env.VERSION }}.zip --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
