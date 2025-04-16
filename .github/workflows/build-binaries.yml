@@ -180,17 +180,18 @@ jobs:
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.binary_base_name }}
+          name: ${{ env.VERSIONED_NAME }}
           path: dist-bin/${{ env.VERSIONED_NAME }}
 
       - name: Create platform-specific archive
         run: |
           cd dist-bin
           # Create versioned archive name
-          VERSIONED_ARCHIVE_NAME="${{ matrix.binary_base_name }}-${{ env.VERSION }}"
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            VERSIONED_ARCHIVE_NAME="ai-hub-apps-win-${{ env.VERSION }}"
             7z a -tzip ../$VERSIONED_ARCHIVE_NAME.zip .
           else
+            VERSIONED_ARCHIVE_NAME="${{ matrix.binary_base_name }}-${{ env.VERSION }}"
             tar -czf ../$VERSIONED_ARCHIVE_NAME.tar.gz .
           fi
           echo "VERSIONED_ARCHIVE_NAME=$VERSIONED_ARCHIVE_NAME" >> $GITHUB_ENV
@@ -200,7 +201,7 @@ jobs:
       - name: Upload archive artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.binary_base_name }}-archive
+          name: ${{ env.VERSIONED_ARCHIVE_NAME }}
           path: |
             ${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz
             ${{ env.VERSIONED_ARCHIVE_NAME }}.zip
@@ -226,11 +227,9 @@ jobs:
         shell: bash
 
       - name: Setup GitHub CLI
-        run: |
-          echo "Setting up GitHub CLI..."
-          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: cli/cli@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -246,12 +245,8 @@ jobs:
         if: github.event_name == 'release'
         with:
           files: |
-            ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux-${{ env.VERSION }}
-            ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux-${{ env.VERSION }}.tar.gz
-            ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos-${{ env.VERSION }}
-            ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos-${{ env.VERSION }}.tar.gz
-            ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win-${{ env.VERSION }}.exe
-            ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win.exe-${{ env.VERSION }}.zip
+            ./artifacts/**/*
+          tag_name: ${{ env.VERSION }}
 
       # Manual workflow dispatch asset uploads
       - name: Upload assets for manual workflow
@@ -263,22 +258,10 @@ jobs:
             gh release create ${{ github.event.inputs.release_tag }} --title "Release ${{ github.event.inputs.release_tag }}" --notes "Automated release created by GitHub Actions"
           fi
           
-          # Linux binary
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux/ai-hub-apps-linux-${{ env.VERSION }} --clobber
-          
-          # Linux archive
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-linux-archive/ai-hub-apps-linux-${{ env.VERSION }}.tar.gz --clobber
-          
-          # macOS binary
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos/ai-hub-apps-macos-${{ env.VERSION }} --clobber
-          
-          # macOS archive
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-macos-archive/ai-hub-apps-macos-${{ env.VERSION }}.tar.gz --clobber
-          
-          # Windows binary
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe/ai-hub-apps-win-${{ env.VERSION }}.exe --clobber
-          
-          # Windows archive
-          gh release upload ${{ github.event.inputs.release_tag }} ./artifacts/ai-hub-apps-win.exe-archive/ai-hub-apps-win-${{ env.VERSION }}.zip --clobber
+          # Find all files in artifacts directory and upload them
+          find ./artifacts -type f -not -path "*/\.*" | while read -r file; do
+            echo "Uploading $file to release ${{ github.event.inputs.release_tag }}..."
+            gh release upload ${{ github.event.inputs.release_tag }} "$file" --clobber
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
