@@ -218,11 +218,7 @@ jobs:
         shell: bash
 
       - name: Setup GitHub CLI
-        run: |
-          echo "Setting up GitHub CLI authentication..."
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: cli/gh-action-setup@v1
           
       - name: Download all artifacts
         uses: actions/download-artifact@v4
