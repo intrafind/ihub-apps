@@ -216,10 +216,6 @@ jobs:
             echo "VERSION=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
           fi
         shell: bash
-        
-      - name: Display structure of downloaded files
-        run: ls -R ./artifacts
-        shell: bash
 
       - name: Setup GitHub CLI
         run: |
