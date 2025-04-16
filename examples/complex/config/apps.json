@@ -19,10 +19,10 @@
     "tokenLimit": 8000,
     "preferredModel": "gemini-1.5-flash",
     "preferredOutputFormat": "markdown",
-    "preferredStyle": "normal",
+    "preferredStyle": "keep",
     "preferredTemperature": 0.3,
     "sendChatHistory": true,
-    "sourcePath": "/contents/sources/faq.md",
+    "sourcePath": "/sources/faq.md",
     "prompt": {
       "en": "{{content}}",
       "de": "{{content}}"

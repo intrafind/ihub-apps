@@ -25,28 +25,28 @@
           "en": "FAQ",
           "de": "FAQ"
         },
-        "url": "/page/faq"
+        "url": "/pages/faq"
       },
       {
         "name": {
           "en": "Documentation",
           "de": "Dokumentation"
         },
-        "url": "https://github.com/ai-hub/docs"
+        "url": "https://github.com/intrafind/ai-hub-apps/docs"
       },
       {
         "name": {
           "en": "GitHub",
           "de": "GitHub"
         },
-        "url": "https://github.com/ai-hub/ai-hub-apps"
+        "url": "https://github.com/intrafind/ai-hub-apps"
       }
     ]
   },
   "footer": {
     "text": {
-      "en": "© 2025 AI Hub. All rights reserved.",
-      "de": "© 2025 KI-Hub. Alle Rechte vorbehalten."
+      "en": "© 2025 IntraFind Software AG. All rights reserved.",
+      "de": "© 2025 IntraFind Software AG. Alle Rechte vorbehalten."
     },
     "links": [
       {
@@ -54,21 +54,21 @@
           "en": "Privacy Policy",
           "de": "Datenschutzerklärung"
         },
-        "url": "/page/privacy"
+        "url": "/pages/privacy"
       },
       {
         "name": {
           "en": "Terms of Service",
           "de": "Nutzungsbedingungen"
         },
-        "url": "/page/terms"
+        "url": "/pages/terms"
       },
       {
         "name": {
           "en": "Contact",
           "de": "Kontakt"
         },
-        "url": "mailto:contact@ai-hub.example.com"
+        "url": "mailto:info@intrafind.com"
       }
     ]
   },
@@ -78,7 +78,7 @@
       "de": "Haftungsausschluss: Diese Anwendung verwendet künstliche Intelligenz-Sprachmodelle, die Inhalte basierend auf ihren Trainingsdaten und den bereitgestellten Eingaben generieren. Die Antworten sind möglicherweise nicht immer korrekt, angemessen oder vollständig. Die KI hat keine Kenntnis von Ereignissen nach ihrem Trainingsstichtag und greift nicht auf Echtzeit-Informationen zu. Benutzer sollten wichtige Informationen überprüfen und kritisches Urteilsvermögen bei der Nutzung von KI-generierten Inhalten anwenden. Diese Anwendung protokolliert Benutzerinteraktionen zur Verbesserung des Dienstes und zu Analysezwecken."
     },
     "version": "1.0",
-    "updated": "2023-01-01"
+    "updated": "2025-04-16"
   },
   "widget": {
     "defaultApp": "faq-bot",

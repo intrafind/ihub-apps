@@ -11,7 +11,7 @@ echo "Building AI Hub Apps for production..."
 # Step 1: Clean previous builds
 echo "Cleaning previous builds..."
 rm -rf dist dist-bin
-mkdir -p dist/public dist/server dist/config
+mkdir -p dist/public dist/server dist/contents dist/examples
 
 # Step 2: Build the client
 echo "Building client..."
@@ -29,19 +29,19 @@ cp server/package.json dist/server/
 
 # Step 4: Copy config files
 echo "Copying configuration files..."
-cp -r config/* dist/config/
 cp package.json dist/
 
 # Step 5: Copy contents files
 echo "Copying contents files..."
-mkdir -p dist/contents/sources dist/contents/pages
+mkdir -p dist/contents
 cp -r contents/* dist/contents/
 
-# Ensure the pages directory exists in the output
-mkdir -p dist/contents/pages/en dist/contents/pages/de
-mkdir -p dist/contents/sources
+# Step 6: Copy examples folder
+echo "Copying examples folder..."
+mkdir -p dist/examples
+cp -r examples/* dist/examples/
 
-# Step 6: Copy .env file if it exists
+# Step 7: Copy .env file if it exists
 if [ -f .env ]; then
   echo "Copying .env file..."
   cp .env dist/
@@ -49,7 +49,7 @@ else
   echo "No .env file found, skipping..."
 fi
 
-# Step 7: Install production dependencies
+# Step 8: Install production dependencies
 echo "Installing production dependencies..."
 cd dist
 npm install --production
@@ -59,7 +59,7 @@ cd ../..
 
 echo "Production build completed successfully!"
 
-# Step 8: Create binary with pkg (if requested)
+# Step 9: Create binary with pkg (if requested)
 if [ "$1" == "--binary" ] || [ "$1" == "-b" ]; then
   echo "Creating binary executable..."
   
@@ -71,7 +71,7 @@ if [ "$1" == "--binary" ] || [ "$1" == "-b" ]; then
     echo "Building for all platforms"
   else
     case "$(uname -s)" in
-      Darwin*)  TARGET="node18-macos-x64"; OUTPUT_NAME="ai-hub-apps-darwin" ;;
+      Darwin*)  TARGET="node18-macos-x64"; OUTPUT_NAME="ai-hub-apps-macos" ;;
       Linux*)   TARGET="node18-linux-x64"; OUTPUT_NAME="ai-hub-apps-linux" ;;
       MINGW*|MSYS*|CYGWIN*)  TARGET="node18-win-x64"; OUTPUT_NAME="ai-hub-apps-win" ;;
       *)        TARGET="node18-macos-x64,node18-linux-x64,node18-win-x64"; OUTPUT_NAME="ai-hub-apps" ;;
@@ -84,17 +84,20 @@ if [ "$1" == "--binary" ] || [ "$1" == "-b" ]; then
   # Run pkg - using the CommonJS entry point
   npx pkg . --target $TARGET --output dist-bin/$OUTPUT_NAME --options max_old_space_size=4096
   
-  # Copy public and config folders next to the binary
+  # Copy necessary directories to the binary distribution
   echo "Copying assets for binary..."
-  mkdir -p dist-bin/public dist-bin/config dist-bin/contents/pages/en dist-bin/contents/pages/de dist-bin/contents/sources
+  mkdir -p dist-bin/public
   cp -r dist/public/* dist-bin/public/
-  cp -r dist/config/* dist-bin/config/
   
-  # Copy contents directory if it exists
-  if [ -d "dist/contents" ]; then
-    echo "Copying contents directory..."
-    cp -r dist/contents/* dist-bin/contents/
-  fi
+  # Copy contents directory 
+  echo "Copying contents directory..."
+  mkdir -p dist-bin/contents
+  cp -r dist/contents/* dist-bin/contents/
+  
+  # Copy examples directory
+  echo "Copying examples directory..."
+  mkdir -p dist-bin/examples
+  cp -r dist/examples/* dist-bin/examples/
   
   # Copy configuration template
   echo "Copying configuration template..."

@@ -1,0 +1,77 @@
+{
+  "title": {
+    "en": "AI Hub",
+    "de": "KI-Hub"
+  },
+  "header": {
+    "defaultColor": "rgb(0, 53, 87)",
+    "logo": {
+      "url": "/logo.png",
+      "alt": {
+        "en": "AI Hub Logo",
+        "de": "KI-Hub Logo"
+      }
+    },
+    "links": [
+      {
+        "name": {
+          "en": "Home",
+          "de": "Startseite"
+        },
+        "url": "/"
+      },
+      {
+        "name": {
+          "en": "Demo",
+          "de": "Demo"
+        },
+        "url": "/pages/simple-demo"
+      }
+    ]
+  },
+  "footer": {
+    "text": {
+      "en": "© 2025 AI Hub. All rights reserved.",
+      "de": "© 2025 KI-Hub. Alle Rechte vorbehalten."
+    },
+    "links": [
+      {
+        "name": {
+          "en": "Demo Footer",
+          "de": "Demo Footer"
+        },
+        "url": "/pages/simple-demo-footer"
+      }
+    ]
+  },
+  "disclaimer": {
+    "text": {
+      "en": "Disclaimer: This application uses artificial intelligence language models that generate content based on their training data and the inputs provided. The responses may not always be accurate, appropriate, or complete. The AI does not have knowledge of events after its training cut-off date and does not access real-time information. Users should verify important information and exercise critical judgment when using AI-generated content. This application logs user interactions for service improvement and analytics purposes.",
+      "de": "Haftungsausschluss: Diese Anwendung verwendet künstliche Intelligenz-Sprachmodelle, die Inhalte basierend auf ihren Trainingsdaten und den bereitgestellten Eingaben generieren. Die Antworten sind möglicherweise nicht immer korrekt, angemessen oder vollständig. Die KI hat keine Kenntnis von Ereignissen nach ihrem Trainingsstichtag und greift nicht auf Echtzeit-Informationen zu. Benutzer sollten wichtige Informationen überprüfen und kritisches Urteilsvermögen bei der Nutzung von KI-generierten Inhalten anwenden. Diese Anwendung protokolliert Benutzerinteraktionen zur Verbesserung des Dienstes und zu Analysezwecken."
+    },
+    "version": "1.0",
+    "updated": "2025-04-016"
+  },
+  "pages": {
+    "simple-demo-footer": {
+      "title": {
+        "en": "Demo Footer Page",
+        "de": "Demo Footer Seite"
+      },
+      "filePath": {
+        "en": "pages/en/simple-demo-footer.md",
+        "de": "pages/de/simple-demo-footer.md"
+      }
+    },
+    "simple-demo": {
+      "title": {
+        "en": "Demo Page",
+        "de": "Demoseite"
+      },
+      "filePath": {
+        "en": "pages/en/simple-demo.md",
+        "de": "pages/de/simple-demo.md"
+      }
+    }
+  }
+}

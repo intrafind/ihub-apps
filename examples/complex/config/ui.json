@@ -25,21 +25,21 @@
           "en": "FAQ",
           "de": "FAQ"
         },
-        "url": "/page/faq"
+        "url": "/pages/faq"
       },
       {
         "name": {
           "en": "Documentation",
           "de": "Dokumentation"
         },
-        "url": "https://github.com/ai-hub/docs"
+        "url": "https://github.com/intrafind/ai-hub-apps"
       },
       {
         "name": {
           "en": "GitHub",
           "de": "GitHub"
         },
-        "url": "https://github.com/ai-hub/ai-hub-apps"
+        "url": "https://github.com/intrafind/ai-hub-apps"
       }
     ]
   },
@@ -54,21 +54,21 @@
           "en": "Privacy Policy",
           "de": "Datenschutzerklärung"
         },
-        "url": "/page/privacy"
+        "url": "/pages/privacy"
       },
       {
         "name": {
           "en": "Terms of Service",
           "de": "Nutzungsbedingungen"
         },
-        "url": "/page/terms"
+        "url": "/pags/terms"
       },
       {
         "name": {
           "en": "Contact",
           "de": "Kontakt"
         },
-        "url": "mailto:contact@ai-hub.example.com"
+        "url": "mailto:info@intrafind.com"
       }
     ]
   },
@@ -112,8 +112,8 @@
         "de": "Datenschutzerklärung"
       },
       "filePath": {
-        "en": "contents/pages/en/privacy.md",
-        "de": "contents/pages/de/privacy.md"
+        "en": "pages/en/privacy.md",
+        "de": "pages/de/privacy.md"
       }
     },
     "terms": {
@@ -122,8 +122,8 @@
         "de": "Nutzungsbedingungen"
       },
       "filePath": {
-        "en": "contents/pages/en/terms.md",
-        "de": "contents/pages/de/terms.md"
+        "en": "pages/en/terms.md",
+        "de": "pages/de/terms.md"
       }
     },
     "faq": {
@@ -132,8 +132,8 @@
         "de": "Häufig gestellte Fragen"
       },
       "filePath": {
-        "en": "contents/pages/en/faq.md",
-        "de": "contents/pages/de/faq.md"
+        "en": "pages/en/faq.md",
+        "de": "pages/de/faq.md"
       }
     }
   }

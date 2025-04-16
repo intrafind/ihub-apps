@@ -57,7 +57,7 @@ jobs:
           npm run prod:build
           
           # Verify the build was successful
-          if [ -d "dist" ] && [ -d "dist/public" ] && [ -d "dist/server" ]; then
+          if [ -d "dist" ] && [ -d "dist/public" ] && [ -d "dist/server" ] && [ -d "dist/contents" ]; then
             echo "✅ Build successful!"
           else
             echo "❌ Build failed! Missing expected output directories."
@@ -112,15 +112,24 @@ jobs:
 
       - name: Prepare build directories
         run: |
-          mkdir -p dist/public dist/server dist/config dist/contents
+          # Create necessary directories
+          mkdir -p dist/public dist/server dist/contents dist/examples
+          # Copy public files from client build
           cp -r client/dist/* dist/public/
+          # Copy server files
           cp -r server/*.js dist/server/
           cp server/*.cjs dist/server/
           cp -r server/adapters dist/server/
           cp server/package.json dist/server/
+          # Copy configuration files
           cp -r config/* dist/config/
           cp package.json dist/
+          # Copy contents folder (with all subfolders)
           cp -r contents/* dist/contents/
+          # Copy examples folder
+          cp -r examples/* dist/examples/
+          # Create necessary subdirectories for contents
+          mkdir -p dist/contents/config dist/contents/locales dist/contents/pages/en dist/contents/pages/de dist/contents/sources
         shell: bash
 
       - name: Install production dependencies
@@ -152,10 +161,15 @@ jobs:
 
       - name: Copy assets for binary
         run: |
-          mkdir -p dist-bin/public dist-bin/config dist-bin/contents
+          # Create necessary directories for binary assets
+          mkdir -p dist-bin/public dist-bin/contents dist-bin/examples
+          # Copy public files
           cp -r dist/public/* dist-bin/public/
-          cp -r dist/config/* dist-bin/config/
-          cp -r contents/* dist-bin/contents/ 
+          # Copy contents with subdirectories
+          cp -r dist/contents/* dist-bin/contents/
+          # Copy examples folder
+          cp -r dist/examples/* dist-bin/examples/
+          # Copy configuration template
           cp config.env dist-bin/
         shell: bash
 

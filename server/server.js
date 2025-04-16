@@ -36,6 +36,10 @@ if (isPackaged) {
 }
 console.log(`Root directory: ${rootDir}`);
 
+// Get the contents directory, either from environment variable or use default 'contents'
+const contentsDir = process.env.CONTENTS_DIR || 'contents';
+console.log(`Using contents directory: ${contentsDir}`);
+
 // Create Express application
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -230,7 +234,7 @@ async function loadUnifiedContent(filename, options = {}) {
     const normalizedPath = path.normalize(filename).replace(/^(\.\.[\/\\])+/, '');
     
     // Handle cases where the file path already includes the base directory
-    const baseDir = basePath || 'contents';
+    const baseDir = basePath || contentsDir;
     let fullPath;
     
     // If the path already starts with the base directory, don't add it again
@@ -253,13 +257,29 @@ async function loadUnifiedContent(filename, options = {}) {
     
     console.log(`Loading content from: ${fullPath}`);
     
-    // Verify the path is still within our allowed directory (extra security check)
-    const allowedDirPath = isPackaged 
-      ? path.join(rootDir)
-      : path.join(__dirname, '..');
-      
-    if (!fullPath.startsWith(allowedDirPath)) {
-      console.error(`Security warning: Attempted to access file outside allowed directory: ${filename}`);
+    // Determine the allowed directory paths that content can be loaded from
+    const allowedDirPaths = [];
+    
+    // Add the standard path
+    if (isPackaged) {
+      allowedDirPaths.push(path.join(rootDir));
+    } else {
+      allowedDirPaths.push(path.join(__dirname, '..'));
+    }
+    
+    // Add the custom contents directory path if it's different
+    const customContentsPath = path.resolve(__dirname, '..', contentsDir);
+    if (customContentsPath !== path.join(__dirname, '..', 'contents')) {
+      allowedDirPaths.push(customContentsPath);
+    }
+    
+    // Check if the path is within any of the allowed directories
+    const isPathAllowed = allowedDirPaths.some(dirPath => fullPath.startsWith(dirPath));
+    
+    if (!isPathAllowed) {
+      console.error(`Security warning: Attempted to access file outside allowed directories: ${filename}`);
+      console.error(`Allowed paths: ${allowedDirPaths.join(', ')}`);
+      console.error(`Requested path: ${fullPath}`);
       return null;
     }
     

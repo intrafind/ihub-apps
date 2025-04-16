@@ -35,7 +35,7 @@ function App() {
             <Route index element={<SafeAppsList />} />
             <Route path="apps/:appId" element={<SafeAppChat />} />
             <Route path="chat/:modelId" element={<SafeDirectChat />} />
-            <Route path="page/:pageId" element={<SafeMarkdownPage />} />
+            <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
