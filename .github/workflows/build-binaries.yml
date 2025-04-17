@@ -227,9 +227,12 @@ jobs:
         shell: bash
 
       - name: Setup GitHub CLI
-        uses: cli/cli@v2.70.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Using GitHub CLI that's pre-installed on the runner..."
+          # Verify gh is installed and authenticated through GITHUB_TOKEN
+          gh --version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -242,26 +245,13 @@ jobs:
 
       - name: Upload assets to release
         uses: softprops/action-gh-release@v2
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         with:
           files: |
-            ./artifacts/**/*
+            ./artifacts/**/*.exe
+            ./artifacts/**/*.tar.gz
+            ./artifacts/**/*.zip
+            ./artifacts/**/ai-hub-apps-linux-*
+            ./artifacts/**/ai-hub-apps-macos-*
+            ./artifacts/**/ai-hub-apps-win-*
           tag_name: ${{ env.VERSION }}
-
-      # Manual workflow dispatch asset uploads
-      - name: Upload assets for manual workflow
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          # Check if the release exists
-          if ! gh release view ${{ github.event.inputs.release_tag }} &>/dev/null; then
-            echo "Release ${{ github.event.inputs.release_tag }} not found. Creating it..."
-            gh release create ${{ github.event.inputs.release_tag }} --title "Release ${{ github.event.inputs.release_tag }}" --notes "Automated release created by GitHub Actions"
-          fi
-          
-          # Find all files in artifacts directory and upload them
-          find ./artifacts -type f -not -path "*/\.*" | while read -r file; do
-            echo "Uploading $file to release ${{ github.event.inputs.release_tag }}..."
-            gh release upload ${{ github.event.inputs.release_tag }} "$file" --clobber
-          done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
