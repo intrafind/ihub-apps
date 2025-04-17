@@ -247,11 +247,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         with:
-          files: |
-            ./artifacts/**/*.exe
-            ./artifacts/**/*.tar.gz
-            ./artifacts/**/*.zip
-            ./artifacts/**/ai-hub-apps-linux-*
-            ./artifacts/**/ai-hub-apps-macos-*
-            ./artifacts/**/ai-hub-apps-win-*
+          files: ./artifacts/**/*.*
           tag_name: ${{ env.VERSION }}
