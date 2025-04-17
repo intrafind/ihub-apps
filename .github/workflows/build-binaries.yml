@@ -166,13 +166,15 @@ jobs:
       - name: Copy assets for binary
         run: |
           # Create necessary directories for binary assets
-          mkdir -p dist-bin/public dist-bin/contents dist-bin/examples
+          mkdir -p dist-bin/public dist-bin/contents dist-bin/examples dist-bin/server
           # Copy public files
           cp -r dist/public/* dist-bin/public/
           # Copy contents with subdirectories
           cp -r dist/contents/* dist-bin/contents/
           # Copy examples folder
           cp -r dist/examples/* dist-bin/examples/
+          # Copy server files
+          cp -r dist/server/* dist-bin/server/
           # Copy configuration template
           cp config.env dist-bin/
         shell: bash
