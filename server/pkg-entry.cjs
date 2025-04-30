@@ -198,6 +198,22 @@ if (process.env.NODE_FLAGS_STYLE === 'linux') {
     ];
   }
 }
+
+// Run the server script with Node.js
+
+// Run the server as a child process with the platform-appropriate arguments
+const nodeProcess = spawnSync(nodePath, nodeArgs, {
+  cwd: process.env.APP_ROOT_DIR,
+  env: process.env,
+  stdio: 'inherit'
+});
+
+if (nodeProcess.error) {
+  console.error('Error launching server:', nodeProcess.error);
+  process.exit(1);
+}
+
+process.exit(nodeProcess.status || 0);
 `);
   
   console.log('Created external server script at:', serverScriptPath);
