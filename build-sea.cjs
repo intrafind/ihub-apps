@@ -12,6 +12,7 @@ const os = require('os');
 
 // Configuration
 const version = require('./package.json').version;
+console.log(`Building for version: ${version}`);
 const appName = 'ai-hub-apps';
 const outputDir = path.join(__dirname, 'dist-bin');
 const contentsDir = path.join(__dirname, 'contents');
@@ -20,9 +21,15 @@ const serverDir = path.join(__dirname, 'server');
 const examplesDir = path.join(__dirname, 'examples');
 const configEnvPath = path.join(__dirname, 'config.env');
 
+// Log system information
+console.log(`Node.js version: ${process.version}`);
+console.log(`Architecture: ${process.arch}`);
+console.log(`Platform: ${process.platform}`);
+console.log(`OS: ${os.type()} ${os.release()}`);
+
 // Platform specific details
 const platformMap = {
-  win32: { suffix: 'win.exe', platform: 'windows' },
+  win32: { suffix: 'win.bat', platform: 'windows' },  // Change to .bat for Windows
   darwin: { suffix: 'macos', platform: 'macos' },
   linux: { suffix: 'linux', platform: 'linux' }
 };
@@ -219,8 +226,14 @@ async function startServer() {
     if (portInUse) {
       console.log(\`Port \${PORT} is already in use. Attempting to resolve...\`);
       
-      // Try to kill the process using the port (macOS only)
-      if (process.platform === 'darwin') {
+      // Windows-specific port handling
+      if (process.platform === 'win32') {
+        console.log('On Windows: Please close the application using this port or specify a different port in config.env.');
+        console.log('Tip: You can use Task Manager to find and close processes using this port.');
+        process.exit(1);
+      }
+      // macOS-specific port handling
+      else if (process.platform === 'darwin') {
         await killProcessOnPort(PORT);
         
         // Wait a moment for the port to be released
@@ -235,7 +248,9 @@ async function startServer() {
           console.error(\`Port \${PORT} is still in use after attempting to free it. Please close the application using this port or specify a different port in config.env.\`);
           process.exit(1);
         }
-      } else {
+      } 
+      // Generic handling for other platforms
+      else {
         console.error(\`Port \${PORT} is already in use. Please close the application using this port or specify a different port in config.env.\`);
         process.exit(1);
       }
@@ -273,7 +288,7 @@ async function startServer() {
       }
     });
     
-    // Enhanced graceful shutdown handling
+    // Platform-specific graceful shutdown handling
     function gracefulShutdown(signal) {
       if (shuttingDown) return;
       shuttingDown = true;
@@ -287,7 +302,24 @@ async function startServer() {
       }, 5000); // Force exit after 5 seconds
       
       // Try to kill the child process gracefully
-      nodeProcess.kill(signal);
+      if (process.platform === 'win32') {
+        // On Windows, SIGINT, SIGTERM aren't exactly the same, use appropriate method
+        try {
+          // On Windows, taskkill is more reliable for terminating processes
+          const pid = nodeProcess.pid;
+          if (pid) {
+            require('child_process').exec(\`taskkill /pid \${pid} /T /F\`);
+          } else {
+            nodeProcess.kill();
+          }
+        } catch (err) {
+          console.error('Error terminating process:', err);
+          nodeProcess.kill();
+        }
+      } else {
+        // Unix platforms can use standard signals
+        nodeProcess.kill(signal);
+      }
       
       // Register handler for when the process actually exits
       nodeProcess.on('exit', () => {
@@ -412,11 +444,30 @@ DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
     fs.writeFileSync(path.join(outputDir, outputName), shellLauncher);
     fs.chmodSync(path.join(outputDir, outputName), 0o755);
   } else {
-    // On Windows, create a batch file
+    // On Windows, create a more robust batch file
     const batchLauncher = `@echo off
 REM AI Hub Apps Launcher
-set DIR=%~dp0
+
+REM Get the directory where this batch file is located (handles spaces in paths)
+set "DIR=%~dp0"
+
+REM Check if node.exe exists
+if not exist "%DIR%node.exe" (
+  echo Error: node.exe not found in the application directory.
+  echo Please ensure the application was properly extracted.
+  pause
+  exit /b 1
+)
+
+REM Use the bundled Node.js to run the server
 "%DIR%node.exe" "%DIR%launcher.cjs" %*
+
+REM If we get here, check if there was an error
+if %ERRORLEVEL% neq 0 (
+  echo Application exited with error code %ERRORLEVEL%
+  pause
+  exit /b %ERRORLEVEL%
+)
 `;
     
     fs.writeFileSync(path.join(outputDir, outputName), batchLauncher);
@@ -425,10 +476,16 @@ set DIR=%~dp0
   // Write the launcher script
   fs.writeFileSync(path.join(outputDir, 'launcher.cjs'), launcherScript);
   
-  // Copy Node.js binary
+  // Copy Node.js binary with platform-specific name
   console.log('Copying Node.js executable...');
-  fs.copyFileSync(process.execPath, path.join(outputDir, 'node'));
-  fs.chmodSync(path.join(outputDir, 'node'), 0o755);
+  if (currentPlatform.platform === 'windows') {
+    // For Windows, copy as node.exe and don't try to set Unix permissions
+    fs.copyFileSync(process.execPath, path.join(outputDir, 'node.exe'));
+  } else {
+    // For Unix platforms (macOS and Linux)
+    fs.copyFileSync(process.execPath, path.join(outputDir, 'node'));
+    fs.chmodSync(path.join(outputDir, 'node'), 0o755);
+  }
   
   console.log('Standalone application build completed successfully.');
 } catch (err) {
