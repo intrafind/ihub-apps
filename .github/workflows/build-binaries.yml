@@ -118,6 +118,7 @@ jobs:
           cp -r client/dist/* dist/public/
           # Copy server files
           cp -r server/*.js dist/server/
+          cp -r server/*.mjs dist/server/
           cp server/*.cjs dist/server/
           cp -r server/adapters dist/server/
           cp server/package.json dist/server/
