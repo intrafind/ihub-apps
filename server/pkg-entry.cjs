@@ -198,10 +198,15 @@ try {
   console.log(`Using Node.js executable at: ${nodePath}`);
   
   // Run Node with the script file as a separate parameter
+  // For Linux and Windows, we need to ensure flags are correctly interpreted
+  // by putting them after the script path with a double dash
   const nodeProcess = spawnSync(nodePath, [
+    serverScriptPath,
+    // Place flags after the script as a workaround for Linux/Windows
+    // Windows and Linux will now see these as arguments to the script, not as paths
+    '--', 
     '--experimental-modules',
-    '--experimental-json-modules',
-    serverScriptPath
+    '--experimental-json-modules'
   ], {
     cwd: binDir,
     env: process.env,
