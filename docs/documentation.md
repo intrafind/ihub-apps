@@ -846,7 +846,7 @@ You can test the Linux binary using Docker with the following command:
 
 ```bash
 docker run --rm -it \
-  -p 3000:3000 \
+  -p 3001:3001 \
   -v "$(pwd)/dist-bin:/app" \
   -w /app \
   -e NODE_FLAGS_STYLE=linux \
@@ -854,17 +854,10 @@ docker run --rm -it \
   -e ANTHROPIC_API_KEY=your_anthropic_api_key \
   -e GOOGLE_API_KEY=your_google_api_key \
   --platform linux/amd64 \
-  node:18-slim /bin/bash -c "chmod +x /app/ai-hub-apps-v1.0.5-linux && /app/ai-hub-apps-v1.0.5-linux"
+  node:20-slim /bin/bash -c "chmod +x /app/ai-hub-apps-v${VERSION}-linux && /app/ai-hub-apps-v${VERSION}-linux"
 ```
 
-This command:
-- Maps port 3000 from the container to your host machine
-- Mounts your dist-bin directory to the container
-- Sets necessary environment variables including `NODE_FLAGS_STYLE=linux` to force Linux-style flag ordering
-- Uses the node:18-slim image with the linux/amd64 platform
-- Makes the binary executable and runs it
-
-Run this command from your project root directory. Make sure to replace the placeholder API keys with your actual keys.
+Replace `${VERSION}` with your current version number from package.json.
 
 #### Troubleshooting Node.js Flag Issues
 

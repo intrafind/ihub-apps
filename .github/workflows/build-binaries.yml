@@ -112,6 +112,19 @@ jobs:
           echo "VERSIONED_NAME=ai-hub-apps-${{ env.VERSION }}-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
         shell: bash
 
+      - name: Update package.json version if needed
+        run: |
+          # If VERSION is set and doesn't match package.json, update it
+          if [ -n "${{ env.VERSION }}" ]; then
+            PKG_VERSION=$(node -p "require('./package.json').version")
+            VERSION_NO_V="${VERSION#v}"
+            if [ "$PKG_VERSION" != "$VERSION_NO_V" ]; then
+              echo "Updating package.json version from $PKG_VERSION to $VERSION_NO_V"
+              npm version $VERSION_NO_V --no-git-tag-version
+            fi
+          fi
+        shell: bash
+
       - name: Build using Node.js SEA
         run: |
           # Use Node.js SEA (Single Executable Application) feature with platform-specific argument

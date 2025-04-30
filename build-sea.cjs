@@ -12,6 +12,7 @@ const os = require('os');
 
 // Configuration
 const version = require('./package.json').version;
+console.log(`Building for version: ${version}`);
 const appName = 'ai-hub-apps';
 const outputDir = path.join(__dirname, 'dist-bin');
 const contentsDir = path.join(__dirname, 'contents');
