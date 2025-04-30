@@ -22,7 +22,7 @@ trap cleanup EXIT INT TERM
 
 # Start the server
 echo "Starting server..."
-cd server && node server.js &
+cd server && node server.mjs &
 SERVER_PID=$!
 
 # Wait a moment for the server to start
@@ -38,4 +38,4 @@ fi
 echo "Starting client..."
 cd client && npm run dev
 
-# The cleanup function will be called automatically when the script exits 
+# The cleanup function will be called automatically when the script exits

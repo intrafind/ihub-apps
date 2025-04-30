@@ -24,6 +24,7 @@ cp -r client/dist/* dist/public/
 # Step 3: Copy server files
 echo "Copying server files..."
 cp -r server/*.js dist/server/
+cp -r server/*.mjs dist/server/
 cp server/*.cjs dist/server/ # Make sure to copy the CommonJS entry point
 cp -r server/adapters dist/server/
 cp server/package.json dist/server/

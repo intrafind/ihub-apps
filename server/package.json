@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "AI Hub Applications Server",
   "type": "module",
-  "main": "server.js",
+  "main": "server.mjs",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "node server.mjs",
+    "dev": "nodemon server.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -17,4 +17,4 @@
   "devDependencies": {
     "nodemon": "^3.1.9"
   }
-} 
+}

@@ -757,7 +757,7 @@ The server component is located in the `server/` directory with the following ke
 
 ```
 server/
-  server.js         - Main server entry point
+  server.mjs        - Main server entry point
   utils.js          - Utility functions
   pkg-entry.cjs     - Package entry for binary builds
   adapters/
@@ -839,6 +839,31 @@ The server can be packaged as a binary for easier distribution, with the package
 - Configuration files
 - Static web assets
 - A start script
+
+### Docker Testing
+
+You can test the Linux binary using Docker with the following command:
+
+```bash
+docker run --rm -it \
+  -p 3000:3000 \
+  -v "$(pwd)/dist-bin:/app" \
+  -w /app \
+  -e OPENAI_API_KEY=your_openai_api_key \
+  -e ANTHROPIC_API_KEY=your_anthropic_api_key \
+  -e GOOGLE_API_KEY=your_google_api_key \
+  --platform linux/amd64 \
+  node:20-slim /bin/bash -c "chmod +x /app/ai-hub-apps-v1.0.3-linux && /app/ai-hub-apps-v1.0.3-linux"
+```
+
+This command:
+- Maps port 3000 from the container to your host machine
+- Mounts your dist-bin directory to the container
+- Sets necessary environment variables
+- Uses the node:20-slim image with the linux/amd64 platform
+- Makes the binary executable and runs it
+
+Run this command from your project root directory. Make sure to replace the placeholder API keys with your actual keys.
 
 ### Logging
 

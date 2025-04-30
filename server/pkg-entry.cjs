@@ -127,7 +127,7 @@ process.env.PORT = '${process.env.PORT}';
 process.env.APP_ROOT_DIR = '${binDir.replace(/\\/g, '\\\\')}'; // Fix Windows paths
 
 // Find server.js path
-const serverPath = path.resolve(process.env.APP_ROOT_DIR, 'server/server.js');
+const serverPath = path.resolve(process.env.APP_ROOT_DIR, 'server/server.mjs');
 console.log('Server path:', serverPath);
 
 // Use current Node.js executable
@@ -137,17 +137,23 @@ console.log('Using Node.js from:', nodePath);
 // Platform-specific handling for passing flags to Node.js
 // This is the critical part that fixes the cross-platform issues
 let nodeArgs;
-if (process.platform === 'win32' || process.platform === 'linux') {
-  // On Windows and Linux, put the script first, followed by '--' and then the flags
-  // This makes sure the flags are interpreted correctly
+if (process.platform === 'win32') {
+  // On Windows, put the script first, followed by '--' and then the flags
   nodeArgs = [
     serverPath,
     '--', 
     '--experimental-modules',
     '--experimental-json-modules'
   ];
+} else if (process.platform === 'linux') {
+  // On Linux, include the input-type=module flag
+  nodeArgs = [
+    '--experimental-modules',
+    '--experimental-json-modules',
+    serverPath
+  ];
 } else {
-  // On macOS, we can use the standard approach
+  // On macOS, exclude the input-type=module flag
   nodeArgs = [
     '--experimental-modules',
     '--experimental-json-modules',
