@@ -104,6 +104,11 @@ if [ "$1" == "--binary" ] || [ "$1" == "-b" ]; then
   mkdir -p dist-bin/examples
   cp -r dist/examples/* dist-bin/examples/
   
+  # Copy server directory (essential for the binary to work)
+  echo "Copying server directory..."
+  mkdir -p dist-bin/server
+  cp -r dist/server/* dist-bin/server/
+  
   # Copy configuration template
   echo "Copying configuration template..."
   cp config.env dist-bin/
