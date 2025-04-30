@@ -110,13 +110,15 @@ try {
   }
   
   // Create an external server script that will be run by Node.js
-  const serverScriptPath = path.join(tempDir, 'start-server.js');
+  // Use .cjs extension to force CommonJS mode regardless of package.json type setting
+  const serverScriptPath = path.join(tempDir, 'start-server.cjs');
   
-  // Write the server script content - this is a simple script that imports server.js
+  // Write the server script content using CommonJS syntax for better compatibility
   fs.writeFileSync(serverScriptPath, `
-// External server starter script
-import * as path from 'path';
-import { fileURLToPath } from 'url';
+// External server starter script using CommonJS
+const path = require('path');
+const { spawnSync } = require('child_process');
+const fs = require('fs');
 
 // Set up environment variables
 process.env.NODE_ENV = 'production';
@@ -124,39 +126,56 @@ process.env.HOST = '${process.env.HOST}';
 process.env.PORT = '${process.env.PORT}';
 process.env.APP_ROOT_DIR = '${binDir.replace(/\\/g, '\\\\')}'; // Fix Windows paths
 
-// Import and run the server
-try {
-  // We need to resolve the server.js path directly
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const serverPath = path.resolve(__dirname, '../server/server.js');
-  console.log('Importing server from:', serverPath);
-  
-  // Dynamically import the server
-  import(serverPath)
-    .catch(err => {
-      console.error('Error importing server module:', err);
-      process.exit(1);
-    });
-} catch (err) {
-  console.error('Error in server bootstrap:', err);
+// Find server.js path
+const serverPath = path.resolve(process.env.APP_ROOT_DIR, 'server/server.js');
+console.log('Server path:', serverPath);
+
+// Use current Node.js executable
+const nodePath = process.execPath;
+console.log('Using Node.js from:', nodePath);
+
+// Platform-specific handling for passing flags to Node.js
+// This is the critical part that fixes the cross-platform issues
+let nodeArgs;
+if (process.platform === 'win32' || process.platform === 'linux') {
+  // On Windows and Linux, put the script first, followed by '--' and then the flags
+  // This makes sure the flags are interpreted correctly
+  nodeArgs = [
+    serverPath,
+    '--', 
+    '--experimental-modules',
+    '--experimental-json-modules'
+  ];
+} else {
+  // On macOS, we can use the standard approach
+  nodeArgs = [
+    '--experimental-modules',
+    '--experimental-json-modules',
+    serverPath
+  ];
+}
+
+// Run the server as a child process with the platform-appropriate arguments
+const nodeProcess = spawnSync(nodePath, nodeArgs, {
+  cwd: process.env.APP_ROOT_DIR,
+  env: process.env,
+  stdio: 'inherit'
+});
+
+if (nodeProcess.error) {
+  console.error('Error launching server:', nodeProcess.error);
   process.exit(1);
 }
+
+process.exit(nodeProcess.status || 0);
 `);
   
   console.log('Created external server script at:', serverScriptPath);
   
-  // Create the server directory if it doesn't exist (for packaged binary)
-  const serverDir = path.join(binDir, 'server');
-  if (!fs.existsSync(serverDir)) {
-    fs.mkdirSync(serverDir, { recursive: true });
-    console.log(`Created server directory at ${serverDir}`);
-  }
-  
-  // Now run the external script with node using the --experimental-modules flag
+  // Starting server via Node.js process
   console.log('Starting server via external Node.js process...');
   
-  // We need to use the system Node.js, not the binary's Node.js
-  // First, try to find the Node.js executable in PATH
+  // Find the Node.js executable
   let nodePath;
   
   // On macOS/Linux, use the 'which' command to locate node
@@ -197,16 +216,9 @@ try {
   
   console.log(`Using Node.js executable at: ${nodePath}`);
   
-  // Run Node with the script file as a separate parameter
-  // For Linux and Windows, we need to ensure flags are correctly interpreted
-  // by putting them after the script path with a double dash
+  // Run the script with Node.js directly (NOT passing flags like --experimental-modules here)
   const nodeProcess = spawnSync(nodePath, [
-    serverScriptPath,
-    // Place flags after the script as a workaround for Linux/Windows
-    // Windows and Linux will now see these as arguments to the script, not as paths
-    '--', 
-    '--experimental-modules',
-    '--experimental-json-modules'
+    serverScriptPath
   ], {
     cwd: binDir,
     env: process.env,
