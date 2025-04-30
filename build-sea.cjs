@@ -29,7 +29,7 @@ console.log(`OS: ${os.type()} ${os.release()}`);
 
 // Platform specific details
 const platformMap = {
-  win32: { suffix: 'win.exe', platform: 'windows' },
+  win32: { suffix: 'win.bat', platform: 'windows' },  // Change to .bat for Windows
   darwin: { suffix: 'macos', platform: 'macos' },
   linux: { suffix: 'linux', platform: 'linux' }
 };

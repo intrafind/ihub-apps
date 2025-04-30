@@ -157,7 +157,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.platform }}-${{ env.VERSION }}
-          path: dist-bin/ai-hub-apps-v*-${{ matrix.platform }}${{ matrix.binary_extension }}
+          path: |
+            dist-bin/ai-hub-apps-v*-${{ matrix.platform }}${{ matrix.binary_extension }}
+            dist-bin/ai-hub-apps-v*-win.bat
+            dist-bin/ai-hub-apps-v*-${{ matrix.platform }}
 
       - name: Create platform-specific archive
         run: |
