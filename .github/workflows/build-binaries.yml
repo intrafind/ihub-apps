@@ -132,6 +132,27 @@ jobs:
           ./build-sea.sh ${{ matrix.platform }}
         shell: bash
 
+      - name: Windows-specific setup
+        if: matrix.platform == 'win'
+        run: |
+          # Check Windows binary architecture
+          node -e "console.log('Windows build: Node.js architecture is ' + process.arch)"
+          
+          # Create a simple diagnostic script for Windows
+          echo '@echo off
+          echo Windows Diagnostic Information:
+          echo -----------------------------
+          echo Node Version: %NODE_VERSION%
+          echo Architecture: %PROCESSOR_ARCHITECTURE%
+          echo Processor: %PROCESSOR_IDENTIFIER%
+          echo System Type: %PROCESSOR_ARCHITECTURE%
+          echo Number of Processors: %NUMBER_OF_PROCESSORS%
+          pause
+          ' > dist-bin/windows-check.bat
+          
+          chmod +x dist-bin/windows-check.bat
+        shell: bash
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:

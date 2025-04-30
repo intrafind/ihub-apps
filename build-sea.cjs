@@ -21,6 +21,12 @@ const serverDir = path.join(__dirname, 'server');
 const examplesDir = path.join(__dirname, 'examples');
 const configEnvPath = path.join(__dirname, 'config.env');
 
+// Log system information
+console.log(`Node.js version: ${process.version}`);
+console.log(`Architecture: ${process.arch}`);
+console.log(`Platform: ${process.platform}`);
+console.log(`OS: ${os.type()} ${os.release()}`);
+
 // Platform specific details
 const platformMap = {
   win32: { suffix: 'win.exe', platform: 'windows' },
@@ -444,10 +450,9 @@ REM AI Hub Apps Launcher
 
 REM Get the directory where this batch file is located (handles spaces in paths)
 set "DIR=%~dp0"
-set "DIR=%DIR:~0,-1%"
 
 REM Check if node.exe exists
-if not exist "%DIR%\\node.exe" (
+if not exist "%DIR%node.exe" (
   echo Error: node.exe not found in the application directory.
   echo Please ensure the application was properly extracted.
   pause
@@ -455,7 +460,14 @@ if not exist "%DIR%\\node.exe" (
 )
 
 REM Use the bundled Node.js to run the server
-"%DIR%\\node.exe" "%DIR%\\launcher.cjs" %*
+"%DIR%node.exe" "%DIR%launcher.cjs" %*
+
+REM If we get here, check if there was an error
+if %ERRORLEVEL% neq 0 (
+  echo Application exited with error code %ERRORLEVEL%
+  pause
+  exit /b %ERRORLEVEL%
+)
 `;
     
     fs.writeFileSync(path.join(outputDir, outputName), batchLauncher);
