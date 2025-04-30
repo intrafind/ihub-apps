@@ -120,6 +120,14 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 
+console.log('PLATFORM DEBUG INFO:');
+console.log('process.platform:', process.platform);
+console.log('Is in Docker:', process.env.INSIDE_DOCKER || 'unknown');
+console.log('Architecture:', process.arch);
+console.log('WSL check:', fs.existsSync('/proc/version') ? 
+  fs.readFileSync('/proc/version', 'utf8') : 'File not accessible');
+
+
 // Set up environment variables
 process.env.NODE_ENV = 'production';
 process.env.HOST = '${process.env.HOST}';
@@ -137,43 +145,59 @@ console.log('Using Node.js from:', nodePath);
 // Platform-specific handling for passing flags to Node.js
 // This is the critical part that fixes the cross-platform issues
 let nodeArgs;
-if (process.platform === 'win32') {
-  // On Windows, put the script first, followed by '--' and then the flags
+
+// Allow explicit control via environment variable
+if (process.env.NODE_FLAGS_STYLE === 'linux') {
+  console.log('Using Linux-style flag order (from NODE_FLAGS_STYLE)');
+  // Linux-style flags
+  nodeArgs = [
+    '--experimental-modules',
+    '--experimental-json-modules',
+    serverPath
+  ];
+} else if (process.env.NODE_FLAGS_STYLE === 'windows') {
+  console.log('Using Windows-style flag order (from NODE_FLAGS_STYLE)');
+  // Windows-style flags
   nodeArgs = [
     serverPath,
     '--', 
     '--experimental-modules',
     '--experimental-json-modules'
   ];
-} else if (process.platform === 'linux') {
-  // On Linux, include the input-type=module flag
-  nodeArgs = [
-    '--experimental-modules',
-    '--experimental-json-modules',
-    serverPath
-  ];
 } else {
-  // On macOS, exclude the input-type=module flag
-  nodeArgs = [
-    '--experimental-modules',
-    '--experimental-json-modules',
-    serverPath
-  ];
+  // Check if running in WSL
+  const isWSL = process.platform === 'linux' && 
+                fs.existsSync('/proc/version') && 
+                fs.readFileSync('/proc/version', 'utf8').toLowerCase().includes('microsoft');
+
+  if (process.platform === 'win32') {
+    console.log('Using Windows-style');
+    // On Windows, put the script first, followed by '--' and then the flags
+    nodeArgs = [
+      serverPath,
+      '--', 
+      '--experimental-modules',
+      '--experimental-json-modules'
+    ];
+  } else if (process.platform === 'linux' || isWSL) {
+    console.log('Using Linux-style');
+    // On Linux (including WSL), try a more compatible approach
+    // Put flags first (standard for Linux)
+    nodeArgs = [
+      '--experimental-modules',
+      '--experimental-json-modules',
+      serverPath
+    ];
+  } else {
+    console.log('Using macOS-style');
+    // On macOS, exclude the input-type=module flag
+    nodeArgs = [
+      '--experimental-modules',
+      '--experimental-json-modules',
+      serverPath
+    ];
+  }
 }
-
-// Run the server as a child process with the platform-appropriate arguments
-const nodeProcess = spawnSync(nodePath, nodeArgs, {
-  cwd: process.env.APP_ROOT_DIR,
-  env: process.env,
-  stdio: 'inherit'
-});
-
-if (nodeProcess.error) {
-  console.error('Error launching server:', nodeProcess.error);
-  process.exit(1);
-}
-
-process.exit(nodeProcess.status || 0);
 `);
   
   console.log('Created external server script at:', serverScriptPath);
