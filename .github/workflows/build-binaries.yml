@@ -29,7 +29,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
@@ -77,16 +77,13 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-            binary_base_name: ai-hub-apps-linux
-            pkg_target: node18-linux-x64
+            binary_extension: ''
           - os: macos-latest
             platform: macos
-            binary_base_name: ai-hub-apps-macos
-            pkg_target: node18-macos-x64
+            binary_extension: ''
           - os: windows-latest
             platform: win
-            binary_base_name: ai-hub-apps-win.exe
-            pkg_target: node18-win-x64
+            binary_extension: '.exe'
 
     steps:
       - name: Checkout code
@@ -95,7 +92,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
@@ -104,40 +101,6 @@ jobs:
           cd client && npm ci && npm install uuid && cd ..
           cd server && npm ci && cd ..
 
-      - name: Build client
-        run: |
-          cd client
-          npm run build
-          cd ..
-
-      - name: Prepare build directories
-        run: |
-          # Create necessary directories
-          mkdir -p dist/public dist/server dist/contents dist/examples
-          # Copy public files from client build
-          cp -r client/dist/* dist/public/
-          # Copy server files
-          cp -r server/*.js dist/server/
-          cp -r server/*.mjs dist/server/
-          cp server/*.cjs dist/server/
-          cp -r server/adapters dist/server/
-          cp server/package.json dist/server/
-          cp package.json dist/
-          # Copy contents folder (with all subfolders)
-          cp -r contents/* dist/contents/
-          # Copy examples folder
-          cp -r examples/* dist/examples/
-        shell: bash
-
-      - name: Install production dependencies
-        run: |
-          cd dist
-          npm install --production
-          cd server
-          npm install --production
-          cd ../..
-        shell: bash
-
       - name: Set version
         run: |
           if [ "${{ github.event_name }}" == "release" ]; then
@@ -145,56 +108,32 @@ jobs:
           else
             echo "VERSION=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
           fi
-        shell: bash
-        
-      - name: Build binary
-        run: |
-          mkdir -p dist-bin
-          # Create versioned binary name for the file
-          VERSIONED_NAME="${{ matrix.binary_base_name }}"
-          # For Windows files, ensure the version is before the file extension
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            # Split the name and extension for Windows
-            VERSIONED_NAME="ai-hub-apps-win-${{ env.VERSION }}.exe"
-          else
-            # For non-Windows platforms, add version normally
-            VERSIONED_NAME="${{ matrix.binary_base_name }}-${{ env.VERSION }}"
-          fi
-          echo "VERSIONED_NAME=$VERSIONED_NAME" >> $GITHUB_ENV
-          npx pkg . --target ${{ matrix.pkg_target }} --output dist-bin/$VERSIONED_NAME --options max_old_space_size=4096
+          # Set versioned name for binary
+          echo "VERSIONED_NAME=ai-hub-apps-${{ env.VERSION }}-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
         shell: bash
 
-      - name: Copy assets for binary
+      - name: Build using Node.js SEA
         run: |
-          # Create necessary directories for binary assets
-          mkdir -p dist-bin/public dist-bin/contents dist-bin/examples dist-bin/server
-          # Copy public files
-          cp -r dist/public/* dist-bin/public/
-          # Copy contents with subdirectories
-          cp -r dist/contents/* dist-bin/contents/
-          # Copy examples folder
-          cp -r dist/examples/* dist-bin/examples/
-          # Copy server files
-          cp -r dist/server/* dist-bin/server/
-          # Copy configuration template
-          cp config.env dist-bin/
+          # Use Node.js SEA (Single Executable Application) feature with platform-specific argument
+          chmod +x ./build-sea.sh
+          ./build-sea.sh ${{ matrix.platform }}
         shell: bash
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binary-${{ matrix.os }}-${{ env.VERSIONED_NAME }}
-          path: dist-bin/${{ env.VERSIONED_NAME }}
+          name: binary-${{ matrix.platform }}-${{ env.VERSION }}
+          path: dist-bin/ai-hub-apps-v*-${{ matrix.platform }}${{ matrix.binary_extension }}
 
       - name: Create platform-specific archive
         run: |
           cd dist-bin
           # Create versioned archive name
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            VERSIONED_ARCHIVE_NAME="ai-hub-apps-win-${{ env.VERSION }}"
+            VERSIONED_ARCHIVE_NAME="ai-hub-apps-${{ env.VERSION }}-win"
             7z a -tzip ../$VERSIONED_ARCHIVE_NAME.zip .
           else
-            VERSIONED_ARCHIVE_NAME="${{ matrix.binary_base_name }}-${{ env.VERSION }}"
+            VERSIONED_ARCHIVE_NAME="ai-hub-apps-${{ env.VERSION }}-${{ matrix.platform }}"
             tar -czf ../$VERSIONED_ARCHIVE_NAME.tar.gz .
           fi
           echo "VERSIONED_ARCHIVE_NAME=$VERSIONED_ARCHIVE_NAME" >> $GITHUB_ENV
@@ -204,7 +143,7 @@ jobs:
       - name: Upload archive artifact
         uses: actions/upload-artifact@v4
         with:
-          name: archive-${{ matrix.os }}-${{ env.VERSIONED_ARCHIVE_NAME }}
+          name: archive-${{ matrix.platform }}-${{ env.VERSION }}
           path: |
             ${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz
             ${{ env.VERSIONED_ARCHIVE_NAME }}.zip

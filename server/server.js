@@ -52,6 +52,15 @@ const DEFAULT_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || '60000', 10); //
 const clients = new Map();
 const activeRequests = new Map();
 
+// --- Additional code to handle macOS port reuse ---
+// Enable port reuse to avoid EADDRINUSE errors on quick restarts
+const serverOptions = {
+  // This allows the server to use a port that is in TIME_WAIT state
+  // (which can happen if the server is restarted quickly)
+  // Note: These are only applied when creating HTTP/HTTPS servers directly
+  ...(process.platform === 'darwin' ? { reuseAddr: true, reusePort: true } : {})
+};
+
 /**
  * Gets the localized value from a potentially multi-language object
  * Similar to client-side getLocalizedContent utility
@@ -1655,7 +1664,9 @@ if (process.env.SSL_KEY && process.env.SSL_CERT) {
     // SSL configuration
     const httpsOptions = {
       key: fsSync.readFileSync(process.env.SSL_KEY),
-      cert: fsSync.readFileSync(process.env.SSL_CERT)
+      cert: fsSync.readFileSync(process.env.SSL_CERT),
+      // Add macOS-specific options for socket reuse
+      ...(process.platform === 'darwin' ? serverOptions : {})
     };
     
     // Add CA certificate if provided
@@ -1669,11 +1680,11 @@ if (process.env.SSL_KEY && process.env.SSL_CERT) {
   } catch (error) {
     console.error('Error setting up HTTPS server:', error);
     console.log('Falling back to HTTP server');
-    server = http.createServer(app);
+    server = http.createServer(serverOptions, app);
   }
 } else {
-  // Create regular HTTP server
-  server = http.createServer(app);
+  // Create regular HTTP server with socket reuse options
+  server = http.createServer(serverOptions, app);
   console.log('Starting HTTP server (no SSL configuration provided)');
 }
 

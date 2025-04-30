@@ -6,20 +6,6 @@
   "bin": {
     "ai-hub-apps": "./server/pkg-entry.cjs"
   },
-  "pkg": {
-    "targets": ["node18-macos-x64", "node18-linux-x64", "node18-win-x64"],
-    "outputPath": "dist-bin",
-    "assets": [
-      "dist/public/**/*",
-      "dist/contents/**/*",
-      "dist/server/**/*"
-    ],
-    "scripts": [
-      "dist/server/*.js",
-      "dist/server/*.mjs",
-      "dist/server/adapters/*.js"
-    ]
-  },
   "scripts": {
     "server": "cd server && node server.mjs",
     "client": "cd client && npm run dev",
@@ -29,7 +15,7 @@
     "build:clean": "rimraf dist",
     "build:client": "cd client && npm run build && mkdir -p ../dist/public && cp -r dist/* ../dist/public/",
     "build:contents": "mkdir -p dist/contents && cp -r contents/* dist/contents/",
-    "build:server": "mkdir -p dist/server && cp -r server/*.js server/*.mjs dist/server/ && cp server/*.cjs dist/server/ && cp server/package.json dist/server/ && cp -r server/adapters dist/server/",
+    "build:server": "mkdir -p dist/server && cp -r server/*.js dist/server/ && cp server/*.cjs dist/server/ && cp server/package.json dist/server/ && cp -r server/adapters dist/server/",
     "build:config": "cp package.json dist/ && npm run build:dotenv",
     "build:dotenv": "[ -f .env ] && cp .env dist/ || echo 'No .env file found, skipping'",
     "build:package": "cd dist && npm install --production && cd server && npm install --production",
@@ -37,11 +23,11 @@
     "start:prod": "cd dist && node server/start-prod.js",
     "prod:build": "npm run build && npm run build:package",
     "prod:deploy": "npm run prod:build && npm run start:prod",
-    "build:binary": "npm run prod:build && pkg . --options max_old_space_size=4096 --no-bytecode",
-    "build:binary:macos": "npm run prod:build && pkg . --target node18-macos-x64 --options max_old_space_size=4096 --no-bytecode",
-    "build:binary:linux": "npm run prod:build && pkg . --target node18-linux-x64 --options max_old_space_size=4096 --no-bytecode",
-    "build:binary:windows": "npm run prod:build && pkg . --target node18-win-x64 --options max_old_space_size=4096 --no-bytecode",
-    "docker:test:linux": "docker run --rm -it -p 3000:3000 -v \"$(pwd)/dist-bin:/app\" -w /app -e OPENAI_API_KEY=your_openai_api_key -e ANTHROPIC_API_KEY=your_anthropic_api_key -e GOOGLE_API_KEY=your_google_api_key --platform linux/amd64 node:20-slim /bin/bash -c \"chmod +x /app/ai-hub-apps-v1.0.3-linux && /app/ai-hub-apps-v1.0.3-linux\""
+    "build:binary": "npm run prod:build && ./build-sea.sh",
+    "build:binary:macos": "npm run prod:build && ./build-sea.sh",
+    "build:binary:linux": "npm run prod:build && ./build-sea.sh",
+    "build:binary:windows": "npm run prod:build && ./build-sea.sh",
+    "docker:test:linux": "docker run --rm -it -p 3000:3000 -v \"$(pwd)/dist-bin:/app\" -w /app -e OPENAI_API_KEY=your_openai_api_key -e ANTHROPIC_API_KEY=your_anthropic_api_key -e GOOGLE_API_KEY=your_google_api_key --platform linux/amd64 node:20-slim /bin/bash -c \"chmod +x /app/ai-hub-apps-v1.0.5-linux && /app/ai-hub-apps-v1.0.5-linux\""
   },
   "keywords": [
     "ai",
@@ -57,7 +43,9 @@
     "node-fetch": "^3.3.0"
   },
   "devDependencies": {
+    "esbuild": "^0.20.2",
     "nodemon": "^3.1.10",
+    "postject": "^1.0.0-alpha.6",
     "rimraf": "^6.0.1"
   },
   "engines": {
