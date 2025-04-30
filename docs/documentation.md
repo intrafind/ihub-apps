@@ -849,21 +849,48 @@ docker run --rm -it \
   -p 3000:3000 \
   -v "$(pwd)/dist-bin:/app" \
   -w /app \
+  -e NODE_FLAGS_STYLE=linux \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e ANTHROPIC_API_KEY=your_anthropic_api_key \
   -e GOOGLE_API_KEY=your_google_api_key \
   --platform linux/amd64 \
-  node:20-slim /bin/bash -c "chmod +x /app/ai-hub-apps-v1.0.3-linux && /app/ai-hub-apps-v1.0.3-linux"
+  node:18-slim /bin/bash -c "chmod +x /app/ai-hub-apps-v1.0.5-linux && /app/ai-hub-apps-v1.0.5-linux"
 ```
 
 This command:
 - Maps port 3000 from the container to your host machine
 - Mounts your dist-bin directory to the container
-- Sets necessary environment variables
-- Uses the node:20-slim image with the linux/amd64 platform
+- Sets necessary environment variables including `NODE_FLAGS_STYLE=linux` to force Linux-style flag ordering
+- Uses the node:18-slim image with the linux/amd64 platform
 - Makes the binary executable and runs it
 
 Run this command from your project root directory. Make sure to replace the placeholder API keys with your actual keys.
+
+#### Troubleshooting Node.js Flag Issues
+
+If you encounter errors like the following when running the binary:
+
+```
+Error: Cannot find module '/path/to/--experimental-modules'
+```
+
+This indicates a Node.js command-line flag ordering issue. Use one of these approaches to fix it:
+
+1. **Set the environment variable** (recommended):
+   ```bash
+   export NODE_FLAGS_STYLE=linux
+   ./ai-hub-apps-v1.0.5-linux
+   ```
+
+2. **Call Node.js explicitly** with correct flag order:
+   ```bash
+   node --experimental-modules --experimental-json-modules /path/to/server/server.mjs
+   ```
+
+3. **For WSL environments** (Windows Subsystem for Linux):
+   ```bash
+   NODE_FLAGS_STYLE=linux ./ai-hub-apps-v1.0.5-linux
+   ```
 
 ### Logging
 
