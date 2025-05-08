@@ -311,7 +311,10 @@ const AppsList = () => {
   return (
     <div ref={containerRef} className="container mx-auto py-8 px-4 flex flex-col h-full">
       <div className="text-center mb-4">
-        <h1 className="text-3xl font-bold mb-2">{t('pages.appsList.title')}</h1>
+        <h1 className="text-3xl font-bold mb-2 flex items-center justify-center">
+          <Icon name="apps-svg-logo" className="text-indigo-600 w-8 h-8 mr-2" />
+          {t('pages.appsList.title')}
+        </h1>
         <p className="text-gray-600">{t('pages.appsList.subtitle')}</p>
       </div>
       

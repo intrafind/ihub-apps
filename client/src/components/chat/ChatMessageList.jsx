@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import ChatMessage from './ChatMessage';
+import Icon from '../Icon'; 
 
 /**
  * A reusable component to display chat messages with auto-scrolling
@@ -15,7 +16,7 @@ const ChatMessageList = ({
   chatId,
   modelId,
   editable = false,
-  compact = false  // New prop for compact mode
+  compact = false
 }) => {
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
@@ -34,19 +35,34 @@ const ChatMessageList = ({
     >
       {messages.length > 0 ? (
         messages.map((message) => (
-          <ChatMessage
-            key={message.id}
-            message={message}
-            outputFormat={outputFormat}
-            onDelete={onDelete}
-            onEdit={onEdit}
-            onResend={onResend}
-            editable={editable}
-            appId={appId}
-            chatId={chatId}
-            modelId={modelId}
-            compact={compact}  // Pass the compact prop to each ChatMessage
-          />
+          <div key={message.id} className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+            {/* Message sender icon */}
+            <div className="flex-shrink-0">
+              {message.role === 'assistant' ? (
+                <Icon name="apps-svg-logo" size="md" className="text-blue-500" />
+              ) : message.role === 'user' ? (
+                <Icon name="user" size="md" className="text-gray-500" />
+              ) : (
+                <Icon name="exclamation-circle" size="md" className="text-yellow-500" />
+              )}
+            </div>
+            
+            {/* Message content */}
+            <div className={`max-w-[80%] ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
+              <ChatMessage
+                message={message}
+                outputFormat={outputFormat}
+                onDelete={onDelete}
+                onEdit={onEdit}
+                onResend={onResend}
+                editable={editable}
+                appId={appId}
+                chatId={chatId}
+                modelId={modelId}
+                compact={compact}
+              />
+            </div>
+          </div>
         ))
       ) : (
         <div className="text-center text-gray-500 py-8">

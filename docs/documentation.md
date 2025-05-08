@@ -757,7 +757,7 @@ The server component is located in the `server/` directory with the following ke
 
 ```
 server/
-  server.mjs        - Main server entry point
+  server.js        - Main server entry point
   utils.js          - Utility functions
   pkg-entry.cjs     - Package entry for binary builds
   adapters/
@@ -877,7 +877,7 @@ This indicates a Node.js command-line flag ordering issue. Use one of these appr
 
 2. **Call Node.js explicitly** with correct flag order:
    ```bash
-   node --experimental-modules --experimental-json-modules /path/to/server/server.mjs
+   node --experimental-modules --experimental-json-modules /path/to/server/server.js
    ```
 
 3. **For WSL environments** (Windows Subsystem for Linux):

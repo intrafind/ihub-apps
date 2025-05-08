@@ -22,7 +22,7 @@ trap cleanup EXIT INT TERM
 
 # Start the server
 echo "Starting server..."
-cd server && node server.mjs &
+cd server && node server.js &
 SERVER_PID=$!
 
 # Wait a moment for the server to start

@@ -7,7 +7,7 @@
     "ai-hub-apps": "./server/pkg-entry.cjs"
   },
   "scripts": {
-    "server": "cd server && node server.mjs",
+    "server": "cd server && node server.js",
     "client": "cd client && npm run dev",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "install:all": "npm install && cd client && npm install && cd ../server && npm install",
@@ -19,7 +19,7 @@
     "build:config": "cp package.json dist/ && npm run build:dotenv",
     "build:dotenv": "[ -f .env ] && cp .env dist/ || echo 'No .env file found, skipping'",
     "build:package": "cd dist && npm install --production && cd server && npm install --production",
-    "start": "cd server && node server.mjs",
+    "start": "cd server && node server.js",
     "start:prod": "cd dist && node server/start-prod.js",
     "prod:build": "npm run build && npm run build:package",
     "prod:deploy": "npm run prod:build && npm run start:prod",
