@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom';
 import { fetchApps } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { useTranslation } from 'react-i18next';
+import { useLocalizedTranslation } from '../utils/useLocalizedTranslation';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { getFavoriteApps, isAppFavorite, toggleFavoriteApp } from '../utils/favoriteApps';
 import { useUIConfig } from '../components/UIConfigContext';
@@ -10,7 +10,7 @@ import Icon from '../components/Icon';
 
 // Instead of fixed values, we'll calculate based on viewport
 const AppsList = () => {
-  const { t, i18n } = useTranslation();
+  const { t, i18n } = useLocalizedTranslation();
   const currentLanguage = i18n.language;
   const { resetHeaderColor } = useUIConfig();
   
