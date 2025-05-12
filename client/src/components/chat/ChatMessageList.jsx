@@ -39,11 +39,11 @@ const ChatMessageList = ({
             {/* Message sender icon */}
             <div className="flex-shrink-0">
               {message.role === 'assistant' ? (
-                <Icon name="apps-svg-logo" size="md" className="text-blue-500" />
+                <Icon name="apps-svg-logo" size="2xl" className="text-blue-500" />
               ) : message.role === 'user' ? (
-                <Icon name="user" size="md" className="text-gray-500" />
+                <Icon name="user" size="2xl" className="text-gray-500" />
               ) : (
-                <Icon name="exclamation-circle" size="md" className="text-yellow-500" />
+                <Icon name="exclamation-circle" size="2xl" className="text-yellow-500" />
               )}
             </div>
             
