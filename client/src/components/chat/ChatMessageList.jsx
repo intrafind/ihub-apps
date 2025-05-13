@@ -41,7 +41,7 @@ const ChatMessageList = ({
               {message.role === 'assistant' ? (
                 <Icon name="apps-svg-logo" size="2xl" className="text-blue-500" />
               ) : message.role === 'user' ? (
-                <Icon name="user" size="2xl" className="text-gray-500" />
+                <Icon name="user" size="xl" className="text-gray-500" />
               ) : (
                 <Icon name="exclamation-circle" size="2xl" className="text-yellow-500" />
               )}
