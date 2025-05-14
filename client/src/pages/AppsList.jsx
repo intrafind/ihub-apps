@@ -12,14 +12,26 @@ import Icon from '../components/Icon';
 const AppsList = () => {
   const { t, i18n } = useLocalizedTranslation();
   const currentLanguage = i18n.language;
-  const { resetHeaderColor } = useUIConfig();
+  const { resetHeaderColor, uiConfig } = useUIConfig();
+  
+  // Get search configuration from UI config with defaults
+  const searchConfig = useMemo(() => {
+    const defaultSearchConfig = {
+      enabled: true,
+      placeholder: {
+        en: "Search apps...",
+        de: "Apps suchen..."
+      },
+      width: "w-full sm:w-2/3 lg:w-1/3"
+    };
+    
+    return uiConfig?.appsList?.search || defaultSearchConfig;
+  }, [uiConfig]);
   
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [categories, setCategories] = useState([]);
   const [favoriteApps, setFavoriteApps] = useState([]);
   const [displayCount, setDisplayCount] = useState(0);
   const [translationsLoaded, setTranslationsLoaded] = useState(false);
@@ -101,19 +113,12 @@ const AppsList = () => {
           return;
         }
         
-        // Extract unique categories before setting state
-        const uniqueCategories = [...new Set(appsData
-          .filter(app => app.category)
-          .map(app => app.category))
-        ];
-        
         // Load favorite apps from localStorage
         const favorites = getFavoriteApps();
         
         // Batch our state updates to prevent multiple renders
         if (isMounted) {
           setApps(appsData);
-          setCategories(uniqueCategories);
           setFavoriteApps(favorites);
           setError(null);
           
@@ -142,11 +147,14 @@ const AppsList = () => {
     };
   }, [currentLanguage, calculateVisibleAppCount]); // Added calculateVisibleAppCount as dependency
 
-  // Reset display count when search or category changes
+  // Reset display count when search changes
   useEffect(() => {
-    const visibleCount = calculateVisibleAppCount();
-    setDisplayCount(visibleCount);
-  }, [searchTerm, selectedCategory, calculateVisibleAppCount]);
+    // Only reset if search is enabled
+    if (searchConfig.enabled && searchTerm) {
+      const visibleCount = calculateVisibleAppCount();
+      setDisplayCount(visibleCount);
+    }
+  }, [searchTerm, calculateVisibleAppCount, searchConfig.enabled]);
 
   // Language change handler to ensure proper UI updates
   // Only re-render on actual language changes, not on every render
@@ -176,10 +184,6 @@ const AppsList = () => {
     setSearchTerm('');
   }, []);
 
-  const handleCategoryChange = useCallback((category) => {
-    setSelectedCategory(category);
-  }, []);
-
   const handleToggleFavorite = useCallback((e, appId) => {
     e.preventDefault(); // Stop event propagation to avoid navigating to the app
     e.stopPropagation();
@@ -207,8 +211,16 @@ const AppsList = () => {
         // Safety check
         if (!app) return false;
         
-        // Skip filtering if search and category are empty/default
-        if (searchTerm === '' && selectedCategory === 'all') {
+        // Determine if search is enabled from config
+        const isSearchEnabled = searchConfig.enabled;
+        
+        // If search is disabled, show all apps
+        if (!isSearchEnabled) {
+          return true;
+        }
+        
+        // Skip filtering if search term is empty
+        if (searchTerm === '') {
           return true;
         }
         
@@ -216,21 +228,17 @@ const AppsList = () => {
         const appName = app.name ? getLocalizedContent(app.name, currentLanguage) || '' : '';
         const appDescription = app.description ? getLocalizedContent(app.description, currentLanguage) || '' : '';
         
-        const nameMatches = searchTerm === '' || 
-                            appName.toLowerCase().includes(searchTerm.toLowerCase());
+        // Check for matches in name or description
+        const nameMatches = appName.toLowerCase().includes(searchTerm.toLowerCase());
+        const descriptionMatches = appDescription.toLowerCase().includes(searchTerm.toLowerCase());
         
-        const descriptionMatches = searchTerm === '' || 
-                                  appDescription.toLowerCase().includes(searchTerm.toLowerCase());
-        
-        const categoryMatches = selectedCategory === 'all' || app.category === selectedCategory;
-        
-        return (nameMatches || descriptionMatches) && categoryMatches;
+        return nameMatches || descriptionMatches;
       } catch (err) {
         console.error('Error filtering app:', app, err);
         return false;
       }
     });
-  }, [apps, searchTerm, selectedCategory, currentLanguage]);
+  }, [apps, searchTerm, currentLanguage, searchConfig.enabled]);
   
   // Memoized sorted apps to avoid recomputing on every render
   const sortedApps = useMemo(() => {
@@ -318,59 +326,42 @@ const AppsList = () => {
         <p className="text-gray-600">{t('pages.appsList.subtitle')}</p>
       </div>
       
-      {/* Responsive search container - full width on mobile, 1/3 width on larger screens */}
-      <div className="flex flex-col gap-6 mb-4 mx-auto w-full sm:w-2/3 lg:w-1/3">
-        <div className="w-full">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <Icon name="search" className="text-gray-400" />
+      {/* Conditional rendering of search based on configuration */}
+      {searchConfig.enabled && (
+        <div className={`flex flex-col gap-6 mb-4 mx-auto ${searchConfig.width || 'w-full sm:w-2/3 lg:w-1/3'}`}>
+          <div className="w-full">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Icon name="search" className="text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder={getLocalizedContent(searchConfig.placeholder, currentLanguage) || t('pages.appsList.searchPlaceholder')}
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+              {searchTerm && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                  aria-label="Clear search"
+                >
+                  <Icon name="x" className="w-5 h-5" />
+                </button>
+              )}
             </div>
-            <input
-              type="text"
-              placeholder={t('pages.appsList.searchPlaceholder')}
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-            {searchTerm && (
-              <button
-                onClick={clearSearch}
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
-                aria-label="Clear search"
-              >
-                <Icon name="x" className="w-5 h-5" />
-              </button>
-            )}
           </div>
         </div>
-        
-        {categories.length > 0 && (
-          <div className="w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-2">{t('pages.appsList.categories')}</label>
-            <select
-              value={selectedCategory}
-              onChange={(e) => handleCategoryChange(e.target.value)}
-              className="w-full px-4 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="all">{t('pages.appsList.allCategories')}</option>
-              {categories.map(category => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+      )}
 
       {displayedApps.length === 0 ? (
         <div className="text-center py-8">
           <p className="text-gray-500">{t('pages.appsList.noApps')}</p>
-          {searchTerm || selectedCategory !== 'all' ? (
+          {searchConfig.enabled && searchTerm ? (
             <button 
               onClick={() => {
                 clearSearch();
-                handleCategoryChange('all');
               }}
               className="mt-4 px-4 py-2 text-indigo-600 border border-indigo-600 rounded hover:bg-indigo-50"
             >
@@ -427,13 +418,6 @@ const AppsList = () => {
                       )}
                     </h3>
                     <p className="text-gray-600 text-sm flex-grow">{getLocalizedContent(app.description, currentLanguage) || ''}</p>
-                    {app.category && (
-                      <div className="mt-3">
-                        <span className="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
-                          {app.category}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </Link>
               </div>
@@ -450,7 +434,8 @@ const AppsList = () => {
                 {t('pages.appsList.loadMore', 'Load More')}
               </button>
               <p className="text-gray-500 text-sm mt-2">
-                {t('pages.appsList.showingCountOfTotal', 'Showing {{displayed}} of {{total}} apps', {
+                {t('pages.appsList.showingCountOfTotal', {
+                  defaultValue: 'Showing {{displayed}} of {{total}} apps',
                   displayed: displayedApps.length,
                   total: sortedApps.length
                 })}
