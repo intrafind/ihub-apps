@@ -105,16 +105,6 @@
       "borderRadius": "8px"
     }
   },
-  "appsList": {
-    "search": {
-      "enabled": true,
-      "placeholder": {
-        "en": "Search apps...",
-        "de": "Apps suchen..."
-      },
-      "width": "w-full sm:w-2/3 lg:w-1/3"
-    }
-  },
   "pages": {
     "privacy": {
       "title": {
