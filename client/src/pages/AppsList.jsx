@@ -373,14 +373,20 @@ const AppsList = () => {
         <>
           <div 
             ref={gridRef} 
-            className={`grid ${displayedApps.length <= 2 ? 'justify-items-center mx-auto max-w-3xl' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'} `}
+            className={`grid gap-6 ${
+              displayedApps.length === 1 
+                ? 'grid-cols-1 max-w-md mx-auto' 
+                : displayedApps.length === 2
+                  ? 'grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto'
+                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+            }`}
             role="list" 
             aria-label="Apps list"
           >
             {displayedApps.map(app => (
               <div
                 key={app.id}
-                className="relative bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300"
+                className="relative bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 w-full max-w-md"
                 role="listitem"
               >
                 <button 
