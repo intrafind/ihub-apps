@@ -198,6 +198,9 @@
 .chat-widget-message-content {
   max-width: 80%; /* Limit width of message bubbles */
   width: auto; /* Allow content to determine width up to max-width */
+  white-space: normal;
+  display: inline-block;
+  box-sizing: content-box;
 }
 
 .chat-widget-message.user .chat-widget-message-content {

@@ -4,6 +4,7 @@ import { marked } from 'marked';
 import { sendMessageFeedback } from '../../api/api';
 import MessageVariables from './MessageVariables';
 import Icon from '../Icon';
+import StreamingMarkdown from './StreamingMarkdown';
 
 const ChatMessage = ({ 
   message, 
@@ -324,6 +325,21 @@ const ChatMessage = ({
     }
 
     if (message.loading) {
+      console.log('Rendering loading state for message:', message.content);
+      // For loading assistant messages with markdown, still use the StreamingMarkdown component
+      if (outputFormat === 'markdown' && !isUser) {
+        return (
+          <div className="flex flex-col">
+            <StreamingMarkdown content={message.content} />
+            <div className="flex mt-2">
+              <span className="inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span>
+              <span className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></span>
+              <span className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></span>
+            </div>
+          </div>
+        );
+      }
+      // For user messages or non-markdown, render as plain text
       return (
         <div className="flex items-center">
           <span>{message.content}</span>
@@ -344,16 +360,12 @@ const ChatMessage = ({
     }
     
     if (outputFormat === 'markdown' && !isUser) {
-      // Use marked to parse markdown including tables
-      const parsedContent = marked(message.content);
-      
-      return (
-        <div className="markdown-content break-words" 
-             dangerouslySetInnerHTML={{ __html: parsedContent }}></div>
-      );
+      console.log('Rendering markdown content:', message.content);
+      // Use StreamingMarkdown component for better real-time rendering
+      return <StreamingMarkdown content={message.content} />;
     }
     
-    return <div className="break-words whitespace-pre-wrap">{message.content}</div>;
+    return <div className="break-words whitespace-normal" style={{boxSizing: 'content-box', display: 'inline-block'}}>{message.content}</div>;
   };
 
   return (
@@ -363,7 +375,7 @@ const ChatMessage = ({
       onMouseLeave={() => setShowActions(false)}
     >
       <div 
-        className={`chat-widget-message-content ${
+        className={`chat-widget-message-content whitespace-normal ${
           isError ? 'error' : ''
         }`}
       >

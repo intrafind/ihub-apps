@@ -98,7 +98,13 @@ function useChatMessages(chatId = 'default') {
     setMessages(prev => 
       prev.map(msg => 
         msg.id === id
-          ? { ...msg, content, loading: isLoading }
+          ? { 
+              ...msg, 
+              content, 
+              loading: isLoading,
+              _timestamp: Date.now(), // Add timestamp to force new object reference
+              _contentLength: content.length // Track content length to ensure React detects changes
+            }
           : msg
       )
     );

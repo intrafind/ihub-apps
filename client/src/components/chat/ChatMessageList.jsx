@@ -21,7 +21,7 @@ const ChatMessageList = ({
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
 
-  // Auto-scroll to bottom when messages change
+1  // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -37,7 +37,7 @@ const ChatMessageList = ({
         messages.map((message) => (
           <div key={message.id} className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
             {/* Message sender icon */}
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 mt-1">
               {message.role === 'assistant' ? (
                 <Icon name="apps-svg-logo" size="2xl" className="text-blue-500" />
               ) : message.role === 'user' ? (
@@ -48,7 +48,7 @@ const ChatMessageList = ({
             </div>
             
             {/* Message content */}
-            <div className={`max-w-[80%] ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
+            <div className={`max-w-[80%] ${message.role === 'user' ? '' : ''}`}>
               <ChatMessage
                 message={message}
                 outputFormat={outputFormat}
