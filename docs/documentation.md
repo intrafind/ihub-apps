@@ -6,6 +6,13 @@ This documentation covers configuration options for AI Hub Apps including apps, 
 
 1. [App Configuration](#app-configuration)
 2. [UI Configuration](#ui-configuration)
+   - [Basic Structure](#basic-structure)
+   - [Title Configuration](#title-configuration)
+   - [Header Configuration](#header-configuration)
+   - [Footer Configuration](#footer-configuration)
+   - [Disclaimer Configuration](#disclaimer-configuration)
+   - [Apps List Configuration](#apps-list-configuration)
+   - [Static Pages](#static-pages)
 3. [Models Configuration](#models-configuration)
 4. [Content Management](#content-management)
 5. [Internationalization (i18n)](#internationalization-i18n)
@@ -272,6 +279,31 @@ The `disclaimer` section defines the legal disclaimer shown to users:
   "updated": "2023-01-01"
 }
 ```
+
+### Apps List Configuration
+
+The `appsList` section controls the behavior and appearance of the apps list/home page:
+
+```json
+"appsList": {
+  "search": {
+    "enabled": true,
+    "placeholder": {
+      "en": "Search apps...",
+      "de": "Apps suchen..."
+    },
+    "width": "w-full sm:w-2/3 lg:w-1/3"
+  }
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `search.enabled` | Boolean | Enable or disable the search functionality (default: true) |
+| `search.placeholder` | Object | Localized placeholder text for the search input |
+| `search.width` | String | CSS width classes for the search container (using Tailwind format) |
+
+Setting `search.enabled` to `false` will completely remove the search functionality from the apps list page.
 
 ### Static Pages
 
