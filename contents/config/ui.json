@@ -107,7 +107,7 @@
   },
   "appsList": {
     "search": {
-      "enabled": false,
+      "enabled": true,
       "placeholder": {
         "en": "Search apps...",
         "de": "Apps suchen..."
