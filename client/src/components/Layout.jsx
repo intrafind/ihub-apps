@@ -29,8 +29,8 @@ const Layout = () => {
 
   return (
     <div className="flex flex-col min-h-screen h-full w-full">
-      {/* Disclaimer Popup */}
-      {uiConfig?.disclaimer && (
+      {/* Disclaimer Popup - Only render if enabled (defaults to true) */}
+      {uiConfig?.disclaimer && uiConfig.disclaimer.enabled !== false && (
         <DisclaimerPopup 
           disclaimer={uiConfig.disclaimer} 
           currentLanguage={currentLanguage} 
@@ -123,32 +123,35 @@ const Layout = () => {
         <Outlet />
       </main>
 
-      <footer className="bg-gray-800 text-white py-4">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="mb-4 md:mb-0">
-              <p>{uiConfig?.footer?.text ? getLocalizedContent(uiConfig.footer.text, currentLanguage) : t('footer.copyright')}</p>
-            </div>
-            {/* Only show footer links when NOT on an app page */}
-            {!isAppPage && (
-              <div className="flex flex-wrap justify-center gap-4 md:gap-6">
-                {uiConfig?.footer?.links && uiConfig.footer.links.map((link, index) => (
-                  <Link 
-                    key={index}
-                    to={link.url} 
-                    className="hover:text-gray-300"
-                    target={link.url.startsWith('http') || link.url.startsWith('mailto:') ? '_blank' : undefined}
-                    rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                  >
-                    {getLocalizedContent(link.name, currentLanguage)}
-                  </Link>
-                ))}
+      {/* Footer - Only render if enabled (defaults to true) */}
+      {(uiConfig?.footer?.enabled !== false) && (
+        <footer className="bg-gray-800 text-white py-4">
+          <div className="container mx-auto px-4">
+            <div className="flex flex-col md:flex-row justify-between items-center">
+              <div className="mb-4 md:mb-0">
+                <p>{uiConfig?.footer?.text ? getLocalizedContent(uiConfig.footer.text, currentLanguage) : t('footer.copyright')}</p>
               </div>
-            )}
+              {/* Only show footer links when NOT on an app page */}
+              {!isAppPage && (
+                <div className="flex flex-wrap justify-center gap-4 md:gap-6">
+                  {uiConfig?.footer?.links && uiConfig.footer.links.map((link, index) => (
+                    <Link 
+                      key={index}
+                      to={link.url} 
+                      className="hover:text-gray-300"
+                      target={link.url.startsWith('http') || link.url.startsWith('mailto:') ? '_blank' : undefined}
+                      rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                    >
+                      {getLocalizedContent(link.name, currentLanguage)}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Disclaimer removed from footer - now shown as a popup */}
           </div>
-          {/* Disclaimer removed from footer - now shown as a popup */}
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 };
