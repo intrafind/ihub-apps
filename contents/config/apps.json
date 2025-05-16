@@ -30,18 +30,12 @@
     "settings": {
       "enabled": true,
       "model": {
-        "enabled": true
-      },
-      "style": {
-        "enabled": true
+        "enabled": false
       },
       "temperature": {
-        "enabled": true
+        "enabled": false
       },
       "outputFormat": {
-        "enabled": true
-      },
-      "chatHistory": {
         "enabled": true
       }
     },
