@@ -321,9 +321,10 @@ const AppsList = () => {
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-2 flex items-center justify-center">
           <Icon name="apps-svg-logo" className="text-indigo-600 w-[4rem] h-[4rem] mr-2" />
-          {t('pages.appsList.title')}
+          {/* Use title from UI config if available, otherwise use translation */}
+          {uiConfig?.appsList?.title ? getLocalizedContent(uiConfig.appsList.title, currentLanguage) : t('pages.appsList.title')}
         </h1>
-        <p className="text-gray-600">{t('pages.appsList.subtitle')}</p>
+        <p className="text-gray-600">{uiConfig?.appsList?.subtitle ? getLocalizedContent(uiConfig.appsList.subtitle, currentLanguage) : t('pages.appsList.subtitle')}</p>
       </div>
       
       {/* Conditional rendering of search based on configuration */}
