@@ -26,6 +26,27 @@
     "prompt": {
       "en": "{{content}}",
       "de": "{{content}}"
+    },
+    "settings": {
+      "enabled": true,
+      "model": {
+        "enabled": true
+      },
+      "style": {
+        "enabled": true
+      },
+      "temperature": {
+        "enabled": true
+      },
+      "outputFormat": {
+        "enabled": true
+      },
+      "chatHistory": {
+        "enabled": true
+      }
+    },
+    "microphone": {
+      "enabled": true
     }
   },
   {
@@ -50,7 +71,28 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.7,
-    "sendChatHistory": true
+    "sendChatHistory": true,
+    "settings": {
+      "enabled": true,
+      "model": {
+        "enabled": true
+      },
+      "style": {
+        "enabled": true
+      },
+      "temperature": {
+        "enabled": true
+      },
+      "outputFormat": {
+        "enabled": true
+      },
+      "chatHistory": {
+        "enabled": true
+      },
+      "microphone": {
+        "enabled": true
+      }
+    }
   },
   {
     "id": "translator",
@@ -78,6 +120,27 @@
     "prompt": {
       "en": "Selected Language: \"{{language}}\" - Text to translate: \"{{content}}\"",
       "de": "Ausgewählte Sprache in die Übersetzt werden soll: \"{{language}}\" - Text der übersetzt werden soll: \"{{content}}\""
+    },
+    "settings": {
+      "enabled": true,
+      "model": {
+        "enabled": true
+      },
+      "style": {
+        "enabled": false
+      },
+      "temperature": {
+        "enabled": false
+      },
+      "outputFormat": {
+        "enabled": true
+      },
+      "chatHistory": {
+        "enabled": false
+      },
+      "microphone": {
+        "enabled": true
+      }
     },
     "variables": [
       {
@@ -134,6 +197,27 @@
       "en": "Please {{action}} the following content: \"{{content}}\"",
       "de": "Bitte {{action}} den folgenden Inhalt: \"{{content}}\""
     },
+    "settings": {
+      "enabled": true,
+      "model": {
+        "enabled": true
+      },
+      "style": {
+        "enabled": true
+      },
+      "temperature": {
+        "enabled": true
+      },
+      "outputFormat": {
+        "enabled": true
+      },
+      "chatHistory": {
+        "enabled": false
+      },
+      "microphone": {
+        "enabled": true
+      }
+    },
     "variables": [
       {
         "name": "action",
@@ -177,6 +261,27 @@
     "prompt": {
       "en": "{{content}}",
       "de": "{{content}}"
+    },
+    "settings": {
+      "enabled": true,
+      "model": {
+        "enabled": true
+      },
+      "style": {
+        "enabled": true
+      },
+      "temperature": {
+        "enabled": true
+      },
+      "outputFormat": {
+        "enabled": true
+      },
+      "chatHistory": {
+        "enabled": true
+      },
+      "microphone": {
+        "enabled": true
+      }
     },
     "variables": [
       {

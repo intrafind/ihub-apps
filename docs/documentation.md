@@ -153,6 +153,46 @@ Apps can define custom actions that trigger specific behaviors:
 ]
 ```
 
+#### Settings Configuration
+
+The `settings` property controls which configuration options users can adjust for each app:
+
+```json
+"settings": {
+  "enabled": true,
+  "model": {
+    "enabled": true
+  },
+  "style": {
+    "enabled": true
+  },
+  "temperature": {
+    "enabled": true
+  },
+  "outputFormat": {
+    "enabled": true
+  },
+  "chatHistory": {
+    "enabled": true
+  }
+},
+"microphone": {
+  "enabled": true
+}
+```
+
+| Property | Description |
+|----------|-------------|
+| `settings.enabled` | Master switch for all settings - when `false`, all settings UI is hidden |
+| `settings.model.enabled` | Enable/disable model selection option |
+| `settings.style.enabled` | Enable/disable response style selection |
+| `settings.temperature.enabled` | Enable/disable temperature adjustment |
+| `settings.outputFormat.enabled` | Enable/disable output format selection |
+| `settings.chatHistory.enabled` | Enable/disable chat history toggle |
+| `microphone.enabled` | Enable/disable microphone input for voice commands |
+
+When a setting is disabled, the corresponding UI element will be hidden, and the app will use the predefined value specified in its configuration.
+
 #### Other Options
 
 - `allowEmptyContent`: Allow submission without content input
@@ -176,6 +216,91 @@ The system supports these icons:
 - `share` - Share icon
 - And more as defined in the system's Icon component
 
+### Settings Configuration Examples
+
+Here are some practical examples of how to configure the settings for different use cases:
+
+#### Example 1: Basic Chat App with All Settings Available
+
+```json
+{
+  "id": "full-featured-chat",
+  "name": {
+    "en": "Full Featured Chat"
+  },
+  // Other app properties
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "style": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": true
+    },
+    "outputFormat": {
+      "enabled": true
+    },
+    "chatHistory": {
+      "enabled": true
+    },
+    "microphone": {
+      "enabled": true
+    }
+  }
+}
+```
+
+#### Example 2: Specialized App with Limited Settings
+
+```json
+{
+  "id": "specialized-translator",
+  "name": {
+    "en": "Specialized Translator"
+  },
+  // Other app properties
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": false 
+    },
+    "style": {
+      "enabled": false
+    },
+    "temperature": {
+      "enabled": false
+    },
+    "outputFormat": {
+      "enabled": true
+    },
+    "chatHistory": {
+      "enabled": false
+    },
+    "microphone": {
+      "enabled": true
+    }
+  }
+}
+```
+
+#### Example 3: Fixed Configuration App (No Settings)
+
+```json
+{
+  "id": "fixed-faq-bot",
+  "name": {
+    "en": "FAQ Bot"
+  },
+  // Other app properties
+  "settings": {
+    "enabled": false
+  }
+}
+```
+
 ## UI Configuration
 
 The UI configuration defines the appearance and behavior of the AI Hub user interface. These settings are managed through the `config/ui.json` file.
@@ -191,8 +316,15 @@ The UI configuration contains the following top-level sections:
     "de": "KI-Hub"
   },
   "header": { /* Header configuration */ },
-  "footer": { /* Footer configuration */ },
-  "disclaimer": { /* Disclaimer text */ },
+  "footer": { 
+    "enabled": true,
+    /* Footer configuration */ 
+  },
+  "disclaimer": { 
+    "enabled": true,
+    /* Disclaimer text */ 
+  },
+  "appsList": { /* Apps list configuration */ },
   "pages": { /* Static page content */ }
 }
 ```
@@ -248,6 +380,7 @@ The `footer` section controls the appearance and content of the application foot
 
 ```json
 "footer": {
+  "enabled": true,
   "text": {
     "en": "© 2025 AI Hub. All rights reserved.",
     "de": "© 2025 KI-Hub. Alle Rechte vorbehalten."
@@ -265,12 +398,21 @@ The `footer` section controls the appearance and content of the application foot
 }
 ```
 
+| Property | Type | Description |
+|----------|------|-------------|
+| `enabled` | Boolean | Whether to display the footer (default: true) |
+| `text` | Object | Localized copyright text for the footer |
+| `links` | Array | Navigation links for the footer |
+
+Setting `enabled` to `false` will completely remove the footer from all pages.
+
 ### Disclaimer Configuration
 
 The `disclaimer` section defines the legal disclaimer shown to users:
 
 ```json
 "disclaimer": {
+  "enabled": true,
   "text": {
     "en": "Disclaimer text in English...",
     "de": "Disclaimer text in German..."
@@ -280,12 +422,29 @@ The `disclaimer` section defines the legal disclaimer shown to users:
 }
 ```
 
+| Property | Type | Description |
+|----------|------|-------------|
+| `enabled` | Boolean | Whether to display the disclaimer (default: true) |
+| `text` | Object | Localized disclaimer text |
+| `version` | String | Version of the disclaimer |
+| `updated` | String | Date the disclaimer was last updated |
+
+Setting `enabled` to `false` will completely remove the disclaimer from the application.
+
 ### Apps List Configuration
 
 The `appsList` section controls the behavior and appearance of the apps list/home page:
 
 ```json
 "appsList": {
+  "title": {
+    "en": "AI Apps",
+    "de": "KI-Anwendungen"
+  },
+  "subtitle": {
+    "en": "Choose an application to start a conversation",
+    "de": "Wählen Sie eine Anwendung, um ein Gespräch zu beginnen"
+  },
   "search": {
     "enabled": true,
     "placeholder": {
@@ -299,6 +458,8 @@ The `appsList` section controls the behavior and appearance of the apps list/hom
 
 | Property | Type | Description |
 |----------|------|-------------|
+| `title` | Object | Localized title for the apps list page (overrides the translation value) |
+| `subtitle` | Object | Localized subtitle for the apps list page (overrides the translation value) |
 | `search.enabled` | Boolean | Enable or disable the search functionality (default: true) |
 | `search.placeholder` | Object | Localized placeholder text for the search input |
 | `search.width` | String | CSS width classes for the search container (using Tailwind format) |

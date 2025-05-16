@@ -826,8 +826,8 @@ const AppChat = () => {
             onSubmit={handleSubmit}
             isProcessing={processing}
             onCancel={cancelGeneration}
-            onVoiceInput={handleVoiceInput}
-            onVoiceCommand={handleVoiceCommand}
+            onVoiceInput={app?.microphone?.enabled !== false ? handleVoiceInput : undefined}
+            onVoiceCommand={app?.microphone?.enabled !== false ? handleVoiceCommand : undefined}
             allowEmptySubmit={app?.allowEmptyContent}
             inputRef={inputRef}
           />

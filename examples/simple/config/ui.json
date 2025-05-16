@@ -3,6 +3,11 @@
     "en": "AI Hub",
     "de": "KI-Hub"
   },
+  "appsList": {
+    "search": {
+      "enabled": false
+    }
+  },
   "header": {
     "defaultColor": "rgb(0, 53, 87)",
     "logo": {

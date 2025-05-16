@@ -1,7 +1,7 @@
 {
   "title": {
-    "en": "AI Hub",
-    "de": "KI-Hub"
+    "en": "AI Hub (complex)",
+    "de": "KI-Hub (komplex)"
   },
   "header": {
     "defaultColor": "rgb(0, 53, 87)",
@@ -103,6 +103,24 @@
       "secondaryColor": "#f3f4f6",
       "fontFamily": "Inter, system-ui, sans-serif",
       "borderRadius": "8px"
+    }
+  },
+  "appsList": {
+    "title": {
+      "en": "Enterprise AI Solutions",
+      "de": "KI-Lösungen für Unternehmen"
+    },
+    "subtitle": {
+      "en": "Select a specialized AI assistant for your task",
+      "de": "Wählen Sie einen spezialisierten KI-Assistenten für Ihre Aufgabe"
+    },
+    "search": {
+      "enabled": true,
+      "placeholder": {
+        "en": "Find an AI solution...",
+        "de": "KI-Lösung finden..."
+      },
+      "width": "w-full sm:w-2/3 lg:w-1/2"
     }
   },
   "pages": {
