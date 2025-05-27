@@ -1,20 +1,32 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { fetchAppDetails, fetchModels, fetchStyles, sendAppChatMessage, isTimeoutError } from '../api/api';
-import AppConfigForm from '../components/AppConfigForm';
-import LoadingSpinner from '../components/LoadingSpinner';
-import { useTranslation } from 'react-i18next';
-import { getLocalizedContent } from '../utils/localizeContent';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  fetchAppDetails,
+  fetchModels,
+  fetchStyles,
+  sendAppChatMessage,
+  isTimeoutError,
+} from "../api/api";
+import AppConfigForm from "../components/AppConfigForm";
+import LoadingSpinner from "../components/LoadingSpinner";
+import { useTranslation } from "react-i18next";
+import { getLocalizedContent } from "../utils/localizeContent";
 
 // Import our custom hooks and components
-import useEventSource from '../utils/useEventSource';
-import useChatMessages from '../utils/useChatMessages';
-import useVoiceCommands from '../utils/useVoiceCommands';
-import ChatHeader from '../components/chat/ChatHeader';
-import ChatInput from '../components/chat/ChatInput';
-import ChatMessageList from '../components/chat/ChatMessageList';
-import InputVariables from '../components/chat/InputVariables';
-import { useUIConfig } from '../components/UIConfigContext';
+import useEventSource from "../utils/useEventSource";
+import useChatMessages from "../utils/useChatMessages";
+import useVoiceCommands from "../utils/useVoiceCommands";
+import ChatHeader from "../components/chat/ChatHeader";
+import ChatInput from "../components/chat/ChatInput";
+import ChatMessageList from "../components/chat/ChatMessageList";
+import InputVariables from "../components/chat/InputVariables";
+import { useUIConfig } from "../components/UIConfigContext";
 
 /**
  * Save app settings and variables to sessionStorage
@@ -26,7 +38,7 @@ const saveAppSettings = (appId, settings) => {
     const key = `ai_hub_app_settings_${appId}`;
     sessionStorage.setItem(key, JSON.stringify(settings));
   } catch (error) {
-    console.error('Error saving app settings to sessionStorage:', error);
+    console.error("Error saving app settings to sessionStorage:", error);
   }
 };
 
@@ -41,7 +53,7 @@ const loadAppSettings = (appId) => {
     const saved = sessionStorage.getItem(key);
     return saved ? JSON.parse(saved) : null;
   } catch (error) {
-    console.error('Error loading app settings from sessionStorage:', error);
+    console.error("Error loading app settings from sessionStorage:", error);
     return null;
   }
 };
@@ -54,14 +66,14 @@ const AppChat = () => {
   const [app, setApp] = useState(null);
   const [models, setModels] = useState([]);
   const [styles, setStyles] = useState({});
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
   const [selectedModel, setSelectedModel] = useState(null);
-  const [selectedStyle, setSelectedStyle] = useState('normal');
-  const [selectedOutputFormat, setSelectedOutputFormat] = useState('markdown');
+  const [selectedStyle, setSelectedStyle] = useState("normal");
+  const [selectedOutputFormat, setSelectedOutputFormat] = useState("markdown");
   const [sendChatHistory, setSendChatHistory] = useState(true);
   const [temperature, setTemperature] = useState(0.7);
   const [variables, setVariables] = useState({});
@@ -71,7 +83,7 @@ const AppChat = () => {
 
   const inputRef = useRef(null);
   const chatId = useRef(`chat-${Date.now()}`);
-  const currentVoiceTextRef = useRef('');
+  const currentVoiceTextRef = useRef("");
 
   // Language tracking
   const prevLanguageRef = useRef(currentLanguage);
@@ -94,15 +106,11 @@ const AppChat = () => {
     editMessage,
     addSystemMessage,
     clearMessages,
-    getMessagesForApi
+    getMessagesForApi,
   } = useChatMessages(stableChatId);
 
   // Use our custom event source hook for SSE connections
-  const {
-    initEventSource,
-    cleanupEventSource,
-    isConnected
-  } = useEventSource({
+  const { initEventSource, cleanupEventSource, isConnected } = useEventSource({
     appId,
     chatId: chatId.current,
     onChunk: (fullContent) => {
@@ -128,29 +136,35 @@ const AppChat = () => {
       try {
         if (window.pendingMessageData) {
           const { appId, chatId, messages, params } = window.pendingMessageData;
-          
-          console.log('Connection established, sending pending message with parameters:', params);
-          
+
+          console.log(
+            "Connection established, sending pending message with parameters:",
+            params
+          );
+
           await sendAppChatMessage(appId, chatId, messages, params);
-          
+
           // Clear the pending data after sending
           window.pendingMessageData = null;
         }
       } catch (error) {
-        console.error('Error sending message on connection:', error);
-        
+        console.error("Error sending message on connection:", error);
+
         if (window.lastMessageId) {
           setMessageError(
             window.lastMessageId,
-            t('error.failedToGenerateResponse', 'Error: Failed to generate response. Please try again or select a different model.')
+            t(
+              "error.failedToGenerateResponse",
+              "Error: Failed to generate response. Please try again or select a different model."
+            )
           );
         }
-        
+
         cleanupEventSource();
         setProcessing(false);
       }
     },
-    onProcessingChange: setProcessing
+    onProcessingChange: setProcessing,
   });
 
   // Set up voice commands
@@ -164,60 +178,74 @@ const AppChat = () => {
     sendMessage: (text) => {
       setInput(text);
       setTimeout(() => {
-        const form = document.querySelector('form');
+        const form = document.querySelector("form");
         if (form) {
-          const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+          const submitEvent = new Event("submit", {
+            cancelable: true,
+            bubbles: true,
+          });
           form.dispatchEvent(submitEvent);
         }
       }, 0);
     },
     isProcessing: processing,
     currentText: input,
-    onConfirmClear: () => window.confirm(t('pages.appChat.confirmClear', 'Are you sure you want to clear the entire chat history?'))
+    setInput,
+    onConfirmClear: () =>
+      window.confirm(
+        t(
+          "pages.appChat.confirmClear",
+          "Are you sure you want to clear the entire chat history?"
+        )
+      ),
   });
 
   // Reference to track if greeting has been added
   const greetingAddedRef = useRef(false);
-  
+
   // Get UI config for fallback to widget greeting
   const { uiConfig } = useUIConfig();
   const widgetConfig = uiConfig?.widget || {};
 
-  const hasVariablesToSend = app?.variables && Object.keys(variables).length > 0;
+  const hasVariablesToSend =
+    app?.variables && Object.keys(variables).length > 0;
 
   useEffect(() => {
     // Store mounted state to prevent state updates after unmount
     let isMounted = true;
-    
+
     const loadData = async () => {
       try {
         setLoading(true);
-        
+
         // Add a small delay to allow i18n to fully initialize
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         // Only proceed if still mounted
         if (!isMounted) return;
-  
-        console.log('Fetching app data for:', appId);
+
+        console.log("Fetching app data for:", appId);
         const appData = await fetchAppDetails(appId);
-        
+
         // Safety check for component unmounting during async operations
         if (!isMounted) return;
-        
+
         if (appData?.color) {
           setHeaderColor(appData.color);
         }
-        
+
         // Batch related state updates
         const initialState = {
           app: appData,
           temperature: appData.preferredTemperature || 0.7,
-          selectedStyle: appData.preferredStyle || 'normal',
-          selectedOutputFormat: appData.preferredOutputFormat || 'markdown',
-          sendChatHistory: appData.sendChatHistory !== undefined ? appData.sendChatHistory : true,
+          selectedStyle: appData.preferredStyle || "normal",
+          selectedOutputFormat: appData.preferredOutputFormat || "markdown",
+          sendChatHistory:
+            appData.sendChatHistory !== undefined
+              ? appData.sendChatHistory
+              : true,
         };
-        
+
         if (isMounted) {
           setApp(initialState.app);
           setTemperature(initialState.temperature);
@@ -225,7 +253,7 @@ const AppChat = () => {
           setSelectedOutputFormat(initialState.selectedOutputFormat);
           setSendChatHistory(initialState.sendChatHistory);
         }
-  
+
         // Process variables if available
         if (appData.variables && isMounted) {
           const initialVars = {};
@@ -233,14 +261,21 @@ const AppChat = () => {
             // For select variables with predefined values, ensure we store the value, not the label
             if (variable.predefinedValues && variable.defaultValue) {
               // If defaultValue is an object with language keys
-              if (typeof variable.defaultValue === 'object') {
-                const localizedLabel = getLocalizedContent(variable.defaultValue, currentLanguage);
+              if (typeof variable.defaultValue === "object") {
+                const localizedLabel = getLocalizedContent(
+                  variable.defaultValue,
+                  currentLanguage
+                );
                 // Find the matching value for the localized label
                 const matchingOption = variable.predefinedValues.find(
-                  option => getLocalizedContent(option.label, currentLanguage) === localizedLabel
+                  (option) =>
+                    getLocalizedContent(option.label, currentLanguage) ===
+                    localizedLabel
                 );
                 // Use the value from predefined values if found, otherwise use the localized label
-                initialVars[variable.name] = matchingOption ? matchingOption.value : localizedLabel;
+                initialVars[variable.name] = matchingOption
+                  ? matchingOption.value
+                  : localizedLabel;
               } else {
                 // If defaultValue is a direct string, use it as is
                 initialVars[variable.name] = variable.defaultValue;
@@ -248,27 +283,27 @@ const AppChat = () => {
             } else {
               // For other variables, use standard localization
               const localizedDefaultValue =
-                typeof variable.defaultValue === 'object'
+                typeof variable.defaultValue === "object"
                   ? getLocalizedContent(variable.defaultValue, currentLanguage)
-                  : variable.defaultValue || '';
+                  : variable.defaultValue || "";
               initialVars[variable.name] = localizedDefaultValue;
             }
           });
-          
+
           if (isMounted) {
             setVariables(initialVars);
           }
         }
-  
+
         // Fetch models and styles in parallel to optimize loading
         const [modelsData, stylesData] = await Promise.all([
           fetchModels(),
-          fetchStyles()
+          fetchStyles(),
         ]);
-        
+
         // Exit if component unmounted during fetch
         if (!isMounted) return;
-        
+
         // Determine model to select
         let modelToSelect = appData.preferredModel;
         if (appData.allowedModels && appData.allowedModels.length > 0) {
@@ -276,7 +311,7 @@ const AppChat = () => {
             modelToSelect = appData.allowedModels[0];
           }
         }
-  
+
         if (isMounted) {
           setModels(modelsData);
           setStyles(stylesData);
@@ -284,10 +319,13 @@ const AppChat = () => {
           setError(null);
         }
       } catch (err) {
-        console.error('Error loading app data:', err);
+        console.error("Error loading app data:", err);
         if (isMounted) {
           setError(
-            t('error.failedToLoadApp', 'Failed to load application data. Please try again later.')
+            t(
+              "error.failedToLoadApp",
+              "Failed to load application data. Please try again later."
+            )
           );
         }
       } finally {
@@ -296,9 +334,9 @@ const AppChat = () => {
         }
       }
     };
-  
+
     loadData();
-    
+
     // Cleanup function to handle component unmount
     return () => {
       isMounted = false;
@@ -311,18 +349,26 @@ const AppChat = () => {
       const savedSettings = loadAppSettings(appId);
       if (savedSettings) {
         // Restore settings if they exist
-        if (savedSettings.selectedModel) setSelectedModel(savedSettings.selectedModel);
-        if (savedSettings.selectedStyle) setSelectedStyle(savedSettings.selectedStyle);
-        if (savedSettings.selectedOutputFormat) setSelectedOutputFormat(savedSettings.selectedOutputFormat);
-        if (savedSettings.sendChatHistory !== undefined) setSendChatHistory(savedSettings.sendChatHistory);
-        if (savedSettings.temperature) setTemperature(savedSettings.temperature);
+        if (savedSettings.selectedModel)
+          setSelectedModel(savedSettings.selectedModel);
+        if (savedSettings.selectedStyle)
+          setSelectedStyle(savedSettings.selectedStyle);
+        if (savedSettings.selectedOutputFormat)
+          setSelectedOutputFormat(savedSettings.selectedOutputFormat);
+        if (savedSettings.sendChatHistory !== undefined)
+          setSendChatHistory(savedSettings.sendChatHistory);
+        if (savedSettings.temperature)
+          setTemperature(savedSettings.temperature);
         if (savedSettings.variables) setVariables(savedSettings.variables);
-        
-        console.log('Restored app settings from sessionStorage:', savedSettings);
+
+        console.log(
+          "Restored app settings from sessionStorage:",
+          savedSettings
+        );
       }
     }
   }, [app, loading, appId]);
-  
+
   // Save settings to sessionStorage whenever they change
   useEffect(() => {
     if (app && !loading) {
@@ -332,52 +378,72 @@ const AppChat = () => {
         selectedOutputFormat,
         sendChatHistory,
         temperature,
-        variables
+        variables,
       };
-      
+
       saveAppSettings(appId, settings);
     }
-  }, [app, loading, appId, selectedModel, selectedStyle, selectedOutputFormat, sendChatHistory, temperature, variables]);
+  }, [
+    app,
+    loading,
+    appId,
+    selectedModel,
+    selectedStyle,
+    selectedOutputFormat,
+    sendChatHistory,
+    temperature,
+    variables,
+  ]);
 
   // Display greeting message when app is loaded and no messages exist yet
   useEffect(() => {
     // Only add greeting message when app is loaded, messages are empty, and we haven't added it yet
     if (app && !loading && messages.length === 0 && !greetingAddedRef.current) {
-      console.log('[AppChat] Adding greeting message when app loaded');
-      
+      console.log("[AppChat] Adding greeting message when app loaded");
+
       // Check for language specific greeting
-      const userLanguage = currentLanguage.split('-')[0].toLowerCase();
-      
+      const userLanguage = currentLanguage.split("-")[0].toLowerCase();
+
       // Try to get app-specific greeting first
       let greeting = null;
-      
+
       // Check if app has its own greeting
       if (app.greeting) {
-        greeting = typeof app.greeting === 'object' 
-          ? (app.greeting[userLanguage] || app.greeting.en)
-          : app.greeting;
+        greeting =
+          typeof app.greeting === "object"
+            ? app.greeting[userLanguage] || app.greeting.en
+            : app.greeting;
       }
-      
+
       // Fall back to widget greeting if app doesn't have one
       if (!greeting && widgetConfig.greeting) {
-        greeting = widgetConfig.greeting[userLanguage] || widgetConfig.greeting.en;
+        greeting =
+          widgetConfig.greeting[userLanguage] || widgetConfig.greeting.en;
       }
-      
+
       // If we have a greeting, display it
       if (greeting) {
         // Create a greeting message and immediately mark it as not loading
         const greetingId = addAssistantMessage();
         updateAssistantMessage(greetingId, greeting, false);
-        
+
         greetingAddedRef.current = true;
       }
     }
-    
+
     // Reset the greeting flag when chat is cleared
     if (messages.length === 0) {
       greetingAddedRef.current = false;
     }
-  }, [app, loading, messages.length, addAssistantMessage, updateAssistantMessage, currentLanguage, widgetConfig]);
+  }, [
+    app,
+    loading,
+    messages.length,
+    addAssistantMessage,
+    updateAssistantMessage,
+    currentLanguage,
+    widgetConfig,
+  ]);
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
@@ -397,16 +463,20 @@ const AppChat = () => {
 
     // Use the editedContent if provided directly from the ChatMessage component
     // otherwise use the content from the found message
-    const contentToResend = editedContent !== undefined ? editedContent : messageToResend.content;
-    
+    const contentToResend =
+      editedContent !== undefined ? editedContent : messageToResend.content;
+
     // Set the input field to the current message content
     setInput(contentToResend);
 
     setTimeout(() => {
-      const form = document.querySelector('form');
+      const form = document.querySelector("form");
       if (form) {
-        console.log('Submitting form with edited content:', contentToResend);
-        const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+        console.log("Submitting form with edited content:", contentToResend);
+        const submitEvent = new Event("submit", {
+          cancelable: true,
+          bubbles: true,
+        });
         form.dispatchEvent(submitEvent);
       }
     }, 0);
@@ -416,8 +486,8 @@ const AppChat = () => {
     if (
       window.confirm(
         t(
-          'pages.appChat.confirmClear',
-          'Are you sure you want to clear the entire chat history?'
+          "pages.appChat.confirmClear",
+          "Are you sure you want to clear the entire chat history?"
         )
       )
     ) {
@@ -434,8 +504,8 @@ const AppChat = () => {
     if (window.lastMessageId) {
       updateAssistantMessage(
         window.lastMessageId,
-        messages.find(m => m.id === window.lastMessageId)?.content + 
-          t('message.generationCancelled', ' [Generation cancelled]'),
+        messages.find((m) => m.id === window.lastMessageId)?.content +
+          t("message.generationCancelled", " [Generation cancelled]"),
         false
       );
     }
@@ -455,22 +525,27 @@ const AppChat = () => {
     if (app?.variables) {
       const missingRequiredVars = app.variables
         .filter((v) => v.required)
-        .filter((v) => !variables[v.name] || variables[v.name].trim() === '');
+        .filter((v) => !variables[v.name] || variables[v.name].trim() === "");
 
       if (missingRequiredVars.length > 0) {
         // Show inline error instead of using setError
-        const errorMessage = t(
-          'error.missingRequiredFields',
-          'Please fill in all required fields:'
-        ) + ' ' + missingRequiredVars.map((v) => getLocalizedContent(v.label, currentLanguage)).join(', ');
-        
+        const errorMessage =
+          t(
+            "error.missingRequiredFields",
+            "Please fill in all required fields:"
+          ) +
+          " " +
+          missingRequiredVars
+            .map((v) => getLocalizedContent(v.label, currentLanguage))
+            .join(", ");
+
         addSystemMessage(errorMessage, true);
-        
+
         // Highlight missing fields by scrolling to parameters section on mobile
         if (window.innerWidth < 768 && !showParameters) {
           toggleParameters();
         }
-        
+
         return;
       }
     }
@@ -485,15 +560,20 @@ const AppChat = () => {
       const originalUserInput = input;
 
       // Generate a single message ID for the entire exchange (request, response, and feedback)
-      const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      console.log('Generated exchange ID:', exchangeId);
-      
+      const exchangeId = `msg-${Date.now()}-${Math.floor(
+        Math.random() * 1000
+      )}`;
+      console.log("Generated exchange ID:", exchangeId);
+
       // Create the user message
       addUserMessage(originalUserInput, {
-        variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined
+        variables:
+          app?.variables && app.variables.length > 0
+            ? { ...variables }
+            : undefined,
       });
-      
-      setInput('');
+
+      setInput("");
 
       // Store the exchangeId in a window property for debugging
       window.lastMessageId = exchangeId;
@@ -503,7 +583,7 @@ const AppChat = () => {
 
       // Create message for the API
       const messageForAPI = {
-        role: 'user',
+        role: "user",
         content: originalUserInput,
         promptTemplate: app?.prompt || null,
         variables: { ...variables },
@@ -512,7 +592,7 @@ const AppChat = () => {
 
       // Get messages for the API
       const messagesForAPI = getMessagesForApi(sendChatHistory, messageForAPI);
-      
+
       // Store the request parameters for use in the onConnected callback
       window.pendingMessageData = {
         appId,
@@ -524,17 +604,17 @@ const AppChat = () => {
           temperature,
           outputFormat: selectedOutputFormat,
           language: currentLanguage,
-        }
+        },
       };
 
       // Initialize event source - the actual message sending happens in the onConnected callback
       initEventSource(`/api/apps/${appId}/chat/${chatId.current}`);
     } catch (err) {
-      console.error('Error sending message:', err);
+      console.error("Error sending message:", err);
 
       addSystemMessage(
-        `Error: ${t('error.sendMessageFailed', 'Failed to send message.')} ${
-          err.message || t('error.tryAgain', 'Please try again.')
+        `Error: ${t("error.sendMessageFailed", "Failed to send message.")} ${
+          err.message || t("error.tryAgain", "Please try again.")
         }`,
         true
       );
@@ -544,89 +624,120 @@ const AppChat = () => {
   };
 
   // Handle app action buttons
-  const handleAction = useCallback((actionId) => {
-    if (!app || !app.actions) return;
-    
-    const action = app.actions.find(action => action.id === actionId);
-    if (!action) return;
-    
-    // Check for required variables
-    if (app?.variables) {
-      const missingRequiredVars = app.variables
-        .filter((v) => v.required)
-        .filter((v) => !variables[v.name] || variables[v.name].trim() === '');
+  const handleAction = useCallback(
+    (actionId) => {
+      if (!app || !app.actions) return;
 
-      if (missingRequiredVars.length > 0) {
-        // Show inline error instead of using setError
-        const errorMessage = t(
-          'error.missingRequiredFields',
-          'Please fill in all required fields:'
-        ) + ' ' + missingRequiredVars.map((v) => getLocalizedContent(v.label, currentLanguage)).join(', ');
-        
-        addSystemMessage(errorMessage, true);
-        
-        // Highlight missing fields by scrolling to parameters section on mobile
-        if (window.innerWidth < 768 && !showParameters) {
-          setShowParameters(true); // directly use state setter instead of the toggle function
+      const action = app.actions.find((action) => action.id === actionId);
+      if (!action) return;
+
+      // Check for required variables
+      if (app?.variables) {
+        const missingRequiredVars = app.variables
+          .filter((v) => v.required)
+          .filter((v) => !variables[v.name] || variables[v.name].trim() === "");
+
+        if (missingRequiredVars.length > 0) {
+          // Show inline error instead of using setError
+          const errorMessage =
+            t(
+              "error.missingRequiredFields",
+              "Please fill in all required fields:"
+            ) +
+            " " +
+            missingRequiredVars
+              .map((v) => getLocalizedContent(v.label, currentLanguage))
+              .join(", ");
+
+          addSystemMessage(errorMessage, true);
+
+          // Highlight missing fields by scrolling to parameters section on mobile
+          if (window.innerWidth < 768 && !showParameters) {
+            setShowParameters(true); // directly use state setter instead of the toggle function
+          }
+
+          return;
         }
-        
-        return;
       }
-    }
 
-    // Clear input field
-    setInput('');
-    
-    // Process the action directly
-    cleanupEventSource();
-    setProcessing(true);
-    setError(null);
-    
-    const actionLabel = getLocalizedContent(action.label, currentLanguage) || action.id;
-    
-    // Create user message that indicates an action was triggered
-    const userMessageId = addUserMessage(`[${actionLabel}]`, {
-      actionId: actionId, // Include the action ID so the server knows this is an action
-      variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined,
-    });
-    
-    // Create message to send to API
-    const messageForAPI = {
-      role: 'user',
-      content: '', // Empty content for action
-      actionId: actionId, // This tells the server it's an action button request
-      promptTemplate: app?.prompt || null,
-      variables: { ...variables },
-    };
+      // Clear input field
+      setInput("");
 
-    const messagesForAPI = getMessagesForApi(sendChatHistory, messageForAPI);
+      // Process the action directly
+      cleanupEventSource();
+      setProcessing(true);
+      setError(null);
 
-    const assistantMessageId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    window.lastMessageId = assistantMessageId;
-    
-    // Add assistant message placeholder
-    addAssistantMessage(assistantMessageId);
-    
-    // Store the request parameters for use in the onConnected callback
-    window.pendingMessageData = {
+      const actionLabel =
+        getLocalizedContent(action.label, currentLanguage) || action.id;
+
+      // Create user message that indicates an action was triggered
+      const userMessageId = addUserMessage(`[${actionLabel}]`, {
+        actionId: actionId, // Include the action ID so the server knows this is an action
+        variables:
+          app?.variables && app.variables.length > 0
+            ? { ...variables }
+            : undefined,
+      });
+
+      // Create message to send to API
+      const messageForAPI = {
+        role: "user",
+        content: "", // Empty content for action
+        actionId: actionId, // This tells the server it's an action button request
+        promptTemplate: app?.prompt || null,
+        variables: { ...variables },
+      };
+
+      const messagesForAPI = getMessagesForApi(sendChatHistory, messageForAPI);
+
+      const assistantMessageId = `msg-${Date.now()}-${Math.floor(
+        Math.random() * 1000
+      )}`;
+      window.lastMessageId = assistantMessageId;
+
+      // Add assistant message placeholder
+      addAssistantMessage(assistantMessageId);
+
+      // Store the request parameters for use in the onConnected callback
+      window.pendingMessageData = {
+        appId,
+        chatId: chatId.current,
+        messages: messagesForAPI,
+        params: {
+          modelId: selectedModel,
+          style: selectedStyle,
+          temperature,
+          outputFormat: selectedOutputFormat,
+          language: currentLanguage,
+        },
+      };
+
+      // Initialize event source - the actual message sending happens in the onConnected callback
+      initEventSource(`/api/apps/${appId}/chat/${chatId.current}`);
+    },
+    [
+      app,
+      variables,
+      currentLanguage,
+      showParameters,
+      cleanupEventSource,
+      setProcessing,
       appId,
-      chatId: chatId.current,
-      messages: messagesForAPI,
-      params: {
-        modelId: selectedModel,
-        style: selectedStyle,
-        temperature,
-        outputFormat: selectedOutputFormat,
-        language: currentLanguage,
-      }
-    };
-
-    // Initialize event source - the actual message sending happens in the onConnected callback
-    initEventSource(`/api/apps/${appId}/chat/${chatId.current}`);
-    
-  }, [app, variables, currentLanguage, showParameters, cleanupEventSource, setProcessing, 
-      appId, selectedModel, selectedStyle, temperature, selectedOutputFormat, sendChatHistory, t, 
-      addUserMessage, addAssistantMessage, setMessageError, getMessagesForApi, initEventSource, addSystemMessage]);
+      selectedModel,
+      selectedStyle,
+      temperature,
+      selectedOutputFormat,
+      sendChatHistory,
+      t,
+      addUserMessage,
+      addAssistantMessage,
+      setMessageError,
+      getMessagesForApi,
+      initEventSource,
+      addSystemMessage,
+    ]
+  );
 
   const toggleConfig = () => {
     setShowConfig(!showConfig);
@@ -641,7 +752,8 @@ const AppChat = () => {
 
     return variables.map((variable) => ({
       ...variable,
-      localizedLabel: getLocalizedContent(variable.label, currentLanguage) || variable.name,
+      localizedLabel:
+        getLocalizedContent(variable.label, currentLanguage) || variable.name,
       localizedDescription: getLocalizedContent(
         variable.description,
         currentLanguage
@@ -653,7 +765,9 @@ const AppChat = () => {
       predefinedValues: variable.predefinedValues
         ? variable.predefinedValues.map((option) => ({
             ...option,
-            localizedLabel: getLocalizedContent(option.label, currentLanguage) || option.value,
+            localizedLabel:
+              getLocalizedContent(option.label, currentLanguage) ||
+              option.value,
           }))
         : undefined,
     }));
@@ -665,7 +779,8 @@ const AppChat = () => {
 
     return app.variables.map((variable) => ({
       ...variable,
-      localizedLabel: getLocalizedContent(variable.label, currentLanguage) || variable.name,
+      localizedLabel:
+        getLocalizedContent(variable.label, currentLanguage) || variable.name,
       localizedDescription: getLocalizedContent(
         variable.description,
         currentLanguage
@@ -677,14 +792,16 @@ const AppChat = () => {
       predefinedValues: variable.predefinedValues
         ? variable.predefinedValues.map((option) => ({
             ...option,
-            localizedLabel: getLocalizedContent(option.label, currentLanguage) || option.value,
+            localizedLabel:
+              getLocalizedContent(option.label, currentLanguage) ||
+              option.value,
           }))
         : undefined,
     }));
   }, [app?.variables, currentLanguage]);
 
   if (loading) {
-    return <LoadingSpinner message={t('app.loading')} />;
+    return <LoadingSpinner message={t("app.loading")} />;
   }
 
   if (error) {
@@ -695,24 +812,26 @@ const AppChat = () => {
           className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mr-4"
           onClick={() => window.location.reload()}
         >
-          {t('app.retry')}
+          {t("app.retry")}
         </button>
         <button
           className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
-          onClick={() => navigate('/')}
+          onClick={() => navigate("/")}
         >
-          {t('common.back')}
+          {t("common.back")}
         </button>
       </div>
     );
   }
 
   // Create action array for ChatHeader
-  const headerActions = app?.actions ? app.actions.map(action => ({
-    id: action.id,
-    label: action.label,
-    onClick: handleAction
-  })) : [];
+  const headerActions = app?.actions
+    ? app.actions.map((action) => ({
+        id: action.id,
+        label: action.label,
+        onClick: handleAction,
+      }))
+    : [];
 
   // App icon
   const appIcon = (
@@ -742,7 +861,9 @@ const AppChat = () => {
         icon={appIcon}
         showClearButton={messages.length > 0}
         showConfigButton={true}
-        showParametersButton={app?.variables && app.variables.length > 0 && !showParameters}
+        showParametersButton={
+          app?.variables && app.variables.length > 0 && !showParameters
+        }
         onClearChat={clearChat}
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}
@@ -775,7 +896,9 @@ const AppChat = () => {
       {app?.variables && app.variables.length > 0 && showParameters && (
         <div className="md:hidden mb-4 p-4 bg-gray-50 rounded-lg">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="font-medium">{t('pages.appChat.inputParameters')}</h3>
+            <h3 className="font-medium">
+              {t("pages.appChat.inputParameters")}
+            </h3>
             <button
               onClick={toggleParameters}
               className="text-gray-500 hover:text-gray-700"
@@ -796,7 +919,7 @@ const AppChat = () => {
               </svg>
             </button>
           </div>
-          <InputVariables 
+          <InputVariables
             variables={variables}
             setVariables={setVariables}
             localizedVariables={localizedVariables}
@@ -805,7 +928,13 @@ const AppChat = () => {
       )}
 
       <div className="flex flex-col md:flex-row flex-1 gap-4 overflow-hidden mx-auto w-full max-w-7xl">
-        <div className={`flex flex-col ${(!app?.variables || app.variables.length === 0) ? 'max-w-6xl mx-auto w-full h-full' : 'flex-1'}`}>
+        <div
+          className={`flex flex-col ${
+            !app?.variables || app.variables.length === 0
+              ? "max-w-6xl mx-auto w-full h-full"
+              : "flex-1"
+          }`}
+        >
           {/* Chat Messages - using our reusable ChatMessageList component */}
           <ChatMessageList
             messages={messages}
@@ -818,7 +947,7 @@ const AppChat = () => {
             chatId={chatId.current}
             modelId={selectedModel}
           />
-          
+
           {/* Message Input - using our reusable ChatInput component */}
           <ChatInput
             value={input}
@@ -826,8 +955,14 @@ const AppChat = () => {
             onSubmit={handleSubmit}
             isProcessing={processing}
             onCancel={cancelGeneration}
-            onVoiceInput={app?.microphone?.enabled !== false ? handleVoiceInput : undefined}
-            onVoiceCommand={app?.microphone?.enabled !== false ? handleVoiceCommand : undefined}
+            onVoiceInput={
+              app?.microphone?.enabled !== false ? handleVoiceInput : undefined
+            }
+            onVoiceCommand={
+              app?.microphone?.enabled !== false
+                ? handleVoiceCommand
+                : undefined
+            }
             allowEmptySubmit={app?.allowEmptyContent}
             inputRef={inputRef}
           />
@@ -835,8 +970,10 @@ const AppChat = () => {
 
         {app?.variables && app.variables.length > 0 && (
           <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-medium mb-3">{t('pages.appChat.inputParameters')}</h3>
-            <InputVariables 
+            <h3 className="font-medium mb-3">
+              {t("pages.appChat.inputParameters")}
+            </h3>
+            <InputVariables
               variables={variables}
               setVariables={setVariables}
               localizedVariables={localizedVariables}
