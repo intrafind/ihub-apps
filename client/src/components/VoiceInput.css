@@ -46,6 +46,7 @@
   border-radius: 12px;
   text-align: center;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  position: relative;
 }
 
 .voice-waves {
@@ -83,6 +84,14 @@
   font-size: 0.9em;
   opacity: 0.7;
   color: var(--color-text, #333);
+}
+
+.voice-close {
+  position: absolute;
+  top: 0px;
+  right: 9px;
+  color: gray;
+  font-size: 24px;
 }
 
 /* Animations */

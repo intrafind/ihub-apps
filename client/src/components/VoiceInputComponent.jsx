@@ -487,6 +487,10 @@ const VoiceInputComponent = ({
     }
   };
 
+  const handleOnFeedbackOverlayClose = () => {
+    stopListening();
+  };
+
   // Display errors in the UI
   useEffect(() => {
     if (errorMessage && inputRef?.current) {
@@ -496,7 +500,10 @@ const VoiceInputComponent = ({
 
   return (
     <>
-      <VoiceFeedback active={isListening} />
+      <VoiceFeedback
+        isActive={isListening}
+        setIsActive={handleOnFeedbackOverlayClose}
+      />
       <button
         className={`voice-input-button ${isListening ? "active" : ""} h-fit`}
         onClick={(e) => {
