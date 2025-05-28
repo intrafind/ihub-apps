@@ -5,6 +5,7 @@ import LanguageSelector from './LanguageSelector';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import DisclaimerPopup from './DisclaimerPopup';
+import { updateSettingsFromUrl } from '../utils/integrationSettings';
 
 const Layout = () => {
   const { t, i18n } = useTranslation();
@@ -14,9 +15,8 @@ const Layout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
 
-  // Check URL parameters for header and footer visibility
-  const showHeader = searchParams.get('header') !== 'false';
-  const showFooter = searchParams.get('footer') !== 'false';
+  // Update integration settings from URL parameters and retrieve current settings
+  const { showHeader, showFooter } = updateSettingsFromUrl(searchParams);
 
   // Check if we're viewing an app page to hide footer links
   const isAppPage = useMemo(() => {
