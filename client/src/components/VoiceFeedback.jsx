@@ -18,8 +18,8 @@ const VoiceFeedback = (props) => {
     >
       <div className="voice-feedback-content">
         <div className="voice-waves">
-          {Array.from(Array(wavesCount).keys()).map(() => (
-            <div className="wave" />
+          {Array.from(Array(wavesCount).keys()).map((_, index) => (
+            <div key={`wave-${index}`} className="wave" />
           ))}
         </div>
         <h3 className="voice-text">

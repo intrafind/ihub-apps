@@ -950,6 +950,7 @@ const AppChat = () => {
 
           {/* Message Input - using our reusable ChatInput component */}
           <ChatInput
+            app={app}
             value={input}
             onChange={handleInputChange}
             onSubmit={handleSubmit}

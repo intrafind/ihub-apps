@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import Icon from "./Icon";
 import "./VoiceInput.css";
-import { useSpeechRecognition } from "../utils/azureRecognitionService";
+import AzureSpeechRecognition from "../utils/azureRecognitionService";
 import VoiceFeedback from "./VoiceFeedback";
 
 const VoiceInputComponent = ({
+  app,
   onSpeechResult,
   inputRef,
   disabled = false,
@@ -17,71 +18,6 @@ const VoiceInputComponent = ({
   const feedbackRef = useRef(null);
   const recognitionRef = useRef(null);
   const originalInputValue = useRef("");
-
-  const recognition = useSpeechRecognition((recognizedText) => {
-    processSpeechForCommands(recognizedText);
-  });
-
-  /*   // Setup feedback overlay
-  useEffect(() => {
-    // Create feedback overlay if it doesn't exist
-    if (!document.getElementById("voice-feedback")) {
-      const feedbackEl = document.createElement("div");
-      feedbackEl.id = "voice-feedback";
-      feedbackEl.className = "voice-feedback";
-
-      const content = document.createElement("div");
-      content.className = "voice-feedback-content";
-
-      const waves = document.createElement("div");
-      waves.className = "voice-waves";
-
-      for (let i = 0; i < 3; i++) {
-        const wave = document.createElement("div");
-        wave.className = "wave";
-        waves.appendChild(wave);
-      }
-
-      const text = document.createElement("div");
-      text.className = "voice-text";
-      text.textContent = t("voiceInput.listening", "Listening...");
-
-      const instructions = document.createElement("div");
-      instructions.className = "voice-instructions";
-      instructions.textContent = t(
-        "voiceInput.instructions",
-        "Speak clearly and naturally"
-      );
-
-      content.appendChild(waves);
-      content.appendChild(text);
-      content.appendChild(instructions);
-      feedbackEl.appendChild(content);
-
-      document.body.appendChild(feedbackEl);
-      feedbackRef.current = feedbackEl;
-    } else {
-      feedbackRef.current = document.getElementById("voice-feedback");
-    }
-
-    return () => {
-      // Clean up overlay when component unmounts
-      if (feedbackRef.current && feedbackRef.current.parentNode) {
-        feedbackRef.current.parentNode.removeChild(feedbackRef.current);
-      }
-    };
-  }, [t]); */
-
-  // Show/hide the overlay based on listening state
-  /*   useEffect(() => {
-    if (!feedbackRef.current) return;
-
-    if (isListening) {
-      feedbackRef.current.classList.add("active");
-    } else {
-      feedbackRef.current.classList.remove("active");
-    }
-  }, [isListening]); */
 
   // Clean up recognition when component unmounts
   useEffect(() => {
@@ -165,7 +101,7 @@ const VoiceInputComponent = ({
     for (const [command, patterns] of Object.entries(commandPatterns)) {
       for (const pattern of patterns) {
         // Check if the text ends with the command pattern
-        if (lowerText.endsWith(pattern)) {
+        if (lowerText.includes(pattern)) {
           console.log(
             `Command detected: "${command}" with pattern: "${pattern}"`
           );
@@ -186,8 +122,6 @@ const VoiceInputComponent = ({
 
   const startListening = async () => {
     if (disabled) return;
-
-    recognition.start();
 
     try {
       // Check browser support
@@ -228,7 +162,18 @@ const VoiceInputComponent = ({
       // Create recognition object
       const SpeechRecognition =
         window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
+
+      let recognition;
+
+      switch (app?.settings?.speechRecognition?.service) {
+        case "azure": {
+          recognition = new AzureSpeechRecognition();
+          break;
+        }
+        case "default":
+        default:
+          recognition = new SpeechRecognition();
+      }
 
       // Configure recognition
       recognition.continuous = false;
@@ -272,23 +217,30 @@ const VoiceInputComponent = ({
         let interimTranscript = "";
         let finalTranscript = "";
 
-        console.log("Speech recognition result received:", event.results);
+        const result = "text" in event ? event.text : event.results;
+        const isAzure = recognition instanceof AzureSpeechRecognition;
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          const isFinal = event.results[i].isFinal;
+        console.log("Speech recognition result received:", result);
 
-          console.log(
-            `Transcript ${i}:`,
-            transcript,
-            isFinal ? "(final)" : "(interim)"
-          );
+        if (!isAzure) {
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            const isFinal = event.results[i].isFinal;
 
-          if (isFinal) {
-            finalTranscript += transcript;
-          } else {
-            interimTranscript += transcript;
+            console.log(
+              `Transcript ${i}:`,
+              transcript,
+              isFinal ? "(final)" : "(interim)"
+            );
+
+            if (isFinal) {
+              finalTranscript += transcript;
+            } else {
+              interimTranscript += transcript;
+            }
           }
+        } else {
+          finalTranscript = event.text;
         }
 
         console.log("Final transcript:", finalTranscript);
@@ -410,6 +362,7 @@ const VoiceInputComponent = ({
       recognition.onend = () => {
         // Complete the recognition and update UI
         setIsListening(false);
+        console.log("test");
 
         if (inputRef?.current) {
           inputRef.current.placeholder = t(
@@ -441,7 +394,6 @@ const VoiceInputComponent = ({
     // Stop the recognition if it's active
     if (recognitionRef.current) {
       try {
-        recognition.stop();
         recognitionRef.current.stop();
       } catch (e) {
         console.error("Error stopping recognition:", e);

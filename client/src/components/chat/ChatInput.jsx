@@ -7,6 +7,7 @@ import Icon from "../Icon";
  * A reusable chat input component for chat interfaces
  */
 const ChatInput = ({
+  app,
   value,
   onChange,
   onSubmit,
@@ -79,6 +80,7 @@ const ChatInput = ({
 
       {onVoiceInput && (
         <VoiceInputComponent
+          app={app}
           onSpeechResult={onVoiceInput}
           inputRef={actualInputRef}
           disabled={disabled || isProcessing}
