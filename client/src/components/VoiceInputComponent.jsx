@@ -167,9 +167,8 @@ const VoiceInputComponent = ({
 
       switch (app?.settings?.speechRecognition?.service) {
         case "azure": {
-          recognition = new AzureSpeechRecognition({
-            host: app?.settings?.speechRecognition?.host,
-          });
+          recognition = new AzureSpeechRecognition();
+          recognition.host = app?.settings?.speechRecognition?.host;
           break;
         }
         case "default":
@@ -203,6 +202,11 @@ const VoiceInputComponent = ({
         recognitionLang = langMap[recognitionLang.toLowerCase()] || "en-US";
       }
       recognition.lang = recognitionLang;
+      const isAzure = recognition instanceof AzureSpeechRecognition;
+
+      if (isAzure) {
+        recognition.initRecognizer();
+      }
 
       // Set event handlers
       recognition.onstart = () => {
@@ -220,7 +224,6 @@ const VoiceInputComponent = ({
         let finalTranscript = "";
 
         const result = "text" in event ? event.text : event.results;
-        const isAzure = recognition instanceof AzureSpeechRecognition;
 
         console.log("Speech recognition result received:", result);
 
@@ -364,7 +367,6 @@ const VoiceInputComponent = ({
       recognition.onend = () => {
         // Complete the recognition and update UI
         setIsListening(false);
-        console.log("test");
 
         if (inputRef?.current) {
           inputRef.current.placeholder = t(

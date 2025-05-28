@@ -11,13 +11,7 @@ class AzureSpeechRecognition {
   interimResults = true;
   host = "";
 
-  constructor(options) {
-    if ("host" in options) {
-      this.host = options.host;
-    }
-
-    this.recognition = this.getRecognizerOnPrem();
-  }
+  constructor() {}
 
   start() {
     this.#triggerOnStart();
@@ -71,7 +65,7 @@ class AzureSpeechRecognition {
     this.recognition = null;
   }
 
-  getRecognizerOnPrem() {
+  initRecognizer() {
     try {
       const hostURL = new URL(
         `${this.host}/speech/recognition/interactive/cognitiveservices/v1${postfix}`
@@ -83,12 +77,12 @@ class AzureSpeechRecognition {
       const audioConfig = speechSdk.AudioConfig.fromDefaultMicrophoneInput();
 
       // No German recognition like this
-      speechConfig.speechRecognitionLanguage = "de-DE";
+      speechConfig.speechRecognitionLanguage = this.lang ?? "de-DE";
       const recognizer = new speechSdk.SpeechRecognizer(
         speechConfig,
         audioConfig
       );
-      return recognizer;
+      this.recognition = recognizer;
     } catch (e) {
       if (!host) {
         console.error("Failed to construct URL since 'host' is not defined");
@@ -137,6 +131,7 @@ class AzureSpeechRecognition {
   }
 
   // GETTER SETTER
+
   get host() {
     return this.host;
   }
