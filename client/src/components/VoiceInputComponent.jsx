@@ -89,7 +89,7 @@ const VoiceInputComponent = ({
     console.log("Processing speech for commands:", text);
 
     // Convert to lowercase for easier matching
-    let lowerText = text.trim().toLowerCase();
+    let lowerText = text.trim().replace(".", "").toLowerCase();
     let originalText = text.trim();
     let detectedCommand = null;
 
@@ -101,7 +101,7 @@ const VoiceInputComponent = ({
     for (const [command, patterns] of Object.entries(commandPatterns)) {
       for (const pattern of patterns) {
         // Check if the text ends with the command pattern
-        if (lowerText.includes(pattern)) {
+        if (lowerText.endsWith(pattern)) {
           console.log(
             `Command detected: "${command}" with pattern: "${pattern}"`
           );
