@@ -167,7 +167,9 @@ const VoiceInputComponent = ({
 
       switch (app?.settings?.speechRecognition?.service) {
         case "azure": {
-          recognition = new AzureSpeechRecognition();
+          recognition = new AzureSpeechRecognition({
+            host: app?.settings?.speechRecognition?.host,
+          });
           break;
         }
         case "default":

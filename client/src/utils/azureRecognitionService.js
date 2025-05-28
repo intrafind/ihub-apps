@@ -1,7 +1,5 @@
 import * as speechSdk from "microsoft-cognitiveservices-speech-sdk";
 
-const host = import.meta.env.VITE_AZURE_SERVER || "http://bmas01lal:5000/";
-
 // const postfix = '?language=de-DE';
 const postfix = "";
 const subscriptionId = import.meta.env.VITE_AZURE_SUBSCRIPTION_ID;
@@ -11,8 +9,13 @@ class AzureSpeechRecognition {
   lang = "de-DE";
   continuous = false;
   interimResults = true;
+  host = "";
 
-  constructor() {
+  constructor(options) {
+    if ("host" in options) {
+      this.host = options.host;
+    }
+
     this.recognition = this.getRecognizerOnPrem();
   }
 
@@ -71,7 +74,7 @@ class AzureSpeechRecognition {
   getRecognizerOnPrem() {
     try {
       const hostURL = new URL(
-        `${host}/speech/recognition/interactive/cognitiveservices/v1${postfix}`
+        `${this.host}/speech/recognition/interactive/cognitiveservices/v1${postfix}`
       );
       const speechConfig = speechSdk.SpeechConfig.fromHost(
         hostURL,
@@ -96,6 +99,7 @@ class AzureSpeechRecognition {
     }
   }
 
+  // PRIVATE METHODS
   #triggerOnResult(result) {
     console.log("Triggered onresult...");
     if ("onresult" in this) {
@@ -130,6 +134,39 @@ class AzureSpeechRecognition {
       return;
     }
     console.log("'onend' is not defined");
+  }
+
+  // GETTER SETTER
+  get host() {
+    return this.host;
+  }
+
+  set host(host) {
+    this.host = host;
+  }
+
+  get lang() {
+    return this.lang;
+  }
+
+  set lang(lang) {
+    this.lang = lang;
+  }
+
+  get continuous() {
+    return this.continuous;
+  }
+
+  set continuous(continuous) {
+    this.continuous = continuous;
+  }
+
+  get interimResults() {
+    return this.interimResults;
+  }
+
+  set interimResults(interimResults) {
+    this.interimResults = interimResults;
   }
 }
 

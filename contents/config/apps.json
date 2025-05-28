@@ -164,7 +164,8 @@
         "enabled": true
       },
       "speechRecognition": {
-        "service": "azure"
+        "service": "azure",
+        "host": "http://bmas01lal:5000/"
       }
     },
     "microphone": {
