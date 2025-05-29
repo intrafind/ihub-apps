@@ -372,65 +372,67 @@ const AppsList = () => {
         </div>
       ) : (
         <>
-          <div 
-            ref={gridRef} 
-            className={`grid gap-6 ${
-              displayedApps.length === 1 
-                ? 'grid-cols-1 max-w-md mx-auto' 
-                : displayedApps.length === 2
-                  ? 'grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto'
-                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-            }`}
-            role="list" 
-            aria-label="Apps list"
-          >
-            {displayedApps.map(app => (
-              <div
-                key={app.id}
-                className="relative bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 w-full max-w-md"
-                role="listitem"
-              >
-                <button 
-                  onClick={(e) => handleToggleFavorite(e, app.id)}
-                  className="absolute top-2 right-2 z-10 p-1 bg-white bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
-                  title={favoriteApps.includes(app.id) ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
-                  aria-label={favoriteApps.includes(app.id) ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
+          <div className="flex justify-center w-full">
+            <div 
+              ref={gridRef} 
+              className={`grid gap-6 ${
+                displayedApps.length === 1 
+                  ? 'grid-cols-1 max-w-md mx-auto' 
+                  : displayedApps.length === 2
+                    ? 'grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto'
+                    : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+              }`}
+              role="list" 
+              aria-label="Apps list"
+            >
+              {displayedApps.map(app => (
+                <div
+                  key={app.id}
+                  className="relative bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 w-full max-w-md"
+                  role="listitem"
                 >
-                  <Icon 
-                    name="star" 
-                    className={favoriteApps.includes(app.id) ? 'text-yellow-500' : 'text-gray-400'}
-                    solid={favoriteApps.includes(app.id)}
-                  />
-                </button>
-                <Link
-                  to={`/apps/${app.id}`}
-                  className="block h-full"
-                  aria-label={`Open ${getLocalizedContent(app.name, currentLanguage) || app.id} app`}
-                >
-                  <div 
-                    className="h-24 rounded-t-lg flex items-center justify-center"
-                    style={{ backgroundColor: app.color || '#4f46e5' }}
+                  <button 
+                    onClick={(e) => handleToggleFavorite(e, app.id)}
+                    className="absolute top-2 right-2 z-10 p-1 bg-white bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
+                    title={favoriteApps.includes(app.id) ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
+                    aria-label={favoriteApps.includes(app.id) ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
                   >
-                    <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
-                      <Icon name={app.icon || 'lightning-bolt'} size="xl" className="text-white" />
+                    <Icon 
+                      name="star" 
+                      className={favoriteApps.includes(app.id) ? 'text-yellow-500' : 'text-gray-400'}
+                      solid={favoriteApps.includes(app.id)}
+                    />
+                  </button>
+                  <Link
+                    to={`/apps/${app.id}`}
+                    className="block h-full"
+                    aria-label={`Open ${getLocalizedContent(app.name, currentLanguage) || app.id} app`}
+                  >
+                    <div 
+                      className="h-24 rounded-t-lg flex items-center justify-center"
+                      style={{ backgroundColor: app.color || '#4f46e5' }}
+                    >
+                      <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
+                        <Icon name={app.icon || 'lightning-bolt'} size="xl" className="text-white" />
+                      </div>
                     </div>
-                  </div>
-                  <div className="px-4 p-2 h-[calc(100%-6rem)] flex flex-col">
-                    <h3 className="font-bold text-lg mb-1 break-words">
-                      {getLocalizedContent(app.name, currentLanguage) || app.id}
-                      {favoriteApps.includes(app.id) && (
-                        <span className="ml-2 inline-block" aria-label="Favorite">
-                          <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-gray-600 text-sm flex-grow">{getLocalizedContent(app.description, currentLanguage) || ''}</p>
-                  </div>
-                </Link>
-              </div>
-            ))}
+                    <div className="px-4 p-2 h-[calc(100%-6rem)] flex flex-col">
+                      <h3 className="font-bold text-lg mb-1 break-words">
+                        {getLocalizedContent(app.name, currentLanguage) || app.id}
+                        {favoriteApps.includes(app.id) && (
+                          <span className="ml-2 inline-block" aria-label="Favorite">
+                            <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-gray-600 text-sm flex-grow">{getLocalizedContent(app.description, currentLanguage) || ''}</p>
+                    </div>
+                  </Link>
+                </div>
+              ))}
+            </div>
           </div>
-          
+            
           {/* Load More Button */}
           {hasMoreApps && (
             <div className="text-center mt-6">
