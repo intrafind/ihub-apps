@@ -43,7 +43,7 @@
     "node-fetch": "^3.3.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.25.4",
     "nodemon": "^3.1.10",
     "postject": "^1.0.0-alpha.6",
     "rimraf": "^6.0.1"
