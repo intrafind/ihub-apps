@@ -1,43 +1,47 @@
-  {
-    "id": "dictator",
-    "order": 0,
-    "name": {
-      "en": "Dictator",
-      "de": "Diktator"
-    },
-    "description": {
-      "en": "Use this app to record your voice and convert it to text",
-      "de": "Verwende diese App, um deine Stimme aufzunehmen und in Text umzuwandeln"
-    },
-    "color": "#10B981",
-    "icon": "question-mark-circle",
-    "system": {
-      "en": "You are a helpful Voice to Text assistant. Your job is to transcribe the user's voice recordings into text accurately. If the recording is unclear or contains background noise, politely inform the user that you couldn't transcribe it and suggest they try again.",
-      "de": "Du bist ein hilfreicher Voice-to-Text-Assistent. Deine Aufgabe ist es, die Sprachaufnahmen des Benutzers genau in Text umzuwandeln. Wenn die Aufnahme unklar ist oder Hintergrundgeräusche enthält, informiere den Benutzer höflich, dass du sie nicht transkribieren konntest, und schlage vor, es erneut zu versuchen."
-    },
-    "tokenLimit": 8000,
-    "preferredModel": "gemini-1.5-flash",
-    "preferredOutputFormat": "markdown",
-    "preferredStyle": "normal",
-    "preferredTemperature": 0.3,
-    "sendChatHistory": false,
-    "prompt": {
-      "en": "{{content}}",
-      "de": "{{content}}"
-    },
-    "settings": {
-      "enabled": true,
-      "model": {
-        "enabled": true
-      },
-      "temperature": {
-        "enabled": true
-      },
-      "outputFormat": {
-        "enabled": true
-      }
-    },
-    "microphone": {
+{
+  "id": "dictator",
+  "order": 0,
+  "name": {
+    "en": "Dictator",
+    "de": "Diktator"
+  },
+  "description": {
+    "en": "Use this app to record your voice and convert it to text",
+    "de": "Verwende diese App, um deine Stimme aufzunehmen und in Text umzuwandeln"
+  },
+  "color": "#10B981",
+  "icon": "question-mark-circle",
+  "system": {
+    "en": "You are a helpful Voice to Text assistant. Your job is to transcribe the user's voice recordings into text accurately. If the recording is unclear or contains background noise, politely inform the user that you couldn't transcribe it and suggest they try again.",
+    "de": "Du bist ein hilfreicher Voice-to-Text-Assistent. Deine Aufgabe ist es, die Sprachaufnahmen des Benutzers genau in Text umzuwandeln. Wenn die Aufnahme unklar ist oder Hintergrundgeräusche enthält, informiere den Benutzer höflich, dass du sie nicht transkribieren konntest, und schlage vor, es erneut zu versuchen."
+  },
+  "tokenLimit": 8000,
+  "preferredModel": "gemini-1.5-flash",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "normal",
+  "preferredTemperature": 0.3,
+  "sendChatHistory": false,
+  "prompt": {
+    "en": "{{content}}",
+    "de": "{{content}}"
+  },
+  "settings": {
+    "enabled": true,
+    "model": {
       "enabled": true
+    },
+    "temperature": {
+      "enabled": true
+    },
+    "outputFormat": {
+      "enabled": true
+    },
+    "speechRecognition": {
+      "service": "azure",
+      "host": "http://localhost:5000/"
     }
+  },
+  "microphone": {
+    "enabled": true
   }
+}

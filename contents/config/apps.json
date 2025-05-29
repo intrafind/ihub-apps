@@ -1095,6 +1095,10 @@
       },
       "outputFormat": {
         "enabled": true
+      },
+      "speechRecognition": {
+        "service": "azure",
+        "host": "http://localhost:5000/"
       }
     },
     "microphone": {

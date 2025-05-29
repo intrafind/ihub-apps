@@ -1,8 +1,8 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef } from "react";
 
 /**
  * Custom hook for handling voice commands in chat applications
- * 
+ *
  * @param {Object} options - Configuration options
  * @param {Array} options.messages - Current chat messages
  * @param {Function} options.clearChat - Function to clear chat history
@@ -18,12 +18,13 @@ function useVoiceCommands({
   clearChat = () => {},
   sendMessage = () => {},
   isProcessing = false,
-  currentText = '',
+  currentText = "",
   onConfirmClear,
-  customCommands = {}
+  customCommands = {},
+  setInput = (text) => {},
 }) {
   // Store the latest recognized text in a ref for immediate access outside React's state system
-  const currentVoiceTextRef = useRef('');
+  const currentVoiceTextRef = useRef("");
 
   /**
    * Update the current voice text
@@ -35,7 +36,9 @@ function useVoiceCommands({
     if (isCommand) {
       currentVoiceTextRef.current = text;
     }
-    
+
+    setInput(text);
+
     return text;
   }, []);
 
@@ -43,50 +46,66 @@ function useVoiceCommands({
    * Handle voice commands
    * @param {string} command - The detected command
    */
-  const handleVoiceCommand = useCallback((command) => {
-    console.log('Voice command detected:', command);
-    
-    // Check for custom commands first
-    if (customCommands[command]) {
-      return customCommands[command]();
-    }
-    
-    // Handle built-in commands
-    switch (command) {
-      case 'clearChat':
-        // Clear the chat after confirming with the user
-        if (messages.length > 0) {
-          const shouldClear = onConfirmClear 
-            ? onConfirmClear() 
-            : window.confirm('Are you sure you want to clear the entire chat history?');
-            
-          if (shouldClear) {
-            clearChat();
+  const handleVoiceCommand = useCallback(
+    (command) => {
+      console.log("Voice command detected:", command);
+
+      // Check for custom commands first
+      if (customCommands[command]) {
+        return customCommands[command]();
+      }
+
+      // Handle built-in commands
+      switch (command) {
+        case "clearChat":
+          // Clear the chat after confirming with the user
+          if (messages.length > 0) {
+            const shouldClear = onConfirmClear
+              ? onConfirmClear()
+              : window.confirm(
+                  "Are you sure you want to clear the entire chat history?"
+                );
+
+            if (shouldClear) {
+              clearChat();
+            }
           }
-        }
-        break;
-        
-      case 'sendMessage':
-        // Use the currentVoiceTextRef to get the latest voice text
-        const messageToSend = currentVoiceTextRef.current || currentText;
-        console.log('Executing send message command with text:', messageToSend);
-        
-        if (messageToSend.trim() && !isProcessing) {
-          sendMessage(messageToSend);
-        } else {
-          console.log('No text to send or processing in progress');
-        }
-        break;
-        
-      default:
-        console.log('Unknown command:', command);
-    }
-  }, [messages, clearChat, sendMessage, isProcessing, currentText, onConfirmClear, customCommands]);
+          break;
+
+        case "sendMessage":
+          // Use the currentVoiceTextRef to get the latest voice text
+          const messageToSend = currentVoiceTextRef.current || currentText;
+          console.log(
+            "Executing send message command with text:",
+            messageToSend
+          );
+
+          if (messageToSend.trim() && !isProcessing) {
+            sendMessage(messageToSend);
+          } else {
+            console.log("No text to send or processing in progress");
+          }
+          break;
+
+        default:
+          console.log("Unknown command:", command);
+      }
+    },
+    [
+      messages,
+      clearChat,
+      sendMessage,
+      isProcessing,
+      currentText,
+      onConfirmClear,
+      customCommands,
+    ]
+  );
 
   return {
     handleVoiceInput,
     handleVoiceCommand,
-    currentVoiceTextRef
+    currentVoiceTextRef,
   };
 }
 
