@@ -1,7 +1,8 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import VoiceInputComponent from "../VoiceInputComponent";
 import Icon from "../Icon";
+import ImageUploader from "../ImageUploader";
 
 /**
  * A reusable chat input component for chat interfaces
@@ -15,14 +16,28 @@ const ChatInput = ({
   onCancel,
   onVoiceInput,
   onVoiceCommand,
+  onImageSelect,
   allowEmptySubmit = false,
   placeholder,
   inputRef = null,
   disabled = false,
+  imageUploadEnabled = false,
+  selectedImage = null, // Add this prop to pass from parent
+  showImageUploader: externalShowImageUploader = undefined,
+  onToggleImageUploader = null,
 }) => {
   const { t } = useTranslation();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
+  const [internalShowImageUploader, setInternalShowImageUploader] = useState(false);
+  
+  // Determine if multiline mode is enabled based on app config
+  // Default to true (multiline) if not specified in app config
+  const multilineMode = app?.inputMode == 'mulitline' || app?.inputMode === 'multiline';
+  
+  // Use external state if provided, otherwise use internal state
+  const showImageUploader = externalShowImageUploader !== undefined ? 
+    externalShowImageUploader : internalShowImageUploader;
 
   const defaultPlaceholder = isProcessing
     ? t("pages.appChat.thinking")
@@ -54,67 +69,130 @@ const ChatInput = ({
     }
   };
 
+  const toggleImageUploader = () => {
+    if (onToggleImageUploader) {
+      // Use the external toggle function if provided
+      onToggleImageUploader();
+    } else {
+      // Otherwise use the internal state
+      setInternalShowImageUploader((prev) => !prev);
+    }
+  };
+
+  // Handle key events for the textarea
+  const handleKeyDown = (e) => {
+    // CMD+Enter or CTRL+Enter to submit
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit(e);
+      return;
+    }
+
+    // In single-line mode, Enter key submits the form
+    if (!multilineMode && e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit(e);
+      return;
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="flex space-x-2">
-      <div className="flex-1 relative">
+    <div className="chat-input-container">
+      {imageUploadEnabled && showImageUploader && (
+        <ImageUploader
+          onImageSelect={onImageSelect}
+          disabled={disabled || isProcessing}
+          imageData={selectedImage} // Pass the actual selectedImage value from parent
+        />
+      )}
+
+      <form onSubmit={handleSubmit} className="flex space-x-2 items-center">
         <textarea
           type="text"
           value={value}
           onChange={onChange}
+          onKeyDown={handleKeyDown}
           disabled={disabled || isProcessing}
           className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 pr-10"
           placeholder={placeholder || defaultPlaceholder}
           ref={actualInputRef}
+          rows={multilineMode ? "2" : "1"}
+          style={{ resize: multilineMode ? "vertical" : "none" }}
+          title={multilineMode ? 
+            t("input.multilineTooltip", "Press Shift+Enter for new line, Cmd+Enter to send") : 
+            t("input.singlelineTooltip", "Press Enter to send")}
         />
-        {value && (
-          <button
-            type="button"
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 h-fit"
-            onClick={handleClearInput}
-            title={t("common.clear", "Clear")}
-          >
-            <Icon name="clearCircle" size="sm" />
-          </button>
-        )}
-      </div>
+        <div className="flex-1 relative">
+          {value && (
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 h-fit"
+              onClick={handleClearInput}
+              title={t("common.clear", "Clear")}
+            >
+              <Icon name="clearCircle" size="sm" />
+            </button>
+          )}
+        </div>
 
-      {onVoiceInput && (
-        <VoiceInputComponent
-          app={app}
-          onSpeechResult={onVoiceInput}
-          inputRef={actualInputRef}
-          disabled={disabled || isProcessing}
-          onCommand={onVoiceCommand}
-        />
-      )}
+        <div className="flex flex-col gap-1 justify-start">
+          {imageUploadEnabled && (
+            <button
+              type="button"
+              onClick={toggleImageUploader}
+              disabled={disabled || isProcessing}
+              className={`image-upload-button ${
+                showImageUploader ? "active" : ""
+              } h-fit`}
+              title={t("common.toggleImageUpload", "Toggle image upload")}
+              aria-label={t("common.toggleImageUpload", "Toggle image upload")}
+            >
+              <Icon name="camera" size="md" />
+            </button>
+          )}
 
-      <button
-        type="button"
-        onClick={isProcessing ? handleCancel : handleSubmit}
-        disabled={
-          disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
-        }
-        className={`px-4 py-2 rounded-lg font-medium flex items-center justify-center h-fit ${
-          disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
-            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-            : isProcessing
-            ? "bg-red-600 text-white hover:bg-red-700"
-            : "bg-indigo-600 text-white hover:bg-indigo-700"
-        }`}
-      >
-        {isProcessing ? (
-          <>
-            <Icon name="close" size="sm" className="mr-1" />
-            <span>{t("common.cancel")}</span>
-          </>
-        ) : (
-          <>
-            <span>{t("common.send")}</span>
-            <Icon name="arrowRight" size="sm" className="ml-1" />
-          </>
-        )}
-      </button>
-    </form>
+          {onVoiceInput && (
+            <VoiceInputComponent
+              app={app}
+              onSpeechResult={onVoiceInput}
+              inputRef={actualInputRef}
+              disabled={disabled || isProcessing}
+              onCommand={onVoiceCommand}
+            />
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={isProcessing ? handleCancel : handleSubmit}
+          disabled={
+            disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
+          }
+          className={`px-4 py-3 rounded-lg font-medium flex items-center justify-center h-fit ${
+            disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : isProcessing
+              ? "bg-red-600 text-white hover:bg-red-700"
+              : "bg-indigo-600 text-white hover:bg-indigo-700"
+          }`}
+        >
+          {isProcessing ? (
+            <>
+              <Icon name="close" size="sm" className="mr-1" />
+              <span>{t("common.cancel")}</span>
+            </>
+          ) : (
+            <>
+              <span>{t("common.send")}</span>
+              {/* Display shortcut hint */}
+              <span className="ml-1 text-xs opacity-70 hidden sm:inline">
+                {multilineMode ? "⌘↵" : "↵"}
+              </span>
+            </>
+          )}
+        </button>
+      </form>
+    </div>
   );
 };
 

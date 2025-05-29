@@ -297,6 +297,12 @@ const ChatMessage = ({
 
   // Render the message content based on the output format
   const renderContent = () => {
+    // For HTML content, check if it contains image tags and render them properly
+    const hasImageContent = message.content && (
+      message.content.includes('<img') || 
+      message.content.includes('data:image')
+    );
+
     if (isEditing) {
       return (
         <div className="w-full">
@@ -356,6 +362,16 @@ const ChatMessage = ({
           <Icon name="exclamation-circle" className="mr-1.5 text-red-500 flex-shrink-0" />
           <span className="break-all">{message.content}</span>
         </div>
+      );
+    }
+    
+    // If the message contains HTML content with an image tag, render it as HTML
+    if (hasImageContent && isUser) {
+      return (
+        <div 
+          className="break-words whitespace-normal" 
+          dangerouslySetInnerHTML={{ __html: message.content }}
+        />
       );
     }
     

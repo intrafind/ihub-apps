@@ -1530,12 +1530,21 @@ async function processMessageTemplates(messages, app, style = null, outputFormat
         }
       }
       
-      // Replace the content with the processed template
-      return { role: 'user', content: processedContent };
+      // Create processed message, preserving image data if present
+      return { 
+        role: 'user', 
+        content: processedContent,
+        imageData: msg.imageData // Preserve image data if it exists
+      };
     }
     
     // For non-user messages or messages without templates, keep as is
-    return { role: msg.role, content: msg.content };
+    // but still preserve image data if it exists
+    return { 
+      role: msg.role, 
+      content: msg.content,
+      imageData: msg.imageData // Preserve image data if it exists
+    };
   });
   
   // Check for variables from the most recent message that might need to be applied to system prompt

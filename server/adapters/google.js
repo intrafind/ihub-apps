@@ -5,14 +5,14 @@ import { sendSSE } from '../utils.js';
 
 const GoogleAdapter = {
   /**
-   * Format messages for Google Gemini API
+   * Format messages for Google Gemini API, including handling image data
    */
   formatMessages(messages) {
     // Extract system message for separate handling
     let systemInstruction = '';
     const geminiContents = [];
     
-    // First pass - extract system messages
+    // First pass - extract system messages and handle image data
     for (const message of messages) {
       if (message.role === 'system') {
         // Collect system messages - ideally there should be only one
@@ -21,16 +21,38 @@ const GoogleAdapter = {
         // Convert OpenAI roles to Gemini roles
         const geminiRole = message.role === 'assistant' ? 'model' : 'user';
         
-        geminiContents.push({
-          role: geminiRole,
-          parts: [{ text: message.content }]
-        });
+        // Check if this message contains image data
+        if (message.imageData && message.imageData.base64) {
+          // For image messages, we need to create a parts array with both text and image
+          const parts = [];
+          
+          // Add text part if content exists
+          if (message.content) {
+            parts.push({ text: message.content });
+          }
+          
+          // Add image part
+          parts.push({
+            inlineData: {
+              mimeType: message.imageData.fileType || 'image/jpeg',
+              data: message.imageData.base64.replace(/^data:image\/[a-z]+;base64,/, '') // Remove data URL prefix if present
+            }
+          });
+          
+          geminiContents.push({ role: geminiRole, parts });
+        } else {
+          // Regular text message
+          geminiContents.push({
+            role: geminiRole,
+            parts: [{ text: message.content }]
+          });
+        }
       }
     }
     
     // Debug logs to trace message transformation
-    console.log('Original messages:', JSON.stringify(messages));
-    console.log('Transformed Gemini contents:', JSON.stringify(geminiContents));
+    console.log('Original messages:', JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData }))));
+    console.log('Transformed Gemini contents:', JSON.stringify(geminiContents.map(c => ({ role: c.role, partTypes: c.parts.map(p => Object.keys(p)[0]) }))));
     console.log('System instruction:', systemInstruction);
     
     // Return both regular messages and the system instruction

@@ -27,6 +27,7 @@ import ChatInput from "../components/chat/ChatInput";
 import ChatMessageList from "../components/chat/ChatMessageList";
 import InputVariables from "../components/chat/InputVariables";
 import { useUIConfig } from "../components/UIConfigContext";
+import cache, { CACHE_KEYS } from "../utils/cache"; // Import cache for manual clearing
 
 /**
  * Save app settings and variables to sessionStorage
@@ -80,12 +81,16 @@ const AppChat = () => {
   const [showParameters, setShowParameters] = useState(true);
   const { setHeaderColor } = useUIConfig();
   const [translationsLoaded, setTranslationsLoaded] = useState(false);
+  
+  // State for image upload and input configuration
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [showImageUploader, setShowImageUploader] = useState(false);
 
   const inputRef = useRef(null);
   const chatId = useRef(`chat-${Date.now()}`);
   const currentVoiceTextRef = useRef("");
 
-  // Language tracking
+  // State for language tracking
   const prevLanguageRef = useRef(currentLanguage);
 
   // Create a stable chat ID that persists across refreshes
@@ -445,6 +450,17 @@ const AppChat = () => {
     widgetConfig,
   ]);
 
+  // Handle image selection from ImageUploader
+  const handleImageSelect = (imageData) => {
+    console.log('AppChat: handleImageSelect called with', imageData);
+    setSelectedImage(imageData);
+  };
+
+  // Toggle image uploader visibility
+  const toggleImageUploader = () => {
+    setShowImageUploader(prev => !prev);
+  };
+
   const handleInputChange = (e) => {
     setInput(e.target.value);
   };
@@ -516,8 +532,8 @@ const AppChat = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Ensure input isn't empty before proceeding
-    if (!input.trim() && !app?.allowEmptyContent) {
+    // Ensure input isn't empty before proceeding or we have an image
+    if (!input.trim() && !selectedImage && !app?.allowEmptyContent) {
       return;
     }
 
@@ -550,8 +566,29 @@ const AppChat = () => {
       }
     }
 
-    // Clear any error message when proceeding
-    setError(null);
+    // Prevent sending during active processing
+    if (processing) {
+      return;
+    }
+
+    // Calculate the final input, including image data if available
+    let finalInput = input.trim();
+    let messageContent = finalInput;
+    let messageData = null;
+
+    // If we have an image, prepare it for display in the message
+    if (selectedImage) {
+      // For the message displayed to the user, create a simple display with text + image
+      const imgPreview = `<img src="${selectedImage.base64}" alt="Uploaded image" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
+      
+      // If there's text, combine it with the image, otherwise just show the image
+      messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
+      
+      // Store the full image data for API transmission
+      messageData = {
+        imageData: selectedImage
+      };
+    }
 
     try {
       cleanupEventSource();
@@ -566,14 +603,19 @@ const AppChat = () => {
       console.log("Generated exchange ID:", exchangeId);
 
       // Create the user message
-      addUserMessage(originalUserInput, {
+      addUserMessage(messageContent, {
         variables:
           app?.variables && app.variables.length > 0
             ? { ...variables }
             : undefined,
+        ...messageData
       });
 
       setInput("");
+      // Clear the selected image after sending
+      setSelectedImage(null);
+      // Close the image uploader
+      setShowImageUploader(false);
 
       // Store the exchangeId in a window property for debugging
       window.lastMessageId = exchangeId;
@@ -588,6 +630,7 @@ const AppChat = () => {
         promptTemplate: app?.prompt || null,
         variables: { ...variables },
         messageId: exchangeId, // Send the exchangeId to the server
+        imageData: selectedImage // Include image data if available
       };
 
       // Get messages for the API
@@ -622,6 +665,14 @@ const AppChat = () => {
       setProcessing(false);
     }
   };
+
+  // Function to clear app cache and reload
+  const clearAppCache = useCallback(() => {
+    // Clear all app detail caches
+    cache.invalidateByPattern(CACHE_KEYS.APP_DETAILS);
+    // Reload the current app
+    window.location.reload();
+  }, []);
 
   // Handle app action buttons
   const handleAction = useCallback(
@@ -747,32 +798,6 @@ const AppChat = () => {
     setShowParameters(!showParameters);
   };
 
-  const localizeVariables = (variables) => {
-    if (!variables || !Array.isArray(variables)) return [];
-
-    return variables.map((variable) => ({
-      ...variable,
-      localizedLabel:
-        getLocalizedContent(variable.label, currentLanguage) || variable.name,
-      localizedDescription: getLocalizedContent(
-        variable.description,
-        currentLanguage
-      ),
-      localizedDefaultValue: getLocalizedContent(
-        variable.defaultValue,
-        currentLanguage
-      ),
-      predefinedValues: variable.predefinedValues
-        ? variable.predefinedValues.map((option) => ({
-            ...option,
-            localizedLabel:
-              getLocalizedContent(option.label, currentLanguage) ||
-              option.value,
-          }))
-        : undefined,
-    }));
-  };
-
   // Memoize localizedVariables calculation to prevent unnecessary work on every render
   const localizedVariables = useMemo(() => {
     if (!app?.variables || !Array.isArray(app.variables)) return [];
@@ -806,20 +831,19 @@ const AppChat = () => {
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <div className="text-red-500 mb-4">{error}</div>
-        <button
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mr-4"
-          onClick={() => window.location.reload()}
-        >
-          {t("app.retry")}
-        </button>
-        <button
-          className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
-          onClick={() => navigate("/")}
-        >
-          {t("common.back")}
-        </button>
+      <div className="flex flex-col items-center justify-center h-screen">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg max-w-md">
+          <p className="font-bold">
+            {t("pages.appChat.errorTitle", "Error")}
+          </p>
+          <p>{error}</p>
+          <button 
+            onClick={clearAppCache}
+            className="mt-3 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded"
+          >
+            {t("pages.appChat.clearCache", "Clear Cache & Reload")}
+          </button>
+        </div>
       </div>
     );
   }
@@ -964,8 +988,13 @@ const AppChat = () => {
                 ? handleVoiceCommand
                 : undefined
             }
-            allowEmptySubmit={app?.allowEmptyContent}
+            onImageSelect={handleImageSelect}
+            imageUploadEnabled={app?.features?.imageUpload === true}
+            allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null}
             inputRef={inputRef}
+            selectedImage={selectedImage}
+            showImageUploader={showImageUploader}
+            onToggleImageUploader={toggleImageUploader}
           />
         </div>
 

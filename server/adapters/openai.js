@@ -5,11 +5,40 @@ import { sendSSE } from '../utils.js';
 
 const OpenAIAdapter = {
   /**
-   * Format messages for OpenAI API
+   * Format messages for OpenAI API, including handling image data
+   * @param {Array} messages - Messages to format
+   * @returns {Array} Formatted messages for OpenAI API
    */
   formatMessages(messages) {
-    // OpenAI already uses the format we use internally
-    return messages;
+    // Handle image data in messages
+    const formattedMessages = messages.map(message => {
+      // If there's no image data, return the message as is
+      if (!message.imageData) {
+        return message;
+      }
+
+      // Format messages with image content for vision models
+      return {
+        role: message.role,
+        content: [
+          // If there's text content, include it
+          ...(message.content ? [{
+            type: "text",
+            text: message.content
+          }] : []),
+          // Add the image content
+          {
+            type: "image_url",
+            image_url: {
+              url: message.imageData.base64,
+              detail: "high"
+            }
+          }
+        ]
+      };
+    });
+
+    return formattedMessages;
   },
 
   /**

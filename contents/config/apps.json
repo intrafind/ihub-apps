@@ -1070,7 +1070,7 @@
       "de": "Verwende diese App, um deine Stimme aufzunehmen und in Text umzuwandeln"
     },
     "color": "#10B981",
-    "icon": "question-mark-circle",
+    "icon": "microphone",
     "system": {
       "en": "You are a helpful assistant, which receives a transcript recorded with a microphone. Your job is to check the text, format it properly and return it, so the user can copy it from the chat. Do NOT add any additional information.",
       "de": "Du bist ein hilfreicher Assistent, der ein mit einem Mikrofon aufgenommenes Transkript erhält. Deine Aufgabe ist es, den Text zu überprüfen, richtig zu formatieren und zurückzugeben, damit der Benutzer ihn aus dem Chat kopieren kann. Füge KEINE zusätzlichen Informationen hinzu."
@@ -1081,6 +1081,7 @@
     "preferredStyle": "normal",
     "preferredTemperature": 0.3,
     "sendChatHistory": false,
+    "inputMode": "multiline",
     "prompt": {
       "en": "{{content}}",
       "de": "{{content}}"
@@ -1099,6 +1100,33 @@
     },
     "microphone": {
       "enabled": true
+    }
+  },
+  {
+    "id": "image-analysis",
+    "order": 10,
+    "name": {
+      "en": "Image Analyzer",
+      "de": "Bildanalyse"
+    },
+    "description": {
+      "en": "Upload and analyze images with AI",
+      "de": "Bilder hochladen und mit KI analysieren"
+    },
+    "color": "#10B981",
+    "icon": "camera",
+    "system": {
+      "en": "You are an AI image analysis assistant. Your role is to analyze images that users upload and provide detailed insights about what you see. Be detailed, accurate, and helpful.",
+      "de": "Du bist ein KI-Bildanalyseassistent. Deine Aufgabe ist es, von Benutzern hochgeladene Bilder zu analysieren und detaillierte Einblicke zu geben, was du siehst. Sei detailliert, genau und hilfreich."
+    },
+    "tokenLimit": 4096,
+    "preferredModel": "gpt-4-vision-preview",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "detailed",
+    "preferredTemperature": 0.7,
+    "sendChatHistory": false,
+    "features": {
+      "imageUpload": true
     }
   }
 ]

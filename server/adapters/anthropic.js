@@ -5,7 +5,7 @@ import { sendSSE } from '../utils.js';
 
 const AnthropicAdapter = {
   /**
-   * Format messages for Anthropic API
+   * Format messages for Anthropic API, including handling image data
    */
   formatMessages(messages) {
     // Extract system message and filter it out from the messages array
@@ -13,8 +13,51 @@ const AnthropicAdapter = {
     const systemMessage = messages.find(msg => msg.role === 'system');
     const filteredMessages = messages.filter(msg => msg.role !== 'system');
     
+    // Process messages to handle image data
+    const processedMessages = filteredMessages.map(msg => {
+      // If the message doesn't have image data, return it as is
+      if (!msg.imageData) {
+        return msg;
+      }
+      
+      // For messages with images, convert to Anthropic's format with content array
+      const content = [];
+      
+      // Add text content if it exists
+      if (msg.content && msg.content.trim()) {
+        content.push({
+          type: "text",
+          text: msg.content
+        });
+      }
+      
+      // Add image content
+      content.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: msg.imageData.fileType || "image/jpeg",
+          data: msg.imageData.base64.replace(/^data:image\/[a-z]+;base64,/, '') // Remove data URL prefix if present
+        }
+      });
+      
+      // Return the message with content array instead of content string
+      return {
+        role: msg.role,
+        content: content
+      };
+    });
+    
+    // Debug logs
+    console.log('Original messages:', JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData }))));
+    console.log('Processed Anthropic messages:', JSON.stringify(processedMessages.map(m => ({ 
+      role: m.role, 
+      contentType: Array.isArray(m.content) ? 'array' : 'string',
+      contentItems: Array.isArray(m.content) ? m.content.map(c => c.type) : null
+    }))));
+    
     return {
-      messages: filteredMessages,
+      messages: processedMessages,
       systemPrompt: systemMessage?.content || ''
     };
   },
