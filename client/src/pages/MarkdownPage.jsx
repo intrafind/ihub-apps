@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { marked } from 'marked';
+import { fetchPageContent } from '../api/api';
 
 const MarkdownPage = () => {
   const { t, i18n } = useTranslation();
@@ -30,36 +31,31 @@ const MarkdownPage = () => {
   }, []);
 
   useEffect(() => {
-    const fetchPageContent = async () => {
+    const loadPageContent = async () => {
       try {
         setLoading(true);
         
-        // Use the new API endpoint to fetch page content
-        const response = await fetch(`/api/pages/${pageId}?lang=${currentLanguage}`);
+        // Use the API service to fetch page content
+        const pageData = await fetchPageContent(pageId, { language: currentLanguage });
         
-        if (!response.ok) {
-          if (response.status === 404) {
-            setError('Page not found');
-          } else {
-            throw new Error(`Failed to load page: ${response.status} ${response.statusText}`);
-          }
-          setLoading(false);
-          return;
-        }
-        
-        const pageData = await response.json();
         setPageTitle(pageData.title || '');
         setMarkdownContent(pageData.content || '');
         setError(null);
       } catch (err) {
         console.error('Error fetching page:', err);
-        setError(`Failed to load page: ${err.message}`);
+        
+        // Use the enhanced error info from the API service
+        if (err.status === 404) {
+          setError('Page not found');
+        } else {
+          setError(`Failed to load page: ${err.message}`);
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    fetchPageContent();
+    loadPageContent();
   }, [pageId, currentLanguage]);
 
   if (loading) {

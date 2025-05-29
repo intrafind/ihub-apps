@@ -419,20 +419,26 @@ export const fetchTranslations = async (language, options = {}) => {
   );
 };
 
-// Centralized API service
+// Pages
+export const fetchPageContent = async (pageId, options = {}) => {
+  const { skipCache = false, language = null } = options;
+  const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.PAGE_CONTENT, { id: pageId, language });
+  
+  return handleApiResponse(
+    () => apiClient.get(`/pages/${pageId}`, { params: { lang: language } }),
+    cacheKey,
+    DEFAULT_CACHE_TTL.MEDIUM
+  );
+};
+
+// Centralized API service with consistent use of apiClient
 const apiService = {
   /**
    * Get UI configuration settings
    * @returns {Promise} Promise resolving to UI config data
    */
   getUIConfig: async () => {
-    try {
-      const response = await axios.get('/api/ui');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching UI configuration:', error);
-      throw error;
-    }
+    return fetchUIConfig();
   },
 
   /**
@@ -440,13 +446,7 @@ const apiService = {
    * @returns {Promise} Promise resolving to apps data
    */
   getApps: async () => {
-    try {
-      const response = await axios.get('/api/apps');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching apps:', error);
-      throw error;
-    }
+    return fetchApps();
   },
   
   /**
@@ -454,13 +454,7 @@ const apiService = {
    * @returns {Promise} Promise resolving to models data
    */
   getModels: async () => {
-    try {
-      const response = await axios.get('/api/models');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching models:', error);
-      throw error;
-    }
+    return fetchModels();
   },
   
   /**
@@ -469,13 +463,12 @@ const apiService = {
    * @returns {Promise} Promise resolving to response data
    */
   logSessionStart: async (sessionData) => {
-    try {
-      const response = await axios.post('/api/session/start', sessionData);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to log session start:', error);
-      throw error;
-    }
+    return handleApiResponse(
+      () => apiClient.post('/session/start', sessionData),
+      null, // No caching
+      null,
+      false // Don't deduplicate
+    );
   },
   
   /**
@@ -485,14 +478,26 @@ const apiService = {
    * @returns {Promise} Promise resolving to response data
    */
   sendChatMessage: async (endpoint, messageData) => {
-    try {
-      const response = await axios.post(endpoint, messageData);
-      return response.data;
-    } catch (error) {
-      console.error('Error sending chat message:', error);
-      throw error;
-    }
-  }
+    return handleApiResponse(
+      () => apiClient.post(endpoint, messageData),
+      null, // No caching for chat messages
+      null,
+      false // Don't deduplicate chat requests
+    );
+  },
+
+  // Reuse the exported functions for consistency
+  fetchPageContent,
+  fetchApps,
+  fetchAppDetails,
+  fetchModels,
+  fetchModelDetails,
+  fetchStyles,
+  fetchUIConfig,
+  fetchTranslations,
+  sendAppChatMessage,
+  sendDirectModelMessage,
+  sendMessageFeedback
 };
 
 export default apiService;
