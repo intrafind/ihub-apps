@@ -145,6 +145,13 @@ const Icon = ({ name, size = 'md', className = '', solid = false }) => {
           </svg>
         );
 
+      case 'arrowLeft':
+        return (
+          <svg className={combinedClassName} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...defaultStyle}>
+            <path d="M11 7l-5 5 5 5M19 12H6" />
+          </svg>
+        );
+
       case 'sparkles':
         return (
           <svg className={combinedClassName} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...defaultStyle}>

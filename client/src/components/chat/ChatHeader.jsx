@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import Icon from '../Icon';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * A reusable header component for chat interfaces
@@ -22,14 +23,27 @@ const ChatHeader = ({
   isMobile = false
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   
   // Default icon if none provided
   const defaultIcon = <Icon name="chat" className="text-white" />;
 
+  const handleBack = () => {
+    navigate('/');
+  };
+
   return (
     <div className="flex flex-col mb-4 pb-4 border-b">
-      <div className="flex items-start justify-between">
-        <div className="flex items-start">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center">
+          <button
+            onClick={handleBack}
+            className="mr-3 bg-gray-200 hover:bg-gray-300 text-gray-800 p-2 rounded-full flex items-center justify-center h-10 w-10"
+            title={t('pages.appChat.backToApps')}
+            aria-label="Back to apps list"
+          >
+            <Icon name="arrowLeft" size="sm" />
+          </button>          
           <div
             className="w-10 h-10 rounded-full flex items-center justify-center mr-3"
             style={{ backgroundColor: color }}
@@ -37,7 +51,7 @@ const ChatHeader = ({
             {icon || defaultIcon}
           </div>
           <div>
-            <h1 className="text-2xl font-bold">
+            <h1 className="text-2xl font-bold leading-tight">
               {typeof title === 'object' 
                 ? getLocalizedContent(title, currentLanguage) 
                 : title}

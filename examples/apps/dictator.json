@@ -38,7 +38,7 @@
     },
     "speechRecognition": {
       "service": "azure",
-      "host": "http://bmas01lal:5000/"
+      "host": "http://localhost:5000/"
     }
   },
   "microphone": {
