@@ -59,6 +59,73 @@ const loadAppSettings = (appId) => {
   }
 };
 
+/**
+ * Initialize variables with default values from app configuration
+ * @param {Object} app - The app configuration
+ * @param {string} currentLanguage - The current language
+ * @returns {Object} - Object with initialized variables
+ */
+const getInitializedVariables = (app, currentLanguage) => {
+  const initialVars = {};
+  
+  if (app && app.variables && Array.isArray(app.variables)) {
+    app.variables.forEach((variable) => {
+      // For select variables with predefined values, ensure we store the value, not the label
+      if (variable.predefinedValues && variable.defaultValue) {
+        // If defaultValue is an object with language keys
+        if (typeof variable.defaultValue === "object") {
+          const localizedLabel = getLocalizedContent(
+            variable.defaultValue,
+            currentLanguage
+          );
+          // Find the matching value for the localized label
+          const matchingOption = variable.predefinedValues.find(
+            (option) =>
+              getLocalizedContent(option.label, currentLanguage) ===
+              localizedLabel
+          );
+          // Use the value from predefined values if found, otherwise use the localized label
+          initialVars[variable.name] = matchingOption
+            ? matchingOption.value
+            : localizedLabel;
+        } else {
+          // If defaultValue is a direct string, use it as is
+          initialVars[variable.name] = variable.defaultValue;
+        }
+      } else if (variable.type === "select" && variable.options) {
+        // For select variables, handle options with localization
+        let matchingOption = null;
+        // Try to find option that matches defaultValue
+        if (variable.defaultValue) {
+          matchingOption = variable.options.find(
+            (option) => option.value === variable.defaultValue
+          );
+        }
+        
+        // Get localized label if available
+        const localizedLabel =
+          typeof variable.label === "object"
+            ? getLocalizedContent(variable.label, currentLanguage)
+            : variable.label || variable.name;
+            
+        // Use the value from predefined values if found, otherwise use the localized label
+        initialVars[variable.name] = matchingOption
+          ? matchingOption.value
+          : localizedLabel;
+      } else {
+        // For other variables, use standard localization
+        const localizedDefaultValue =
+          typeof variable.defaultValue === "object"
+            ? getLocalizedContent(variable.defaultValue, currentLanguage)
+            : variable.defaultValue || "";
+        initialVars[variable.name] = localizedDefaultValue;
+      }
+    });
+  }
+  
+  return initialVars;
+};
+
 const AppChat = () => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -179,6 +246,23 @@ const AppChat = () => {
       cleanupEventSource();
       clearMessages();
       chatId.current = `chat-${Date.now()}`;
+      
+      // Reset variables to their default values when clearing via voice command
+      if (app && app.variables) {
+        const initialVars = getInitializedVariables(app, currentLanguage);
+        setVariables(initialVars);
+        
+        // Also update the saved settings with the reset variables
+        const settings = {
+          selectedModel,
+          selectedStyle,
+          selectedOutputFormat,
+          sendChatHistory,
+          temperature,
+          variables: initialVars,
+        };
+        saveAppSettings(appId, settings);
+      }
     },
     sendMessage: (text) => {
       setInput(text);
@@ -261,40 +345,7 @@ const AppChat = () => {
 
         // Process variables if available
         if (appData.variables && isMounted) {
-          const initialVars = {};
-          appData.variables.forEach((variable) => {
-            // For select variables with predefined values, ensure we store the value, not the label
-            if (variable.predefinedValues && variable.defaultValue) {
-              // If defaultValue is an object with language keys
-              if (typeof variable.defaultValue === "object") {
-                const localizedLabel = getLocalizedContent(
-                  variable.defaultValue,
-                  currentLanguage
-                );
-                // Find the matching value for the localized label
-                const matchingOption = variable.predefinedValues.find(
-                  (option) =>
-                    getLocalizedContent(option.label, currentLanguage) ===
-                    localizedLabel
-                );
-                // Use the value from predefined values if found, otherwise use the localized label
-                initialVars[variable.name] = matchingOption
-                  ? matchingOption.value
-                  : localizedLabel;
-              } else {
-                // If defaultValue is a direct string, use it as is
-                initialVars[variable.name] = variable.defaultValue;
-              }
-            } else {
-              // For other variables, use standard localization
-              const localizedDefaultValue =
-                typeof variable.defaultValue === "object"
-                  ? getLocalizedContent(variable.defaultValue, currentLanguage)
-                  : variable.defaultValue || "";
-              initialVars[variable.name] = localizedDefaultValue;
-            }
-          });
-
+          const initialVars = getInitializedVariables(appData, currentLanguage);
           if (isMounted) {
             setVariables(initialVars);
           }
@@ -510,6 +561,23 @@ const AppChat = () => {
       cleanupEventSource();
       clearMessages();
       chatId.current = `chat-${Date.now()}`;
+      
+      // Reset variables to their default values
+      if (app && app.variables) {
+        const initialVars = getInitializedVariables(app, currentLanguage);
+        setVariables(initialVars);
+        
+        // Also update the saved settings with the reset variables
+        const settings = {
+          selectedModel,
+          selectedStyle,
+          selectedOutputFormat,
+          sendChatHistory,
+          temperature,
+          variables: initialVars,
+        };
+        saveAppSettings(appId, settings);
+      }
     }
   };
 
