@@ -21,6 +21,10 @@
   "preferredOutputFormat": "text",
   "preferredStyle": "keep",
   "preferredTemperature": 0.3,
+  "messagePlaceholder": {
+    "en": "Enter text to translate...",
+    "de": "Text zum Übersetzen eingeben..."
+  },
   "sendChatHistory": false,
   "prompt": {
     "en": "Selected Language: \"{{language}}\" - Text to translate: \"{{content}}\"",

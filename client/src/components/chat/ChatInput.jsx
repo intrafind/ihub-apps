@@ -18,7 +18,6 @@ const ChatInput = ({
   onVoiceCommand,
   onImageSelect,
   allowEmptySubmit = false,
-  placeholder,
   inputRef = null,
   disabled = false,
   imageUploadEnabled = false,
@@ -26,7 +25,7 @@ const ChatInput = ({
   showImageUploader: externalShowImageUploader = undefined,
   onToggleImageUploader = null,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
   const [internalShowImageUploader, setInternalShowImageUploader] = useState(false);
@@ -38,15 +37,48 @@ const ChatInput = ({
   // Use external state if provided, otherwise use internal state
   const showImageUploader = externalShowImageUploader !== undefined ? 
     externalShowImageUploader : internalShowImageUploader;
+    
+  // First check for direct placeholder prop, then app.messagePlaceholder, then default
+  const customPlaceholder = app?.messagePlaceholder ? 
+    (typeof app.messagePlaceholder === 'object' ? 
+      app.messagePlaceholder[i18n.language] || app.messagePlaceholder.en : 
+      app.messagePlaceholder) : null;
 
-  const defaultPlaceholder = isProcessing
+  let defaultPlaceholder = isProcessing
     ? t("pages.appChat.thinking")
     : allowEmptySubmit
     ? t(
         "pages.appChat.optionalMessagePlaceholder",
         "Type a message (optional)..."
       )
-    : t("pages.appChat.messagePlaceholder", "Type your message here...");
+    : customPlaceholder || t("pages.appChat.messagePlaceholder", "Type your message here...");
+  
+  // Store the current placeholder in a ref to ensure it persists
+  const placeholderRef = useRef(defaultPlaceholder);
+  
+  // Only update the placeholder ref when relevant dependencies change
+  useEffect(() => {
+    placeholderRef.current = defaultPlaceholder;
+    
+    // Set the placeholder on the input element directly when it changes
+    if (actualInputRef.current) {
+      actualInputRef.current.placeholder = defaultPlaceholder;
+    }
+  }, [isProcessing, allowEmptySubmit, customPlaceholder, i18n.language]);
+  
+  // Debug logging
+  useEffect(() => {
+    console.log("ChatInput placeholder state:", { 
+      customPlaceholder,
+      defaultPlaceholder, 
+      placeholderRef: placeholderRef.current,
+      appPlaceholder: app?.messagePlaceholder,
+      currentLanguage: i18n.language,
+      isUsingCustom: Boolean(customPlaceholder),
+      isProcessing,
+      allowEmptySubmit
+    });
+  }, [customPlaceholder, defaultPlaceholder, isProcessing, allowEmptySubmit, i18n.language, app?.messagePlaceholder]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -114,7 +146,7 @@ const ChatInput = ({
           onKeyDown={handleKeyDown}
           disabled={disabled || isProcessing}
           className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 pr-10"
-          placeholder={placeholder || defaultPlaceholder}
+          placeholder={placeholderRef.current}
           ref={actualInputRef}
           rows={multilineMode ? "2" : "1"}
           style={{ resize: multilineMode ? "vertical" : "none" }}
@@ -122,6 +154,9 @@ const ChatInput = ({
             t("input.multilineTooltip", "Press Shift+Enter for new line, Cmd+Enter to send") : 
             t("input.singlelineTooltip", "Press Enter to send")}
         />
+        <span className="sr-only">
+          
+        </span>
         <div className="flex-1 relative">
           {value && (
             <button

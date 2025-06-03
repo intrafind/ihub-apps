@@ -21,5 +21,9 @@
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
   "preferredTemperature": 0.7,
+  "messagePlaceholder": {
+    "en": "Ask me anything...",
+    "de": "Frag mich etwas..."
+  },
   "sendChatHistory": true
 }
