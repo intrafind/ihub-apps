@@ -18,6 +18,7 @@ const VoiceInputComponent = ({
   const feedbackRef = useRef(null);
   const recognitionRef = useRef(null);
   const originalInputValue = useRef("");
+  const originalPlaceholder = useRef(""); // Store the original placeholder
 
   // Clean up recognition when component unmounts
   useEffect(() => {
@@ -157,6 +158,8 @@ const VoiceInputComponent = ({
       // Store original input value to append to it later
       if (inputRef?.current) {
         originalInputValue.current = inputRef.current.value || "";
+        // Store the original placeholder
+        originalPlaceholder.current = inputRef.current.placeholder || "";
       }
 
       // Create recognition object
@@ -369,10 +372,8 @@ const VoiceInputComponent = ({
         setIsListening(false);
 
         if (inputRef?.current) {
-          inputRef.current.placeholder = t(
-            "voiceInput.messagePlaceholder",
-            "Type your message here..."
-          );
+          // Restore the original placeholder
+          inputRef.current.placeholder = originalPlaceholder.current;
         }
 
         // Clean up recognition object
@@ -410,10 +411,8 @@ const VoiceInputComponent = ({
     setIsListening(false);
 
     if (inputRef?.current) {
-      inputRef.current.placeholder = t(
-        "voiceInput.messagePlaceholder",
-        "Type your message here..."
-      );
+      // Restore the original placeholder
+      inputRef.current.placeholder = originalPlaceholder.current;
     }
   };
 
@@ -434,10 +433,8 @@ const VoiceInputComponent = ({
       // Reset placeholder after 3 seconds
       setTimeout(() => {
         if (inputRef?.current) {
-          inputRef.current.placeholder = t(
-            "voiceInput.messagePlaceholder",
-            "Type your message here..."
-          );
+          // Restore the original placeholder
+          inputRef.current.placeholder = originalPlaceholder.current;
         }
       }, 3000);
     }

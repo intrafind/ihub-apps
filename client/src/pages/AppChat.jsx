@@ -315,7 +315,7 @@ const AppChat = () => {
 
         console.log("Fetching app data for:", appId);
         const appData = await fetchAppDetails(appId);
-
+        
         // Safety check for component unmounting during async operations
         if (!isMounted) return;
 
