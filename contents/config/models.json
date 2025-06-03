@@ -45,6 +45,14 @@
     "tokenLimit": 32768
   },
   {
+    "id": "gemini-2.5-flash-preview-05-20",
+    "modelId": "gemini-2.5-flash-preview-05-20",
+    "name": "Gemini 2.5",
+    "description": "Google's versatile model optimized for text and code tasks",
+    "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:streamGenerateContent",
+    "provider": "google", 
+    "tokenLimit": 32768
+  },{
     "id": "local-vllm",
     "modelId": "stelterlab_Mistral-Small-24B-Instruct-2501-AWQ",
     "name": "Local vLLM",
