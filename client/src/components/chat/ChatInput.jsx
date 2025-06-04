@@ -46,12 +46,11 @@ const ChatInput = ({
 
   let defaultPlaceholder = isProcessing
     ? t("pages.appChat.thinking")
+    : customPlaceholder
+    ? customPlaceholder
     : allowEmptySubmit
-    ? t(
-        "pages.appChat.optionalMessagePlaceholder",
-        "Type a message (optional)..."
-      )
-    : customPlaceholder || t("pages.appChat.messagePlaceholder", "Type your message here...");
+    ? t("pages.appChat.optionalMessagePlaceholder", "Type here (optional)...")
+    : t("pages.appChat.messagePlaceholder", "Type here...");
   
   // Store the current placeholder in a ref to ensure it persists
   const placeholderRef = useRef(defaultPlaceholder);

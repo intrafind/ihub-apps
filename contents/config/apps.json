@@ -315,6 +315,11 @@
     "preferredStyle": "professional",
     "preferredTemperature": 0.6,
     "sendChatHistory": false,
+    "allowEmptyContent": true,
+    "messagePlaceholder": {
+      "en": "Type any specific information for the eMail which should be included...",
+      "de": "Gib spezifische Informationen für die E-Mail an, die enthalten sein sollen..."
+    },
     "prompt": {
       "en": "Write a {{type}} email to {{recipient}} regarding {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}",
       "de": "Schreibe eine {{type}} E-Mail an {{recipient}} bezüglich {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}"
@@ -913,8 +918,7 @@
           "de": "Erstelle einen Prompt basierend auf den aktuellen Parametern ohne eine Nachricht eingeben zu müssen"
         }
       }
-    ],
-    "allowEmptyContent": true
+    ]
   },
   {
     "id": "app-generator",
@@ -1059,8 +1063,7 @@
           "de": "App-JSON basierend auf den aktuellen Parametern generieren, ohne eine Nachricht eingeben zu müssen"
         }
       }
-    ],
-    "allowEmptyContent": true
+    ]
   },
   {
     "id": "dictation",
