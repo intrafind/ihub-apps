@@ -1530,21 +1530,32 @@ async function processMessageTemplates(messages, app, style = null, outputFormat
         }
       }
       
-      // Create processed message, preserving image data if present
-      return { 
+      // Create processed message, only including imageData if it exists and isn't null
+      const processedMsg = { 
         role: 'user', 
-        content: processedContent,
-        imageData: msg.imageData // Preserve image data if it exists
+        content: processedContent
       };
+      
+      // Only include imageData if it actually exists and isn't null
+      if (msg.imageData) {
+        processedMsg.imageData = msg.imageData;
+      }
+      
+      return processedMsg;
     }
     
-    // For non-user messages or messages without templates, keep as is
-    // but still preserve image data if it exists
-    return { 
+    // For non-user messages or messages without templates
+    const processedMsg = { 
       role: msg.role, 
-      content: msg.content,
-      imageData: msg.imageData // Preserve image data if it exists
+      content: msg.content
     };
+    
+    // Only include imageData if it actually exists and isn't null
+    if (msg.imageData) {
+      processedMsg.imageData = msg.imageData;
+    }
+    
+    return processedMsg;
   });
   
   // Check for variables from the most recent message that might need to be applied to system prompt
@@ -1570,8 +1581,13 @@ async function processMessageTemplates(messages, app, style = null, outputFormat
     // Replace variable placeholders in the system prompt
     if (Object.keys(userVariables).length > 0) {
       for (const [key, value] of Object.entries(userVariables)) {
-        // Ensure value is a string before using replace
-        const strValue = typeof value === 'string' ? value : String(value || '');
+        // Skip properties that are functions or objects
+        if (typeof value === 'function' || (typeof value === 'object' && value !== null)) {
+          continue;
+        }
+        
+        // Replace placeholders in the system prompt
+        const strValue = String(value || '');
         systemPrompt = systemPrompt.replace(`{{${key}}}`, strValue);
       }
     }

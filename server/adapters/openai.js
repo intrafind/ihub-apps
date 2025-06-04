@@ -12,9 +12,13 @@ const OpenAIAdapter = {
   formatMessages(messages) {
     // Handle image data in messages
     const formattedMessages = messages.map(message => {
-      // If there's no image data, return the message as is
+      // If there's no image data, return a clean message without imageData property
       if (!message.imageData) {
-        return message;
+        // Return a new object with only the properties that OpenAI expects
+        return {
+          role: message.role,
+          content: message.content
+        };
       }
 
       // Format messages with image content for vision models

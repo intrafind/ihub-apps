@@ -15,9 +15,13 @@ const AnthropicAdapter = {
     
     // Process messages to handle image data
     const processedMessages = filteredMessages.map(msg => {
-      // If the message doesn't have image data, return it as is
+      // If the message doesn't have image data, return a clean message without imageData property
       if (!msg.imageData) {
-        return msg;
+        // Return a new object with only the properties that Anthropic expects
+        return {
+          role: msg.role,
+          content: msg.content
+        };
       }
       
       // For messages with images, convert to Anthropic's format with content array
@@ -42,6 +46,7 @@ const AnthropicAdapter = {
       });
       
       // Return the message with content array instead of content string
+      // Only include the properties that Anthropic expects
       return {
         role: msg.role,
         content: content

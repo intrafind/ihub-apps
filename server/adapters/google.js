@@ -41,7 +41,7 @@ const GoogleAdapter = {
           
           geminiContents.push({ role: geminiRole, parts });
         } else {
-          // Regular text message
+          // Regular text message - without imageData property
           geminiContents.push({
             role: geminiRole,
             parts: [{ text: message.content }]
