@@ -247,6 +247,17 @@ const AppChat = () => {
       clearMessages();
       chatId.current = `chat-${Date.now()}`;
       
+      // Reset the chat input to empty
+      setInput("");
+      
+      // Clear any selected image
+      setSelectedImage(null);
+      
+      // Hide the image uploader if it's visible
+      if (showImageUploader) {
+        setShowImageUploader(false);
+      }
+      
       // Reset variables to their default values when clearing via voice command
       if (app && app.variables) {
         const initialVars = getInitializedVariables(app, currentLanguage);
@@ -561,6 +572,17 @@ const AppChat = () => {
       cleanupEventSource();
       clearMessages();
       chatId.current = `chat-${Date.now()}`;
+      
+      // Reset the chat input to empty
+      setInput("");
+      
+      // Clear any selected image
+      setSelectedImage(null);
+      
+      // Hide the image uploader if it's visible
+      if (showImageUploader) {
+        setShowImageUploader(false);
+      }
       
       // Reset variables to their default values
       if (app && app.variables) {

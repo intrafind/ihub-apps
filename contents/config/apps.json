@@ -317,8 +317,8 @@
     "sendChatHistory": false,
     "allowEmptyContent": true,
     "messagePlaceholder": {
-      "en": "Type any specific information for the eMail which should be included...",
-      "de": "Gib spezifische Informationen für die E-Mail an, die enthalten sein sollen..."
+      "en": "Here you can provide additional information for composing the email...",
+      "de": "Hier kannst du mir zusätzliche Informationen zur Erstellung der Mail geben…"
     },
     "prompt": {
       "en": "Write a {{type}} email to {{recipient}} regarding {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}",
@@ -1134,6 +1134,37 @@
     "sendChatHistory": false,
     "features": {
       "imageUpload": true
+    },
+    "microphone": {
+      "enabled": false
+    }
+  },
+  {
+    "id": "Note-assistant",
+    "order": 6,
+    "name": {
+      "en": "Note assistant",
+      "de": "Vermerks-Assistent"
+    },
+    "description": {
+      "en": "Generative AI assistant for creating professional notes - without access to internal data.",
+      "de": "Generativer KI-Assistent zur Erstellung professioneller Vermerke - ohne Zugriff auf interne Daten."
+    },
+    "color": "#4F46E5",
+    "icon": "chat-bubbles",
+    "system": {
+      "en": "You are an AI assistant for creating memos. The note is divided into the sections 1. vote, 2. facts and 3. evaluation. The vote should be formulated precisely and be a maximum of 3 sentences long. The facts should contain detailed information and factual statements. The evaluation should be concise and precise and take into account the statements in the facts. At the end of the evaluation, the following sentence should be included after a line break “Department (Dept.) has co-signed or was involved.” Add the following notes at the end: 1. no internal data was taken into account in the note, only public training data from the AI model. 2. the statements should always be checked again in detail for accuracy.",
+      "de": "Du bist ein KI-Assistent zur Erstellung von Vermerken. Der Vermerk ist in die Abschnitte 1. Votum, 2. Sachverhalt und 3. Bewertung gegliedert. Das Votum sollte präzise formuliert und maximal 3 Sätze lang sein. Der Sachverhalt sollte ausführliche Informationen und Tatsachendarstellungen enthalten. Die Bewertung sollte knapp und präzise aufgebaut und die Ausführungen im Sachverhaltes berücksichtigen. Am Ende der Bewertung sollte nach einer Zeilenschaltung folgender Satz enthalten sein „Abteilung (Abt.) hat mitgezeichnet bzw. war beteiligt.“ Ergänze am Ende etwas abgesetzt noch folgenden Hinweise: 1. Im Vermerk wurden keine internen Daten berücksichtigt, sondern ausschließlich öffentliche Trainingsdaten des KI-Models. 2. Die Ausführungen sollten stets noch einmal ausführlich auf Richtigkeit geprüft werden."
+    },
+    "tokenLimit": 4096,
+    "preferredModel": "local-vllm-gemma-3-27b",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "keep",
+    "preferredTemperature": 0.7,
+    "sendChatHistory": true,
+    "messagePlaceholder": {
+      "en": "Which topic should the note deal with and which key aspects should I address in the facts or the assessment?",
+      "de": "Welches Thema soll der Vermerk behandeln und auf welche zentralen Aspekte soll ich im Sachverhalt oder der Bewertung eingehen?"
     },
     "microphone": {
       "enabled": false
