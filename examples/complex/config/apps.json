@@ -798,19 +798,6 @@
         }
       }
     ],
-    "actions": [
-      {
-        "id": "create-prompt",
-        "label": {
-          "en": "Create Prompt",
-          "de": "Prompt erstellen"
-        },
-        "description": {
-          "en": "Generate a prompt based on the current parameters without needing to type a message",
-          "de": "Erstelle einen Prompt basierend auf den aktuellen Parametern ohne eine Nachricht eingeben zu müssen"
-        }
-      }
-    ],
     "allowEmptyContent": true
   },
   {

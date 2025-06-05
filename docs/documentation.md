@@ -133,26 +133,6 @@ Some apps can load content from a file:
 "sourcePath": "/contents/faq.md"
 ```
 
-#### Custom Actions
-
-Apps can define custom actions that trigger specific behaviors:
-
-```json
-"actions": [
-  {
-    "id": "draft-email",
-    "label": {
-      "en": "Draft Email",
-      "de": "E-Mail entwerfen"
-    },
-    "description": {
-      "en": "Generate an email draft based on the current parameters",
-      "de": "E-Mail-Entwurf basierend auf den aktuellen Parametern generieren"
-    }
-  }
-]
-```
-
 #### Settings Configuration
 
 The `settings` property controls which configuration options users can adjust for each app:
@@ -191,7 +171,50 @@ The `settings` property controls which configuration options users can adjust fo
 | `settings.chatHistory.enabled` | Enable/disable chat history toggle |
 | `microphone.enabled` | Enable/disable microphone input for voice commands |
 
-When a setting is disabled, the corresponding UI element will be hidden, and the app will use the predefined value specified in its configuration.
+When a setting is disabled (`false`), the corresponding UI element will be hidden, and the app will use the predefined value specified in its configuration.
+
+#### Image Upload Configuration
+
+Apps can support image upload functionality for visual analysis:
+
+```json
+"imageUpload": true
+```
+
+When enabled, users can upload images that will be processed alongside their text input.
+
+#### Input Modes
+
+Apps can specify different input modes to control the user interface:
+
+```json
+"inputMode": "single"
+```
+
+Available input modes:
+- `single`: Single input mode (default)
+- `multiple`: Multiple input mode for complex workflows
+
+#### Message Placeholders
+
+Apps can define custom placeholder text for the message input:
+
+```json
+"messagePlaceholder": {
+  "en": "Enter your text to translate...",
+  "de": "Geben Sie Ihren Text zum Übersetzen ein..."
+}
+```
+
+#### Content Restrictions
+
+Apps can be configured to allow empty content submission:
+
+```json
+"allowEmptyContent": true
+```
+
+When `true`, users can submit the form without entering content in the main input field.
 
 #### Other Options
 

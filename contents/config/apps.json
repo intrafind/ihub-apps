@@ -905,19 +905,6 @@
           "de": "Füge spezifische Anforderungen, Einschränkungen oder Techniken hinzu, die du einbauen möchtest."
         }
       }
-    ],
-    "actions": [
-      {
-        "id": "create-prompt",
-        "label": {
-          "en": "Create Prompt",
-          "de": "Prompt erstellen"
-        },
-        "description": {
-          "en": "Generate a prompt based on the current parameters without needing to type a message",
-          "de": "Erstelle einen Prompt basierend auf den aktuellen Parametern ohne eine Nachricht eingeben zu müssen"
-        }
-      }
     ]
   },
   {
@@ -1048,19 +1035,6 @@
         "description": {
           "en": "Any other details or special requirements for your app.",
           "de": "Weitere Details oder spezielle Anforderungen für deine App."
-        }
-      }
-    ],
-    "actions": [
-      {
-        "id": "generate-app",
-        "label": {
-          "en": "Generate App",
-          "de": "App generieren"
-        },
-        "description": {
-          "en": "Generate app JSON based on the current parameters without needing to type a message",
-          "de": "App-JSON basierend auf den aktuellen Parametern generieren, ohne eine Nachricht eingeben zu müssen"
         }
       }
     ]

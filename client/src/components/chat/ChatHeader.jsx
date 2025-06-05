@@ -18,7 +18,6 @@ const ChatHeader = ({
   onClearChat,
   onToggleConfig,
   onToggleParameters,
-  actions = [],
   currentLanguage,
   isMobile = false
 }) => {
@@ -96,19 +95,6 @@ const ChatHeader = ({
               <span className="hidden sm:inline">{t('settings.title')}</span>
             </button>
           )}
-          {/* Action buttons */}
-          {actions.length > 0 &&
-            actions.map(action => (
-              <button
-                key={action.id}
-                onClick={() => action.onClick(action.id)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded flex items-center"
-              >
-                {typeof action.label === 'object' 
-                  ? getLocalizedContent(action.label, currentLanguage) 
-                  : action.label}
-              </button>
-            ))}
         </div>
       </div>
     </div>

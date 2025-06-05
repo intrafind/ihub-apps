@@ -764,122 +764,6 @@ const AppChat = () => {
     window.location.reload();
   }, []);
 
-  // Handle app action buttons
-  const handleAction = useCallback(
-    (actionId) => {
-      if (!app || !app.actions) return;
-
-      const action = app.actions.find((action) => action.id === actionId);
-      if (!action) return;
-
-      // Check for required variables
-      if (app?.variables) {
-        const missingRequiredVars = app.variables
-          .filter((v) => v.required)
-          .filter((v) => !variables[v.name] || variables[v.name].trim() === "");
-
-        if (missingRequiredVars.length > 0) {
-          // Show inline error instead of using setError
-          const errorMessage =
-            t(
-              "error.missingRequiredFields",
-              "Please fill in all required fields:"
-            ) +
-            " " +
-            missingRequiredVars
-              .map((v) => getLocalizedContent(v.label, currentLanguage))
-              .join(", ");
-
-          addSystemMessage(errorMessage, true);
-
-          // Highlight missing fields by scrolling to parameters section on mobile
-          if (window.innerWidth < 768 && !showParameters) {
-            setShowParameters(true); // directly use state setter instead of the toggle function
-          }
-
-          return;
-        }
-      }
-
-      // Clear input field
-      setInput("");
-
-      // Process the action directly
-      cleanupEventSource();
-      setProcessing(true);
-      setError(null);
-
-      const actionLabel =
-        getLocalizedContent(action.label, currentLanguage) || action.id;
-
-      // Create user message that indicates an action was triggered
-      const userMessageId = addUserMessage(`[${actionLabel}]`, {
-        actionId: actionId, // Include the action ID so the server knows this is an action
-        variables:
-          app?.variables && app.variables.length > 0
-            ? { ...variables }
-            : undefined,
-      });
-
-      // Create message to send to API
-      const messageForAPI = {
-        role: "user",
-        content: "", // Empty content for action
-        actionId: actionId, // This tells the server it's an action button request
-        promptTemplate: app?.prompt || null,
-        variables: { ...variables },
-      };
-
-      const messagesForAPI = getMessagesForApi(sendChatHistory, messageForAPI);
-
-      const assistantMessageId = `msg-${Date.now()}-${Math.floor(
-        Math.random() * 1000
-      )}`;
-      window.lastMessageId = assistantMessageId;
-
-      // Add assistant message placeholder
-      addAssistantMessage(assistantMessageId);
-
-      // Store the request parameters for use in the onConnected callback
-      window.pendingMessageData = {
-        appId,
-        chatId: chatId.current,
-        messages: messagesForAPI,
-        params: {
-          modelId: selectedModel,
-          style: selectedStyle,
-          temperature,
-          outputFormat: selectedOutputFormat,
-          language: currentLanguage,
-        },
-      };
-
-      // Initialize event source - the actual message sending happens in the onConnected callback
-      initEventSource(`/api/apps/${appId}/chat/${chatId.current}`);
-    },
-    [
-      app,
-      variables,
-      currentLanguage,
-      showParameters,
-      cleanupEventSource,
-      setProcessing,
-      appId,
-      selectedModel,
-      selectedStyle,
-      temperature,
-      selectedOutputFormat,
-      sendChatHistory,
-      t,
-      addUserMessage,
-      addAssistantMessage,
-      setMessageError,
-      getMessagesForApi,
-      initEventSource,
-      addSystemMessage,
-    ]
-  );
-
   const toggleConfig = () => {
     setShowConfig(!showConfig);
   };
@@ -938,15 +822,6 @@ const AppChat = () => {
     );
   }
 
-  // Create action array for ChatHeader
-  const headerActions = app?.actions
-    ? app.actions.map((action) => ({
-        id: action.id,
-        label: action.label,
-        onClick: handleAction,
-      }))
-    : [];
-
   // App icon
   const appIcon = (
     <svg
@@ -981,7 +856,6 @@ const AppChat = () => {
         onClearChat={clearChat}
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}
-        actions={headerActions}
         currentLanguage={currentLanguage}
         isMobile={window.innerWidth < 768}
       />

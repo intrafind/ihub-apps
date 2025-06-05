@@ -129,18 +129,5 @@
       }
     }
   ],
-  "actions": [
-    {
-      "id": "generate-app",
-      "label": {
-        "en": "Generate App",
-        "de": "App generieren"
-      },
-      "description": {
-        "en": "Generate app JSON based on the current parameters without needing to type a message",
-        "de": "App-JSON basierend auf den aktuellen Parametern generieren, ohne eine Nachricht eingeben zu müssen"
-      }
-    }
-  ],
   "allowEmptyContent": true
 }
