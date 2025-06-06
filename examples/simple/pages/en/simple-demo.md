@@ -16,6 +16,6 @@ Use the navigation menu to explore the available applications. The Simple demo s
 
 The Simple configuration includes basic applications that demonstrate the platform's capabilities without complex setups.
 
-![AI Hub Logo](/logo.png)
+![AI Hub Apps Logo](/logo.png)
 
 For more information, check the documentation or contact the support team.

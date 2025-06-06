@@ -1,8 +1,8 @@
 /**
- * AI Hub Chat Widget - Embed script
+ * AI Hub Apps Chat Widget - Embed script
  * Version: 1.0.0
  * 
- * This script allows embedding the AI Hub Chat widget in any website
+ * This script allows embedding the AI Hub Apps Chat widget in any website
  */
 
 (function () {
@@ -21,7 +21,7 @@
   
   function debug(...args) {
     if (isDebugMode) {
-      console.log('[AI Hub Widget]', ...args);
+      console.log('[AI Hub Apps Widget]', ...args);
     }
   }
 

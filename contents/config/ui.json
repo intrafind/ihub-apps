@@ -79,8 +79,8 @@
   "widget": {
     "defaultApp": "faq-bot",
     "title": {
-      "en": "AI Hub Chat",
-      "de": "KI-Hub Chat"
+      "en": "AI Hub Apps Chat",
+      "de": "KI-Hub Apps Chat"
     },
     "placeholder": {
       "en": "Ask me anything...",

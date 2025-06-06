@@ -4,23 +4,23 @@
 
 ## General Questions
 
-### What is AI Hub?
+### What is AI Hub Apps?
 
-AI Hub is a platform that allows you to interact with various AI models through a simple, consistent interface. You can use our pre-configured apps or create your own to solve specific tasks.
+AI Hub Apps is a platform that allows you to interact with various AI models through a simple, consistent interface. You can use our pre-configured apps or create your own to solve specific tasks.
 
 ### How do I get started?
 
 To get started, simply browse our collection of apps on the home page and click on one that interests you. No account is required for basic usage.
 
-### Is AI Hub free to use?
+### Is AI Hub Apps free to use?
 
-AI Hub offers both free and premium features. Basic access to standard models is free, while access to more advanced models and higher usage limits requires a subscription.
+AI Hub Apps offers both free and premium features. Basic access to standard models is free, while access to more advanced models and higher usage limits requires a subscription.
 
 ## Technical Questions
 
-### Which AI models does AI Hub support?
+### Which AI models does AI Hub Apps support?
 
-AI Hub currently supports models from OpenAI (GPT-4, GPT-3.5), Anthropic (Claude), and Google (Gemini).
+AI Hub Apps currently supports models from OpenAI (GPT-4, GPT-3.5), Anthropic (Claude), and Google (Gemini).
 
 ### Can I use my own API keys?
 

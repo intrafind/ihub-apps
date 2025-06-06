@@ -1,7 +1,7 @@
 /**
- * AI Hub Widget - Standalone embed script
+ * AI Hub Apps Widget - Standalone embed script
  * 
- * This script can be included on any website to embed the AI Hub Chat Widget.
+ * This script can be included on any website to embed the AI Hub Apps Chat Widget.
  * It creates a button and iframe container similar to the sample widget.js implementation.
  */
 
@@ -113,7 +113,7 @@ window.aiHubWidget = (function() {
     isInitialized = true;
     checkTrigger();
     
-    console.log('AI Hub Widget initialized with options:', options);
+    console.log('AI Hub Apps Widget initialized with options:', options);
     
     return {
       open: open,
@@ -216,7 +216,7 @@ window.aiHubWidget = (function() {
       // Add visual indication that the iframe is open
       toggleButton.innerHTML = '<i class="fas fa-times"></i>';
       
-      console.log('AI Hub Widget opened');
+      console.log('AI Hub Apps Widget opened');
     }
   }
   
@@ -236,7 +236,7 @@ window.aiHubWidget = (function() {
       // Reset the toggle button icon to the chat icon
       toggleButton.innerHTML = '<i class="fas fa-comments"></i>';
       
-      console.log('AI Hub Widget closed');
+      console.log('AI Hub Apps Widget closed');
     }
   }
   

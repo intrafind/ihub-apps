@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "AI Hub",
+    "title": "AI Hub Apps",
     "loading": "Wird geladen...",
     "error": "Ein Fehler ist aufgetreten",
     "retry": "Wiederholen"
@@ -11,7 +11,13 @@
     "save": "Speichern",
     "edit": "Bearbeiten",
     "delete": "Löschen",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "select": "Auswählen"
+  },
+  "variables": {
+    "selectLabel": "{{label}} auswählen",
+    "enterLabel": "{{label}} eingeben",
+    "enter": "Eingeben"
   },
   "languages": {
     "en": "Englisch",

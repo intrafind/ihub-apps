@@ -17,4 +17,4 @@ For questions, support, or feedback:
 
 ## Acknowledgments
 
-The AI Hub platform is built using open source technologies and contributions from the community.
+The AI Hub Apps platform is built using open source technologies and contributions from the community.

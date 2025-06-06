@@ -38,7 +38,7 @@ const InputVariables = ({
               className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
               required={variable.required}
             >
-              <option value="">{t('common.select')} {variable.localizedLabel}</option>
+              <option value="">{t('variables.selectLabel', { label: variable.localizedLabel })}</option>
               {variable.predefinedValues.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.localizedLabel}
@@ -56,7 +56,7 @@ const InputVariables = ({
               }
               rows={4}
               className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder={t('variables.enter') + ' ' + variable.localizedLabel.toLowerCase()}
+              placeholder={t('variables.enterLabel', { label: variable.localizedLabel.toLowerCase() })}
               required={variable.required}
             />
           ) : (
@@ -70,7 +70,7 @@ const InputVariables = ({
                 })
               }
               className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder={t('variables.enter') + ' ' + variable.localizedLabel.toLowerCase()}
+              placeholder={t('variables.enterLabel', { label: variable.localizedLabel.toLowerCase() })}
               required={variable.required}
             />
           )}

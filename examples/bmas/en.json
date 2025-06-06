@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "AI Hub",
+    "title": "AI Hub Apps",
     "loading": "Loading...",
     "error": "An error occurred",
     "retry": "Retry"
@@ -33,7 +33,7 @@
   },
   "pages": {
     "home": {
-      "title": "AI Hub",
+      "title": "AI Hub Apps",
       "description": "Interact with various AI models through a simple interface",
       "featured": "Featured Apps",
       "viewAll": "View All Apps"

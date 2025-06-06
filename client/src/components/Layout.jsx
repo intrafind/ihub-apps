@@ -16,7 +16,15 @@ const Layout = () => {
   const [searchParams] = useSearchParams();
 
   // Update integration settings from URL parameters and retrieve current settings
-  const { showHeader, showFooter } = updateSettingsFromUrl(searchParams);
+  const { showHeader, showFooter, language } = updateSettingsFromUrl(searchParams);
+
+  // Apply language from URL if specified
+  useEffect(() => {
+    if (language && language !== i18n.language) {
+      console.log(`Setting language from URL parameter: ${language}`);
+      i18n.changeLanguage(language);
+    }
+  }, [language, i18n]);
 
   // Check if we're viewing an app page to hide footer links
   const isAppPage = useMemo(() => {
@@ -27,9 +35,10 @@ const Layout = () => {
   useEffect(() => {
     localStorage.setItem('aiHubIntegrationSettings', JSON.stringify({
       showHeader,
-      showFooter
+      showFooter,
+      language
     }));
-  }, [showHeader, showFooter]);
+  }, [showHeader, showFooter, language]);
 
   const headerColorStyle = {
     backgroundColor: headerColor || '#4f46e5',
@@ -68,7 +77,7 @@ const Layout = () => {
               <div className="flex items-center h-full">
                 {/* Add padding-left if logo exists to prevent overlap */}
                 <Link to="/" className={`text-2xl font-bold flex items-center py-4`}>
-                  {uiConfig?.title ? getLocalizedContent(uiConfig.title, currentLanguage) : 'AI Hub'}
+                  {uiConfig?.title ? getLocalizedContent(uiConfig.title, currentLanguage) : 'AI Hub Apps'}
                 </Link>
               </div>
 

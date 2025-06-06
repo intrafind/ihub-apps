@@ -17,11 +17,12 @@ This documentation covers configuration options for AI Hub Apps including apps, 
 4. [Content Management](#content-management)
 5. [Internationalization (i18n)](#internationalization-i18n)
 6. [Response Styles](#response-styles)
-7. [Server Components and API Adapters](#server-components-and-api-adapters)
+7. [External Integration](#external-integration)
+8. [Server Components and API Adapters](#server-components-and-api-adapters)
 
 ## App Configuration
 
-The app configuration defines the behavior, appearance, and capabilities of each AI application in the AI Hub. Configuration is managed through the `config/apps.json` file, which contains an array of app objects.
+The app configuration defines the behavior, appearance, and capabilities of each AI application in the AI Hub Apps. Configuration is managed through the `config/apps.json` file, which contains an array of app objects.
 
 ### Basic App Structure
 
@@ -326,7 +327,7 @@ Here are some practical examples of how to configure the settings for different 
 
 ## UI Configuration
 
-The UI configuration defines the appearance and behavior of the AI Hub user interface. These settings are managed through the `config/ui.json` file.
+The UI configuration defines the appearance and behavior of the AI Hub Apps user interface. These settings are managed through the `config/ui.json` file.
 
 ### Basic Structure
 
@@ -335,8 +336,8 @@ The UI configuration contains the following top-level sections:
 ```json
 {
   "title": {
-    "en": "AI Hub",
-    "de": "KI-Hub"
+    "en": "AI Hub Apps",
+    "de": "KI-Hub Apps"
   },
   "header": { /* Header configuration */ },
   "footer": { 
@@ -358,8 +359,8 @@ The `title` property defines the localized application title shown in the browse
 
 ```json
 "title": {
-  "en": "AI Hub",
-  "de": "KI-Hub"
+  "en": "AI Hub Apps",
+  "de": "KI-Hub Apps"
 }
 ```
 
@@ -373,8 +374,8 @@ The `header` section controls the appearance and content of the application head
   "logo": {
     "url": "/logo-bmas-2.png",
     "alt": {
-      "en": "AI Hub Logo",
-      "de": "KI-Hub Logo"
+      "en": "AI Hub Apps Logo",
+      "de": "KI-Hub Apps Logo"
     }
   },
   "links": [
@@ -405,8 +406,8 @@ The `footer` section controls the appearance and content of the application foot
 "footer": {
   "enabled": true,
   "text": {
-    "en": "© 2025 AI Hub. All rights reserved.",
-    "de": "© 2025 KI-Hub. Alle Rechte vorbehalten."
+    "en": "© 2025 AI Hub Apps. All rights reserved.",
+    "de": "© 2025 KI-Hub Apps. Alle Rechte vorbehalten."
   },
   "links": [
     {
@@ -726,7 +727,7 @@ The translation files follow a nested structure, organizing translations by feat
 ```json
 {
   "app": {
-    "title": "AI Hub",
+    "title": "AI Hub Apps",
     "loading": "Loading...",
     "error": "An error occurred",
     "retry": "Retry"
@@ -738,7 +739,7 @@ The translation files follow a nested structure, organizing translations by feat
   },
   "pages": {
     "home": {
-      "title": "AI Hub",
+      "title": "AI Hub Apps",
       "description": "Interact with various AI models through a simple interface"
     }
   }
@@ -797,14 +798,14 @@ The UI configuration in `config/ui.json` also supports localization:
 
 ```json
 "title": {
-  "en": "AI Hub",
-  "de": "KI-Hub"
+  "en": "AI Hub Apps",
+  "de": "KI-Hub Apps"
 },
 "header": {
   "logo": {
     "alt": {
-      "en": "AI Hub Logo",
-      "de": "KI-Hub Logo"
+      "en": "AI Hub Apps Logo",
+      "de": "KI-Hub Apps Logo"
     }
   },
   "links": [
@@ -962,6 +963,44 @@ The available styles can be categorized as follows:
    - `persuasive` - Convincing and compelling
    - `humorous` - Light-hearted and funny
    - `assertive` - Confident and direct
+
+## External Integration
+
+AI Hub Apps can be integrated into external applications using URL parameters to control the appearance and behavior of the interface.
+
+### Integration Parameters
+
+The following URL parameters can be used when embedding or linking to AI Hub Apps:
+
+| Parameter | Description | Values |
+|-----------|-------------|--------|
+| `header` | Controls the visibility of the application header | `true` (default), `false` |
+| `footer` | Controls the visibility of the application footer | `true` (default), `false` |
+| `language` | Sets the application language | `en`, `de`, or any other supported language code |
+
+### Usage Examples
+
+1. **Hide both header and footer, set language to German:**
+   ```
+   https://ai-hub-apps.example.com/?header=false&footer=false&language=de
+   ```
+
+2. **Hide only the header, keep default language:**
+   ```
+   https://ai-hub-apps.example.com/?header=false
+   ```
+
+3. **Only set language to English:**
+   ```
+   https://ai-hub-apps.example.com/?language=en
+   ```
+
+### Integration Notes
+
+- When the header is hidden, users cannot manually change the language through the UI, making the `language` parameter particularly useful.
+- The selected language affects all localized content, including app names, descriptions, and interface elements.
+- Settings are stored in the browser's localStorage and persist across page reloads.
+- These parameters can be combined with other application-specific parameters, such as direct links to specific apps.
 
 ## Server Components and API Adapters
 

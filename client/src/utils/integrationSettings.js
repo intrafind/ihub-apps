@@ -16,7 +16,7 @@ export const getIntegrationSettings = () => {
   } catch (error) {
     console.error('Error reading integration settings from localStorage:', error);
   }
-  return { showHeader: true, showFooter: true };
+  return { showHeader: true, showFooter: true, language: null };
 };
 
 /**
@@ -52,6 +52,13 @@ export const updateSettingsFromUrl = (searchParams) => {
     const footerParam = searchParams.get('footer');
     if (footerParam !== null) {
       settings.showFooter = footerParam !== 'false';
+      updated = true;
+    }
+
+    // Update language setting if provided in URL
+    const languageParam = searchParams.get('language');
+    if (languageParam !== null) {
+      settings.language = languageParam;
       updated = true;
     }
 

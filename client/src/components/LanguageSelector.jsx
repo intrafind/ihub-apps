@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIConfig } from './UIConfigContext';
 
@@ -57,25 +57,6 @@ const LanguageSelector = () => {
     
     return languages.length ? languages : [{ code: 'en', name: 'English' }, { code: 'de', name: 'Deutsch' }];
   }, [uiConfig, t]);
-
-  // Ensure language specific entries are in the core translations
-  useEffect(() => {
-    // If we detect missing language name translations, we can pre-fill here
-    const languageEntries = {
-      'en': 'English',
-      'de': 'Deutsch'
-    };
-    
-    // Add them to i18n instance if needed
-    if (i18n.language && !t('languages.en', { defaultValue: '' })) {
-      // These will be overridden by backend translations if they exist
-      Object.entries(languageEntries).forEach(([code, name]) => {
-        if (i18n.addResource) {
-          i18n.addResource(i18n.language, 'translation', `languages.${code}`, name);
-        }
-      });
-    }
-  }, [i18n, t]);
 
   if (isLoading) {
     return <div className="language-selector-loading">Loading...</div>;

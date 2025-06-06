@@ -1,15 +1,15 @@
 {
   "title": {
-    "en": "AI Hub (complex)",
-    "de": "KI-Hub (komplex)"
+    "en": "AI Hub Apps (complex)",
+    "de": "KI-Hub Apps (komplex)"
   },
   "header": {
     "defaultColor": "rgb(0, 53, 87)",
     "logo": {
       "url": "/logo-bmas-2.png",
       "alt": {
-        "en": "AI Hub Logo",
-        "de": "KI-Hub Logo"
+        "en": "AI Hub Apps Logo",
+        "de": "KI-Hub Apps Logo"
       }
     },
     "links": [
@@ -45,8 +45,8 @@
   },
   "footer": {
     "text": {
-      "en": "© 2025 AI Hub. All rights reserved.",
-      "de": "© 2025 KI-Hub. Alle Rechte vorbehalten."
+      "en": "© 2025 AI Hub Apps. All rights reserved.",
+      "de": "© 2025 KI-Hub Apps. Alle Rechte vorbehalten."
     },
     "links": [
       {
@@ -83,8 +83,8 @@
   "widget": {
     "defaultApp": "faq-bot",
     "title": {
-      "en": "AI Hub Chat",
-      "de": "KI-Hub Chat"
+      "en": "AI Hub Apps Chat",
+      "de": "KI-Hub Apps Chat"
     },
     "placeholder": {
       "en": "Ask me anything...",

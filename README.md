@@ -1,437 +1,305 @@
-# AI Hub Apps
+# kubectl-ai
 
-This repository contains the source code for the AI Hub Apps.
+[![Go Report Card](https://goreportcard.com/badge/github.com/GoogleCloudPlatform/kubectl-ai)](https://goreportcard.com/report/github.com/GoogleCloudPlatform/kubectl-ai)
+![GitHub License](https://img.shields.io/github/license/GoogleCloudPlatform/kubectl-ai)
+[![GitHub stars](https://img.shields.io/github/stars/GoogleCloudPlatform/kubectl-ai.svg)](https://github.com/GoogleCloudPlatform/kubectl-ai/stargazers)
 
-## Purpose
+`kubectl-ai` acts as an intelligent interface, translating user intent into
+precise Kubernetes operations, making Kubernetes management more accessible and
+efficient.
 
-The purpose of this repository is to provide a collection of apps, which a user can use to interact with all kind of AI models.
+![kubectl-ai demo GIF using: kubectl-ai "how's nginx app doing in my cluster"](./.github/kubectl-ai.gif)
 
-## Apps
+## Quick Start
 
-### Chat
-
-### Translation
-
-## Implementation
-
-### Server
-
-The server is implemented as a Node.js application, likely using a framework like Express.js to provide a REST API gateway. Its primary responsibilities include:
-
-*   **Configuration Loading:** Reads configuration files (e.g., JSON) defining available apps, language models (LLMs), endpoints, API keys, default styles, and the disclaimer text.
-*   **API Endpoints:**
-        /api
-        /api/apps
-        /api/apps/{appId}
-        /api/apps/{appId}/chat
-        /api/apps/{appId}/chat/{chatId} #openai compatible chat completions endpoint, which supports streaming
-        /api/models
-        /api/models/{modelId}
-        /api/models/{modelId}/chat #openai compatible chat completions endpoint, which supports streaming
-        /api/disclaimer
-
-    *   Provides endpoints for the frontend to fetch the list of available apps (`/api/apps`).
-    *   Provides endpoints to fetch the list of available models (`/api/models`).
-    *   Provides an endpoint to fetch the disclaimer text (`/api/disclaimer`).
-    *   Provides the main endpoint for handling chat interactions (`/api/chat` or similar).
-*   **LLM Interaction:**
-    *   Receives chat messages from the frontend (formatted according to OpenAI's message structure).
-    *   Identifies the target LLM based on the user's selection or app configuration.
-    *   Forwards the request, including the conversation history and system prompt, to the appropriate remote LLM API endpoint.
-    *   Manages API keys required for different LLM services.
-*   **Response Streaming:** Receives the response stream from the LLM and forwards it back to the connected frontend client using either WebSockets or Server-Sent Events (SSE) for real-time updates.
-
-## Initial Concept
-
-We want to build an application for users to get started working with AI-enabled applications. These applications are using LLMs and we want to let user use them to support their daily work.
-The application consists of a start page. When the user opens the start page, the user will be asked for a username, which is only stored in browser local storage, but also used when using our apps. We use this name to personalize the experience as well as tracking who did what. The user can decide to stay anonymous, in this case we generate a username.
-When the user returns to the web application, we will show them their last name, if available. Below the input for the username, we also show a disclaimer, which has been loaded from the backend.
-After the user has chosen a username on the start page, the web application switches to the next screen. This app overview screen shows his/her/its name and loads the apps from the backend. A maximum of 7 apps are shown. If we have more apps, we show also show a more button. The apps which are loaded from the backend, can be configured in a json file in the backend. Each app consists of a name, a description, a color, an icon, a system, a token limit, a preferred model, a preferred output format (like markdown, html, pure text, ...) and an optional prompt which can contain variables.  These variables can have a type like string, date, number or boolean. The variables can have predefined values which consists of a label as well as a text which will be used for replacing the variable in the prompt. The variables will be used to adjust the frontend and allow the user a simpler work / guidance what to fill out.
-When a user has selected an app, the chat application opens, where the user can simply chat with the llms. These apps will help the user to translate text, these apps  are specialized in generating content, these apps can be used to summarize content incl. voice of tone, writing style as well as the action for the summary like "just summarize", "extract the key facts", "highlight actions items", "list all decisions", "summarize and provide recommendations" or nothing as well as free text or just a full custom app, where the user can enter the system as well as user prompt.
-At the app overview page the user can also search for apps via a search box on the page. The search is done purely on the client side.
-A user can favorize apps as well as we are tracking which apps he/she/it has used before. This tracking is done in the browser and connected to the username. If the user has chosen a different name, they will not see the used apps from the last time.
-When a user has chosen the app, the client will render a chat interface as well as a panel with the information about the app and if the app contains variables with the input fields. It is also possible to expand the system prompt and the normal prompt as well as an option to edit them. A user can save the changes, but they are not written back. A hint should be shown to the user that the changes are only temporarily until the next login.
-When a user fills out the optional fields for the variables and enters their text for translation, summarization or whatever the apps is able to do, it will send all the information to the backend in the message format used by OpenAI to simulate a conversion between the assistant and the user.
-The backend will send it to an OpenAI compatible LLM hosted remotely and waits for the answer to be streamed back. Our backend will then stream it to our frontend via either Websockets or Server Sent Events.
-
-Example:
-instructions: "Talk like a pirate.", #system prompt
-input=[
-{"role": "user", "content": "knock knock."},
-{"role": "assistant", "content": "Who's there?"},
-{"role": "user", "content": "Orange."},
-] #the messages between the user and the assistant
-We will send all messages which have been send before with the request, so we can simulate a conversion and allow the model to use the asked information before. For example, if we have asked to summarize it and afterwards ask to translate it, the llm knows that it has to use the summarized text.
-We have to be careful about the context window. This means we should count the tokens on client side and check it against the limit configured in each app.
-Our application will also load the available models from our server and if multiples ones are configured, we allow the user to switch the model. Each model has a remote url, an optional api key, a human readable name and a description what it excels in. Depending on the model, our backend will send the request to the configured url.
-The conversation in our app looks like a chat with an assistant. A user can modify their input, they can send it again, can copy the text to easily extract it, allow a download for an answer as well as the whole chat.
-The user can also tell the assistant how they want to have their response formatted. The user can also chose a certain writing style. Styles allow the user to customize how llm communicates, helping you achieve more while working in a way that feels natural to you. Styles could be:
-
-Normal: Default responses from Claude
-
-Concise: Shorter and more direct responses
-
-Formal: Clear and polished responses
-
-Explanatory: Educational responses for learning new concepts
-The default styles are also configured on the backend side and loaded from our web application.
-But also custom styles are possible, which are stored in the local storage.
-
-All keys as well as texts has to support i18n / localization.
-Therefore we want to build a web application which talks through a small node.js service with the LLMs.
-
-## Setup and Installation
-
-### Prerequisites
-
-- Node.js 16.x or higher
-- npm 8.x or higher
+First, ensure that kubectl is installed and configured.
 
 ### Installation
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd ai-hub-apps
-   ```
+#### Quick Install (Linux & MacOS only)
 
-2. Install dependencies:
-   ```bash
-   npm run install:all
-   ```
-
-   This will install dependencies for both the client and server components.
-
-### Development
-
-To run the application in development mode:
-
-```bash
-npm run dev
+```shell
+curl -sSL https://raw.githubusercontent.com/GoogleCloudPlatform/kubectl-ai/main/install.sh | bash
 ```
 
-This will:
-- Start the Node.js server on port 3000
-- Launch the Vite development server for the client
-- Enable hot reloading for both client and server changes
+<details>
 
-## Building for Production
+<summary>Other Installation Methods</summary>
 
-### Standard Production Build
+#### Manual Installation (Linux, MacOS and Windows)
 
-To create a production build:
+1. Download the latest release from the [releases page](https://github.com/GoogleCloudPlatform/kubectl-ai/releases/latest) for your target machine.
 
-```bash
-npm run prod:build
+2. Untar the release, make the binary executable and move it to a directory in your $PATH (as shown below).
+
+```shell
+tar -zxvf kubectl-ai_Darwin_arm64.tar.gz
+chmod a+x kubectl-ai
+sudo mv kubectl-ai /usr/local/bin/
 ```
 
-This creates a `dist` directory containing:
-- Optimized client build in `dist/public`
-- Server files in `dist/server`
-- Configuration files in `dist/config`
+#### Install with Krew (Linux/macOS/Windows)
+First of all, you need to have krew insatlled, refer to [krew document](https://krew.sigs.k8s.io/docs/user-guide/setup/install/) for more details
+Then you can install with krew
+```shell
+kubectl krew install ai
+```
+Now you can invoke `kubectl-ai` as a kubectl plugin like this: `kubectl ai`.
+</details>
 
-To start the production build:
+### Usage
+
+`kubectl-ai` supports AI models from `gemini`, `vertexai`, `azopenai`, `openai`, `grok` and local LLM providers such as `ollama` and `llama.cpp`.
+
+#### Using Gemini (Default)
+
+Set your Gemini API key as an environment variable. If you don't have a key, get one from [Google AI Studio](https://aistudio.google.com).
 
 ```bash
-npm run start:prod
+export GEMINI_API_KEY=your_api_key_here
+kubectl-ai
+
+# Use different gemini model
+kubectl-ai --model gemini-2.5-pro-exp-03-25
+
+# Use 2.5 flash (faster) model
+kubectl-ai --quiet --model gemini-2.5-flash-preview-04-17 "check logs for nginx app in hello namespace"
 ```
 
-### Building as Binary
+<details>
 
-You can package the entire application as a standalone binary using:
+<summary>Use other AI models</summary>
+
+#### Using AI models running locally (ollama or llama.cpp)
+
+You can use `kubectl-ai` with AI models running locally. `kubectl-ai` supports [ollama](https://ollama.com/) and [llama.cpp](https://github.com/ggml-org/llama.cpp) to use the AI models running locally.
+
+Additionally, the [`modelserving`](modelserving/) directory provides tools and instructions for deploying your own `llama.cpp`-based LLM serving endpoints locally or on a Kubernetes cluster. This allows you to host models like Gemma directly in your environment.
+
+An example of using Google's `gemma3` model with `ollama`:
+
+```shell
+# assuming ollama is already running and you have pulled one of the gemma models
+# ollama pull gemma3:12b-it-qat
+
+# if your ollama server is at remote, use OLLAMA_HOST variable to specify the host
+# export OLLAMA_HOST=http://192.168.1.3:11434/
+
+# enable-tool-use-shim because models require special prompting to enable tool calling
+kubectl-ai --llm-provider ollama --model gemma3:12b-it-qat --enable-tool-use-shim
+
+# you can use `models` command to discover the locally available models
+>> models
+```
+
+#### Using Grok
+
+You can use X.AI's Grok model by setting your X.AI API key:
 
 ```bash
-./build.sh --binary
+export GROK_API_KEY=your_xai_api_key_here
+kubectl-ai --llm-provider=grok --model=grok-3-beta
 ```
 
-This creates a binary in the `dist-bin` directory along with necessary configuration files and assets.
+#### Using Azure OpenAI
 
-To run the binary:
+You can also use Azure OpenAI deployment by setting your OpenAI API key and specifying the provider:
 
 ```bash
-./dist-bin/ai-hub-apps-darwin  # On macOS
-./dist-bin/ai-hub-apps-linux   # On Linux
-./dist-bin/ai-hub-apps-win.exe # On Windows
+export AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
+export AZURE_OPENAI_ENDPOINT=https://your_azure_openai_endpoint_here
+kubectl-ai --llm-provider=azopenai --model=your_azure_openai_deployment_name_here
+# or
+az login
+kubectl-ai --llm-provider=openai://your_azure_openai_endpoint_here --model=your_azure_openai_deployment_name_here
 ```
 
-### Downloading Pre-built Binaries
+#### Using OpenAI
 
-Pre-built binaries for all platforms are available on the [GitHub Releases](https://github.com/your-username/ai-hub-apps/releases) page. Each release includes:
+You can also use OpenAI models by setting your OpenAI API key and specifying the provider:
 
-- **Standalone executables**:
-  - `ai-hub-apps-macos` - for macOS
-  - `ai-hub-apps-linux` - for Linux
-  - `ai-hub-apps-win.exe` - for Windows
+```bash
+export OPENAI_API_KEY=your_openai_api_key_here
+kubectl-ai --llm-provider=openai --model=gpt-4.1
+```
+
+#### Using OpenAI Compatible API
+For example, you can use aliyun qwen-xxx models as follows
+```bash
+export OPENAI_API_KEY=your_openai_api_key_here
+export OPENAI_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1
+kubectl-ai --llm-provider=openai --model=qwen-plus
+```
+</details>
+
+Run interactively:
+
+```shell
+kubectl-ai
+```
+
+The interactive mode allows you to have a chat with `kubectl-ai`, asking multiple questions in sequence while maintaining context from previous interactions. Simply type your queries and press Enter to receive responses. To exit the interactive shell, type `exit` or press Ctrl+C.
+
+Or, run with a task as input:
+
+```shell
+kubectl-ai --quiet "fetch logs for nginx app in hello namespace"
+```
+
+Combine it with other unix commands:
+
+```shell
+kubectl-ai < query.txt
+# OR
+echo "list pods in the default namespace" | kubectl-ai
+```
+
+You can even combine a positional argument with stdin input. The positional argument will be used as a prefix to the stdin content:
+
+```shell
+cat error.log | kubectl-ai "explain the error"
+```
+
+## Tools
+
+`kubectl-ai` leverages LLMs to suggest and execute Kubernetes operations using a set of powerful tools. It comes with built-in tools like `kubectl`, `bash`, and `trivy`.
+
+You can also extend its capabilities by defining your own custom tools. By default, `kubectl-ai` looks for your tool configurations in `~/.config/kubectl-ai/tools.yaml`.
+
+To specify tools configuration files or directories containing tools configuration files, use:
+
+```shell
+kubectl-ai --custom-tools-config=YOUR_CONFIG
+```
+
+You can include multiple tools in a single configuration file, or a directory with multiple configuration files, each dedicated to a single or multiple tools.
+Define your custom tools using the following schema:
+
+```yaml
+- name: tool_name
+  description: "A clear description that helps the LLM understand when to use this tool."
+  command: "your_command" # For example: 'gcloud' or 'gcloud container clusters'
+  command_desc: "Detailed information for the LLM, including command syntax and usage examples."
+```
+
+A custom tool definition for `helm` could look like the following example:
+
+```yaml
+- name: helm
+  description: "Helm is the Kubernetes package manager and deployment tool. Use it to define, install, upgrade, and roll back applications packaged as Helm charts in a Kubernetes cluster."
+  command: "helm"
+  command_desc: |
+    Helm command-line interface, with the following core subcommands and usage patterns:    
+    - helm install <release-name> <chart> [flags]  
+      Install a chart into the cluster.      
+    - helm upgrade <release-name> <chart> [flags]  
+      Upgrade an existing release to a new chart version or configuration.      
+    - helm list [flags]  
+      List all releases in one or all namespaces.      
+    - helm uninstall <release-name> [flags]  
+      Uninstall a release and clean up associated resources.  
+    Use `helm --help` or `helm <subcommand> --help` to see full syntax, available flags, and examples for each command.
+```
+
+## MCP Client Mode
+
+> **Note:** MCP Client Mode is available in `kubectl-ai` version v0.0.12 and onwards.
+
+`kubectl-ai` can connect to external [MCP](https://modelcontextprotocol.io/examples) Servers to access additional tools in addition to built-in tools.
+
+### Quick Start
+
+Enable MCP client mode:
+
+```bash
+kubectl-ai --mcp-client
+```
+
+### Configuration
+
+Create or edit `~/.config/kubectl-ai/mcp.yaml` to customize MCP servers:
+
+```yaml
+servers:
+  # Local MCP server (stdio-based)
+  # sequential-thinking: Advanced reasoning and step-by-step analysis
+  - name: sequential-thinking
+    command: npx
+    args:
+      - -y
+      - "@modelcontextprotocol/server-sequential-thinking"
   
-- **Complete packages** (executable + configuration files):
-  - `ai-hub-apps-macos.tar.gz` - macOS package
-  - `ai-hub-apps-linux.tar.gz` - Linux package
-  - `ai-hub-apps-win.exe.zip` - Windows package
+  # Remote MCP server (HTTP-based)
+  - name: cloudflare-documentation
+    url: https://docs.mcp.cloudflare.com/mcp
+    
+  # Optional: Remote MCP server with authentication
+  - name: custom-api
+    url: https://api.example.com/mcp
+    auth:
+      type: "bearer"
+      token: "${MCP_TOKEN}"
+```
 
-For most users, downloading the complete package is recommended as it includes all necessary configuration files and assets.
+The system automatically:
+- Converts parameter names (snake_case → camelCase)
+- Handles type conversion (strings → numbers/booleans when appropriate)
+- Provides fallback behavior for unknown servers
 
-## Configuration
+No additional setup required - just use the `--mcp-client` flag and the AI will have access to all configured MCP tools.
 
-### Server Configuration
+📖 **For detailed configuration options, troubleshooting, and advanced features for MCP Client mode, see the [MCP Client Documentation](pkg/mcp/README.md).**
 
-The server can be configured through environment variables or by editing the `config.env` file:
+## Extras
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Port the server listens on | `3000` |
-| `HOST` | Host interface to bind to | `0.0.0.0` |
-| `REQUEST_TIMEOUT` | LLM request timeout (ms) | `60000` |
-| `OPENAI_API_KEY` | OpenAI API key | (required) |
-| `ANTHROPIC_API_KEY` | Anthropic API key | (required) |
-| `GOOGLE_API_KEY` | Google AI API key | (required) |
+You can use the following special keywords for specific actions:
 
-### SSL Configuration
+* `model`: Display the currently selected model.
+* `models`: List all available models.
+* `tools`: List all available tools.
+* `version`: Display the `kubectl-ai` version.
+* `reset`: Clear the conversational context.
+* `clear`: Clear the terminal screen.
+* `exit` or `quit`: Terminate the interactive shell (Ctrl+C also works).
 
-For HTTPS support, set these environment variables or define them in `config.env`:
+### Invoking as kubectl plugin
 
-| Variable | Description |
-|----------|-------------|
-| `SSL_KEY` | Path to SSL private key |
-| `SSL_CERT` | Path to SSL certificate |
-| `SSL_CA` | Path to CA certificate (optional) |
+You can also run `kubectl ai`. `kubectl` finds any executable file in your `PATH` whose name begins with `kubectl-` as a [plugin](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/).
 
-Example of running with custom configuration:
+## MCP Server Mode
+
+`kubectl-ai` can also act as an MCP server that exposes `kubectl` as a tool for other MCP clients (like Claude, Cursor, or VS Code) to interact with your locally configured Kubernetes environment. 
+
+Enable MCP server mode:
 
 ```bash
-PORT=8080 HOST=127.0.0.1 npm run start:prod
+kubectl-ai --mcp-server
 ```
 
-Or with the binary:
+This allows AI agents and tools to execute kubectl commands in your environment through the Model Context Protocol.
 
-```bash
-PORT=8080 HOST=127.0.0.1 ./dist-bin/ai-hub-apps-darwin
-```
+📖 **For details on configuring kubectl-ai as an MCP server for use with Claude, Cursor, VS Code, and other MCP clients, see the [MCP Server Documentation](./docs/mcp.md).**
 
-## Configuration Files
+## k8s-bench
 
-### apps.json
+kubectl-ai project includes [k8s-bench](./k8s-bench/README.md) - a benchmark to evaluate performance of different LLM models on kubernetes related tasks. Here is a summary from our last run:
 
-This file defines all available applications in the AI Hub. Each app has the following structure:
+| Model | Success | Fail |
+|-------|---------|------|
+| gemini-2.5-flash-preview-04-17 | 10 | 0 |
+| gemini-2.5-pro-preview-03-25 | 10 | 0 |
+| gemma-3-27b-it | 8 | 2 |
+| **Total** | 28 | 2 |
 
-```json
-{
-  "id": "unique-id",
-  "name": {
-    "en": "App Name",
-    "de": "App Name German"
-  },
-  "description": {
-    "en": "Short description of the app",
-    "de": "Kurze Beschreibung der App"
-  },
-  "color": "#HEXCOLOR",
-  "icon": "icon-name",
-  "system": {
-    "en": "System prompt text for the LLM",
-    "de": "Systemaufforderungstext für das LLM"
-  },
-  "tokenLimit": 16000,
-  "preferredModel": "model-id",
-  "preferredTemperature": 0.7,
-  "preferredOutputFormat": "markdown",
-  "variables": [
-    {
-      "name": "variableName",
-      "type": "string",
-      "label": {
-        "en": "Human-readable label",
-        "de": "Menschenlesbare Bezeichnung"
-      },
-      "predefinedValues": [
-        {
-          "label": {
-            "en": "Option 1",
-            "de": "Option 1 DE"
-          },
-          "value": "option1-value"
-        }
-      ],
-      "required": true
-    }
-  ]
-}
-```
+See [full report](./k8s-bench.md) for more details.
 
-Variable types can be:
-- `string`: Text input
-- `text`: Multi-line text input
-- `date`: Date picker
-- `number`: Numeric input
-- `boolean`: Toggle/checkbox
-- `select`: Selection from predefined values
+## Start Contributing
 
-### models.json
+We welcome contributions to `kubectl-ai` from the community. Take a look at our
+[contribution guide](contributing.md) to get started.
 
-This file defines the available LLM models:
+---
 
-```json
-[
-  {
-    "id": "model-id",
-    "name": "Model Name",
-    "description": "Model description",
-    "provider": "openai|anthropic|google",
-    "maxTokens": 16000,
-    "endpointOverride": "https://custom-endpoint.com" (optional)
-  }
-]
-```
-
-The `provider` field determines which adapter is used to format requests to the LLM.
-
-### styles.json
-
-Defines writing styles available to the user:
-
-```json
-{
-  "concise": "Please keep your responses brief and to the point.",
-  "formal": "Please use formal language and a professional tone.",
-  "explanatory": "Please provide detailed explanations suitable for someone learning the concept."
-}
-```
-
-### ui.json
-
-Configures the user interface elements:
-
-```json
-{
-  "title": {
-    "en": "AI Hub",
-    "de": "KI-Hub"
-  },
-  "header": {
-    "links": [
-      {
-        "name": {
-          "en": "Home",
-          "de": "Startseite"
-        },
-        "url": "/"
-      }
-    ]
-  },
-  "footer": {
-    "text": {
-      "en": "© 2025 AI Hub. All rights reserved.",
-      "de": "© 2025 KI-Hub. Alle Rechte vorbehalten."
-    },
-    "links": [
-      {
-        "name": {
-          "en": "Privacy Policy",
-          "de": "Datenschutzerklärung"
-        },
-        "url": "/page/privacy"
-      }
-    ]
-  },
-  "disclaimer": {
-    "text": {
-      "en": "Disclaimer text...",
-      "de": "Haftungsausschluss Text..."
-    },
-    "version": "1.0",
-    "updated": "2023-01-01"
-  },
-  "pages": {
-    "privacy": {
-      "title": {
-        "en": "Privacy Policy",
-        "de": "Datenschutzerklärung"
-      },
-      "content": {
-        "en": "# Privacy Policy Content in Markdown",
-        "de": "# Datenschutzerklärung Inhalt in Markdown"
-      }
-    }
-  }
-}
-```
-
-## Localization
-
-The application supports internationalization through localization files:
-
-### Server-side Localization
-
-Server-side strings are defined in `config/locales/{lang}.json` files.
-
-### Client-side Localization
-
-Client-side translations are stored in:
-- Core translations: `client/src/i18n/core/{lang}.json`
-- App-specific translations: `client/src/i18n/locales/{lang}.json`
-
-### Adding a New Language
-
-1. Create a new JSON file in each of these directories named after the language code (e.g., `fr.json` for French)
-2. Copy the structure from an existing language file and translate all values
-3. Update the language selector in `client/src/components/LanguageSelector.jsx` to include the new language
-
-## Creating Custom Pages
-
-Custom pages can be added through the `ui.json` configuration in the `pages` section:
-
-1. Add a new entry to the `pages` object:
-   ```json
-   "pages": {
-     "page-id": {
-       "title": {
-         "en": "Page Title",
-         "de": "Seitentitel"
-       },
-       "content": {
-         "en": "# Page content in markdown format",
-         "de": "# Seiteninhalt im Markdown-Format"
-       }
-     }
-   }
-   ```
-
-2. The content field supports Markdown, which will be rendered by the application.
-
-3. To link to the page from the header, add an entry to the `header.links` array:
-   ```json
-   "header": {
-     "links": [
-       {
-         "name": {
-           "en": "Page Title",
-           "de": "Seitentitel"
-         },
-         "url": "/page/page-id"
-       }
-     ]
-   }
-   ```
-
-4. To link to the page from the footer, add an entry to the `footer.links` array:
-   ```json
-   "footer": {
-     "links": [
-       {
-         "name": {
-           "en": "Page Title",
-           "de": "Seitentitel"
-         },
-         "url": "/page/page-id"
-       }
-     ]
-   }
-   ```
-
-Custom pages are rendered using the `MarkdownPage` component and are accessible at the path `/page/{id}`.
-
-## Development Guidelines
-
-- All UI changes should support dark/light mode themes
-- New features should include appropriate translations
-- API endpoints should follow the established pattern
-- Server-side code should maintain the modular adapter pattern for LLM providers
+*Note: This is not an officially supported Google product. This project is not
+eligible for the [Google Open Source Software Vulnerability Rewards
+Program](https://bughunters.google.com/open-source-security).*

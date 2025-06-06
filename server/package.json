@@ -1,7 +1,7 @@
 {
   "name": "ai-hub-apps-server",
   "version": "1.0.0",
-  "description": "AI Hub Applications Server",
+  "description": "AI Hub Apps Applications Server",
   "type": "module",
   "main": "server.js",
   "scripts": {

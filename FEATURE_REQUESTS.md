@@ -6,13 +6,12 @@
 - ask the image
 - upload a document?
 - convert a pdf to image to talk to it?
-- ground an app with a file from the backend (like a knowledge-base.md)
 - improve conversation handling for prompt generator and apps generator
 - Docker Image?
 - Ai hub
-- Dokumente hochladen
 
 Done
+- Image Upload
 - Microphone
 - Logo
 - check if the prompts are loaded from the backend and not taken from the frontend

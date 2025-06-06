@@ -154,7 +154,7 @@ export function getErrorDetails(error, model) {
 }
 
 /**
- * Logs user interactions with the AI Hub
+ * Logs user interactions with the AI Hub Apps
  * 
  * @param {Object} data - The interaction data to log
  * @param {string} data.appId - The ID of the app being used
