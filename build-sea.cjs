@@ -390,6 +390,17 @@ try {
       );
     }
   });
+
+  // Copy route files
+  fs.mkdirSync(path.join(outputDir, 'server', 'routes'), { recursive: true });
+  fs.readdirSync(path.join(serverDir, 'routes')).forEach(file => {
+    if (file.endsWith('.js')) {
+      fs.copyFileSync(
+        path.join(serverDir, 'routes', file),
+        path.join(outputDir, 'server', 'routes', file)
+      );
+    }
+  });
   
   // Create a package.json for the server
   const serverPackageJson = {
