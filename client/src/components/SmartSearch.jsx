@@ -126,7 +126,7 @@ const SmartSearch = () => {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-lg mt-20">
+      <div className="bg-white rounded-lg shadow-lg w-full max-w-xl mt-20">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <Icon name="search" className="text-gray-400" />
@@ -165,7 +165,7 @@ const SmartSearch = () => {
                   <Icon name="star" size="sm" className="text-yellow-500 ml-1" solid={true} />
                 )}
               </span>
-              <span className="text-sm text-gray-600 truncate">{getLocalizedContent(r.app.description, currentLanguage) || ''}</span>
+              <span className="text-sm text-gray-600 line-clamp-2">{getLocalizedContent(r.app.description, currentLanguage) || ''}</span>
             </li>
           ))}
         </ul>
