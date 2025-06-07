@@ -138,6 +138,13 @@ npm run start:prod
 
 ### Building as Binary
 
+Node.js 20 or newer is required to create the single executable. Check your
+version with:
+
+```bash
+node -v
+```
+
 You can package the entire application as a standalone binary using:
 
 ```bash
