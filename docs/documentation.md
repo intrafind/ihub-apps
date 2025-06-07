@@ -350,10 +350,11 @@ The UI configuration contains the following top-level sections:
     "enabled": true,
     /* Footer configuration */ 
   },
-  "disclaimer": { 
+  "disclaimer": {
     "enabled": true,
-    /* Disclaimer text */ 
+    /* Disclaimer text */
   },
+  "icons": { /* Icon overrides */ },
   "appsList": { /* Apps list configuration */ },
   "pages": { /* Static page content */ }
 }
@@ -460,6 +461,22 @@ The `disclaimer` section defines the legal disclaimer shown to users:
 | `updated` | String | Date the disclaimer was last updated |
 
 Setting `enabled` to `false` will completely remove the disclaimer from the application.
+
+### Icons Configuration
+
+The `icons` section allows overriding which icon is used for certain UI elements. Icon names can be any built-in name from the `Icon` component or a custom SVG placed under `public/icons` (or the directory specified by `VITE_ICON_BASE_URL`).
+
+```json
+"icons": {
+  "assistantMessage": "apps-svg-logo",
+  "userMessage": "user"
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `assistantMessage` | String | Icon identifier for messages from the assistant |
+| `userMessage` | String | Icon identifier for user messages |
 
 ### Apps List Configuration
 
