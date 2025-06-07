@@ -4,7 +4,7 @@
   "description": "AI Hub Applications Platform",
   "type": "module",
   "bin": {
-    "ai-hub-apps": "./server/pkg-entry.cjs"
+    "ai-hub-apps": "./server/sea-server.cjs"
   },
   "scripts": {
     "server": "cd server && node server.js",
