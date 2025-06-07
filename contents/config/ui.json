@@ -102,8 +102,7 @@
     }
   },
   "icons": {
-    "assistantMessage": "academic-cap",
-    "userMessage": "user"
+    "assistantMessage": "bmas-assistant-icon"
   },
   "appsList": {
     "title": {

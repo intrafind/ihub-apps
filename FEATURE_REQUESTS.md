@@ -8,7 +8,14 @@
 - convert a pdf to image to talk to it?
 - improve conversation handling for prompt generator and apps generator
 - Docker Image?
-- Ai hub
+- Integrate with AI Hub
+- Show recent apps / smart sorting / recommendations
+- Separate Favorite Apps
+- Allow suggested Apps configured by the hoster
+- Preview on Hover for Apps?
+- App Collections / Bundles curated by teams?
+- Tab-based / Category-based navigation?
+
 
 Done
 - Image Upload
@@ -22,4 +29,7 @@ Done
 - eml or mailto generate via prompt tuning
 - session storage for session, cache, chats and settings
 - local storage for favorites
+- Smart search with Semantic Suggestions
+- Command bar with CMD+K
+
 
