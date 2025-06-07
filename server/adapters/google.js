@@ -2,6 +2,7 @@
  * Google Gemini API adapter
  */
 import { sendSSE } from '../utils.js';
+import { parseSSEBuffer } from './streamUtils.js';
 
 const GoogleAdapter = {
   /**
@@ -114,59 +115,48 @@ const GoogleAdapter = {
    * Process streaming response from Gemini
    */
   processResponseBuffer(buffer) {
-    console.log('Processing buffer:', buffer);
     try {
-      // Initialize result object
       const result = {
         content: [],
         complete: false,
         error: false,
         errorMessage: null
       };
-      
-      // If the buffer is just whitespace, opening/closing bracket or a comma, ignore it
-      if (!buffer.trim() || buffer.trim() === '[' || buffer.trim() === ']' || buffer.trim() === ',') {
-        // If it's a closing bracket, signal completion
-        if (buffer.trim() === ']') {
-          console.log('End of Gemini response detected (closing bracket)');
-          result.complete = true;
-        }
-        return result;
-      }
-      
-      // Extract text content from JSON response
-      if (buffer.includes('"text"')) {
+
+      const { events, done } = parseSSEBuffer(buffer);
+      if (done) result.complete = true;
+
+      for (const evt of events) {
         try {
-          // Parse the JSON to extract the text directly
-          const data = JSON.parse(buffer.replace('data: ', ''));
+          const data = JSON.parse(evt);
+
           if (data.candidates && data.candidates[0]?.content?.parts) {
             for (const part of data.candidates[0].content.parts) {
               if (part.text) {
-                console.log('Extracted text:', part.text);
                 result.content.push(part.text);
               }
             }
           }
+
+          if (data.candidates && data.candidates[0]?.finishReason === 'STOP') {
+            result.complete = true;
+          }
         } catch (jsonError) {
           // Fallback to regex if JSON parsing fails
-          const textMatches = buffer.match(/"text":\s*"([^"]*)"/g);
+          const textMatches = evt.match(/"text":\s*"([^"]*)"/g);
           if (textMatches) {
             for (const match of textMatches) {
-              // Extract the actual text content from the match
               const textContent = match.replace(/"text":\s*"/, '').replace(/"$/, '');
-              console.log('Extracted text (regex fallback):', textContent);
               result.content.push(textContent);
             }
           }
+
+          if (evt.includes('"finishReason": "STOP"') || evt.includes('"finishReason":"STOP"')) {
+            result.complete = true;
+          }
         }
       }
-      
-      // Check if we have a finishReason in this buffer, which indicates completion
-      const isComplete = buffer.includes('"finishReason": "STOP"') || buffer.includes('"finishReason":"STOP"');
-      if (isComplete) {
-        result.complete = true;
-      }
-      
+
       return result;
     } catch (error) {
       console.error('Error processing Gemini response:', error);

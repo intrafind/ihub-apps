@@ -2,6 +2,7 @@
  * Anthropic API adapter
  */
 import { sendSSE } from '../utils.js';
+import { parseSSEBuffer } from './streamUtils.js';
 
 const AnthropicAdapter = {
   /**
@@ -122,35 +123,20 @@ const AnthropicAdapter = {
       error: false,
       errorMessage: null
     };
-    
-    const lines = buffer.split('\n\n');
-    
-    for (const line of lines) {
-      // Check for completion signal
-      if (line.includes('data: [DONE]')) {
-        result.complete = true;
-        continue;
-      }
-      
-      if (line.trim() === '') continue;
-      
+
+    const { events, done } = parseSSEBuffer(buffer);
+    if (done) result.complete = true;
+
+    for (const evt of events) {
       try {
-        // Extract the JSON data part from "data: {json}"
-        const dataMatch = line.match(/data: (.+)/);
-        if (!dataMatch) continue;
-        
-        const data = JSON.parse(dataMatch[1]);
-        
-        // Check if this is a content block with text
+        const data = JSON.parse(evt);
+
         if (data.type === 'content_block_delta' && data.delta && data.delta.text) {
           result.content.push(data.delta.text);
-        }
-        // Check for message delta (different format in some Claude API versions)
-        else if (data.type === 'message_delta' && data.delta && data.delta.content) {
+        } else if (data.type === 'message_delta' && data.delta && data.delta.content) {
           result.content.push(data.delta.content);
         }
-        
-        // Check for completion signal
+
         if (data.type === 'message_stop') {
           result.complete = true;
         }
@@ -160,7 +146,7 @@ const AnthropicAdapter = {
         result.errorMessage = `Error parsing Claude response: ${parseError.message}`;
       }
     }
-    
+
     return result;
   }
 };
