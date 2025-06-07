@@ -5,6 +5,7 @@ import LanguageSelector from './LanguageSelector';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import DisclaimerPopup from './DisclaimerPopup';
+import SmartSearch from './SmartSearch';
 import { updateSettingsFromUrl } from '../utils/integrationSettings';
 
 const Layout = () => {
@@ -53,11 +54,14 @@ const Layout = () => {
     <div className="flex flex-col min-h-screen h-full w-full">
       {/* Disclaimer Popup - Only render if enabled (defaults to true) */}
       {uiConfig?.disclaimer && uiConfig.disclaimer.enabled !== false && (
-        <DisclaimerPopup 
-          disclaimer={uiConfig.disclaimer} 
-          currentLanguage={currentLanguage} 
+        <DisclaimerPopup
+          disclaimer={uiConfig.disclaimer}
+          currentLanguage={currentLanguage}
         />
       )}
+
+      {/* Global smart search overlay */}
+      <SmartSearch />
       
       {showHeader && (
         <header className="text-white sticky top-0 z-10" style={headerColorStyle}>

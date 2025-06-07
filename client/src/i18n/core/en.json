@@ -110,5 +110,8 @@
     "title": "Disclaimer",
     "accept": "I Understand",
     "versionInfo": "Version {{version}}, Last Updated: {{date}}"
+  },
+  "smartSearch": {
+    "placeholder": "Search apps..."
   }
 }
