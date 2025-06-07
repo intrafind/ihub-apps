@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Icon from './Icon';
 import { fetchApps } from '../api/api';
 import { getLocalizedContent } from '../utils/localizeContent';
+import { getFavoriteApps } from '../utils/favoriteApps';
 import Fuse from 'fuse.js';
 
 const fuseRef = { current: null };
@@ -16,6 +17,7 @@ const SmartSearch = () => {
   const [query, setQuery] = useState('');
   const [apps, setApps] = useState([]);
   const [results, setResults] = useState([]);
+  const [favoriteApps, setFavoriteApps] = useState([]);
   const inputRef = useRef(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -35,6 +37,12 @@ const SmartSearch = () => {
   useEffect(() => {
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setFavoriteApps(getFavoriteApps());
     }
   }, [isOpen]);
 
@@ -63,13 +71,35 @@ const SmartSearch = () => {
       setResults([]);
       return;
     }
-    const results = fuseRef.current.search(query).slice(0, 5).map(r => ({
+
+    const searchResults = fuseRef.current.search(query).map(r => ({
       app: r.item,
       score: r.score
     }));
-    setResults(results);
+
+    const favorites = new Set(favoriteApps);
+    searchResults.sort((a, b) => {
+      const aFav = favorites.has(a.app.id);
+      const bFav = favorites.has(b.app.id);
+      if (aFav && !bFav) return -1;
+      if (!aFav && bFav) return 1;
+
+      const aHasOrder = a.app.order !== undefined && a.app.order !== null;
+      const bHasOrder = b.app.order !== undefined && b.app.order !== null;
+
+      if (aHasOrder && bHasOrder && a.app.order !== b.app.order) {
+        return a.app.order - b.app.order;
+      }
+      if (aHasOrder && !bHasOrder) return -1;
+      if (!aHasOrder && bHasOrder) return 1;
+
+      return a.score - b.score;
+    });
+
+    const limited = searchResults.slice(0, 5);
+    setResults(limited);
     setSelectedIndex(0);
-  }, [query, isOpen]);
+  }, [query, isOpen, favoriteApps]);
 
   const handleSelect = (appId) => {
     setIsOpen(false);
