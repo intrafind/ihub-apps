@@ -31,7 +31,8 @@ import {
   StarIcon as OutlineStarIcon,
   XCircleIcon,
   UserIcon,
-  ExclamationCircleIcon as OutlineExclamationCircleIcon
+  ExclamationCircleIcon as OutlineExclamationCircleIcon,
+  AcademicCapIcon as OutlineAcademicCapIcon
 } from '@heroicons/react/24/outline';
 import {
   CameraIcon as SolidCameraIcon,
@@ -54,7 +55,8 @@ import {
   DocumentMagnifyingGlassIcon as SolidDocumentMagnifyingGlassIcon,
   UsersIcon as SolidUsersIcon,
   LightBulbIcon as SolidLightBulbIcon,
-  CodeBracketIcon as SolidCodeBracketIcon
+  CodeBracketIcon as SolidCodeBracketIcon,
+  AcademicCapIcon as SolidAcademicCapIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
@@ -98,6 +100,7 @@ const iconMap = {
   users: { outline: OutlineUsersIcon, solid: SolidUsersIcon },
   'light-bulb': { outline: OutlineLightBulbIcon, solid: SolidLightBulbIcon },
   code: { outline: OutlineCodeBracketIcon, solid: SolidCodeBracketIcon },
+  'academic-cap': { outline: OutlineAcademicCapIcon, solid: SolidAcademicCapIcon },
 };
 
 const sizeClasses = {
