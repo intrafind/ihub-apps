@@ -128,7 +128,9 @@ npm run prod:build
 This creates a `dist` directory containing:
 - Optimized client build in `dist/public`
 - Server files in `dist/server`
-- Configuration files in `dist/config`
+- Application content and configuration in `dist/contents`
+- Example setups in `dist/examples`
+- Production dependencies alongside `package.json`
 
 To start the production build:
 
@@ -208,6 +210,8 @@ PORT=8080 HOST=127.0.0.1 ./dist-bin/ai-hub-apps-darwin
 ```
 
 ## Configuration Files
+
+Configuration JSON files are kept in `contents/config` during development. When building, they are copied to `dist/contents/config`.
 
 ### apps.json
 
