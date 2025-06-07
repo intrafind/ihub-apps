@@ -193,7 +193,6 @@ function validateApiKeys() {
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Increased limit for file uploads
 app.use(express.urlencoded({ limit: '50mb', extended: true })); // Also handle URL-encoded data
-registerStaticRoutes(app, { isPackaged, rootDir });
 
 // Helper to verify API key exists for a model and provide a meaningful error
 async function verifyApiKey(model, res, clientRes = null, language = 'en') {
@@ -388,6 +387,9 @@ app.post('/api/session/start', async (req, res) => {
     res.status(500).json({ error: 'Failed to log session start' });
   }
 });
+
+// Register static file and SPA routes after API routes
+registerStaticRoutes(app, { isPackaged, rootDir });
 
 // Helper function to extract messages and format them
 async function processMessageTemplates(messages, app, style = null, outputFormat = null, language = 'en') {
