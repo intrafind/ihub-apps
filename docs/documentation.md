@@ -240,6 +240,12 @@ The system supports these icons:
 - `share` - Share icon
 - And more as defined in the system's Icon component
 
+Additional icons can be provided by placing custom SVG files in the
+`public/icons` directory (or any directory specified by the
+`VITE_ICON_BASE_URL` environment variable).  The file name should match the
+icon identifier (e.g., `my-icon.svg`).  Files in this directory override
+icons of the same name from the built-in set.
+
 ### Settings Configuration Examples
 
 Here are some practical examples of how to configure the settings for different use cases:
