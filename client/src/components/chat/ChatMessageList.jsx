@@ -1,7 +1,8 @@
 import React, { useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import ChatMessage from './ChatMessage';
-import Icon from '../Icon'; 
+import Icon from '../Icon';
+import { useUIConfig } from '../UIConfigContext';
 
 /**
  * A reusable component to display chat messages with auto-scrolling
@@ -20,8 +21,12 @@ const ChatMessageList = ({
 }) => {
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
+  const { uiConfig } = useUIConfig();
 
-1  // Auto-scroll to bottom when messages change
+  const assistantIcon = uiConfig?.icons?.assistantMessage || 'apps-svg-logo';
+  const userIcon = uiConfig?.icons?.userMessage || 'user';
+  const errorIcon = uiConfig?.icons?.errorMessage || 'exclamation-circle';
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -38,13 +43,13 @@ const ChatMessageList = ({
           <div key={message.id} className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
             {/* Message sender icon */}
             <div className="flex-shrink-0 mt-1">
-              {message.role === 'assistant' ? (
-                <Icon name="apps-svg-logo" size="2xl" className="text-blue-500" />
-              ) : message.role === 'user' ? (
-                <Icon name="user" size="xl" className="text-gray-500" />
-              ) : (
-                <Icon name="exclamation-circle" size="2xl" className="text-yellow-500" />
-              )}
+            {message.role === 'assistant' ? (
+              <Icon name={assistantIcon} size="2xl" className="text-blue-500" />
+            ) : message.role === 'user' ? (
+              <Icon name={userIcon} size="xl" className="text-gray-500" />
+            ) : (
+              <Icon name={errorIcon} size="2xl" className="text-yellow-500" />
+            )}
             </div>
             
             {/* Message content */}

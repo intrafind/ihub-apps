@@ -101,6 +101,10 @@
       "borderRadius": "8px"
     }
   },
+  "icons": {
+    "assistantMessage": "apps-svg-logo",
+    "userMessage": "user"
+  },
   "appsList": {
     "title": {
       "en": "AI Apps",
