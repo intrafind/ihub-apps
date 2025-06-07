@@ -190,7 +190,8 @@ function validateApiKeys() {
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Increased limit for file uploads
+app.use(express.urlencoded({ limit: '50mb', extended: true })); // Also handle URL-encoded data
 
 // Determine static file path based on environment and packaging
 let staticPath;
@@ -1530,7 +1531,7 @@ async function processMessageTemplates(messages, app, style = null, outputFormat
         }
       }
       
-      // Create processed message, only including imageData if it exists and isn't null
+      // Create processed message, only including imageData and fileData if they exist and aren't null
       const processedMsg = { 
         role: 'user', 
         content: processedContent
@@ -1539,6 +1540,11 @@ async function processMessageTemplates(messages, app, style = null, outputFormat
       // Only include imageData if it actually exists and isn't null
       if (msg.imageData) {
         processedMsg.imageData = msg.imageData;
+      }
+      
+      // Only include fileData if it actually exists and isn't null
+      if (msg.fileData) {
+        processedMsg.fileData = msg.fileData;
       }
       
       return processedMsg;
@@ -1553,6 +1559,11 @@ async function processMessageTemplates(messages, app, style = null, outputFormat
     // Only include imageData if it actually exists and isn't null
     if (msg.imageData) {
       processedMsg.imageData = msg.imageData;
+    }
+    
+    // Only include fileData if it actually exists and isn't null
+    if (msg.fileData) {
+      processedMsg.fileData = msg.fileData;
     }
     
     return processedMsg;

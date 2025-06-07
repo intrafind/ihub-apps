@@ -297,11 +297,18 @@ const ChatMessage = ({
 
   // Render the message content based on the output format
   const renderContent = () => {
-    // For HTML content, check if it contains image tags and render them properly
+    // For HTML content, check if it contains image tags or file indicators and render them properly
     const hasImageContent = message.content && (
       message.content.includes('<img') || 
       message.content.includes('data:image')
     );
+    
+    //TODO improve detection of file content
+    const hasFileContent = message.content && (
+      message.content.includes('📎') && message.content.includes('<div') && message.content.includes('</div>')
+    );
+    
+    const hasHTMLContent = hasImageContent || hasFileContent;
 
     if (isEditing) {
       return (
@@ -365,8 +372,8 @@ const ChatMessage = ({
       );
     }
     
-    // If the message contains HTML content with an image tag, render it as HTML
-    if (hasImageContent && isUser) {
+    // If the message contains HTML content with an image tag or file content, render it as HTML
+    if (hasHTMLContent && isUser) {
       return (
         <div 
           className="break-words whitespace-normal" 

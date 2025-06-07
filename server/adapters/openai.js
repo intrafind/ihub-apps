@@ -5,19 +5,26 @@ import { sendSSE } from '../utils.js';
 
 const OpenAIAdapter = {
   /**
-   * Format messages for OpenAI API, including handling image data
+   * Format messages for OpenAI API, including handling image data and file data
    * @param {Array} messages - Messages to format
    * @returns {Array} Formatted messages for OpenAI API
    */
   formatMessages(messages) {
-    // Handle image data in messages
+    // Handle image data and file data in messages
     const formattedMessages = messages.map(message => {
-      // If there's no image data, return a clean message without imageData property
+      let content = message.content;
+      
+      // If there's file data, prepend it to the content
+      if (message.fileData && message.fileData.content) {
+        const fileInfo = `[File: ${message.fileData.name} (${message.fileData.type})]\n\n${message.fileData.content}\n\n`;
+        content = fileInfo + (content || '');
+      }
+      
+      // If there's no image data, return a clean message with text content (possibly including file content)
       if (!message.imageData) {
-        // Return a new object with only the properties that OpenAI expects
         return {
           role: message.role,
-          content: message.content
+          content: content
         };
       }
 
@@ -25,10 +32,10 @@ const OpenAIAdapter = {
       return {
         role: message.role,
         content: [
-          // If there's text content, include it
-          ...(message.content ? [{
+          // If there's text content (possibly including file content), include it
+          ...(content ? [{
             type: "text",
-            text: message.content
+            text: content
           }] : []),
           // Add the image content
           {

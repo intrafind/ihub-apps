@@ -5,14 +5,14 @@ import { sendSSE } from '../utils.js';
 
 const GoogleAdapter = {
   /**
-   * Format messages for Google Gemini API, including handling image data
+   * Format messages for Google Gemini API, including handling image data and file data
    */
   formatMessages(messages) {
     // Extract system message for separate handling
     let systemInstruction = '';
     const geminiContents = [];
     
-    // First pass - extract system messages and handle image data
+    // First pass - extract system messages and handle image data and file data
     for (const message of messages) {
       if (message.role === 'system') {
         // Collect system messages - ideally there should be only one
@@ -21,14 +21,22 @@ const GoogleAdapter = {
         // Convert OpenAI roles to Gemini roles
         const geminiRole = message.role === 'assistant' ? 'model' : 'user';
         
+        let textContent = message.content;
+        
+        // If there's file data, prepend it to the content
+        if (message.fileData && message.fileData.content) {
+          const fileInfo = `[File: ${message.fileData.name} (${message.fileData.type})]\n\n${message.fileData.content}\n\n`;
+          textContent = fileInfo + (textContent || '');
+        }
+        
         // Check if this message contains image data
         if (message.imageData && message.imageData.base64) {
           // For image messages, we need to create a parts array with both text and image
           const parts = [];
           
-          // Add text part if content exists
-          if (message.content) {
-            parts.push({ text: message.content });
+          // Add text part if content exists (possibly including file content)
+          if (textContent) {
+            parts.push({ text: textContent });
           }
           
           // Add image part
@@ -41,10 +49,10 @@ const GoogleAdapter = {
           
           geminiContents.push({ role: geminiRole, parts });
         } else {
-          // Regular text message - without imageData property
+          // Regular text message (possibly including file content)
           geminiContents.push({
             role: geminiRole,
-            parts: [{ text: message.content }]
+            parts: [{ text: textContent }]
           });
         }
       }

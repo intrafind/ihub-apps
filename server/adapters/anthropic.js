@@ -5,7 +5,7 @@ import { sendSSE } from '../utils.js';
 
 const AnthropicAdapter = {
   /**
-   * Format messages for Anthropic API, including handling image data
+   * Format messages for Anthropic API, including handling image data and file data
    */
   formatMessages(messages) {
     // Extract system message and filter it out from the messages array
@@ -13,30 +13,37 @@ const AnthropicAdapter = {
     const systemMessage = messages.find(msg => msg.role === 'system');
     const filteredMessages = messages.filter(msg => msg.role !== 'system');
     
-    // Process messages to handle image data
+    // Process messages to handle image data and file data
     const processedMessages = filteredMessages.map(msg => {
-      // If the message doesn't have image data, return a clean message without imageData property
+      let content = msg.content;
+      
+      // If there's file data, prepend it to the content
+      if (msg.fileData && msg.fileData.content) {
+        const fileInfo = `[File: ${msg.fileData.name} (${msg.fileData.type})]\n\n${msg.fileData.content}\n\n`;
+        content = fileInfo + (content || '');
+      }
+      
+      // If the message doesn't have image data, return a clean message with text content (possibly including file content)
       if (!msg.imageData) {
-        // Return a new object with only the properties that Anthropic expects
         return {
           role: msg.role,
-          content: msg.content
+          content: content
         };
       }
       
       // For messages with images, convert to Anthropic's format with content array
-      const content = [];
+      const contentArray = [];
       
-      // Add text content if it exists
-      if (msg.content && msg.content.trim()) {
-        content.push({
+      // Add text content if it exists (possibly including file content)
+      if (content && content.trim()) {
+        contentArray.push({
           type: "text",
-          text: msg.content
+          text: content
         });
       }
       
       // Add image content
-      content.push({
+      contentArray.push({
         type: "image",
         source: {
           type: "base64",
@@ -46,10 +53,9 @@ const AnthropicAdapter = {
       });
       
       // Return the message with content array instead of content string
-      // Only include the properties that Anthropic expects
       return {
         role: msg.role,
-        content: content
+        content: contentArray
       };
     });
     

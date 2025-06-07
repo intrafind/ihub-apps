@@ -152,6 +152,10 @@ const AppChat = () => {
   // State for image upload and input configuration
   const [selectedImage, setSelectedImage] = useState(null);
   const [showImageUploader, setShowImageUploader] = useState(false);
+  
+  // State for file upload and input configuration
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showFileUploader, setShowFileUploader] = useState(false);
 
   const inputRef = useRef(null);
   const chatId = useRef(`chat-${Date.now()}`);
@@ -256,6 +260,14 @@ const AppChat = () => {
       // Hide the image uploader if it's visible
       if (showImageUploader) {
         setShowImageUploader(false);
+      }
+      
+      // Clear any selected file
+      setSelectedFile(null);
+      
+      // Hide the file uploader if it's visible
+      if (showFileUploader) {
+        setShowFileUploader(false);
       }
       
       // Reset variables to their default values when clearing via voice command
@@ -518,9 +530,20 @@ const AppChat = () => {
     setSelectedImage(imageData);
   };
 
+  // Handle file selection from FileUploader
+  const handleFileSelect = (fileData) => {
+    console.log('AppChat: handleFileSelect called with', fileData);
+    setSelectedFile(fileData);
+  };
+
   // Toggle image uploader visibility
   const toggleImageUploader = () => {
     setShowImageUploader(prev => !prev);
+  };
+
+  // Toggle file uploader visibility
+  const toggleFileUploader = () => {
+    setShowFileUploader(prev => !prev);
   };
 
   const handleInputChange = (e) => {
@@ -584,6 +607,14 @@ const AppChat = () => {
         setShowImageUploader(false);
       }
       
+      // Clear any selected file
+      setSelectedFile(null);
+      
+      // Hide the file uploader if it's visible
+      if (showFileUploader) {
+        setShowFileUploader(false);
+      }
+      
       // Reset variables to their default values
       if (app && app.variables) {
         const initialVars = getInitializedVariables(app, currentLanguage);
@@ -622,8 +653,8 @@ const AppChat = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Ensure input isn't empty before proceeding or we have an image
-    if (!input.trim() && !selectedImage && !app?.allowEmptyContent) {
+    // Ensure input isn't empty before proceeding or we have an image or file
+    if (!input.trim() && !selectedImage && !selectedFile && !app?.allowEmptyContent) {
       return;
     }
 
@@ -661,7 +692,7 @@ const AppChat = () => {
       return;
     }
 
-    // Calculate the final input, including image data if available
+    // Calculate the final input, including image data or file data if available
     let finalInput = input.trim();
     let messageContent = finalInput;
     let messageData = null;
@@ -677,6 +708,23 @@ const AppChat = () => {
       // Store the full image data for API transmission
       messageData = {
         imageData: selectedImage
+      };
+    }
+
+    // If we have a file, prepare it for display in the message
+    if (selectedFile) {
+      // For the message displayed to the user, show only a simple file indicator
+      const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">
+        <span style="margin-right: 4px;">📎</span>
+        <span>${selectedFile.fileName}</span>
+      </div>`;
+      
+      // If there's text, combine it with the file indicator, otherwise just show the file indicator
+      messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
+      
+      // Store the full file data for API transmission
+      messageData = {
+        fileData: selectedFile
       };
     }
 
@@ -706,6 +754,10 @@ const AppChat = () => {
       setSelectedImage(null);
       // Close the image uploader
       setShowImageUploader(false);
+      // Clear the selected file after sending
+      setSelectedFile(null);
+      // Close the file uploader
+      setShowFileUploader(false);
 
       // Store the exchangeId in a window property for debugging
       window.lastMessageId = exchangeId;
@@ -720,7 +772,8 @@ const AppChat = () => {
         promptTemplate: app?.prompt || null,
         variables: { ...variables },
         messageId: exchangeId, // Send the exchangeId to the server
-        imageData: selectedImage // Include image data if available
+        imageData: selectedImage, // Include image data if available
+        fileData: selectedFile // Include file data if available
       };
 
       // Get messages for the API
@@ -954,11 +1007,17 @@ const AppChat = () => {
             }
             onImageSelect={handleImageSelect}
             imageUploadEnabled={app?.features?.imageUpload === true}
-            allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null}
+            onFileSelect={handleFileSelect}
+            fileUploadEnabled={app?.features?.fileUpload === true}
+            fileUploadConfig={app?.fileUpload || {}}
+            allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
             inputRef={inputRef}
             selectedImage={selectedImage}
             showImageUploader={showImageUploader}
             onToggleImageUploader={toggleImageUploader}
+            selectedFile={selectedFile}
+            showFileUploader={showFileUploader}
+            onToggleFileUploader={toggleFileUploader}
           />
         </div>
 

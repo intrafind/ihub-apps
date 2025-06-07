@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import VoiceInputComponent from "../VoiceInputComponent";
 import Icon from "../Icon";
 import ImageUploader from "../ImageUploader";
+import FileUploader from "../FileUploader";
 
 /**
  * A reusable chat input component for chat interfaces
@@ -17,18 +18,25 @@ const ChatInput = ({
   onVoiceInput,
   onVoiceCommand,
   onImageSelect,
+  onFileSelect,
   allowEmptySubmit = false,
   inputRef = null,
   disabled = false,
   imageUploadEnabled = false,
+  fileUploadEnabled = false,
+  fileUploadConfig = {},
   selectedImage = null, // Add this prop to pass from parent
+  selectedFile = null, // Add this prop to pass from parent
   showImageUploader: externalShowImageUploader = undefined,
+  showFileUploader: externalShowFileUploader = undefined,
   onToggleImageUploader = null,
+  onToggleFileUploader = null,
 }) => {
   const { t, i18n } = useTranslation();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
   const [internalShowImageUploader, setInternalShowImageUploader] = useState(false);
+  const [internalShowFileUploader, setInternalShowFileUploader] = useState(false);
   
   // Determine if multiline mode is enabled based on app config
   // Default to true (multiline) if not specified in app config
@@ -37,6 +45,9 @@ const ChatInput = ({
   // Use external state if provided, otherwise use internal state
   const showImageUploader = externalShowImageUploader !== undefined ? 
     externalShowImageUploader : internalShowImageUploader;
+    
+  const showFileUploader = externalShowFileUploader !== undefined ? 
+    externalShowFileUploader : internalShowFileUploader;
     
   // First check for direct placeholder prop, then app.messagePlaceholder, then default
   const customPlaceholder = app?.messagePlaceholder ? 
@@ -110,6 +121,16 @@ const ChatInput = ({
     }
   };
 
+  const toggleFileUploader = () => {
+    if (onToggleFileUploader) {
+      // Use the external toggle function if provided
+      onToggleFileUploader();
+    } else {
+      // Otherwise use the internal state
+      setInternalShowFileUploader((prev) => !prev);
+    }
+  };
+
   // Handle key events for the textarea
   const handleKeyDown = (e) => {
     // CMD+Enter or CTRL+Enter to submit
@@ -134,6 +155,15 @@ const ChatInput = ({
           onImageSelect={onImageSelect}
           disabled={disabled || isProcessing}
           imageData={selectedImage} // Pass the actual selectedImage value from parent
+        />
+      )}
+
+      {fileUploadEnabled && showFileUploader && (
+        <FileUploader
+          onFileSelect={onFileSelect}
+          disabled={disabled || isProcessing}
+          fileData={selectedFile} // Pass the actual selectedFile value from parent
+          config={fileUploadConfig}
         />
       )}
 
@@ -182,6 +212,21 @@ const ChatInput = ({
               aria-label={t("common.toggleImageUpload", "Toggle image upload")}
             >
               <Icon name="camera" size="md" />
+            </button>
+          )}
+
+          {fileUploadEnabled && (
+            <button
+              type="button"
+              onClick={toggleFileUploader}
+              disabled={disabled || isProcessing}
+              className={`image-upload-button ${
+                showFileUploader ? "active" : ""
+              } h-fit`}
+              title={t("common.toggleFileUpload", "Toggle file upload")}
+              aria-label={t("common.toggleFileUpload", "Toggle file upload")}
+            >
+              <Icon name="paper-clip" size="md" />
             </button>
           )}
 
