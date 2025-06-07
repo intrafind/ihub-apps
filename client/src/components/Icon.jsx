@@ -114,10 +114,6 @@ const iconBaseUrl = import.meta.env.VITE_ICON_BASE_URL || '/icons';
 const Icon = ({ name, size = 'md', className = '', solid = false }) => {
   const [imgError, setImgError] = useState(false);
 
-  if (name === 'apps-svg-logo') {
-    return <img src="/logo.png" alt="logo" className={`${sizeClasses[size] || sizeClasses.md} ${className}`} />;
-  }
-
   const iconEntry = iconMap[name];
   if (iconEntry) {
     const IconComponent = solid ? iconEntry.solid : iconEntry.outline;
