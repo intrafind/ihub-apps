@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@heroicons/react": "2.2.0",
     "@opendocsg/pdf2md": "^0.2.1",
     "@tailwindcss/typography": "^0.5.16",
     "@xenova/transformers": "^2.17.2",
@@ -28,7 +29,7 @@
   "devDependencies": {
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^4.5.1",
     "autoprefixer": "^10.4.14",
     "pkg": "^5.8.1",
     "postcss": "^8.4.23",

@@ -2,6 +2,7 @@
  * OpenAI API adapter
  */
 import { sendSSE } from '../utils.js';
+import { parseSSEBuffer } from './streamUtils.js';
 
 const OpenAIAdapter = {
   /**
@@ -84,30 +85,18 @@ const OpenAIAdapter = {
       error: false,
       errorMessage: null
     };
-    
-    const lines = buffer.split('\n');
-    
-    for (const line of lines) {
-      // Check for completion signal
-      if (line.trim() === 'data: [DONE]') {
-        result.complete = true;
-        continue;
-      }
-      
-      if (line.trim() === '') continue;
-      
+
+    const { events, done } = parseSSEBuffer(buffer);
+    if (done) result.complete = true;
+
+    for (const evt of events) {
       try {
-        // Extract the JSON data part from "data: {json}"
-        const dataMatch = line.match(/data: (.+)/);
-        if (!dataMatch) continue;
-        
-        const data = JSON.parse(dataMatch[1]);
-        
+        const data = JSON.parse(evt);
+
         if (data.choices && data.choices[0]?.delta?.content) {
           result.content.push(data.choices[0].delta.content);
         }
-        
-        // Check if this is the last chunk
+
         if (data.choices && data.choices[0]?.finish_reason) {
           result.complete = true;
         }
@@ -117,7 +106,7 @@ const OpenAIAdapter = {
         result.errorMessage = `Error parsing OpenAI response: ${error.message}`;
       }
     }
-    
+
     return result;
   }
 };
