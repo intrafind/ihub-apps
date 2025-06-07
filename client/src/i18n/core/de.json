@@ -110,5 +110,8 @@
     "title": "Haftungsausschluss",
     "accept": "Ich verstehe",
     "versionInfo": "Version {{version}}, Zuletzt aktualisiert: {{date}}"
+  },
+  "smartSearch": {
+    "placeholder": "Apps durchsuchen..."
   }
 }
