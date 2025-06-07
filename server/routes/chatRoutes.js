@@ -1,9 +1,9 @@
 import { loadJson, loadText } from '../configLoader.js';
-import { createCompletionRequest } from '../adapters/index.js';
+import { createCompletionRequest, processResponseBuffer } from '../adapters/index.js';
 import { getErrorDetails, logInteraction, trackSession } from '../utils.js';
 import { sendSSE, clients, activeRequests } from '../sse.js';
 
-export default function registerChatRoutes(app, { verifyApiKey, processMessageTemplates, DEFAULT_TIMEOUT }) {
+export default function registerChatRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }) {
   // GET /api/models/{modelId}/chat/test - Test model chat completion without streaming
   app.get('/api/models/:modelId/chat/test', async (req, res) => {
     try {
@@ -306,6 +306,10 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
     // Get the session ID from request headers
     const userSessionId = req.headers['x-session-id'];
 
+    // Declare variables for later use so they are accessible in buildLogData
+    let model;
+    let llmMessages;
+
     function buildLogData(streaming, extra = {}) {
       return {
         messageId,
@@ -360,14 +364,14 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
         }
         
         // Determine which model to use
-        const model = models.find(m => m.id === (modelId || app.preferredModel));
+        model = models.find(m => m.id === (modelId || app.preferredModel));
         if (!model) {
           const errorMessage = await getLocalizedError('modelNotFound', {}, clientLanguage);
           return res.status(404).json({ error: errorMessage });
         }
         
         // Prepare messages with proper formatting
-        const llmMessages = await processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
+        llmMessages = await processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
         
         // Log the interaction before sending to LLM
         const requestLog = buildLogData(false);
@@ -526,7 +530,7 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
         
         console.log(`Using modelId: ${modelId} || ${app.preferredModel}`);
         // Determine which model to use
-        const model = models.find(m => m.id === (modelId || app.preferredModel));
+        model = models.find(m => m.id === (modelId || app.preferredModel));
         if (!model) {
           const errorMessage = await getLocalizedError('modelNotFound', {}, clientLanguage);
           sendSSE(clientRes, 'error', { message: errorMessage });
@@ -534,7 +538,7 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
         }
         
         // Prepare messages with proper formatting
-        const llmMessages = await processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
+        llmMessages = await processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
         
         // Log the interaction before sending to LLM
         await logInteraction(

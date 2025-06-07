@@ -352,7 +352,7 @@ app.get('/api/pages/:pageId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch page content' });
   }
 });
-registerChatRoutes(app, { verifyApiKey, processMessageTemplates, DEFAULT_TIMEOUT });
+registerChatRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT });
 
 
 // --- Session Management ---
