@@ -11,6 +11,16 @@ import {
   TrashIcon as OutlineTrashIcon,
   HandThumbUpIcon as OutlineHandThumbUpIcon,
   HandThumbDownIcon as OutlineHandThumbDownIcon,
+  QuestionMarkCircleIcon as OutlineQuestionMarkCircleIcon,
+  GlobeAltIcon,
+  SparklesIcon as OutlineSparklesIcon,
+  EnvelopeIcon as OutlineEnvelopeIcon,
+  CalendarIcon as OutlineCalendarIcon,
+  ShareIcon as OutlineShareIcon,
+  DocumentMagnifyingGlassIcon as OutlineDocumentMagnifyingGlassIcon,
+  UsersIcon as OutlineUsersIcon,
+  LightBulbIcon as OutlineLightBulbIcon,
+  CodeBracketIcon as OutlineCodeBracketIcon,
   XMarkIcon,
   DocumentTextIcon as OutlineDocumentTextIcon,
   PaperClipIcon as OutlinePaperClipIcon,
@@ -34,7 +44,17 @@ import {
   PaperClipIcon as SolidPaperClipIcon,
   MicrophoneIcon as SolidMicrophoneIcon,
   StarIcon as SolidStarIcon,
-  ExclamationCircleIcon as SolidExclamationCircleIcon
+  ExclamationCircleIcon as SolidExclamationCircleIcon,
+  QuestionMarkCircleIcon as SolidQuestionMarkCircleIcon,
+  GlobeAltIcon as SolidGlobeAltIcon,
+  SparklesIcon as SolidSparklesIcon,
+  EnvelopeIcon as SolidEnvelopeIcon,
+  CalendarIcon as SolidCalendarIcon,
+  ShareIcon as SolidShareIcon,
+  DocumentMagnifyingGlassIcon as SolidDocumentMagnifyingGlassIcon,
+  UsersIcon as SolidUsersIcon,
+  LightBulbIcon as SolidLightBulbIcon,
+  CodeBracketIcon as SolidCodeBracketIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
@@ -61,6 +81,23 @@ const iconMap = {
   x: { outline: XMarkIcon, solid: XMarkIcon },
   'thumbs-up': { outline: OutlineHandThumbUpIcon, solid: SolidHandThumbUpIcon },
   'thumbs-down': { outline: OutlineHandThumbDownIcon, solid: SolidHandThumbDownIcon },
+  'question-mark-circle': {
+    outline: OutlineQuestionMarkCircleIcon,
+    solid: SolidQuestionMarkCircleIcon,
+  },
+  'chat-bubbles': { outline: ChatBubbleLeftRightIcon, solid: ChatBubbleLeftRightIcon },
+  globe: { outline: GlobeAltIcon, solid: SolidGlobeAltIcon },
+  sparkles: { outline: OutlineSparklesIcon, solid: SolidSparklesIcon },
+  mail: { outline: OutlineEnvelopeIcon, solid: SolidEnvelopeIcon },
+  calendar: { outline: OutlineCalendarIcon, solid: SolidCalendarIcon },
+  share: { outline: OutlineShareIcon, solid: SolidShareIcon },
+  'document-search': {
+    outline: OutlineDocumentMagnifyingGlassIcon,
+    solid: SolidDocumentMagnifyingGlassIcon,
+  },
+  users: { outline: OutlineUsersIcon, solid: SolidUsersIcon },
+  'light-bulb': { outline: OutlineLightBulbIcon, solid: SolidLightBulbIcon },
+  code: { outline: OutlineCodeBracketIcon, solid: SolidCodeBracketIcon },
 };
 
 const sizeClasses = {
