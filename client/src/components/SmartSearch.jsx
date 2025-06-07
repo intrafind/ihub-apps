@@ -138,7 +138,7 @@ const SmartSearch = () => {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyNav}
             placeholder={t('smartSearch.placeholder', 'Search apps...')}
-            className="w-full pl-12 pr-12 py-3 border-b outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
           {query && (
             <button
@@ -159,7 +159,12 @@ const SmartSearch = () => {
               onMouseDown={() => handleSelect(r.app.id)}
             >
               <Icon name={r.app.icon || 'lightning-bolt'} className="w-5 h-5 mr-2" />
-              <span className="font-medium mr-1">{getLocalizedContent(r.app.name, currentLanguage) || r.app.id}</span>
+              <span className="font-medium mr-1 flex items-center">
+                {getLocalizedContent(r.app.name, currentLanguage) || r.app.id}
+                {favoriteApps.includes(r.app.id) && (
+                  <Icon name="star" size="sm" className="text-yellow-500 ml-1" solid={true} />
+                )}
+              </span>
               <span className="text-sm text-gray-600 truncate">{getLocalizedContent(r.app.description, currentLanguage) || ''}</span>
             </li>
           ))}
