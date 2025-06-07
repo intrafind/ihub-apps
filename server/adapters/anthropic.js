@@ -1,7 +1,6 @@
 /**
  * Anthropic API adapter
  */
-import { sendSSE } from '../utils.js';
 import { parseSSEBuffer } from './streamUtils.js';
 
 const AnthropicAdapter = {
