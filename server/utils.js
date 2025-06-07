@@ -1,3 +1,5 @@
+import { loadJson } from './configLoader.js';
+
 /**
  * Helper function to send Server-Sent Events
  * @param {Object} res - Express response object
@@ -17,16 +19,11 @@ export function sendSSE(res, event, data) {
 export async function getApiKeyForModel(modelId) {
   try {
     // Load models configuration to find the provider
-    const fs = await import('fs/promises');
-    const path = await import('path');
-    const { fileURLToPath } = await import('url');
-    
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    
-    const filePath = path.join(__dirname, '../contents/config/models.json');
-    const data = await fs.readFile(filePath, 'utf8');
-    const models = JSON.parse(data);
+    const models = await loadJson('config/models.json');
+    if (!models) {
+      console.error('Failed to load models configuration');
+      return null;
+    }
     
     // Find the model by ID
     const model = models.find(m => m.id === modelId);
@@ -80,16 +77,11 @@ export async function getApiKeyForModel(modelId) {
 export async function getModelInfo(modelId) {
   try {
     // Load models configuration
-    const fs = await import('fs/promises');
-    const path = await import('path');
-    const { fileURLToPath } = await import('url');
-    
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    
-    const filePath = path.join(__dirname, '../config/models.json');
-    const data = await fs.readFile(filePath, 'utf8');
-    const models = JSON.parse(data);
+    const models = await loadJson('config/models.json');
+    if (!models) {
+      console.error('Failed to load models configuration');
+      return null;
+    }
     
     // Find the model by ID
     return models.find(m => m.id === modelId) || null;
