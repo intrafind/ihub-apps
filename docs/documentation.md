@@ -1037,7 +1037,7 @@ The server component is located in the `server/` directory with the following ke
 server/
   server.js        - Main server entry point
   utils.js          - Utility functions
-  pkg-entry.cjs     - Package entry for binary builds
+  sea-server.cjs    - SEA entry for binary builds
   adapters/
     index.js        - Adapter orchestration
     openai.js       - OpenAI API adapter
@@ -1127,7 +1127,6 @@ docker run --rm -it \
   -p 3001:3001 \
   -v "$(pwd)/dist-bin:/app" \
   -w /app \
-  -e NODE_FLAGS_STYLE=linux \
   -e OPENAI_API_KEY=your_openai_api_key \
   -e ANTHROPIC_API_KEY=your_anthropic_api_key \
   -e GOOGLE_API_KEY=your_google_api_key \
@@ -1137,31 +1136,6 @@ docker run --rm -it \
 
 Replace `${VERSION}` with your current version number from package.json.
 
-#### Troubleshooting Node.js Flag Issues
-
-If you encounter errors like the following when running the binary:
-
-```
-Error: Cannot find module '/path/to/--experimental-modules'
-```
-
-This indicates a Node.js command-line flag ordering issue. Use one of these approaches to fix it:
-
-1. **Set the environment variable** (recommended):
-   ```bash
-   export NODE_FLAGS_STYLE=linux
-   ./ai-hub-apps-v1.0.5-linux
-   ```
-
-2. **Call Node.js explicitly** with correct flag order:
-   ```bash
-   node --experimental-modules --experimental-json-modules /path/to/server/server.js
-   ```
-
-3. **For WSL environments** (Windows Subsystem for Linux):
-   ```bash
-   NODE_FLAGS_STYLE=linux ./ai-hub-apps-v1.0.5-linux
-   ```
 
 ### Logging
 

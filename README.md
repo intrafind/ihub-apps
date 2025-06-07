@@ -84,7 +84,7 @@ Therefore we want to build a web application which talks through a small node.js
 
 ### Prerequisites
 
-- Node.js 16.x or higher
+- Node.js 20.x or higher
 - npm 8.x or higher
 
 ### Installation
@@ -142,18 +142,20 @@ npm run start:prod
 
 You can package the entire application as a standalone binary using:
 
+**Prerequisite:** Node.js 20 or newer is required for creating the binary.
+
 ```bash
 ./build.sh --binary
 ```
 
-This creates a binary in the `dist-bin` directory along with necessary configuration files and assets.
+This creates versioned executables in the `dist-bin` directory along with configuration files and assets.
 
-To run the binary:
+To run the binary (replace `${VERSION}` with the current version):
 
 ```bash
-./dist-bin/ai-hub-apps-darwin  # On macOS
-./dist-bin/ai-hub-apps-linux   # On Linux
-./dist-bin/ai-hub-apps-win.exe # On Windows
+./dist-bin/ai-hub-apps-v${VERSION}-macos    # On macOS
+./dist-bin/ai-hub-apps-v${VERSION}-linux    # On Linux
+./dist-bin/ai-hub-apps-v${VERSION}-win.bat  # On Windows
 ```
 
 ### Downloading Pre-built Binaries
@@ -161,14 +163,14 @@ To run the binary:
 Pre-built binaries for all platforms are available on the [GitHub Releases](https://github.com/your-username/ai-hub-apps/releases) page. Each release includes:
 
 - **Standalone executables**:
-  - `ai-hub-apps-macos` - for macOS
-  - `ai-hub-apps-linux` - for Linux
-  - `ai-hub-apps-win.exe` - for Windows
+  - `ai-hub-apps-v<version>-macos` - for macOS
+  - `ai-hub-apps-v<version>-linux` - for Linux
+  - `ai-hub-apps-v<version>-win.bat` - for Windows
   
 - **Complete packages** (executable + configuration files):
-  - `ai-hub-apps-macos.tar.gz` - macOS package
-  - `ai-hub-apps-linux.tar.gz` - Linux package
-  - `ai-hub-apps-win.exe.zip` - Windows package
+  - `ai-hub-apps-v<version>-macos.tar.gz` - macOS package
+  - `ai-hub-apps-v<version>-linux.tar.gz` - Linux package
+  - `ai-hub-apps-v<version>-win.zip` - Windows package
 
 For most users, downloading the complete package is recommended as it includes all necessary configuration files and assets.
 
@@ -203,10 +205,10 @@ Example of running with custom configuration:
 PORT=8080 HOST=127.0.0.1 npm run start:prod
 ```
 
-Or with the binary:
+Or with the binary (replace `${VERSION}` with the current version):
 
 ```bash
-PORT=8080 HOST=127.0.0.1 ./dist-bin/ai-hub-apps-darwin
+PORT=8080 HOST=127.0.0.1 ./dist-bin/ai-hub-apps-v${VERSION}-macos
 ```
 
 ## Configuration Files
