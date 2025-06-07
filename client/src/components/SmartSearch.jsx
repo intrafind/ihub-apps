@@ -155,17 +155,21 @@ const SmartSearch = () => {
           {results.map((r, idx) => (
             <li
               key={r.app.id}
-              className={`flex items-center px-4 py-2 cursor-pointer ${idx === selectedIndex ? 'bg-indigo-100' : ''}`}
+              className={`px-4 py-2 cursor-pointer ${idx === selectedIndex ? 'bg-indigo-100' : ''}`}
               onMouseDown={() => handleSelect(r.app.id)}
             >
-              <Icon name={r.app.icon || 'lightning-bolt'} className="w-5 h-5 mr-2" />
-              <span className="font-medium mr-1 flex items-center">
-                {getLocalizedContent(r.app.name, currentLanguage) || r.app.id}
-                {favoriteApps.includes(r.app.id) && (
-                  <Icon name="star" size="sm" className="text-yellow-500 ml-1" solid={true} />
-                )}
-              </span>
-              <span className="text-sm text-gray-600 line-clamp-2">{getLocalizedContent(r.app.description, currentLanguage) || ''}</span>
+              <div className="flex items-center">
+                <Icon name={r.app.icon || 'lightning-bolt'} className="w-5 h-5 mr-2" />
+                <span className="font-medium mr-1 flex items-center">
+                  {getLocalizedContent(r.app.name, currentLanguage) || r.app.id}
+                  {favoriteApps.includes(r.app.id) && (
+                    <Icon name="star" size="sm" className="text-yellow-500 ml-1" solid={true} />
+                  )}
+                </span>
+              </div>
+              <p className="text-sm text-gray-600 ml-7 line-clamp-2">
+                {getLocalizedContent(r.app.description, currentLanguage) || ''}
+              </p>
             </li>
           ))}
         </ul>
