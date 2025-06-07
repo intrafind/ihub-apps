@@ -4,28 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import Icon from './Icon';
 import { fetchApps } from '../api/api';
 import { getLocalizedContent } from '../utils/localizeContent';
+import Fuse from 'fuse.js';
 
-let embedderPromise = null;
-const loadEmbedder = async () => {
-  if (!embedderPromise) {
-    embedderPromise = import('@xenova/transformers').then(({ pipeline }) =>
-      pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2')
-    );
-  }
-  return embedderPromise;
-};
-
-const cosineSimilarity = (a, b) => {
-  let sum = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length && i < b.length; i++) {
-    sum += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  return sum / (Math.sqrt(normA) * Math.sqrt(normB));
-};
+const fuseRef = { current: null };
 
 const SmartSearch = () => {
   const { t, i18n } = useTranslation();
@@ -34,7 +15,6 @@ const SmartSearch = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [apps, setApps] = useState([]);
-  const [embeddings, setEmbeddings] = useState([]);
   const [results, setResults] = useState([]);
   const inputRef = useRef(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -64,14 +44,14 @@ const SmartSearch = () => {
       try {
         const data = await fetchApps();
         setApps(data);
-        const embedder = await loadEmbedder();
-        const vectors = [];
-        for (const app of data) {
-          const text = `${getLocalizedContent(app.name, currentLanguage) || ''}. ${getLocalizedContent(app.description, currentLanguage) || ''}`;
-          const output = await embedder(text, { pooling: 'mean', normalize: true });
-          vectors.push(Array.from(output.data));
-        }
-        setEmbeddings(vectors);
+        const list = data.map(app => ({
+          ...app,
+          searchText: `${getLocalizedContent(app.name, currentLanguage) || ''}. ${getLocalizedContent(app.description, currentLanguage) || ''}`
+        }));
+        fuseRef.current = new Fuse(list, {
+          keys: ['searchText'],
+          threshold: 0.4
+        });
       } catch (err) {
         console.error('Failed to initialize smart search', err);
       }
@@ -79,24 +59,17 @@ const SmartSearch = () => {
   }, [isOpen, currentLanguage, apps.length]);
 
   useEffect(() => {
-    const search = async () => {
-      const embedder = await loadEmbedder();
-      const output = await embedder(query, { pooling: 'mean', normalize: true });
-      const qVec = Array.from(output.data);
-      const scored = apps.map((app, idx) => ({
-        app,
-        score: cosineSimilarity(qVec, embeddings[idx])
-      }));
-      scored.sort((a, b) => b.score - a.score);
-      setResults(scored.slice(0, 5));
-      setSelectedIndex(0);
-    };
-    if (isOpen && query.trim() && embeddings.length === apps.length) {
-      search();
-    } else {
+    if (!isOpen || !query.trim() || !fuseRef.current) {
       setResults([]);
+      return;
     }
-  }, [query, embeddings, apps, isOpen]);
+    const results = fuseRef.current.search(query).slice(0, 5).map(r => ({
+      app: r.item,
+      score: r.score
+    }));
+    setResults(results);
+    setSelectedIndex(0);
+  }, [query, isOpen]);
 
   const handleSelect = (appId) => {
     setIsOpen(false);
