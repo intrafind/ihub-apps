@@ -428,7 +428,7 @@ const AppsList = () => {
                         <h3 className="font-bold text-lg mb-1 break-words">
                           {getLocalizedContent(app.name, currentLanguage) || app.id}
                           {favoriteApps.includes(app.id) && (
-                            <span className="ml-2 inline-block" aria-label="Favorite">
+                            <span className="ml-2 hidden sm:inline-block" aria-label="Favorite">
                               <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
                             </span>
                           )}
