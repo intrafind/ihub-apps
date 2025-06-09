@@ -55,13 +55,18 @@ function useChatMessages(chatId = 'default') {
    * @returns {string} The ID of the created message
    */
   const addUserMessage = useCallback((content, metadata = {}) => {
+    const { rawContent, ...rest } = metadata;
     const id = `user-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const userMessage = {
       id,
       role: 'user',
       content,
-      ...metadata
+      ...rest
     };
+
+    if (rawContent !== undefined) {
+      userMessage.rawContent = rawContent;
+    }
     
     setMessages(prev => [...prev, userMessage]);
     return id;
@@ -144,10 +149,10 @@ function useChatMessages(chatId = 'default') {
    * @param {string} newContent - The new content for the message
    */
   const editMessage = useCallback((messageId, newContent) => {
-    setMessages(prev => 
+    setMessages(prev =>
       prev.map(message =>
-        message.id === messageId 
-          ? { ...message, content: newContent } 
+        message.id === messageId
+          ? { ...message, content: newContent, rawContent: newContent }
           : message
       )
     );
@@ -199,8 +204,9 @@ function useChatMessages(chatId = 'default') {
     
     // Strip UI-specific properties that the API doesn't need
     return messagesForApi.map(msg => {
-      const { id, loading, error, isErrorMessage, ...apiMsg } = msg;
-      return apiMsg;
+      const { id, loading, error, isErrorMessage, rawContent, ...apiMsg } = msg;
+      const content = rawContent !== undefined ? rawContent : apiMsg.content;
+      return { ...apiMsg, content };
     });
   }, []); // No dependency on messages anymore
 
