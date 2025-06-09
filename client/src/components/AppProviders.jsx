@@ -1,4 +1,3 @@
-// filepath: /Users/danielmanzke/Workspaces/github.ai/ai-hub-apps/client/src/components/AppProviders.jsx
 import React from "react";
 import { UIConfigProvider } from "./UIConfigContext";
 import ErrorBoundaryFallback from "./ErrorBoundary";
