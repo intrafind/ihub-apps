@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from './Icon';
 import { fetchApps } from '../api/api';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { getFavoriteApps } from '../utils/favoriteApps';
+import { getRecentAppIds } from '../utils/recentApps';
 import Fuse from 'fuse.js';
 
 const fuseRef = { current: null };
@@ -20,6 +21,7 @@ const SmartSearch = () => {
   const [favoriteApps, setFavoriteApps] = useState([]);
   const inputRef = useRef(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const recentAppIds = useMemo(() => getRecentAppIds(), [isOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -78,11 +80,20 @@ const SmartSearch = () => {
     }));
 
     const favorites = new Set(favoriteApps);
+    const recents = new Set(recentAppIds);
     searchResults.sort((a, b) => {
       const aFav = favorites.has(a.app.id);
       const bFav = favorites.has(b.app.id);
       if (aFav && !bFav) return -1;
       if (!aFav && bFav) return 1;
+
+      const aRecent = recents.has(a.app.id);
+      const bRecent = recents.has(b.app.id);
+      if (aRecent && !bRecent) return -1;
+      if (!aRecent && bRecent) return 1;
+      if (aRecent && bRecent) {
+        return recentAppIds.indexOf(a.app.id) - recentAppIds.indexOf(b.app.id);
+      }
 
       const aHasOrder = a.app.order !== undefined && a.app.order !== null;
       const bHasOrder = b.app.order !== undefined && b.app.order !== null;
@@ -99,7 +110,7 @@ const SmartSearch = () => {
     const limited = searchResults.slice(0, 5);
     setResults(limited);
     setSelectedIndex(0);
-  }, [query, isOpen, favoriteApps]);
+  }, [query, isOpen, favoriteApps, recentAppIds]);
 
   const handleSelect = (appId) => {
     setIsOpen(false);
