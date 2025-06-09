@@ -44,7 +44,9 @@
       }
     },
     "microphone": {
-      "enabled": true
+      "enabled": true,
+      "mode": "automatic",
+      "showTranscript": false
     }
   },
   {
@@ -88,7 +90,9 @@
         "enabled": true
       },
       "microphone": {
-        "enabled": true
+        "enabled": true,
+        "mode": "automatic",
+        "showTranscript": false
       }
     }
   },
@@ -137,7 +141,9 @@
         "enabled": false
       },
       "microphone": {
-        "enabled": true
+        "enabled": true,
+        "mode": "automatic",
+        "showTranscript": false
       }
     },
     "variables": [
@@ -214,7 +220,9 @@
       }
     },
     "microphone": {
-      "enabled": true
+      "enabled": true,
+      "mode": "automatic",
+      "showTranscript": false
     },
     "variables": [
       {
@@ -279,7 +287,9 @@
       }
     },
     "microphone": {
-      "enabled": true
+      "enabled": true,
+      "mode": "automatic",
+      "showTranscript": false
     },
     "variables": [
       {
@@ -1080,7 +1090,9 @@
       }
     },
     "microphone": {
-      "enabled": true
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
     }
   },
   {
@@ -1110,7 +1122,9 @@
       "imageUpload": true
     },
     "microphone": {
-      "enabled": false
+      "enabled": false,
+      "mode": "automatic",
+      "showTranscript": false
     }
   },
   {
@@ -1140,7 +1154,9 @@
       "fileUpload": true
     },
     "microphone": {
-      "enabled": false
+      "enabled": false,
+      "mode": "automatic",
+      "showTranscript": false
     },
     "fileUpload": {
       "maxFileSizeMB": 5,
@@ -1188,7 +1204,9 @@
       "de": "Welches Thema soll der Vermerk behandeln und auf welche zentralen Aspekte soll ich im Sachverhalt oder der Bewertung eingehen?"
     },
     "microphone": {
-      "enabled": false
+      "enabled": false,
+      "mode": "automatic",
+      "showTranscript": false
     }
   }
 ]
