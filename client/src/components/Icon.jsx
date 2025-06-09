@@ -21,6 +21,7 @@ import {
   UsersIcon as OutlineUsersIcon,
   LightBulbIcon as OutlineLightBulbIcon,
   CodeBracketIcon as OutlineCodeBracketIcon,
+  ClockIcon,
   XMarkIcon,
   DocumentTextIcon as OutlineDocumentTextIcon,
   PaperClipIcon as OutlinePaperClipIcon,
@@ -56,6 +57,7 @@ import {
   UsersIcon as SolidUsersIcon,
   LightBulbIcon as SolidLightBulbIcon,
   CodeBracketIcon as SolidCodeBracketIcon,
+  ClockIcon as SolidClockIcon,
   AcademicCapIcon as SolidAcademicCapIcon
 } from '@heroicons/react/24/solid';
 
@@ -100,6 +102,7 @@ const iconMap = {
   users: { outline: OutlineUsersIcon, solid: SolidUsersIcon },
   'light-bulb': { outline: OutlineLightBulbIcon, solid: SolidLightBulbIcon },
   code: { outline: OutlineCodeBracketIcon, solid: SolidCodeBracketIcon },
+  clock: { outline: ClockIcon, solid: SolidClockIcon },
   'academic-cap': { outline: OutlineAcademicCapIcon, solid: SolidAcademicCapIcon },
 };
 
