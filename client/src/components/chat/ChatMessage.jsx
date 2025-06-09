@@ -183,15 +183,12 @@ const ChatMessage = ({
   // Render the message content based on the output format
   const renderContent = () => {
     // For HTML content, check if it contains image tags or file indicators and render them properly
-    const hasImageContent = message.content && (
-      message.content.includes('<img') || 
-      message.content.includes('data:image')
-    );
-    
-    //TODO improve detection of file content
-    const hasFileContent = message.content && (
-      message.content.includes('📎') && message.content.includes('<div') && message.content.includes('</div>')
-    );
+    const hasImageContent =
+      !!message.imageData ||
+      (message.content &&
+        (message.content.includes('<img') || message.content.includes('data:image')));
+
+    const hasFileContent = !!message.fileData;
     
     const hasHTMLContent = hasImageContent || hasFileContent;
 
