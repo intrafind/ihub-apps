@@ -59,27 +59,6 @@ export async function getApiKeyForModel(modelId) {
   }
 }
 
-/**
- * Get model information by ID
- * @param {string} modelId - The model ID
- * @returns {Object|null} The model information or null if not found
- */
-export async function getModelInfo(modelId) {
-  try {
-    // Load models configuration
-    const models = await loadJson('config/models.json');
-    if (!models) {
-      console.error('Failed to load models configuration');
-      return null;
-    }
-    
-    // Find the model by ID
-    return models.find(m => m.id === modelId) || null;
-  } catch (error) {
-    console.error('Error getting model info:', error);
-    return null;
-  }
-}
 
 /**
  * Get detailed error information from fetch errors
