@@ -1182,3 +1182,4 @@ logs/
 ```
 
 These logs contain anonymized records of user interactions, model selections, and any errors encountered, which is useful for troubleshooting and monitoring usage patterns.
+Tool calls are also recorded so that each invocation logs the provided parameters and the resulting output.
