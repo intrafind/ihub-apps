@@ -398,15 +398,6 @@ const AppsList = () => {
                   className="relative bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 w-full max-w-md"
                   role="listitem"
                 >
-                  {recentAppIds.includes(app.id) && (
-                    <span
-                      className="absolute top-2 left-2 z-10 p-1 bg-white bg-opacity-70 rounded-full"
-                      title={t('pages.appsList.recent')}
-                      aria-label={t('pages.appsList.recent')}
-                    >
-                      <Icon name="clock" className="text-indigo-600" solid={true} />
-                    </span>
-                  )}
                   <button
                     onClick={(e) => handleToggleFavorite(e, app.id)}
                     className="absolute top-2 right-2 z-10 p-1 bg-white bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
@@ -441,7 +432,7 @@ const AppsList = () => {
                           </span>
                         )}
                         {recentAppIds.includes(app.id) && (
-                          <span className="ml-1 inline-block" aria-label={t('pages.appsList.recent')}>
+                          <span className="ml-1 inline-block" aria-label={t('pages.appsList.recent')} title={t('pages.appsList.recent')}>
                             <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
                           </span>
                         )}
