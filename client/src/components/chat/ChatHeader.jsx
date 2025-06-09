@@ -75,7 +75,7 @@ const ChatHeader = ({
               <span className="hidden sm:inline">{t('pages.appChat.clear')}</span>
             </button>
           )}
-          {showParametersButton && (
+          {showParametersButton && isMobile && (
             <button
               onClick={onToggleParameters}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
