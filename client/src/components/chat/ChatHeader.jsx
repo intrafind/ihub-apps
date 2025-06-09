@@ -15,6 +15,7 @@ const ChatHeader = ({
   showClearButton = false,
   showConfigButton = true,
   showParametersButton = false,
+  parametersVisible = false,
   onClearChat,
   onToggleConfig,
   onToggleParameters,
@@ -78,7 +79,10 @@ const ChatHeader = ({
           {showParametersButton && isMobile && (
             <button
               onClick={onToggleParameters}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
+              className={`text-gray-800 px-3 py-1 rounded flex items-center ${
+                parametersVisible ? 'bg-gray-300' : 'bg-gray-200 hover:bg-gray-300'
+              }`}
+              aria-pressed={parametersVisible}
               title={t('pages.appChat.parameters')}
             >
               <Icon name="sliders" size="sm" className="sm:mr-1" />
