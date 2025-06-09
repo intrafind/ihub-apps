@@ -1,5 +1,5 @@
 const RECENT_APPS_KEY_PREFIX = 'aihub_recent_apps_';
-const MAX_RECENT_APPS = 20;
+const MAX_RECENT_APPS = 5;
 const RECENT_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const getCurrentUsername = () => {
