@@ -46,3 +46,34 @@ export default async function webSearch({ query }) {
   }
   return { results };
 }
+
+// CLI interface for direct execution
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const query = process.argv.slice(2).join(' ');
+  
+  if (!query) {
+    console.error('Usage: node webSearch.js <search term>');
+    console.error('Example: node webSearch.js "JavaScript tutorials"');
+    process.exit(1);
+  }
+  
+  console.log(`Searching for: "${query}"`);
+  
+  try {
+    const result = await webSearch({ query });
+    console.log('\nSearch Results:');
+    console.log('===============');
+    
+    if (result.results.length === 0) {
+      console.log('No results found.');
+    } else {
+      result.results.forEach((item, index) => {
+        console.log(`${index + 1}. ${item.title}`);
+        console.log(`   URL: ${item.url}\n`);
+      });
+    }
+  } catch (error) {
+    console.error('Error performing search:', error.message);
+    process.exit(1);
+  }
+}
