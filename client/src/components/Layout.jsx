@@ -147,8 +147,10 @@ const Layout = () => {
         </header>
       )}
 
-      <main className="flex-grow container mx-auto px-4 overflow-y-auto">
-        <Outlet />
+      <main className="flex-grow w-full overflow-y-auto">
+        <div className="container mx-auto px-4">
+          <Outlet />
+        </div>
       </main>
 
       {/* Footer - Only render if enabled (defaults to true) */}
