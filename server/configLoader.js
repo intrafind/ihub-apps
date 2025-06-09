@@ -1,18 +1,12 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { getRootDir } from './pathUtils.js';
 
 const cache = new Map();
 const CACHE_TTL = 60 * 1000; // 60 seconds
 
 function resolvePath(relativePath) {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-
-  const isPackaged = process.pkg !== undefined || process.env.APP_ROOT_DIR !== undefined;
-  const rootDir = isPackaged
-    ? (process.env.APP_ROOT_DIR || path.dirname(process.execPath))
-    : path.join(__dirname, '..');
+  const rootDir = getRootDir();
 
   const contentsDir = process.env.CONTENTS_DIR || 'contents';
 
