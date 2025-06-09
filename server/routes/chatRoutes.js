@@ -2,7 +2,11 @@ import { loadJson, loadText } from '../configLoader.js';
 import { createCompletionRequest, processResponseBuffer } from '../adapters/index.js';
 import { getErrorDetails, logInteraction, trackSession } from '../utils.js';
 import { sendSSE, clients, activeRequests } from '../sse.js';
-import { getToolsForApp } from '../toolLoader.js';
+import {
+  prepareChatRequest,
+  executeStreamingResponse,
+  executeNonStreamingResponse
+} from '../services/chatService.js';
 
 export default function registerChatRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }) {
   // GET /api/models/{modelId}/chat/test - Test model chat completion without streaming
@@ -345,468 +349,90 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
       // Check if client has an SSE connection
       if (!clients.has(chatId)) {
         console.log(`No active SSE connection for chat ID: ${chatId}. Creating response without streaming.`);
-        
-        // Process without streaming if no SSE connection exists
-        // Load app details
-        const apps = await loadJson('config/apps.json');
-        if (!apps) {
-          return res.status(500).json({ error: 'Failed to load apps configuration' });
-        }
-        
-        const app = apps.find(a => a.id === appId);
-        if (!app) {
-          const errorMessage = await getLocalizedError('appNotFound', {}, clientLanguage);
-          return res.status(404).json({ error: errorMessage });
-        }
-        
-        // Load models
-        const models = await loadJson('config/models.json');
-        if (!models) {
-          return res.status(500).json({ error: 'Failed to load models configuration' });
-        }
-        
-        // Determine which model to use
-        model = models.find(m => m.id === (modelId || app.preferredModel));
-        if (!model) {
-          const errorMessage = await getLocalizedError('modelNotFound', {}, clientLanguage);
-          return res.status(404).json({ error: errorMessage });
-        }
-        
-        // Prepare messages with proper formatting
-        llmMessages = await processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
-        
-        // Log the interaction before sending to LLM
-        const requestLog = buildLogData(false);
-        requestLog.options.maxTokens = parseInt(maxTokens) || app.tokenLimit || 1024;
-        await logInteraction('chat_request', requestLog);
-        
-        // Get and verify API key for model
-        const apiKey = await verifyApiKey(model, res, null, clientLanguage);
-        if (!apiKey) {
-          const errorMessage = await getLocalizedError('apiKeyNotFound', { provider: model.provider }, clientLanguage);
-          return res.status(500).json({ error: errorMessage });
-        }
-  
-        const requestedTokens = parseInt(maxTokens) || app.tokenLimit || 1024;
-        const modelTokenLimit = model.tokenLimit || requestedTokens;
-        const finalTokens = Math.min(requestedTokens, modelTokenLimit);
-        
-        // Create request without streaming
-        const tools = await getToolsForApp(app);
-        const request = createCompletionRequest(model, llmMessages, apiKey, {
-          temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
-          maxTokens: finalTokens,
-          stream: false,
-          tools
-        });
-        
-        // Set up timeout for the request
-        let timeoutId;
-        const timeoutPromise = new Promise((_, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT/1000} seconds`));
-          }, DEFAULT_TIMEOUT);
-        });
-        
-        // Execute request to LLM API with timeout
-        try {
-          const responsePromise = fetch(request.url, {
-            method: 'POST',
-            headers: request.headers,
-            body: JSON.stringify(request.body)
-          });
-          
-          const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
-          
-          clearTimeout(timeoutId);
-          
-          if (!llmResponse.ok) {
-            const errorBody = await llmResponse.text();
-            console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
 
-            const errorLog = buildLogData(false, {
-              responseType: 'error',
-              error: {
-                message: `LLM API request failed with status ${llmResponse.status}`,
-                code: llmResponse.status.toString()
-              }
-            });
-            await logInteraction('chat_error', errorLog);
-            
-            return res.status(llmResponse.status).json({ 
-              error: `LLM API request failed with status ${llmResponse.status}`,
-              details: errorBody
-            });
-          }
-          
-          // Return the complete response
-          const responseData = await llmResponse.json();
-          
-          // Add messageId to the response for client-side feedback
-          responseData.messageId = messageId;
-          
-          // Extract and log the model's response
-          let aiResponse = '';
-          if (responseData.choices && responseData.choices.length > 0) {
-            aiResponse = responseData.choices[0].message?.content || '';
-          }
-  
-          // Log successful interaction with response
-          const responseLog = buildLogData(false, {
-            responseType: 'success',
-            response: aiResponse.substring(0, 1000)
-          });
-          await logInteraction('chat_response', responseLog);
-          
-          return res.json(responseData);
-        } catch (fetchError) {
-          clearTimeout(timeoutId);
-          
-          if (fetchError.message.includes('timed out')) {
-            // Log timeout error
-            await logInteraction('chat_error', buildLogData(false, {
-              responseType: 'error',
-              error: {
-                message: `Request timed out after ${DEFAULT_TIMEOUT/1000} seconds`,
-                code: 'TIMEOUT'
-              }
-            }));
-            
-            return res.status(504).json({ 
-              error: 'Request timed out', 
-              message: `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT/1000} seconds`
-            });
-          } else {
-            // Get enhanced error details for the non-streaming case
-            const errorDetails = getErrorDetails(fetchError, model);
-            
-            // Log detailed error
-            await logInteraction('chat_error', buildLogData(false, {
-              responseType: 'error',
-              error: {
-                message: errorDetails.message,
-                code: errorDetails.code
-              }
-            }));
-            
-            return res.status(500).json({ 
-              error: errorDetails.message,
-              code: errorDetails.code,
-              modelId: model.id,
-              provider: model.provider,
-              recommendation: errorDetails.recommendation,
-              details: fetchError.message
-            });
-          }
-        }
-      } else {
-        // If we have an SSE connection, stream the response
-        const clientRes = clients.get(chatId).response;
-        
-        // Update last activity timestamp
-        clients.set(chatId, {
-          ...clients.get(chatId),
-          lastActivity: new Date()
+        const prep = await prepareChatRequest({
+          appId,
+          modelId,
+          messages,
+          temperature,
+          style,
+          outputFormat,
+          language: clientLanguage,
+          maxTokens,
+          verifyApiKey,
+          processMessageTemplates,
+          res
         });
-        
-        // Load app details
-        const apps = await loadJson('config/apps.json');
-        if (!apps) {
-          const errorMessage = await getLocalizedError('internalError', {}, clientLanguage);
-          sendSSE(clientRes, 'error', { message: errorMessage });
-          return res.json({ status: 'error', message: errorMessage });
+
+        if (prep.error) {
+          const errMsg = await getLocalizedError(prep.error, {}, clientLanguage);
+          return res.status( prep.error === 'appNotFound' || prep.error === 'modelNotFound' ? 404 : 500 ).json({ error: errMsg });
         }
-        
-        const app = apps.find(a => a.id === appId);
-        if (!app) {
-          const errorMessage = await getLocalizedError('appNotFound', {}, clientLanguage);
-          sendSSE(clientRes, 'error', { message: errorMessage });
-          return res.json({ status: 'error', message: errorMessage });
+
+        ({ model, llmMessages } = prep);
+
+        const requestLog = buildLogData(false);
+        requestLog.options.maxTokens = parseInt(maxTokens) || prep.app.tokenLimit || 1024;
+        await logInteraction('chat_request', requestLog);
+
+        return executeNonStreamingResponse({
+          request: prep.request,
+          res,
+          buildLogData,
+          messageId,
+          model: prep.model,
+          llmMessages: prep.llmMessages,
+          DEFAULT_TIMEOUT
+        });
+      } else {
+        const clientRes = clients.get(chatId).response;
+        clients.set(chatId, { ...clients.get(chatId), lastActivity: new Date() });
+
+        const prep = await prepareChatRequest({
+          appId,
+          modelId,
+          messages,
+          temperature,
+          style,
+          outputFormat,
+          language: clientLanguage,
+          maxTokens,
+          verifyApiKey,
+          processMessageTemplates,
+          clientRes
+        });
+
+        if (prep.error) {
+          const errMsg = await getLocalizedError(prep.error, {}, clientLanguage);
+          sendSSE(clientRes, 'error', { message: errMsg });
+          return res.json({ status: 'error', message: errMsg });
         }
-        
-        // Load models
-        const models = await loadJson('config/models.json');
-        if (!models) {
-          const errorMessage = await getLocalizedError('internalError', {}, clientLanguage);
-          sendSSE(clientRes, 'error', { message: errorMessage });
-          return res.json({ status: 'error', message: errorMessage });
-        }
-        
-        console.log(`Using modelId: ${modelId} || ${app.preferredModel}`);
-        // Determine which model to use
-        model = models.find(m => m.id === (modelId || app.preferredModel));
-        if (!model) {
-          const errorMessage = await getLocalizedError('modelNotFound', {}, clientLanguage);
-          sendSSE(clientRes, 'error', { message: errorMessage });
-          return res.json({ status: 'error', message: errorMessage });
-        }
-        
-        // Prepare messages with proper formatting
-        llmMessages = await processMessageTemplates(messages, app, style, outputFormat, clientLanguage);
-        
-        // Log the interaction before sending to LLM
-        await logInteraction(
-          "chat_request",
-        {
-          messageId, // Use client-provided ID
+
+        model = prep.model;
+        llmMessages = prep.llmMessages;
+
+        await logInteraction('chat_request', {
+          messageId,
           appId,
           modelId: model.id,
           sessionId: chatId,
           userSessionId,
           messages: llmMessages,
-          options: {
-            temperature,
-            style,
-            outputFormat,
-            language: clientLanguage,
-            streaming: true
-          }
+          options: { temperature, style, outputFormat, language: clientLanguage, streaming: true }
         });
-        
-        // Get and verify API key with proper error handling for SSE
-        const apiKey = await verifyApiKey(model, null, clientRes, clientLanguage);
-        if (!apiKey) {
-          // Log the API key error
-          await logInteraction('chat_error', buildLogData(true, {
-            responseType: 'error',
-            error: {
-              message: `API key not found for model: ${model.id}`,
-              code: 'API_KEY_NOT_FOUND'
-            }
-          }));
-          
-          // Already sent error via SSE, just return response to the HTTP request
-          return res.json({ status: 'error', message: `API key not found for model: ${model.id}` });
-        }
-        
-        // Create request using appropriate adapter
-        // Ensure maxTokens doesn't exceed model's token limit
-        const requestedTokens = parseInt(maxTokens) || app.tokenLimit || 1024;
-        const modelTokenLimit = model.tokenLimit || requestedTokens;
-        const finalTokens = Math.min(requestedTokens, modelTokenLimit);
-        
-        const tools = await getToolsForApp(app);
-        const request = createCompletionRequest(model, llmMessages, apiKey, {
-          temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
-          maxTokens: finalTokens,
-          stream: true,
-          tools
+
+        await executeStreamingResponse({
+          request: prep.request,
+          chatId,
+          clientRes,
+          buildLogData,
+          model: prep.model,
+          llmMessages: prep.llmMessages,
+          DEFAULT_TIMEOUT,
+          getLocalizedError,
+          clientLanguage
         });
-        
-        // Send processing event
-        sendSSE(clientRes, 'processing', { message: 'Processing your request...' });
-        
-        // Set up abort controller for this request
-        const controller = new AbortController();
-        activeRequests.set(chatId, controller);
-        
-        // Set up timeout for the request
-        const timeoutId = setTimeout(async () => {
-          console.log(`Request timeout for chat ${chatId}`);
-          controller.abort();
-          const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT/1000 }, clientLanguage);
-          sendSSE(clientRes, 'error', { 
-            message: errorMessage 
-          });
-          activeRequests.delete(chatId);
-        }, DEFAULT_TIMEOUT);
-        
-        // Execute request to LLM API in the background
-        fetch(request.url, {
-          method: 'POST',
-          headers: request.headers,
-          body: JSON.stringify(request.body),
-          signal: controller.signal
-        }).then(async (llmResponse) => {
-          // Clear timeout as we got a response
-          clearTimeout(timeoutId);
-          
-          if (!llmResponse.ok) {
-            // Handle error case
-            const errorBody = await llmResponse.text();
-            console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
-            let errorMessage = await getLocalizedError('llmApiError', { status: llmResponse.status }, clientLanguage);
-            
-            // Provide more helpful error messages for common errors
-            if (llmResponse.status === 401) {
-              errorMessage = await getLocalizedError('authenticationFailed', { provider: model.provider }, clientLanguage);
-            } else if (llmResponse.status === 429) {
-              errorMessage = await getLocalizedError('rateLimitExceeded', { provider: model.provider }, clientLanguage);
-            } else if (llmResponse.status >= 500) {
-              errorMessage = await getLocalizedError('serviceError', { provider: model.provider }, clientLanguage);
-            }
-            
-            // Log the LLM error
-            await logInteraction(
-              "chat_error",
-            {
-              messageId, // Use the same ID to link these logs
-              appId,
-              modelId: model.id,
-              sessionId: chatId,
-              userSessionId,
-              messages: llmMessages,
-              options: {
-                temperature,
-                style,
-                outputFormat,
-                language: clientLanguage,
-                streaming: true
-              },
-              responseType: 'error',
-              error: {
-                message: errorMessage,
-                code: llmResponse.status.toString(),
-                details: errorBody
-              }
-            });
-            
-            sendSSE(clientRes, 'error', { message: errorMessage, details: errorBody });
-            activeRequests.delete(chatId);
-            return;
-          }
-          
-          // Stream the response back to the client
-          const reader = llmResponse.body.getReader();
-          const decoder = new TextDecoder();
-          
-          // Collect the entire response for logging
-          let fullResponse = '';
-          
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              
-              // Check if client is still connected
-              if (!clients.has(chatId)) {
-                reader.cancel();
-                break;
-              }
-              
-              if (done) break;
-              
-              // Decode the chunk and add to buffer
-              const chunk = decoder.decode(value, { stream: true });
-              
-              // Process the chunk with the appropriate adapter
-              const result = processResponseBuffer(model.provider, chunk);
-              
-              // Send any extracted content to the client
-              if (result && result.content && result.content.length > 0) {
-                for (const textContent of result.content) {
-                  sendSSE(clientRes, 'chunk', { content: textContent });
-                  // Accumulate the full response for logging
-                  fullResponse += textContent;
-                }
-              }
-              
-              // Handle errors if any occurred during processing
-              if (result && result.error) {
-                const errorLog = buildLogData(true, {
-                  responseType: 'error',
-                  error: {
-                    message: result.errorMessage || 'Error processing response',
-                    code: 'PROCESSING_ERROR'
-                  },
-                  response: fullResponse
-                });
-                await logInteraction('chat_error', errorLog);
-                
-                sendSSE(clientRes, 'error', { message: result.errorMessage || 'Error processing response' });
-                break;
-              }
-              
-              // Check for completion
-              if (result && result.complete) {
-                sendSSE(clientRes, 'done', {});
-                
-                // Log the completed interaction with the full response
-                const doneLog = buildLogData(true, {
-                  responseType: 'success',
-                  response: fullResponse
-                });
-                await logInteraction('chat_response', doneLog);
-                
-                break; // Stop processing more chunks
-              }
-            }
-          } catch (error) {
-            if (error.name === 'AbortError') {
-              console.log(`Request aborted for chat ${chatId}`);
-              // Don't send an error event if timeout already sent one
-            } else {
-              console.error('Error processing response stream:', error);
-              const errorMessage = await getLocalizedError('responseStreamError', { error: error.message }, clientLanguage);
-              sendSSE(clientRes, 'error', { message: errorMessage });
-            }
-          } finally {
-            activeRequests.delete(chatId);
-          }
-        }).catch(async (error) => {
-          clearTimeout(timeoutId);
-          
-          if (error.name === 'AbortError') {
-            console.log(`Request aborted for chat ${chatId}`);
-            // Don't log or send event if it was an intentional abort
-          } else {
-            console.error('Error executing LLM request:', error);
-            
-            // Get enhanced error details
-            const errorDetails = getErrorDetails(error, model);
-            
-            // Check for connection refused errors
-            if (errorDetails.code === 'ECONNREFUSED') {
-              const errorMessage = await getLocalizedError('connectionRefused', 
-                { provider: model.provider, model: model.id }, 
-                clientLanguage);
-              
-              // Log the connection error
-              logInteraction('chat_error', buildLogData(true, {
-                responseType: 'error',
-                error: {
-                  message: errorMessage,
-                  code: errorDetails.code
-                }
-              })).catch(logError => {
-                console.error('Error logging interaction error:', logError);
-              });
-              
-              // Send localized error message to the client
-              sendSSE(clientRes, 'error', { 
-                message: errorMessage,
-                modelId: model.id,
-                provider: model.provider,
-                recommendation: errorDetails.recommendation
-              });
-            } else {
-              // Handle other types of errors with existing code
-              logInteraction('chat_error', buildLogData(true, {
-                responseType: 'error',
-                error: {
-                  message: errorDetails.message,
-                  code: errorDetails.code
-                }
-              })).catch(logError => {
-                console.error('Error logging interaction error:', logError);
-              });
-              
-              // Send a more helpful error message to the client
-              const errorMessage = {
-                message: errorDetails.message,
-                modelId: model.id,
-                provider: model.provider,
-                recommendation: errorDetails.recommendation,
-                details: error.message
-              };
-              
-              sendSSE(clientRes, 'error', errorMessage);
-            }
-          }
-          
-          activeRequests.delete(chatId);
-        });
-        
-        // Return immediate response to the POST request
+
         return res.json({ status: 'streaming', chatId });
       }
       
