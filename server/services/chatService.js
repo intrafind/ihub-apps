@@ -293,10 +293,24 @@ export async function processChatWithTools({
   getLocalizedError,
   clientLanguage
 }) {
+  console.log('Preparing to process chat with tools:', prep);
   const { request, model, llmMessages, tools, apiKey, temperature, maxTokens } = prep;
 
   try {
+    console.log('Processing chat with tools:', {
+      modelId: model.id,
+      provider: model.provider,
+      messages: llmMessages,
+      tools: tools.map(t => t.id),
+      temperature,
+      maxTokens
+    });
     const firstResponse = await fetchJsonWithTimeout(request, DEFAULT_TIMEOUT);
+    console.log('Received first response:', {
+      modelId: model.id,
+      provider: model.provider,
+      response: firstResponse
+    });
     // Normalize the response structure across providers
     let choice;
     if (model.provider === 'google' && firstResponse.candidates) {
@@ -327,6 +341,7 @@ export async function processChatWithTools({
       choice = firstResponse.choices[0];
     }
 
+    console.log('Choice after normalization:', choice);
     if (choice && choice.finish_reason === 'tool_calls' && choice.message?.tool_calls?.length > 0) {
       const toolCalls = choice.message.tool_calls;
 

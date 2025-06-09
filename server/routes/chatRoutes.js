@@ -435,6 +435,7 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
         });
 
         if (prep.tools && prep.tools.length > 0) {
+          console.log(`Processing chat with tools for chat ID: ${chatId}`);
           await processChatWithTools({
             prep,
             clientRes,
