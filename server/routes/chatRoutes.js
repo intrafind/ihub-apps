@@ -5,7 +5,8 @@ import { sendSSE, clients, activeRequests } from '../sse.js';
 import {
   prepareChatRequest,
   executeStreamingResponse,
-  executeNonStreamingResponse
+  executeNonStreamingResponse,
+  processChatWithTools
 } from '../services/chatService.js';
 
 export default function registerChatRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }) {
@@ -375,6 +376,18 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
         requestLog.options.maxTokens = parseInt(maxTokens) || prep.app.tokenLimit || 1024;
         await logInteraction('chat_request', requestLog);
 
+        if (prep.tools && prep.tools.length > 0) {
+          return processChatWithTools({
+            prep,
+            res,
+            buildLogData,
+            messageId,
+            DEFAULT_TIMEOUT,
+            getLocalizedError,
+            clientLanguage
+          });
+        }
+
         return executeNonStreamingResponse({
           request: prep.request,
           res,
@@ -421,17 +434,30 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
           options: { temperature, style, outputFormat, language: clientLanguage, streaming: true }
         });
 
-        await executeStreamingResponse({
-          request: prep.request,
-          chatId,
-          clientRes,
-          buildLogData,
-          model: prep.model,
-          llmMessages: prep.llmMessages,
-          DEFAULT_TIMEOUT,
-          getLocalizedError,
-          clientLanguage
-        });
+        if (prep.tools && prep.tools.length > 0) {
+          await processChatWithTools({
+            prep,
+            clientRes,
+            chatId,
+            buildLogData,
+            messageId,
+            DEFAULT_TIMEOUT,
+            getLocalizedError,
+            clientLanguage
+          });
+        } else {
+          await executeStreamingResponse({
+            request: prep.request,
+            chatId,
+            clientRes,
+            buildLogData,
+            model: prep.model,
+            llmMessages: prep.llmMessages,
+            DEFAULT_TIMEOUT,
+            getLocalizedError,
+            clientLanguage
+          });
+        }
 
         return res.json({ status: 'streaming', chatId });
       }

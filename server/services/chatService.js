@@ -2,7 +2,8 @@
 import { loadJson } from '../configLoader.js';
 import { createCompletionRequest, processResponseBuffer } from '../adapters/index.js';
 import { getErrorDetails, logInteraction } from '../utils.js';
-import { getToolsForApp } from '../toolLoader.js';
+import { getToolsForApp, runTool } from '../toolLoader.js';
+import { normalizeName } from '../adapters/toolFormatter.js';
 import { sendSSE, activeRequests } from '../sse.js';
 
 // Prepare the LLM request (load app and model, process messages, verify API key)
@@ -58,11 +59,11 @@ export async function prepareChatRequest({
   const request = createCompletionRequest(model, llmMessages, apiKey, {
     temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
     maxTokens: finalTokens,
-    stream: !!clientRes,
+    stream: tools.length === 0 && !!clientRes,
     tools
   });
 
-  return { app, model, llmMessages, request };
+  return { app, model, llmMessages, request, tools, apiKey, temperature: parseFloat(temperature) || app.preferredTemperature || 0.7, maxTokens: finalTokens };
 }
 
 // Execute a non-streaming request and send JSON response
@@ -249,4 +250,130 @@ export async function executeStreamingResponse({
     }
     activeRequests.delete(chatId);
   });
+}
+
+// Internal helper to perform a single non-streaming request and return JSON
+async function fetchJsonWithTimeout(request, DEFAULT_TIMEOUT) {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT/1000} seconds`));
+    }, DEFAULT_TIMEOUT);
+  });
+
+  const responsePromise = fetch(request.url, {
+    method: 'POST',
+    headers: request.headers,
+    body: JSON.stringify(request.body)
+  });
+
+  const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
+  clearTimeout(timeoutId);
+
+  if (!llmResponse.ok) {
+    const errorBody = await llmResponse.text();
+    const err = new Error(`LLM API request failed with status ${llmResponse.status}`);
+    err.code = llmResponse.status.toString();
+    err.details = errorBody;
+    throw err;
+  }
+
+  return llmResponse.json();
+}
+
+// Execute a request with potential tool calls
+export async function processChatWithTools({
+  prep,
+  res,
+  clientRes = null,
+  chatId = null,
+  buildLogData,
+  messageId,
+  DEFAULT_TIMEOUT,
+  getLocalizedError,
+  clientLanguage
+}) {
+  const { request, model, llmMessages, tools, apiKey, temperature, maxTokens } = prep;
+
+  try {
+    const firstResponse = await fetchJsonWithTimeout(request, DEFAULT_TIMEOUT);
+    const choice = firstResponse.choices && firstResponse.choices[0];
+
+    if (choice && choice.finish_reason === 'tool_calls' && choice.message?.tool_calls?.length > 0) {
+      const toolCalls = choice.message.tool_calls;
+
+      llmMessages.push({ role: 'assistant', content: choice.message.content, tool_calls: toolCalls });
+
+      for (const call of toolCalls) {
+        const toolId = tools.find(t => normalizeName(t.id) === call.function.name)?.id || call.function.name;
+        let args = {};
+        try {
+          args = JSON.parse(call.function.arguments || '{}');
+        } catch (e) {
+          console.error('Failed to parse tool arguments', e);
+        }
+        const result = await runTool(toolId, args);
+        llmMessages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+      }
+
+      const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
+        temperature,
+        maxTokens,
+        stream: !!clientRes,
+        tools
+      });
+
+      if (clientRes) {
+        return executeStreamingResponse({
+          request: followRequest,
+          chatId,
+          clientRes,
+          buildLogData,
+          model,
+          llmMessages,
+          DEFAULT_TIMEOUT,
+          getLocalizedError,
+          clientLanguage
+        });
+      }
+
+      return executeNonStreamingResponse({
+        request: followRequest,
+        res,
+        buildLogData,
+        messageId,
+        model,
+        llmMessages,
+        DEFAULT_TIMEOUT
+      });
+    }
+
+    // No tool calls - return or stream the first response
+    if (clientRes) {
+      const content = choice?.message?.content || '';
+      sendSSE(clientRes, 'chunk', { content });
+      sendSSE(clientRes, 'done', {});
+      await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: content.substring(0, 1000) }));
+      return;
+    }
+
+    firstResponse.messageId = messageId;
+    await logInteraction('chat_response', buildLogData(false, { responseType: 'success', response: choice?.message?.content?.substring(0, 1000) || '' }));
+    return res.json(firstResponse);
+  } catch (error) {
+    const errorDetails = getErrorDetails(error, model);
+    if (clientRes) {
+      const errMsg = { message: errorDetails.message, modelId: model.id, provider: model.provider, recommendation: errorDetails.recommendation, details: error.details || error.message };
+      sendSSE(clientRes, 'error', errMsg);
+    } else {
+      return res.status(500).json({
+        error: errorDetails.message,
+        code: errorDetails.code,
+        modelId: model.id,
+        provider: model.provider,
+        recommendation: errorDetails.recommendation,
+        details: error.details || error.message
+      });
+    }
+  }
 }
