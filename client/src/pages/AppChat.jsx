@@ -848,6 +848,10 @@ const AppChat = () => {
         variable.defaultValue,
         currentLanguage
       ),
+      localizedPlaceholder: getLocalizedContent(
+        variable.placeholder,
+        currentLanguage
+      ),
       predefinedValues: variable.predefinedValues
         ? variable.predefinedValues.map((option) => ({
             ...option,

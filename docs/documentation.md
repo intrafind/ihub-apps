@@ -118,6 +118,22 @@ The `variables` property defines customizable inputs for the app:
 ]
 ```
 
+### Variable Placeholders
+
+Administrators can override the automatically generated placeholder for each variable:
+
+```json
+"variables": [
+  {
+    "name": "language",
+    "placeholder": {
+      "en": "Choose a language",
+      "de": "Sprache wählen"
+    }
+  }
+]
+```
+
 #### Variable Types
 
 | Type | Description |

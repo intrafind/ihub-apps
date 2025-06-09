@@ -158,6 +158,10 @@
           "en": "Select the target language for translation.",
           "de": "Wähle die Zielsprache für die Übersetzung."
         },
+        "placeholder": {
+          "en": "Choose a language",
+          "de": "Sprache wählen"
+        },
         "defaultValue": {
           "en": "English",
           "de": "Englisch"

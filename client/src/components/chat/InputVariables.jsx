@@ -10,7 +10,7 @@ const InputVariables = ({
   localizedVariables,
   className = "" 
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   
   if (!localizedVariables || localizedVariables.length === 0) {
     return null;
@@ -56,7 +56,10 @@ const InputVariables = ({
               }
               rows={4}
               className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder={t('variables.enterLabel', { label: variable.localizedLabel.toLowerCase() })}
+              placeholder={
+                variable.localizedPlaceholder ||
+                t('variables.enterLabel', { label: variable.localizedLabel.toLowerCase() })
+              }
               required={variable.required}
             />
           ) : (
@@ -70,7 +73,10 @@ const InputVariables = ({
                 })
               }
               className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder={t('variables.enterLabel', { label: variable.localizedLabel.toLowerCase() })}
+              placeholder={
+                variable.localizedPlaceholder ||
+                t('variables.enterLabel', { label: variable.localizedLabel.toLowerCase() })
+              }
               required={variable.required}
             />
           )}
