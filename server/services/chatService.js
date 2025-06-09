@@ -297,7 +297,35 @@ export async function processChatWithTools({
 
   try {
     const firstResponse = await fetchJsonWithTimeout(request, DEFAULT_TIMEOUT);
-    const choice = firstResponse.choices && firstResponse.choices[0];
+    // Normalize the response structure across providers
+    let choice;
+    if (model.provider === 'google' && firstResponse.candidates) {
+      const candidate = firstResponse.candidates[0];
+      choice = {
+        message: {
+          content: candidate.content?.parts
+            ?.map(p => p.text || '')
+            .join('') || ''
+        },
+        finish_reason: candidate.finishReason
+      };
+      // Map Gemini functionCall to OpenAI-style tool_calls array
+      const fnCall = candidate.content?.parts?.find(p => p.functionCall);
+      if (fnCall) {
+        choice.message.tool_calls = [
+          {
+            id: 'tool_call_1',
+            function: {
+              name: fnCall.functionCall.name,
+              arguments: JSON.stringify(fnCall.functionCall.args || {})
+            }
+          }
+        ];
+        choice.finish_reason = 'tool_calls';
+      }
+    } else if (firstResponse.choices) {
+      choice = firstResponse.choices[0];
+    }
 
     if (choice && choice.finish_reason === 'tool_calls' && choice.message?.tool_calls?.length > 0) {
       const toolCalls = choice.message.tool_calls;
