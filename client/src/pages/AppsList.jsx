@@ -417,7 +417,7 @@ const AppsList = () => {
                   >
                     <div className="flex flex-row sm:flex-col h-full">
                       <div
-                        className="flex items-center justify-center w-20 h-20 flex-shrink-0 rounded-l-lg sm:rounded-t-lg sm:rounded-l-none sm:w-full sm:h-24"
+                        className="flex items-center justify-center w-20 h-full flex-shrink-0 rounded-l-lg sm:rounded-t-lg sm:rounded-l-none sm:w-full sm:h-24"
                         style={{ backgroundColor: app.color || '#4f46e5' }}
                       >
                         <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
