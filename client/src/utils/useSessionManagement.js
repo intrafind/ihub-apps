@@ -1,4 +1,3 @@
-// filepath: /Users/danielmanzke/Workspaces/github.ai/ai-hub-apps/client/src/utils/useSessionManagement.js
 import { useEffect } from 'react';
 import { getSessionId, renewSession, getSessionInfo } from './sessionManager';
 import apiService from '../api/api';
