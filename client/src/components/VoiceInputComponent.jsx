@@ -15,6 +15,7 @@ const VoiceInputComponent = ({
   const { t, i18n } = useTranslation();
   const [isListening, setIsListening] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [transcript, setTranscript] = useState("");
   const feedbackRef = useRef(null);
   const recognitionRef = useRef(null);
   const originalInputValue = useRef("");
@@ -180,7 +181,8 @@ const VoiceInputComponent = ({
       }
 
       // Configure recognition
-      recognition.continuous = false;
+      const mode = app?.microphone?.mode || "automatic";
+      recognition.continuous = mode === "manual";
       recognition.interimResults = true;
 
       // Set language
@@ -214,6 +216,7 @@ const VoiceInputComponent = ({
       // Set event handlers
       recognition.onstart = () => {
         setIsListening(true);
+        setTranscript("");
         if (inputRef?.current) {
           inputRef.current.placeholder = t(
             "voiceInput.listening",
@@ -253,6 +256,7 @@ const VoiceInputComponent = ({
 
         console.log("Final transcript:", finalTranscript);
         console.log("Interim transcript:", interimTranscript);
+        setTranscript(interimTranscript || finalTranscript);
 
         // Process transcript for commands
         if (finalTranscript) {
@@ -370,6 +374,7 @@ const VoiceInputComponent = ({
       recognition.onend = () => {
         // Complete the recognition and update UI
         setIsListening(false);
+        setTranscript("");
 
         if (inputRef?.current) {
           // Restore the original placeholder
@@ -409,6 +414,7 @@ const VoiceInputComponent = ({
 
     // Update UI
     setIsListening(false);
+    setTranscript("");
 
     if (inputRef?.current) {
       // Restore the original placeholder
@@ -456,6 +462,7 @@ const VoiceInputComponent = ({
       <VoiceFeedback
         isActive={isListening}
         setIsActive={handleOnFeedbackOverlayClose}
+        transcript={app?.microphone?.showTranscript ? transcript : ""}
       />
       <button
         className={`voice-input-button ${isListening ? "active" : ""} h-fit`}

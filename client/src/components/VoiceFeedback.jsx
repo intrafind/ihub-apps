@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 const wavesCount = 3;
 
 const VoiceFeedback = (props) => {
-  const { isActive, setIsActive } = props;
+  const { isActive, setIsActive, transcript = "" } = props;
   const { t } = useTranslation();
 
   const onClose = () => {
@@ -28,6 +28,9 @@ const VoiceFeedback = (props) => {
         <span className="voice-instructions">
           {t("voiceInput.instructions", "Speak clearly and naturally")}
         </span>
+        {transcript && (
+          <div className="voice-transcript">{transcript}</div>
+        )}
         <button className="voice-close" onClick={onClose}>
           &times;
         </button>

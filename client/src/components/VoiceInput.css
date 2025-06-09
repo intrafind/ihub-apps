@@ -142,3 +142,16 @@
 [data-theme="dark"] .wave {
   background-color: #0d6efd;
 }
+
+.voice-transcript {
+  margin-top: 8px;
+  font-size: 1em;
+  max-height: 8rem;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  color: var(--color-text, #333);
+}
+
+[data-theme="dark"] .voice-transcript {
+  color: #fff;
+}
