@@ -23,7 +23,7 @@ export function formatToolsForAnthropic(tools = []) {
 
 export function formatToolsForGoogle(tools = []) {
   return tools.map(t => ({
-    function_declarations: [{
+    functionDeclarations: [{
       name: normalizeName(t.id || t.name),
       description: t.description || '',
       parameters: t.parameters || { type: 'object', properties: {} }
