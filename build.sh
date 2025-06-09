@@ -10,14 +10,12 @@ VERSION=$(node -p "require('./package.json').version")
 echo "Building AI Hub Apps v$VERSION for production..."
 
 # Check Node.js version - SEA requires Node.js 20+
-NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-if [ "$NODE_VERSION" -lt 20 ]; then
+if scripts/check-node-version.sh; then
+  SEA_BUILD=true
+else
   echo "⚠️ Warning: Node.js version 20 or later is required for SEA builds."
-  echo "Current version: $(node -v)"
   echo "Proceeding with standard build only (no binary will be created)."
   SEA_BUILD=false
-else
-  SEA_BUILD=true
 fi
 
 # Standard build process for development/production
