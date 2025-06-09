@@ -742,6 +742,7 @@ const AppChat = () => {
 
       // Create the user message
       addUserMessage(messageContent, {
+        rawContent: originalUserInput,
         variables:
           app?.variables && app.variables.length > 0
             ? { ...variables }
