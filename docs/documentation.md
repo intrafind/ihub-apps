@@ -573,6 +573,16 @@ Each model is defined with the following properties:
 | `provider` | String | Provider identifier (openai, anthropic, google, etc.) |
 | `tokenLimit` | Number | Maximum token capacity of the model's context window |
 
+### Tools
+
+Models can optionally specify a list of tool identifiers that the server will
+include when calling the provider's API. Tools are defined in `config/tools.json`
+or can be discovered from a Model Context Protocol (MCP) server via the
+`MCP_SERVER_URL` environment variable. Each tool includes a JSON schema for its
+parameters. Tools are executed by calling `/api/tools/{id}` with the required
+parameters. A common example is the built‑in `web-search` tool which performs a
+web search using DuckDuckGo.
+
 ### Providers
 
 The system currently supports the following providers:
@@ -1055,6 +1065,9 @@ The server provides several key functions:
 4. **Response Processing**: Handles streaming responses and formats them for the client
 5. **Error Handling**: Provides consistent error responses across different providers
 6. **Logging**: Records interactions for monitoring and debugging
+7. **Tool Execution**: Provides the `/api/tools/{id}` endpoint for executing
+   server-side tools and merges tool definitions from `config/tools.json` or an
+   MCP server.
 
 ### API Adapters
 

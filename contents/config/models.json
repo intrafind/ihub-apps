@@ -6,7 +6,8 @@
     "description": "Fast and efficient model for most everyday tasks and conversations",
     "url": "https://api.openai.com/v1/chat/completions",
     "provider": "openai",
-    "tokenLimit": 4096
+    "tokenLimit": 4096,
+    "tools": ["web-search"]
   },
   {
     "id": "gpt-4",
@@ -15,7 +16,8 @@
     "description": "Advanced model with strong reasoning and knowledge capabilities",
     "url": "https://api.openai.com/v1/chat/completions",
     "provider": "openai",
-    "tokenLimit": 8192
+    "tokenLimit": 8192,
+    "tools": ["web-search"]
   },
   {
     "id": "claude-3-opus",
