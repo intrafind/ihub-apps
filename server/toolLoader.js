@@ -43,27 +43,30 @@ export async function loadTools() {
   return all;
 }
 
+
 /**
- * Get tools applicable to a specific model
- * @param {Object} model - model configuration object
+ * Get tools applicable to a specific app
+ * @param {Object} app - app configuration object
  */
-export async function getToolsForModel(model) {
+export async function getToolsForApp(app) {
   const allTools = await loadTools();
-  if (Array.isArray(model.tools) && model.tools.length > 0) {
-    return allTools.filter(t => model.tools.includes(t.id));
+  if (Array.isArray(app.tools) && app.tools.length > 0) {
+    return allTools.filter(t => app.tools.includes(t.id));
   }
-  return allTools;
+  return [];
 }
 
 /**
- * Dynamically import and run a tool implementation.
- * Tool implementations are expected to live in the `server/tools` directory
- * and export a default async function.
+ * Dynamically import and run a tool implementation securely.
+ * Tool implementations live in `server/tools` and export a default async function.
  *
  * @param {string} toolId - Tool identifier
  * @param {object} params - Parameters passed to the tool
  */
 export async function runTool(toolId, params = {}) {
+  if (!/^[A-Za-z0-9_-]+$/.test(toolId)) {
+    throw new Error('Invalid tool id');
+  }
   try {
     const mod = await import(`./tools/${toolId}.js`);
     if (typeof mod.default !== 'function') {
