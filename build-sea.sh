@@ -6,11 +6,7 @@
 set -e  # Exit on errors
 
 # Check Node.js version
-NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-if [ "$NODE_VERSION" -lt 20 ]; then
-  echo "Error: Node.js version 20 or later is required for SEA. Current version: $(node -v)"
-  exit 1
-fi
+scripts/check-node-version.sh
 
 # Check if platform argument was provided
 if [ -n "$1" ]; then
