@@ -915,7 +915,7 @@ const AppChat = () => {
         showClearButton={messages.length > 0}
         showConfigButton={true}
         showParametersButton={
-          app?.variables && app.variables.length > 0 && !showParameters
+          app?.variables && app.variables.length > 0
         }
         onClearChat={clearChat}
         onToggleConfig={toggleConfig}
