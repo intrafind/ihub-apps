@@ -10,7 +10,6 @@ import { loadJson, loadText } from './configLoader.js';
 import { getRootDir } from './pathUtils.js';
 
 // Import adapters and utilities
-import { createCompletionRequest, processResponseBuffer, formatMessages } from './adapters/index.js';
 import { getApiKeyForModel, getErrorDetails, logInteraction, trackSession, logNewSession } from "./utils.js";
 import { sendSSE, clients, activeRequests } from "./sse.js";
 import registerChatRoutes from "./routes/chatRoutes.js";
