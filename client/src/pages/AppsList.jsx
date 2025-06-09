@@ -415,29 +415,31 @@ const AppsList = () => {
                     className="block h-full"
                     aria-label={`Open ${getLocalizedContent(app.name, currentLanguage) || app.id} app`}
                   >
-                    <div 
-                      className="h-24 rounded-t-lg flex items-center justify-center"
-                      style={{ backgroundColor: app.color || '#4f46e5' }}
-                    >
-                      <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
-                        <Icon name={app.icon || 'lightning-bolt'} size="xl" className="text-white" />
+                    <div className="flex flex-row sm:flex-col h-full">
+                      <div
+                        className="flex items-center justify-center w-20 h-20 flex-shrink-0 rounded-l-lg sm:rounded-t-lg sm:rounded-l-none sm:w-full sm:h-24"
+                        style={{ backgroundColor: app.color || '#4f46e5' }}
+                      >
+                        <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
+                          <Icon name={app.icon || 'lightning-bolt'} size="xl" className="text-white" />
+                        </div>
                       </div>
-                    </div>
-                    <div className="px-4 p-2 h-[calc(100%-6rem)] flex flex-col">
-                      <h3 className="font-bold text-lg mb-1 break-words">
-                        {getLocalizedContent(app.name, currentLanguage) || app.id}
-                        {favoriteApps.includes(app.id) && (
-                          <span className="ml-2 inline-block" aria-label="Favorite">
-                            <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
-                          </span>
-                        )}
-                        {recentAppIds.includes(app.id) && (
-                          <span className="ml-1 inline-block" aria-label={t('pages.appsList.recent')} title={t('pages.appsList.recent')}>
-                            <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
-                          </span>
-                        )}
-                      </h3>
-                      <p className="text-gray-600 text-sm flex-grow">{getLocalizedContent(app.description, currentLanguage) || ''}</p>
+                      <div className="px-4 py-2 flex flex-col flex-1">
+                        <h3 className="font-bold text-lg mb-1 break-words">
+                          {getLocalizedContent(app.name, currentLanguage) || app.id}
+                          {favoriteApps.includes(app.id) && (
+                            <span className="ml-2 inline-block" aria-label="Favorite">
+                              <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
+                            </span>
+                          )}
+                          {recentAppIds.includes(app.id) && (
+                            <span className="ml-1 inline-block" aria-label={t('pages.appsList.recent')} title={t('pages.appsList.recent')}>
+                              <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
+                            </span>
+                          )}
+                        </h3>
+                        <p className="text-gray-600 text-sm flex-grow">{getLocalizedContent(app.description, currentLanguage) || ''}</p>
+                      </div>
                     </div>
                   </Link>
                 </div>
