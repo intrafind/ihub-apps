@@ -321,6 +321,16 @@ app.all('/api/tools/:toolId', async (req, res) => {
   const params = req.method === 'GET' ? req.query : req.body;
   try {
     const result = await runTool(toolId, params);
+
+    // Log the tool invocation with input and output
+    await logInteraction('tool_usage', {
+      toolId,
+      toolInput: params,
+      toolOutput: result,
+      sessionId: req.headers['x-chat-id'] || 'direct',
+      userSessionId: req.headers['x-session-id'] || 'unknown'
+    });
+
     res.json(result);
   } catch (error) {
     console.error(`Tool ${toolId} error:`, error);

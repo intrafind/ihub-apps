@@ -341,6 +341,14 @@ export async function processChatWithTools({
           console.error('Failed to parse tool arguments', e);
         }
         const result = await runTool(toolId, args);
+
+        // Log tool usage including input and output for tracking
+        await logInteraction('tool_usage', buildLogData(!!clientRes, {
+          toolId,
+          toolInput: args,
+          toolOutput: result
+        }));
+
         llmMessages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
       }
 
