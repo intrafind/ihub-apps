@@ -1,5 +1,5 @@
 import { loadJson, loadText } from '../configLoader.js';
-import { createCompletionRequest, processResponseBuffer } from '../adapters/index.js';
+import { createCompletionRequest } from '../adapters/index.js';
 import { getErrorDetails, logInteraction, trackSession } from '../utils.js';
 import { sendSSE, clients, activeRequests } from '../sse.js';
 import {
