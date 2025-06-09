@@ -28,6 +28,7 @@ import ChatMessageList from "../components/chat/ChatMessageList";
 import InputVariables from "../components/chat/InputVariables";
 import { useUIConfig } from "../components/UIConfigContext";
 import cache, { CACHE_KEYS } from "../utils/cache"; // Import cache for manual clearing
+import { recordAppUsage } from "../utils/recentApps";
 
 /**
  * Save app settings and variables to sessionStorage
@@ -148,6 +149,11 @@ const AppChat = () => {
   const [showParameters, setShowParameters] = useState(true);
   const { setHeaderColor } = useUIConfig();
   const [translationsLoaded, setTranslationsLoaded] = useState(false);
+
+  // Record recent usage of this app
+  useEffect(() => {
+    recordAppUsage(appId);
+  }, [appId]);
   
   // State for image upload and input configuration
   const [selectedImage, setSelectedImage] = useState(null);

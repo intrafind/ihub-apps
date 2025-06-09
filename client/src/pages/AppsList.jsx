@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { useLocalizedTranslation } from '../utils/useLocalizedTranslation';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { getFavoriteApps, isAppFavorite, toggleFavoriteApp } from '../utils/favoriteApps';
+import { getRecentAppIds } from '../utils/recentApps';
 import { useUIConfig } from '../components/UIConfigContext';
 import Icon from '../components/Icon';
 
@@ -35,6 +36,7 @@ const AppsList = () => {
   const [favoriteApps, setFavoriteApps] = useState([]);
   const [displayCount, setDisplayCount] = useState(0);
   const [translationsLoaded, setTranslationsLoaded] = useState(false);
+  const recentAppIds = useMemo(() => getRecentAppIds(), [apps]);
   
   const gridRef = useRef(null);
   const containerRef = useRef(null);
@@ -242,33 +244,38 @@ const AppsList = () => {
   
   // Memoized sorted apps to avoid recomputing on every render
   const sortedApps = useMemo(() => {
+    const recentSet = new Set(recentAppIds);
     return [...filteredApps].sort((a, b) => {
-      // First sort by favorite status
-      const aIsFavorite = favoriteApps.includes(a.id);
-      const bIsFavorite = favoriteApps.includes(b.id);
-      
-      if (aIsFavorite && !bIsFavorite) return -1;
-      if (!aIsFavorite && bIsFavorite) return 1;
-      
-      // Then sort by order if available
+      // Favorites first
+      const aFav = favoriteApps.includes(a.id);
+      const bFav = favoriteApps.includes(b.id);
+      if (aFav && !bFav) return -1;
+      if (!aFav && bFav) return 1;
+
+      // Recently used next
+      const aRecent = recentSet.has(a.id);
+      const bRecent = recentSet.has(b.id);
+      if (aRecent && !bRecent) return -1;
+      if (!aRecent && bRecent) return 1;
+      if (aRecent && bRecent) {
+        return recentAppIds.indexOf(a.id) - recentAppIds.indexOf(b.id);
+      }
+
+      // Then sort by configured order
       const aHasOrder = a.order !== undefined && a.order !== null;
       const bHasOrder = b.order !== undefined && b.order !== null;
-      
-      // If both have order, compare by order
       if (aHasOrder && bHasOrder) {
         return a.order - b.order;
       }
-      
-      // If only one has order, prioritize the one with order
       if (aHasOrder && !bHasOrder) return -1;
       if (!aHasOrder && bHasOrder) return 1;
-      
-      // Finally, sort by name if same favorite status and neither has order or both have same order
+
+      // Fallback alphabetical
       const aName = getLocalizedContent(a.name, currentLanguage) || '';
       const bName = getLocalizedContent(b.name, currentLanguage) || '';
       return aName.localeCompare(bName);
     });
-  }, [filteredApps, favoriteApps, currentLanguage]);
+  }, [filteredApps, favoriteApps, recentAppIds, currentLanguage]);
   
   // Memoized displayed apps for progressive loading
   const displayedApps = useMemo(() => {
