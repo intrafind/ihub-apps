@@ -39,6 +39,31 @@ const GoogleAdapter = {
           ]
         });
       } else {
+        // Handle assistant messages with tool calls
+        if (message.role === 'assistant' && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+          const parts = [];
+          if (message.content) {
+            parts.push({ text: message.content });
+          }
+          for (const call of message.tool_calls) {
+            let argsObj;
+            try {
+              argsObj = JSON.parse(call.function.arguments || '{}');
+            } catch {
+              argsObj = {};
+            }
+            parts.push({
+              functionCall: {
+                name: normalizeName(call.function.name),
+                args: argsObj
+              }
+            });
+          }
+
+          geminiContents.push({ role: 'model', parts });
+          continue;
+        }
+
         // Convert OpenAI roles to Gemini roles
         const geminiRole = message.role === 'assistant' ? 'model' : 'user';
         
