@@ -3,11 +3,11 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import http from 'http';
 import https from 'https';
 import { loadJson, loadText } from './configLoader.js';
+import { getRootDir } from './pathUtils.js';
 
 // Import adapters and utilities
 import { createCompletionRequest, processResponseBuffer, formatMessages } from './adapters/index.js';
@@ -24,19 +24,11 @@ dotenv.config();
 // Either via process.pkg (when using pkg directly) or APP_ROOT_DIR env var (our shell script approach)
 const isPackaged = process.pkg !== undefined || process.env.APP_ROOT_DIR !== undefined;
 
-// Set up directory paths
-const __filename = fileURLToPath(import.meta.url);
-const { dirname } = path;
-const __dirname = dirname(__filename);
-
-// Handle paths differently when running from a packaged binary vs normal execution
-// In packaged mode, use APP_ROOT_DIR environment variable if available
-let rootDir;
+// Resolve the application root directory
+const rootDir = getRootDir();
 if (isPackaged) {
-  rootDir = process.env.APP_ROOT_DIR || path.dirname(process.execPath);
   console.log(`Running in packaged binary mode with APP_ROOT_DIR: ${rootDir}`);
 } else {
-  rootDir = path.join(__dirname, '..');
   console.log(`Running in normal mode`);
 }
 console.log(`Root directory: ${rootDir}`);
