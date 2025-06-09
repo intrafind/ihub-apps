@@ -12,6 +12,74 @@
           "description": "Search query"
         }
       },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "id": "multi-search",
+    "name": "Multi Search",
+    "description": "Search the web using multiple engines",
+    "script": "multiSearch.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "id": "bing-search",
+    "name": "Bing Search",
+    "description": "Search the web using Bing",
+    "script": "bingSearch.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query"
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "id": "google-search",
+    "name": "Google Search",
+    "description": "Search the web using Google",
+    "script": "googleSearch.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query"
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "id": "duck-search",
+    "name": "DuckDuckGo Search",
+    "description": "Search the web using DuckDuckGo",
+    "script": "duckSearch.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query"
+        }
+      },
       "required": ["query"]
     }
   }

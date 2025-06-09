@@ -592,8 +592,8 @@ Each model is defined with the following properties:
 ### Tools
 
 Apps can optionally specify a list of tool identifiers via the `tools` property.
-Tool definitions are loaded from `config/tools.json` or discovered from a Model Context Protocol (MCP) server via the `MCP_SERVER_URL` environment variable. Each tool includes a JSON schema for its parameters and the name of the implementation script in `server/tools`. Tools are executed by calling `/api/tools/{id}` with the required parameters. A common example is the built-in `web-search` tool which performs a web search using DuckDuckGo. The tool queries DuckDuckGo's results feed (`links.duckduckgo.com/d.js`) and returns up to five links.
-For example, the `Chat with DuckDuckGo` app in `config/apps.json` enables this tool for its prompts.
+Tool definitions are loaded from `config/tools.json` or discovered from a Model Context Protocol (MCP) server via the `MCP_SERVER_URL` environment variable. Each tool includes a JSON schema for its parameters and the name of the implementation script in `server/tools`. Tools are executed by calling `/api/tools/{id}` with the required parameters. A common example is the built-in `web-search` tool which performs a web search using DuckDuckGo. Additional tools provide direct access to Bing (`bing-search`) and Google (`google-search`) when the corresponding API keys are configured.
+For example, the `Chat with DuckDuckGo` app in `config/apps.json` enables the `web-search` tool for its prompts.
 
 Each entry in `config/tools.json` uses the following fields:
 
@@ -1140,6 +1140,10 @@ The server uses environment variables for configuration, which can be set in the
 OPENAI_API_KEY=your_openai_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
 GOOGLE_API_KEY=your_google_api_key
+BING_SEARCH_API_KEY=your_bing_api_key
+#BING_SEARCH_ENDPOINT=https://api.bing.microsoft.com/v7.0/search
+GOOGLE_SEARCH_API_KEY=your_google_search_api_key
+GOOGLE_SEARCH_CX=your_custom_search_cx
 PORT=3000
 LOG_LEVEL=info
 ```
