@@ -631,6 +631,3 @@ server.listen(PORT, HOST, () => {
   console.log(`Open ${protocol}://${HOST}:${PORT} in your browser to use AI Hub Apps`);
 });
 
-// Import necessary modules
-const fsSync = await import('fs');
-const pathSync = await import('path');
