@@ -25,6 +25,10 @@ const AppConfigForm = ({
     ? models.filter(model => app.allowedModels.includes(model.id))
     : models;
 
+  const filteredModels = app?.tools && app.tools.length > 0
+    ? availableModels.filter(model => model.supportsTools)
+    : availableModels;
+
   // Available output formats
   const outputFormats = [
     { id: 'markdown', name: t('appConfig.markdown', 'Markdown') },
@@ -54,7 +58,7 @@ const AppConfigForm = ({
             onChange={(e) => onModelChange(e.target.value)}
             className="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
           >
-            {availableModels.map((model) => (
+            {filteredModels.map((model) => (
               <option key={model.id} value={model.id}>
                 {model.name}
                 {t(`models.descriptions.${model.id}`) !== `models.descriptions.${model.id}` ? 

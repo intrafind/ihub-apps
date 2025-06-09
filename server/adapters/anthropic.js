@@ -2,6 +2,7 @@
  * Anthropic API adapter
  */
 import { parseSSEBuffer } from './streamUtils.js';
+import { formatToolsForAnthropic } from './toolFormatter.js';
 
 const AnthropicAdapter = {
   /**
@@ -95,7 +96,7 @@ const AnthropicAdapter = {
     };
 
     if (tools && tools.length > 0) {
-      requestBody.tools = tools;
+      requestBody.tools = formatToolsForAnthropic(tools);
     }
     
     // Only add system parameter if we have a system message
