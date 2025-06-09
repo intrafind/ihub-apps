@@ -30,23 +30,6 @@
     "prompt": {
       "en": "{{content}}",
       "de": "{{content}}"
-    },
-    "settings": {
-      "enabled": true,
-      "model": {
-        "enabled": false
-      },
-      "temperature": {
-        "enabled": false
-      },
-      "outputFormat": {
-        "enabled": true
-      }
-    },
-    "microphone": {
-      "enabled": true,
-      "mode": "automatic",
-      "showTranscript": false
     }
   },
   {
@@ -71,30 +54,7 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.7,
-    "sendChatHistory": true,
-    "settings": {
-      "enabled": true,
-      "model": {
-        "enabled": true
-      },
-      "style": {
-        "enabled": true
-      },
-      "temperature": {
-        "enabled": true
-      },
-      "outputFormat": {
-        "enabled": true
-      },
-      "chatHistory": {
-        "enabled": true
-      },
-      "microphone": {
-        "enabled": true,
-        "mode": "automatic",
-        "showTranscript": false
-      }
-    }
+    "sendChatHistory": true
   },
   {
     "id": "chat-with-duckduckgo",
@@ -173,11 +133,6 @@
       },
       "chatHistory": {
         "enabled": false
-      },
-      "microphone": {
-        "enabled": true,
-        "mode": "automatic",
-        "showTranscript": false
       }
     },
     "variables": [
@@ -234,33 +189,14 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.5,
-    "sendChatHistory": false,
     "prompt": {
       "en": "Please {{action}} the following content: \"{{content}}\"",
       "de": "Bitte {{action}} den folgenden Inhalt: \"{{content}}\""
     },
     "settings": {
-      "enabled": true,
-      "model": {
-        "enabled": true
-      },
-      "style": {
-        "enabled": true
-      },
-      "temperature": {
-        "enabled": true
-      },
-      "outputFormat": {
-        "enabled": true
-      },
       "chatHistory": {
         "enabled": false
       }
-    },
-    "microphone": {
-      "enabled": true,
-      "mode": "automatic",
-      "showTranscript": false
     },
     "variables": [
       {
@@ -306,29 +242,6 @@
       "en": "{{content}}",
       "de": "{{content}}"
     },
-    "settings": {
-      "enabled": true,
-      "model": {
-        "enabled": true
-      },
-      "style": {
-        "enabled": true
-      },
-      "temperature": {
-        "enabled": true
-      },
-      "outputFormat": {
-        "enabled": true
-      },
-      "chatHistory": {
-        "enabled": true
-      }
-    },
-    "microphone": {
-      "enabled": true,
-      "mode": "automatic",
-      "showTranscript": false
-    },
     "variables": [
       {
         "name": "system",
@@ -362,7 +275,6 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "professional",
     "preferredTemperature": 0.6,
-    "sendChatHistory": false,
     "allowEmptyContent": true,
     "messagePlaceholder": {
       "en": "Here you can provide additional information for composing the email...",
@@ -463,7 +375,6 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.4,
-    "sendChatHistory": false,
     "prompt": {
       "en": "{{action}} for a {{meeting_type}} meeting with the following details:\n\nMeeting Title: {{meeting_title}}\nParticipants: {{participants}}\nDuration: {{duration}}\n\n{{content}}",
       "de": "{{action}} für eine {{meeting_type}} Besprechung mit den folgenden Details:\n\nBesprechungstitel: {{meeting_title}}\nTeilnehmer: {{participants}}\nDauer: {{duration}}\n\n{{content}}"
@@ -555,7 +466,6 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "creative",
     "preferredTemperature": 0.8,
-    "sendChatHistory": false,
     "prompt": {
       "en": "Create {{count}} {{post_type}} for {{platform}} about {{topic}}. {{tone}} {{additional_instructions}}",
       "de": "Erstelle {{count}} {{post_type}} für {{platform}} über {{topic}}. {{tone}} {{additional_instructions}}"
@@ -671,7 +581,6 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "academic",
     "preferredTemperature": 0.2,
-    "sendChatHistory": false,
     "prompt": {
       "en": "{{action}} on the topic of {{topic}}. {{format}}\n\n{{content}}",
       "de": "{{action}} zum Thema {{topic}}. {{format}}\n\n{{content}}"
@@ -745,7 +654,6 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "professional",
     "preferredTemperature": 0.4,
-    "sendChatHistory": false,
     "prompt": {
       "en": "Create a {{document_type}} for {{role}} {{additional_context}}.\n\n{{content}}",
       "de": "Erstelle ein {{document_type}} für {{role}} {{additional_context}}.\n\n{{content}}"
@@ -857,7 +765,6 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "creative",
     "preferredTemperature": 1.0,
-    "sendChatHistory": false,
     "allowedModels": ["local-vllm", "gemini-1.5-flash"]
   },
   {
@@ -1109,7 +1016,6 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.3,
-    "sendChatHistory": false,
     "inputMode": "multiline",
     "prompt": {
       "en": "{{content}}",
@@ -1155,14 +1061,8 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "detailed",
     "preferredTemperature": 0.7,
-    "sendChatHistory": false,
     "features": {
       "imageUpload": true
-    },
-    "microphone": {
-      "enabled": false,
-      "mode": "automatic",
-      "showTranscript": false
     }
   },
   {
@@ -1187,14 +1087,8 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "detailed",
     "preferredTemperature": 0.7,
-    "sendChatHistory": false,
     "features": {
       "fileUpload": true
-    },
-    "microphone": {
-      "enabled": false,
-      "mode": "automatic",
-      "showTranscript": false
     },
     "fileUpload": {
       "maxFileSizeMB": 5,
@@ -1242,9 +1136,7 @@
       "de": "Welches Thema soll der Vermerk behandeln und auf welche zentralen Aspekte soll ich im Sachverhalt oder der Bewertung eingehen?"
     },
     "microphone": {
-      "enabled": false,
-      "mode": "automatic",
-      "showTranscript": false
+      "enabled": false
     }
   }
 ]

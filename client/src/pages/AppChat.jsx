@@ -143,12 +143,11 @@ const AppChat = () => {
   const [selectedModel, setSelectedModel] = useState(null);
   const [selectedStyle, setSelectedStyle] = useState("normal");
   const [selectedOutputFormat, setSelectedOutputFormat] = useState("markdown");
-  const [sendChatHistory, setSendChatHistory] = useState(true);
+  const [sendChatHistory, setSendChatHistory] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(true);
   const { setHeaderColor } = useUIConfig();
-  const [translationsLoaded, setTranslationsLoaded] = useState(false);
 
   // Record recent usage of this app
   useEffect(() => {
@@ -165,10 +164,6 @@ const AppChat = () => {
 
   const inputRef = useRef(null);
   const chatId = useRef(`chat-${Date.now()}`);
-  const currentVoiceTextRef = useRef("");
-
-  // State for language tracking
-  const prevLanguageRef = useRef(currentLanguage);
 
   // Create a stable chat ID that persists across refreshes
   const [stableChatId] = useState(() => {
@@ -361,7 +356,7 @@ const AppChat = () => {
           sendChatHistory:
             appData.sendChatHistory !== undefined
               ? appData.sendChatHistory
-              : true,
+              : false,
         };
 
         if (isMounted) {
