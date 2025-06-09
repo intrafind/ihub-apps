@@ -81,9 +81,14 @@ const GoogleAdapter = {
     const { contents, systemInstruction } = this.formatMessages(messages);
     
     // Build Gemini API URL with API key
-    const url = stream 
-      ? `${model.url}?alt=sse&key=${apiKey}`
-      : `https://generativelanguage.googleapis.com/v1beta/models/${model.modelId}:streamGenerateContent?alt=sse&key=${apiKey}`;
+    let url;
+    if (stream) {
+      url = `${model.url}?alt=sse&key=${apiKey}`;
+    } else {
+      // Convert the configured streaming URL to the non-streaming endpoint
+      const nonStreamingUrl = model.url.replace(':streamGenerateContent', ':generateContent');
+      url = `${nonStreamingUrl}?key=${apiKey}`;
+    }
     
     // Build request body
     const requestBody = {
