@@ -2,6 +2,7 @@
  * Google Gemini API adapter
  */
 import { parseSSEBuffer } from './streamUtils.js';
+import { formatToolsForGoogle } from './toolFormatter.js';
 
 const GoogleAdapter = {
   /**
@@ -94,7 +95,7 @@ const GoogleAdapter = {
     };
 
     if (tools && tools.length > 0) {
-      requestBody.tools = tools;
+      requestBody.tools = formatToolsForGoogle(tools);
     }
     
     // Add system instruction if present

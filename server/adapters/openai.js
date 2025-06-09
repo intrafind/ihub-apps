@@ -2,6 +2,7 @@
  * OpenAI API adapter
  */
 import { parseSSEBuffer } from './streamUtils.js';
+import { formatToolsForOpenAI } from './toolFormatter.js';
 
 const OpenAIAdapter = {
   /**
@@ -66,7 +67,7 @@ const OpenAIAdapter = {
       max_tokens: options.maxTokens || 1024
     };
 
-    if (tools && tools.length > 0) body.tools = tools;
+    if (tools && tools.length > 0) body.tools = formatToolsForOpenAI(tools);
     if (toolChoice) body.tool_choice = toolChoice;
 
     return {

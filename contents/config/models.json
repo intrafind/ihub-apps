@@ -6,7 +6,8 @@
     "description": "Fast and efficient model for most everyday tasks and conversations",
     "url": "https://api.openai.com/v1/chat/completions",
     "provider": "openai",
-    "tokenLimit": 4096
+    "tokenLimit": 4096,
+    "supportsTools": true
   },
   {
     "id": "gpt-4",
@@ -15,7 +16,8 @@
     "description": "Advanced model with strong reasoning and knowledge capabilities",
     "url": "https://api.openai.com/v1/chat/completions",
     "provider": "openai",
-    "tokenLimit": 8192
+    "tokenLimit": 8192,
+    "supportsTools": true
   },
   {
     "id": "claude-3-opus",
@@ -24,7 +26,8 @@
     "description": "Anthropic's most capable model with exceptional reasoning abilities",
     "url": "https://api.anthropic.com/v1/messages",
     "provider": "anthropic",
-    "tokenLimit": 200000
+    "tokenLimit": 200000,
+    "supportsTools": true
   },
   {
     "id": "claude-3-sonnet",
@@ -33,7 +36,8 @@
     "description": "Balanced performance and value for enterprise and everyday tasks",
     "url": "https://api.anthropic.com/v1/messages",
     "provider": "anthropic",
-    "tokenLimit": 180000
+    "tokenLimit": 180000,
+    "supportsTools": true
   },
   {
     "id": "gemini-1.5-flash",
@@ -41,8 +45,9 @@
     "name": "Gemini",
     "description": "Google's versatile model optimized for text and code tasks",
     "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent",
-    "provider": "google", 
-    "tokenLimit": 32768
+    "provider": "google",
+    "tokenLimit": 32768,
+    "supportsTools": true
   },
   {
     "id": "gemini-2.5-flash-preview-05-20",
@@ -50,8 +55,9 @@
     "name": "Gemini 2.5",
     "description": "Google's versatile model optimized for text and code tasks",
     "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:streamGenerateContent",
-    "provider": "google", 
-    "tokenLimit": 32768
+    "provider": "google",
+    "tokenLimit": 32768,
+    "supportsTools": true
   },{
     "id": "local-vllm",
     "modelId": "stelterlab_Mistral-Small-24B-Instruct-2501-AWQ",
@@ -59,6 +65,7 @@
     "description": "Advanced model with strong reasoning and knowledge capabilities",
     "url": "http://localhost:8080/v1/chat/completions",
     "provider": "openai",
-    "tokenLimit": 8192
+    "tokenLimit": 8192,
+    "supportsTools": false
   }
-] 
+]
