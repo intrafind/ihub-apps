@@ -97,6 +97,40 @@
     }
   },
   {
+    "id": "chat-with-duckduckgo",
+    "order": 1,
+    "name": {
+      "en": "Chat with DuckDuckGo",
+      "de": "Chat mit DuckDuckGo"
+    },
+    "description": {
+      "en": "General chat assistant with web search via DuckDuckGo",
+      "de": "Allgemeiner Chat-Assistent mit DuckDuckGo-Websuche"
+    },
+    "color": "#4F46E5",
+    "icon": "chat-bubbles",
+    "system": {
+      "en": "You are a helpful AI assistant with access to a web search tool.",
+      "de": "Du bist ein hilfreicher KI-Assistent mit Zugriff auf eine Websuche."
+    },
+    "tokenLimit": 4096,
+    "preferredModel": "gpt-3.5-turbo",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.7,
+    "sendChatHistory": true,
+    "tools": ["web-search"],
+    "settings": {
+      "enabled": true,
+      "model": { "enabled": true },
+      "style": { "enabled": true },
+      "temperature": { "enabled": true },
+      "outputFormat": { "enabled": true },
+      "chatHistory": { "enabled": true },
+      "microphone": { "enabled": true }
+    }
+  },
+  {
     "id": "translator",
     "order": 3,
     "name": {

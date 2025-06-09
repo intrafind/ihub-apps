@@ -1,0 +1,18 @@
+[
+  {
+    "id": "web-search",
+    "name": "Web Search",
+    "description": "Search the web for recent information",
+    "script": "webSearch.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query"
+        }
+      },
+      "required": ["query"]
+    }
+  }
+]

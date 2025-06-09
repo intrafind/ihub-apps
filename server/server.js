@@ -15,6 +15,7 @@ import { getApiKeyForModel, getErrorDetails, logInteraction, trackSession, logNe
 import { sendSSE, clients, activeRequests } from "./sse.js";
 import registerChatRoutes from "./routes/chatRoutes.js";
 import registerStaticRoutes from "./routes/staticRoutes.js";
+import { loadTools, runTool } from './toolLoader.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -310,6 +311,29 @@ app.get('/api/models/:modelId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching model details:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/tools - Retrieve all available tools
+app.get('/api/tools', async (req, res) => {
+  try {
+    const tools = await loadTools();
+    res.json(tools);
+  } catch (error) {
+    console.error('Error fetching tools:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+// Dynamic tool execution endpoint
+app.all('/api/tools/:toolId', async (req, res) => {
+  const { toolId } = req.params;
+  const params = req.method === 'GET' ? req.query : req.body;
+  try {
+    const result = await runTool(toolId, params);
+    res.json(result);
+  } catch (error) {
+    console.error(`Tool ${toolId} error:`, error);
+    res.status(500).json({ error: 'Tool execution failed' });
   }
 });
 

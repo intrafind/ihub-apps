@@ -2,6 +2,7 @@ import { loadJson, loadText } from '../configLoader.js';
 import { createCompletionRequest, processResponseBuffer } from '../adapters/index.js';
 import { getErrorDetails, logInteraction, trackSession } from '../utils.js';
 import { sendSSE, clients, activeRequests } from '../sse.js';
+import { getToolsForApp } from '../toolLoader.js';
 
 export default function registerChatRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }) {
   // GET /api/models/{modelId}/chat/test - Test model chat completion without streaming
@@ -34,10 +35,11 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
           provider: model.provider
         });
       }
-  
+      // No tools for this test endpoint
+      const tools = [];
+
       // Create request using appropriate adapter
-      const request = createCompletionRequest(model, messages, apiKey, { stream: false });
-      
+      const request = createCompletionRequest(model, messages, apiKey, { stream: false, tools });
       // Set up timeout for the request
       let timeoutId;
       const timeoutPromise = new Promise((_, reject) => {
@@ -390,10 +392,12 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
         const finalTokens = Math.min(requestedTokens, modelTokenLimit);
         
         // Create request without streaming
-        const request = createCompletionRequest(model, llmMessages, apiKey, { 
+        const tools = await getToolsForApp(app);
+        const request = createCompletionRequest(model, llmMessages, apiKey, {
           temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
           maxTokens: finalTokens,
-          stream: false
+          stream: false,
+          tools
         });
         
         // Set up timeout for the request
@@ -581,10 +585,12 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
         const modelTokenLimit = model.tokenLimit || requestedTokens;
         const finalTokens = Math.min(requestedTokens, modelTokenLimit);
         
-        const request = createCompletionRequest(model, llmMessages, apiKey, { 
+        const tools = await getToolsForApp(app);
+        const request = createCompletionRequest(model, llmMessages, apiKey, {
           temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
           maxTokens: finalTokens,
-          stream: true
+          stream: true,
+          tools
         });
         
         // Send processing event

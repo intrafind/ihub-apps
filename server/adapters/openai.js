@@ -56,21 +56,26 @@ const OpenAIAdapter = {
    * Create a completion request for OpenAI
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true } = options;
-    
+    const { temperature = 0.7, stream = true, tools = null, toolChoice = undefined } = options;
+
+    const body = {
+      model: model.modelId,
+      messages: this.formatMessages(messages),
+      stream,
+      temperature: parseFloat(temperature),
+      max_tokens: options.maxTokens || 1024
+    };
+
+    if (tools && tools.length > 0) body.tools = tools;
+    if (toolChoice) body.tool_choice = toolChoice;
+
     return {
       url: model.url,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
-      body: {
-        model: model.modelId,
-        messages: this.formatMessages(messages),
-        stream,
-        temperature: parseFloat(temperature),
-        max_tokens: options.maxTokens || 1024
-      }
+      body
     };
   },
 

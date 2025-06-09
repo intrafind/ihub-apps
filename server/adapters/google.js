@@ -74,7 +74,7 @@ const GoogleAdapter = {
    * Create a completion request for Gemini
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true } = options;
+    const { temperature = 0.7, stream = true, tools = null } = options;
     
     // Format messages and extract system instruction
     const { contents, systemInstruction } = this.formatMessages(messages);
@@ -92,6 +92,10 @@ const GoogleAdapter = {
         maxOutputTokens: options.maxTokens || 2048
       }
     };
+
+    if (tools && tools.length > 0) {
+      requestBody.tools = tools;
+    }
     
     // Add system instruction if present
     if (systemInstruction) {
