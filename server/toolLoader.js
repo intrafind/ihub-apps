@@ -67,8 +67,21 @@ export async function runTool(toolId, params = {}) {
   if (!/^[A-Za-z0-9_-]+$/.test(toolId)) {
     throw new Error('Invalid tool id');
   }
+
+  // Find tool definition to determine the script file
+  const allTools = await loadTools();
+  const tool = allTools.find(t => t.id === toolId);
+  if (!tool) {
+    throw new Error(`Tool ${toolId} not found`);
+  }
+
+  const scriptName = tool.script || `${toolId}.js`;
+  if (!/^[A-Za-z0-9_-]+\.js$/.test(scriptName)) {
+    throw new Error('Invalid script name');
+  }
+
   try {
-    const mod = await import(`./tools/${toolId}.js`);
+    const mod = await import(`./tools/${scriptName}`);
     if (typeof mod.default !== 'function') {
       throw new Error(`Tool ${toolId} does not export a default function`);
     }

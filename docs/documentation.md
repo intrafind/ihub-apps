@@ -576,7 +576,17 @@ Each model is defined with the following properties:
 ### Tools
 
 Apps can optionally specify a list of tool identifiers via the `tools` property.
-Tool definitions are loaded from `config/tools.json` or discovered from a Model Context Protocol (MCP) server via the `MCP_SERVER_URL` environment variable. Each tool includes a JSON schema for its parameters. Tools are executed by calling `/api/tools/{id}` with the required parameters. A common example is the built-in `web-search` tool which performs a web search using DuckDuckGo.
+Tool definitions are loaded from `config/tools.json` or discovered from a Model Context Protocol (MCP) server via the `MCP_SERVER_URL` environment variable. Each tool includes a JSON schema for its parameters and the name of the implementation script in `server/tools`. Tools are executed by calling `/api/tools/{id}` with the required parameters. A common example is the built-in `web-search` tool which performs a web search using DuckDuckGo.
+
+Each entry in `config/tools.json` uses the following fields:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Unique identifier referenced by apps |
+| `name` | Display name |
+| `description` | Short description of the tool |
+| `script` | The script file in `server/tools` implementing the tool |
+| `parameters` | JSON schema describing the tool input |
 
 ### Providers
 
