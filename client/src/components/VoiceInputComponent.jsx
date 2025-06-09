@@ -313,6 +313,9 @@ const VoiceInputComponent = ({
               console.log("Calling onSpeechResult with:", newValue);
               onSpeechResult(newValue);
             }
+
+            // Update the original input value so future results append correctly
+            originalInputValue.current = newValue;
           }
 
           return;

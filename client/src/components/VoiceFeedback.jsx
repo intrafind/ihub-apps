@@ -31,7 +31,7 @@ const VoiceFeedback = (props) => {
         {transcript && (
           <div className="voice-transcript">{transcript}</div>
         )}
-        <button className="voice-close" onClick={onClose}>
+        <button className="voice-close" onClick={onClose} type="button">
           &times;
         </button>
       </div>
