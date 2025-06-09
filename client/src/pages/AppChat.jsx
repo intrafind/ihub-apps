@@ -915,7 +915,7 @@ const AppChat = () => {
         showClearButton={messages.length > 0}
         showConfigButton={true}
         showParametersButton={
-          app?.variables && app.variables.length > 0 && !showParameters
+          app?.variables && app.variables.length > 0
         }
         onClearChat={clearChat}
         onToggleConfig={toggleConfig}
@@ -946,7 +946,7 @@ const AppChat = () => {
       )}
 
       {app?.variables && app.variables.length > 0 && showParameters && (
-        <div className="md:hidden mb-4 p-4 bg-gray-50 rounded-lg">
+        <div className="md:hidden mb-4 p-4 bg-gray-50 rounded-lg overflow-y-auto max-h-[60vh]">
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-medium">
               {t("pages.appChat.inputParameters")}

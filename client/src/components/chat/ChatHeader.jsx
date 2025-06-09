@@ -64,7 +64,7 @@ const ChatHeader = ({
         </div>
 
         {/* Action buttons on the right */}
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-col items-start space-y-2 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-2">
           {showClearButton && (
             <button
               onClick={onClearChat}
