@@ -364,7 +364,12 @@ export async function processChatWithTools({
           toolOutput: result
         }));
 
-        llmMessages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+        llmMessages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          name: call.function.name,
+          content: JSON.stringify(result)
+        });
       }
 
       const followRequest = createCompletionRequest(model, llmMessages, apiKey, {

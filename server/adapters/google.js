@@ -2,7 +2,7 @@
  * Google Gemini API adapter
  */
 import { parseSSEBuffer } from './streamUtils.js';
-import { formatToolsForGoogle } from './toolFormatter.js';
+import { formatToolsForGoogle, normalizeName } from './toolFormatter.js';
 
 const GoogleAdapter = {
   /**
@@ -18,6 +18,26 @@ const GoogleAdapter = {
       if (message.role === 'system') {
         // Collect system messages - ideally there should be only one
         systemInstruction += (systemInstruction ? '\n\n' : '') + message.content;
+      } else if (message.role === 'tool') {
+        // Convert tool outputs to Gemini functionResponse format
+        let responseObj;
+        try {
+          responseObj = JSON.parse(message.content);
+        } catch {
+          responseObj = message.content;
+        }
+
+        geminiContents.push({
+          role: 'user',
+          parts: [
+            {
+              functionResponse: {
+                name: normalizeName(message.name || message.tool_call_id || 'tool'),
+                response: responseObj
+              }
+            }
+          ]
+        });
       } else {
         // Convert OpenAI roles to Gemini roles
         const geminiRole = message.role === 'assistant' ? 'model' : 'user';
