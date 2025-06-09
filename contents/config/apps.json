@@ -26,7 +26,6 @@
     "preferredStyle": "normal",
     "preferredTemperature": 0.3,
     "sendChatHistory": true,
-    "tools": ["web-search"],
     "sourcePath": "/sources/faq.md",
     "prompt": {
       "en": "{{content}}",
@@ -71,7 +70,6 @@
     "preferredStyle": "normal",
     "preferredTemperature": 0.7,
     "sendChatHistory": true,
-    "tools": ["web-search"],
     "settings": {
       "enabled": true,
       "model": {
@@ -92,6 +90,40 @@
       "microphone": {
         "enabled": true
       }
+    }
+  },
+  {
+    "id": "chat-with-duckduckgo",
+    "order": 1,
+    "name": {
+      "en": "Chat with DuckDuckGo",
+      "de": "Chat mit DuckDuckGo"
+    },
+    "description": {
+      "en": "General chat assistant with web search via DuckDuckGo",
+      "de": "Allgemeiner Chat-Assistent mit DuckDuckGo-Websuche"
+    },
+    "color": "#4F46E5",
+    "icon": "chat-bubbles",
+    "system": {
+      "en": "You are a helpful AI assistant with access to a web search tool.",
+      "de": "Du bist ein hilfreicher KI-Assistent mit Zugriff auf eine Websuche."
+    },
+    "tokenLimit": 4096,
+    "preferredModel": "gpt-3.5-turbo",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.7,
+    "sendChatHistory": true,
+    "tools": ["web-search"],
+    "settings": {
+      "enabled": true,
+      "model": { "enabled": true },
+      "style": { "enabled": true },
+      "temperature": { "enabled": true },
+      "outputFormat": { "enabled": true },
+      "chatHistory": { "enabled": true },
+      "microphone": { "enabled": true }
     }
   },
   {
@@ -117,7 +149,6 @@
     "preferredStyle": "keep",
     "preferredTemperature": 0.3,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "prompt": {
       "en": "Selected Language: \"{{language}}\" - Text to translate: \"{{content}}\"",
       "de": "Ausgewählte Sprache in die Übersetzt werden soll: \"{{language}}\" - Text der übersetzt werden soll: \"{{content}}\""
@@ -194,7 +225,6 @@
     "preferredStyle": "normal",
     "preferredTemperature": 0.5,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "prompt": {
       "en": "Please {{action}} the following content: \"{{content}}\"",
       "de": "Bitte {{action}} den folgenden Inhalt: \"{{content}}\""
@@ -260,7 +290,6 @@
     "preferredOutputFormat": "markdown",
     "preferredTemperature": 0.8,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "prompt": {
       "en": "{{content}}",
       "de": "{{content}}"
@@ -320,7 +349,6 @@
     "preferredStyle": "professional",
     "preferredTemperature": 0.6,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "allowEmptyContent": true,
     "messagePlaceholder": {
       "en": "Here you can provide additional information for composing the email...",
@@ -422,7 +450,6 @@
     "preferredStyle": "normal",
     "preferredTemperature": 0.4,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "prompt": {
       "en": "{{action}} for a {{meeting_type}} meeting with the following details:\n\nMeeting Title: {{meeting_title}}\nParticipants: {{participants}}\nDuration: {{duration}}\n\n{{content}}",
       "de": "{{action}} für eine {{meeting_type}} Besprechung mit den folgenden Details:\n\nBesprechungstitel: {{meeting_title}}\nTeilnehmer: {{participants}}\nDauer: {{duration}}\n\n{{content}}"
@@ -515,7 +542,6 @@
     "preferredStyle": "creative",
     "preferredTemperature": 0.8,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "prompt": {
       "en": "Create {{count}} {{post_type}} for {{platform}} about {{topic}}. {{tone}} {{additional_instructions}}",
       "de": "Erstelle {{count}} {{post_type}} für {{platform}} über {{topic}}. {{tone}} {{additional_instructions}}"
@@ -632,7 +658,6 @@
     "preferredStyle": "academic",
     "preferredTemperature": 0.2,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "prompt": {
       "en": "{{action}} on the topic of {{topic}}. {{format}}\n\n{{content}}",
       "de": "{{action}} zum Thema {{topic}}. {{format}}\n\n{{content}}"
@@ -707,7 +732,6 @@
     "preferredStyle": "professional",
     "preferredTemperature": 0.4,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "prompt": {
       "en": "Create a {{document_type}} for {{role}} {{additional_context}}.\n\n{{content}}",
       "de": "Erstelle ein {{document_type}} für {{role}} {{additional_context}}.\n\n{{content}}"
@@ -820,7 +844,6 @@
     "preferredStyle": "creative",
     "preferredTemperature": 1.0,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "allowedModels": ["local-vllm", "gemini-1.5-flash"]
   },
   {
@@ -846,7 +869,6 @@
     "preferredStyle": "normal",
     "preferredTemperature": 0.6,
     "sendChatHistory": true,
-    "tools": ["web-search"],
     "prompt": {
       "en": "Create a {{prompt_type}} prompt for {{task}}. The target AI model is {{model}}. {{additional_requirements}}\n\n{{#if content}}User refinement request: {{content}}{{else}}Please provide a well-structured, effective prompt that follows best practices for this model and use case.{{/if}}",
       "de": "Erstelle einen {{prompt_type}} Prompt für {{task}}. Das Ziel-KI-Modell ist {{model}}. {{additional_requirements}}\n\n{{#if content}}Verfeinerungsanfrage des Benutzers: {{content}}{{else}}Bitte erstelle einen gut strukturierten, effektiven Prompt, der den Best Practices für dieses Modell und diesen Anwendungsfall folgt.{{/if}}"
@@ -942,7 +964,6 @@
     "preferredStyle": "normal",
     "preferredTemperature": 0.4,
     "sendChatHistory": true,
-    "tools": ["web-search"],
     "prompt": {
       "en": "Generate a complete JSON configuration for an AI Hub App with the following details:\n\nApp Name: {{app_name}}\nPurpose: {{app_purpose}}\nPreferred Model: {{preferred_model}}\nPreferred Temperature: {{preferred_temperature}}\n\nFeatures and functionality needed: {{app_features}}\n\nUser input variables required: {{input_variables}}\n\n{{additional_details}}\n\nPLEASE PROVIDE A VALID JSON CONFIGURATION FOLLOWING EXACTLY THE STRUCTURE AND FIELD NAMES AS SHOWN IN THE REFERENCE EXAMPLE.",
       "de": "Generiere eine vollständige JSON-Konfiguration für eine AI Hub App mit den folgenden Details:\n\nApp-Name: {{app_name}}\nZweck: {{app_purpose}}\nBevorzugtes Modell: {{preferred_model}}\nBevorzugte Temperatur: {{preferred_temperature}}\n\nBenötigte Funktionen: {{app_features}}\n\nErforderliche Benutzereingabe-Variablen: {{input_variables}}\n\n{{additional_details}}\n\nBITTE STELLE EINE GÜLTIGE JSON-KONFIGURATION BEREIT, DIE GENAU DER STRUKTUR UND DEN FELDNAMEN AUS DEM REFERENZBEISPIEL FOLGT."
@@ -1075,7 +1096,6 @@
     "preferredStyle": "normal",
     "preferredTemperature": 0.3,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "inputMode": "multiline",
     "prompt": {
       "en": "{{content}}",
@@ -1120,7 +1140,6 @@
     "preferredStyle": "detailed",
     "preferredTemperature": 0.7,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "features": {
       "imageUpload": true
     },
@@ -1151,7 +1170,6 @@
     "preferredStyle": "detailed",
     "preferredTemperature": 0.7,
     "sendChatHistory": false,
-    "tools": ["web-search"],
     "features": {
       "fileUpload": true
     },
@@ -1199,7 +1217,6 @@
     "preferredStyle": "keep",
     "preferredTemperature": 0.7,
     "sendChatHistory": true,
-    "tools": ["web-search"],
     "messagePlaceholder": {
       "en": "Which topic should the note deal with and which key aspects should I address in the facts or the assessment?",
       "de": "Welches Thema soll der Vermerk behandeln und auf welche zentralen Aspekte soll ich im Sachverhalt oder der Bewertung eingehen?"
