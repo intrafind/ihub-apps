@@ -922,6 +922,7 @@ const AppChat = () => {
         onToggleParameters={toggleParameters}
         currentLanguage={currentLanguage}
         isMobile={window.innerWidth < 768}
+        parametersVisible={showParameters}
       />
 
       {showConfig && (
