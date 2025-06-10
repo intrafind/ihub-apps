@@ -82,5 +82,21 @@
       },
       "required": ["query"]
     }
+  },
+  {
+    "id": "brave-search",
+    "name": "Brave Search",
+    "description": "Search the web using Brave",
+    "script": "braveSearch.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query"
+        }
+      },
+      "required": ["query"]
+    }
   }
 ]

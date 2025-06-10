@@ -1,6 +1,7 @@
 import bingSearch from './bingSearch.js';
 import googleSearch from './googleSearch.js';
 import duckSearch from './duckSearch.js';
+import braveSearch from './braveSearch.js';
 
 export default async function multiSearch({ query }) {
   if (!query) {
@@ -31,6 +32,15 @@ export default async function multiSearch({ query }) {
       results.push(...duckResults);
     } catch (err) {
       console.error('DuckDuckGo search error', err);
+    }
+  }
+
+  if (results.length < 5) {
+    try {
+      const { results: braveResults } = await braveSearch({ query });
+      results.push(...braveResults);
+    } catch (err) {
+      console.error('Brave search error', err);
     }
   }
 
