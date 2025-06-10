@@ -7,7 +7,7 @@ export default async function braveSearch({ query }) {
     throw new Error('BRAVE_SEARCH_API_KEY is not set');
   }
   const endpoint = process.env.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
-  const res = await fetch(`${endpoint}?q=${encodeURIComponent(query)}&count=5`, {
+  const res = await fetch(`${endpoint}?q=${encodeURIComponent(query)}`, {
     headers: {
       'X-Subscription-Token': apiKey,
       'Accept': 'application/json'
@@ -20,11 +20,40 @@ export default async function braveSearch({ query }) {
   const results = [];
   if (data.web && Array.isArray(data.web.results)) {
     for (const item of data.web.results) {
-      if (item.title && item.url) {
-        results.push({ title: item.title, url: item.url });
-      }
-      if (results.length >= 5) break;
+      results.push({ title: item.title, url: item.url, description: item.description, language: item.language });
     }
   }
   return { results };
+}
+
+// CLI interface for direct execution
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const query = process.argv.slice(2).join(' ');
+  
+  if (!query) {
+    console.error('Usage: node braveSearch.js <search term>');
+    console.error('Example: node braveSearch.js "JavaScript tutorials"');
+    process.exit(1);
+  }
+  
+  console.log(`Searching for: "${query}"`);
+  
+  try {
+    const result = await braveSearch({ query });
+    console.log('\nSearch Results:');
+    console.log('===============');
+    
+    if (result.results.length === 0) {
+      console.log('No results found.');
+    } else {
+      result.results.forEach((item, index) => {
+        console.log(`${index + 1}. ${item.title}`);
+        console.log(`   URL: ${item.url}\n`);
+        console.log(`   Result: ${JSON.stringify(item, null, 2)}\n`);
+      });
+    }
+  } catch (error) {
+    console.error('Error performing search:', error.message);
+    process.exit(1);
+  }
 }

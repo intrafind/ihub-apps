@@ -57,15 +57,15 @@
     "sendChatHistory": true
   },
   {
-    "id": "chat-with-duckduckgo",
+    "id": "chat-with-web",
     "order": 1,
     "name": {
-      "en": "Chat with DuckDuckGo",
-      "de": "Chat mit DuckDuckGo"
+      "en": "Chat with Web",
+      "de": "Chat mit dem Web"
     },
     "description": {
-      "en": "General chat assistant with web search via DuckDuckGo",
-      "de": "Allgemeiner Chat-Assistent mit DuckDuckGo-Websuche"
+      "en": "General chat assistant with web search",
+      "de": "Allgemeiner Chat-Assistent mit Websuche"
     },
     "color": "#4F46E5",
     "icon": "chat-bubbles",
@@ -79,7 +79,7 @@
     "preferredStyle": "normal",
     "preferredTemperature": 0.7,
     "sendChatHistory": true,
-    "tools": ["web-search"],
+    "tools": ["brave-search"],
     "settings": {
       "enabled": true,
       "model": { "enabled": true },

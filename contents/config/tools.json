@@ -1,23 +1,5 @@
 [
   {
-    "id": "web-search",
-    "name": "Web Search",
-    "description": "Search the web for recent information",
-    "script": "webSearch.js",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "Search query"
-        }
-      },
-      "required": [
-        "query"
-      ]
-    }
-  },
-  {
     "id": "multi-search",
     "name": "Multi Search",
     "description": "Search the web using multiple engines",
@@ -33,6 +15,22 @@
       "required": [
         "query"
       ]
+    }
+  },
+  {
+    "id": "brave-search",
+    "name": "Brave Search",
+    "description": "Search the web using Brave",
+    "script": "braveSearch.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query"
+        }
+      },
+      "required": ["query"]
     }
   },
   {
@@ -72,22 +70,6 @@
     "name": "DuckDuckGo Search",
     "description": "Search the web using DuckDuckGo",
     "script": "duckSearch.js",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "Search query"
-        }
-      },
-      "required": ["query"]
-    }
-  },
-  {
-    "id": "brave-search",
-    "name": "Brave Search",
-    "description": "Search the web using Brave",
-    "script": "braveSearch.js",
     "parameters": {
       "type": "object",
       "properties": {
