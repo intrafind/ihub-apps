@@ -27,6 +27,26 @@ export const configureMarked = () => {
     `;
   };
 
+  // Customize link rendering to open external links in a new tab
+  const currentDomain =
+    typeof window !== 'undefined' ? window.location.hostname : '';
+  renderer.link = function(href, title, text) {
+    let html = `<a href="${href}"`;
+    if (title) {
+      html += ` title="${title}"`;
+    }
+    try {
+      const url = new URL(href, window.location.href);
+      if (url.hostname !== currentDomain) {
+        html += ' target="_blank" rel="noopener noreferrer"';
+      }
+    } catch (e) {
+      // If URL parsing fails, fall back to default behaviour
+    }
+    html += `>${text}</a>`;
+    return html;
+  };
+
   marked.setOptions({
     gfm: true,
     breaks: true,

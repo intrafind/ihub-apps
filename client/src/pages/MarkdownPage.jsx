@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { marked } from 'marked';
 import { fetchPageContent } from '../api/api';
+import { configureMarked } from '../components/MarkdownRenderer';
 
 const MarkdownPage = () => {
   const { t, i18n } = useTranslation();
@@ -17,17 +18,7 @@ const MarkdownPage = () => {
 
   // Configure marked options when component mounts
   useEffect(() => {
-    marked.setOptions({
-      gfm: true,            // Enable GitHub Flavored Markdown
-      breaks: true,         // Add <br> on single line breaks
-      headerIds: true,      // Generate IDs for headings
-      mangle: false,        // Don't escape autolinked email addresses
-      pedantic: false,      // Conform to markdown.pl (compatibility)
-      sanitize: false,      // Don't sanitize HTML
-      smartLists: true,     // Use smart ordered lists
-      smartypants: false,   // Use smart quotes, etc.
-      xhtml: false          // Don't close all tags
-    });
+    configureMarked();
   }, []);
 
   useEffect(() => {
