@@ -340,10 +340,11 @@ export async function processChatWithTools({
     } else if (firstResponse.choices) {
       choice = firstResponse.choices[0];
     }
-
-    console.log('Choice after normalization:', choice);
+    //FIX choice can't be logged, because it contains an object
+    console.log('Choice after normalization:', JSON.stringify(choice));
     if (choice && choice.finish_reason === 'tool_calls' && choice.message?.tool_calls?.length > 0) {
       const toolCalls = choice.message.tool_calls;
+      console.log('Processing tool calls:', toolCalls);
 
       llmMessages.push({ role: 'assistant', content: choice.message.content, tool_calls: toolCalls });
 
@@ -355,6 +356,7 @@ export async function processChatWithTools({
         } catch (e) {
           console.error('Failed to parse tool arguments', e);
         }
+        console.log(`Running tool ${toolId} with args:`, args);
         const result = await runTool(toolId, args);
 
         // Log tool usage including input and output for tracking

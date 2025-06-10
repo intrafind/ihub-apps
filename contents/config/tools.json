@@ -1,81 +1,73 @@
 [
   {
-    "id": "multi-search",
-    "name": "Multi Search",
-    "description": "Search the web using multiple engines",
-    "script": "multiSearch.js",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "Search query"
-        }
-      },
-      "required": [
-        "query"
-      ]
-    }
-  },
-  {
-    "id": "brave-search",
-    "name": "Brave Search",
-    "description": "Search the web using Brave",
+    "id": "braveSearch",
+    "name": "Brave Web / Internet Search",
+    "description": "Search the web / internet using Brave for up-to-date information. Use the 'query' parameter with your search terms.",
     "script": "braveSearch.js",
     "parameters": {
       "type": "object",
       "properties": {
         "query": {
           "type": "string",
-          "description": "Search query"
+          "description": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'"
         }
       },
       "required": ["query"]
     }
   },
   {
-    "id": "bing-search",
-    "name": "Bing Search",
-    "description": "Search the web using Bing",
-    "script": "bingSearch.js",
+    "id": "webContentExtractor",
+    "name": "Web Content Extractor",
+    "description": "Extract clean, readable content from a web page URL, removing ads, headers, footers, and other non-content elements. Use the 'url' parameter with a valid HTTP/HTTPS URL.",
+    "script": "webContentExtractor.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "query": {
+        "url": {
           "type": "string",
-          "description": "Search query"
+          "description": "The full URL of the webpage to extract content from. Must be a valid HTTP or HTTPS URL. Example: 'https://example.com/article'"
+        },
+        "maxLength": {
+          "type": "integer",
+          "description": "Maximum length of extracted content in characters (default: 5000)",
+          "default": 5000,
+          "minimum": 100,
+          "maximum": 50000
         }
       },
-      "required": ["query"]
+      "required": ["url"]
     }
   },
   {
-    "id": "google-search",
-    "name": "Google Search",
-    "description": "Search the web using Google",
-    "script": "googleSearch.js",
+    "id": "enhancedWebSearch",
+    "name": "Enhanced Web Search with Content",
+    "description": "Performs web search and automatically extracts full content from the top results for comprehensive information gathering. Perfect for 'chat with web' functionality. Use the 'query' parameter with your search terms.",
+    "script": "enhancedWebSearch.js",
     "parameters": {
       "type": "object",
       "properties": {
         "query": {
           "type": "string",
-          "description": "Search query"
-        }
-      },
-      "required": ["query"]
-    }
-  },
-  {
-    "id": "duck-search",
-    "name": "DuckDuckGo Search",
-    "description": "Search the web using DuckDuckGo",
-    "script": "duckSearch.js",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "Search query"
+          "description": "The search query or search terms to find on the web. Example: 'artificial intelligence trends 2024' or 'best programming languages'"
+        },
+        "extractContent": {
+          "type": "boolean",
+          "description": "Whether to extract full content from search results (default: true)",
+          "default": true
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": "Maximum number of search results to process and extract content from (default: 3)",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10
+        },
+        "contentMaxLength": {
+          "type": "integer",
+          "description": "Maximum length of extracted content per page in characters (default: 3000)",
+          "default": 3000,
+          "minimum": 500,
+          "maximum": 10000
         }
       },
       "required": ["query"]

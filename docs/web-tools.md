@@ -1,0 +1,203 @@
+# Web Tools Documentation
+
+This document describes the web tools available in the AI Hub Apps platform for extracting and searching web content.
+
+## Overview
+
+The platform now includes three web-related tools:
+
+1. **braveSearch** - Basic web search using Brave Search API
+2. **webContentExtractor** - Extract clean content from web pages
+3. **enhancedWebSearch** - Combined web search with automatic content extraction
+
+## Tools Description
+
+### 1. Brave Search (`braveSearch`)
+
+**Purpose**: Search the web using Brave Search API for up-to-date information.
+
+**Parameters**:
+- `query` (string, required): Search query
+
+**Returns**: List of search results with titles, URLs, descriptions, and language information.
+
+**Example Usage**:
+```javascript
+{
+  "query": "latest AI developments 2024"
+}
+```
+
+### 2. Web Content Extractor (`webContentExtractor`)
+
+**Purpose**: Extract clean, readable content from any webpage URL, automatically removing headers, footers, navigation, ads, and other non-content elements.
+
+**Parameters**:
+- `url` (string, required): The URL of the webpage to extract content from
+- `maxLength` (integer, optional): Maximum length of extracted content in characters (default: 5000)
+
+**Returns**: 
+- Clean text content
+- Page metadata (title, description, author)
+- Word count and extraction timestamp
+
+**Example Usage**:
+```javascript
+{
+  "url": "https://example.com/article",
+  "maxLength": 3000
+}
+```
+
+**Features**:
+- Removes ads, navigation menus, headers, footers
+- Extracts main article content intelligently
+- Handles various webpage structures
+- Provides metadata extraction
+- Error handling for invalid URLs or failed requests
+
+### 3. Enhanced Web Search (`enhancedWebSearch`)
+
+**Purpose**: Performs web search and automatically extracts full content from the top results. Perfect for comprehensive information gathering and "chat with web" functionality.
+
+**Parameters**:
+- `query` (string, required): Search query
+- `extractContent` (boolean, optional): Whether to extract full content from search results (default: true)
+- `maxResults` (integer, optional): Maximum number of search results to process (default: 3)
+- `contentMaxLength` (integer, optional): Maximum length of extracted content per page (default: 3000)
+
+**Returns**:
+- Original search results
+- Extracted content from each result
+- Success/failure statistics
+- Summary of the operation
+
+**Example Usage**:
+```javascript
+{
+  "query": "artificial intelligence news 2024",
+  "extractContent": true,
+  "maxResults": 5,
+  "contentMaxLength": 2000
+}
+```
+
+## Configuration
+
+### Environment Variables
+
+Set the following environment variable in your `config.env` file:
+
+```env
+BRAVE_SEARCH_API_KEY=your_brave_api_key_here
+```
+
+### App Configuration
+
+To enable these tools in an app, add them to the `tools` array in your app configuration:
+
+```json
+{
+  "id": "your-app-id",
+  "tools": ["enhancedWebSearch", "webContentExtractor"],
+  "system": "You are an AI assistant with web search capabilities..."
+}
+```
+
+## Usage Examples
+
+### Chat with Web App
+
+The "Chat with Web" app has been updated to use the enhanced web search functionality:
+
+- **Tool**: `enhancedWebSearch` and `webContentExtractor`
+- **Capability**: Automatically searches the web and extracts full content for comprehensive answers
+- **Use Case**: Ask questions that require current information, and get detailed answers with source citations
+
+### Example Queries for Enhanced Web Search
+
+1. **News and Current Events**:
+   - "What are the latest developments in AI technology?"
+   - "Current stock market trends"
+   - "Recent climate change research findings"
+
+2. **Research and Analysis**:
+   - "Best practices for sustainable energy"
+   - "Comparison of different programming frameworks"
+   - "Latest medical breakthroughs in cancer treatment"
+
+3. **Product Information**:
+   - "Reviews of latest smartphone models"
+   - "Comparison of electric vehicle features"
+   - "Software pricing and features comparison"
+
+## Technical Implementation
+
+### Content Extraction Algorithm
+
+The web content extractor uses the following approach:
+
+1. **Fetch webpage** with appropriate headers and timeout
+2. **Parse HTML** using JSDOM
+3. **Remove unwanted elements** (ads, navigation, etc.)
+4. **Identify main content** using semantic selectors
+5. **Clean and format text** for readability
+6. **Extract metadata** (title, description, author)
+7. **Apply length limits** and return structured result
+
+### Error Handling
+
+- Invalid URLs are caught and reported
+- Network timeouts are handled gracefully
+- Failed content extractions don't break the search flow
+- Detailed error messages help with debugging
+
+### Performance Considerations
+
+- Parallel processing of multiple URLs
+- Configurable timeouts and content limits
+- Efficient DOM parsing and text extraction
+- Graceful degradation when extraction fails
+
+## Testing
+
+Use the test script to verify functionality:
+
+```bash
+cd server/tools
+node test-web-tools.js
+```
+
+This will test:
+- Basic content extraction
+- Error handling
+- Different webpage structures
+
+## Security Considerations
+
+- URL validation prevents malicious requests
+- Only HTTP/HTTPS protocols are supported
+- Request timeouts prevent hanging connections
+- Content length limits prevent memory issues
+- User-Agent headers for responsible web crawling
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"BRAVE_SEARCH_API_KEY is not set"**
+   - Set the API key in your `config.env` file
+   - Restart the server after setting the key
+
+2. **"Failed to extract content"**
+   - Check if the URL is accessible
+   - Some websites may block automated requests
+   - Try with a different URL to test functionality
+
+3. **"Request timeout"**
+   - The webpage is taking too long to load
+   - Consider increasing timeout or trying a different URL
+
+### Debugging
+
+Enable detailed logging by checking the console output when running the tools. The enhanced web search tool provides comprehensive statistics about success/failure rates.

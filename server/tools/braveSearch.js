@@ -1,13 +1,16 @@
-export default async function braveSearch({ query }) {
-  if (!query) {
-    throw new Error('query parameter is required');
+export default async function braveSearch({ query, q }) {
+  // Accept both 'query' and 'q' parameters for flexibility
+  const searchQuery = query || q;
+  
+  if (!searchQuery) {
+    throw new Error('query parameter is required (use "query" or "q")');
   }
   const apiKey = process.env.BRAVE_SEARCH_API_KEY;
   if (!apiKey) {
     throw new Error('BRAVE_SEARCH_API_KEY is not set');
   }
   const endpoint = process.env.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
-  const res = await fetch(`${endpoint}?q=${encodeURIComponent(query)}`, {
+  const res = await fetch(`${endpoint}?q=${encodeURIComponent(searchQuery)}`, {
     headers: {
       'X-Subscription-Token': apiKey,
       'Accept': 'application/json'
@@ -28,18 +31,18 @@ export default async function braveSearch({ query }) {
 
 // CLI interface for direct execution
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const query = process.argv.slice(2).join(' ');
+  const searchQuery = process.argv.slice(2).join(' ');
   
-  if (!query) {
+  if (!searchQuery) {
     console.error('Usage: node braveSearch.js <search term>');
     console.error('Example: node braveSearch.js "JavaScript tutorials"');
     process.exit(1);
   }
   
-  console.log(`Searching for: "${query}"`);
+  console.log(`Searching for: "${searchQuery}"`);
   
   try {
-    const result = await braveSearch({ query });
+    const result = await braveSearch({ query: searchQuery });
     console.log('\nSearch Results:');
     console.log('===============');
     
