@@ -187,6 +187,8 @@ The `settings` property controls which configuration options users can adjust fo
 | `settings.outputFormat.enabled` | Enable/disable output format selection |
 | `settings.chatHistory.enabled` | Enable/disable chat history toggle |
 | `microphone.enabled` | Enable/disable microphone input for voice commands |
+| `microphone.mode` | `automatic` (default) stops after each phrase, `manual` keeps listening |
+| `microphone.showTranscript` | Show the live transcript during recording |
 
 When a setting is disabled (`false`), the corresponding UI element will be hidden, and the app will use the predefined value specified in its configuration.
 
@@ -211,6 +213,21 @@ Apps can specify different input modes to control the user interface:
 Available input modes:
 - `single`: Single input mode (default)
 - `multiple`: Multiple input mode for complex workflows
+
+#### Microphone Modes
+
+Configure how speech recognition behaves:
+
+```json
+"microphone": {
+  "enabled": true,
+  "mode": "automatic",
+  "showTranscript": true
+}
+```
+
+- `automatic` mode stops listening after each phrase
+- `manual` mode keeps listening until stopped
 
 #### Message Placeholders
 
