@@ -78,9 +78,9 @@ const ChatInput = ({
   
   // Debug logging
   useEffect(() => {
-    console.log("ChatInput placeholder state:", { 
+    console.log("ChatInput placeholder state:", {
       customPlaceholder,
-      defaultPlaceholder, 
+      defaultPlaceholder,
       placeholderRef: placeholderRef.current,
       appPlaceholder: app?.messagePlaceholder,
       currentLanguage: i18n.language,
@@ -89,6 +89,13 @@ const ChatInput = ({
       allowEmptySubmit
     });
   }, [customPlaceholder, defaultPlaceholder, isProcessing, allowEmptySubmit, i18n.language, app?.messagePlaceholder]);
+
+  // When processing finishes, refocus the input field
+  useEffect(() => {
+    if (!isProcessing && actualInputRef.current) {
+      actualInputRef.current.focus();
+    }
+  }, [isProcessing]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
