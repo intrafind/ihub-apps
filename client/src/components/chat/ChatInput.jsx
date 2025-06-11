@@ -94,6 +94,12 @@ const ChatInput = ({
     e.preventDefault();
     if ((value.trim() || allowEmptySubmit) && !isProcessing) {
       onSubmit(e);
+      // Keep focus on the input so the user can continue typing
+      setTimeout(() => {
+        if (actualInputRef.current) {
+          actualInputRef.current.focus();
+        }
+      }, 0);
     }
   };
 
