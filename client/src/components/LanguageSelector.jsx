@@ -67,7 +67,7 @@ const LanguageSelector = () => {
       <select 
         value={i18n.language || 'en'} 
         onChange={(e) => changeLanguage(e.target.value)}
-        className="bg-transparent text-white border border-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-white"
+        className="bg-transparent text-white border border-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-white cursor-pointer"
         disabled={isChanging}
       >
         {availableLanguages.map(lang => (
