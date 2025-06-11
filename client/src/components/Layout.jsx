@@ -80,7 +80,12 @@ const Layout = () => {
             <div className="container mx-auto px-4 flex justify-between items-center">
               <div className="flex items-center h-full">
                 {/* Add padding-left if logo exists to prevent overlap */}
-                <Link to="/" className={`text-2xl font-bold flex items-center py-4`}>
+                <Link
+                  to="/"
+                  className={`text-2xl font-bold flex items-center py-4 ${
+                    uiConfig?.header?.logo?.url ? 'pl-24' : ''
+                  }`}
+                >
                   {uiConfig?.header?.title ? getLocalizedContent(uiConfig.header.title, currentLanguage) : 'AI Hub Apps'}
                 </Link>
               </div>
