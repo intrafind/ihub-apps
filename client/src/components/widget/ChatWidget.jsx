@@ -461,7 +461,7 @@ const ChatWidget = ({
             background: 'white',
           } : {}}
         >
-          <textarea
+          <textarea autoComplete="off" data-lpignore="true" data-1p-ignore="true"
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}

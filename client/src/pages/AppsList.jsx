@@ -348,6 +348,9 @@ const AppsList = () => {
                 value={searchTerm}
                 onChange={handleSearchChange}
                 className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
               />
               {searchTerm && (
                 <button
