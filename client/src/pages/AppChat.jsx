@@ -475,10 +475,18 @@ const AppChat = () => {
     variables,
   ]);
 
-  // Display greeting message when app is loaded and no messages exist yet
+  // Display greeting message when app is loaded and no messages exist yet.
+  // Skip the greeting if starter prompts are configured so they can be shown
   useEffect(() => {
-    // Only add greeting message when app is loaded, messages are empty, and we haven't added it yet
-    if (app && !loading && messages.length === 0 && !greetingAddedRef.current) {
+    // Only add greeting message when app is loaded, messages are empty,
+    // no starter prompts exist, and we haven't added it yet
+    if (
+      app &&
+      !loading &&
+      messages.length === 0 &&
+      !greetingAddedRef.current &&
+      !(app.starterPrompts && app.starterPrompts.length > 0)
+    ) {
       console.log("[AppChat] Adding greeting message when app loaded");
 
       // Check for language specific greeting
@@ -549,6 +557,13 @@ const AppChat = () => {
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
+  };
+
+  const handleStarterPromptClick = (prompt) => {
+    setInput(prompt);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
   };
 
   const handleDeleteMessage = (messageId) => {
@@ -998,6 +1013,8 @@ const AppChat = () => {
             appId={appId}
             chatId={chatId.current}
             modelId={selectedModel}
+            starterPrompts={app?.starterPrompts || []}
+            onSelectPrompt={handleStarterPromptClick}
           />
 
           {/* Message Input - using our reusable ChatInput component */}

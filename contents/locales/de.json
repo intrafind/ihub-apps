@@ -68,7 +68,8 @@
       "configureApp": "Konfigurieren",
       "inputParameters": "Eingabeparameter",
       "parameters": "Parameter",
-      "startConversation": "Unterhaltung starten"
+      "startConversation": "Unterhaltung starten",
+      "starterPromptsTitle": "Start-Prompts"
     },
     "notFound": {
       "title": "Seite nicht gefunden",
