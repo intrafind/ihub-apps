@@ -32,7 +32,8 @@
     "unfavorite": "Unfavorite",
     "promptSearch": {
       "placeholder": "Search prompts...",
-      "appSpecific": "app"
+      "appSpecific": "app",
+      "viewAll": "View all prompts"
     }
   },
   "pages": {
@@ -57,6 +58,17 @@
       "clearFilters": "Clear filters",
       "loadMore": "Load More",
       "showingCountOfTotal": "Showing {{displayed}} of {{total}} apps"
+    },
+    "promptsList": {
+      "title": "Prompt Library",
+      "subtitle": "Browse available prompts",
+      "searchPlaceholder": "Search prompts...",
+      "noPrompts": "No prompts found",
+      "copyPrompt": "Copy prompt",
+      "copied": "Copied!",
+      "previous": "Previous",
+      "next": "Next",
+      "pageOfTotal": "Page {{current}} of {{total}}"
     },
     "appChat": {
       "messagePlaceholder": "Type your message here...",

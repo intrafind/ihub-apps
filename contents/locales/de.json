@@ -32,7 +32,8 @@
     "unfavorite": "Defavorisieren",
     "promptSearch": {
       "placeholder": "Prompts durchsuchen...",
-      "appSpecific": "App"
+      "appSpecific": "App",
+      "viewAll": "Alle Prompts anzeigen"
     },
     "toggleImageUpload": "Bild-Upload umschalten",
     "toggleFileUpload": "Datei-Upload umschalten"
@@ -58,6 +59,17 @@
       "clearFilters": "Filter zurücksetzen",
       "loadMore": "Mehr laden",
       "showingCountOfTotal": "Zeige {{displayed}} von {{total}} Anwendungen"
+    },
+    "promptsList": {
+      "title": "Prompt-Bibliothek",
+      "subtitle": "Verfügbare Prompts durchsuchen",
+      "searchPlaceholder": "Prompts durchsuchen...",
+      "noPrompts": "Keine Prompts gefunden",
+      "copyPrompt": "Prompt kopieren",
+      "copied": "Kopiert!",
+      "previous": "Zurück",
+      "next": "Weiter",
+      "pageOfTotal": "Seite {{current}} von {{total}}"
     },
     "appChat": {
       "messagePlaceholder": "Gib deine Nachricht hier ein...",

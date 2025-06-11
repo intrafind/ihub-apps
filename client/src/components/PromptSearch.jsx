@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import Fuse from 'fuse.js';
 import Icon from './Icon';
 import { fetchPrompts } from '../api/api';
@@ -134,6 +135,15 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
             </li>
           ))}
         </ul>
+        <div className="text-right p-2">
+          <Link
+            to="/prompts"
+            onMouseDown={onClose}
+            className="text-indigo-600 hover:underline"
+          >
+            {t('promptSearch.viewAll', 'View all prompts')}
+          </Link>
+        </div>
       </div>
     </div>
   );

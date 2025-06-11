@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './App.css';
 import Layout from './components/Layout';
 import AppsList from './pages/AppsList';
+import PromptsList from './pages/PromptsList';
 import AppChat from './pages/AppChat';
 import DirectChat from './pages/DirectChat';
 import NotFound from './pages/NotFound';
@@ -18,6 +19,7 @@ const SafeAppChat = withErrorBoundary(AppChat);
 const SafeDirectChat = withErrorBoundary(DirectChat);
 const SafeMarkdownPage = withErrorBoundary(MarkdownPage);
 const SafeWidgetPage = withErrorBoundary(WidgetPage);
+const SafePromptsList = withErrorBoundary(PromptsList);
 
 function App() {
   // Use the custom hook for session management
@@ -33,6 +35,7 @@ function App() {
           {/* Regular application routes */}
           <Route path="/" element={<Layout />}>
             <Route index element={<SafeAppsList />} />
+            <Route path="prompts" element={<SafePromptsList />} />
             <Route path="apps/:appId" element={<SafeAppChat />} />
             <Route path="chat/:modelId" element={<SafeDirectChat />} />
             <Route path="pages/:pageId" element={<SafeMarkdownPage />} />

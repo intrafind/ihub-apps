@@ -27,6 +27,13 @@
       },
       {
         "name": {
+          "en": "Prompts",
+          "de": "Prompts"
+        },
+        "url": "/prompts"
+      },
+      {
+        "name": {
           "en": "FAQ",
           "de": "FAQ"
         },
