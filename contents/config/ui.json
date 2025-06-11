@@ -9,12 +9,12 @@
       },
       "containerStyle": {
         "backgroundColor": "#ffffff",
-        "borderBottomRightRadius": "8px",
+        "borderBottomRightRadius": "16px",
         "justifyContent": "center",
         "padding": "0 8px"
       },
       "imageStyle": {
-        "maxHeight": "80%"
+        "maxHeight": "20%"
       }
     },
     "links": [
