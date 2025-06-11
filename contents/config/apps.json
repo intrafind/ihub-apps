@@ -54,7 +54,14 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.7,
-    "sendChatHistory": true
+    "sendChatHistory": true,
+    "features": {
+      "magicPrompt": {
+        "enabled": true,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
+      }
+    }
   },
   {
     "id": "chat-with-web",
@@ -165,14 +172,7 @@
           {"label": {"en": "Japanese", "de": "Japanisch"}, "value": "Japanese"}
         ]
       }
-    ],
-    "features": {
-      "magicPrompt": {
-        "enabled": true,
-        "model": "gpt-3.5-turbo",
-        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
-      }
-    }
+    ]
   },
   {
     "id": "summarizer",
@@ -221,14 +221,7 @@
           {"label": {"en": "Summarize and recommend", "de": "Zusammenfassen und Empfehlungen geben"}, "value": "summarize and provide recommendations based on"}
         ]
       }
-    ],
-    "features": {
-      "magicPrompt": {
-        "enabled": true,
-        "model": "gpt-3.5-turbo",
-        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
-      }
-    }
+    ]
   },
   {
     "id": "custom",
@@ -265,14 +258,7 @@
         },
         "type": "text"
       }
-    ],
-    "features": {
-      "magicPrompt": {
-        "enabled": true,
-        "model": "gpt-3.5-turbo",
-        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
-      }
-    }
+    ]
   },
   {
     "id": "email-composer",
@@ -373,14 +359,7 @@
         },
         "type": "text"
       }
-    ],
-    "features": {
-      "magicPrompt": {
-        "enabled": true,
-        "model": "gpt-3.5-turbo",
-        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
-      }
-    }
+    ]
   },
   {
     "id": "meeting-assistant",
@@ -471,14 +450,7 @@
           "de": "30 Minuten"
         }
       }
-    ],
-    "features": {
-      "magicPrompt": {
-        "enabled": true,
-        "model": "gpt-3.5-turbo",
-        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
-      }
-    }
+    ]
   },
   {
     "id": "social-media",
