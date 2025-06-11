@@ -49,24 +49,30 @@ const SmartSearch = () => {
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || apps.length > 0) return;
+    if (!isOpen) return;
     (async () => {
       try {
-        const data = await fetchApps();
-        setApps(data);
+        const data = apps.length === 0 ? await fetchApps() : apps;
+        if (apps.length === 0) {
+          setApps(data);
+        }
         const list = data.map(app => ({
           ...app,
-          searchText: `${getLocalizedContent(app.name, currentLanguage) || ''}. ${getLocalizedContent(app.description, currentLanguage) || ''}`
+          nameText: getLocalizedContent(app.name, currentLanguage) || '',
+          descriptionText: getLocalizedContent(app.description, currentLanguage) || ''
         }));
         fuseRef.current = new Fuse(list, {
-          keys: ['searchText'],
+          keys: [
+            { name: 'nameText', weight: 0.7 },
+            { name: 'descriptionText', weight: 0.3 }
+          ],
           threshold: 0.4
         });
       } catch (err) {
         console.error('Failed to initialize smart search', err);
       }
     })();
-  }, [isOpen, currentLanguage, apps.length]);
+  }, [isOpen, currentLanguage, apps]);
 
   useEffect(() => {
     if (!isOpen || !query.trim() || !fuseRef.current) {
