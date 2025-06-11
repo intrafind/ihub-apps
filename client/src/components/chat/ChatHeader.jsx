@@ -31,6 +31,14 @@ const ChatHeader = ({
   // Toggle visibility of the description tooltip on mobile
   const [showDescription, setShowDescription] = useState(false);
 
+  // Auto hide description tooltip on mobile after 3 seconds
+  useEffect(() => {
+    if (isMobile && showDescription) {
+      const timer = setTimeout(() => setShowDescription(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isMobile, showDescription]);
+
   const handleBack = () => {
     navigate('/');
   };
