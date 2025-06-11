@@ -31,18 +31,58 @@ export const configureMarked = () => {
   const currentDomain =
     typeof window !== 'undefined' ? window.location.hostname : '';
   renderer.link = function(href, title, text) {
-    let html = `<a href="${href}"`;
-    if (title) {
-      html += ` title="${title}"`;
+    console.log('Link renderer called:', { href: JSON.stringify(href), title, text });
+    
+    // Extract the actual URL and title from href - handle both string and object cases
+    let actualHref;
+    let actualTitle = title;
+    
+    if (typeof href === 'string') {
+      // Check if the href is a stringified JSON object
+      if (href.startsWith('{') && href.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(href);
+          actualHref = parsed.href || parsed.url || href;
+          if (!actualTitle) {
+            actualTitle = parsed.title || null;
+          }
+        } catch (e) {
+          console.warn('Failed to parse href JSON:', e);
+          actualHref = href;
+        }
+      } else {
+        actualHref = href;
+      }
+    } else if (typeof href === 'object' && href !== null) {
+      // If href is an object (like from marked's token system), extract the href property
+      actualHref = href.href || href.url || String(href);
+      
+      // Also try to extract title from the object if not provided separately
+      if (!actualTitle) {
+        actualTitle = href.title || href.text;
+      }
+    } else {
+      actualHref = String(href);
+    }
+    
+    let html = `<a href="${actualHref}"`;
+    if (actualTitle) {
+      html += ` title="${actualTitle}"`;
     }
     try {
-      const url = new URL(href, window.location.href);
+      const url = new URL(actualHref, window.location.href);
       if (url.hostname !== currentDomain) {
         html += ' target="_blank" rel="noopener noreferrer"';
       }
     } catch (e) {
       // If URL parsing fails, fall back to default behaviour
+      console.warn('Failed to parse URL:', actualHref, e);
     }
+
+    if (actualTitle && (text !== undefined || text !== null)) {
+      text = actualTitle;
+    }
+
     html += `>${text}</a>`;
     return html;
   };
