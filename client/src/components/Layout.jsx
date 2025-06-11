@@ -100,7 +100,9 @@ const Layout = () => {
               </nav>
 
               <div className="flex items-center space-x-4">
-                <LanguageSelector />
+                {uiConfig?.header?.languageSelector?.enabled !== false && (
+                  <LanguageSelector />
+                )}
                 <button 
                   className="md:hidden text-white" 
                   onClick={toggleMobileMenu}
