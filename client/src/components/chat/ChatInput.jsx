@@ -180,8 +180,8 @@ const ChatInput = ({
         />
       )}
 
-      <form onSubmit={handleSubmit} className="flex space-x-2 items-center">
-        <textarea
+      <form onSubmit={handleSubmit} autoComplete="off" className="flex space-x-2 items-center">
+        <textarea autoComplete="off" data-lpignore="true" data-1p-ignore="true"
           type="text"
           value={value}
           onChange={onChange}

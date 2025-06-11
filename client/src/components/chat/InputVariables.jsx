@@ -46,7 +46,7 @@ const InputVariables = ({
               ))}
             </select>
           ) : variable.type === 'text' ? (
-            <textarea
+            <textarea autoComplete="off" data-lpignore="true" data-1p-ignore="true"
               value={variables[variable.name] || ''}
               onChange={(e) =>
                 setVariables({
@@ -63,7 +63,7 @@ const InputVariables = ({
               required={variable.required}
             />
           ) : (
-            <input
+            <input autoComplete="off" data-lpignore="true" data-1p-ignore="true"
               type="text"
               value={variables[variable.name] || ''}
               onChange={(e) =>
