@@ -1058,7 +1058,7 @@ const AppChat = () => {
             selectedFile={selectedFile}
             showFileUploader={showFileUploader}
             onToggleFileUploader={toggleFileUploader}
-            magicPromptEnabled={app?.features?.magicPrompt === true}
+            magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
             onMagicPrompt={handleMagicPrompt}
             showUndoMagicPrompt={originalInput !== null}
             onUndoMagicPrompt={handleUndoMagicPrompt}

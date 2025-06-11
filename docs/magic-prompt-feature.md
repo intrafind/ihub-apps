@@ -11,6 +11,7 @@ Enable and configure the feature for an app by adding a `magicPrompt` object und
 ```json
 "features": {
   "magicPrompt": {
+    "enabled": true,
     "model": "gpt-3.5-turbo",
     "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
   }

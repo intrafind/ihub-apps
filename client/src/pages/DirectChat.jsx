@@ -439,7 +439,7 @@ const DirectChat = () => {
         onVoiceInput={handleVoiceInput}
         onVoiceCommand={handleVoiceCommand}
         inputRef={inputRef}
-        magicPromptEnabled={true}
+        magicPromptEnabled={widgetConfig?.features?.magicPrompt?.enabled === true}
         onMagicPrompt={handleMagicPrompt}
         showUndoMagicPrompt={originalInput !== null}
         onUndoMagicPrompt={handleUndoMagicPrompt}

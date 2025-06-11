@@ -260,7 +260,19 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
       }
 
       const responseData = await llmResponse.json();
-      const newPrompt = responseData.choices?.[0]?.message?.content?.trim() || '';
+
+      let newPrompt = '';
+      if (model.provider === 'openai') {
+        newPrompt = responseData.choices?.[0]?.message?.content?.trim() || '';
+      } else if (model.provider === 'google') {
+        const parts = responseData.candidates?.[0]?.content?.parts || [];
+        newPrompt = parts.map(p => p.text || '').join('').trim();
+      } else if (model.provider === 'anthropic') {
+        const content = responseData.content;
+        if (Array.isArray(content)) {
+          newPrompt = content.map(c => (typeof c === 'string' ? c : c.text || '')).join('').trim();
+        }
+      }
 
       return res.json({ prompt: newPrompt });
     } catch (error) {
