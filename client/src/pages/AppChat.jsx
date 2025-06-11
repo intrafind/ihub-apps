@@ -785,6 +785,7 @@ const AppChat = () => {
       });
 
       setInput("");
+      setOriginalInput(null);
       // Clear the selected image after sending
       setSelectedImage(null);
       // Close the image uploader
@@ -1062,6 +1063,7 @@ const AppChat = () => {
             onMagicPrompt={handleMagicPrompt}
             showUndoMagicPrompt={originalInput !== null}
             onUndoMagicPrompt={handleUndoMagicPrompt}
+            magicPromptLoading={magicLoading}
           />
         </div>
 

@@ -35,6 +35,7 @@ const ChatInput = ({
   onMagicPrompt = null,
   showUndoMagicPrompt = false,
   onUndoMagicPrompt = null,
+  magicPromptLoading = false,
 }) => {
   const { t, i18n } = useTranslation();
   const localInputRef = useRef(null);
@@ -247,7 +248,7 @@ const ChatInput = ({
             </button>
           )}
 
-          {magicPromptEnabled && (
+          {magicPromptEnabled && !showUndoMagicPrompt && (
             <button
               type="button"
               onClick={onMagicPrompt}
@@ -256,7 +257,13 @@ const ChatInput = ({
               title={t("common.magicPrompt", "Magic prompt")}
               aria-label={t("common.magicPrompt", "Magic prompt")}
             >
-              <Icon name="sparkles" size="md" />
+              {magicPromptLoading ? (
+                <div className="animate-spin h-5 w-5 flex items-center justify-center">
+                  <Icon name="sparkles" size="md" />
+                </div>
+              ) : (
+                <Icon name="sparkles" size="md" />
+              )}
             </button>
           )}
 

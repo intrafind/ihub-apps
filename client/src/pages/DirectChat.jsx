@@ -260,6 +260,7 @@ const DirectChat = () => {
       // Add user message to the chat
       addUserMessage(currentMessage);
       setCurrentMessage('');
+      setOriginalInput(null);
       
       // Add placeholder for assistant's response
       const assistantId = addAssistantMessage();
@@ -443,6 +444,7 @@ const DirectChat = () => {
         onMagicPrompt={handleMagicPrompt}
         showUndoMagicPrompt={originalInput !== null}
         onUndoMagicPrompt={handleUndoMagicPrompt}
+        magicPromptLoading={magicLoading}
       />
     </div>
   );

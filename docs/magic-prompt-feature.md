@@ -23,4 +23,9 @@ If no model or prompt is specified in the configuration the server falls back to
 
 ## Usage
 
-When enabled a sparkles icon appears next to the chat input. Clicking it replaces the current text with the generated prompt. A second button allows undoing this replacement.
+When enabled a sparkles icon appears next to the chat input. Clicking it
+triggers generation and the button shows a spinning animation while the request
+is processed. Once the text has been replaced, the sparkles button turns into a
+back arrow allowing the user to restore the original input. Submitting the
+message automatically resets the button back to the sparkles icon for the next
+prompt.
