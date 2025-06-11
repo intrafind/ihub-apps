@@ -26,7 +26,8 @@
     ]
   },
   "icons": {
-    "assistantMessage": "bmas-assistant-icon"
+    "assistantMessage": "bmas-assistant-icon",
+    "apps-svg-logo": "bmas-assistant-icon"
   },
   "appsList": {
     "title": {

@@ -2,10 +2,10 @@
   "header": {
     "defaultColor": "rgb(0, 53, 87)",
     "logo": {
-      "url": "/logo-bmas.png",
+      "url": "/logo.svg",
       "alt": {
-        "en": "AI Hub Logo",
-        "de": "KI-Hub Logo"
+        "en": "AI Hub Apps Logo",
+        "de": "AI Hub Apps Logo"
       },
       "containerStyle": {
         "backgroundColor": "#ffffff",
@@ -110,13 +110,10 @@
       "borderRadius": "8px"
     }
   },
-  "icons": {
-    "assistantMessage": "bmas-assistant-icon"
-  },
   "appsList": {
     "title": {
-      "en": "AI Apps",
-      "de": "KI-Anwendungen"
+      "en": "I Hub Apps",
+      "de": "I Hub Apps"
     },
     "subtitle": {
       "en": "Choose an application to start a conversation",

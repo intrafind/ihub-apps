@@ -23,7 +23,7 @@ const ChatMessageList = ({
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
 
-  const assistantIcon = uiConfig?.icons?.assistantMessage || 'academic-cap';
+  const assistantIcon = uiConfig?.icons?.assistantMessage || 'apps-svg-logo';
   const userIcon = uiConfig?.icons?.userMessage || 'user';
   const errorIcon = uiConfig?.icons?.errorMessage || 'exclamation-circle';
   // Auto-scroll to bottom when messages change

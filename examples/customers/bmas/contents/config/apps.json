@@ -24,6 +24,24 @@
     "sendChatHistory": true,
     "microphone": {
       "enabled": false
+    },
+    "settings": {
+        "enabled": true,
+        "model": {
+          "enabled": false
+        },
+        "temperature": {
+          "enabled": false
+        },
+        "outputFormat": {
+          "enabled": false
+        },
+        "chatHistory": {
+          "enabled": false
+        },
+        "style": {
+          "enabled": true
+        }
     }
   },
   {
@@ -51,6 +69,24 @@
     "sendChatHistory": true,
     "microphone": {
       "enabled": false
+    },
+    "settings": {
+        "enabled": true,
+        "model": {
+          "enabled": false
+        },
+        "temperature": {
+          "enabled": false
+        },
+        "outputFormat": {
+          "enabled": false
+        },
+        "chatHistory": {
+          "enabled": false
+        },
+        "style": {
+          "enabled": true
+        }
     }
   },
   {
@@ -78,6 +114,24 @@
     "sendChatHistory": true,
     "microphone": {
       "enabled": false
+    },
+    "settings": {
+        "enabled": true,
+        "model": {
+          "enabled": false
+        },
+        "temperature": {
+          "enabled": false
+        },
+        "outputFormat": {
+          "enabled": false
+        },
+        "chatHistory": {
+          "enabled": false
+        },
+        "style": {
+          "enabled": true
+        }
     }
   },
   {
@@ -110,10 +164,28 @@
     "microphone": {
       "enabled": false
     },
-	"allowEmptyContent": true,
-	"messagePlaceholder": {
-	  "en": "Here you can give me additional information about the creation of the mail...",
-	  "de": "Hier kannst du mir zusätzliche Informationen zur Erstellung der Mail geben..."
+    "settings": {
+        "enabled": true,
+        "model": {
+          "enabled": false
+        },
+        "temperature": {
+          "enabled": false
+        },
+        "outputFormat": {
+          "enabled": false
+        },
+        "chatHistory": {
+          "enabled": false
+        },
+        "style": {
+          "enabled": true
+        }
+    },
+	  "allowEmptyContent": true,
+	  "messagePlaceholder": {
+	    "en": "Here you can give me additional information about the creation of the mail...",
+	    "de": "Hier kannst du mir zusätzliche Informationen zur Erstellung der Mail geben..."
     },		
     "variables": [
       {
@@ -216,7 +288,7 @@
         "enabled": false
       },
       "outputFormat": {
-        "enabled": true
+        "enabled": false
       },
       "chatHistory": {
         "enabled": false
@@ -252,9 +324,27 @@
     "preferredStyle": "keep",
     "preferredTemperature": 0.7,
     "sendChatHistory": true,
-	"messagePlaceholder": {
-	  "en": "What topic should the memo cover and what key aspects should it address?",
-	  "de": "Welches Thema soll der Vermerk behandeln und auf welche zentralen Aspekte soll eingegangen werden?"
+    "messagePlaceholder": {
+      "en": "What topic should the memo cover and what key aspects should it address?",
+      "de": "Welches Thema soll der Vermerk behandeln und auf welche zentralen Aspekte soll eingegangen werden?"
+    },
+    "settings": {
+      "enabled": true,
+      "model": {
+        "enabled": false
+      },
+      "temperature": {
+        "enabled": false
+      },
+      "outputFormat": {
+        "enabled": false
+      },
+      "chatHistory": {
+        "enabled": false
+      },
+      "style": {
+        "enabled": true
+      }
     }
-  }  
+  }
 ]
