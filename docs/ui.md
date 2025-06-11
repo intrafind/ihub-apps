@@ -61,7 +61,10 @@ The `header` section controls the appearance and content of the application head
       "url": "/"
     },
     // More navigation links...
-  ]
+  ],
+  "languageSelector": {
+    "enabled": true
+  }
 }
 ```
 
@@ -71,6 +74,7 @@ The `header` section controls the appearance and content of the application head
 | `logo.url` | String | Path to the logo image |
 | `logo.alt` | Object | Localized alt text for the logo |
 | `links` | Array | Navigation links for the header |
+| `languageSelector.enabled` | Boolean | Show the language selector (default: true) |
 
 ### Footer Configuration
 
@@ -128,6 +132,7 @@ The `disclaimer` section defines the legal disclaimer shown to users:
 | `updated` | String | Date the disclaimer was last updated |
 
 Setting `enabled` to `false` will completely remove the disclaimer from the application.
+
 
 ### Icons Configuration
 

@@ -37,7 +37,10 @@
         },
         "url": "https://github.com/intrafind/ai-hub-apps"
       }
-    ]
+    ],
+    "languageSelector": {
+      "enabled": true
+    }
   },
   "footer": {
     "text": {
