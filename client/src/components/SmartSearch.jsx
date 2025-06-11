@@ -185,6 +185,9 @@ const SmartSearch = () => {
                   {favoriteApps.includes(r.app.id) && (
                     <Icon name="star" size="sm" className="text-yellow-500 ml-1" solid={true} />
                   )}
+                  {recentAppIds.includes(r.app.id) && (
+                    <Icon name="clock" size="sm" className="text-indigo-600 ml-1" solid={true} />
+                  )}
                 </span>
               </div>
               <p className="text-sm text-gray-600 ml-7 line-clamp-2">
