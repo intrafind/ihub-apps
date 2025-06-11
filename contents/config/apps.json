@@ -54,7 +54,14 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.7,
-    "sendChatHistory": true
+    "sendChatHistory": true,
+    "features": {
+      "magicPrompt": {
+        "enabled": true,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
+      }
+    }
   },
   {
     "id": "chat-with-web",

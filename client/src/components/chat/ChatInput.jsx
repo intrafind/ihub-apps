@@ -31,6 +31,11 @@ const ChatInput = ({
   showFileUploader: externalShowFileUploader = undefined,
   onToggleImageUploader = null,
   onToggleFileUploader = null,
+  magicPromptEnabled = false,
+  onMagicPrompt = null,
+  showUndoMagicPrompt = false,
+  onUndoMagicPrompt = null,
+  magicPromptLoading = false,
 }) => {
   const { t, i18n } = useTranslation();
   const localInputRef = useRef(null);
@@ -240,6 +245,38 @@ const ChatInput = ({
               aria-label={t("common.toggleFileUpload", "Toggle file upload")}
             >
               <Icon name="paper-clip" size="md" />
+            </button>
+          )}
+
+          {magicPromptEnabled && !showUndoMagicPrompt && (
+            <button
+              type="button"
+              onClick={onMagicPrompt}
+              disabled={disabled || isProcessing}
+              className="image-upload-button h-fit"
+              title={t("common.magicPrompt", "Magic prompt")}
+              aria-label={t("common.magicPrompt", "Magic prompt")}
+            >
+              {magicPromptLoading ? (
+                <div className="animate-spin h-5 w-5 flex items-center justify-center">
+                  <Icon name="sparkles" size="md" />
+                </div>
+              ) : (
+                <Icon name="sparkles" size="md" />
+              )}
+            </button>
+          )}
+
+          {showUndoMagicPrompt && (
+            <button
+              type="button"
+              onClick={onUndoMagicPrompt}
+              disabled={disabled || isProcessing}
+              className="image-upload-button h-fit"
+              title={t("common.undo", "Undo")}
+              aria-label={t("common.undo", "Undo")}
+            >
+              <Icon name="arrowLeft" size="md" />
             </button>
           )}
 
