@@ -350,6 +350,7 @@ export const CACHE_KEYS = {
   MODELS_LIST: 'models-list',
   MODEL_DETAILS: 'model-details',
   STYLES: 'styles',
+  PROMPTS: 'prompts',
   UI_CONFIG: 'ui-config',
   TRANSLATIONS: 'translations'
 };

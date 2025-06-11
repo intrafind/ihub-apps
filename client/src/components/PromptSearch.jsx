@@ -1,0 +1,142 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import Fuse from 'fuse.js';
+import Icon from './Icon';
+import { fetchPrompts } from '../api/api';
+
+const fuseRef = { current: null };
+
+const highlightVariables = (text) => {
+  return text.split(/(\[[^\]]+\])/g).map((part, idx) => (
+    part.startsWith('[') && part.endsWith(']') ? (
+      <span key={idx} className="text-indigo-600 font-semibold">{part}</span>
+    ) : (
+      <span key={idx}>{part}</span>
+    )
+  ));
+};
+
+const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
+  const { t } = useTranslation();
+  const [prompts, setPrompts] = useState([]);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    (async () => {
+      try {
+        const data = prompts.length === 0 ? await fetchPrompts() : prompts;
+        if (prompts.length === 0) {
+          setPrompts(data);
+        }
+        fuseRef.current = new Fuse(data, {
+          keys: ['name', 'prompt'],
+          threshold: 0.4
+        });
+      } catch (err) {
+        console.error('Failed to load prompts', err);
+      }
+    })();
+  }, [isOpen, prompts]);
+
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !query.trim() || !fuseRef.current) {
+      setResults([]);
+      return;
+    }
+    const searchResults = fuseRef.current.search(query).map(r => r.item);
+    searchResults.sort((a, b) => {
+      const aMatch = a.appId === appId;
+      const bMatch = b.appId === appId;
+      if (aMatch && !bMatch) return -1;
+      if (!aMatch && bMatch) return 1;
+      return 0;
+    });
+    setResults(searchResults.slice(0, 5));
+    setSelectedIndex(0);
+  }, [query, isOpen, appId]);
+
+  const handleKeyNav = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex((prev) => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' && results[selectedIndex]) {
+      e.preventDefault();
+      onSelect(results[selectedIndex]);
+    } else if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-lg w-full max-w-xl mt-20">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Icon name="search" className="text-gray-400" />
+          </div>
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyNav}
+            placeholder={t('promptSearch.placeholder', 'Search prompts...')}
+            className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore="true"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+              aria-label={t('common.clear', 'Clear')}
+            >
+              <Icon name="x" className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+        <ul>
+          {results.map((p, idx) => (
+            <li
+              key={p.id}
+              className={`px-4 py-2 cursor-pointer ${idx === selectedIndex ? 'bg-indigo-100' : ''}`}
+              onMouseDown={() => onSelect(p)}
+            >
+              <div className="flex items-center">
+                <Icon name={p.icon || 'clipboard'} className="w-5 h-5 mr-2" />
+                <span className="font-medium mr-1 flex items-center">
+                  {p.name}
+                  {p.appId && p.appId === appId && (
+                    <span className="ml-1 text-xs text-indigo-600">{t('promptSearch.appSpecific', 'app')}</span>
+                  )}
+                </span>
+              </div>
+              <p className="text-sm text-gray-600 ml-7 line-clamp-2">
+                {highlightVariables(p.prompt)}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+export default PromptSearch;

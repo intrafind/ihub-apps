@@ -29,7 +29,11 @@
     "creative": "Creative",
     "select": "Select",
     "favorite": "Favorite",
-    "unfavorite": "Unfavorite"
+    "unfavorite": "Unfavorite",
+    "promptSearch": {
+      "placeholder": "Search prompts...",
+      "appSpecific": "app"
+    }
   },
   "pages": {
     "home": {

@@ -30,6 +30,10 @@
     "select": "Auswählen",
     "favorite": "Favorisieren",
     "unfavorite": "Defavorisieren",
+    "promptSearch": {
+      "placeholder": "Prompts durchsuchen...",
+      "appSpecific": "App"
+    },
     "toggleImageUpload": "Bild-Upload umschalten",
     "toggleFileUpload": "Datei-Upload umschalten"
   },

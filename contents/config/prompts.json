@@ -1,0 +1,21 @@
+[
+  {
+    "id": "summarize",
+    "name": "Summarize Text",
+    "icon": "sparkles",
+    "prompt": "Summarize the following text:\n[content]"
+  },
+  {
+    "id": "translate-de",
+    "name": "Translate to German",
+    "icon": "globe",
+    "prompt": "Translate the following into German:\n[content]"
+  },
+  {
+    "id": "faq-question",
+    "name": "Ask FAQ",
+    "icon": "question-mark-circle",
+    "prompt": "Answer using our FAQ:\n[content]",
+    "appId": "faq-bot"
+  }
+]

@@ -259,11 +259,23 @@ export const sendDirectModelMessage = async (modelId, messages, options = {}) =>
 export const fetchStyles = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : CACHE_KEYS.STYLES;
-  
+
   return handleApiResponse(
     () => apiClient.get('/styles'),
     cacheKey,
     DEFAULT_CACHE_TTL.LONG
+  );
+};
+
+// Prompts
+export const fetchPrompts = async (options = {}) => {
+  const { skipCache = false } = options;
+  const cacheKey = skipCache ? null : CACHE_KEYS.PROMPTS;
+
+  return handleApiResponse(
+    () => apiClient.get('/prompts'),
+    cacheKey,
+    DEFAULT_CACHE_TTL.MEDIUM
   );
 };
 
@@ -495,6 +507,7 @@ const apiService = {
   fetchStyles,
   fetchUIConfig,
   fetchTranslations,
+  fetchPrompts,
   sendAppChatMessage,
   sendDirectModelMessage,
   sendMessageFeedback

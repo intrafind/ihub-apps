@@ -4,6 +4,7 @@ import VoiceInputComponent from "../VoiceInputComponent";
 import Icon from "../Icon";
 import ImageUploader from "../ImageUploader";
 import FileUploader from "../FileUploader";
+import PromptSearch from "../PromptSearch";
 
 /**
  * A reusable chat input component for chat interfaces
@@ -37,6 +38,7 @@ const ChatInput = ({
   const actualInputRef = inputRef || localInputRef;
   const [internalShowImageUploader, setInternalShowImageUploader] = useState(false);
   const [internalShowFileUploader, setInternalShowFileUploader] = useState(false);
+  const [showPromptSearch, setShowPromptSearch] = useState(false);
   
   // Determine if multiline mode is enabled based on app config
   // Default to true (multiline) if not specified in app config
@@ -146,6 +148,19 @@ const ChatInput = ({
 
   // Handle key events for the textarea
   const handleKeyDown = (e) => {
+    if (!showPromptSearch && e.key === '/' && value === '') {
+      e.preventDefault();
+      setShowPromptSearch(true);
+      return;
+    }
+
+    if (showPromptSearch) {
+      if (e.key === 'Escape') {
+        setShowPromptSearch(false);
+      }
+      return;
+    }
+
     // CMD+Enter or CTRL+Enter to submit
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
@@ -163,6 +178,16 @@ const ChatInput = ({
 
   return (
     <div className="chat-input-container">
+      <PromptSearch
+        isOpen={showPromptSearch}
+        appId={app?.id}
+        onClose={() => setShowPromptSearch(false)}
+        onSelect={(p) => {
+          onChange({ target: { value: p.prompt.replace('[content]', '') } });
+          setShowPromptSearch(false);
+          setTimeout(() => actualInputRef.current && actualInputRef.current.focus(), 0);
+        }}
+      />
       {imageUploadEnabled && showImageUploader && (
         <ImageUploader
           onImageSelect={onImageSelect}
