@@ -563,6 +563,10 @@ const AppChat = () => {
     const messageToResend = messages.find((msg) => msg.id === messageId);
     if (!messageToResend) return;
 
+    // Remove the selected message and any following messages to avoid sending
+    // them again with the resent message
+    deleteMessage(messageId);
+
     // Use the editedContent if provided directly from the ChatMessage component
     // otherwise use the content from the found message
     const contentToResend =

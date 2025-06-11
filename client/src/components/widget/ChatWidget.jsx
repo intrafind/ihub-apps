@@ -262,7 +262,11 @@ const ChatWidget = ({
   const handleResendMessage = (messageId, editedContent) => {
     const messageToResend = messages.find((msg) => msg.id === messageId);
     if (!messageToResend) return;
-    
+
+    // Remove the selected message and any following messages so they are not
+    // resent with the new submission
+    deleteMessage(messageId);
+
     // Use the editedContent if provided
     const contentToResend = editedContent !== undefined ? editedContent : messageToResend.content;
     
