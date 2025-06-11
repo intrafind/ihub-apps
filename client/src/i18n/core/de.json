@@ -41,6 +41,10 @@
     "messagePlaceholder": "Geben Sie Ihre Nachricht hier ein...",
     "tooltip": "Spracheingabe (Strg+M)",
     "ariaLabel": "Spracheingabe umschalten",
+    "modeAutomatic": "Automatischer Modus - stoppt, wenn Sie aufhören zu sprechen",
+    "modeManual": "Manueller Modus - klicken Sie auf Schließen, wenn Sie fertig sind",
+    "tooltipAutomatic": "Spracheingabe (Strg+M) - automatisch",
+    "tooltipManual": "Spracheingabe (Strg+M) - manuell",
     "error": {
       "permissionDenied": "Bitte erlauben Sie den Mikrofonzugriff und versuchen Sie es erneut.",
       "noMicrophone": "Kein Mikrofon gefunden. Bitte überprüfen Sie Ihre Geräteeinstellungen.",

@@ -20,6 +20,7 @@ const VoiceInputComponent = ({
   const recognitionRef = useRef(null);
   const originalInputValue = useRef("");
   const originalPlaceholder = useRef(""); // Store the original placeholder
+  const microphoneMode = app?.microphone?.mode || "automatic";
 
   // Clean up recognition when component unmounts
   useEffect(() => {
@@ -181,8 +182,7 @@ const VoiceInputComponent = ({
       }
 
       // Configure recognition
-      const mode = app?.microphone?.mode || "automatic";
-      recognition.continuous = mode === "manual";
+      recognition.continuous = microphoneMode === "manual";
       recognition.interimResults = true;
 
       // Set language
@@ -466,6 +466,7 @@ const VoiceInputComponent = ({
         isActive={isListening}
         setIsActive={handleOnFeedbackOverlayClose}
         transcript={app?.microphone?.showTranscript ? transcript : ""}
+        mode={microphoneMode}
       />
       <button
         className={`voice-input-button ${isListening ? "active" : ""} h-fit`}
@@ -475,7 +476,11 @@ const VoiceInputComponent = ({
         }}
         type="button" // Explicitly set type to button to avoid form submission
         disabled={disabled}
-        title={t("voiceInput.tooltip", "Voice input (Ctrl+M)")}
+        title={
+          microphoneMode === "manual"
+            ? t("voiceInput.tooltipManual", "Voice input (Ctrl+M) - manual")
+            : t("voiceInput.tooltipAutomatic", "Voice input (Ctrl+M) - automatic")
+        }
         aria-label={t("voiceInput.ariaLabel", "Toggle voice input")}
       >
         <Icon name="microphone" size="md" />

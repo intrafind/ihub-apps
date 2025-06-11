@@ -41,6 +41,10 @@
     "messagePlaceholder": "Type your message here...",
     "tooltip": "Voice input (Ctrl+M)",
     "ariaLabel": "Toggle voice input",
+    "modeAutomatic": "Automatic mode - stops when you stop speaking",
+    "modeManual": "Manual mode - click close when finished",
+    "tooltipAutomatic": "Voice input (Ctrl+M) - automatic",
+    "tooltipManual": "Voice input (Ctrl+M) - manual",
     "error": {
       "permissionDenied": "Please allow microphone access and try again.",
       "noMicrophone": "No microphone found. Please check your device settings.",
