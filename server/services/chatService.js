@@ -420,13 +420,28 @@ export async function processChatWithTools({
     return res.json(firstResponse);
   } catch (error) {
     const errorDetails = getErrorDetails(error, model);
+    let localizedMessage = errorDetails.message;
+    if (error.code) {
+      const translated = await getLocalizedError(error.code, {}, clientLanguage);
+      if (translated && !translated.startsWith('Error:')) {
+        localizedMessage = translated;
+      }
+    }
+
     if (clientRes) {
-      const errMsg = { message: errorDetails.message, modelId: model.id, provider: model.provider, recommendation: errorDetails.recommendation, details: error.details || error.message };
+      const errMsg = {
+        message: localizedMessage,
+        code: error.code || errorDetails.code,
+        modelId: model.id,
+        provider: model.provider,
+        recommendation: errorDetails.recommendation,
+        details: error.details || error.message
+      };
       sendSSE(clientRes, 'error', errMsg);
     } else {
       return res.status(500).json({
-        error: errorDetails.message,
-        code: errorDetails.code,
+        error: localizedMessage,
+        code: error.code || errorDetails.code,
         modelId: model.id,
         provider: model.provider,
         recommendation: errorDetails.recommendation,

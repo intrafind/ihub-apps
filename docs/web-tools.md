@@ -60,6 +60,7 @@ The platform now includes three web-related tools:
 - Optional `ignoreSSL` flag to bypass invalid HTTPS certificates when configured by an administrator
 - Detects missing pages or authentication requirements and reports them clearly
 - Returned errors include a `code` field so applications can translate messages
+  and the UI automatically shows a localized error when possible
 
 ### 3. Enhanced Web Search (`enhancedWebSearch`)
 

@@ -163,6 +163,18 @@
     "responseStreamError": "Fehler bei der Verarbeitung des Antwortstreams: {error}",
     "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration."
   },
+  "toolErrors": {
+    "MISSING_URL": "URL-Parameter ist erforderlich.",
+    "INVALID_URL": "Ungültige URL.",
+    "UNSUPPORTED_PROTOCOL": "Nur HTTP- und HTTPS-URLs werden unterstützt.",
+    "PAGE_NOT_FOUND": "Seite wurde nicht gefunden.",
+    "AUTH_REQUIRED": "Authentifizierung ist für diese Seite erforderlich.",
+    "FETCH_ERROR": "Webseite konnte nicht abgerufen werden.",
+    "CONTENT_NOT_FOUND": "Konnte keinen Seiteninhalt finden.",
+    "TIMEOUT": "Zeitüberschreitung beim Laden der Webseite.",
+    "TLS_ERROR": "Zertifikatsfehler aufgetreten. Bitte Administrator kontaktieren.",
+    "EXTRACTION_FAILED": "Fehler beim Extrahieren des Inhalts."
+  },
   "responseStyles": {
     "title": "Antwortstil",
     "keep": "Original beibehalten",

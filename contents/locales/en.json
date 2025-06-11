@@ -162,6 +162,18 @@
     "responseStreamError": "Error processing response stream: {error}",
     "connectionRefused": "Connection refused while trying to access {provider} API for model {model}. Please check your connection or server configuration."
   },
+  "toolErrors": {
+    "MISSING_URL": "URL parameter is required.",
+    "INVALID_URL": "Invalid URL.",
+    "UNSUPPORTED_PROTOCOL": "Only HTTP and HTTPS URLs are supported.",
+    "PAGE_NOT_FOUND": "Page could not be found.",
+    "AUTH_REQUIRED": "Authentication is required to access this page.",
+    "FETCH_ERROR": "Failed to fetch webpage.",
+    "CONTENT_NOT_FOUND": "Could not find content in the webpage.",
+    "TIMEOUT": "Request timed out while loading the webpage.",
+    "TLS_ERROR": "Certificate error encountered. Please contact your administrator.",
+    "EXTRACTION_FAILED": "Failed to extract content from webpage."
+  },
   "responseStyles": {
     "title": "Response Style",
     "keep": "Keep Original",
