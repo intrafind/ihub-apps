@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchModels, sendDirectModelMessage, fetchModelDetails } from '../api/api';
+import { fetchModels, sendDirectModelMessage, fetchModelDetails, generateMagicPrompt } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 
@@ -55,6 +55,8 @@ const DirectChat = () => {
   const [isSending, setIsSending] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [error, setError] = useState(null);
+  const [originalInput, setOriginalInput] = useState(null);
+  const [magicLoading, setMagicLoading] = useState(false);
   const inputRef = useRef(null);
   const { resetHeaderColor, uiConfig } = useUIConfig();
   
@@ -197,6 +199,29 @@ const DirectChat = () => {
 
   const handleInputChange = (e) => {
     setCurrentMessage(e.target.value);
+  };
+
+  const handleMagicPrompt = async () => {
+    if (!currentMessage.trim()) return;
+    try {
+      setMagicLoading(true);
+      const response = await generateMagicPrompt(currentMessage);
+      if (response && response.prompt) {
+        setOriginalInput(currentMessage);
+        setCurrentMessage(response.prompt);
+      }
+    } catch (err) {
+      console.error('Error generating magic prompt:', err);
+    } finally {
+      setMagicLoading(false);
+    }
+  };
+
+  const handleUndoMagicPrompt = () => {
+    if (originalInput !== null) {
+      setCurrentMessage(originalInput);
+      setOriginalInput(null);
+    }
   };
 
   // Function to clear chat history with confirmation
@@ -411,6 +436,10 @@ const DirectChat = () => {
         onVoiceInput={handleVoiceInput}
         onVoiceCommand={handleVoiceCommand}
         inputRef={inputRef}
+        magicPromptEnabled={true}
+        onMagicPrompt={handleMagicPrompt}
+        showUndoMagicPrompt={originalInput !== null}
+        onUndoMagicPrompt={handleUndoMagicPrompt}
       />
     </div>
   );

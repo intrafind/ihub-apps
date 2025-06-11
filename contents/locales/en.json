@@ -29,7 +29,9 @@
     "creative": "Creative",
     "select": "Select",
     "favorite": "Favorite",
-    "unfavorite": "Unfavorite"
+    "unfavorite": "Unfavorite",
+    "magicPrompt": "Magic prompt",
+    "undo": "Undo"
   },
   "pages": {
     "home": {
@@ -44,11 +46,12 @@
       "noApps": "No applications found",
       "searchPlaceholder": "Search apps...",
       "categories": "Categories",
-      "allCategories": "All Categories",    "favorite": "Add to favorites",
-    "unfavorite": "Remove from favorites",
+      "allCategories": "All Categories",
+      "favorite": "Add to favorites",
+      "unfavorite": "Remove from favorites",
       "recent": "Recently used",
       "toggleImageUpload": "Toggle image upload",
-    "toggleFileUpload": "Toggle file upload",
+      "toggleFileUpload": "Toggle file upload",
       "favorites": "Favorites",
       "clearFilters": "Clear filters",
       "loadMore": "Load More",
