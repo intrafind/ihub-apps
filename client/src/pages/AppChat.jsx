@@ -551,6 +551,13 @@ const AppChat = () => {
     setInput(e.target.value);
   };
 
+  const handleStarterPromptClick = (prompt) => {
+    setInput(prompt);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
   const handleDeleteMessage = (messageId) => {
     deleteMessage(messageId);
   };
@@ -998,6 +1005,8 @@ const AppChat = () => {
             appId={appId}
             chatId={chatId.current}
             modelId={selectedModel}
+            starterPrompts={app?.starterPrompts || []}
+            onSelectPrompt={handleStarterPromptClick}
           />
 
           {/* Message Input - using our reusable ChatInput component */}

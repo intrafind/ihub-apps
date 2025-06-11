@@ -67,7 +67,8 @@
       "configureApp": "Configure",
       "parameters": "Parameters",
       "inputParameters": "Input Parameters",
-      "startConversation": "Start conversation"
+      "startConversation": "Start conversation",
+      "starterPromptsTitle": "Starter Prompts"
     },
     "notFound": {
       "title": "Page Not Found",
