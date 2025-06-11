@@ -35,7 +35,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-    const agent = ignoreSSL && validUrl.protocol === 'https:'
+    const dispatcher = ignoreSSL && validUrl.protocol === 'https:'
       ? new https.Agent({ rejectUnauthorized: false })
       : undefined;
     if (ignoreSSL && validUrl.protocol === 'https:') {
@@ -52,7 +52,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
         'Upgrade-Insecure-Requests': '1'
       },
       signal: controller.signal,
-      ...(agent ? { agent } : {})
+      ...(dispatcher ? { dispatcher } : {})
     });
     
     clearTimeout(timeoutId);

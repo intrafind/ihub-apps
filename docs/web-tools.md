@@ -35,7 +35,7 @@ The platform now includes three web-related tools:
 **Parameters**:
 - `url` (string, required): The URL of the webpage to extract content from
 - `maxLength` (integer, optional): Maximum length of extracted content in characters (default: 5000)
-- `ignoreSSL` (boolean, optional): Ignore invalid HTTPS certificates (default: false, admin configurable)
+- `ignoreSSL` (boolean, optional, admin only): Ignore invalid HTTPS certificates. If omitted, the value configured in `tools.json` is used.
 
 **Returns**: 
 - Clean text content
@@ -57,7 +57,7 @@ The platform now includes three web-related tools:
 - Handles various webpage structures
 - Provides metadata extraction
 - Error handling for invalid URLs or failed requests
-- Optional `ignoreSSL` flag to bypass invalid HTTPS certificates when configured by an administrator
+- Optional `ignoreSSL` flag to bypass invalid HTTPS certificates (value can be preset in `tools.json`)
 - Detects missing pages or authentication requirements and reports them clearly
 - Returned errors include a `code` field so applications can translate messages
   and the UI automatically shows a localized error when possible
