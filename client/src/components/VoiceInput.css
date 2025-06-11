@@ -83,12 +83,15 @@
 .voice-instructions {
   font-size: 0.9em;
   opacity: 0.7;
+  display: block;
+  margin-bottom: 4px;
   color: var(--color-text, #333);
 }
 
 .voice-mode {
   font-size: 0.9em;
   margin-bottom: 4px;
+  display: block;
   color: var(--color-text, #333);
 }
 
