@@ -42,8 +42,8 @@ const LanguageSelector = () => {
     const languages = [];
     
     // Using the title field as it's guaranteed to have language entries
-    if (uiConfig.title) {
-      Object.keys(uiConfig.title).forEach(langCode => {
+    if (uiConfig.header.title) {
+      Object.keys(uiConfig.header.title).forEach(langCode => {
         const localizedName = t(`languages.${langCode}`);
         languages.push({
           code: langCode,
