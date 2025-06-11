@@ -68,11 +68,18 @@ const Layout = () => {
           <div className="relative flex items-stretch h-16">
             {/* Logo section - positioned absolutely to be flush with left edge */}
             {uiConfig?.header?.logo?.url && (
-              <div className="absolute left-0 h-full flex items-center">
-                <img 
-                  src={uiConfig.header.logo.url} 
-                  alt={getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'Organization Logo'} 
+              <div
+                className="absolute left-0 h-full flex items-center"
+                style={uiConfig.header.logo.containerStyle}
+              >
+                <img
+                  src={uiConfig.header.logo.url}
+                  alt={
+                    getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) ||
+                    'Organization Logo'
+                  }
                   className="h-full w-auto"
+                  style={uiConfig.header.logo.imageStyle}
                 />
               </div>
             )}

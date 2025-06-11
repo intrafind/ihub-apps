@@ -50,6 +50,15 @@ The `header` section controls the appearance and content of the application head
     "alt": {
       "en": "AI Hub Apps Logo",
       "de": "KI-Hub Apps Logo"
+    },
+    "containerStyle": {
+      "backgroundColor": "#fff",
+      "borderBottomRightRadius": "8px",
+      "justifyContent": "center",
+      "padding": "0 8px"
+    },
+    "imageStyle": {
+      "maxHeight": "80%"
     }
   },
   "links": [
@@ -73,6 +82,8 @@ The `header` section controls the appearance and content of the application head
 | `defaultColor` | String | Background color for the header |
 | `logo.url` | String | Path to the logo image |
 | `logo.alt` | Object | Localized alt text for the logo |
+| `logo.containerStyle` | Object | Optional inline style for the logo container |
+| `logo.imageStyle` | Object | Optional inline style for the logo image |
 | `links` | Array | Navigation links for the header |
 | `languageSelector.enabled` | Boolean | Show the language selector (default: true) |
 
