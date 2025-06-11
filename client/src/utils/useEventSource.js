@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { checkAppChatStatus, stopAppChatStream } from '../api/api';
 
 /**
@@ -25,6 +26,7 @@ function useEventSource({
   onConnected,
   onProcessingChange
 }) {
+  const { t } = useTranslation();
   const eventSourceRef = useRef(null);
   const connectionTimeoutRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);
@@ -195,13 +197,20 @@ function useEventSource({
     eventSource.onerror = (event) => {
       console.error('SSE Error:', event);
       clearTimeout(connectionTimeoutRef.current);
-      
-      let errorMessage = 'Error receiving response. Please try again.';
-      
+
+      let errorMessage = t('error.general', 'Error receiving response. Please try again.');
+
       try {
         if (event.data) {
           const errorData = JSON.parse(event.data);
-          if (errorData.message) {
+          if (errorData.code) {
+            const translated = t(`toolErrors.${errorData.code}`, `toolErrors.${errorData.code}`);
+            if (translated && translated !== `toolErrors.${errorData.code}`) {
+              errorMessage = translated;
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } else if (errorData.message) {
             errorMessage = errorData.message;
           }
         }
