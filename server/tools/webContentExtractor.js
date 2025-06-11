@@ -1,6 +1,12 @@
 import { JSDOM } from 'jsdom';
 import https from 'https';
 
+function createError(message, code) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
 /**
  * Extract clean, readable content from a web page
  * Removes headers, footers, navigation, ads, and other non-content elements
@@ -10,7 +16,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
   const targetUrl = url || uri || link;
   
   if (!targetUrl) {
-    throw new Error('url parameter is required (use "url", "uri", or "link")');
+    throw createError('url parameter is required (use "url", "uri", or "link")', 'MISSING_URL');
   }
 
   // Validate URL format
@@ -18,10 +24,10 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
   try {
     validUrl = new URL(targetUrl);
     if (!['http:', 'https:'].includes(validUrl.protocol)) {
-      throw new Error('Only HTTP and HTTPS URLs are supported');
+      throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
     }
   } catch (error) {
-    throw new Error(`Invalid URL: ${error.message}`);
+    throw createError(`Invalid URL: ${error.message}`, 'INVALID_URL');
   }
 
   try {
@@ -53,12 +59,12 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
 
     if (!response.ok) {
       if (response.status === 404) {
-        throw new Error('Page could not be found (HTTP 404)');
+        throw createError('Page could not be found (HTTP 404)', 'PAGE_NOT_FOUND');
       }
       if (response.status === 401 || response.status === 403) {
-        throw new Error(`Authentication required to access this page (HTTP ${response.status})`);
+        throw createError(`Authentication required to access this page (HTTP ${response.status})`, 'AUTH_REQUIRED');
       }
-      throw new Error(`Failed to fetch webpage: ${response.status} ${response.statusText}`);
+      throw createError(`Failed to fetch webpage: ${response.status} ${response.statusText}`, 'FETCH_ERROR');
     }
 
     const html = await response.text();
@@ -116,7 +122,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     }
 
     if (!contentElement) {
-      throw new Error('Could not find content in the webpage');
+      throw createError('Could not find content in the webpage', 'CONTENT_NOT_FOUND');
     }
 
     // Extract text content
@@ -157,12 +163,12 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
 
   } catch (error) {
     if (error.name === 'AbortError') {
-      throw new Error('Request timeout - webpage took too long to load');
+      throw createError('Request timeout - webpage took too long to load', 'TIMEOUT');
     }
     if (/certificate|SSL/i.test(error.message) && !ignoreSSL) {
-      throw new Error(`TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates.`);
+      throw createError(`TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates.`, 'TLS_ERROR');
     }
-    throw new Error(`Failed to extract content from webpage: ${error.message}`);
+    throw createError(`Failed to extract content from webpage: ${error.message}`, 'EXTRACTION_FAILED');
   }
 }
 
@@ -197,7 +203,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log('--------');
     console.log(result.content);
   } catch (error) {
-    console.error('Error extracting content:', error.message);
+    console.error(`Error extracting content: ${error.message} (code: ${error.code || 'UNKNOWN'})`);
     process.exit(1);
   }
 }

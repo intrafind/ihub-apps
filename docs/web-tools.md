@@ -41,6 +41,7 @@ The platform now includes three web-related tools:
 - Clean text content
 - Page metadata (title, description, author)
 - Word count and extraction timestamp
+- If an error occurs, an exception is thrown with a `code` property for translation
 
 **Example Usage**:
 ```javascript
@@ -58,6 +59,7 @@ The platform now includes three web-related tools:
 - Error handling for invalid URLs or failed requests
 - Optional `ignoreSSL` flag to bypass invalid HTTPS certificates when configured by an administrator
 - Detects missing pages or authentication requirements and reports them clearly
+- Returned errors include a `code` field so applications can translate messages
 
 ### 3. Enhanced Web Search (`enhancedWebSearch`)
 
