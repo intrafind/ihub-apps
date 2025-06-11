@@ -79,15 +79,25 @@ const ChatMessageList = ({
               <p className="font-medium">
                 {t('pages.appChat.starterPromptsTitle', 'Starter Prompts')}
               </p>
-              <div className="flex flex-col items-center gap-2">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {starterPrompts.map((sp, idx) => (
                   <button
                     key={idx}
                     type="button"
-                    className="px-4 py-2 bg-white border rounded-lg shadow hover:bg-gray-100"
-                    onClick={() => onSelectPrompt && onSelectPrompt(getLocalizedContent(sp.message, i18n.language))}
+                    className="p-4 text-left bg-white border rounded-lg shadow hover:bg-gray-50"
+                    onClick={() =>
+                      onSelectPrompt &&
+                      onSelectPrompt(
+                        getLocalizedContent(sp.message, i18n.language)
+                      )
+                    }
                   >
-                    {getLocalizedContent(sp.title, i18n.language)}
+                    <p className="font-semibold">
+                      {getLocalizedContent(sp.title, i18n.language)}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {getLocalizedContent(sp.message, i18n.language)}
+                    </p>
                   </button>
                 ))}
               </div>
