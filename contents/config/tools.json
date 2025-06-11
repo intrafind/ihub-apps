@@ -33,6 +33,11 @@
           "default": 5000,
           "minimum": 100,
           "maximum": 50000
+        },
+        "ignoreSSL": {
+          "type": "boolean",
+          "description": "Ignore invalid HTTPS certificates (default: false, admin configurable)",
+          "default": false
         }
       },
       "required": ["url"]

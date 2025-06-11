@@ -1,10 +1,11 @@
 import { JSDOM } from 'jsdom';
+import https from 'https';
 
 /**
  * Extract clean, readable content from a web page
  * Removes headers, footers, navigation, ads, and other non-content elements
  */
-export default async function webContentExtractor({ url, uri, link, maxLength = 5000 }) {
+export default async function webContentExtractor({ url, uri, link, maxLength = 5000, ignoreSSL = false }) {
   // Accept various URL parameter names for flexibility
   const targetUrl = url || uri || link;
   
@@ -27,7 +28,14 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     // Fetch the webpage with appropriate headers and timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-    
+
+    const agent = ignoreSSL && validUrl.protocol === 'https:'
+      ? new https.Agent({ rejectUnauthorized: false })
+      : undefined;
+    if (ignoreSSL && validUrl.protocol === 'https:') {
+      console.warn(`Ignoring SSL certificate errors for ${targetUrl}`);
+    }
+
     const response = await fetch(targetUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -37,12 +45,19 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1'
       },
-      signal: controller.signal
+      signal: controller.signal,
+      ...(agent ? { agent } : {})
     });
     
     clearTimeout(timeoutId);
 
     if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Page could not be found (HTTP 404)');
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(`Authentication required to access this page (HTTP ${response.status})`);
+      }
       throw new Error(`Failed to fetch webpage: ${response.status} ${response.statusText}`);
     }
 
@@ -144,24 +159,33 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     if (error.name === 'AbortError') {
       throw new Error('Request timeout - webpage took too long to load');
     }
+    if (/certificate|SSL/i.test(error.message) && !ignoreSSL) {
+      throw new Error(`TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates.`);
+    }
     throw new Error(`Failed to extract content from webpage: ${error.message}`);
   }
 }
 
 // CLI interface for direct execution
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const url = process.argv[2];
-  
+  const args = process.argv.slice(2);
+  const url = args[0];
+  const ignoreSSLFlag = args.includes('--insecure');
+
   if (!url) {
-    console.error('Usage: node webContentExtractor.js <URL>');
+    console.error('Usage: node webContentExtractor.js <URL> [--insecure]');
+    console.error('The --insecure flag is for administrators to bypass certificate errors.');
     console.error('Example: node webContentExtractor.js "https://example.com/article"');
     process.exit(1);
   }
-  
+
   console.log(`Extracting content from: ${url}`);
-  
+  if (ignoreSSLFlag) {
+    console.warn('Warning: ignoring SSL certificate errors');
+  }
+
   try {
-    const result = await webContentExtractor({ url });
+    const result = await webContentExtractor({ url, ignoreSSL: ignoreSSLFlag });
     console.log('\nExtracted Content:');
     console.log('==================');
     console.log(`Title: ${result.title}`);
