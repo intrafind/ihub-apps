@@ -4,6 +4,9 @@
       "en": " ",
       "de": " "
     },
+    "languageSelector": {
+      "enabled": false
+    },
     "defaultColor": "rgb(0, 53, 87)",
     "logo": {
       "url": "/bmas-logo-complete.png",
