@@ -230,6 +230,7 @@ When `true`, users can submit the form without entering content in the main inpu
 
 The system supports these icons:
 - `question-mark-circle` - Question mark in a circle
+- `information-circle` - Information icon
 - `chat-bubbles` - Chat conversation bubbles
 - `globe` - Globe/Earth icon
 - `document-text` - Document with text

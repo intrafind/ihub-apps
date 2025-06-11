@@ -27,6 +27,7 @@ import {
   PaperClipIcon as OutlinePaperClipIcon,
   MicrophoneIcon as OutlineMicrophoneIcon,
   MagnifyingGlassIcon,
+  InformationCircleIcon as OutlineInformationCircleIcon,
   Cog6ToothIcon,
   AdjustmentsHorizontalIcon,
   StarIcon as OutlineStarIcon,
@@ -58,7 +59,8 @@ import {
   LightBulbIcon as SolidLightBulbIcon,
   CodeBracketIcon as SolidCodeBracketIcon,
   ClockIcon as SolidClockIcon,
-  AcademicCapIcon as SolidAcademicCapIcon
+  AcademicCapIcon as SolidAcademicCapIcon,
+  InformationCircleIcon as SolidInformationCircleIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
@@ -73,6 +75,7 @@ const iconMap = {
   'document-text': { outline: OutlineDocumentTextIcon, solid: SolidDocumentTextIcon },
   edit: { outline: PencilSquareIcon, solid: PencilSquareIcon },
   'exclamation-circle': { outline: OutlineExclamationCircleIcon, solid: SolidExclamationCircleIcon },
+  'information-circle': { outline: OutlineInformationCircleIcon, solid: SolidInformationCircleIcon },
   microphone: { outline: OutlineMicrophoneIcon, solid: SolidMicrophoneIcon },
   'paper-clip': { outline: OutlinePaperClipIcon, solid: SolidPaperClipIcon },
   refresh: { outline: ArrowPathIcon, solid: ArrowPathIcon },

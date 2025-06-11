@@ -28,6 +28,9 @@ const ChatHeader = ({
   // Default icon if none provided
   const defaultIcon = <Icon name="chat" className="text-white" />;
 
+  // Toggle visibility of the description tooltip on mobile
+  const [showDescription, setShowDescription] = useState(false);
+
   const handleBack = () => {
     navigate('/');
   };
@@ -50,17 +53,42 @@ const ChatHeader = ({
           >
             {icon || defaultIcon}
           </div>
-          <div>
-            <h1 className="text-2xl font-bold leading-tight">
-              {typeof title === 'object' 
-                ? getLocalizedContent(title, currentLanguage) 
+          <div className="relative">
+            <h1 className="text-2xl font-bold leading-tight flex items-center">
+              {typeof title === 'object'
+                ? getLocalizedContent(title, currentLanguage)
                 : title}
+              {isMobile && description && (
+                <button
+                  className="ml-1 text-gray-500"
+                  onClick={() => setShowDescription((prev) => !prev)}
+                  onMouseEnter={() => setShowDescription(true)}
+                  onMouseLeave={() => setShowDescription(false)}
+                  aria-label="App info"
+                  title={
+                    typeof description === 'object'
+                      ? getLocalizedContent(description, currentLanguage)
+                      : description
+                  }
+                >
+                  <Icon name="information-circle" size="sm" />
+                </button>
+              )}
             </h1>
-            <p className="text-gray-600 text-sm">
-              {typeof description === 'object'
-                ? getLocalizedContent(description, currentLanguage) 
-                : description}
-            </p>
+            {!isMobile && (
+              <p className="text-gray-600 text-sm">
+                {typeof description === 'object'
+                  ? getLocalizedContent(description, currentLanguage)
+                  : description}
+              </p>
+            )}
+            {isMobile && showDescription && (
+              <div className="absolute z-10 mt-2 p-2 bg-white border rounded shadow text-xs max-w-xs">
+                {typeof description === 'object'
+                  ? getLocalizedContent(description, currentLanguage)
+                  : description}
+              </div>
+            )}
           </div>
         </div>
 
