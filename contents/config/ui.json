@@ -6,6 +6,15 @@
       "alt": {
         "en": "AI Hub Logo",
         "de": "KI-Hub Logo"
+      },
+      "containerStyle": {
+        "backgroundColor": "#ffffff",
+        "borderBottomRightRadius": "8px",
+        "justifyContent": "center",
+        "padding": "0 8px"
+      },
+      "imageStyle": {
+        "maxHeight": "80%"
       }
     },
     "links": [
