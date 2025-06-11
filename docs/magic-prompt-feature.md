@@ -6,18 +6,19 @@ The magic prompt feature refines the user's input by sending it to an LLM with a
 
 ## Configuration
 
-Enable the feature for an app by adding `"magicPrompt": true` under the `features` section of its configuration:
+Enable and configure the feature for an app by adding a `magicPrompt` object under the `features` section:
 
 ```json
 "features": {
-  "magicPrompt": true
+  "magicPrompt": {
+    "model": "gpt-3.5-turbo",
+    "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
+  }
 }
 ```
 
-Two environment variables control the behaviour of the generator:
-
-- `MAGIC_PROMPT_MODEL` – model id used for generation (default `gpt-3.5-turbo`)
-- `MAGIC_PROMPT_PROMPT` – system prompt sent along with the user input
+If no model or prompt is specified in the configuration the server falls back to the environment variables
+`MAGIC_PROMPT_MODEL` and `MAGIC_PROMPT_PROMPT`.
 
 ## Usage
 

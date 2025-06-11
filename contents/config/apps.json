@@ -165,7 +165,13 @@
           {"label": {"en": "Japanese", "de": "Japanisch"}, "value": "Japanese"}
         ]
       }
-    ]
+    ],
+    "features": {
+      "magicPrompt": {
+        "model": "gpt-3.5-turbo",
+        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
+      }
+    }
   },
   {
     "id": "summarizer",
@@ -214,7 +220,13 @@
           {"label": {"en": "Summarize and recommend", "de": "Zusammenfassen und Empfehlungen geben"}, "value": "summarize and provide recommendations based on"}
         ]
       }
-    ]
+    ],
+    "features": {
+      "magicPrompt": {
+        "model": "gpt-3.5-turbo",
+        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
+      }
+    }
   },
   {
     "id": "custom",
@@ -251,7 +263,13 @@
         },
         "type": "text"
       }
-    ]
+    ],
+    "features": {
+      "magicPrompt": {
+        "model": "gpt-3.5-turbo",
+        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
+      }
+    }
   },
   {
     "id": "email-composer",
@@ -352,7 +370,13 @@
         },
         "type": "text"
       }
-    ]
+    ],
+    "features": {
+      "magicPrompt": {
+        "model": "gpt-3.5-turbo",
+        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
+      }
+    }
   },
   {
     "id": "meeting-assistant",
@@ -443,7 +467,13 @@
           "de": "30 Minuten"
         }
       }
-    ]
+    ],
+    "features": {
+      "magicPrompt": {
+        "model": "gpt-3.5-turbo",
+        "prompt": "Rewrite the user input into a concise high quality prompt and respond only with the new prompt."
+      }
+    }
   },
   {
     "id": "social-media",
