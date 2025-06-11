@@ -367,11 +367,10 @@ try {
   // Create the output directory structure
   console.log('Creating output directory structure...');
   
-  // Copy server files
-  fs.mkdirSync(path.join(outputDir, 'server'), { recursive: true });
-  fs.mkdirSync(path.join(outputDir, 'server', 'adapters'), { recursive: true });
-  
+  // TODO: make it more dynamic, because we have to add every new folder and they should be picked up automatically
+
   // Copy all server JS files
+  fs.mkdirSync(path.join(outputDir, 'server'), { recursive: true });
   fs.readdirSync(serverDir).forEach(file => {
     if (file.endsWith('.js') || file.endsWith('.cjs')) {
       fs.copyFileSync(
@@ -382,6 +381,7 @@ try {
   });
   
   // Copy adapter files
+  fs.mkdirSync(path.join(outputDir, 'server', 'adapters'), { recursive: true });
   fs.readdirSync(path.join(serverDir, 'adapters')).forEach(file => {
     if (file.endsWith('.js')) {
       fs.copyFileSync(
@@ -401,7 +401,26 @@ try {
       );
     }
   });
-  
+
+  fs.mkdirSync(path.join(outputDir, 'server', 'services'), { recursive: true });
+  fs.readdirSync(path.join(serverDir, 'services')).forEach(file => {
+    if (file.endsWith('.js')) {
+      fs.copyFileSync(
+        path.join(serverDir, 'services', file),
+        path.join(outputDir, 'server', 'services', file)
+      );
+    }
+  });
+
+  fs.mkdirSync(path.join(outputDir, 'server', 'tools'), { recursive: true });
+  fs.readdirSync(path.join(serverDir, 'tools')).forEach(file => {
+    if (file.endsWith('.js')) {
+      fs.copyFileSync(
+        path.join(serverDir, 'tools', file),
+        path.join(outputDir, 'server', 'tools', file)
+      );
+    }
+  });  
   // Create a package.json for the server
   const serverPackageJson = {
     name: 'ai-hub-apps-server',
