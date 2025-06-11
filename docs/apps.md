@@ -223,6 +223,9 @@ Apps can offer clickable starter prompts shown when the chat has no messages:
 ]
 ```
 
+If starter prompts are defined, any configured greeting message will be
+suppressed so the prompts can be displayed instead.
+
 #### Content Restrictions
 
 Apps can be configured to allow empty content submission:
