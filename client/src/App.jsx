@@ -8,6 +8,7 @@ import DirectChat from './pages/DirectChat';
 import NotFound from './pages/NotFound';
 import MarkdownPage from './pages/MarkdownPage';
 import WidgetPage from './pages/WidgetPage';
+import AdminUsageReports from './pages/AdminUsageReports';
 import AppProviders from './components/AppProviders';
 import { withErrorBoundary } from './components/ErrorBoundary';
 import useSessionManagement from './utils/useSessionManagement';
@@ -18,6 +19,7 @@ const SafeAppChat = withErrorBoundary(AppChat);
 const SafeDirectChat = withErrorBoundary(DirectChat);
 const SafeMarkdownPage = withErrorBoundary(MarkdownPage);
 const SafeWidgetPage = withErrorBoundary(WidgetPage);
+const SafeAdminUsage = withErrorBoundary(AdminUsageReports);
 
 function App() {
   // Use the custom hook for session management
@@ -36,6 +38,7 @@ function App() {
             <Route path="apps/:appId" element={<SafeAppChat />} />
             <Route path="chat/:modelId" element={<SafeDirectChat />} />
             <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
+            <Route path="admin/usage" element={<SafeAdminUsage />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

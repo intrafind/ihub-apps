@@ -211,6 +211,7 @@ export async function logInteraction(interactionType, data) {
     
     // Write to log file
     await appendToLogFile(logEntry);
+
     
     // Return the interaction ID so it can be used to link requests, responses, and feedback
     return interactionId;

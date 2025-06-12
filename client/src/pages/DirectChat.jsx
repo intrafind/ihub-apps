@@ -207,7 +207,8 @@ const DirectChat = () => {
       setMagicLoading(true);
       const response = await generateMagicPrompt(currentMessage, {
         prompt: widgetConfig?.features?.magicPrompt?.prompt,
-        modelId: widgetConfig?.features?.magicPrompt?.model
+        modelId: widgetConfig?.features?.magicPrompt?.model,
+        appId: 'direct'
       });
       if (response && response.prompt) {
         setOriginalInput(currentMessage);

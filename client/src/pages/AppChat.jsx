@@ -564,7 +564,8 @@ const AppChat = () => {
       setMagicLoading(true);
       const response = await generateMagicPrompt(input, {
         prompt: app?.features?.magicPrompt?.prompt,
-        modelId: app?.features?.magicPrompt?.model
+        modelId: app?.features?.magicPrompt?.model,
+        appId
       });
       if (response && response.prompt) {
         setOriginalInput(input);
