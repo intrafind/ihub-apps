@@ -1,0 +1,30 @@
+.magic-prompt-stars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem; /* 20px to match h-5 w-5 */
+  height: 1.25rem;
+  gap: 2px;
+}
+
+.magic-prompt-star {
+  opacity: 0.3;
+  animation: magicPromptFlash 1s ease-in-out infinite;
+}
+
+.magic-prompt-star:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.magic-prompt-star:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes magicPromptFlash {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}

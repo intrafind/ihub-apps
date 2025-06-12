@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import VoiceInputComponent from "../VoiceInputComponent";
 import Icon from "../Icon";
+import MagicPromptLoader from "../MagicPromptLoader";
 import ImageUploader from "../ImageUploader";
 import FileUploader from "../FileUploader";
 
@@ -258,9 +259,7 @@ const ChatInput = ({
               aria-label={t("common.magicPrompt", "Magic prompt")}
             >
               {magicPromptLoading ? (
-                <div className="animate-spin h-5 w-5 flex items-center justify-center">
-                  <Icon name="sparkles" size="md" />
-                </div>
+                <MagicPromptLoader />
               ) : (
                 <Icon name="sparkles" size="md" />
               )}
