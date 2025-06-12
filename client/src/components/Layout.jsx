@@ -11,7 +11,7 @@ import { updateSettingsFromUrl } from '../utils/integrationSettings';
 const Layout = () => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const { headerColor, uiConfig } = useUIConfig();
+  const { headerColor, uiConfig, resetHeaderColor } = useUIConfig();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
@@ -89,6 +89,7 @@ const Layout = () => {
                 {/* Add padding-left if logo exists to prevent overlap */}
                 <Link
                   to="/"
+                  onClick={resetHeaderColor}
                   className={`text-2xl font-bold flex items-center py-4`}
                 >
                   {uiConfig?.header?.title ? getLocalizedContent(uiConfig.header.title, currentLanguage) : 'AI Hub Apps'}
@@ -103,6 +104,7 @@ const Layout = () => {
                       <Link
                         key={index}
                         to={link.url}
+                        onClick={resetHeaderColor}
                         className={`hover:text-white/80 ${location.pathname === link.url ? 'underline font-medium' : ''}`}
                         target={link.url.startsWith('http') ? '_blank' : undefined}
                         rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
@@ -154,7 +156,10 @@ const Layout = () => {
                         className={`block py-2 ${location.pathname === link.url ? 'font-medium' : ''}`}
                         target={link.url.startsWith('http') ? '_blank' : undefined}
                         rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          resetHeaderColor();
+                        }}
                       >
                         {getLocalizedContent(link.name, currentLanguage)}
                       </Link>
@@ -183,9 +188,10 @@ const Layout = () => {
               {!isAppPage && (
                 <div className="flex flex-wrap justify-center gap-4 md:gap-6">
                   {uiConfig?.footer?.links && uiConfig.footer.links.map((link, index) => (
-                    <Link 
+                    <Link
                       key={index}
-                      to={link.url} 
+                      to={link.url}
+                      onClick={resetHeaderColor}
                       className="hover:text-gray-300"
                       target={link.url.startsWith('http') || link.url.startsWith('mailto:') ? '_blank' : undefined}
                       rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
