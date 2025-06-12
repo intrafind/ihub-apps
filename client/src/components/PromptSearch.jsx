@@ -8,18 +8,10 @@ import { fetchPrompts } from '../api/api';
 import { getFavoritePrompts } from '../utils/favoritePrompts';
 import { getRecentPromptIds, recordPromptUsage } from '../utils/recentPrompts';
 import { getLocalizedContent } from '../utils/localizeContent';
+import { highlightVariables } from '../utils/highlightVariables';
 
 const fuseRef = { current: null };
 
-const highlightVariables = (text) => {
-  return text.split(/(\[[^\]]+\])/g).map((part, idx) => (
-    part.startsWith('[') && part.endsWith(']') ? (
-      <span key={idx} className="text-indigo-600 font-semibold">{part}</span>
-    ) : (
-      <span key={idx}>{part}</span>
-    )
-  ));
-};
 
 const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
   const { t, i18n } = useTranslation();

@@ -73,7 +73,9 @@
       "recent": "Zuletzt verwendet",
       "previous": "Zurück",
       "next": "Weiter",
-      "pageOfTotal": "Seite {{current}} von {{total}}"
+      "pageOfTotal": "Seite {{current}} von {{total}}",
+      "sharePrompt": "Prompt teilen",
+      "linkCopied": "Link kopiert!"
     },
     "appChat": {
       "messagePlaceholder": "Gib deine Nachricht hier ein...",

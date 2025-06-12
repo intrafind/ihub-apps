@@ -72,7 +72,9 @@
       "recent": "Recently used",
       "previous": "Previous",
       "next": "Next",
-      "pageOfTotal": "Page {{current}} of {{total}}"
+      "pageOfTotal": "Page {{current}} of {{total}}",
+      "sharePrompt": "Share prompt",
+      "linkCopied": "Link copied!"
     },
     "appChat": {
       "messagePlaceholder": "Type your message here...",

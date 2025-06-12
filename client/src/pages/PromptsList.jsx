@@ -1,21 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { fetchPrompts } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Icon from '../components/Icon';
+import PromptModal from '../components/PromptModal';
 import { getFavoritePrompts, toggleFavoritePrompt } from '../utils/favoritePrompts';
 import { getRecentPromptIds, recordPromptUsage } from '../utils/recentPrompts';
 import { getLocalizedContent } from '../utils/localizeContent';
-
-const highlightVariables = (text) =>
-  text.split(/(\[[^\]]+\])/g).map((part, idx) =>
-    part.startsWith('[') && part.endsWith(']') ? (
-      <span key={idx} className="text-indigo-600 font-semibold">{part}</span>
-    ) : (
-      <span key={idx}>{part}</span>
-    )
-  );
+import { highlightVariables } from '../utils/highlightVariables';
 
 const ITEMS_PER_PAGE = 9;
 
@@ -28,6 +21,8 @@ const PromptsList = () => {
   const [page, setPage] = useState(0);
   const [favoritePromptIds, setFavoritePromptIds] = useState([]);
   const [recentPromptIds, setRecentPromptIds] = useState([]);
+  const [selectedPrompt, setSelectedPrompt] = useState(null);
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     (async () => {
@@ -51,6 +46,16 @@ const PromptsList = () => {
       }
     })();
   }, [t, i18n.language]);
+
+  // Open modal if id parameter is present
+  useEffect(() => {
+    if (!prompts.length) return;
+    const id = searchParams.get('id');
+    if (id) {
+      const found = prompts.find(p => p.id === id);
+      if (found) setSelectedPrompt(found);
+    }
+  }, [prompts, searchParams]);
 
   const filteredPrompts = useMemo(() => {
     if (!searchTerm) return prompts;
@@ -168,9 +173,13 @@ const PromptsList = () => {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
             {pagePrompts.map(p => (
-              <div key={p.id} className="bg-white rounded-lg shadow p-4 flex flex-col relative">
+              <div
+                key={p.id}
+                className="bg-white rounded-lg shadow p-4 flex flex-col relative cursor-pointer"
+                onClick={() => setSelectedPrompt(p)}
+              >
                 <button
-                  onClick={(e) => handleToggleFavorite(e, p.id)}
+                  onClick={(e) => { e.stopPropagation(); handleToggleFavorite(e, p.id); }}
                   className="absolute top-2 right-2 p-1 bg-white bg-opacity-70 rounded-full hover:bg-opacity-100"
                   title={favoritePromptIds.includes(p.id) ? t('pages.promptsList.unfavorite') : t('pages.promptsList.favorite')}
                   aria-label={favoritePromptIds.includes(p.id) ? t('pages.promptsList.unfavorite') : t('pages.promptsList.favorite')}
@@ -201,7 +210,8 @@ const PromptsList = () => {
                 </p>
                 <div className="mt-4 flex gap-2">
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       navigator.clipboard.writeText(p.prompt.replace('[content]', ''));
                       recordPromptUsage(p.id);
                       alert(t('pages.promptsList.copied', 'Copied!'));
@@ -214,7 +224,7 @@ const PromptsList = () => {
                     <Link
                       to={`/apps/${p.appId}?prefill=${encodeURIComponent(p.prompt.replace('[content]', ''))}`}
                       className="px-3 py-1 text-sm border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50 flex items-center"
-                      onClick={() => recordPromptUsage(p.id)}
+                      onClick={(e) => { e.stopPropagation(); recordPromptUsage(p.id); }}
                     >
                       {t('pages.promptsList.useInApp', 'Open app')}
                     </Link>
@@ -250,6 +260,22 @@ const PromptsList = () => {
             </div>
           )}
         </>
+      )}
+      {selectedPrompt && (
+        <PromptModal
+          prompt={selectedPrompt}
+          onClose={() => setSelectedPrompt(null)}
+          isFavorite={favoritePromptIds.includes(selectedPrompt.id)}
+          onToggleFavorite={(id) => {
+            const newStatus = toggleFavoritePrompt(id);
+            if (newStatus) {
+              setFavoritePromptIds((prev) => [...prev, id]);
+            } else {
+              setFavoritePromptIds((prev) => prev.filter((pid) => pid !== id));
+            }
+          }}
+          t={t}
+        />
       )}
     </div>
   );
