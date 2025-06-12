@@ -8,7 +8,7 @@ import {
   executeNonStreamingResponse,
   processChatWithTools
 } from '../services/chatService.js';
-import { recordMagicPrompt } from '../usageTracker.js';
+import { recordMagicPrompt, recordFeedback, estimateTokens } from '../usageTracker.js';
 
 export default function registerChatRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }) {
   // GET /api/models/{modelId}/chat/test - Test model chat completion without streaming
@@ -193,6 +193,14 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
         }
       });
 
+      // Record feedback for usage tracking
+      await recordFeedback({
+        userId: userSessionId,
+        appId,
+        modelId,
+        rating: rating === 'positive' ? 'positive' : 'negative'
+      });
+
       console.log(`Feedback received for message ${messageId} in chat ${chatId}: ${rating}`);
       return res.status(200).json({ success: true });
     } catch (error) {
@@ -275,8 +283,10 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
         }
       }
 
-      const inputTokens = responseData.usage?.prompt_tokens || 0;
-      const outputTokens = responseData.usage?.completion_tokens || 0;
+      const inputTokens =
+        responseData.usage?.prompt_tokens ?? estimateTokens(input);
+      const outputTokens =
+        responseData.usage?.completion_tokens ?? estimateTokens(newPrompt);
       const userSessionId = req.headers['x-session-id'];
       await recordMagicPrompt({ userId: userSessionId, appId, modelId: model.id, inputTokens, outputTokens });
 
