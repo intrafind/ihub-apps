@@ -243,6 +243,17 @@ export const sendMessageFeedback = async (feedbackData) => {
   );
 };
 
+// Admin usage data
+export const fetchUsageData = async () => {
+  return handleApiResponse(
+    () => apiClient.get('/admin/usage'),
+    null,
+    null,
+    false
+  );
+};
+
+
 export const sendDirectModelMessage = async (modelId, messages, options = {}) => {
   return handleApiResponse(() =>
     apiClient.post(`/models/${modelId}/chat`, {

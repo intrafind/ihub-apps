@@ -8,6 +8,7 @@ import {
   executeNonStreamingResponse,
   processChatWithTools
 } from '../services/chatService.js';
+import { recordMagicPrompt, recordFeedback, estimateTokens } from '../usageTracker.js';
 
 export default function registerChatRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }) {
   // GET /api/models/{modelId}/chat/test - Test model chat completion without streaming
@@ -192,6 +193,14 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
         }
       });
 
+      // Record feedback for usage tracking
+      await recordFeedback({
+        userId: userSessionId,
+        appId,
+        modelId,
+        rating: rating === 'positive' ? 'positive' : 'negative'
+      });
+
       console.log(`Feedback received for message ${messageId} in chat ${chatId}: ${rating}`);
       return res.status(200).json({ success: true });
     } catch (error) {
@@ -203,7 +212,7 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
   // POST /api/magic-prompt - Generate an enhanced prompt
   app.post('/api/magic-prompt', async (req, res) => {
     try {
-      const { input, prompt, modelId } = req.body;
+      const { input, prompt, modelId, appId = 'direct' } = req.body;
       const language = req.headers['accept-language']?.split(',')[0] || 'en';
 
       if (!input) {
@@ -273,6 +282,13 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
           newPrompt = content.map(c => (typeof c === 'string' ? c : c.text || '')).join('').trim();
         }
       }
+
+      const inputTokens =
+        responseData.usage?.prompt_tokens ?? estimateTokens(input);
+      const outputTokens =
+        responseData.usage?.completion_tokens ?? estimateTokens(newPrompt);
+      const userSessionId = req.headers['x-session-id'];
+      await recordMagicPrompt({ userId: userSessionId, appId, modelId: model.id, inputTokens, outputTokens });
 
       return res.json({ prompt: newPrompt });
     } catch (error) {

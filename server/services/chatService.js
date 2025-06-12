@@ -2,6 +2,7 @@
 import { loadJson } from '../configLoader.js';
 import { createCompletionRequest, processResponseBuffer } from '../adapters/index.js';
 import { getErrorDetails, logInteraction } from '../utils.js';
+import { recordChatRequest, recordChatResponse, estimateTokens } from '../usageTracker.js';
 import { getToolsForApp, runTool } from '../toolLoader.js';
 import { normalizeName } from '../adapters/toolFormatter.js';
 import { sendSSE, activeRequests } from '../sse.js';
@@ -111,6 +112,11 @@ export async function executeNonStreamingResponse({
     const responseData = await llmResponse.json();
     responseData.messageId = messageId;
 
+    const promptTokens = responseData.usage?.prompt_tokens || 0;
+    const completionTokens = responseData.usage?.completion_tokens || 0;
+    const baseLog = buildLogData(false);
+    await recordChatRequest({ userId: baseLog.userSessionId, appId: baseLog.appId, modelId: model.id, tokens: promptTokens });
+
     let aiResponse = '';
     if (responseData.choices && responseData.choices.length > 0) {
       aiResponse = responseData.choices[0].message?.content || '';
@@ -120,6 +126,7 @@ export async function executeNonStreamingResponse({
       response: aiResponse.substring(0, 1000)
     });
     await logInteraction('chat_response', responseLog);
+    await recordChatResponse({ userId: baseLog.userSessionId, appId: baseLog.appId, modelId: model.id, tokens: completionTokens });
 
     return res.json(responseData);
   } catch (fetchError) {
@@ -155,6 +162,9 @@ export async function executeStreamingResponse({
   sendSSE(clientRes, 'processing', { message: 'Processing your request...' });
   const controller = new AbortController();
   activeRequests.set(chatId, controller);
+  const baseLog = buildLogData(true);
+  const promptTokens = llmMessages.map(m => estimateTokens(m.content || '')).reduce((a,b) => a+b, 0);
+  await recordChatRequest({ userId: baseLog.userSessionId, appId: baseLog.appId, modelId: model.id, tokens: promptTokens });
   const timeoutId = setTimeout(async () => {
     controller.abort();
     const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT/1000 }, clientLanguage);
@@ -220,6 +230,8 @@ export async function executeStreamingResponse({
         if (result && result.complete) {
           sendSSE(clientRes, 'done', {});
           await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: fullResponse }));
+          const completionTokens = estimateTokens(fullResponse);
+          await recordChatResponse({ userId: baseLog.userSessionId, appId: baseLog.appId, modelId: model.id, tokens: completionTokens });
           break;
         }
       }
