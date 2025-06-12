@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 const renderTable = (obj) => {
   const rows = flatten(obj);
+  const formatNumber = new Intl.NumberFormat();
   return (
     <table className="min-w-full text-xs border mb-2">
       <thead>
@@ -17,6 +18,9 @@ const renderTable = (obj) => {
         {rows.map(({ key, value }) => (
           <tr key={key} className="odd:bg-white even:bg-gray-50">
             <td className="p-1">{key}</td>
+            <td className="p-1 text-right font-mono tabular-nums">
+              {typeof value === 'number' ? formatNumber.format(value) : value}
+            </td>
             <td className="p-1 text-right">{value}</td>
           </tr>
         ))}
@@ -89,14 +93,13 @@ const AdminUsageReports = () => {
 
   const downloadJson = () => {
     if (!usage) return;
-    const data = usage[category];
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
+    const blob = new Blob([JSON.stringify(usage, null, 2)], {
       type: 'application/json'
     });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${category}.json`;
+    link.download = 'usage.json';
     link.click();
     URL.revokeObjectURL(url);
   };
