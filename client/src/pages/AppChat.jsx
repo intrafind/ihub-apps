@@ -12,6 +12,7 @@ import {
   fetchStyles,
   sendAppChatMessage,
   isTimeoutError,
+  generateMagicPrompt,
 } from "../api/api";
 import AppConfigForm from "../components/AppConfigForm";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -163,6 +164,8 @@ const AppChat = () => {
   // State for file upload and input configuration
   const [selectedFile, setSelectedFile] = useState(null);
   const [showFileUploader, setShowFileUploader] = useState(false);
+  const [originalInput, setOriginalInput] = useState(null);
+  const [magicLoading, setMagicLoading] = useState(false);
 
   const inputRef = useRef(null);
   const chatId = useRef(`chat-${Date.now()}`);
@@ -477,10 +480,18 @@ const AppChat = () => {
     variables,
   ]);
 
-  // Display greeting message when app is loaded and no messages exist yet
+  // Display greeting message when app is loaded and no messages exist yet.
+  // Skip the greeting if starter prompts are configured so they can be shown
   useEffect(() => {
-    // Only add greeting message when app is loaded, messages are empty, and we haven't added it yet
-    if (app && !loading && messages.length === 0 && !greetingAddedRef.current) {
+    // Only add greeting message when app is loaded, messages are empty,
+    // no starter prompts exist, and we haven't added it yet
+    if (
+      app &&
+      !loading &&
+      messages.length === 0 &&
+      !greetingAddedRef.current &&
+      !(app.starterPrompts && app.starterPrompts.length > 0)
+    ) {
       console.log("[AppChat] Adding greeting message when app loaded");
 
       // Check for language specific greeting
@@ -549,8 +560,41 @@ const AppChat = () => {
     setShowFileUploader(prev => !prev);
   };
 
+  const handleMagicPrompt = async () => {
+    if (!input.trim()) return;
+    try {
+      setMagicLoading(true);
+      const response = await generateMagicPrompt(input, {
+        prompt: app?.features?.magicPrompt?.prompt,
+        modelId: app?.features?.magicPrompt?.model
+      });
+      if (response && response.prompt) {
+        setOriginalInput(input);
+        setInput(response.prompt);
+      }
+    } catch (err) {
+      console.error('Error generating magic prompt:', err);
+    } finally {
+      setMagicLoading(false);
+    }
+  };
+
+  const handleUndoMagicPrompt = () => {
+    if (originalInput !== null) {
+      setInput(originalInput);
+      setOriginalInput(null);
+    }
+  };
+
   const handleInputChange = (e) => {
     setInput(e.target.value);
+  };
+
+  const handleStarterPromptClick = (prompt) => {
+    setInput(prompt);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
   };
 
   const handleDeleteMessage = (messageId) => {
@@ -758,6 +802,7 @@ const AppChat = () => {
       });
 
       setInput("");
+      setOriginalInput(null);
       // Clear the selected image after sending
       setSelectedImage(null);
       // Close the image uploader
@@ -1000,6 +1045,8 @@ const AppChat = () => {
             appId={appId}
             chatId={chatId.current}
             modelId={selectedModel}
+            starterPrompts={app?.starterPrompts || []}
+            onSelectPrompt={handleStarterPromptClick}
           />
 
           {/* Message Input - using our reusable ChatInput component */}
@@ -1031,6 +1078,11 @@ const AppChat = () => {
             selectedFile={selectedFile}
             showFileUploader={showFileUploader}
             onToggleFileUploader={toggleFileUploader}
+            magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
+            onMagicPrompt={handleMagicPrompt}
+            showUndoMagicPrompt={originalInput !== null}
+            onUndoMagicPrompt={handleUndoMagicPrompt}
+            magicPromptLoading={magicLoading}
           />
         </div>
 

@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import VoiceInputComponent from "../VoiceInputComponent";
 import Icon from "../Icon";
+import MagicPromptLoader from "../MagicPromptLoader";
 import ImageUploader from "../ImageUploader";
 import FileUploader from "../FileUploader";
 import PromptSearch from "../PromptSearch";
@@ -33,6 +34,11 @@ const ChatInput = ({
   showFileUploader: externalShowFileUploader = undefined,
   onToggleImageUploader = null,
   onToggleFileUploader = null,
+  magicPromptEnabled = false,
+  onMagicPrompt = null,
+  showUndoMagicPrompt = false,
+  onUndoMagicPrompt = null,
+  magicPromptLoading = false,
 }) => {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -280,6 +286,36 @@ const ChatInput = ({
               aria-label={t("common.toggleFileUpload", "Toggle file upload")}
             >
               <Icon name="paper-clip" size="md" />
+            </button>
+          )}
+
+          {magicPromptEnabled && !showUndoMagicPrompt && (
+            <button
+              type="button"
+              onClick={onMagicPrompt}
+              disabled={disabled || isProcessing}
+              className="image-upload-button h-fit"
+              title={t("common.magicPrompt", "Magic prompt")}
+              aria-label={t("common.magicPrompt", "Magic prompt")}
+            >
+              {magicPromptLoading ? (
+                <MagicPromptLoader />
+              ) : (
+                <Icon name="sparkles" size="md" />
+              )}
+            </button>
+          )}
+
+          {showUndoMagicPrompt && (
+            <button
+              type="button"
+              onClick={onUndoMagicPrompt}
+              disabled={disabled || isProcessing}
+              className="image-upload-button h-fit"
+              title={t("common.undo", "Undo")}
+              aria-label={t("common.undo", "Undo")}
+            >
+              <Icon name="arrowLeft" size="md" />
             </button>
           )}
 

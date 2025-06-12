@@ -85,6 +85,16 @@ export async function runTool(toolId, params = {}) {
     if (typeof mod.default !== 'function') {
       throw new Error(`Tool ${toolId} does not export a default function`);
     }
+
+    // Apply default parameter values defined in the tool schema
+    if (tool.parameters && tool.parameters.properties) {
+      for (const [key, prop] of Object.entries(tool.parameters.properties)) {
+        if (params[key] === undefined && prop.default !== undefined) {
+          params[key] = prop.default;
+        }
+      }
+    }
+
     return await mod.default(params);
   } catch (err) {
     console.error(`Failed to execute tool ${toolId}:`, err);

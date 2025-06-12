@@ -126,28 +126,33 @@ async function getLocalizedError(errorKey, params = {}, language = 'en') {
   try {
     // Load translations for the requested language
     const translations = await loadJson(`locales/${language}.json`);
-    
-    if (!translations || !translations.serverErrors || !translations.serverErrors[errorKey]) {
+
+    const hasServerError = translations?.serverErrors && translations.serverErrors[errorKey];
+    const hasToolError = translations?.toolErrors && translations.toolErrors[errorKey];
+
+    if (!translations || (!hasServerError && !hasToolError)) {
       // Try English as fallback
       if (language !== 'en') {
         const enTranslations = await loadJson('locales/en.json');
-        if (enTranslations && enTranslations.serverErrors && enTranslations.serverErrors[errorKey]) {
-          let message = enTranslations.serverErrors[errorKey];
+        const enServer = enTranslations?.serverErrors?.[errorKey];
+        const enTool = enTranslations?.toolErrors?.[errorKey];
+        if (enServer || enTool) {
+          let message = enServer || enTool;
           
           // Replace any parameters in the message
           Object.entries(params).forEach(([key, value]) => {
             message = message.replace(`{${key}}`, value);
           });
-          
+
           return message;
         }
       }
-      
+
       // Default fallback message if nothing else works
       return `Error: ${errorKey}`;
     }
-    
-    let message = translations.serverErrors[errorKey];
+
+    let message = translations.serverErrors?.[errorKey] || translations.toolErrors?.[errorKey];
     
     // Replace any parameters in the message
     Object.entries(params).forEach(([key, value]) => {

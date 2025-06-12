@@ -244,7 +244,7 @@ export const sendMessageFeedback = async (feedbackData) => {
 };
 
 export const sendDirectModelMessage = async (modelId, messages, options = {}) => {
-  return handleApiResponse(() => 
+  return handleApiResponse(() =>
     apiClient.post(`/models/${modelId}/chat`, {
       messages,
       ...options
@@ -252,6 +252,15 @@ export const sendDirectModelMessage = async (modelId, messages, options = {}) =>
     null, // No caching for chat messages
     null,
     false // Don't deduplicate chat requests
+  );
+};
+
+export const generateMagicPrompt = async (input, options = {}) => {
+  return handleApiResponse(
+    () => apiClient.post('/magic-prompt', { input, ...options }),
+    null,
+    null,
+    false
   );
 };
 
@@ -510,6 +519,7 @@ const apiService = {
   fetchPrompts,
   sendAppChatMessage,
   sendDirectModelMessage,
+  generateMagicPrompt,
   sendMessageFeedback
 };
 

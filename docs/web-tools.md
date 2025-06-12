@@ -35,11 +35,13 @@ The platform now includes three web-related tools:
 **Parameters**:
 - `url` (string, required): The URL of the webpage to extract content from
 - `maxLength` (integer, optional): Maximum length of extracted content in characters (default: 5000)
+- `ignoreSSL` (boolean, optional, admin only): Ignore invalid HTTPS certificates. If omitted, the value configured in `tools.json` is used.
 
 **Returns**: 
 - Clean text content
 - Page metadata (title, description, author)
 - Word count and extraction timestamp
+- If an error occurs, an exception is thrown with a `code` property for translation
 
 **Example Usage**:
 ```javascript
@@ -55,6 +57,10 @@ The platform now includes three web-related tools:
 - Handles various webpage structures
 - Provides metadata extraction
 - Error handling for invalid URLs or failed requests
+- Optional `ignoreSSL` flag to bypass invalid HTTPS certificates (value can be preset in `tools.json`)
+- Detects missing pages or authentication requirements and reports them clearly
+- Returned errors include a `code` field so applications can translate messages
+  and the UI automatically shows a localized error when possible
 
 ### 3. Enhanced Web Search (`enhancedWebSearch`)
 
@@ -111,8 +117,8 @@ To enable these tools in an app, add them to the `tools` array in your app confi
 The "Chat with Web" app has been updated to use the enhanced web search functionality:
 
 - **Tool**: `enhancedWebSearch` and `webContentExtractor`
-- **Capability**: Automatically searches the web and extracts full content for comprehensive answers
-- **Use Case**: Ask questions that require current information, and get detailed answers with source citations
+- **Capability**: Automatically searches the web and extracts full content for comprehensive answers. If your question contains a direct URL, the assistant loads that page using `webContentExtractor` and incorporates the contents into the response.
+- **Use Case**: Ask questions that require current information or provide a URL to analyze, and get detailed answers with source citations
 
 ### Example Queries for Enhanced Web Search
 

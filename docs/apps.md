@@ -210,6 +210,22 @@ Apps can define custom placeholder text for the message input:
 }
 ```
 
+#### Starter Prompts
+
+Apps can offer clickable starter prompts shown when the chat has no messages:
+
+```json
+"starterPrompts": [
+  {
+    "title": { "en": "Brainstorm a topic" },
+    "message": { "en": "Help me brainstorm about a specific topic." }
+  }
+]
+```
+
+If starter prompts are defined, any configured greeting message will be
+suppressed so the prompts can be displayed instead.
+
 #### Content Restrictions
 
 Apps can be configured to allow empty content submission:

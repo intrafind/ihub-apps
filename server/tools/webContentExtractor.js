@@ -1,15 +1,22 @@
 import { JSDOM } from 'jsdom';
+import https from 'https';
+
+function createError(message, code) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
 
 /**
  * Extract clean, readable content from a web page
  * Removes headers, footers, navigation, ads, and other non-content elements
  */
-export default async function webContentExtractor({ url, uri, link, maxLength = 5000 }) {
+export default async function webContentExtractor({ url, uri, link, maxLength = 5000, ignoreSSL = false }) {
   // Accept various URL parameter names for flexibility
   const targetUrl = url || uri || link;
   
   if (!targetUrl) {
-    throw new Error('url parameter is required (use "url", "uri", or "link")');
+    throw createError('url parameter is required (use "url", "uri", or "link")', 'MISSING_URL');
   }
 
   // Validate URL format
@@ -17,17 +24,24 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
   try {
     validUrl = new URL(targetUrl);
     if (!['http:', 'https:'].includes(validUrl.protocol)) {
-      throw new Error('Only HTTP and HTTPS URLs are supported');
+      throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
     }
   } catch (error) {
-    throw new Error(`Invalid URL: ${error.message}`);
+    throw createError(`Invalid URL: ${error.message}`, 'INVALID_URL');
   }
 
   try {
     // Fetch the webpage with appropriate headers and timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-    
+
+    const dispatcher = ignoreSSL && validUrl.protocol === 'https:'
+      ? new https.Agent({ rejectUnauthorized: false })
+      : undefined;
+    if (ignoreSSL && validUrl.protocol === 'https:') {
+      console.warn(`Ignoring SSL certificate errors for ${targetUrl}`);
+    }
+
     const response = await fetch(targetUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -37,13 +51,20 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1'
       },
-      signal: controller.signal
+      signal: controller.signal,
+      ...(dispatcher ? { dispatcher } : {})
     });
     
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch webpage: ${response.status} ${response.statusText}`);
+      if (response.status === 404) {
+        throw createError('Page could not be found (HTTP 404)', 'PAGE_NOT_FOUND');
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw createError(`Authentication required to access this page (HTTP ${response.status})`, 'AUTH_REQUIRED');
+      }
+      throw createError(`Failed to fetch webpage: ${response.status} ${response.statusText}`, 'FETCH_ERROR');
     }
 
     const html = await response.text();
@@ -101,7 +122,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     }
 
     if (!contentElement) {
-      throw new Error('Could not find content in the webpage');
+      throw createError('Could not find content in the webpage', 'CONTENT_NOT_FOUND');
     }
 
     // Extract text content
@@ -142,26 +163,35 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
 
   } catch (error) {
     if (error.name === 'AbortError') {
-      throw new Error('Request timeout - webpage took too long to load');
+      throw createError('Request timeout - webpage took too long to load', 'TIMEOUT');
     }
-    throw new Error(`Failed to extract content from webpage: ${error.message}`);
+    if (/certificate|SSL/i.test(error.message) && !ignoreSSL) {
+      throw createError(`TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates.`, 'TLS_ERROR');
+    }
+    throw createError(`Failed to extract content from webpage: ${error.message}`, 'EXTRACTION_FAILED');
   }
 }
 
 // CLI interface for direct execution
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const url = process.argv[2];
-  
+  const args = process.argv.slice(2);
+  const url = args[0];
+  const ignoreSSLFlag = args.includes('--insecure');
+
   if (!url) {
-    console.error('Usage: node webContentExtractor.js <URL>');
+    console.error('Usage: node webContentExtractor.js <URL> [--insecure]');
+    console.error('The --insecure flag is for administrators to bypass certificate errors.');
     console.error('Example: node webContentExtractor.js "https://example.com/article"');
     process.exit(1);
   }
-  
+
   console.log(`Extracting content from: ${url}`);
-  
+  if (ignoreSSLFlag) {
+    console.warn('Warning: ignoring SSL certificate errors');
+  }
+
   try {
-    const result = await webContentExtractor({ url });
+    const result = await webContentExtractor({ url, ignoreSSL: ignoreSSLFlag });
     console.log('\nExtracted Content:');
     console.log('==================');
     console.log(`Title: ${result.title}`);
@@ -173,7 +203,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log('--------');
     console.log(result.content);
   } catch (error) {
-    console.error('Error extracting content:', error.message);
+    console.error(`Error extracting content: ${error.message} (code: ${error.code || 'UNKNOWN'})`);
     process.exit(1);
   }
 }

@@ -35,6 +35,8 @@
       "appSpecific": "app",
       "viewAll": "View all prompts"
     }
+    "magicPrompt": "Magic prompt",
+    "undo": "Undo"
   },
   "pages": {
     "home": {
@@ -49,11 +51,12 @@
       "noApps": "No applications found",
       "searchPlaceholder": "Search apps...",
       "categories": "Categories",
-      "allCategories": "All Categories",    "favorite": "Add to favorites",
-    "unfavorite": "Remove from favorites",
+      "allCategories": "All Categories",
+      "favorite": "Add to favorites",
+      "unfavorite": "Remove from favorites",
       "recent": "Recently used",
       "toggleImageUpload": "Toggle image upload",
-    "toggleFileUpload": "Toggle file upload",
+      "toggleFileUpload": "Toggle file upload",
       "favorites": "Favorites",
       "clearFilters": "Clear filters",
       "loadMore": "Load More",
@@ -89,7 +92,8 @@
       "configureApp": "Configure",
       "parameters": "Parameters",
       "inputParameters": "Input Parameters",
-      "startConversation": "Start conversation"
+      "startConversation": "Start conversation",
+      "starterPromptsTitle": "Starter Prompts"
     },
     "notFound": {
       "title": "Page Not Found",
@@ -183,6 +187,18 @@
     "llmApiError": "LLM API request failed with status {status}",
     "responseStreamError": "Error processing response stream: {error}",
     "connectionRefused": "Connection refused while trying to access {provider} API for model {model}. Please check your connection or server configuration."
+  },
+  "toolErrors": {
+    "MISSING_URL": "URL parameter is required.",
+    "INVALID_URL": "Invalid URL.",
+    "UNSUPPORTED_PROTOCOL": "Only HTTP and HTTPS URLs are supported.",
+    "PAGE_NOT_FOUND": "Page could not be found.",
+    "AUTH_REQUIRED": "Authentication is required to access this page.",
+    "FETCH_ERROR": "Failed to fetch webpage.",
+    "CONTENT_NOT_FOUND": "Could not find content in the webpage.",
+    "TIMEOUT": "Request timed out while loading the webpage.",
+    "TLS_ERROR": "Certificate error encountered. Please contact your administrator.",
+    "EXTRACTION_FAILED": "Failed to extract content from webpage."
   },
   "responseStyles": {
     "title": "Response Style",
