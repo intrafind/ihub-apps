@@ -24,7 +24,6 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
     try {
       await navigator.clipboard.writeText(prompt.prompt.replace('[content]', ''));
       setCopyStatus('success');
-      onClose();
     } catch (err) {
       console.error('Failed to copy prompt:', err);
       setCopyStatus('error');
