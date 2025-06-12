@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './App.css';
 import Layout from './components/Layout';
 import AppsList from './pages/AppsList';
+import PromptsList from './pages/PromptsList';
 import AppChat from './pages/AppChat';
 import DirectChat from './pages/DirectChat';
 import NotFound from './pages/NotFound';
@@ -12,6 +13,7 @@ import AdminUsageReports from './pages/AdminUsageReports';
 import AppProviders from './components/AppProviders';
 import { withErrorBoundary } from './components/ErrorBoundary';
 import useSessionManagement from './utils/useSessionManagement';
+import { useUIConfig } from './components/UIConfigContext';
 
 // Apply error boundary to individual routes that might fail
 const SafeAppsList = withErrorBoundary(AppsList);
@@ -20,10 +22,12 @@ const SafeDirectChat = withErrorBoundary(DirectChat);
 const SafeMarkdownPage = withErrorBoundary(MarkdownPage);
 const SafeWidgetPage = withErrorBoundary(WidgetPage);
 const SafeAdminUsage = withErrorBoundary(AdminUsageReports);
+const SafePromptsList = withErrorBoundary(PromptsList);
 
 function App() {
   // Use the custom hook for session management
   useSessionManagement();
+  const { uiConfig } = useUIConfig();
 
   return (
     <AppProviders>
@@ -35,6 +39,9 @@ function App() {
           {/* Regular application routes */}
           <Route path="/" element={<Layout />}>
             <Route index element={<SafeAppsList />} />
+            {uiConfig?.promptDb?.enabled !== false && (
+              <Route path="prompts" element={<SafePromptsList />} />
+            )}
             <Route path="apps/:appId" element={<SafeAppChat />} />
             <Route path="chat/:modelId" element={<SafeDirectChat />} />
             <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
