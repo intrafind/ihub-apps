@@ -17,6 +17,7 @@ dist/
 dist-ssr/
 dist-bin/
 build/
+contents/data/*
 
 # Logs
 logs/
