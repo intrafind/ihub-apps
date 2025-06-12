@@ -135,23 +135,25 @@ const PromptsList = () => {
                 <p className="text-sm text-gray-600 flex-grow">
                   {highlightVariables(p.prompt)}
                 </p>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(p.prompt.replace('[content]', ''));
-                    alert(t('pages.promptsList.copied', 'Copied!'));
-                  }}
-                  className="mt-4 self-start px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
-                >
-                  {t('pages.promptsList.copyPrompt', 'Copy prompt')}
-                </button>
-                {p.appId && (
-                  <Link
-                    to={`/apps/${p.appId}?prefill=${encodeURIComponent(p.prompt.replace('[content]', ''))}`}
-                    className="mt-2 text-sm text-indigo-600 hover:underline self-start"
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(p.prompt.replace('[content]', ''));
+                      alert(t('pages.promptsList.copied', 'Copied!'));
+                    }}
+                    className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
                   >
-                    {t('pages.promptsList.useInApp', 'Open app')}
-                  </Link>
-                )}
+                    {t('pages.promptsList.copyPrompt', 'Copy prompt')}
+                  </button>
+                  {p.appId && (
+                    <Link
+                      to={`/apps/${p.appId}?prefill=${encodeURIComponent(p.prompt.replace('[content]', ''))}`}
+                      className="px-3 py-1 text-sm border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50 flex items-center"
+                    >
+                      {t('pages.promptsList.useInApp', 'Open app')}
+                    </Link>
+                  )}
+                </div>
               </div>
             ))}
           </div>
