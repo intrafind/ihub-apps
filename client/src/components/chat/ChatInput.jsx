@@ -95,10 +95,20 @@ const ChatInput = ({
     });
   }, [customPlaceholder, defaultPlaceholder, isProcessing, allowEmptySubmit, i18n.language, app?.messagePlaceholder]);
 
+  const focusInputAtEnd = () => {
+    if (actualInputRef.current) {
+      const el = actualInputRef.current;
+      el.focus();
+      const len = el.value.length;
+      // Move cursor to the end so users can continue typing
+      el.setSelectionRange(len, len);
+    }
+  };
+
   // When processing finishes, refocus the input field
   useEffect(() => {
-    if (!isProcessing && actualInputRef.current) {
-      actualInputRef.current.focus();
+    if (!isProcessing) {
+      focusInputAtEnd();
     }
   }, [isProcessing]);
 
@@ -108,9 +118,7 @@ const ChatInput = ({
       onSubmit(e);
       // Keep focus on the input so the user can continue typing
       setTimeout(() => {
-        if (actualInputRef.current) {
-          actualInputRef.current.focus();
-        }
+        focusInputAtEnd();
       }, 0);
     }
   };
@@ -189,7 +197,9 @@ const ChatInput = ({
           onSelect={(p) => {
             onChange({ target: { value: p.prompt.replace('[content]', '') } });
             setShowPromptSearch(false);
-            setTimeout(() => actualInputRef.current && actualInputRef.current.focus(), 0);
+            setTimeout(() => {
+              focusInputAtEnd();
+            }, 0);
           }}
         />
       )}
