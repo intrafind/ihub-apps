@@ -55,6 +55,9 @@
       }
     ]
   },
+  "promptDb": {
+    "enabled": true
+  },
   "footer": {
     "text": {
       "en": "© 2025 IntraFind Software AG. All rights reserved.",

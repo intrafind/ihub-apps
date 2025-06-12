@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { fetchPrompts } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Icon from '../components/Icon';
@@ -127,7 +128,7 @@ const PromptsList = () => {
                   <h3 className="font-semibold text-lg flex items-center">
                     {p.name}
                     {p.appId && (
-                      <span className="ml-1 text-xs text-indigo-600">{t('promptSearch.appSpecific', 'app')}</span>
+                      <span className="ml-1 text-xs text-indigo-600">{t('common.promptSearch.appSpecific', 'app')}</span>
                     )}
                   </h3>
                 </div>
@@ -143,6 +144,14 @@ const PromptsList = () => {
                 >
                   {t('pages.promptsList.copyPrompt', 'Copy prompt')}
                 </button>
+                {p.appId && (
+                  <Link
+                    to={`/apps/${p.appId}?prefill=${encodeURIComponent(p.prompt.replace('[content]', ''))}`}
+                    className="mt-2 text-sm text-indigo-600 hover:underline self-start"
+                  >
+                    {t('pages.promptsList.useInApp', 'Open app')}
+                  </Link>
+                )}
               </div>
             ))}
           </div>

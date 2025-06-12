@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { useUIConfig } from './UIConfigContext';
 import Fuse from 'fuse.js';
 import Icon from './Icon';
 import { fetchPrompts } from '../api/api';
@@ -19,6 +20,7 @@ const highlightVariables = (text) => {
 
 const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
   const { t } = useTranslation();
+  const { uiConfig } = useUIConfig();
   const [prompts, setPrompts] = useState([]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -96,7 +98,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyNav}
-            placeholder={t('promptSearch.placeholder', 'Search prompts...')}
+            placeholder={t('common.promptSearch.placeholder', 'Search prompts...')}
             className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             autoComplete="off"
             data-lpignore="true"
@@ -125,7 +127,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
                 <span className="font-medium mr-1 flex items-center">
                   {p.name}
                   {p.appId && p.appId === appId && (
-                    <span className="ml-1 text-xs text-indigo-600">{t('promptSearch.appSpecific', 'app')}</span>
+                    <span className="ml-1 text-xs text-indigo-600">{t('common.promptSearch.appSpecific', 'app')}</span>
                   )}
                 </span>
               </div>
@@ -136,13 +138,15 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
           ))}
         </ul>
         <div className="text-right p-2">
-          <Link
-            to="/prompts"
-            onMouseDown={onClose}
-            className="text-indigo-600 hover:underline"
-          >
-            {t('promptSearch.viewAll', 'View all prompts')}
-          </Link>
+          {uiConfig?.promptDb?.enabled !== false && (
+            <Link
+              to="/prompts"
+              onClick={onClose}
+              className="text-indigo-600 hover:underline"
+            >
+              {t('common.promptSearch.viewAll', 'View all prompts')}
+            </Link>
+          )}
         </div>
       </div>
     </div>

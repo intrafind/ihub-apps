@@ -5,6 +5,7 @@ import Icon from "../Icon";
 import ImageUploader from "../ImageUploader";
 import FileUploader from "../FileUploader";
 import PromptSearch from "../PromptSearch";
+import { useUIConfig } from "../UIConfigContext";
 
 /**
  * A reusable chat input component for chat interfaces
@@ -34,11 +35,13 @@ const ChatInput = ({
   onToggleFileUploader = null,
 }) => {
   const { t, i18n } = useTranslation();
+  const { uiConfig } = useUIConfig();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
   const [internalShowImageUploader, setInternalShowImageUploader] = useState(false);
   const [internalShowFileUploader, setInternalShowFileUploader] = useState(false);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
+  const promptDbEnabled = uiConfig?.promptDb?.enabled !== false && app?.features?.promptDb !== false;
   
   // Determine if multiline mode is enabled based on app config
   // Default to true (multiline) if not specified in app config
@@ -148,7 +151,7 @@ const ChatInput = ({
 
   // Handle key events for the textarea
   const handleKeyDown = (e) => {
-    if (!showPromptSearch && e.key === '/' && value === '') {
+    if (promptDbEnabled && !showPromptSearch && e.key === '/' && value === '') {
       e.preventDefault();
       setShowPromptSearch(true);
       return;
@@ -178,16 +181,18 @@ const ChatInput = ({
 
   return (
     <div className="chat-input-container">
-      <PromptSearch
-        isOpen={showPromptSearch}
-        appId={app?.id}
-        onClose={() => setShowPromptSearch(false)}
-        onSelect={(p) => {
-          onChange({ target: { value: p.prompt.replace('[content]', '') } });
-          setShowPromptSearch(false);
-          setTimeout(() => actualInputRef.current && actualInputRef.current.focus(), 0);
-        }}
-      />
+      {promptDbEnabled && (
+        <PromptSearch
+          isOpen={showPromptSearch}
+          appId={app?.id}
+          onClose={() => setShowPromptSearch(false)}
+          onSelect={(p) => {
+            onChange({ target: { value: p.prompt.replace('[content]', '') } });
+            setShowPromptSearch(false);
+            setTimeout(() => actualInputRef.current && actualInputRef.current.focus(), 0);
+          }}
+        />
+      )}
       {imageUploadEnabled && showImageUploader && (
         <ImageUploader
           onImageSelect={onImageSelect}

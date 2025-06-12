@@ -12,6 +12,7 @@ import WidgetPage from './pages/WidgetPage';
 import AppProviders from './components/AppProviders';
 import { withErrorBoundary } from './components/ErrorBoundary';
 import useSessionManagement from './utils/useSessionManagement';
+import { useUIConfig } from './components/UIConfigContext';
 
 // Apply error boundary to individual routes that might fail
 const SafeAppsList = withErrorBoundary(AppsList);
@@ -24,6 +25,7 @@ const SafePromptsList = withErrorBoundary(PromptsList);
 function App() {
   // Use the custom hook for session management
   useSessionManagement();
+  const { uiConfig } = useUIConfig();
 
   return (
     <AppProviders>
@@ -35,7 +37,9 @@ function App() {
           {/* Regular application routes */}
           <Route path="/" element={<Layout />}>
             <Route index element={<SafeAppsList />} />
-            <Route path="prompts" element={<SafePromptsList />} />
+            {uiConfig?.promptDb?.enabled !== false && (
+              <Route path="prompts" element={<SafePromptsList />} />
+            )}
             <Route path="apps/:appId" element={<SafeAppChat />} />
             <Route path="chat/:modelId" element={<SafeDirectChat />} />
             <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
