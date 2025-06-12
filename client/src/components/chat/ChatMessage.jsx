@@ -372,11 +372,11 @@ const ChatMessage = ({
                 className={`p-1 flex items-center gap-1 ${activeFeedback === 'negative' ? 'text-red-600' : 'text-gray-500 hover:text-red-600'} transition-colors duration-150`}
                 title={t('feedback.thumbsDown', 'This response was not helpful')}
               >
-                <Icon 
-                  name="thumbs-down" 
-                  size="sm" 
+                <Icon
+                  name="thumbs-down"
+                  size="sm"
                   solid={activeFeedback === 'negative'}
-                  className="flex-shrink-0 transform rotate-180" 
+                  className="flex-shrink-0"
                 />
                 {!compact && <span>{t('feedback.notHelpful', 'Not helpful')}</span>}
               </button>

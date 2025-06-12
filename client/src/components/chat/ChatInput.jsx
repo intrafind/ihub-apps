@@ -5,6 +5,8 @@ import Icon from "../Icon";
 import MagicPromptLoader from "../MagicPromptLoader";
 import ImageUploader from "../ImageUploader";
 import FileUploader from "../FileUploader";
+import PromptSearch from "../PromptSearch";
+import { useUIConfig } from "../UIConfigContext";
 
 /**
  * A reusable chat input component for chat interfaces
@@ -39,10 +41,13 @@ const ChatInput = ({
   magicPromptLoading = false,
 }) => {
   const { t, i18n } = useTranslation();
+  const { uiConfig } = useUIConfig();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
   const [internalShowImageUploader, setInternalShowImageUploader] = useState(false);
   const [internalShowFileUploader, setInternalShowFileUploader] = useState(false);
+  const [showPromptSearch, setShowPromptSearch] = useState(false);
+  const promptDbEnabled = uiConfig?.promptDb?.enabled !== false && app?.features?.promptDb !== false;
   
   // Determine if multiline mode is enabled based on app config
   // Default to true (multiline) if not specified in app config
@@ -96,10 +101,20 @@ const ChatInput = ({
     });
   }, [customPlaceholder, defaultPlaceholder, isProcessing, allowEmptySubmit, i18n.language, app?.messagePlaceholder]);
 
+  const focusInputAtEnd = () => {
+    if (actualInputRef.current) {
+      const el = actualInputRef.current;
+      el.focus();
+      const len = el.value.length;
+      // Move cursor to the end so users can continue typing
+      el.setSelectionRange(len, len);
+    }
+  };
+
   // When processing finishes, refocus the input field
   useEffect(() => {
-    if (!isProcessing && actualInputRef.current) {
-      actualInputRef.current.focus();
+    if (!isProcessing) {
+      focusInputAtEnd();
     }
   }, [isProcessing]);
 
@@ -109,9 +124,7 @@ const ChatInput = ({
       onSubmit(e);
       // Keep focus on the input so the user can continue typing
       setTimeout(() => {
-        if (actualInputRef.current) {
-          actualInputRef.current.focus();
-        }
+        focusInputAtEnd();
       }, 0);
     }
   };
@@ -152,6 +165,19 @@ const ChatInput = ({
 
   // Handle key events for the textarea
   const handleKeyDown = (e) => {
+    if (promptDbEnabled && !showPromptSearch && e.key === '/' && value === '') {
+      e.preventDefault();
+      setShowPromptSearch(true);
+      return;
+    }
+
+    if (showPromptSearch) {
+      if (e.key === 'Escape') {
+        setShowPromptSearch(false);
+      }
+      return;
+    }
+
     // CMD+Enter or CTRL+Enter to submit
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
@@ -169,6 +195,20 @@ const ChatInput = ({
 
   return (
     <div className="chat-input-container">
+      {promptDbEnabled && (
+        <PromptSearch
+          isOpen={showPromptSearch}
+          appId={app?.id}
+          onClose={() => setShowPromptSearch(false)}
+          onSelect={(p) => {
+            onChange({ target: { value: p.prompt.replace('[content]', '') } });
+            setShowPromptSearch(false);
+            setTimeout(() => {
+              focusInputAtEnd();
+            }, 0);
+          }}
+        />
+      )}
       {imageUploadEnabled && showImageUploader && (
         <ImageUploader
           onImageSelect={onImageSelect}

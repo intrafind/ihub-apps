@@ -21,6 +21,7 @@ const renderTable = (obj) => {
             <td className="p-1 text-right font-mono tabular-nums">
               {typeof value === 'number' ? formatNumber.format(value) : value}
             </td>
+            <td className="p-1 text-right">{value}</td>
           </tr>
         ))}
       </tbody>

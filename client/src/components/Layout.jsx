@@ -96,17 +96,20 @@ const Layout = () => {
               </div>
 
               <nav className="hidden md:flex items-center space-x-6">
-                {uiConfig?.header?.links && uiConfig.header.links.map((link, index) => (
-                  <Link 
-                    key={index}
-                    to={link.url} 
-                    className={`hover:text-white/80 ${location.pathname === link.url ? 'underline font-medium' : ''}`}
-                    target={link.url.startsWith('http') ? '_blank' : undefined}
-                    rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                  >
-                    {getLocalizedContent(link.name, currentLanguage)}
-                  </Link>
-                ))}
+                {uiConfig?.header?.links &&
+                  uiConfig.header.links
+                    .filter(link => !(link.url === '/prompts' && uiConfig?.promptDb?.enabled === false))
+                    .map((link, index) => (
+                      <Link
+                        key={index}
+                        to={link.url}
+                        className={`hover:text-white/80 ${location.pathname === link.url ? 'underline font-medium' : ''}`}
+                        target={link.url.startsWith('http') ? '_blank' : undefined}
+                        rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                      >
+                        {getLocalizedContent(link.name, currentLanguage)}
+                      </Link>
+                    ))}
               </nav>
 
               <div className="flex items-center space-x-4">
@@ -141,18 +144,21 @@ const Layout = () => {
           {mobileMenuOpen && (
             <div className="md:hidden bg-indigo-800 shadow-lg" style={headerColorStyle}>
               <nav className="container mx-auto px-4 py-3 flex flex-col">
-                {uiConfig?.header?.links && uiConfig.header.links.map((link, index) => (
-                  <Link 
-                    key={index}
-                    to={link.url} 
-                    className={`block py-2 ${location.pathname === link.url ? 'font-medium' : ''}`}
-                    target={link.url.startsWith('http') ? '_blank' : undefined}
-                    rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    {getLocalizedContent(link.name, currentLanguage)}
-                  </Link>
-                ))}
+                {uiConfig?.header?.links &&
+                  uiConfig.header.links
+                    .filter(link => !(link.url === '/prompts' && uiConfig?.promptDb?.enabled === false))
+                    .map((link, index) => (
+                      <Link
+                        key={index}
+                        to={link.url}
+                        className={`block py-2 ${location.pathname === link.url ? 'font-medium' : ''}`}
+                        target={link.url.startsWith('http') ? '_blank' : undefined}
+                        rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {getLocalizedContent(link.name, currentLanguage)}
+                      </Link>
+                    ))}
               </nav>
             </div>
           )}

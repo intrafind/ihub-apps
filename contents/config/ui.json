@@ -27,6 +27,13 @@
       },
       {
         "name": {
+          "en": "Prompts",
+          "de": "Prompts"
+        },
+        "url": "/prompts"
+      },
+      {
+        "name": {
           "en": "FAQ",
           "de": "FAQ"
         },
@@ -47,6 +54,9 @@
         "url": "https://github.com/intrafind/ai-hub-apps"
       }
     ]
+  },
+  "promptDb": {
+    "enabled": true
   },
   "footer": {
     "text": {
