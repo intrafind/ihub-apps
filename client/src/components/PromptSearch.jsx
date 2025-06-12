@@ -5,6 +5,8 @@ import { useUIConfig } from './UIConfigContext';
 import Fuse from 'fuse.js';
 import Icon from './Icon';
 import { fetchPrompts } from '../api/api';
+import { getFavoritePrompts } from '../utils/favoritePrompts';
+import { getRecentPromptIds, recordPromptUsage } from '../utils/recentPrompts';
 
 const fuseRef = { current: null };
 
@@ -25,7 +27,16 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [favoritePromptIds, setFavoritePromptIds] = useState([]);
+  const [recentPromptIds, setRecentPromptIds] = useState([]);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setFavoritePromptIds(getFavoritePrompts());
+      setRecentPromptIds(getRecentPromptIds());
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -57,7 +68,22 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
       return;
     }
     const searchResults = fuseRef.current.search(query).map(r => r.item);
+    const favs = new Set(favoritePromptIds);
+    const recents = new Set(recentPromptIds);
     searchResults.sort((a, b) => {
+      const aFav = favs.has(a.id);
+      const bFav = favs.has(b.id);
+      if (aFav && !bFav) return -1;
+      if (!aFav && bFav) return 1;
+
+      const aRecent = recents.has(a.id);
+      const bRecent = recents.has(b.id);
+      if (aRecent && !bRecent) return -1;
+      if (!aRecent && bRecent) return 1;
+      if (aRecent && bRecent) {
+        return recentPromptIds.indexOf(a.id) - recentPromptIds.indexOf(b.id);
+      }
+
       const aMatch = a.appId === appId;
       const bMatch = b.appId === appId;
       if (aMatch && !bMatch) return -1;
@@ -66,7 +92,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
     });
     setResults(searchResults.slice(0, 5));
     setSelectedIndex(0);
-  }, [query, isOpen, appId]);
+  }, [query, isOpen, appId, favoritePromptIds, recentPromptIds]);
 
   const handleKeyNav = (e) => {
     if (e.key === 'ArrowDown') {
@@ -77,6 +103,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
       setSelectedIndex((prev) => Math.max(prev - 1, 0));
     } else if (e.key === 'Enter' && results[selectedIndex]) {
       e.preventDefault();
+      recordPromptUsage(results[selectedIndex].id);
       onSelect(results[selectedIndex]);
     } else if (e.key === 'Escape') {
       onClose();
@@ -120,12 +147,25 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
             <li
               key={p.id}
               className={`px-4 py-2 cursor-pointer ${idx === selectedIndex ? 'bg-indigo-100' : ''}`}
-              onMouseDown={() => onSelect(p)}
+              onMouseDown={() => {
+                recordPromptUsage(p.id);
+                onSelect(p);
+              }}
             >
               <div className="flex items-center">
                 <Icon name={p.icon || 'clipboard'} className="w-5 h-5 mr-2" />
                 <span className="font-medium mr-1 flex items-center">
                   {p.name}
+                  {favoritePromptIds.includes(p.id) && (
+                    <span className="ml-1" aria-label={t('pages.promptsList.favorite')} title={t('pages.promptsList.favorite')}>
+                      <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
+                    </span>
+                  )}
+                  {recentPromptIds.includes(p.id) && (
+                    <span className="ml-1" aria-label={t('pages.promptsList.recent')} title={t('pages.promptsList.recent')}>
+                      <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
+                    </span>
+                  )}
                   {p.appId && p.appId === appId && (
                     <span className="ml-1 text-xs text-indigo-600">{t('common.promptSearch.appSpecific', 'app')}</span>
                   )}

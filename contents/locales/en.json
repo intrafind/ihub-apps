@@ -67,6 +67,9 @@
       "copyPrompt": "Copy prompt",
       "useInApp": "Open app",
       "copied": "Copied!",
+      "favorite": "Add to favorites",
+      "unfavorite": "Remove from favorites",
+      "recent": "Recently used",
       "previous": "Previous",
       "next": "Next",
       "pageOfTotal": "Page {{current}} of {{total}}"
