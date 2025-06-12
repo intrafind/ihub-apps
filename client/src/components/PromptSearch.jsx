@@ -7,6 +7,7 @@ import Icon from './Icon';
 import { fetchPrompts } from '../api/api';
 import { getFavoritePrompts } from '../utils/favoritePrompts';
 import { getRecentPromptIds, recordPromptUsage } from '../utils/recentPrompts';
+import { getLocalizedContent } from '../utils/localizeContent';
 
 const fuseRef = { current: null };
 
@@ -21,7 +22,7 @@ const highlightVariables = (text) => {
 };
 
 const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const [prompts, setPrompts] = useState([]);
   const [query, setQuery] = useState('');
@@ -42,19 +43,23 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
     if (!isOpen) return;
     (async () => {
       try {
-        const data = prompts.length === 0 ? await fetchPrompts() : prompts;
-        if (prompts.length === 0) {
-          setPrompts(data);
-        }
-        fuseRef.current = new Fuse(data, {
-          keys: ['name', 'prompt'],
+        const raw = await fetchPrompts();
+        const localized = (Array.isArray(raw) ? raw : []).map(p => ({
+          ...p,
+          name: getLocalizedContent(p.name, i18n.language),
+          prompt: getLocalizedContent(p.prompt, i18n.language),
+          description: getLocalizedContent(p.description, i18n.language)
+        }));
+        setPrompts(localized);
+        fuseRef.current = new Fuse(localized, {
+          keys: ['name', 'prompt', 'description'],
           threshold: 0.4
         });
       } catch (err) {
         console.error('Failed to load prompts', err);
       }
     })();
-  }, [isOpen, prompts]);
+  }, [isOpen, i18n.language]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -172,7 +177,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
                 </span>
               </div>
               <p className="text-sm text-gray-600 ml-7 line-clamp-2">
-                {highlightVariables(p.prompt)}
+                {highlightVariables(p.description || p.prompt)}
               </p>
             </li>
           ))}

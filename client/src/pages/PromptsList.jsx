@@ -6,6 +6,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Icon from '../components/Icon';
 import { getFavoritePrompts, toggleFavoritePrompt } from '../utils/favoritePrompts';
 import { getRecentPromptIds, recordPromptUsage } from '../utils/recentPrompts';
+import { getLocalizedContent } from '../utils/localizeContent';
 
 const highlightVariables = (text) =>
   text.split(/(\[[^\]]+\])/g).map((part, idx) =>
@@ -19,7 +20,7 @@ const highlightVariables = (text) =>
 const ITEMS_PER_PAGE = 9;
 
 const PromptsList = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -31,8 +32,14 @@ const PromptsList = () => {
   useEffect(() => {
     (async () => {
       try {
-        const data = await fetchPrompts();
-        setPrompts(Array.isArray(data) ? data : []);
+        const raw = await fetchPrompts();
+        const localized = (Array.isArray(raw) ? raw : []).map(p => ({
+          ...p,
+          name: getLocalizedContent(p.name, i18n.language),
+          prompt: getLocalizedContent(p.prompt, i18n.language),
+          description: getLocalizedContent(p.description, i18n.language)
+        }));
+        setPrompts(localized);
         setFavoritePromptIds(getFavoritePrompts());
         setRecentPromptIds(getRecentPromptIds());
         setError(null);
@@ -43,13 +50,15 @@ const PromptsList = () => {
         setLoading(false);
       }
     })();
-  }, [t]);
+  }, [t, i18n.language]);
 
   const filteredPrompts = useMemo(() => {
     if (!searchTerm) return prompts;
     const term = searchTerm.toLowerCase();
     return prompts.filter(p =>
-      p.name.toLowerCase().includes(term) || p.prompt.toLowerCase().includes(term)
+      p.name.toLowerCase().includes(term) ||
+      p.prompt.toLowerCase().includes(term) ||
+      (p.description && p.description.toLowerCase().includes(term))
     );
   }, [prompts, searchTerm]);
 
@@ -188,7 +197,7 @@ const PromptsList = () => {
                   </h3>
                 </div>
                 <p className="text-sm text-gray-600 flex-grow">
-                  {highlightVariables(p.prompt)}
+                  {highlightVariables(p.description || p.prompt)}
                 </p>
                 <div className="mt-4 flex gap-2">
                   <button
