@@ -1,14 +1,35 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from './Icon';
 import { highlightVariables } from '../utils/highlightVariables';
 
 const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
+  const [copyStatus, setCopyStatus] = useState('idle');
+  const [shareStatus, setShareStatus] = useState('idle');
   if (!prompt) return null;
-  const handleShare = () => {
+
+  const handleShare = async () => {
     const url = `${window.location.origin}/prompts?id=${encodeURIComponent(prompt.id)}`;
-    navigator.clipboard.writeText(url);
-    alert(t('pages.promptsList.linkCopied', 'Link copied!'));
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareStatus('success');
+    } catch (err) {
+      console.error('Failed to copy share link:', err);
+      setShareStatus('error');
+    }
+    setTimeout(() => setShareStatus('idle'), 2000);
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt.prompt.replace('[content]', ''));
+      setCopyStatus('success');
+      onClose();
+    } catch (err) {
+      console.error('Failed to copy prompt:', err);
+      setCopyStatus('error');
+    }
+    setTimeout(() => setCopyStatus('idle'), 2000);
   };
 
   return (
@@ -31,14 +52,17 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
         </pre>
         <div className="flex flex-wrap justify-end gap-2">
           <button
-            onClick={() => {
-              navigator.clipboard.writeText(prompt.prompt.replace('[content]', ''));
-              onClose();
-              alert(t('pages.promptsList.copied', 'Copied!'));
-            }}
-            className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+            onClick={handleCopy}
+            className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center gap-1"
           >
-            {t('pages.promptsList.copyPrompt', 'Copy prompt')}
+            {copyStatus === 'success' ? (
+              <Icon name="check-circle" className="text-green-600" solid />
+            ) : copyStatus === 'error' ? (
+              <Icon name="exclamation-circle" className="text-red-600" solid />
+            ) : (
+              <Icon name="copy" />
+            )}
+            <span>{t('pages.promptsList.copyPrompt', 'Copy prompt')}</span>
           </button>
           {prompt.appId && (
             <Link
@@ -60,7 +84,13 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
             className="px-3 py-1 text-sm border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50 flex items-center"
             aria-label={t('pages.promptsList.sharePrompt', 'Share prompt')}
           >
-            <Icon name="share" />
+            {shareStatus === 'success' ? (
+              <Icon name="check-circle" className="text-green-600" solid />
+            ) : shareStatus === 'error' ? (
+              <Icon name="exclamation-circle" className="text-red-600" solid />
+            ) : (
+              <Icon name="share" />
+            )}
           </button>
         </div>
       </div>

@@ -22,6 +22,7 @@ const PromptsList = () => {
   const [favoritePromptIds, setFavoritePromptIds] = useState([]);
   const [recentPromptIds, setRecentPromptIds] = useState([]);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
+  const [copyStatus, setCopyStatus] = useState({});
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
@@ -210,15 +211,30 @@ const PromptsList = () => {
                 </p>
                 <div className="mt-4 flex gap-2">
                   <button
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      navigator.clipboard.writeText(p.prompt.replace('[content]', ''));
-                      recordPromptUsage(p.id);
-                      alert(t('pages.promptsList.copied', 'Copied!'));
+                      try {
+                        await navigator.clipboard.writeText(p.prompt.replace('[content]', ''));
+                        setCopyStatus((s) => ({ ...s, [p.id]: 'success' }));
+                        recordPromptUsage(p.id);
+                      } catch (err) {
+                        console.error('Failed to copy prompt:', err);
+                        setCopyStatus((s) => ({ ...s, [p.id]: 'error' }));
+                      }
+                      setTimeout(() => {
+                        setCopyStatus((s) => ({ ...s, [p.id]: 'idle' }));
+                      }, 2000);
                     }}
-                    className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                    className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center gap-1"
                   >
-                    {t('pages.promptsList.copyPrompt', 'Copy prompt')}
+                    {copyStatus[p.id] === 'success' ? (
+                      <Icon name="check-circle" className="text-green-500" solid />
+                    ) : copyStatus[p.id] === 'error' ? (
+                      <Icon name="exclamation-circle" className="text-red-500" solid />
+                    ) : (
+                      <Icon name="copy" />
+                    )}
+                    <span>{t('pages.promptsList.copyPrompt', 'Copy prompt')}</span>
                   </button>
                   {p.appId && (
                     <Link
