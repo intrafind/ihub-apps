@@ -5,7 +5,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   fetchAppDetails,
   fetchModels,
@@ -133,10 +133,12 @@ const AppChat = () => {
   const currentLanguage = i18n.language;
   const { appId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const prefillMessage = searchParams.get('prefill') || "";
   const [app, setApp] = useState(null);
   const [models, setModels] = useState([]);
   const [styles, setStyles] = useState({});
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(prefillMessage);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState(null);

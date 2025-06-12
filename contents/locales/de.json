@@ -30,6 +30,11 @@
     "select": "Auswählen",
     "favorite": "Favorisieren",
     "unfavorite": "Defavorisieren",
+    "promptSearch": {
+      "placeholder": "Prompts durchsuchen...",
+      "appSpecific": "App",
+      "viewAll": "Alle Prompts anzeigen"
+    },
     "toggleImageUpload": "Bild-Upload umschalten",
     "toggleFileUpload": "Datei-Upload umschalten",
     "magicPrompt": "Magischer Prompt",
@@ -56,6 +61,23 @@
       "clearFilters": "Filter zurücksetzen",
       "loadMore": "Mehr laden",
       "showingCountOfTotal": "Zeige {{displayed}} von {{total}} Anwendungen"
+    },
+    "promptsList": {
+      "title": "Prompt-Bibliothek",
+      "subtitle": "Verfügbare Prompts durchsuchen",
+      "searchPlaceholder": "Prompts durchsuchen...",
+      "noPrompts": "Keine Prompts gefunden",
+      "copyPrompt": "Prompt kopieren",
+      "useInApp": "App öffnen",
+      "copied": "Kopiert!",
+      "favorite": "Zu Favoriten hinzufügen",
+      "unfavorite": "Aus Favoriten entfernen",
+      "recent": "Zuletzt verwendet",
+      "previous": "Zurück",
+      "next": "Weiter",
+      "pageOfTotal": "Seite {{current}} von {{total}}",
+      "sharePrompt": "Prompt teilen",
+      "linkCopied": "Link kopiert!"
     },
     "appChat": {
       "messagePlaceholder": "Gib deine Nachricht hier ein...",

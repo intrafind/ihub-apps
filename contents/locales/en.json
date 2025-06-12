@@ -30,6 +30,11 @@
     "select": "Select",
     "favorite": "Favorite",
     "unfavorite": "Unfavorite",
+    "promptSearch": {
+      "placeholder": "Search prompts...",
+      "appSpecific": "app",
+      "viewAll": "View all prompts"
+    }
     "magicPrompt": "Magic prompt",
     "undo": "Undo"
   },
@@ -56,6 +61,23 @@
       "clearFilters": "Clear filters",
       "loadMore": "Load More",
       "showingCountOfTotal": "Showing {{displayed}} of {{total}} apps"
+    },
+    "promptsList": {
+      "title": "Prompt Library",
+      "subtitle": "Browse available prompts",
+      "searchPlaceholder": "Search prompts...",
+      "noPrompts": "No prompts found",
+      "copyPrompt": "Copy prompt",
+      "useInApp": "Open app",
+      "copied": "Copied!",
+      "favorite": "Add to favorites",
+      "unfavorite": "Remove from favorites",
+      "recent": "Recently used",
+      "previous": "Previous",
+      "next": "Next",
+      "pageOfTotal": "Page {{current}} of {{total}}",
+      "sharePrompt": "Share prompt",
+      "linkCopied": "Link copied!"
     },
     "appChat": {
       "messagePlaceholder": "Type your message here...",

@@ -294,6 +294,20 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+  // GET /api/prompts - Fetch prompt database
+  app.get('/api/prompts', async (req, res) => {
+    try {
+      const prompts = await loadJson('config/prompts.json');
+      if (!prompts) {
+        return res.status(500).json({ error: 'Failed to load prompts configuration' });
+      }
+      res.json(prompts);
+    } catch (error) {
+      console.error('Error fetching prompts:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
   
   // GET /api/translations/:lang - Fetch translations for a specific language
   app.get('/api/translations/:lang', async (req, res) => {
