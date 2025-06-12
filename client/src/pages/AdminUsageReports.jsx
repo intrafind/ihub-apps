@@ -68,10 +68,15 @@ const AdminUsageReports = () => {
   if (!usage) return <div>No data</div>;
 
   const { messages, tokens, feedback, magicPrompt } = usage;
+  const { lastUpdated, lastReset } = usage;
 
   return (
     <div className="my-4 p-4">
       <h1 className="text-2xl font-bold mb-4">Usage Reports</h1>
+      <div className="text-sm mb-4 text-gray-600">
+        <div>Last Updated: {new Date(lastUpdated).toLocaleString()}</div>
+        <div>Last Reset: {new Date(lastReset).toLocaleString()}</div>
+      </div>
 
       {renderSection('Messages', messages)}
       {renderSection('Tokens', tokens)}

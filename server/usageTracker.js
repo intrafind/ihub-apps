@@ -10,11 +10,37 @@ const __dirname = path.dirname(__filename);
 const contentsDir = process.env.CONTENTS_DIR || 'contents';
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'usage.json');
 const SAVE_INTERVAL_MS = 10000;
+const now = () => new Date().toISOString();
 
 let usage = null;
 let trackingEnabled = true;
 let dirty = false;
 let saveTimer = null;
+
+function createDefaultUsage() {
+  return {
+    messages: { total: 0, perUser: {}, perApp: {}, perModel: {} },
+    tokens: {
+      total: 0,
+      perUser: {},
+      perApp: {},
+      perModel: {},
+      prompt: { total: 0, perUser: {}, perApp: {}, perModel: {} },
+      completion: { total: 0, perUser: {}, perApp: {}, perModel: {} }
+    },
+    feedback: { good: 0, bad: 0, perUser: {}, perApp: {}, perModel: {} },
+    magicPrompt: {
+      total: 0,
+      tokensIn: { total: 0, perUser: {}, perApp: {}, perModel: {} },
+      tokensOut: { total: 0, perUser: {}, perApp: {}, perModel: {} },
+      perUser: {},
+      perApp: {},
+      perModel: {}
+    },
+    lastUpdated: now(),
+    lastReset: now()
+  };
+}
 
 async function loadConfig() {
   try {
@@ -30,27 +56,10 @@ async function loadUsage() {
   try {
     const data = await fs.readFile(dataFile, 'utf8');
     usage = JSON.parse(data);
+    usage.lastUpdated = usage.lastUpdated || now();
+    usage.lastReset = usage.lastReset || now();
   } catch {
-    usage = {
-      messages: { total: 0, perUser: {}, perApp: {}, perModel: {} },
-      tokens: {
-        total: 0,
-        perUser: {},
-        perApp: {},
-        perModel: {},
-        prompt: { total: 0, perUser: {}, perApp: {}, perModel: {} },
-        completion: { total: 0, perUser: {}, perApp: {}, perModel: {} }
-      },
-      feedback: { good: 0, bad: 0, perUser: {}, perApp: {}, perModel: {} },
-      magicPrompt: {
-        total: 0,
-        tokensIn: { total: 0, perUser: {}, perApp: {}, perModel: {} },
-        tokensOut: { total: 0, perUser: {}, perApp: {}, perModel: {} },
-        perUser: {},
-        perApp: {},
-        perModel: {}
-      }
-    };
+    usage = createDefaultUsage();
   }
   return usage;
 }
@@ -58,6 +67,7 @@ async function loadUsage() {
 async function saveUsage() {
   if (!usage || !dirty) return;
   await fs.mkdir(path.dirname(dataFile), { recursive: true });
+  usage.lastUpdated = now();
   await fs.writeFile(dataFile, JSON.stringify(usage, null, 2));
   dirty = false;
 }
@@ -170,6 +180,13 @@ export async function getUsage() {
 
 export function isTrackingEnabled() {
   return trackingEnabled;
+}
+
+export async function resetUsage() {
+  usage = createDefaultUsage();
+  usage.lastReset = now();
+  dirty = true;
+  await saveUsage();
 }
 
 // Initialize configuration and load existing usage data
