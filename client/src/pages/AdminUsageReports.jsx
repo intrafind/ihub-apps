@@ -42,9 +42,30 @@ const renderSection = (title, data) => (
   </div>
 );
 
+const categories = [
+  { key: 'messages', label: 'Messages' },
+  { key: 'tokens', label: 'Tokens' },
+  { key: 'feedback', label: 'Feedback' },
+  { key: 'magicPrompt', label: 'Magic Prompt' }
+];
+
+const flatten = (obj, prefix = '') => {
+  let rows = [];
+  for (const [k, v] of Object.entries(obj || {})) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === 'object') {
+      rows = rows.concat(flatten(v, key));
+    } else {
+      rows.push({ key, value: v });
+    }
+  }
+  return rows;
+};
+
 const AdminUsageReports = () => {
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [category, setCategory] = useState('messages');
 
   const load = async () => {
     try {
@@ -62,6 +83,36 @@ const AdminUsageReports = () => {
     load();
   }, []);
 
+  const downloadJson = () => {
+    if (!usage) return;
+    const data = usage[category];
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${category}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadCsv = () => {
+    if (!usage) return;
+    const data = usage[category];
+    const rows = flatten(data);
+    const csv = ['Key,Value']
+      .concat(rows.map(r => `${r.key},${r.value}`))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${category}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
 
 
   if (loading) return <LoadingSpinner />;
@@ -70,20 +121,21 @@ const AdminUsageReports = () => {
   const { messages, tokens, feedback, magicPrompt } = usage;
   const { lastUpdated, lastReset } = usage;
 
-  return (
-    <div className="my-4 p-4">
-      <h1 className="text-2xl font-bold mb-4">Usage Reports</h1>
-      <div className="text-sm mb-4 text-gray-600">
-        <div>Last Updated: {new Date(lastUpdated).toLocaleString()}</div>
-        <div>Last Reset: {new Date(lastReset).toLocaleString()}</div>
-      </div>
-
-      {renderSection('Messages', messages)}
-      {renderSection('Tokens', tokens)}
-      {renderSection('Prompt Tokens', tokens.prompt)}
-      {renderSection('Completion Tokens', tokens.completion)}
-      {renderSection('Feedback', feedback)}
-
+  let content = null;
+  if (category === 'messages') {
+    content = renderSection('Messages', messages);
+  } else if (category === 'tokens') {
+    content = (
+      <>
+        {renderSection('Tokens', tokens)}
+        {renderSection('Prompt Tokens', tokens.prompt)}
+        {renderSection('Completion Tokens', tokens.completion)}
+      </>
+    );
+  } else if (category === 'feedback') {
+    content = renderSection('Feedback', feedback);
+  } else if (category === 'magicPrompt') {
+    content = (
       <div className="mt-6">
         <h2 className="text-lg font-semibold mb-2">Magic Prompt</h2>
         {renderSection('Invocations', {
@@ -95,6 +147,50 @@ const AdminUsageReports = () => {
         {renderSection('Input Tokens', magicPrompt.tokensIn)}
         {renderSection('Output Tokens', magicPrompt.tokensOut)}
       </div>
+    );
+  }
+
+  return (
+    <div className="my-4 p-4">
+      <h1 className="text-2xl font-bold mb-4">Usage Reports</h1>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-4">
+        <div className="text-sm text-gray-600 mb-2 sm:mb-0">
+          <div>Last Updated: {new Date(lastUpdated).toLocaleString()}</div>
+          <div>Last Reset: {new Date(lastReset).toLocaleString()}</div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={downloadJson}
+            className="px-3 py-1 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700"
+          >
+            Download JSON
+          </button>
+          <button
+            onClick={downloadCsv}
+            className="px-3 py-1 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700"
+          >
+            Download CSV
+          </button>
+        </div>
+      </div>
+
+      <nav className="mb-6 border-b flex gap-2">
+        {categories.map((c) => (
+          <button
+            key={c.key}
+            onClick={() => setCategory(c.key)}
+            className={`px-3 py-2 rounded-t-md text-sm font-medium border-b-2 ${
+              category === c.key
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-600 hover:text-indigo-600'
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
+      </nav>
+
+      {content}
     </div>
   );
 };
