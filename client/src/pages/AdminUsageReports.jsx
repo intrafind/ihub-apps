@@ -2,24 +2,28 @@ import React, { useEffect, useState } from 'react';
 import { fetchUsageData } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 
-const renderTable = (obj) => (
-  <table className="min-w-full text-xs border mb-2">
-    <thead>
-      <tr className="bg-gray-100">
-        <th className="text-left p-1">Key</th>
-        <th className="text-right p-1">Value</th>
-      </tr>
-    </thead>
-    <tbody>
-      {Object.entries(obj).map(([k, v]) => (
-        <tr key={k} className="odd:bg-white even:bg-gray-50">
-          <td className="p-1">{k}</td>
-          <td className="p-1 text-right">{v}</td>
+
+const renderTable = (obj) => {
+  const rows = flatten(obj);
+  return (
+    <table className="min-w-full text-xs border mb-2">
+      <thead>
+        <tr className="bg-gray-100">
+          <th className="text-left p-1">Key</th>
+          <th className="text-right p-1">Value</th>
         </tr>
-      ))}
-    </tbody>
-  </table>
-);
+      </thead>
+      <tbody>
+        {rows.map(({ key, value }) => (
+          <tr key={key} className="odd:bg-white even:bg-gray-50">
+            <td className="p-1">{key}</td>
+            <td className="p-1 text-right">{value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
 
 const renderSection = (title, data) => (
   <div className="mb-6">
