@@ -13,6 +13,7 @@ import { getRootDir } from './pathUtils.js';
 import { getApiKeyForModel, getErrorDetails, logInteraction, trackSession, logNewSession } from "./utils.js";
 import { sendSSE, clients, activeRequests } from "./sse.js";
 import registerChatRoutes from "./routes/chatRoutes.js";
+import registerAdminRoutes from "./routes/adminRoutes.js";
 import registerStaticRoutes from "./routes/staticRoutes.js";
 import { loadTools, runTool } from './toolLoader.js';
 
@@ -383,6 +384,7 @@ app.get('/api/pages/:pageId', async (req, res) => {
   }
 });
 registerChatRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT });
+registerAdminRoutes(app);
 
 
 // --- Session Management ---
