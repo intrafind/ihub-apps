@@ -267,9 +267,9 @@ const ChatWidget = ({
     // resent with the new submission
     deleteMessage(messageId);
 
-    // Use the editedContent if provided
-    const contentToResend = editedContent !== undefined ? editedContent : messageToResend.content;
-    
+    // Use the editedContent if provided, otherwise prefer the raw content if available
+    const contentToResend = editedContent !== undefined ? editedContent : (messageToResend.rawContent || messageToResend.content);
+
     // Set the input to the content to resend
     setInput(contentToResend);
     
