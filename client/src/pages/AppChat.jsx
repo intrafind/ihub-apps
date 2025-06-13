@@ -614,12 +614,15 @@ const AppChat = () => {
     // them again with the resent message
     deleteMessage(messageId);
 
-    // Use the editedContent if provided directly from the ChatMessage component
-    // otherwise use the content from the found message
+    // Use the editedContent if provided, otherwise fall back to the original
+    // raw content (if available) or the displayed content
     const contentToResend =
-      editedContent !== undefined ? editedContent : messageToResend.content;
+      editedContent !== undefined
+        ? editedContent
+        : messageToResend.rawContent || messageToResend.content;
 
-    // Set the input field to the current message content
+
+    // Set the input field to the original message content
     setInput(contentToResend);
 
     setTimeout(() => {
