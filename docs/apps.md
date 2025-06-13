@@ -212,13 +212,19 @@ Apps can define custom placeholder text for the message input:
 
 #### Starter Prompts
 
-Apps can offer clickable starter prompts shown when the chat has no messages:
+Apps can offer clickable starter prompts shown when the chat has no messages.
+Each prompt can optionally set initial values for input variables:
 
 ```json
 "starterPrompts": [
   {
     "title": { "en": "Brainstorm a topic" },
     "message": { "en": "Help me brainstorm about a specific topic." }
+  },
+  {
+    "title": { "en": "Translate to German" },
+    "message": { "en": "Translate the following text." },
+    "variables": { "language": "German" }
   }
 ]
 ```

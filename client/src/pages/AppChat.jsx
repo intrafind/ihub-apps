@@ -592,7 +592,16 @@ const AppChat = () => {
   };
 
   const handleStarterPromptClick = (prompt) => {
-    setInput(prompt);
+    if (prompt && typeof prompt === "object") {
+      if (prompt.message) {
+        setInput(prompt.message);
+      }
+      if (prompt.variables) {
+        setVariables((prev) => ({ ...prev, ...prompt.variables }));
+      }
+    } else {
+      setInput(prompt);
+    }
     if (inputRef.current) {
       inputRef.current.focus();
     }
