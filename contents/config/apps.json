@@ -172,7 +172,19 @@
           {"label": {"en": "Japanese", "de": "Japanisch"}, "value": "Japanese"}
         ]
       }
-    ]
+    ],
+    "starterPrompts": [
+      {
+        "title": { "en": "Translate to German", "de": "Auf Deutsch übersetzen" },
+        "message": { "en": "Translate the following text.", "de": "Übersetze den folgenden Text." },
+        "variables": { "language": "German" }
+      },
+      {
+        "title": { "en": "Translate to English", "de": "Auf Englisch übersetzen" },
+        "message": { "en": "Translate the following text.", "de": "Übersetze den folgenden Text." },
+        "variables": { "language": "English" }
+      }
+    ],
   },
   {
     "id": "summarizer",
@@ -358,6 +370,13 @@
           "de": "Zusätzliche Anweisungen"
         },
         "type": "text"
+      }
+    ],
+    "starterPrompts": [
+      {
+        "title": { "en": "Friendly intro email", "de": "Freundliche Einleitungs-E-Mail" },
+        "message": { "en": "Write an introduction email.", "de": "Schreibe eine Einleitungs-E-Mail." },
+        "variables": { "tone": "Use a friendly and approachable tone." }
       }
     ]
   },

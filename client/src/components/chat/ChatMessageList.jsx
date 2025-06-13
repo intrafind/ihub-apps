@@ -87,9 +87,10 @@ const ChatMessageList = ({
                     className="p-4 text-left bg-white border rounded-lg shadow hover:bg-gray-50"
                     onClick={() =>
                       onSelectPrompt &&
-                      onSelectPrompt(
-                        getLocalizedContent(sp.message, i18n.language)
-                      )
+                      onSelectPrompt({
+                        ...sp,
+                        message: getLocalizedContent(sp.message, i18n.language),
+                      })
                     }
                   >
                     <p className="font-semibold">
