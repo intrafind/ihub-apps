@@ -153,7 +153,7 @@ const AppChat = () => {
   const { setHeaderColor } = useUIConfig();
 
   const [maxTokens, setMaxTokens] = useState(null);
-  const [outputTokens, setOutputTokens] = useState(null);
+  const [useMaxTokens, setUseMaxTokens] = useState(false);
 
   // Record recent usage of this app
   useEffect(() => {
@@ -211,14 +211,14 @@ const AppChat = () => {
           finishReason: info.finishReason,
         });
       }
-      setOutputTokens(null);
+      setUseMaxTokens(false);
     },
     onError: (error) => {
       // Update with an error message
       if (window.lastMessageId) {
         setMessageError(window.lastMessageId, error.message);
       }
-      setOutputTokens(null);
+      setUseMaxTokens(false);
     },
     onConnected: async (event) => {
       // Handle when connection is established
@@ -647,7 +647,7 @@ const AppChat = () => {
 
     setInput(contentToResend);
     if (useMaxTokens) {
-      setOutputTokens(maxTokens);
+      setUseMaxTokens(true);
     }
 
     setTimeout(() => {
@@ -871,7 +871,7 @@ const AppChat = () => {
           temperature,
           outputFormat: selectedOutputFormat,
           language: currentLanguage,
-          ...(outputTokens ? { maxTokens: outputTokens } : {}),
+          ...(useMaxTokens ? { useMaxTokens: true } : {}),
         },
       };
 

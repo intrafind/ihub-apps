@@ -40,9 +40,7 @@ const ChatWidget = ({
   const widgetConfig = uiConfig?.widget || {};
   const appId = configuredAppId || widgetConfig.defaultApp || 'general-assistant';
 
-  const defaultMaxTokens = widgetConfig.maxTokens || 4096;
-  const [maxTokens] = useState(defaultMaxTokens);
-  const [outputTokens, setOutputTokens] = useState(null);
+  const [useMaxTokens, setUseMaxTokens] = useState(false);
   
   // Log the app ID being used
   useEffect(() => {
@@ -129,14 +127,14 @@ const ChatWidget = ({
         });
       }
       setProcessing(false);
-      setOutputTokens(null);
+      setUseMaxTokens(false);
     },
     onError: (error) => {
       if (window.lastMessageId) {
         setMessageError(window.lastMessageId, error.message);
       }
       setProcessing(false);
-      setOutputTokens(null);
+      setUseMaxTokens(false);
     },
     onConnected: async (event) => {
       try {
@@ -289,7 +287,7 @@ const ChatWidget = ({
 
     setInput(contentToResend);
     if (useMaxTokens) {
-      setOutputTokens(maxTokens);
+      setUseMaxTokens(true);
     }
 
     setTimeout(() => {
@@ -341,7 +339,7 @@ const ChatWidget = ({
           temperature: 0.7, // Default temperature
           outputFormat: 'markdown',
           language: getUserLanguage(),
-          ...(outputTokens ? { maxTokens: outputTokens } : {})
+          ...(useMaxTokens ? { useMaxTokens: true } : {})
         }
       };
       

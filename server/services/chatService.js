@@ -16,7 +16,7 @@ export async function prepareChatRequest({
   style,
   outputFormat,
   language,
-  maxTokens,
+  useMaxTokens = false,
   verifyApiKey,
   processMessageTemplates,
   res,
@@ -45,10 +45,12 @@ export async function prepareChatRequest({
   // Prepare messages for the model
   const llmMessages = await processMessageTemplates(messages, app, style, outputFormat, language);
 
-  // Ensure token count does not exceed model limit
-  const requestedTokens = parseInt(maxTokens) || app.tokenLimit || 1024;
-  const modelTokenLimit = model.tokenLimit || requestedTokens;
-  const finalTokens = Math.min(requestedTokens, modelTokenLimit);
+  // Determine token limit based on app configuration and retry flag
+  const appTokenLimit = app.tokenLimit || 1024;
+  const modelTokenLimit = model.tokenLimit || appTokenLimit;
+  const finalTokens = useMaxTokens
+    ? modelTokenLimit
+    : Math.min(appTokenLimit, modelTokenLimit);
 
   // Verify API key
   const apiKey = await verifyApiKey(model, res, clientRes, language);
