@@ -67,8 +67,8 @@
       "subtitle": "Browse available prompts",
       "searchPlaceholder": "Search prompts...",
       "noPrompts": "No prompts found",
-      "copyPrompt": "Copy prompt",
-      "useInApp": "Open app",
+      "copyPrompt": "Copy",
+      "useInApp": "Try it",
       "copied": "Copied!",
       "favorite": "Add to favorites",
       "unfavorite": "Remove from favorites",
@@ -93,7 +93,8 @@
       "parameters": "Parameters",
       "inputParameters": "Input Parameters",
       "startConversation": "Start conversation",
-      "starterPromptsTitle": "Starter Prompts"
+      "starterPromptsTitle": "Starter Prompts",
+      "starterPromptsSubtitle": "Choose a prompt below to get started quickly"
     },
     "notFound": {
       "title": "Page Not Found",

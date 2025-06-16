@@ -172,80 +172,94 @@ const PromptsList = () => {
         <p className="text-gray-500">{t('pages.promptsList.noPrompts', 'No prompts found')}</p>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto w-full">
             {pagePrompts.map(p => (
               <div
                 key={p.id}
-                className="bg-white rounded-lg shadow p-4 flex flex-col relative cursor-pointer"
+                className="group relative bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300 transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer"
                 onClick={() => setSelectedPrompt(p)}
               >
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleToggleFavorite(e, p.id); }}
-                  className="absolute top-2 right-2 p-1 bg-white bg-opacity-70 rounded-full hover:bg-opacity-100"
-                  title={favoritePromptIds.includes(p.id) ? t('pages.promptsList.unfavorite') : t('pages.promptsList.favorite')}
-                  aria-label={favoritePromptIds.includes(p.id) ? t('pages.promptsList.unfavorite') : t('pages.promptsList.favorite')}
-                >
-                  <Icon name="star" className={favoritePromptIds.includes(p.id) ? 'text-yellow-500' : 'text-gray-400'} solid={favoritePromptIds.includes(p.id)} />
-                </button>
-                <div className="flex items-center mb-2">
-                  <Icon name={p.icon || 'clipboard'} className="w-6 h-6 mr-2" />
-                  <h3 className="font-semibold text-lg flex items-center">
-                    {p.name}
-                    {favoritePromptIds.includes(p.id) && (
-                      <span className="ml-1" aria-label={t('pages.promptsList.favorite')} title={t('pages.promptsList.favorite')}>
-                        <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
-                      </span>
-                    )}
-                    {recentPromptIds.includes(p.id) && (
-                      <span className="ml-1" aria-label={t('pages.promptsList.recent')} title={t('pages.promptsList.recent')}>
-                        <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
-                      </span>
-                    )}
-                    {p.appId && (
-                      <span className="ml-1 text-xs text-indigo-600">{t('common.promptSearch.appSpecific', 'app')}</span>
-                    )}
-                  </h3>
-                </div>
-                <p className="text-sm text-gray-600 flex-grow">
-                  {highlightVariables(p.description || p.prompt)}
-                </p>
-                <div className="mt-4 flex gap-2">
+                <div className="p-4 h-full flex flex-col">
                   <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      try {
-                        await navigator.clipboard.writeText(p.prompt.replace('[content]', ''));
-                        setCopyStatus((s) => ({ ...s, [p.id]: 'success' }));
-                        recordPromptUsage(p.id);
-                      } catch (err) {
-                        console.error('Failed to copy prompt:', err);
-                        setCopyStatus((s) => ({ ...s, [p.id]: 'error' }));
-                      }
-                      setTimeout(() => {
-                        setCopyStatus((s) => ({ ...s, [p.id]: 'idle' }));
-                      }, 2000);
-                    }}
-                    className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center gap-1"
+                    onClick={(e) => { e.stopPropagation(); handleToggleFavorite(e, p.id); }}
+                    className="absolute top-3 right-3 z-10 p-1.5 bg-white bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
+                    title={favoritePromptIds.includes(p.id) ? t('pages.promptsList.unfavorite') : t('pages.promptsList.favorite')}
+                    aria-label={favoritePromptIds.includes(p.id) ? t('pages.promptsList.unfavorite') : t('pages.promptsList.favorite')}
                   >
-                    {copyStatus[p.id] === 'success' ? (
-                      <Icon name="check-circle" className="text-green-500" solid />
-                    ) : copyStatus[p.id] === 'error' ? (
-                      <Icon name="exclamation-circle" className="text-red-500" solid />
-                    ) : (
-                      <Icon name="copy" />
-                    )}
-                    <span>{t('pages.promptsList.copyPrompt', 'Copy prompt')}</span>
+                    <Icon name="star" className={favoritePromptIds.includes(p.id) ? 'text-yellow-500' : 'text-gray-400'} solid={favoritePromptIds.includes(p.id)} />
                   </button>
-                  {p.appId && (
-                    <Link
-                      to={`/apps/${p.appId}?prefill=${encodeURIComponent(p.prompt.replace('[content]', ''))}`}
-                      className="px-3 py-1 text-sm border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50 flex items-center"
-                      onClick={(e) => { e.stopPropagation(); recordPromptUsage(p.id); }}
+                  
+                  <div className="flex items-start space-x-3 mb-3">
+                    <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                      <Icon name={p.icon || 'clipboard'} className="w-4 h-4 text-indigo-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 text-sm leading-5 mb-1 flex items-center flex-wrap">
+                        {p.name}
+                        {favoritePromptIds.includes(p.id) && (
+                          <span className="ml-1" aria-label={t('pages.promptsList.favorite')} title={t('pages.promptsList.favorite')}>
+                            <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
+                          </span>
+                        )}
+                        {recentPromptIds.includes(p.id) && (
+                          <span className="ml-1" aria-label={t('pages.promptsList.recent')} title={t('pages.promptsList.recent')}>
+                            <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
+                          </span>
+                        )}
+                        {p.appId && (
+                          <span className="ml-1 px-1.5 py-0.5 text-xs text-indigo-600 bg-indigo-50 rounded-full">{t('common.promptSearch.appSpecific', 'app')}</span>
+                        )}
+                      </h3>
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-gray-500 leading-4 flex-grow overflow-hidden mb-4" style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical'
+                  }}>
+                    {highlightVariables(p.description || p.prompt)}
+                  </p>
+                  
+                  <div className="flex gap-2 mt-auto justify-start">
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          await navigator.clipboard.writeText(p.prompt.replace('[content]', ''));
+                          setCopyStatus((s) => ({ ...s, [p.id]: 'success' }));
+                          recordPromptUsage(p.id);
+                        } catch (err) {
+                          console.error('Failed to copy prompt:', err);
+                          setCopyStatus((s) => ({ ...s, [p.id]: 'error' }));
+                        }
+                        setTimeout(() => {
+                          setCopyStatus((s) => ({ ...s, [p.id]: 'idle' }));
+                        }, 2000);
+                      }}
+                      className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1"
                     >
-                      {t('pages.promptsList.useInApp', 'Open app')}
-                    </Link>
-                  )}
+                      {copyStatus[p.id] === 'success' ? (
+                        <Icon name="check-circle" size="sm" className="text-green-200" solid />
+                      ) : copyStatus[p.id] === 'error' ? (
+                        <Icon name="exclamation-circle" size="sm" className="text-red-200" solid />
+                      ) : (
+                        <Icon name="copy" size="sm" />
+                      )}
+                      <span>{t('pages.promptsList.copyPrompt', 'Copy')}</span>
+                    </button>
+                    {p.appId && (
+                      <Link
+                        to={`/apps/${p.appId}?prefill=${encodeURIComponent(p.prompt.replace('[content]', ''))}`}
+                        className="px-3 py-1.5 text-xs border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors flex items-center justify-center gap-1"
+                        onClick={(e) => { e.stopPropagation(); recordPromptUsage(p.id); }}
+                      >
+                        {t('pages.promptsList.useInApp', 'Open')}
+                      </Link>
+                    )}
+                  </div>
                 </div>
+                <div className="absolute inset-0 rounded-xl border border-transparent group-hover:border-indigo-200 transition-colors pointer-events-none"></div>
               </div>
             ))}
           </div>

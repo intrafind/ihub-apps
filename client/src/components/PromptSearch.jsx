@@ -139,38 +139,48 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
             </button>
           )}
         </div>
-        <ul>
+        <ul className="max-h-64 overflow-y-auto">
           {results.map((p, idx) => (
             <li
               key={p.id}
-              className={`px-4 py-2 cursor-pointer ${idx === selectedIndex ? 'bg-indigo-100' : ''}`}
+              className={`p-3 cursor-pointer border-b border-gray-100 last:border-b-0 hover:bg-gray-50 ${idx === selectedIndex ? 'bg-indigo-50 border-indigo-200' : ''}`}
               onMouseDown={() => {
                 recordPromptUsage(p.id);
                 onSelect(p);
               }}
             >
-              <div className="flex items-center">
-                <Icon name={p.icon || 'clipboard'} className="w-5 h-5 mr-2" />
-                <span className="font-medium mr-1 flex items-center">
-                  {p.name}
-                  {favoritePromptIds.includes(p.id) && (
-                    <span className="ml-1" aria-label={t('pages.promptsList.favorite')} title={t('pages.promptsList.favorite')}>
-                      <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0 w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
+                  <Icon name={p.icon || 'clipboard'} className="w-3.5 h-3.5 text-indigo-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center flex-wrap mb-1">
+                    <span className="font-medium text-gray-900 text-sm mr-1">
+                      {p.name}
                     </span>
-                  )}
-                  {recentPromptIds.includes(p.id) && (
-                    <span className="ml-1" aria-label={t('pages.promptsList.recent')} title={t('pages.promptsList.recent')}>
-                      <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
-                    </span>
-                  )}
-                  {p.appId && p.appId === appId && (
-                    <span className="ml-1 text-xs text-indigo-600">{t('common.promptSearch.appSpecific', 'app')}</span>
-                  )}
-                </span>
+                    {favoritePromptIds.includes(p.id) && (
+                      <span className="ml-1" aria-label={t('pages.promptsList.favorite')} title={t('pages.promptsList.favorite')}>
+                        <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
+                      </span>
+                    )}
+                    {recentPromptIds.includes(p.id) && (
+                      <span className="ml-1" aria-label={t('pages.promptsList.recent')} title={t('pages.promptsList.recent')}>
+                        <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
+                      </span>
+                    )}
+                    {p.appId && p.appId === appId && (
+                      <span className="ml-1 px-1.5 py-0.5 text-xs text-indigo-600 bg-indigo-100 rounded-full">{t('common.promptSearch.appSpecific', 'app')}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 leading-4 overflow-hidden" style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical'
+                  }}>
+                    {highlightVariables(p.description || p.prompt)}
+                  </p>
+                </div>
               </div>
-              <p className="text-sm text-gray-600 ml-7 line-clamp-2">
-                {highlightVariables(p.description || p.prompt)}
-              </p>
             </li>
           ))}
         </ul>

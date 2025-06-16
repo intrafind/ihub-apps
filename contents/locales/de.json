@@ -67,7 +67,7 @@
       "subtitle": "Verfügbare Prompts durchsuchen",
       "searchPlaceholder": "Prompts durchsuchen...",
       "noPrompts": "Keine Prompts gefunden",
-      "copyPrompt": "Prompt kopieren",
+      "copyPrompt": "kopieren",
       "useInApp": "App öffnen",
       "copied": "Kopiert!",
       "favorite": "Zu Favoriten hinzufügen",
@@ -93,7 +93,8 @@
       "inputParameters": "Eingabeparameter",
       "parameters": "Parameter",
       "startConversation": "Unterhaltung starten",
-      "starterPromptsTitle": "Start-Prompts"
+      "starterPromptsTitle": "Start-Prompts",
+      "starterPromptsSubtitle": "Wählen Sie einen Prompt unten aus, um schnell zu beginnen"
     },
     "notFound": {
       "title": "Seite nicht gefunden",

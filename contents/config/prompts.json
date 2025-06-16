@@ -4,21 +4,21 @@
     "name": { "en": "Summarize Text", "de": "Text zusammenfassen" },
     "description": { "en": "Quickly summarize a block of text.", "de": "Einen Textabschnitt schnell zusammenfassen." },
     "icon": "sparkles",
-    "prompt": { "en": "Summarize the following text:\n[content]", "de": "Fasse den folgenden Text zusammen:\n[content]" }
+    "prompt": { "en": "Summarize the following text: [content]", "de": "Fasse den folgenden Text zusammen: [content]" }
   },
   {
     "id": "translate-de",
     "name": { "en": "Translate to German", "de": "Ins Deutsche übersetzen" },
     "description": { "en": "Translate text into German.", "de": "Text ins Deutsche übersetzen." },
     "icon": "globe",
-    "prompt": { "en": "Translate the following into German:\n[content]", "de": "Übersetze Folgendes ins Deutsche:\n[content]" }
+    "prompt": { "en": "Translate the following into German: [content]", "de": "Übersetze Folgendes ins Deutsche: [content]" }
   },
   {
     "id": "faq-question",
     "name": { "en": "Ask FAQ", "de": "FAQ fragen" },
     "description": { "en": "Answer questions using the FAQ bot.", "de": "Fragen mit dem FAQ-Bot beantworten." },
     "icon": "question-mark-circle",
-    "prompt": { "en": "Answer using our FAQ:\n[content]", "de": "Beantworte mithilfe unserer FAQ:\n[content]" },
+    "prompt": { "en": "Answer using our FAQ: [content]", "de": "Beantworte mithilfe unserer FAQ: [content]" },
     "appId": "faq-bot"
   }
 ]

@@ -61,7 +61,7 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
             ) : (
               <Icon name="copy" />
             )}
-            <span>{t('pages.promptsList.copyPrompt', 'Copy prompt')}</span>
+            <span>{t('pages.promptsList.copyPrompt', 'Copy')}</span>
           </button>
           {prompt.appId && (
             <Link

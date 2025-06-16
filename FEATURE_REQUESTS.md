@@ -15,6 +15,9 @@
 - Preview on Hover for Apps?
 - App Collections / Bundles curated by teams?
 - Tab-based / Category-based navigation?
+- workflow mode -> instead of having the variables as input in the ui, we could define "workflow" to ask the user about, collect them until the final prompt is ready to send
+- variable "form-based" only app -> user fills out the form, the form is submitted and the answer is generated -> start over / edit 
+- admin 
 
 
 Done
