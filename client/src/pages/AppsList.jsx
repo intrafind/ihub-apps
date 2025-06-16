@@ -25,9 +25,23 @@ const AppsList = () => {
       },
       width: "w-full sm:w-2/3 lg:w-1/3"
     };
-    
+
     return uiConfig?.appsList?.search || defaultSearchConfig;
   }, [uiConfig]);
+
+  const sortConfig = useMemo(() => {
+    const defaultSortConfig = {
+      enabled: true,
+      default: 'relevance'
+    };
+    return uiConfig?.appsList?.sort || defaultSortConfig;
+  }, [uiConfig]);
+
+  const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
+
+  useEffect(() => {
+    setSortMethod(sortConfig.default || 'relevance');
+  }, [sortConfig]);
   
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -244,8 +258,11 @@ const AppsList = () => {
   
   // Memoized sorted apps to avoid recomputing on every render
   const sortedApps = useMemo(() => {
-    const recentSet = new Set(recentAppIds);
-    return [...filteredApps].sort((a, b) => {
+    if (!sortConfig.enabled) return filteredApps;
+
+    const sortByRelevance = (a, b) => {
+      const recentSet = new Set(recentAppIds);
+
       // Favorites first
       const aFav = favoriteApps.includes(a.id);
       const bFav = favoriteApps.includes(b.id);
@@ -264,7 +281,7 @@ const AppsList = () => {
       // Then sort by configured order
       const aHasOrder = a.order !== undefined && a.order !== null;
       const bHasOrder = b.order !== undefined && b.order !== null;
-      if (aHasOrder && bHasOrder) {
+      if (aHasOrder && bHasOrder && a.order !== b.order) {
         return a.order - b.order;
       }
       if (aHasOrder && !bHasOrder) return -1;
@@ -274,8 +291,27 @@ const AppsList = () => {
       const aName = getLocalizedContent(a.name, currentLanguage) || '';
       const bName = getLocalizedContent(b.name, currentLanguage) || '';
       return aName.localeCompare(bName);
-    });
-  }, [filteredApps, favoriteApps, recentAppIds, currentLanguage]);
+    };
+
+    const nameCompare = (a, b, dir = 'asc') => {
+      const aName = getLocalizedContent(a.name, currentLanguage) || '';
+      const bName = getLocalizedContent(b.name, currentLanguage) || '';
+      return dir === 'asc'
+        ? aName.localeCompare(bName)
+        : bName.localeCompare(aName);
+    };
+
+    const list = [...filteredApps];
+
+    if (sortMethod === 'nameAsc') {
+      return list.sort((a, b) => nameCompare(a, b, 'asc'));
+    }
+    if (sortMethod === 'nameDesc') {
+      return list.sort((a, b) => nameCompare(a, b, 'desc'));
+    }
+
+    return list.sort(sortByRelevance);
+  }, [filteredApps, favoriteApps, recentAppIds, currentLanguage, sortMethod, sortConfig.enabled]);
   
   // Memoized displayed apps for progressive loading
   const displayedApps = useMemo(() => {
@@ -363,6 +399,19 @@ const AppsList = () => {
               )}
             </div>
           </div>
+          {sortConfig.enabled && (
+            <div className="w-full">
+              <select
+                className="w-full border rounded-lg py-2 px-3"
+                value={sortMethod}
+                onChange={(e) => setSortMethod(e.target.value)}
+              >
+                <option value="relevance">{t('pages.appsList.sort.relevance', 'Relevance')}</option>
+                <option value="nameAsc">{t('pages.appsList.sort.nameAsc', 'Name A-Z')}</option>
+                <option value="nameDesc">{t('pages.appsList.sort.nameDesc', 'Name Z-A')}</option>
+              </select>
+            </div>
+          )}
         </div>
       )}
 

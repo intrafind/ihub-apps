@@ -9,6 +9,7 @@ import { getFavoritePrompts, toggleFavoritePrompt } from '../utils/favoritePromp
 import { getRecentPromptIds, recordPromptUsage } from '../utils/recentPrompts';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { highlightVariables } from '../utils/highlightVariables';
+import { useUIConfig } from '../components/UIConfigContext';
 
 const ITEMS_PER_PAGE = 9;
 
@@ -24,6 +25,18 @@ const PromptsList = () => {
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [copyStatus, setCopyStatus] = useState({});
   const [searchParams] = useSearchParams();
+  const { uiConfig } = useUIConfig();
+
+  const sortConfig = useMemo(() => {
+    const defaultSortConfig = { enabled: true, default: 'relevance' };
+    return uiConfig?.promptsList?.sort || defaultSortConfig;
+  }, [uiConfig]);
+
+  const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
+
+  useEffect(() => {
+    setSortMethod(sortConfig.default || 'relevance');
+  }, [sortConfig]);
 
   useEffect(() => {
     (async () => {
@@ -69,9 +82,12 @@ const PromptsList = () => {
   }, [prompts, searchTerm]);
 
   const sortedPrompts = useMemo(() => {
-    const favs = new Set(favoritePromptIds);
-    const recents = new Set(recentPromptIds);
-    return [...filteredPrompts].sort((a, b) => {
+    if (!sortConfig.enabled) return filteredPrompts;
+
+    const sortByRelevance = (a, b) => {
+      const favs = new Set(favoritePromptIds);
+      const recents = new Set(recentPromptIds);
+
       const aFav = favs.has(a.id);
       const bFav = favs.has(b.id);
       if (aFav && !bFav) return -1;
@@ -86,8 +102,25 @@ const PromptsList = () => {
       }
 
       return 0;
-    });
-  }, [filteredPrompts, favoritePromptIds, recentPromptIds]);
+    };
+
+    const nameCompare = (a, b, dir = 'asc') => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      return dir === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
+    };
+
+    const list = [...filteredPrompts];
+
+    if (sortMethod === 'nameAsc') {
+      return list.sort((a, b) => nameCompare(a, b, 'asc'));
+    }
+    if (sortMethod === 'nameDesc') {
+      return list.sort((a, b) => nameCompare(a, b, 'desc'));
+    }
+
+    return list.sort(sortByRelevance);
+  }, [filteredPrompts, favoritePromptIds, recentPromptIds, sortMethod, sortConfig.enabled]);
 
   const totalPages = Math.ceil(sortedPrompts.length / ITEMS_PER_PAGE);
   const pagePrompts = sortedPrompts.slice(
@@ -166,6 +199,19 @@ const PromptsList = () => {
             </button>
           )}
         </div>
+        {sortConfig.enabled && (
+          <div className="mt-4">
+            <select
+              className="w-full border rounded-lg py-2 px-3"
+              value={sortMethod}
+              onChange={(e) => { setSortMethod(e.target.value); setPage(0); }}
+            >
+              <option value="relevance">{t('pages.promptsList.sort.relevance', 'Relevance')}</option>
+              <option value="nameAsc">{t('pages.promptsList.sort.nameAsc', 'Name A-Z')}</option>
+              <option value="nameDesc">{t('pages.promptsList.sort.nameDesc', 'Name Z-A')}</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {filteredPrompts.length === 0 ? (

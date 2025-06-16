@@ -62,6 +62,12 @@
       "loadMore": "Load More",
       "showingCountOfTotal": "Showing {{displayed}} of {{total}} apps"
     },
+    "sort": {
+      "label": "Sort by",
+      "nameAsc": "Name A-Z",
+      "nameDesc": "Name Z-A",
+      "relevance": "Relevance"
+    },
     "promptsList": {
       "title": "Prompt Library",
       "subtitle": "Browse available prompts",
@@ -77,7 +83,13 @@
       "next": "Next",
       "pageOfTotal": "Page {{current}} of {{total}}",
       "sharePrompt": "Share prompt",
-      "linkCopied": "Link copied!"
+      "linkCopied": "Link copied!",
+      "sort": {
+        "label": "Sort by",
+        "nameAsc": "Name A-Z",
+        "nameDesc": "Name Z-A",
+        "relevance": "Relevance"
+      }
     },
     "appChat": {
       "messagePlaceholder": "Type your message here...",

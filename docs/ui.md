@@ -182,6 +182,10 @@ The `appsList` section controls the behavior and appearance of the apps list/hom
       "de": "Apps suchen..."
     },
     "width": "w-full sm:w-2/3 lg:w-1/3"
+  },
+  "sort": {
+    "enabled": true,
+    "default": "relevance"
   }
 }
 ```
@@ -193,8 +197,28 @@ The `appsList` section controls the behavior and appearance of the apps list/hom
 | `search.enabled` | Boolean | Enable or disable the search functionality (default: true) |
 | `search.placeholder` | Object | Localized placeholder text for the search input |
 | `search.width` | String | CSS width classes for the search container (using Tailwind format) |
+| `sort.enabled` | Boolean | Enable or disable client-side sorting (default: true) |
+| `sort.default` | String | Default sorting mode: `relevance`, `nameAsc`, or `nameDesc` |
 
 Setting `search.enabled` to `false` will completely remove the search functionality from the apps list page.
+
+### Prompts List Configuration
+
+The `promptsList` section controls sorting behavior of the prompts library:
+
+```json
+"promptsList": {
+  "sort": {
+    "enabled": true,
+    "default": "relevance"
+  }
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `sort.enabled` | Boolean | Enable or disable client-side sorting (default: true) |
+| `sort.default` | String | Default sorting mode: `relevance`, `nameAsc`, or `nameDesc` |
 
 ### Static Pages
 

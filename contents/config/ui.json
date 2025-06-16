@@ -136,6 +136,16 @@
         "de": "Apps suchen..."
       },
       "width": "w-full sm:w-2/3 lg:w-1/3"
+    },
+    "sort": {
+      "enabled": true,
+      "default": "relevance"
+    }
+  },
+  "promptsList": {
+    "sort": {
+      "enabled": true,
+      "default": "relevance"
     }
   },
   "pages": {
