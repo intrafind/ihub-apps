@@ -30,6 +30,7 @@ import InputVariables from "../components/chat/InputVariables";
 import { useUIConfig } from "../components/UIConfigContext";
 import cache, { CACHE_KEYS } from "../utils/cache"; // Import cache for manual clearing
 import { recordAppUsage } from "../utils/recentApps";
+import Icon from "../components/Icon";
 
 /**
  * Save app settings and variables to sessionStorage
@@ -126,6 +127,144 @@ const getInitializedVariables = (app, currentLanguage) => {
   }
   
   return initialVars;
+};
+
+/**
+ * Component for displaying starter prompts
+ */
+const StarterPromptsView = ({ starterPrompts, onSelectPrompt }) => {
+  const { t, i18n } = useTranslation();
+
+  return (
+    <div className="text-center text-gray-500 space-y-6 w-full">
+      <div className="space-y-2">
+        <svg
+          className="w-12 h-12 mx-auto mb-3 text-indigo-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+          />
+        </svg>
+        <h3 className="text-xl font-semibold text-gray-700 mb-1">
+          {t('pages.appChat.starterPromptsTitle', 'Starter Prompts')}
+        </h3>
+        <p className="text-sm text-gray-500 max-w-md mx-auto md:px-4">
+          {t('pages.appChat.starterPromptsSubtitle', 'Choose a prompt below to get started quickly')}
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 w-full max-w-4xl mx-auto px-4 pb-4">
+        {starterPrompts.map((sp, idx) => (
+          <button
+            key={idx}
+            type="button"
+            className="group relative p-4 text-left bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300 transition-all duration-200 transform hover:-translate-y-0.5 h-full min-h-[100px] flex flex-col"
+            onClick={() =>
+              onSelectPrompt &&
+              onSelectPrompt({
+                ...sp,
+                message: getLocalizedContent(sp.message, i18n.language),
+              })
+            }
+          >
+            <div className="flex items-start space-x-3 h-full">
+              <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors mt-0.5">
+                <svg
+                  className="w-4 h-4 text-indigo-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0 flex flex-col justify-start">
+                <p className="font-semibold text-gray-900 text-sm leading-5 mb-1">
+                  {getLocalizedContent(sp.title, i18n.language)}
+                </p>
+                <p className="text-xs text-gray-500 leading-4 overflow-hidden" style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical'
+                }}>
+                  {getLocalizedContent(sp.message, i18n.language)}
+                </p>
+              </div>
+            </div>
+            <div className="absolute inset-0 rounded-xl border border-transparent group-hover:border-indigo-200 transition-colors pointer-events-none"></div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Component for displaying greeting message
+ */
+const GreetingView = ({ welcomeMessage }) => {
+  const { t } = useTranslation();
+
+  return (
+    <div className="text-center text-gray-500 space-y-6 w-full">
+      <div className="px-4">
+        <Icon name="chat-bubble" size="3xl" className="mx-auto mb-4 text-gray-400" />
+        <h3 className="text-lg font-semibold mb-2">
+          {welcomeMessage}
+        </h3>
+        <p className="text-sm max-w-md mx-auto">
+          {t('pages.appChat.noMessagesSubtitle', 'Start a conversation by sending a message!')}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Component for displaying no messages state
+ */
+const NoMessagesView = () => {
+  const { t } = useTranslation();
+
+  return (
+    <div className="text-center text-gray-500 space-y-6 w-full">
+      <div className="px-4">
+        <Icon name="chat-bubble" size="3xl" className="mx-auto mb-4 text-gray-400" />
+        <h3 className="text-lg font-semibold mb-2">
+          {t('pages.appChat.noMessagesTitle', 'No Messages Yet')}
+        </h3>
+        <p className="text-sm max-w-md mx-auto">
+          {t('pages.appChat.noMessagesSubtitle', 'Start a conversation by sending a message!')}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Renders the appropriate startup state component
+ */
+const renderStartupState = (app, welcomeMessage, handleStarterPromptClick) => {
+  const starterPrompts = app?.starterPrompts || [];
+  
+  if (starterPrompts.length > 0) {
+    return <StarterPromptsView starterPrompts={starterPrompts} onSelectPrompt={handleStarterPromptClick} />;
+  } else if (welcomeMessage) {
+    return <GreetingView welcomeMessage={welcomeMessage} />;
+  } else {
+    return <NoMessagesView />;
+  }
 };
 
 const AppChat = () => {
@@ -958,7 +1097,7 @@ const AppChat = () => {
   );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-9rem)] max-h-[calc(100vh-9rem)] min-h-0 overflow-hidden pt-8">
+    <div className="flex flex-col h-[calc(100vh-9rem)] max-h-[calc(100vh-9rem)] min-h-0 overflow-hidden pt-4">
       {/* App Header - using our reusable ChatHeader component */}
       <ChatHeader
         title={app?.name}
@@ -1046,24 +1185,30 @@ const AppChat = () => {
             <>
               {/* Mobile layout: content centers, input at bottom */}
               <div className="flex flex-col h-full md:hidden">
-                <div className="flex-1 flex items-center justify-center overflow-hidden">
-                  <div className="w-full max-w-4xl px-4 h-full flex items-center justify-center">
-                    <ChatMessageList
-                      messages={messages}
-                      outputFormat={selectedOutputFormat}
-                      onDelete={handleDeleteMessage}
-                      onEdit={handleEditMessage}
-                      onResend={handleResendMessage}
-                      editable={true}
-                      appId={appId}
-                      chatId={chatId.current}
-                      modelId={selectedModel}
-                      starterPrompts={app?.starterPrompts || []}
-                      onSelectPrompt={handleStarterPromptClick}
-                      welcomeMessage={welcomeMessage}
-                      showCenteredInput={shouldCenterInput}
-                    />
-                  </div>
+                <div className="flex-1 overflow-hidden">
+                  {messages.length > 0 ? (
+                    <div className="w-full h-full overflow-y-auto bg-gray-50 rounded-lg">
+                      <ChatMessageList
+                        messages={messages}
+                        outputFormat={selectedOutputFormat}
+                        onDelete={handleDeleteMessage}
+                        onEdit={handleEditMessage}
+                        onResend={handleResendMessage}
+                        editable={true}
+                        appId={appId}
+                        chatId={chatId.current}
+                        modelId={selectedModel}
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full h-full overflow-y-auto">
+                      <div className="min-h-full flex items-center justify-center p-4">
+                        <div className="w-full max-w-4xl">
+                          {renderStartupState(app, welcomeMessage, handleStarterPromptClick)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="flex-shrink-0 px-4 pt-2">
                   <div className="w-full max-w-4xl mx-auto">
@@ -1110,22 +1255,26 @@ const AppChat = () => {
               {/* Desktop layout: everything centered together */}
               <div className="hidden md:flex md:flex-col md:h-full md:items-center md:justify-center">
                 <div className="w-full max-w-4xl">
-                  <ChatMessageList
-                    messages={messages}
-                    outputFormat={selectedOutputFormat}
-                    onDelete={handleDeleteMessage}
-                    onEdit={handleEditMessage}
-                    onResend={handleResendMessage}
-                    editable={true}
-                    appId={appId}
-                    chatId={chatId.current}
-                    modelId={selectedModel}
-                    starterPrompts={app?.starterPrompts || []}
-                    onSelectPrompt={handleStarterPromptClick}
-                    welcomeMessage={welcomeMessage}
-                    showCenteredInput={shouldCenterInput}
-                  />
-                  <div className="mt-8">
+                  {messages.length > 0 ? (
+                    <div className="mb-8">
+                      <ChatMessageList
+                        messages={messages}
+                        outputFormat={selectedOutputFormat}
+                        onDelete={handleDeleteMessage}
+                        onEdit={handleEditMessage}
+                        onResend={handleResendMessage}
+                        editable={true}
+                        appId={appId}
+                        chatId={chatId.current}
+                        modelId={selectedModel}
+                      />
+                    </div>
+                  ) : (
+                    <div className="mb-8">
+                      {renderStartupState(app, welcomeMessage, handleStarterPromptClick)}
+                    </div>
+                  )}
+                  <div>
                     <ChatInput
                       app={app}
                       value={input}

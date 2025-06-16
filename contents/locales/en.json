@@ -106,13 +106,22 @@
       "inputParameters": "Input Parameters",
       "startConversation": "Start conversation",
       "starterPromptsTitle": "Starter Prompts",
-      "starterPromptsSubtitle": "Choose a prompt below to get started quickly"
+      "starterPromptsSubtitle": "Choose a prompt below to get started quickly",
+      "welcome": "Welcome",
+      "getStarted": "Get Started",
+      "examplePrompts": "Here are some example prompts to get you started"
     },
     "notFound": {
       "title": "Page Not Found",
       "message": "We couldn't find the page you were looking for.",
       "returnHome": "Return to Home"
     }
+  },
+  "examples": {
+    "helpWithTask": "Help me brainstorm ideas for my project",
+    "explainConcept": "Explain a complex topic in simple terms", 
+    "writeContent": "Help me write professional content",
+    "planSomething": "Plan and organize my schedule"
   },
   "models": {
     "temperature": "Temperature",
