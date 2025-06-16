@@ -44,7 +44,7 @@ const ChatWidget = ({
   const defaultMaxTokens = widgetConfig.maxTokens || 4096;
   const [initialTokens] = useState(defaultInitialTokens);
   const [maxTokens] = useState(defaultMaxTokens);
-  const [outputTokens, setOutputTokens] = useState(initialTokens);
+  const [outputTokens, setOutputTokens] = useState(null);
   
   // Log the app ID being used
   useEffect(() => {
@@ -128,17 +128,18 @@ const ChatWidget = ({
       if (window.lastMessageId) {
         updateAssistantMessage(window.lastMessageId, finalContent, false, {
           finishReason: info.finishReason,
-          tokensUsed: outputTokens
+          tokensUsed: outputTokens || initialTokens
         });
       }
       setProcessing(false);
-      setOutputTokens(initialTokens);
+      setOutputTokens(null);
     },
     onError: (error) => {
       if (window.lastMessageId) {
         setMessageError(window.lastMessageId, error.message);
       }
       setProcessing(false);
+      setOutputTokens(null);
     },
     onConnected: async (event) => {
       try {
@@ -273,20 +274,26 @@ const ChatWidget = ({
     const messageToResend = messages.find((msg) => msg.id === messageId);
     if (!messageToResend) return;
 
-    // Remove the selected message and any following messages so they are not
-    // resent with the new submission
-    deleteMessage(messageId);
+    let contentToResend = editedContent;
 
-    // Use the editedContent if provided, otherwise prefer the raw content if available
-    const contentToResend = editedContent !== undefined ? editedContent : (messageToResend.rawContent || messageToResend.content);
+    if (messageToResend.role === 'assistant') {
+      const idx = messages.findIndex((msg) => msg.id === messageId);
+      const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
+      if (!prevUser) return;
+      contentToResend = prevUser.rawContent || prevUser.content;
+      deleteMessage(messageId); // remove the assistant message only
+    } else {
+      deleteMessage(messageId);
+      if (contentToResend === undefined) {
+        contentToResend = messageToResend.rawContent || messageToResend.content;
+      }
+    }
 
-    // Set the input to the content to resend
     setInput(contentToResend);
     if (useMaxTokens) {
       setOutputTokens(maxTokens);
     }
-    
-    // Submit the form after a brief delay to ensure state updates
+
     setTimeout(() => {
       handleSubmit({ preventDefault: () => {} });
     }, 100);
@@ -336,7 +343,7 @@ const ChatWidget = ({
           temperature: 0.7, // Default temperature
           outputFormat: 'markdown',
           language: getUserLanguage(),
-          maxTokens: outputTokens
+          ...(outputTokens ? { maxTokens: outputTokens } : {})
         }
       };
       
