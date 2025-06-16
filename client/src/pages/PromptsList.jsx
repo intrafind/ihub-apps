@@ -174,44 +174,46 @@ const PromptsList = () => {
       </p>
 
       <div className="w-full max-w-md sm:max-w-lg lg:max-w-xl mb-8">
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Icon name="search" className="text-gray-400" />
+        <div className="flex flex-col sm:flex-row items-stretch gap-4">
+          <div className="relative flex-grow">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Icon name="search" className="text-gray-400" />
+            </div>
+            <input
+              type="text"
+              className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              placeholder={t('pages.promptsList.searchPlaceholder', 'Search prompts...')}
+              value={searchTerm}
+              onChange={handleSearchChange}
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => { setSearchTerm(''); setPage(0); }}
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                aria-label={t('common.clear', 'Clear')}
+              >
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            )}
           </div>
-          <input
-            type="text"
-            className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder={t('pages.promptsList.searchPlaceholder', 'Search prompts...')}
-            value={searchTerm}
-            onChange={handleSearchChange}
-            autoComplete="off"
-            data-lpignore="true"
-            data-1p-ignore="true"
-          />
-          {searchTerm && (
-            <button
-              type="button"
-              onClick={() => { setSearchTerm(''); setPage(0); }}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
-              aria-label={t('common.clear', 'Clear')}
-            >
-              <Icon name="x" className="w-5 h-5" />
-            </button>
+          {sortConfig.enabled && (
+            <div className="flex-shrink-0">
+              <select
+                className="h-full border rounded-lg py-2 px-3 w-full sm:w-auto"
+                value={sortMethod}
+                onChange={(e) => { setSortMethod(e.target.value); setPage(0); }}
+              >
+                <option value="relevance">{t('pages.promptsList.sort.relevance', 'Relevance')}</option>
+                <option value="nameAsc">{t('pages.promptsList.sort.nameAsc', 'Name A-Z')}</option>
+                <option value="nameDesc">{t('pages.promptsList.sort.nameDesc', 'Name Z-A')}</option>
+              </select>
+            </div>
           )}
         </div>
-        {sortConfig.enabled && (
-          <div className="mt-4">
-            <select
-              className="w-full border rounded-lg py-2 px-3"
-              value={sortMethod}
-              onChange={(e) => { setSortMethod(e.target.value); setPage(0); }}
-            >
-              <option value="relevance">{t('pages.promptsList.sort.relevance', 'Relevance')}</option>
-              <option value="nameAsc">{t('pages.promptsList.sort.nameAsc', 'Name A-Z')}</option>
-              <option value="nameDesc">{t('pages.promptsList.sort.nameDesc', 'Name Z-A')}</option>
-            </select>
-          </div>
-        )}
       </div>
 
       {filteredPrompts.length === 0 ? (
