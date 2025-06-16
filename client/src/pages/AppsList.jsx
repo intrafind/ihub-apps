@@ -258,7 +258,27 @@ const AppsList = () => {
   
   // Memoized sorted apps to avoid recomputing on every render
   const sortedApps = useMemo(() => {
-    if (!sortConfig.enabled) return filteredApps;
+    const sortByDefault = (a, b) => {
+      // Favorites first
+      const aFav = favoriteApps.includes(a.id);
+      const bFav = favoriteApps.includes(b.id);
+      if (aFav && !bFav) return -1;
+      if (!aFav && bFav) return 1;
+
+      // Then sort by configured order
+      const aHasOrder = a.order !== undefined && a.order !== null;
+      const bHasOrder = b.order !== undefined && b.order !== null;
+      if (aHasOrder && bHasOrder && a.order !== b.order) {
+        return a.order - b.order;
+      }
+      if (aHasOrder && !bHasOrder) return -1;
+      if (!aHasOrder && bHasOrder) return 1;
+
+      // Fallback alphabetical
+      const aName = getLocalizedContent(a.name, currentLanguage) || '';
+      const bName = getLocalizedContent(b.name, currentLanguage) || '';
+      return aName.localeCompare(bName);
+    };
 
     const sortByRelevance = (a, b) => {
       const recentSet = new Set(recentAppIds);
@@ -303,14 +323,22 @@ const AppsList = () => {
 
     const list = [...filteredApps];
 
+    if (sortMethod === 'relevance') {
+      console.log('Sorting by relevance');
+      return list.sort(sortByRelevance);
+    }
+
     if (sortMethod === 'nameAsc') {
+      console.log('Sorting by name ascending');
       return list.sort((a, b) => nameCompare(a, b, 'asc'));
     }
+
     if (sortMethod === 'nameDesc') {
+      console.log('Sorting by name descending');
       return list.sort((a, b) => nameCompare(a, b, 'desc'));
     }
 
-    return list.sort(sortByRelevance);
+    return list.sort(sortByDefault);
   }, [filteredApps, favoriteApps, recentAppIds, currentLanguage, sortMethod, sortConfig.enabled]);
   
   // Memoized displayed apps for progressive loading

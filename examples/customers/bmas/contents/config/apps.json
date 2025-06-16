@@ -26,22 +26,22 @@
       "enabled": false
     },
     "settings": {
-        "enabled": true,
-        "model": {
-          "enabled": false
-        },
-        "temperature": {
-          "enabled": false
-        },
-        "outputFormat": {
-          "enabled": false
-        },
-        "chatHistory": {
-          "enabled": false
-        },
-        "style": {
-          "enabled": true
-        }
+      "enabled": true,
+      "model": {
+        "enabled": false
+      },
+      "temperature": {
+        "enabled": false
+      },
+      "outputFormat": {
+        "enabled": false
+      },
+      "chatHistory": {
+        "enabled": false
+      },
+      "style": {
+        "enabled": true
+      }
     }
   },
   {
@@ -71,22 +71,22 @@
       "enabled": false
     },
     "settings": {
-        "enabled": true,
-        "model": {
-          "enabled": false
-        },
-        "temperature": {
-          "enabled": false
-        },
-        "outputFormat": {
-          "enabled": false
-        },
-        "chatHistory": {
-          "enabled": false
-        },
-        "style": {
-          "enabled": true
-        }
+      "enabled": true,
+      "model": {
+        "enabled": false
+      },
+      "temperature": {
+        "enabled": false
+      },
+      "outputFormat": {
+        "enabled": false
+      },
+      "chatHistory": {
+        "enabled": false
+      },
+      "style": {
+        "enabled": true
+      }
     }
   },
   {
@@ -116,22 +116,22 @@
       "enabled": false
     },
     "settings": {
-        "enabled": true,
-        "model": {
-          "enabled": false
-        },
-        "temperature": {
-          "enabled": false
-        },
-        "outputFormat": {
-          "enabled": false
-        },
-        "chatHistory": {
-          "enabled": false
-        },
-        "style": {
-          "enabled": true
-        }
+      "enabled": true,
+      "model": {
+        "enabled": false
+      },
+      "temperature": {
+        "enabled": false
+      },
+      "outputFormat": {
+        "enabled": false
+      },
+      "chatHistory": {
+        "enabled": false
+      },
+      "style": {
+        "enabled": true
+      }
     }
   },
   {
@@ -165,28 +165,28 @@
       "enabled": false
     },
     "settings": {
-        "enabled": true,
-        "model": {
-          "enabled": false
-        },
-        "temperature": {
-          "enabled": false
-        },
-        "outputFormat": {
-          "enabled": false
-        },
-        "chatHistory": {
-          "enabled": false
-        },
-        "style": {
-          "enabled": true
-        }
+      "enabled": true,
+      "model": {
+        "enabled": false
+      },
+      "temperature": {
+        "enabled": false
+      },
+      "outputFormat": {
+        "enabled": false
+      },
+      "chatHistory": {
+        "enabled": false
+      },
+      "style": {
+        "enabled": true
+      }
     },
-	  "allowEmptyContent": true,
-	  "messagePlaceholder": {
-	    "en": "Here you can give me additional information about the creation of the mail...",
-	    "de": "Hier kannst du mir zusätzliche Informationen zur Erstellung der Mail geben..."
-    },		
+    "allowEmptyContent": true,
+    "messagePlaceholder": {
+      "en": "Here you can give me additional information about the creation of the mail...",
+      "de": "Hier kannst du mir zusätzliche Informationen zur Erstellung der Mail geben..."
+    },
     "variables": [
       {
         "name": "type",
@@ -201,12 +201,48 @@
         },
         "required": true,
         "predefinedValues": [
-          {"label": {"en": "Standard", "de": "Standard"}, "value": "professional"},
-          {"label": {"en": "Follow-up", "de": "Nachverfolgung"}, "value": "follow-up"},
-          {"label": {"en": "Request", "de": "Anfrage"}, "value": "request"},
-          {"label": {"en": "Thank you", "de": "Danke"}, "value": "thank you"},
-          {"label": {"en": "Introduction", "de": "Einführung"}, "value": "introduction"},
-          {"label": {"en": "Complaint", "de": "Beschwerde"}, "value": "complaint resolution"}
+          {
+            "label": {
+              "en": "Standard",
+              "de": "Standard"
+            },
+            "value": "professional"
+          },
+          {
+            "label": {
+              "en": "Follow-up",
+              "de": "Nachverfolgung"
+            },
+            "value": "follow-up"
+          },
+          {
+            "label": {
+              "en": "Request",
+              "de": "Anfrage"
+            },
+            "value": "request"
+          },
+          {
+            "label": {
+              "en": "Thank you",
+              "de": "Danke"
+            },
+            "value": "thank you"
+          },
+          {
+            "label": {
+              "en": "Introduction",
+              "de": "Einführung"
+            },
+            "value": "introduction"
+          },
+          {
+            "label": {
+              "en": "Complaint",
+              "de": "Beschwerde"
+            },
+            "value": "complaint resolution"
+          }
         ]
       },
       {
@@ -239,10 +275,34 @@
           "de": "Verwende einen professionellen Ton."
         },
         "predefinedValues": [
-          {"label": {"en": "Professional", "de": "Professionell"}, "value": "Use a professional tone."},
-          {"label": {"en": "Friendly", "de": "Freundlich"}, "value": "Use a friendly and approachable tone."},
-          {"label": {"en": "Formal", "de": "Formell"}, "value": "Use a formal tone."},
-          {"label": {"en": "Assertive", "de": "Bestimmend"}, "value": "Use an assertive and confident tone."}
+          {
+            "label": {
+              "en": "Professional",
+              "de": "Professionell"
+            },
+            "value": "Use a professional tone."
+          },
+          {
+            "label": {
+              "en": "Friendly",
+              "de": "Freundlich"
+            },
+            "value": "Use a friendly and approachable tone."
+          },
+          {
+            "label": {
+              "en": "Formal",
+              "de": "Formell"
+            },
+            "value": "Use a formal tone."
+          },
+          {
+            "label": {
+              "en": "Assertive",
+              "de": "Bestimmend"
+            },
+            "value": "Use an assertive and confident tone."
+          }
         ]
       }
     ]
@@ -251,8 +311,8 @@
     "id": "dictator",
     "order": 5,
     "name": {
-      "en": "Dictation",
-      "de": "Dictation"
+      "en": "Dictation Assistant",
+      "de": "Diktier-Assistent"
     },
     "description": {
       "en": "Use this app to record your voice and convert it to text",
@@ -263,6 +323,10 @@
     "system": {
       "en": "You are a helpful assistant, which receives a transcript recorded with a microphone. Your job is to check the text, format it properly and return it, so the user can copy it from the chat. Do NOT add any additional information.",
       "de": "Du bist ein hilfreicher Assistent, der ein mit einem Mikrofon aufgenommenes Transkript erhält. Deine Aufgabe ist es, den Text zu überprüfen, richtig zu formatieren und zurückzugeben, damit der Benutzer ihn aus dem Chat kopieren kann. Füge KEINE zusätzlichen Informationen hinzu."
+    },
+    "messagePlaceholder": {
+      "en": "Please speak the text by tapping the microphone icon.",
+      "de": "Bitte sprich den Text ein, indem du auf das Mikrofon-Symbol tippst."
     },
     "tokenLimit": 8000,
     "preferredModel": "local-vllm-intrafind",
@@ -276,9 +340,9 @@
     },
     "inputMode": "multiline",
     "settings": {
-	  "speechRecognition": {
-      	"service": "azure",
-      	"host": "https://bmas01lal/"
+      "speechRecognition": {
+        "service": "azure",
+        "host": "https://bmas01lal/"
       },
       "enabled": true,
       "model": {
@@ -345,6 +409,9 @@
       "style": {
         "enabled": true
       }
+    },
+    "microphone": {
+      "enabled": false
     }
   }
 ]

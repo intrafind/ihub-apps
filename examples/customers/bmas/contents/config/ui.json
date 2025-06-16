@@ -29,6 +29,12 @@
     "assistantMessage": "bmas-assistant-icon",
     "apps-svg-logo": "bmas-assistant-icon"
   },
+  "propmptsList": {
+    "enabled": false,
+    "sort": {
+      "enabled": false
+    }
+  },
   "appsList": {
     "title": {
       "en": " - Hub",
@@ -39,6 +45,9 @@
       "de": "Diese KI-Plattform wird verwendet, um ausgewählte KI-Pilotanwendungen zu testen. Alle KI-Anwendungen werden im BMAS-Rechenzentrum und ohne Cloud-Verbindung betrieben. Wählen Sie eine KI-Anwendung aus, um ein Gespräch zu beginnen."
     },
     "search": {
+      "enabled": false
+    },
+    "sort": {
       "enabled": false
     }
   },
