@@ -308,7 +308,7 @@
     ]
   },
   {
-    "id": "dictator",
+    "id": "dictation",
     "order": 5,
     "name": {
       "en": "Dictation Assistant",
@@ -338,7 +338,15 @@
       "en": "{{content}}",
       "de": "{{content}}"
     },
-    "inputMode": "multiline",
+    "inputMode": {
+      "type": "multiline",
+      "rows": 5,
+      "microphone": {
+        "enabled": true,
+        "mode": "manual",
+        "showTranscript": true
+      }
+    },
     "settings": {
       "speechRecognition": {
         "service": "azure",
@@ -360,9 +368,6 @@
       "style": {
         "enabled": true
       }
-    },
-    "microphone": {
-      "enabled": true
     }
   },
   {
