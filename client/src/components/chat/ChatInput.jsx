@@ -119,6 +119,37 @@ const ChatInput = ({
     }
   }, [isProcessing]);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    if (actualInputRef.current) {
+      const textarea = actualInputRef.current;
+      
+      const autoResize = () => {
+        // Reset height to auto to get the correct scrollHeight
+        textarea.style.height = 'auto';
+        
+        // Calculate the new height based on content
+        const scrollHeight = textarea.scrollHeight;
+        const minHeight = inputRows * 1.5 * 16; // Convert em to px (assuming 16px base font size)
+        const maxHeight = ( multilineMode ? 12 : 3 ) * 1.5 * 16 + 24; // 12 lines + padding (1.5rem = 24px)
+
+        // Set the height to fit content, but respect min/max limits
+        const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
+        textarea.style.height = `${newHeight}px`;
+      };
+      
+      // Initial resize
+      autoResize();
+      
+      // Add event listener for input changes
+      textarea.addEventListener('input', autoResize);
+      
+      return () => {
+        textarea.removeEventListener('input', autoResize);
+      };
+    }
+  }, [value, multilineMode, inputRows]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if ((value.trim() || allowEmptySubmit) && !isProcessing) {
@@ -237,8 +268,13 @@ const ChatInput = ({
           className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 pr-10"
           placeholder={placeholderRef.current}
           ref={actualInputRef}
-          rows={inputRows}
-          style={{ resize: multilineMode ? "vertical" : "none" }}
+          style={{ 
+            resize: multilineMode ? "vertical" : "none",
+            minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
+            maxHeight: multilineMode ? "calc(11 * 1.5em + 1.5rem)" : undefined,
+            overflowY: multilineMode ? "auto" : "hidden",
+            height: multilineMode ? "auto" : undefined
+          }}
           title={multilineMode ? 
             t("input.multilineTooltip", "Press Shift+Enter for new line, Cmd+Enter to send") : 
             t("input.singlelineTooltip", "Press Enter to send")}
