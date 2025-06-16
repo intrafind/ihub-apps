@@ -99,14 +99,15 @@ function useChatMessages(chatId = 'default') {
    * @param {string} content - The new content
    * @param {boolean} isLoading - Whether the message is still loading
    */
-  const updateAssistantMessage = useCallback((id, content, isLoading = true) => {
-    setMessages(prev => 
-      prev.map(msg => 
+  const updateAssistantMessage = useCallback((id, content, isLoading = true, extra = {}) => {
+    setMessages(prev =>
+      prev.map(msg =>
         msg.id === id
-          ? { 
-              ...msg, 
-              content, 
+          ? {
+              ...msg,
+              content,
               loading: isLoading,
+              ...extra,
               _timestamp: Date.now(), // Add timestamp to force new object reference
               _contentLength: content.length // Track content length to ensure React detects changes
             }

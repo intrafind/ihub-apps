@@ -10,7 +10,7 @@ import { checkAppChatStatus, stopAppChatStream } from '../api/api';
  * @param {string} options.chatId - The ID of the chat session
  * @param {number} options.timeoutDuration - Timeout duration in milliseconds
  * @param {Function} options.onChunk - Callback for when a chunk of data is received
- * @param {Function} options.onDone - Callback for when the stream is complete
+ * @param {Function} options.onDone - Callback for when the stream is complete. Receives (content, info)
  * @param {Function} options.onError - Callback for when an error occurs
  * @param {Function} options.onConnected - Callback for when the connection is established
  * @param {Function} options.onProcessingChange - Callback to update processing state
@@ -179,9 +179,17 @@ function useEventSource({
     
     eventSource.addEventListener('chunk', eventSource.onchunk);
     
-    eventSource.ondone = () => {
+    eventSource.ondone = (event) => {
+      let info = {};
+      if (event.data) {
+        try {
+          info = JSON.parse(event.data);
+        } catch (e) {
+          console.warn('Failed to parse done event data:', e);
+        }
+      }
       if (onDone) {
-        onDone(fullContentRef.current);
+        onDone(fullContentRef.current, info);
       }
       
       eventSource.close();

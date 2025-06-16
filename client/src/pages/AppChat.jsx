@@ -152,6 +152,11 @@ const AppChat = () => {
   const [showParameters, setShowParameters] = useState(true);
   const { setHeaderColor } = useUIConfig();
 
+  const defaultInitialTokens = 512;
+  const [initialTokens] = useState(defaultInitialTokens);
+  const [maxTokens, setMaxTokens] = useState(null);
+  const [outputTokens, setOutputTokens] = useState(initialTokens);
+
   // Record recent usage of this app
   useEffect(() => {
     recordAppUsage(appId);
@@ -201,11 +206,15 @@ const AppChat = () => {
         updateAssistantMessage(window.lastMessageId, fullContent, true);
       }
     },
-    onDone: (finalContent) => {
+    onDone: (finalContent, info) => {
       // Mark the message as no longer loading
       if (window.lastMessageId) {
-        updateAssistantMessage(window.lastMessageId, finalContent, false);
+        updateAssistantMessage(window.lastMessageId, finalContent, false, {
+          finishReason: info.finishReason,
+          tokensUsed: outputTokens
+        });
       }
+      setOutputTokens(initialTokens);
     },
     onError: (error) => {
       // Update with an error message
@@ -344,6 +353,9 @@ const AppChat = () => {
 
         console.log("Fetching app data for:", appId);
         const appData = await fetchAppDetails(appId);
+        if (isMounted) {
+          setMaxTokens(appData.tokenLimit || 4096);
+        }
         
         // Safety check for component unmounting during async operations
         if (!isMounted) return;
@@ -615,7 +627,7 @@ const AppChat = () => {
     editMessage(messageId, newContent);
   };
 
-  const handleResendMessage = (messageId, editedContent) => {
+  const handleResendMessage = (messageId, editedContent, useMaxTokens = false) => {
     const messageToResend = messages.find((msg) => msg.id === messageId);
     if (!messageToResend) return;
 
@@ -633,6 +645,9 @@ const AppChat = () => {
 
     // Set the input field to the original message content
     setInput(contentToResend);
+    if (useMaxTokens) {
+      setOutputTokens(maxTokens || initialTokens);
+    }
 
     setTimeout(() => {
       const form = document.querySelector("form");
@@ -856,6 +871,7 @@ const AppChat = () => {
           temperature,
           outputFormat: selectedOutputFormat,
           language: currentLanguage,
+          maxTokens: outputTokens,
         },
       };
 
@@ -1058,6 +1074,7 @@ const AppChat = () => {
             appId={appId}
             chatId={chatId.current}
             modelId={selectedModel}
+            maxTokens={maxTokens}
             starterPrompts={app?.starterPrompts || []}
             onSelectPrompt={handleStarterPromptClick}
           />

@@ -88,7 +88,8 @@ const OpenAIAdapter = {
       content: [],
       complete: false,
       error: false,
-      errorMessage: null
+      errorMessage: null,
+      finishReason: null
     };
 
     const { events, done } = parseSSEBuffer(buffer);
@@ -104,6 +105,7 @@ const OpenAIAdapter = {
 
         if (data.choices && data.choices[0]?.finish_reason) {
           result.complete = true;
+          result.finishReason = data.choices[0].finish_reason;
         }
       } catch (error) {
         console.error('Error parsing OpenAI response chunk:', error);

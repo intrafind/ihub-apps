@@ -174,7 +174,8 @@ const GoogleAdapter = {
         content: [],
         complete: false,
         error: false,
-        errorMessage: null
+        errorMessage: null,
+        finishReason: null
       };
 
       const { events, done } = parseSSEBuffer(buffer);
@@ -192,8 +193,12 @@ const GoogleAdapter = {
             }
           }
 
-          if (data.candidates && data.candidates[0]?.finishReason === 'STOP') {
-            result.complete = true;
+          if (data.candidates && data.candidates[0]?.finishReason) {
+            const fr = data.candidates[0].finishReason;
+            result.finishReason = fr;
+            if (fr === 'STOP' || fr === 'MAX_TOKENS') {
+              result.complete = true;
+            }
           }
         } catch (jsonError) {
           // Fallback to regex if JSON parsing fails
@@ -206,6 +211,10 @@ const GoogleAdapter = {
           }
 
           if (evt.includes('"finishReason": "STOP"') || evt.includes('"finishReason":"STOP"')) {
+            result.finishReason = 'STOP';
+            result.complete = true;
+          } else if (evt.includes('"finishReason": "MAX_TOKENS"')) {
+            result.finishReason = 'MAX_TOKENS';
             result.complete = true;
           }
         }

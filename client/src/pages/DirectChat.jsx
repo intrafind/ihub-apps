@@ -429,6 +429,7 @@ const DirectChat = () => {
         appId="direct-chat"
         chatId={modelId || "default"}
         modelId={selectedModel}
+        maxTokens={null}
       />
       
       {/* Message Input - using our reusable ChatInput component */}

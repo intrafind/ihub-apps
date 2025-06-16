@@ -39,6 +39,12 @@ const ChatWidget = ({
   // Use widget config options
   const widgetConfig = uiConfig?.widget || {};
   const appId = configuredAppId || widgetConfig.defaultApp || 'general-assistant';
+
+  const defaultInitialTokens = widgetConfig.initialTokens || 512;
+  const defaultMaxTokens = widgetConfig.maxTokens || 4096;
+  const [initialTokens] = useState(defaultInitialTokens);
+  const [maxTokens] = useState(defaultMaxTokens);
+  const [outputTokens, setOutputTokens] = useState(initialTokens);
   
   // Log the app ID being used
   useEffect(() => {
@@ -118,11 +124,15 @@ const ChatWidget = ({
         updateAssistantMessage(window.lastMessageId, fullContent, true);
       }
     },
-    onDone: (finalContent) => {
+    onDone: (finalContent, info) => {
       if (window.lastMessageId) {
-        updateAssistantMessage(window.lastMessageId, finalContent, false);
+        updateAssistantMessage(window.lastMessageId, finalContent, false, {
+          finishReason: info.finishReason,
+          tokensUsed: outputTokens
+        });
       }
       setProcessing(false);
+      setOutputTokens(initialTokens);
     },
     onError: (error) => {
       if (window.lastMessageId) {
@@ -259,7 +269,7 @@ const ChatWidget = ({
   };
   
   // Handle message resending
-  const handleResendMessage = (messageId, editedContent) => {
+  const handleResendMessage = (messageId, editedContent, useMaxTokens = false) => {
     const messageToResend = messages.find((msg) => msg.id === messageId);
     if (!messageToResend) return;
 
@@ -272,6 +282,9 @@ const ChatWidget = ({
 
     // Set the input to the content to resend
     setInput(contentToResend);
+    if (useMaxTokens) {
+      setOutputTokens(maxTokens);
+    }
     
     // Submit the form after a brief delay to ensure state updates
     setTimeout(() => {
@@ -323,6 +336,7 @@ const ChatWidget = ({
           temperature: 0.7, // Default temperature
           outputFormat: 'markdown',
           language: getUserLanguage(),
+          maxTokens: outputTokens
         }
       };
       
@@ -436,6 +450,7 @@ const ChatWidget = ({
                 appId={appId}
                 chatId={chatId}
                 compact={true} // Set compact mode for the limited widget space
+                maxTokens={maxTokens}
               />
               {/* Only show typing indicator when processing AND there are no loading messages */}
               {processing && !messages.some(msg => msg.loading) && (

@@ -16,7 +16,8 @@ const ChatMessage = ({
   appId,
   chatId,
   modelId,
-  compact = false  // New prop to indicate compact mode (for widget or mobile)
+  compact = false,  // New prop to indicate compact mode (for widget or mobile)
+  maxTokens = null
 }) => {
   const { t } = useTranslation();
   const isUser = message.role === 'user';
@@ -91,9 +92,9 @@ const ChatMessage = ({
     setEditedContent(message.content);
   };
 
-  const handleResend = () => {
+  const handleResend = (useMaxTokens = false) => {
     if (onResend) {
-      onResend(message.id);
+      onResend(message.id, undefined, useMaxTokens);
     }
   };
 
@@ -289,6 +290,32 @@ const ChatMessage = ({
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
       </div>
       
+      {/* Info about finish reason and retry options */}
+      {!isUser && !isError && !message.loading && message.finishReason && (
+        <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
+          {(message.finishReason === 'length' || message.finishReason === 'MAX_TOKENS') && (
+            <>
+              <Icon name="information-circle" size="sm" className="text-blue-500" />
+              {message.tokensUsed && maxTokens && message.tokensUsed < maxTokens ? (
+                <button onClick={() => handleResend(true)} className="underline">
+                  {t('chatMessage.retryMoreTokens', 'Retry with more tokens')}
+                </button>
+              ) : (
+                <span>{t('chatMessage.maxTokenLimit', 'Maximum token limit reached')}</span>
+              )}
+            </>
+          )}
+          {(message.finishReason === 'connection_closed' || message.finishReason === 'error') && (
+            <>
+              <Icon name="exclamation-circle" size="sm" className="text-red-500" />
+              <button onClick={() => handleResend()} className="underline text-red-600">
+                {t('common.retry', 'Retry')}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Combined action icons and feedback buttons in a single row */}
       <div className="mt-1 px-1">
         <div className={`flex items-center gap-${compact ? '1' : '3'} text-xs transition-opacity duration-200 ${

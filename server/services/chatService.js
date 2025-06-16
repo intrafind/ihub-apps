@@ -201,6 +201,8 @@ export async function executeStreamingResponse({
     const reader = llmResponse.body.getReader();
     const decoder = new TextDecoder();
     let fullResponse = '';
+    let finishReason = null;
+    let doneEmitted = false;
 
     try {
       while (true) {
@@ -225,10 +227,15 @@ export async function executeStreamingResponse({
             response: fullResponse
           }));
           sendSSE(clientRes, 'error', { message: result.errorMessage || 'Error processing response' });
+          finishReason = 'error';
           break;
         }
+        if (result && result.finishReason) {
+          finishReason = result.finishReason;
+        }
         if (result && result.complete) {
-          sendSSE(clientRes, 'done', {});
+          sendSSE(clientRes, 'done', { finishReason });
+          doneEmitted = true;
           await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: fullResponse }));
           const completionTokens = estimateTokens(fullResponse);
           await recordChatResponse({ userId: baseLog.userSessionId, appId: baseLog.appId, modelId: model.id, tokens: completionTokens });
@@ -239,8 +246,12 @@ export async function executeStreamingResponse({
       if (error.name !== 'AbortError') {
         const errorMessage = await getLocalizedError('responseStreamError', { error: error.message }, clientLanguage);
         sendSSE(clientRes, 'error', { message: errorMessage });
+        finishReason = 'error';
       }
     } finally {
+      if (!doneEmitted) {
+        sendSSE(clientRes, 'done', { finishReason: finishReason || 'connection_closed' });
+      }
       activeRequests.delete(chatId);
     }
   }).catch(async (error) => {
