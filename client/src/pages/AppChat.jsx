@@ -152,8 +152,6 @@ const AppChat = () => {
   const [showParameters, setShowParameters] = useState(true);
   const { setHeaderColor } = useUIConfig();
 
-  const defaultInitialTokens = 512;
-  const [initialTokens] = useState(defaultInitialTokens);
   const [maxTokens, setMaxTokens] = useState(null);
   const [outputTokens, setOutputTokens] = useState(null);
 
@@ -211,7 +209,6 @@ const AppChat = () => {
       if (window.lastMessageId) {
         updateAssistantMessage(window.lastMessageId, finalContent, false, {
           finishReason: info.finishReason,
-          tokensUsed: outputTokens || initialTokens,
         });
       }
       setOutputTokens(null);
@@ -649,7 +646,7 @@ const AppChat = () => {
 
     setInput(contentToResend);
     if (useMaxTokens) {
-      setOutputTokens(maxTokens || initialTokens);
+      setOutputTokens(maxTokens);
     }
 
     setTimeout(() => {
@@ -1076,7 +1073,6 @@ const AppChat = () => {
             appId={appId}
             chatId={chatId.current}
             modelId={selectedModel}
-            maxTokens={maxTokens}
             starterPrompts={app?.starterPrompts || []}
             onSelectPrompt={handleStarterPromptClick}
           />

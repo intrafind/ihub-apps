@@ -195,9 +195,14 @@ const GoogleAdapter = {
 
           if (data.candidates && data.candidates[0]?.finishReason) {
             const fr = data.candidates[0].finishReason;
-            result.finishReason = fr;
-            if (fr === 'STOP' || fr === 'MAX_TOKENS') {
+            if (fr === 'STOP') {
+              result.finishReason = 'stop';
               result.complete = true;
+            } else if (fr === 'MAX_TOKENS') {
+              result.finishReason = 'length';
+              result.complete = true;
+            } else {
+              result.finishReason = fr;
             }
           }
         } catch (jsonError) {
@@ -211,10 +216,10 @@ const GoogleAdapter = {
           }
 
           if (evt.includes('"finishReason": "STOP"') || evt.includes('"finishReason":"STOP"')) {
-            result.finishReason = 'STOP';
+            result.finishReason = 'stop';
             result.complete = true;
           } else if (evt.includes('"finishReason": "MAX_TOKENS"')) {
-            result.finishReason = 'MAX_TOKENS';
+            result.finishReason = 'length';
             result.complete = true;
           }
         }

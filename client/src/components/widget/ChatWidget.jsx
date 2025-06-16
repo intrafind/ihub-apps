@@ -40,9 +40,7 @@ const ChatWidget = ({
   const widgetConfig = uiConfig?.widget || {};
   const appId = configuredAppId || widgetConfig.defaultApp || 'general-assistant';
 
-  const defaultInitialTokens = widgetConfig.initialTokens || 512;
   const defaultMaxTokens = widgetConfig.maxTokens || 4096;
-  const [initialTokens] = useState(defaultInitialTokens);
   const [maxTokens] = useState(defaultMaxTokens);
   const [outputTokens, setOutputTokens] = useState(null);
   
@@ -127,8 +125,7 @@ const ChatWidget = ({
     onDone: (finalContent, info) => {
       if (window.lastMessageId) {
         updateAssistantMessage(window.lastMessageId, finalContent, false, {
-          finishReason: info.finishReason,
-          tokensUsed: outputTokens || initialTokens
+          finishReason: info.finishReason
         });
       }
       setProcessing(false);
@@ -457,7 +454,6 @@ const ChatWidget = ({
                 appId={appId}
                 chatId={chatId}
                 compact={true} // Set compact mode for the limited widget space
-                maxTokens={maxTokens}
               />
               {/* Only show typing indicator when processing AND there are no loading messages */}
               {processing && !messages.some(msg => msg.loading) && (

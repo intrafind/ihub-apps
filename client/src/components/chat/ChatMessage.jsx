@@ -16,8 +16,7 @@ const ChatMessage = ({
   appId,
   chatId,
   modelId,
-  compact = false,  // New prop to indicate compact mode (for widget or mobile)
-  maxTokens = null
+  compact = false  // New prop to indicate compact mode (for widget or mobile)
 }) => {
   const { t } = useTranslation();
   const isUser = message.role === 'user';
@@ -293,16 +292,12 @@ const ChatMessage = ({
       {/* Info about finish reason and retry options */}
       {!isUser && !isError && !message.loading && message.finishReason && (
         <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
-          {(message.finishReason === 'length' || message.finishReason === 'MAX_TOKENS') && (
+          {message.finishReason === 'length' && (
             <>
               <Icon name="information-circle" size="sm" className="text-blue-500" />
-              {message.tokensUsed && maxTokens && message.tokensUsed < maxTokens ? (
-                <button onClick={() => handleResend(true)} className="underline">
-                  {t('chatMessage.retryMoreTokens', 'Retry with more tokens')}
-                </button>
-              ) : (
-                <span>{t('chatMessage.maxTokenLimit', 'Maximum token limit reached')}</span>
-              )}
+              <button onClick={() => handleResend(true)} className="underline">
+                {t('chatMessage.retryMoreTokens', 'Retry with more tokens')}
+              </button>
             </>
           )}
           {(message.finishReason === 'connection_closed' || message.finishReason === 'error') && (

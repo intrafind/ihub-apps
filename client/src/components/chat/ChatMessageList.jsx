@@ -20,8 +20,7 @@ const ChatMessageList = ({
   editable = false,
   compact = false,
   starterPrompts = [],
-  onSelectPrompt = null,
-  maxTokens = null
+  onSelectPrompt = null
 }) => {
   const { t, i18n } = useTranslation();
   const chatContainerRef = useRef(null);
@@ -69,7 +68,6 @@ const ChatMessageList = ({
                 chatId={chatId}
                 modelId={modelId}
                 compact={compact}
-                maxTokens={maxTokens}
               />
             </div>
           </div>
