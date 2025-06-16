@@ -195,11 +195,16 @@ const GoogleAdapter = {
 
           if (data.candidates && data.candidates[0]?.finishReason) {
             const fr = data.candidates[0].finishReason;
+            // Map Gemini finish reasons to normalized values used by the client
+            // Documented reasons include STOP, MAX_TOKENS, SAFETY, RECITATION and OTHER
             if (fr === 'STOP') {
               result.finishReason = 'stop';
               result.complete = true;
             } else if (fr === 'MAX_TOKENS') {
               result.finishReason = 'length';
+              result.complete = true;
+            } else if (fr === 'SAFETY' || fr === 'RECITATION') {
+              result.finishReason = 'content_filter';
               result.complete = true;
             } else {
               result.finishReason = fr;
@@ -220,6 +225,9 @@ const GoogleAdapter = {
             result.complete = true;
           } else if (evt.includes('"finishReason": "MAX_TOKENS"')) {
             result.finishReason = 'length';
+            result.complete = true;
+          } else if (evt.includes('"finishReason": "SAFETY"') || evt.includes('"finishReason": "RECITATION"')) {
+            result.finishReason = 'content_filter';
             result.complete = true;
           }
         }

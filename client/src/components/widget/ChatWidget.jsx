@@ -278,7 +278,8 @@ const ChatWidget = ({
       const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
       if (!prevUser) return;
       contentToResend = prevUser.rawContent || prevUser.content;
-      deleteMessage(messageId); // remove the assistant message only
+      // remove the user message and everything after it (including the assistant)
+      deleteMessage(prevUser.id);
     } else {
       deleteMessage(messageId);
       if (contentToResend === undefined) {

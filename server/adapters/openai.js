@@ -104,6 +104,9 @@ const OpenAIAdapter = {
         }
 
         if (data.choices && data.choices[0]?.finish_reason) {
+          // Possible OpenAI finish reasons include 'stop', 'length', 'tool_calls'
+          // and 'content_filter'. We forward the raw value so the service layer
+          // can normalize or act on it as needed.
           result.complete = true;
           result.finishReason = data.choices[0].finish_reason;
         }
