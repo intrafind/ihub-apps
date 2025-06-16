@@ -135,26 +135,19 @@ The `settings` property controls which configuration options users can adjust fo
 ```json
 "settings": {
   "enabled": true,
-  "model": {
-    "enabled": true
-  },
-  "style": {
-    "enabled": true
-  },
-  "temperature": {
-    "enabled": true
-  },
-  "outputFormat": {
-    "enabled": true
-  },
-  "chatHistory": {
-    "enabled": true
-  }
+  "model": { "enabled": true },
+  "style": { "enabled": true },
+  "temperature": { "enabled": true },
+  "outputFormat": { "enabled": true },
+  "chatHistory": { "enabled": true }
 },
-"microphone": {
-  "enabled": true,
-  "mode": "manual",
-  "showTranscript": true
+"inputMode": {
+  "type": "multiline",
+  "microphone": {
+    "enabled": true,
+    "mode": "manual",
+    "showTranscript": true
+  }
 }
 ```
 
@@ -166,9 +159,9 @@ The `settings` property controls which configuration options users can adjust fo
 | `settings.temperature.enabled` | Enable/disable temperature adjustment |
 | `settings.outputFormat.enabled` | Enable/disable output format selection |
 | `settings.chatHistory.enabled` | Enable/disable chat history toggle |
-| `microphone.mode` | Mode for recording (`manual` or `continuous`) |
-| `microphone.showTranscript` | Show the live transcript while recording |
-| `microphone.enabled` | Enable/disable microphone input for voice commands |
+| `inputMode.microphone.mode` | Mode for recording (`manual` or `automatic`) |
+| `inputMode.microphone.showTranscript` | Show the live transcript while recording |
+| `inputMode.microphone.enabled` | Enable/disable microphone input for voice commands |
 
 For more details, see the [Microphone Feature](microphone-feature.md) documentation.
 
@@ -187,17 +180,27 @@ Optional capabilities can be enabled with a `features` object:
 - `fileUpload` – allow users to upload text or PDF files (see [File Upload Feature](file-upload-feature.md))
 
 
-#### Input Modes
+#### Input Mode
 
-Apps can specify different input modes to control the user interface:
+Apps can configure the chat input with the `inputMode` object. The `type` controls how the input behaves.
 
 ```json
-"inputMode": "single"
+"inputMode": {
+  "type": "multiline",
+  "rows": 5,
+  "microphone": {
+    "enabled": true,
+    "mode": "manual",
+    "showTranscript": true
+  }
+}
 ```
 
-Available input modes:
-- `single`: Single input mode (default)
-- `multiple`: Multiple input mode for complex workflows
+Available types:
+- `single` – single line text field (default)
+- `multiline` – expandable text area
+
+The optional `rows` property sets the initial number of textarea rows (defaults to 2). If the `microphone` block is provided, it configures voice input for that app.
 
 #### Message Placeholders
 

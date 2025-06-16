@@ -20,7 +20,8 @@ const VoiceInputComponent = ({
   const recognitionRef = useRef(null);
   const originalInputValue = useRef("");
   const originalPlaceholder = useRef(""); // Store the original placeholder
-  const microphoneMode = app?.microphone?.mode || "automatic";
+  const microphoneMode =
+    app?.inputMode?.microphone?.mode || app?.microphone?.mode || "automatic";
 
   // Clean up recognition when component unmounts
   useEffect(() => {
@@ -465,7 +466,11 @@ const VoiceInputComponent = ({
       <VoiceFeedback
         isActive={isListening}
         setIsActive={handleOnFeedbackOverlayClose}
-        transcript={app?.microphone?.showTranscript ? transcript : ""}
+        transcript={
+          app?.inputMode?.microphone?.showTranscript || app?.microphone?.showTranscript
+            ? transcript
+            : ""
+        }
         mode={microphoneMode}
       />
       <button
