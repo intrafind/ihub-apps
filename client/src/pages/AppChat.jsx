@@ -325,9 +325,6 @@ const AppChat = () => {
       ),
   });
 
-  // Reference to track if greeting has been added
-  const greetingAddedRef = useRef(false);
-
   // Get UI config for fallback to widget greeting
   const { uiConfig } = useUIConfig();
   const widgetConfig = uiConfig?.widget || {};
@@ -490,63 +487,44 @@ const AppChat = () => {
     variables,
   ]);
 
-  // Display greeting message when app is loaded and no messages exist yet.
-  // Skip the greeting if starter prompts are configured so they can be shown
-  useEffect(() => {
-    // Only add greeting message when app is loaded, messages are empty,
-    // no starter prompts exist, and we haven't added it yet
-    if (
-      app &&
-      !loading &&
-      messages.length === 0 &&
-      !greetingAddedRef.current &&
-      !(app.starterPrompts && app.starterPrompts.length > 0)
-    ) {
-      console.log("[AppChat] Adding greeting message when app loaded");
-
-      // Check for language specific greeting
-      const userLanguage = currentLanguage.split("-")[0].toLowerCase();
-
-      // Try to get app-specific greeting first
-      let greeting = null;
-
-      // Check if app has its own greeting
-      if (app.greeting) {
-        greeting =
-          typeof app.greeting === "object"
-            ? app.greeting[userLanguage] || app.greeting.en
-            : app.greeting;
-      }
-
-      // Fall back to widget greeting if app doesn't have one
-      if (!greeting && widgetConfig.greeting) {
-        greeting =
-          widgetConfig.greeting[userLanguage] || widgetConfig.greeting.en;
-      }
-
-      // If we have a greeting, display it
-      if (greeting) {
-        // Create a greeting message and immediately mark it as not loading
-        const greetingId = addAssistantMessage();
-        updateAssistantMessage(greetingId, greeting, false);
-
-        greetingAddedRef.current = true;
-      }
+  // Calculate the welcome message to display (if any) - show greeting when configured
+  const welcomeMessage = useMemo(() => {
+    // Don't show welcome message if there are any messages
+    if (!app || loading || messages.length > 0) return null;
+    
+    // Skip if starter prompts are configured - they take priority
+    if (app.starterPrompts && app.starterPrompts.length > 0) {
+      return null;
     }
 
-    // Reset the greeting flag when chat is cleared
-    if (messages.length === 0) {
-      greetingAddedRef.current = false;
+    // Get the greeting message if configured
+    const userLanguage = currentLanguage.split("-")[0].toLowerCase();
+    
+    let greeting = null;
+    
+    // Check if app has its own greeting
+    if (app.greeting) {
+      greeting =
+        typeof app.greeting === "object"
+          ? app.greeting[userLanguage] || app.greeting.en
+          : app.greeting;
     }
-  }, [
-    app,
-    loading,
-    messages.length,
-    addAssistantMessage,
-    updateAssistantMessage,
-    currentLanguage,
-    widgetConfig,
-  ]);
+
+    // Fall back to widget greeting if app doesn't have one
+    if (!greeting && widgetConfig.greeting) {
+      greeting =
+        widgetConfig.greeting[userLanguage] || widgetConfig.greeting.en;
+    }
+
+    return greeting;
+  }, [app, loading, currentLanguage, messages.length, widgetConfig]);
+
+  // Determine if input should be centered (only when showing example prompts)
+  const shouldCenterInput = useMemo(() => {
+    if (!app || loading || messages.length > 0) return false;
+    
+    return true;
+  }, [app, loading, messages.length, welcomeMessage]);
 
   // Handle image selection from ImageUploader
   const handleImageSelect = (imageData) => {
@@ -1063,58 +1041,250 @@ const AppChat = () => {
               : "flex-1"
           }`}
         >
-          {/* Chat Messages - using our reusable ChatMessageList component */}
-          <ChatMessageList
-            messages={messages}
-            outputFormat={selectedOutputFormat}
-            onDelete={handleDeleteMessage}
-            onEdit={handleEditMessage}
-            onResend={handleResendMessage}
-            editable={true}
-            appId={appId}
-            chatId={chatId.current}
-            modelId={selectedModel}
-            starterPrompts={app?.starterPrompts || []}
-            onSelectPrompt={handleStarterPromptClick}
-          />
+          {shouldCenterInput ? (
+            /* Centered layout for example prompts */
+            <>
+              {/* Mobile layout: content centers, input at bottom */}
+              <div className="flex flex-col h-full md:hidden">
+                <div className="flex-1 flex items-center justify-center overflow-hidden">
+                  <div className="w-full max-w-4xl px-4 h-full flex items-center justify-center">
+                    <ChatMessageList
+                      messages={messages}
+                      outputFormat={selectedOutputFormat}
+                      onDelete={handleDeleteMessage}
+                      onEdit={handleEditMessage}
+                      onResend={handleResendMessage}
+                      editable={true}
+                      appId={appId}
+                      chatId={chatId.current}
+                      modelId={selectedModel}
+                      starterPrompts={app?.starterPrompts || []}
+                      onSelectPrompt={handleStarterPromptClick}
+                      welcomeMessage={welcomeMessage}
+                      showCenteredInput={shouldCenterInput}
+                    />
+                  </div>
+                </div>
+                <div className="flex-shrink-0 px-4 pt-2">
+                  <div className="w-full max-w-4xl mx-auto">
+                    <ChatInput
+                      app={app}
+                      value={input}
+                      onChange={handleInputChange}
+                      onSubmit={handleSubmit}
+                      isProcessing={processing}
+                      onCancel={cancelGeneration}
+                      onVoiceInput={
+                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+                          ? handleVoiceInput
+                          : undefined
+                      }
+                      onVoiceCommand={
+                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+                          ? handleVoiceCommand
+                          : undefined
+                      }
+                      onImageSelect={handleImageSelect}
+                      imageUploadEnabled={app?.features?.imageUpload === true}
+                      onFileSelect={handleFileSelect}
+                      fileUploadEnabled={app?.features?.fileUpload === true}
+                      fileUploadConfig={app?.fileUpload || {}}
+                      allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
+                      inputRef={inputRef}
+                      selectedImage={selectedImage}
+                      showImageUploader={showImageUploader}
+                      onToggleImageUploader={toggleImageUploader}
+                      selectedFile={selectedFile}
+                      showFileUploader={showFileUploader}
+                      onToggleFileUploader={toggleFileUploader}
+                      magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
+                      onMagicPrompt={handleMagicPrompt}
+                      showUndoMagicPrompt={originalInput !== null}
+                      onUndoMagicPrompt={handleUndoMagicPrompt}
+                      magicPromptLoading={magicLoading}
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Desktop layout: everything centered together */}
+              <div className="hidden md:flex md:flex-col md:h-full md:items-center md:justify-center">
+                <div className="w-full max-w-4xl">
+                  <ChatMessageList
+                    messages={messages}
+                    outputFormat={selectedOutputFormat}
+                    onDelete={handleDeleteMessage}
+                    onEdit={handleEditMessage}
+                    onResend={handleResendMessage}
+                    editable={true}
+                    appId={appId}
+                    chatId={chatId.current}
+                    modelId={selectedModel}
+                    starterPrompts={app?.starterPrompts || []}
+                    onSelectPrompt={handleStarterPromptClick}
+                    welcomeMessage={welcomeMessage}
+                    showCenteredInput={shouldCenterInput}
+                  />
+                  <div className="mt-8">
+                    <ChatInput
+                      app={app}
+                      value={input}
+                      onChange={handleInputChange}
+                      onSubmit={handleSubmit}
+                      isProcessing={processing}
+                      onCancel={cancelGeneration}
+                      onVoiceInput={
+                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+                          ? handleVoiceInput
+                          : undefined
+                      }
+                      onVoiceCommand={
+                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+                          ? handleVoiceCommand
+                          : undefined
+                      }
+                      onImageSelect={handleImageSelect}
+                      imageUploadEnabled={app?.features?.imageUpload === true}
+                      onFileSelect={handleFileSelect}
+                      fileUploadEnabled={app?.features?.fileUpload === true}
+                      fileUploadConfig={app?.fileUpload || {}}
+                      allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
+                      inputRef={inputRef}
+                      selectedImage={selectedImage}
+                      showImageUploader={showImageUploader}
+                      onToggleImageUploader={toggleImageUploader}
+                      selectedFile={selectedFile}
+                      showFileUploader={showFileUploader}
+                      onToggleFileUploader={toggleFileUploader}
+                      magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
+                      onMagicPrompt={handleMagicPrompt}
+                      showUndoMagicPrompt={originalInput !== null}
+                      onUndoMagicPrompt={handleUndoMagicPrompt}
+                      magicPromptLoading={magicLoading}
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* Standard layout for normal chat and starter prompts */
+            <>
+              {/* Mobile layout: content scrollable, input at bottom */}
+              <div className="flex flex-col h-full md:hidden">
+                <div className="flex-1 overflow-hidden">
+                  <ChatMessageList
+                    messages={messages}
+                    outputFormat={selectedOutputFormat}
+                    onDelete={handleDeleteMessage}
+                    onEdit={handleEditMessage}
+                    onResend={handleResendMessage}
+                    editable={true}
+                    appId={appId}
+                    chatId={chatId.current}
+                    modelId={selectedModel}
+                    starterPrompts={app?.starterPrompts || []}
+                    onSelectPrompt={handleStarterPromptClick}
+                    welcomeMessage={welcomeMessage}
+                    showCenteredInput={shouldCenterInput}
+                  />
+                </div>
+                <div className="flex-shrink-0 px-4 pt-2">
+                  <ChatInput
+                    app={app}
+                    value={input}
+                    onChange={handleInputChange}
+                    onSubmit={handleSubmit}
+                    isProcessing={processing}
+                    onCancel={cancelGeneration}
+                    onVoiceInput={
+                      (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+                        ? handleVoiceInput
+                        : undefined
+                    }
+                    onVoiceCommand={
+                      (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+                        ? handleVoiceCommand
+                        : undefined
+                    }
+                    onImageSelect={handleImageSelect}
+                    imageUploadEnabled={app?.features?.imageUpload === true}
+                    onFileSelect={handleFileSelect}
+                    fileUploadEnabled={app?.features?.fileUpload === true}
+                    fileUploadConfig={app?.fileUpload || {}}
+                    allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
+                    inputRef={inputRef}
+                    selectedImage={selectedImage}
+                    showImageUploader={showImageUploader}
+                    onToggleImageUploader={toggleImageUploader}
+                    selectedFile={selectedFile}
+                    showFileUploader={showFileUploader}
+                    onToggleFileUploader={toggleFileUploader}
+                    magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
+                    onMagicPrompt={handleMagicPrompt}
+                    showUndoMagicPrompt={originalInput !== null}
+                    onUndoMagicPrompt={handleUndoMagicPrompt}
+                    magicPromptLoading={magicLoading}
+                  />
+                </div>
+              </div>
+              
+              {/* Desktop layout: normal flex column */}
+              <div className="hidden md:flex md:flex-col md:h-full">
+                <ChatMessageList
+                  messages={messages}
+                  outputFormat={selectedOutputFormat}
+                  onDelete={handleDeleteMessage}
+                  onEdit={handleEditMessage}
+                  onResend={handleResendMessage}
+                  editable={true}
+                  appId={appId}
+                  chatId={chatId.current}
+                  modelId={selectedModel}
+                  starterPrompts={app?.starterPrompts || []}
+                  onSelectPrompt={handleStarterPromptClick}
+                  welcomeMessage={welcomeMessage}
+                  showCenteredInput={shouldCenterInput}
+                />
 
-          {/* Message Input - using our reusable ChatInput component */}
-          <ChatInput
-            app={app}
-            value={input}
-            onChange={handleInputChange}
-            onSubmit={handleSubmit}
-            isProcessing={processing}
-            onCancel={cancelGeneration}
-            onVoiceInput={
-              (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                ? handleVoiceInput
-                : undefined
-            }
-            onVoiceCommand={
-              (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                ? handleVoiceCommand
-                : undefined
-            }
-            onImageSelect={handleImageSelect}
-            imageUploadEnabled={app?.features?.imageUpload === true}
-            onFileSelect={handleFileSelect}
-            fileUploadEnabled={app?.features?.fileUpload === true}
-            fileUploadConfig={app?.fileUpload || {}}
-            allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
-            inputRef={inputRef}
-            selectedImage={selectedImage}
-            showImageUploader={showImageUploader}
-            onToggleImageUploader={toggleImageUploader}
-            selectedFile={selectedFile}
-            showFileUploader={showFileUploader}
-            onToggleFileUploader={toggleFileUploader}
-            magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
-            onMagicPrompt={handleMagicPrompt}
-            showUndoMagicPrompt={originalInput !== null}
-            onUndoMagicPrompt={handleUndoMagicPrompt}
-            magicPromptLoading={magicLoading}
-          />
+                <ChatInput
+                  app={app}
+                  value={input}
+                  onChange={handleInputChange}
+                  onSubmit={handleSubmit}
+                  isProcessing={processing}
+                  onCancel={cancelGeneration}
+                  onVoiceInput={
+                    (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+                      ? handleVoiceInput
+                      : undefined
+                  }
+                  onVoiceCommand={
+                    (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+                      ? handleVoiceCommand
+                      : undefined
+                  }
+                  onImageSelect={handleImageSelect}
+                  imageUploadEnabled={app?.features?.imageUpload === true}
+                  onFileSelect={handleFileSelect}
+                  fileUploadEnabled={app?.features?.fileUpload === true}
+                  fileUploadConfig={app?.fileUpload || {}}
+                  allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
+                  inputRef={inputRef}
+                  selectedImage={selectedImage}
+                  showImageUploader={showImageUploader}
+                  onToggleImageUploader={toggleImageUploader}
+                  selectedFile={selectedFile}
+                  showFileUploader={showFileUploader}
+                  onToggleFileUploader={toggleFileUploader}
+                  magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
+                  onMagicPrompt={handleMagicPrompt}
+                  showUndoMagicPrompt={originalInput !== null}
+                  onUndoMagicPrompt={handleUndoMagicPrompt}
+                  magicPromptLoading={magicLoading}
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {app?.variables && app.variables.length > 0 && (

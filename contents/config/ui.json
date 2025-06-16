@@ -105,10 +105,6 @@
       "en": "Ask me anything...",
       "de": "Frag mich etwas..."
     },
-    "greeting": {
-      "en": "👋 Hello! How can I help you today?",
-      "de": "👋 Hallo! Wie kann ich Ihnen heute helfen?"
-    },
     "sendButtonText": {
       "en": "Send",
       "de": "Senden"

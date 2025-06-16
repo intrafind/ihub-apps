@@ -49,6 +49,10 @@
       "en": "You are a helpful AI assistant. Answer the user's questions accurately and concisely.",
       "de": "Du bist ein hilfreicher KI-Assistent. Beantworte die Fragen des Nutzers präzise und knapp."
     },
+    "greeting": {
+      "en": "👋 Hello! How can I help you today?",
+      "de": "👋 Hallo! Wie kann ich Ihnen heute helfen?"
+    },
     "tokenLimit": 8192,
     "preferredModel": "gpt-3.5-turbo",
     "preferredOutputFormat": "markdown",
@@ -1329,5 +1333,54 @@
         ]
       }
     ]
+  },
+  {
+    "id": "simple-chat",
+    "order": 99,
+    "name": {
+      "en": "Simple Chat",
+      "de": "Einfacher Chat"
+    },
+    "description": {
+      "en": "A minimal chat interface with example prompts",
+      "de": "Eine minimale Chat-Oberfläche mit Beispiel-Prompts"
+    },
+    "color": "#6B7280",
+    "icon": "chat-bubbles",
+    "system": {
+      "en": "You are a helpful AI assistant.",
+      "de": "Du bist ein hilfreicher KI-Assistent."
+    },
+    "tokenLimit": 4096,
+    "preferredModel": "gpt-3.5-turbo",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.7,
+    "sendChatHistory": true
+  },
+  {
+    "id": "no-chat",
+    "order": 100,
+    "name": {
+      "en": "No Chat",
+      "de": "Kein Chat"
+    },
+    "description": {
+      "en": "A minimal interface without chat functionality",
+      "de": "Eine minimale Oberfläche ohne Chat-Funktionalität"
+    },
+    "color": "#6B7280",
+    "icon": "chat-bubbles",
+    "system": {
+      "en": "You are a helpful AI assistant.",
+      "de": "Du bist ein hilfreicher KI-Assistent."
+    },
+    "starterPrompts":[],
+    "tokenLimit": 4096,
+    "preferredModel": "gpt-3.5-turbo",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.7,
+    "sendChatHistory": true
   }
 ]

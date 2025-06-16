@@ -33,12 +33,15 @@ function useChatMessages(chatId = 'default') {
     messagesRef.current = messages;
   }, [messages]);
 
-  // Save messages to sessionStorage whenever they change
+  // Save messages to sessionStorage whenever they change (exclude greeting messages)
   useEffect(() => {
     try {
+      // Filter out greeting messages for persistence
+      const persistableMessages = messages.filter(msg => !msg.isGreeting);
+      
       // Only save if we have messages
-      if (messages.length > 0) {
-        sessionStorage.setItem(storageKey, JSON.stringify(messages));
+      if (persistableMessages.length > 0) {
+        sessionStorage.setItem(storageKey, JSON.stringify(persistableMessages));
       } else {
         // Clear storage if messages are empty
         sessionStorage.removeItem(storageKey);
@@ -190,14 +193,17 @@ function useChatMessages(chatId = 'default') {
   }, []);
 
   /**
-   * Get messages formatted for API requests
+   * Get messages formatted for API requests (excludes greeting messages)
    * @param {boolean} includeFull - Whether to include the entire message history
    * @param {Object} additionalMessage - An additional message to include
    * @returns {Array} Messages formatted for API consumption
    */
   const getMessagesForApi = useCallback((includeFull = true, additionalMessage = null) => {
     // Using messagesRef instead of messages dependency
-    let messagesForApi = includeFull ? [...messagesRef.current] : [];
+    // Filter out greeting messages for API requests
+    let messagesForApi = includeFull ? 
+      messagesRef.current.filter(msg => !msg.isGreeting) : 
+      [];
     
     if (additionalMessage) {
       messagesForApi = [...messagesForApi, additionalMessage];
@@ -205,7 +211,7 @@ function useChatMessages(chatId = 'default') {
     
     // Strip UI-specific properties that the API doesn't need
     return messagesForApi.map(msg => {
-      const { id, loading, error, isErrorMessage, rawContent, ...apiMsg } = msg;
+      const { id, loading, error, isErrorMessage, rawContent, isGreeting, ...apiMsg } = msg;
       const content = rawContent !== undefined ? rawContent : apiMsg.content;
       return { ...apiMsg, content };
     });
