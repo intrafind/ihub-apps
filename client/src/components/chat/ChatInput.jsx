@@ -47,8 +47,8 @@ const ChatInput = ({
   const [internalShowImageUploader, setInternalShowImageUploader] = useState(false);
   const [internalShowFileUploader, setInternalShowFileUploader] = useState(false);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
-  const promptDbEnabled = uiConfig?.promptDb?.enabled !== false && app?.features?.promptDb !== false;
-  
+  const promptsListEnabled = uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
+
   // Determine input mode configuration
   const inputMode = app?.inputMode;
   const multilineMode = inputMode?.type === 'multiline' || inputMode === 'multiline';
@@ -166,7 +166,7 @@ const ChatInput = ({
 
   // Handle key events for the textarea
   const handleKeyDown = (e) => {
-    if (promptDbEnabled && !showPromptSearch && e.key === '/' && value === '') {
+    if (promptsListEnabled && !showPromptSearch && e.key === '/' && value === '') {
       e.preventDefault();
       setShowPromptSearch(true);
       return;
@@ -196,7 +196,7 @@ const ChatInput = ({
 
   return (
     <div className="chat-input-container">
-      {promptDbEnabled && (
+      {promptsListEnabled && (
         <PromptSearch
           isOpen={showPromptSearch}
           appId={app?.id}

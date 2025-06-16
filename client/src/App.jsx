@@ -39,7 +39,7 @@ function App() {
           {/* Regular application routes */}
           <Route path="/" element={<Layout />}>
             <Route index element={<SafeAppsList />} />
-            {uiConfig?.promptDb?.enabled !== false && (
+            {uiConfig?.promptsList?.enabled !== false && (
               <Route path="prompts" element={<SafePromptsList />} />
             )}
             <Route path="apps/:appId" element={<SafeAppChat />} />

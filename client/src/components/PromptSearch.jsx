@@ -185,7 +185,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
           ))}
         </ul>
         <div className="text-right p-2">
-          {uiConfig?.promptDb?.enabled !== false && (
+          {uiConfig?.promptsList?.enabled !== false && (
             <Link
               to="/prompts"
               onClick={onClose}

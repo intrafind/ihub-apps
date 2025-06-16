@@ -213,6 +213,19 @@ Apps can define custom placeholder text for the message input:
 }
 ```
 
+#### Welcome Messages
+
+Apps can configure a welcome message that appears above the chat input when no messages exist and no starter prompts are configured:
+
+```json
+"greeting": {
+  "en": "Hello! I'm your AI assistant. How can I help you today?",
+  "de": "Hallo! Ich bin Ihr KI-Assistent. Wie kann ich Ihnen heute helfen?"
+}
+```
+
+Welcome messages are displayed as informational cards above the input area, not as chat messages. They take priority over example prompts but are hidden if starter prompts are configured.
+
 #### Starter Prompts
 
 Apps can offer clickable starter prompts shown when the chat has no messages.
@@ -232,8 +245,22 @@ Each prompt can optionally set initial values for input variables:
 ]
 ```
 
+Starter prompts take the highest priority and will hide both welcome messages and example prompts when configured.
+
 If starter prompts are defined, any configured greeting message will be
 suppressed so the prompts can be displayed instead.
+
+#### App Startup States
+
+The chat interface adapts its initial appearance based on the app configuration:
+
+1. **Starter Prompts State**: When `starterPrompts` are configured, they are displayed in a grid layout with the chat input below. This provides guided entry points for users.
+
+2. **Welcome Message State**: When no starter prompts are configured but a `greeting` message exists, the welcome message appears in an informational card above the chat input.
+
+3. **Example Prompts State**: When neither starter prompts nor welcome messages are configured, the interface shows a centered layout with example prompts and centers the input box for better visual balance.
+
+The priority order is: Starter Prompts > Welcome Message > Example Prompts.
 
 #### Content Restrictions
 

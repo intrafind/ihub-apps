@@ -288,11 +288,15 @@ const AppChat = () => {
   const [sendChatHistory, setSendChatHistory] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
   const [variables, setVariables] = useState({});
-  const [showParameters, setShowParameters] = useState(true);
+  const [showParameters, setShowParameters] = useState(false);
   const { setHeaderColor } = useUIConfig();
 
   const [maxTokens, setMaxTokens] = useState(null);
   const [useMaxTokens, setUseMaxTokens] = useState(false);
+
+  // State for managing parameter changes on mobile
+  const [tempVariables, setTempVariables] = useState({});
+  const [parametersChanged, setParametersChanged] = useState(false);
 
   // Record recent usage of this app
   useEffect(() => {
@@ -1021,7 +1025,33 @@ const AppChat = () => {
   };
 
   const toggleParameters = () => {
+    if (window.innerWidth < 768) {
+      // On mobile, prepare temp variables when opening
+      if (!showParameters) {
+        setTempVariables({ ...variables });
+        setParametersChanged(false);
+      }
+    }
     setShowParameters(!showParameters);
+  };
+
+  const handleParametersOk = () => {
+    // Apply temp variables to actual variables
+    setVariables({ ...tempVariables });
+    setShowParameters(false);
+    setParametersChanged(false);
+  };
+
+  const handleParametersCancel = () => {
+    // Discard changes and close modal
+    setTempVariables({});
+    setShowParameters(false);
+    setParametersChanged(false);
+  };
+
+  const handleTempVariableChange = (newVariables) => {
+    setTempVariables(newVariables);
+    setParametersChanged(true);
   };
 
   // Memoize localizedVariables calculation to prevent unnecessary work on every render
@@ -1054,6 +1084,13 @@ const AppChat = () => {
         : undefined,
     }));
   }, [app?.variables, currentLanguage]);
+
+  // Initialize temp variables when variables change
+  useEffect(() => {
+    if (!showParameters) {
+      setTempVariables({ ...variables });
+    }
+  }, [variables, showParameters]);
 
   if (loading) {
     return <LoadingSpinner message={t("app.loading")} />;
@@ -1097,7 +1134,7 @@ const AppChat = () => {
   );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-9rem)] max-h-[calc(100vh-9rem)] min-h-0 overflow-hidden pt-4">
+    <div className="flex flex-col h-[calc(100vh-10rem)] max-h-[calc(100vh-10rem)] min-h-0 overflow-hidden pt-4 pb-2">
       {/* App Header - using our reusable ChatHeader component */}
       <ChatHeader
         title={app?.name}
@@ -1139,47 +1176,67 @@ const AppChat = () => {
       )}
 
       {app?.variables && app.variables.length > 0 && showParameters && (
-        <div className="md:hidden mb-4 p-4 bg-gray-50 rounded-lg overflow-y-auto max-h-[60vh]">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="font-medium">
-              {t("pages.appChat.inputParameters")}
-            </h3>
-            <button
-              onClick={toggleParameters}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
+        <div 
+          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end"
+          onClick={(e) => {
+            // Close modal when clicking backdrop
+            if (e.target === e.currentTarget) {
+              handleParametersCancel();
+            }
+          }}
+        >
+          <div className="w-full bg-white rounded-t-lg max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b flex-shrink-0">
+              <h3 className="font-medium">
+                {t("pages.appChat.inputParameters")}
+              </h3>
+              <button
+                onClick={handleParametersCancel}
+                className="text-gray-500 hover:text-gray-700 p-1"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1">
+              <InputVariables
+                variables={tempVariables}
+                setVariables={handleTempVariableChange}
+                localizedVariables={localizedVariables}
+              />
+            </div>
+            <div className="flex gap-3 p-4 border-t bg-gray-50 flex-shrink-0">
+              <button
+                onClick={handleParametersCancel}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                {t("common.cancel", "Cancel")}
+              </button>
+              <button
+                onClick={handleParametersOk}
+                className="flex-1 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium"
+              >
+                {t("common.ok", "OK")}
+              </button>
+            </div>
           </div>
-          <InputVariables
-            variables={variables}
-            setVariables={setVariables}
-            localizedVariables={localizedVariables}
-          />
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row flex-1 gap-4 overflow-hidden mx-auto w-full max-w-7xl">
-        <div
-          className={`flex flex-col ${
-            !app?.variables || app.variables.length === 0
-              ? "max-w-6xl mx-auto w-full h-full"
-              : "flex-1"
-          }`}
-        >
+      <div className="flex flex-col md:flex-row flex-1 gap-4 overflow-hidden mx-auto w-full">
+        <div className="flex flex-col max-w-6xl mx-auto w-full h-full">
           {shouldCenterInput ? (
             /* Centered layout for example prompts */
             <>
@@ -1437,7 +1494,7 @@ const AppChat = () => {
         </div>
 
         {app?.variables && app.variables.length > 0 && (
-          <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 rounded-lg">
+          <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 rounded-lg flex-shrink-0">
             <h3 className="font-medium mb-3">
               {t("pages.appChat.inputParameters")}
             </h3>

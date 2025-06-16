@@ -99,7 +99,7 @@ const Layout = () => {
               <nav className="hidden md:flex items-center space-x-6">
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
-                    .filter(link => !(link.url === '/prompts' && uiConfig?.promptDb?.enabled === false))
+                    .filter(link => !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false))
                     .map((link, index) => (
                       <Link
                         key={index}
@@ -148,7 +148,7 @@ const Layout = () => {
               <nav className="container mx-auto px-4 py-3 flex flex-col">
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
-                    .filter(link => !(link.url === '/prompts' && uiConfig?.promptDb?.enabled === false))
+                    .filter(link => !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false))
                     .map((link, index) => (
                       <Link
                         key={index}
