@@ -372,37 +372,42 @@ const AppsList = () => {
       
       {/* Conditional rendering of search based on configuration */}
       {searchConfig.enabled && (
-        <div className={`flex flex-col gap-6 mb-4 mx-auto ${searchConfig.width || 'w-full sm:w-2/3 lg:w-1/3'}`}>
-          <div className="w-full">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Icon name="search" className="text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder={getLocalizedContent(searchConfig.placeholder, currentLanguage) || t('pages.appsList.searchPlaceholder')}
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                autoComplete="off"
-                data-lpignore="true"
-                data-1p-ignore="true"
-              />
-              {searchTerm && (
-                <button
-                  onClick={clearSearch}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
-                  aria-label="Clear search"
-                >
-                  <Icon name="x" className="w-5 h-5" />
-                </button>
-              )}
+        <div
+          className={`flex flex-col sm:flex-row items-stretch gap-4 mb-4 mx-auto ${
+            searchConfig.width || 'w-full sm:w-2/3 lg:w-1/3'
+          }`}
+        >
+          <div className="relative flex-grow">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Icon name="search" className="text-gray-400" />
             </div>
+            <input
+              type="text"
+              placeholder={
+                getLocalizedContent(searchConfig.placeholder, currentLanguage) ||
+                t('pages.appsList.searchPlaceholder')
+              }
+              value={searchTerm}
+              onChange={handleSearchChange}
+              className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
+            />
+            {searchTerm && (
+              <button
+                onClick={clearSearch}
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                aria-label="Clear search"
+              >
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            )}
           </div>
           {sortConfig.enabled && (
-            <div className="w-full">
+            <div className="flex-shrink-0">
               <select
-                className="w-full border rounded-lg py-2 px-3"
+                className="h-full border rounded-lg py-2 px-3 w-full sm:w-auto"
                 value={sortMethod}
                 onChange={(e) => setSortMethod(e.target.value)}
               >
