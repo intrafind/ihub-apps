@@ -62,6 +62,12 @@
       "loadMore": "Mehr laden",
       "showingCountOfTotal": "Zeige {{displayed}} von {{total}} Anwendungen"
     },
+    "sort": {
+      "label": "Sortieren nach",
+      "nameAsc": "Name A-Z",
+      "nameDesc": "Name Z-A",
+      "relevance": "Relevanz"
+    },
     "promptsList": {
       "title": "Prompt-Bibliothek",
       "subtitle": "Verfügbare Prompts durchsuchen",
@@ -77,7 +83,13 @@
       "next": "Weiter",
       "pageOfTotal": "Seite {{current}} von {{total}}",
       "sharePrompt": "Prompt teilen",
-      "linkCopied": "Link kopiert!"
+      "linkCopied": "Link kopiert!",
+      "sort": {
+        "label": "Sortieren nach",
+        "nameAsc": "Name A-Z",
+        "nameDesc": "Name Z-A",
+        "relevance": "Relevanz"
+      }
     },
     "appChat": {
       "messagePlaceholder": "Gib deine Nachricht hier ein...",
