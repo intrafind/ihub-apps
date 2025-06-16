@@ -125,7 +125,8 @@ const AnthropicAdapter = {
       content: [],
       complete: false,
       error: false,
-      errorMessage: null
+      errorMessage: null,
+      finishReason: null
     };
 
     const { events, done } = parseSSEBuffer(buffer);
@@ -143,6 +144,7 @@ const AnthropicAdapter = {
 
         if (data.type === 'message_stop') {
           result.complete = true;
+          result.finishReason = 'stop';
         }
       } catch (parseError) {
         console.error('Error parsing Claude response chunk:', parseError);

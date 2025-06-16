@@ -152,6 +152,9 @@ const AppChat = () => {
   const [showParameters, setShowParameters] = useState(true);
   const { setHeaderColor } = useUIConfig();
 
+  const [maxTokens, setMaxTokens] = useState(null);
+  const [useMaxTokens, setUseMaxTokens] = useState(false);
+
   // Record recent usage of this app
   useEffect(() => {
     recordAppUsage(appId);
@@ -201,17 +204,21 @@ const AppChat = () => {
         updateAssistantMessage(window.lastMessageId, fullContent, true);
       }
     },
-    onDone: (finalContent) => {
+    onDone: (finalContent, info) => {
       // Mark the message as no longer loading
       if (window.lastMessageId) {
-        updateAssistantMessage(window.lastMessageId, finalContent, false);
+        updateAssistantMessage(window.lastMessageId, finalContent, false, {
+          finishReason: info.finishReason,
+        });
       }
+      setUseMaxTokens(false);
     },
     onError: (error) => {
       // Update with an error message
       if (window.lastMessageId) {
         setMessageError(window.lastMessageId, error.message);
       }
+      setUseMaxTokens(false);
     },
     onConnected: async (event) => {
       // Handle when connection is established
@@ -344,6 +351,9 @@ const AppChat = () => {
 
         console.log("Fetching app data for:", appId);
         const appData = await fetchAppDetails(appId);
+        if (isMounted) {
+          setMaxTokens(appData.tokenLimit || 4096);
+        }
         
         // Safety check for component unmounting during async operations
         if (!isMounted) return;
@@ -615,29 +625,34 @@ const AppChat = () => {
     editMessage(messageId, newContent);
   };
 
-  const handleResendMessage = (messageId, editedContent) => {
+  const handleResendMessage = (messageId, editedContent, useMaxTokens = false) => {
     const messageToResend = messages.find((msg) => msg.id === messageId);
     if (!messageToResend) return;
 
-    // Remove the selected message and any following messages to avoid sending
-    // them again with the resent message
-    deleteMessage(messageId);
+    let contentToResend = editedContent;
 
-    // Use the editedContent if provided, otherwise fall back to the original
-    // raw content (if available) or the displayed content
-    const contentToResend =
-      editedContent !== undefined
-        ? editedContent
-        : messageToResend.rawContent || messageToResend.content;
+    if (messageToResend.role === 'assistant') {
+      const idx = messages.findIndex((msg) => msg.id === messageId);
+      const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
+      if (!prevUser) return;
+      contentToResend = prevUser.rawContent || prevUser.content;
+      // remove the user message and everything after it, including the assistant reply
+      deleteMessage(prevUser.id);
+    } else {
+      deleteMessage(messageId);
+      if (contentToResend === undefined) {
+        contentToResend = messageToResend.rawContent || messageToResend.content;
+      }
+    }
 
-
-    // Set the input field to the original message content
     setInput(contentToResend);
+    if (useMaxTokens) {
+      setUseMaxTokens(true);
+    }
 
     setTimeout(() => {
       const form = document.querySelector("form");
       if (form) {
-        console.log("Submitting form with edited content:", contentToResend);
         const submitEvent = new Event("submit", {
           cancelable: true,
           bubbles: true,
@@ -856,6 +871,7 @@ const AppChat = () => {
           temperature,
           outputFormat: selectedOutputFormat,
           language: currentLanguage,
+          ...(useMaxTokens ? { useMaxTokens: true } : {}),
         },
       };
 

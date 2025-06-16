@@ -405,7 +405,7 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
   app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     try {
       const { appId, chatId } = req.params;
-      const { messages, modelId, temperature, style, outputFormat, language, maxTokens } = req.body;
+      const { messages, modelId, temperature, style, outputFormat, language, useMaxTokens } = req.body;
       
       // Extract client language from request headers or use provided language in the request
       const clientLanguage = language || req.headers['accept-language']?.split(',')[0] || 'en';
@@ -470,7 +470,7 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
           style,
           outputFormat,
           language: clientLanguage,
-          maxTokens,
+          useMaxTokens,
           verifyApiKey,
           processMessageTemplates,
           res
@@ -484,7 +484,7 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
         ({ model, llmMessages } = prep);
 
         const requestLog = buildLogData(false);
-        requestLog.options.maxTokens = parseInt(maxTokens) || prep.app.tokenLimit || 1024;
+        requestLog.options.useMaxTokens = !!useMaxTokens;
         await logInteraction('chat_request', requestLog);
 
         if (prep.tools && prep.tools.length > 0) {
@@ -520,7 +520,7 @@ export default function registerChatRoutes(app, { verifyApiKey, processMessageTe
           style,
           outputFormat,
           language: clientLanguage,
-          maxTokens,
+          useMaxTokens,
           verifyApiKey,
           processMessageTemplates,
           clientRes

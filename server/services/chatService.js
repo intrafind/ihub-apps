@@ -16,7 +16,7 @@ export async function prepareChatRequest({
   style,
   outputFormat,
   language,
-  maxTokens,
+  useMaxTokens = false,
   verifyApiKey,
   processMessageTemplates,
   res,
@@ -45,10 +45,12 @@ export async function prepareChatRequest({
   // Prepare messages for the model
   const llmMessages = await processMessageTemplates(messages, app, style, outputFormat, language);
 
-  // Ensure token count does not exceed model limit
-  const requestedTokens = parseInt(maxTokens) || app.tokenLimit || 1024;
-  const modelTokenLimit = model.tokenLimit || requestedTokens;
-  const finalTokens = Math.min(requestedTokens, modelTokenLimit);
+  // Determine token limit based on app configuration and retry flag
+  const appTokenLimit = app.tokenLimit || 1024;
+  const modelTokenLimit = model.tokenLimit || appTokenLimit;
+  const finalTokens = useMaxTokens
+    ? modelTokenLimit
+    : Math.min(appTokenLimit, modelTokenLimit);
 
   // Verify API key
   const apiKey = await verifyApiKey(model, res, clientRes, language);
@@ -201,6 +203,8 @@ export async function executeStreamingResponse({
     const reader = llmResponse.body.getReader();
     const decoder = new TextDecoder();
     let fullResponse = '';
+    let finishReason = null;
+    let doneEmitted = false;
 
     try {
       while (true) {
@@ -225,10 +229,15 @@ export async function executeStreamingResponse({
             response: fullResponse
           }));
           sendSSE(clientRes, 'error', { message: result.errorMessage || 'Error processing response' });
+          finishReason = 'error';
           break;
         }
+        if (result && result.finishReason) {
+          finishReason = result.finishReason;
+        }
         if (result && result.complete) {
-          sendSSE(clientRes, 'done', {});
+          sendSSE(clientRes, 'done', { finishReason });
+          doneEmitted = true;
           await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: fullResponse }));
           const completionTokens = estimateTokens(fullResponse);
           await recordChatResponse({ userId: baseLog.userSessionId, appId: baseLog.appId, modelId: model.id, tokens: completionTokens });
@@ -239,8 +248,12 @@ export async function executeStreamingResponse({
       if (error.name !== 'AbortError') {
         const errorMessage = await getLocalizedError('responseStreamError', { error: error.message }, clientLanguage);
         sendSSE(clientRes, 'error', { message: errorMessage });
+        finishReason = 'error';
       }
     } finally {
+      if (!doneEmitted) {
+        sendSSE(clientRes, 'done', { finishReason: finishReason || 'connection_closed' });
+      }
       activeRequests.delete(chatId);
     }
   }).catch(async (error) => {

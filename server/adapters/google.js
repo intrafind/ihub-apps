@@ -174,7 +174,8 @@ const GoogleAdapter = {
         content: [],
         complete: false,
         error: false,
-        errorMessage: null
+        errorMessage: null,
+        finishReason: null
       };
 
       const { events, done } = parseSSEBuffer(buffer);
@@ -192,8 +193,22 @@ const GoogleAdapter = {
             }
           }
 
-          if (data.candidates && data.candidates[0]?.finishReason === 'STOP') {
-            result.complete = true;
+          if (data.candidates && data.candidates[0]?.finishReason) {
+            const fr = data.candidates[0].finishReason;
+            // Map Gemini finish reasons to normalized values used by the client
+            // Documented reasons include STOP, MAX_TOKENS, SAFETY, RECITATION and OTHER
+            if (fr === 'STOP') {
+              result.finishReason = 'stop';
+              result.complete = true;
+            } else if (fr === 'MAX_TOKENS') {
+              result.finishReason = 'length';
+              result.complete = true;
+            } else if (fr === 'SAFETY' || fr === 'RECITATION') {
+              result.finishReason = 'content_filter';
+              result.complete = true;
+            } else {
+              result.finishReason = fr;
+            }
           }
         } catch (jsonError) {
           // Fallback to regex if JSON parsing fails
@@ -206,6 +221,13 @@ const GoogleAdapter = {
           }
 
           if (evt.includes('"finishReason": "STOP"') || evt.includes('"finishReason":"STOP"')) {
+            result.finishReason = 'stop';
+            result.complete = true;
+          } else if (evt.includes('"finishReason": "MAX_TOKENS"')) {
+            result.finishReason = 'length';
+            result.complete = true;
+          } else if (evt.includes('"finishReason": "SAFETY"') || evt.includes('"finishReason": "RECITATION"')) {
+            result.finishReason = 'content_filter';
             result.complete = true;
           }
         }
