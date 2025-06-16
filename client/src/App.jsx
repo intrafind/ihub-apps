@@ -5,7 +5,6 @@ import Layout from './components/Layout';
 import AppsList from './pages/AppsList';
 import PromptsList from './pages/PromptsList';
 import AppChat from './pages/AppChat';
-import DirectChat from './pages/DirectChat';
 import NotFound from './pages/NotFound';
 import MarkdownPage from './pages/MarkdownPage';
 import WidgetPage from './pages/WidgetPage';
@@ -18,7 +17,6 @@ import { useUIConfig } from './components/UIConfigContext';
 // Apply error boundary to individual routes that might fail
 const SafeAppsList = withErrorBoundary(AppsList);
 const SafeAppChat = withErrorBoundary(AppChat);
-const SafeDirectChat = withErrorBoundary(DirectChat);
 const SafeMarkdownPage = withErrorBoundary(MarkdownPage);
 const SafeWidgetPage = withErrorBoundary(WidgetPage);
 const SafeAdminUsage = withErrorBoundary(AdminUsageReports);
@@ -43,7 +41,6 @@ function App() {
               <Route path="prompts" element={<SafePromptsList />} />
             )}
             <Route path="apps/:appId" element={<SafeAppChat />} />
-            <Route path="chat/:modelId" element={<SafeDirectChat />} />
             <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
             <Route path="admin/usage" element={<SafeAdminUsage />} />
             <Route path="*" element={<NotFound />} />

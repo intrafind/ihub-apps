@@ -50,8 +50,14 @@
       "de": "Du bist ein hilfreicher KI-Assistent. Beantworte die Fragen des Nutzers präzise und knapp."
     },
     "greeting": {
-      "en": "👋 Hello! How can I help you today?",
-      "de": "👋 Hallo! Wie kann ich Ihnen heute helfen?"
+      "en": {
+        "title": "👋 Hello!",
+        "subtitle": "How can I help you today?"
+      },
+      "de": {
+        "title": "👋 Hallo!",
+        "subtitle": "Wie kann ich Ihnen heute helfen?"
+      }
     },
     "tokenLimit": 8192,
     "preferredModel": "gpt-3.5-turbo",
@@ -206,6 +212,10 @@
     "system": {
       "en": "You are a summarization assistant. Provide a concise summary of the content while maintaining all key information.",
       "de": "Du bist ein Assistent für Zusammenfassungen. Erstelle eine prägnante Zusammenfassung des Inhalts und behalte alle wichtigen Informationen bei."
+    },
+    "greeting": {
+      "en": "Ready to summarize your content! Paste your text and choose an action.",
+      "de": "Bereit, Ihren Inhalt zusammenzufassen! Fügen Sie Ihren Text ein und wählen Sie eine Aktion."
     },
     "tokenLimit": 8000,
     "preferredModel": "gpt-4",

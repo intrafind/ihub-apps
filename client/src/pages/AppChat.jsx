@@ -216,15 +216,32 @@ const StarterPromptsView = ({ starterPrompts, onSelectPrompt }) => {
 const GreetingView = ({ welcomeMessage }) => {
   const { t } = useTranslation();
 
+  // Handle both old string format and new title/subtitle object format
+  let title, subtitle;
+  
+  if (typeof welcomeMessage === 'object' && welcomeMessage !== null) {
+    // New format with title and subtitle
+    title = welcomeMessage.title || '';
+    subtitle = welcomeMessage.subtitle || '';
+  } else if (typeof welcomeMessage === 'string') {
+    // Legacy format - use the string as title
+    title = welcomeMessage;
+    subtitle = t('pages.appChat.noMessagesSubtitle', 'Start a conversation by sending a message!');
+  } else {
+    // Fallback
+    title = t('pages.appChat.noMessagesTitle', 'Welcome!');
+    subtitle = t('pages.appChat.noMessagesSubtitle', 'Start a conversation by sending a message!');
+  }
+
   return (
     <div className="text-center text-gray-500 space-y-6 w-full">
       <div className="px-4">
         <Icon name="chat-bubble" size="3xl" className="mx-auto mb-4 text-gray-400" />
         <h3 className="text-lg font-semibold mb-2">
-          {welcomeMessage}
+          {title}
         </h3>
         <p className="text-sm max-w-md mx-auto">
-          {t('pages.appChat.noMessagesSubtitle', 'Start a conversation by sending a message!')}
+          {subtitle}
         </p>
       </div>
     </div>
@@ -651,12 +668,6 @@ const AppChat = () => {
         typeof app.greeting === "object"
           ? app.greeting[userLanguage] || app.greeting.en
           : app.greeting;
-    }
-
-    // Fall back to widget greeting if app doesn't have one
-    if (!greeting && widgetConfig.greeting) {
-      greeting =
-        widgetConfig.greeting[userLanguage] || widgetConfig.greeting.en;
     }
 
     return greeting;

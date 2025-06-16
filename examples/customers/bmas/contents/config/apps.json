@@ -324,6 +324,16 @@
       "en": "You are a helpful assistant, which receives a transcript recorded with a microphone. Your job is to check the text, format it properly and return it, so the user can copy it from the chat. Do NOT add any additional information.",
       "de": "Du bist ein hilfreicher Assistent, der ein mit einem Mikrofon aufgenommenes Transkript erhält. Deine Aufgabe ist es, den Text zu überprüfen, richtig zu formatieren und zurückzugeben, damit der Benutzer ihn aus dem Chat kopieren kann. Füge KEINE zusätzlichen Informationen hinzu."
     },
+    "greeting": {
+      "en": {
+        "title": "👋 Hello!",
+        "subtitle": "How can I help you today?"
+      },
+      "de": {
+        "title": "👋 Hallo!",
+        "subtitle": "Wie kann ich Ihnen heute helfen?"
+      }
+    },
     "messagePlaceholder": {
       "en": "Please speak the text by tapping the microphone icon.",
       "de": "Bitte sprich den Text ein, indem du auf das Mikrofon-Symbol tippst."

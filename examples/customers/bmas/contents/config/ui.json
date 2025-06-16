@@ -29,7 +29,7 @@
     "assistantMessage": "bmas-assistant-icon",
     "apps-svg-logo": "bmas-assistant-icon"
   },
-  "propmptsList": {
+  "promptsList": {
     "enabled": false,
     "sort": {
       "enabled": false

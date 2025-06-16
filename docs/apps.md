@@ -215,14 +215,31 @@ Apps can define custom placeholder text for the message input:
 
 #### Welcome Messages
 
-Apps can configure a welcome message that appears above the chat input when no messages exist and no starter prompts are configured:
+Apps can configure a welcome message that appears above the chat input when no messages exist and no starter prompts are configured.
 
+**Simple format (legacy):**
 ```json
 "greeting": {
   "en": "Hello! I'm your AI assistant. How can I help you today?",
   "de": "Hallo! Ich bin Ihr KI-Assistent. Wie kann ich Ihnen heute helfen?"
 }
 ```
+
+**Extended format with title and subtitle:**
+```json
+"greeting": {
+  "en": {
+    "title": "👋 Welcome!",
+    "subtitle": "I'm your AI assistant. How can I help you today?"
+  },
+  "de": {
+    "title": "👋 Willkommen!",
+    "subtitle": "Ich bin Ihr KI-Assistent. Wie kann ich Ihnen heute helfen?"
+  }
+}
+```
+
+Both formats are supported for backward compatibility. The extended format allows you to configure a separate title and subtitle for the greeting screen, providing better visual hierarchy and customization.
 
 Welcome messages are displayed as informational cards above the input area, not as chat messages. They take priority over example prompts but are hidden if starter prompts are configured.
 
