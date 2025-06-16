@@ -17,9 +17,12 @@ Set `showTranscript` to `true` to display the live transcript during recording.
 ## Example Configuration
 
 ```json
-"microphone": {
-  "enabled": true,
-  "mode": "automatic",
-  "showTranscript": true
+"inputMode": {
+  "type": "multiline",
+  "microphone": {
+    "enabled": true,
+    "mode": "automatic",
+    "showTranscript": true
+  }
 }
 ```

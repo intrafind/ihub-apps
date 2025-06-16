@@ -1042,7 +1042,15 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.3,
-    "inputMode": "multiline",
+    "inputMode": {
+      "type": "multiline",
+      "rows": 5,
+      "microphone": {
+        "enabled": true,
+        "mode": "manual",
+        "showTranscript": true
+      }
+    },
     "prompt": {
       "en": "{{content}}",
       "de": "{{content}}"
@@ -1058,11 +1066,6 @@
       "outputFormat": {
         "enabled": true
       }
-    },
-    "microphone": {
-      "enabled": true,
-      "mode": "manual",
-      "showTranscript": true
     }
   },
   {
@@ -1201,8 +1204,11 @@
       "en": "Which topic should the note deal with and which key aspects should I address in the facts or the assessment?",
       "de": "Welches Thema soll der Vermerk behandeln und auf welche zentralen Aspekte soll ich im Sachverhalt oder der Bewertung eingehen?"
     },
-    "microphone": {
-      "enabled": false
+    "inputMode": {
+      "type": "single",
+      "microphone": {
+        "enabled": false
+      }
     }
   },
   {

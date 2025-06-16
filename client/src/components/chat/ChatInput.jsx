@@ -49,9 +49,10 @@ const ChatInput = ({
   const [showPromptSearch, setShowPromptSearch] = useState(false);
   const promptDbEnabled = uiConfig?.promptDb?.enabled !== false && app?.features?.promptDb !== false;
   
-  // Determine if multiline mode is enabled based on app config
-  // Default to true (multiline) if not specified in app config
-  const multilineMode = app?.inputMode == 'mulitline' || app?.inputMode === 'multiline';
+  // Determine input mode configuration
+  const inputMode = app?.inputMode;
+  const multilineMode = inputMode?.type === 'multiline' || inputMode === 'multiline';
+  const inputRows = multilineMode ? (inputMode?.rows || 2) : 1;
   
   // Use external state if provided, otherwise use internal state
   const showImageUploader = externalShowImageUploader !== undefined ? 
@@ -236,7 +237,7 @@ const ChatInput = ({
           className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 pr-10"
           placeholder={placeholderRef.current}
           ref={actualInputRef}
-          rows={multilineMode ? "2" : "1"}
+          rows={inputRows}
           style={{ resize: multilineMode ? "vertical" : "none" }}
           title={multilineMode ? 
             t("input.multilineTooltip", "Press Shift+Enter for new line, Cmd+Enter to send") : 

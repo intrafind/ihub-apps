@@ -1087,10 +1087,12 @@ const AppChat = () => {
             isProcessing={processing}
             onCancel={cancelGeneration}
             onVoiceInput={
-              app?.microphone?.enabled !== false ? handleVoiceInput : undefined
+              (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+                ? handleVoiceInput
+                : undefined
             }
             onVoiceCommand={
-              app?.microphone?.enabled !== false
+              (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
                 ? handleVoiceCommand
                 : undefined
             }
