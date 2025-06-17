@@ -71,4 +71,5 @@ export function recordTokenUsage(tokens) {
 
 export async function shutdownTelemetry() {
   await sdk?.shutdown();
+  console.info('Telemetry shutdown completed successfully.');
 }
