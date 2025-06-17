@@ -674,3 +674,4 @@ const handleShutdownSignal = async () => {
 
 process.on('SIGTERM', handleShutdownSignal);
 process.on('SIGINT', handleShutdownSignal);
+}

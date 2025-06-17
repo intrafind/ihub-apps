@@ -36,13 +36,20 @@
     "applications"
   ],
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.60.1",
+    "@opentelemetry/exporter-prometheus": "^0.202.0",
+    "@opentelemetry/resources": "^2.0.1",
+    "@opentelemetry/sdk-logs": "^0.202.0",
+    "@opentelemetry/sdk-node": "^0.202.0",
+    "@opentelemetry/sdk-trace-node": "^2.0.1",
     "concurrently": "^9.1.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
+    "duck-duck-scrape": "^2.2.7",
     "express": "^5.1.0",
     "microsoft-cognitiveservices-speech-sdk": "^1.44.1",
-    "node-fetch": "^3.3.0",
-    "duck-duck-scrape": "^2.2.7"
+    "node-fetch": "^3.3.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.5",
