@@ -667,12 +667,10 @@ server.listen(PORT, HOST, () => {
   console.log(`Open ${protocol}://${HOST}:${PORT} in your browser to use AI Hub Apps`);
 });
 
-process.on('SIGTERM', async () => {
+const handleShutdownSignal = async () => {
   await shutdownTelemetry();
   process.exit(0);
-});
+};
 
-process.on('SIGINT', async () => {
-  await shutdownTelemetry();
-  process.exit(0);
-});
+process.on('SIGTERM', handleShutdownSignal);
+process.on('SIGINT', handleShutdownSignal);
