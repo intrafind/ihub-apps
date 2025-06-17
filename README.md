@@ -192,6 +192,7 @@ The server can be configured through environment variables or by editing the `co
 | `PORT` | Port the server listens on | `3000` |
 | `HOST` | Host interface to bind to | `0.0.0.0` |
 | `REQUEST_TIMEOUT` | LLM request timeout (ms) | `60000` |
+| `WORKERS` | Number of cluster workers | `CPU count` |
 | `OPENAI_API_KEY` | OpenAI API key | (required) |
 | `ANTHROPIC_API_KEY` | Anthropic API key | (required) |
 | `GOOGLE_API_KEY` | Google AI API key | (required) |
@@ -209,13 +210,13 @@ For HTTPS support, set these environment variables or define them in `config.env
 Example of running with custom configuration:
 
 ```bash
-PORT=8080 HOST=127.0.0.1 npm run start:prod
+PORT=8080 HOST=127.0.0.1 WORKERS=4 npm run start:prod
 ```
 
 Or with the binary (replace `${VERSION}` with the current version):
 
 ```bash
-PORT=8080 HOST=127.0.0.1 ./dist-bin/ai-hub-apps-v${VERSION}-macos
+PORT=8080 HOST=127.0.0.1 WORKERS=4 ./dist-bin/ai-hub-apps-v${VERSION}-macos
 ```
 
 ## Configuration Files
