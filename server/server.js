@@ -6,6 +6,8 @@ import path from 'path';
 import dotenv from 'dotenv';
 import http from 'http';
 import https from 'https';
+import cluster from 'cluster';
+import os from 'os';
 import { loadJson, loadText } from './configLoader.js';
 import { getRootDir } from './pathUtils.js';
 
@@ -20,6 +22,23 @@ import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 
 // Initialize environment variables
 dotenv.config();
+
+// ----- Cluster setup -----
+const workerCountEnv = process.env.WORKERS || process.env.NUM_WORKERS;
+const totalCPUs = os.cpus().length;
+const workerCount = workerCountEnv ? parseInt(workerCountEnv, 10) : totalCPUs;
+
+if (cluster.isPrimary && workerCount > 1) {
+  console.log(`Primary process ${process.pid} starting ${workerCount} workers`);
+  for (let i = 0; i < workerCount; i++) {
+    cluster.fork();
+  }
+
+  cluster.on('exit', (worker, code, signal) => {
+    console.warn(`Worker ${worker.process.pid} exited (${code || signal}).`);
+    cluster.fork();
+  });
+} else {
 
 // Determine if we're running from a packaged binary
 // Either via process.pkg (when using pkg directly) or APP_ROOT_DIR env var (our shell script approach)
@@ -657,4 +676,3 @@ process.on('SIGINT', async () => {
   await shutdownTelemetry();
   process.exit(0);
 });
-
