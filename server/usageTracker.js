@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getRootDir } from './pathUtils.js';
 import { loadJson } from './configLoader.js';
+import { recordTokenUsage } from './telemetry.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -116,6 +117,7 @@ export async function recordChatRequest({ userId, appId, modelId, tokens = 0 }) 
   inc(data.tokens.prompt.perApp, appId, tokens);
   inc(data.tokens.prompt.perModel, modelId, tokens);
   inc(data.tokens.prompt, 'total', tokens);
+  recordTokenUsage(tokens);
   dirty = true;
   scheduleSave();
 }
@@ -136,6 +138,7 @@ export async function recordChatResponse({ userId, appId, modelId, tokens = 0 })
   inc(data.tokens.completion.perApp, appId, tokens);
   inc(data.tokens.completion.perModel, modelId, tokens);
   inc(data.tokens.completion, 'total', tokens);
+  recordTokenUsage(tokens);
   dirty = true;
   scheduleSave();
 }
@@ -169,6 +172,8 @@ export async function recordMagicPrompt({ userId, appId, modelId, inputTokens = 
   inc(data.magicPrompt.tokensOut.perApp, appId, outputTokens);
   inc(data.magicPrompt.tokensOut.perModel, modelId, outputTokens);
   inc(data.magicPrompt.tokensOut, 'total', outputTokens);
+
+  recordTokenUsage(inputTokens + outputTokens);
 
   dirty = true;
   scheduleSave();

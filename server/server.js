@@ -18,6 +18,7 @@ import registerChatRoutes from "./routes/chatRoutes.js";
 import registerAdminRoutes from "./routes/adminRoutes.js";
 import registerStaticRoutes from "./routes/staticRoutes.js";
 import { loadTools, runTool } from './toolLoader.js';
+import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -55,6 +56,14 @@ console.log(`Root directory: ${rootDir}`);
 // Get the contents directory, either from environment variable or use default 'contents'
 const contentsDir = process.env.CONTENTS_DIR || 'contents';
 console.log(`Using contents directory: ${contentsDir}`);
+
+// Initialize telemetry based on platform configuration
+try {
+  const platformConfig = await loadJson('config/platform.json');
+  await initTelemetry(platformConfig?.telemetry || {});
+} catch (err) {
+  console.error('Failed to initialize telemetry:', err);
+}
 
 // Create Express application
 const app = express();
@@ -658,5 +667,11 @@ server.listen(PORT, HOST, () => {
   console.log(`Open ${protocol}://${HOST}:${PORT} in your browser to use AI Hub Apps`);
 });
 
-}
+const handleShutdownSignal = async () => {
+  await shutdownTelemetry();
+  process.exit(0);
+};
 
+process.on('SIGTERM', handleShutdownSignal);
+process.on('SIGINT', handleShutdownSignal);
+}
