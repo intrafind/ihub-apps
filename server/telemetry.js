@@ -3,9 +3,11 @@ import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentation
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-node';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-import { diag, DiagConsoleLogger, DiagLogLevel, logs } from '@opentelemetry/api';
+import apiPkg from '@opentelemetry/api';
+const { diag, DiagConsoleLogger, DiagLogLevel, logs } = apiPkg;
 import { LoggerProvider, ConsoleLogRecordExporter, SimpleLogRecordProcessor } from '@opentelemetry/sdk-logs';
-import { Resource } from '@opentelemetry/resources';
+import resourcesPkg from '@opentelemetry/resources';
+const { Resource } = resourcesPkg;
 
 let sdk = null;
 let tokenUsageCounter = null;
