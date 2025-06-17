@@ -1,5 +1,12 @@
 {
   "features": {
     "usageTracking": true
+  },
+  "telemetry": {
+    "enabled": false,
+    "metrics": true,
+    "traces": true,
+    "logs": true,
+    "port": 9464
   }
 }
