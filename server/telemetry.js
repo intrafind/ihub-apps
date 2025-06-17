@@ -34,6 +34,7 @@ export async function initTelemetry(config = {}) {
   if (!config.enabled) {
     return;
   }
+  console.info('Initializing telemetry... with config:', config);
 
   diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
@@ -50,13 +51,13 @@ export async function initTelemetry(config = {}) {
 
   await sdk.start();
 
-  if (config.metrics) {
+  if (config.metrics?.enabled === true) {
     tokenUsageCounter = sdk.getMeterProvider().getMeter('ai-hub-apps').createCounter('token_usage_total', {
       description: 'Total number of tokens processed'
     });
   }
 
-  if (config.logs) {
+  if (config.logs?.enabled === true) {
     const loggerProvider = new LoggerProvider({ resource: new Resource({ 'service.name': 'ai-hub-apps-server' }) });
     loggerProvider.addLogRecordProcessor(new SimpleLogRecordProcessor(new ConsoleLogRecordExporter()));
     loggerProvider.register();
