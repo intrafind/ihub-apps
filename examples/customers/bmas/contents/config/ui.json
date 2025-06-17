@@ -27,12 +27,13 @@
   },
   "icons": {
     "assistantMessage": "bmas-assistant-icon",
-    "apps-svg-logo": "bmas-assistant-icon"
+    "appsListLogo": "bmas-assistant-icon"
   },
   "promptsList": {
     "enabled": false,
     "sort": {
-      "enabled": false
+      "enabled": false,
+      "default": "default"
     }
   },
   "appsList": {
@@ -48,7 +49,8 @@
       "enabled": false
     },
     "sort": {
-      "enabled": false
+      "enabled": false,
+      "default": "default"
     }
   },
   "disclaimer": {

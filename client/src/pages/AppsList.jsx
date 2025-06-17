@@ -391,7 +391,7 @@ const AppsList = () => {
     <div ref={containerRef} className="container mx-auto py-8 px-4 flex flex-col">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-2 flex items-center justify-center">
-          <Icon name="apps-svg-logo" className="text-indigo-600 w-[4rem] h-[4rem] mr-2" />
+          <Icon name={uiConfig?.icons?.appsListLogo || 'apps-svg-logo'} className="text-indigo-600 w-[4rem] h-[4rem] mr-2" />
           {/* Use title from UI config if available, otherwise use translation */}
           {uiConfig?.appsList?.title ? getLocalizedContent(uiConfig.appsList.title, currentLanguage) : t('pages.appsList.title')}
         </h1>
