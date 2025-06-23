@@ -109,7 +109,9 @@
       "starterPromptsSubtitle": "Choose a prompt below to get started quickly",
       "welcome": "Welcome",
       "getStarted": "Get Started",
-      "examplePrompts": "Here are some example prompts to get you started"
+      "examplePrompts": "Here are some example prompts to get you started",
+      "noMessagesTitle": "No Messages Yet",
+      "noMessagesSubtitle": "Start a conversation by sending a message!"
     },
     "notFound": {
       "title": "Page Not Found",

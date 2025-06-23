@@ -109,7 +109,9 @@
       "starterPromptsSubtitle": "Wählen Sie einen Prompt unten aus, um schnell zu beginnen",
       "welcome": "Willkommen",
       "getStarted": "Loslegen",
-      "examplePrompts": "Hier sind einige Beispiel-Prompts zum Einstieg"
+      "examplePrompts": "Hier sind einige Beispiel-Prompts zum Einstieg",
+      "noMessagesTitle": "Noch keine Nachrichten",
+      "noMessagesSubtitle": "Beginne eine Unterhaltung, indem du eine Nachricht sendest!"
     },
     "notFound": {
       "title": "Seite nicht gefunden",

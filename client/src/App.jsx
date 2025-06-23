@@ -13,6 +13,7 @@ import AppProviders from './components/AppProviders';
 import { withErrorBoundary } from './components/ErrorBoundary';
 import useSessionManagement from './utils/useSessionManagement';
 import { useUIConfig } from './components/UIConfigContext';
+import DocumentTitle from './components/DocumentTitle';
 
 // Apply error boundary to individual routes that might fail
 const SafeAppsList = withErrorBoundary(AppsList);
@@ -30,6 +31,9 @@ function App() {
   return (
     <AppProviders>
       <BrowserRouter>
+        {/* Document title management - must be inside Router for useLocation/useParams */}
+        <DocumentTitle />
+        
         <Routes>
           {/* Widget page should be outside of the regular Layout */}
           <Route path="/widget/chat" element={<SafeWidgetPage />} />

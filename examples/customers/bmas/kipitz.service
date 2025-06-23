@@ -1,0 +1,19 @@
+[Unit]
+Description=kipitz
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+WorkingDirectory=/home/intrafind/kipitz
+
+User=intrafind
+Group=intrafind
+
+# Restart service whenever it fails.
+Restart=always
+RestartSec=5
+
+ExecStart=/home/intrafind/kipitz/ai-hub-apps-linux
+
+[Install]
+WantedBy=multi-user.target
