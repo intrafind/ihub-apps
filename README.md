@@ -3,6 +3,10 @@
 This repository contains the source code for the AI Hub Apps.
 
 For detailed documentation please see [docs/README.md](docs/README.md).
+When you run a production build, the generated documentation is copied to
+`public/help` inside the build directory and served by the server. After
+starting the built application, open `/help/index.html` in your browser to
+read the rendered mdBook docs.
 
 ## Purpose
 
