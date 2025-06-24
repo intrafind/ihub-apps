@@ -1,0 +1,37 @@
+import { logInteraction } from '../../utils.js';
+import { sendSSE } from '../../sse.js';
+import { recordFeedback } from '../../usageTracker.js';
+
+export default function registerFeedbackRoutes(app, { getLocalizedError }) {
+  app.post('/api/feedback', async (req, res) => {
+    try {
+      const { messageId, appId, chatId, messageContent, rating, feedback, modelId } = req.body;
+      const language = req.headers['accept-language']?.split(',')[0] || 'en';
+      if (!messageId || !rating || !appId || !chatId) {
+        const errorMessage = await getLocalizedError('missingFeedbackFields', {}, language);
+        return res.status(400).json({ error: errorMessage });
+      }
+      const userSessionId = req.headers['x-session-id'];
+      await logInteraction('feedback', {
+        messageId,
+        appId,
+        modelId,
+        sessionId: chatId,
+        userSessionId,
+        responseType: 'feedback',
+        feedback: {
+          messageId,
+          rating,
+          comment: feedback || '',
+          contentSnippet: messageContent ? messageContent.substring(0, 300) : ''
+        }
+      });
+      await recordFeedback({ userId: userSessionId, appId, modelId, rating: rating === 'positive' ? 'positive' : 'negative' });
+      console.log(`Feedback received for message ${messageId} in chat ${chatId}: ${rating}`);
+      return res.status(200).json({ success: true });
+    } catch (error) {
+      console.error('Error processing feedback:', error);
+      return res.status(500).json({ error: 'Internal server error', message: error.message });
+    }
+  });
+}
