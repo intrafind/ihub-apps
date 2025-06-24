@@ -270,7 +270,7 @@
     "settings": {
       "speechRecognition": {
         "service": "azure",
-        "host": "https://bmas01lal/"
+        "host": "https://sd-container-01.rochus.local/"
       },
       "enabled": true,
       "model": {
