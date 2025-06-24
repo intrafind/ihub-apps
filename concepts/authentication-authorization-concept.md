@@ -65,8 +65,3 @@ Before starting implementation, these topics should be answered:
 - Update client-side session utilities to store authentication tokens instead of only a random ID, and support both login flows.
 - Normalize user and group data from both authentication sources for consistent authorization checks.
 - Usage tracking can include tenant and user identifiers once authentication is in place.
-
-### Implementation Order
-
-Implement authentication and authorization (supporting both OIDC and local AD) before multi-tenancy. Resolving user identity first allows the system to determine the tenant context for configuration overrides.
-
