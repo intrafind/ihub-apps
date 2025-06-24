@@ -31,3 +31,34 @@ This concept outlines a simple approach for adding an authentication and authori
 - Keep the initial version focused on Entra OIDC to reduce complexity.
 - Store role and group mappings in configuration files or environment variables.
 - Structure the code so additional authentication providers can be plugged in easily later.
+
+### Questions to Clarify
+
+Before starting implementation, these topics should be answered:
+
+1. **Which identity provider(s) will be used initially?**  
+   Start with OIDC via Microsoft Entra as the primary method. Other OAuth providers can be integrated later.
+2. **Will anonymous access be permitted, and to which apps?**  
+   Yes. Anonymous users can only use public apps such as the basic chat app.
+3. **How will user roles/groups be mapped to app features?**  
+   Map the groups or roles received from the identity provider to permissions stored in configuration files or environment variables.
+4. **Which authentication library should be used with the Express server?**  
+   Evaluate Passport.js or NextAuth.js for integration with OIDC.
+5. **Where will user profiles and tokens be stored?**  
+   Initially in memory or sessions; persist them in a database if the project grows.
+6. **How will failures be handled (e.g., expired tokens)?**  
+   Return localized error codes similar to the existing API error handling.
+7. **Do we need local accounts for development?**  
+   Yes. Local accounts remain a supported fallback.
+8. **How will the front end handle login/logout?**  
+   Replace the current random session ID with real authentication tokens obtained during login.
+
+### Impact on Existing Code
+
+- Add middleware to authenticate incoming requests and check permissions.
+- Update client-side session utilities to store authentication tokens instead of only a random ID.
+- Usage tracking can include tenant and user identifiers once authentication is in place.
+
+### Implementation Order
+
+Implement authentication and authorization before multi-tenancy. Resolving user identity first allows the system to determine the tenant context for configuration overrides.

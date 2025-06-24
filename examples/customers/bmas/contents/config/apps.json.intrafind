@@ -1,95 +1,5 @@
 [
   {
-    "id": "chat-llama-3.1-8b",
-    "order": 1,
-    "name": {
-      "en": "AI-Chatbot (LLama 3.1 8b)",
-      "de": "KI-Chatbot (LLama 3.1 8b)"
-    },
-    "description": {
-      "en": "Generative AI assistant with small AI model - LLama 3.1 8b - without access to BMAS data.",
-      "de": "Generativer KI-Assistent mit kleinem KI-Modell - LLama 3.1 8b - ohne Zugriff auf BMAS Daten."
-    },
-    "color": "#4F46E5",
-    "icon": "chat-bubbles",
-    "system": {
-      "en": "You are a helpful AI assistant. Answer the user's questions accurately and concisely.",
-      "de": "Du bist ein hilfreicher KI-Assistent. Beantworte die Fragen des Nutzers präzise und knapp."
-    },
-    "tokenLimit": 4096,
-    "preferredModel": "local-vllm-llama-3.1-8b",
-    "preferredOutputFormat": "markdown",
-    "preferredStyle": "keep",
-    "preferredTemperature": 0.7,
-    "sendChatHistory": true,
-    "microphone": {
-      "enabled": false
-    },
-    "settings": {
-      "enabled": true,
-      "model": {
-        "enabled": false
-      },
-      "temperature": {
-        "enabled": false
-      },
-      "outputFormat": {
-        "enabled": false
-      },
-      "chatHistory": {
-        "enabled": false
-      },
-      "style": {
-        "enabled": true
-      }
-    }
-  },
-  {
-    "id": "chat-deepseek-r1-14b",
-    "order": 2,
-    "name": {
-      "en": "AI-Chatbot (Deepseek R1 14b)",
-      "de": "KI-Chatbot (Deepseek R1 14b)"
-    },
-    "description": {
-      "en": "Generative AI assistant with AI model - Deepseek R1 14b - without access to BMAS data.",
-      "de": "Generativer KI-Assistent mit KI-Modell - Deepseek R1 14b - ohne Zugriff auf BMAS Daten."
-    },
-    "color": "#4F46E5",
-    "icon": "chat-bubbles",
-    "system": {
-      "en": "You are a helpful AI assistant. Answer the user's questions accurately and concisely.",
-      "de": "Du bist ein hilfreicher KI-Assistent. Beantworte die Fragen des Nutzers präzise und knapp."
-    },
-    "tokenLimit": 4096,
-    "preferredModel": "local-vllm-deepseek-r1-14b",
-    "preferredOutputFormat": "markdown",
-    "preferredStyle": "keep",
-    "preferredTemperature": 0.7,
-    "sendChatHistory": true,
-    "microphone": {
-      "enabled": false
-    },
-    "settings": {
-      "enabled": true,
-      "model": {
-        "enabled": false
-      },
-      "temperature": {
-        "enabled": false
-      },
-      "outputFormat": {
-        "enabled": false
-      },
-      "chatHistory": {
-        "enabled": false
-      },
-      "style": {
-        "enabled": true
-      }
-    }
-  },
-  {
     "id": "chat-gemma-3-27b",
     "order": 3,
     "name": {
@@ -107,7 +17,7 @@
       "de": "Du bist CAI, das steht für conversational artificial intelligence und du bist ein fortschrittlicher KI-Assistent im BMAS, der allerdings keinen Zugriff auf interne Daten des BMAS hat. Beantworte die Fragen des Nutzers präzise und knapp."
     },
     "tokenLimit": 4096,
-    "preferredModel": "local-vllm-gemma-3-27b",
+    "preferredModel": "local-vllm-intrafind",
     "preferredOutputFormat": "markdown",
     "preferredStyle": "keep",
     "preferredTemperature": 0.7,
@@ -398,7 +308,7 @@
       "de": "Du bist ein KI-Assistent zur Erstellung von Vermerken im Bundesministerium für Arbeit und Soziales (BMAS). Der Vermerk ist in die Abschnitte 1. Votum, 2. Sachverhalt und 3. Bewertung gegliedert. Das Votum sollte präzise formuliert und maximal 3 Sätze lang sein. Der Sachverhalt sollte ausführliche Informationen und Tatsachendarstellungen enthalten. Die Bewertung sollte knapp und präzise aufgebaut und die Ausführungen im Sachverhaltes berücksichtigen. Am Ende der Bewertung sollte nach einer Zeilenschaltung folgender Satz enthalten sein „Abteilung (Abt.) hat mitgezeichnet bzw. war beteiligt.“ Ergänze am Ende etwas abgesetzt noch folgenden Hinweise: 1. Im Vermerk wurden keine internen Daten des BMAS berücksichtigt, sondern ausschließlich öffentliche Trainingsdaten des KI-Models. 2. Die Ausführungen sollten stets noch einmal ausführlich auf Richtigkeit geprüft werden."
     },
     "tokenLimit": 4096,
-    "preferredModel": "local-vllm-gemma-3-27b",
+    "preferredModel": "local-vllm-intrafind",
     "preferredOutputFormat": "markdown",
     "preferredStyle": "keep",
     "preferredTemperature": 0.7,

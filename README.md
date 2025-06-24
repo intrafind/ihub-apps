@@ -2,6 +2,8 @@
 
 This repository contains the source code for the AI Hub Apps.
 
+For detailed documentation please see [docs/index.md](docs/index.md).
+
 ## Purpose
 
 The purpose of this repository is to provide a collection of apps, which a user can use to interact with all kind of AI models.
@@ -449,3 +451,7 @@ Custom pages are rendered using the `MarkdownPage` component and are accessible 
 - New features should include appropriate translations
 - API endpoints should follow the established pattern
 - Server-side code should maintain the modular adapter pattern for LLM providers
+## FAQ
+
+A default FAQ page is provided in [contents/pages/en/faq.md](contents/pages/en/faq.md) which can be customized or translated.
+

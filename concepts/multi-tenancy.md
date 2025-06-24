@@ -63,3 +63,22 @@ Before implementing multi-tenancy, clarify these points. Each item lists possibl
     - How will existing single-tenant deployments migrate?
       *Possible answer*: treat the current configuration as the root tenant and add tenant-specific directories over time.
 
+### Questions to Clarify
+
+Answer these topics before adding multi-tenancy support:
+
+1. **What is the initial tenant hierarchy?**  
+   Begin with a root tenant. Create sub-tenants for different teams or environments as needed.
+2. **Where will tenant-specific configuration be stored?**  
+   Add a tenant ID to configuration files or database tables and merge parent settings with child overrides when loading configuration.
+3. **How is a tenant determined for each request?**  
+   Use the domain name or a request header to resolve the tenant ID.
+4. **Is there an admin UI for managing tenants?**  
+   Provide a basic interface to create and configure tenants.
+5. **What level of configuration inheritance is required?**  
+   Keep it simple—child tenants override only necessary fields and inherit the rest.
+
+### Relationship to Authentication
+
+Tenant selection may depend on the authenticated user or domain. Implement authentication and authorization first so the tenant context can be resolved reliably.
+

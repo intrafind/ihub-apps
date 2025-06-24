@@ -29,7 +29,7 @@ Content files can be incorporated into apps using the `sourcePath` property in a
     "de": "FAQ-Bot"
   },
   // Other app properties...
-  "sourcePath": "/contents/faq.md",
+  "sourcePath": "/sources/faq.md",
   "system": {
     "en": "You are a helpful FAQ assistant. Your job is to answer user questions based ONLY on the information provided in the sources section...",
     "de": "Du bist ein hilfreicher FAQ-Assistent..."
