@@ -41,4 +41,6 @@ coverage/
 .cache/
 .temp/
 .tmp/
+docs/book/
+book/
 ai-input/
