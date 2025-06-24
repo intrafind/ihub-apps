@@ -2,7 +2,7 @@
 
 This repository contains the source code for the AI Hub Apps.
 
-For detailed documentation please see [docs/index.md](docs/index.md).
+For detailed documentation please see [docs/README.md](docs/README.md).
 
 ## Purpose
 
