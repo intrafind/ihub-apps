@@ -15,6 +15,11 @@
 - test mcp tool support
 - when you chose a prompt with placeholder, they are removed and the pointer is positioned at this place
 - convert variable based app to dialog based conversation
+- introduce categories for better filtering
+- invoke an app with parameters from the outside
+- invoke an app with a document, a set of documents or even a whole search result 
+- be able to invoke a minimized version from within the ifinder
+- share the authentication from the ifinder login with our app via a short lived token or similar?
 
 
 Done
