@@ -1,8 +1,12 @@
 # AI Hub Apps Documentation
 
-This documentation explains how to configure and run AI Hub Apps.
+This book contains configuration details and user instructions for the AI Hub Apps.
 
-## Sections
+## User Guide
+
+- [Getting Started](user-guide.md)
+
+## Configuration
 
 - [App Configuration](apps.md)
 - [Models](models.md)
@@ -11,6 +15,9 @@ This documentation explains how to configure and run AI Hub Apps.
 - [Styles](styles.md)
 - [Prompts Database](prompts.md)
 - [Content Management](content-management.md)
+
+## Features
+
 - [Tools (Experimental)](tools.md)
 - [File Upload Feature](file-upload-feature.md)
 - [Microphone Feature](microphone-feature.md)
