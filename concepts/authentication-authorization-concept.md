@@ -10,16 +10,16 @@ This concept outlines a hybrid approach for adding an authentication and authori
 
 ### Supported Authentication Methods
 - **OIDC with Microsoft Entra** – primary method for receiving user identity and groups.
-- **Local Active Directory (AD)** – via Windows Integrated Authentication (WIA), using libraries such as Waffle (Java) or passport-waffle/passport-windowsauth (Node.js).
+- **Local Active Directory (AD)** – via Windows Integrated Authentication (WIA), using libraries such as  passport-waffle/passport-windowsauth (Node.js).
 - **OAuth 2.0 providers** (e.g., Google, Facebook) – optional additional sign‐in options.
 - **Local accounts** for development or fallback scenarios.
 - Other identity systems (e.g., SAML or LDAP) can be integrated later if needed.
 
 ### Authorization Approach
-1. Assign each user to one or more groups or roles provided by the identity provider.
-2. Define which apps and features are available to each group.
-3. Grant anonymous users access only to specific apps (e.g., the chat app).
-4. Give authenticated users additional capabilities based on their groups, including administrative rights where applicable.
+1. Users are assigned to groups in the identity provider
+2. 1 to many groups are mapped to our 1 to many groups on our side.
+3. Apps are mapped to groups. 
+4. Grant anonymous users access only to specific apps via a specific group.
 
 ### Implementation Steps
 1. Choose an authentication library compatible with the existing stack (e.g., Passport.js for Node.js, which supports both OIDC and Windows/AD strategies).
@@ -28,36 +28,35 @@ This concept outlines a hybrid approach for adding an authentication and authori
 4. Allow users to select their authentication method (e.g., "Sign in with Entra" or "Sign in with Windows/AD"), or detect the environment to choose the appropriate strategy.
 5. Add middleware to check authentication state (anonymous vs authenticated).
 6. Normalize user profiles and group/role information from both OIDC and AD to a common format.
-7. Map incoming groups or roles to application permissions.
+7. Map incoming groups to our own groups.
 8. Apply authorization checks around app routes and administrative features.
-9. Extend support for OAuth 2.0 providers or other methods as required.
 
 ### Design Notes
 - Support both OIDC (Microsoft Entra) and local Active Directory (AD) authentication from the start.
 - Use Passport.js (Node.js) or Waffle (Java) to enable multiple authentication strategies.
-- Store role and group mappings in configuration files or environment variables.
+- Store group mappings in configuration files or environment variables.
 - Normalize user and group data from both sources to a unified format for authorization.
 - Structure the code so additional authentication providers can be plugged in easily later.
+- it should also be possible to map all apps to a group, so not every individual one has to be specified
+- our server should be stateless, which means it should not have any session and must be able to verify the authentication for every call. this will help us when we have to scale horizontally. this also means we have to generate an own token for the user after successful login. these tokens should have an expiration date and a salt, so we can make sure users have to login again after awhile as well as we can enforce a relogin for everyone.
 
 ### Questions to Clarify
 
 Before starting implementation, these topics should be answered:
 
 1. **Which identity provider(s) will be used initially?**  
-   Support both OIDC via Microsoft Entra and local Active Directory (AD) via Windows Integrated Authentication. Other OAuth providers can be integrated later.
+   Support both OIDC via Microsoft Entra and local Active Directory (AD) via Windows Integrated Authentication. 
 2. **Will anonymous access be permitted, and to which apps?**  
-   Yes. Anonymous users can only use public apps such as the basic chat app.
-3. **How will user roles/groups be mapped to app features?**  
-   Map the groups or roles received from both OIDC and AD to permissions stored in configuration files or environment variables.
-4. **Which authentication library should be used with the Express server?**  
+   Yes. Anonymous users are handled like authenticated users. They are mapped to a specific group, which specifies which apps they can use.
+3. **Which authentication library should be used with the Express server?**  
    Use Passport.js with both OIDC and Windows/AD strategies (e.g., passport-azure-ad, passport-openidconnect, passport-waffle, or passport-windowsauth).
-5. **Where will user profiles and tokens be stored?**  
+4. **Where will user profiles and tokens be stored?**  
    Initially in memory or sessions; persist them in a database if the project grows.
-6. **How will failures be handled (e.g., expired tokens, AD connection issues)?**  
+5. **How will failures be handled (e.g., expired tokens, AD connection issues)?**  
    Return localized error codes similar to the existing API error handling.
-7. **Do we need local accounts for development?**  
-   Yes. Local accounts remain a supported fallback.
-8. **How will the front end handle login/logout?**  
+6. **Do we need local accounts for development?**  
+   Not yet. 
+7. **How will the front end handle login/logout?**  
    Replace the current random session ID with real authentication tokens obtained during login. Support both login flows in the UI.
 
 ### Impact on Existing Code
@@ -69,9 +68,5 @@ Before starting implementation, these topics should be answered:
 
 ### Implementation Order
 
-<<<<<<< Updated upstream
-Implement authentication and authorization before multi-tenancy. Resolving user identity first allows the system to determine the tenant context for configuration overrides.
-=======
 Implement authentication and authorization (supporting both OIDC and local AD) before multi-tenancy. Resolving user identity first allows the system to determine the tenant context for configuration overrides.
 
->>>>>>> Stashed changes
