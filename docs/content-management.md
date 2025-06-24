@@ -12,7 +12,7 @@ The `contents/` directory contains Markdown (.md) files that can be referenced b
 
 ```
 contents/
-  docs/index.md  - Main documentation file
+  docs/README.md - Main documentation file
   faq.md           - Frequently asked questions
   [other-content].md - Additional content files
 ```
