@@ -62,4 +62,3 @@ Before starting implementation, these topics should be answered:
 ### Implementation Order
 
 Implement authentication and authorization before multi-tenancy. Resolving user identity first allows the system to determine the tenant context for configuration overrides.
-
