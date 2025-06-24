@@ -22,6 +22,10 @@ echo "Building AI Hub Apps using Node.js SEA..."
 echo "Node.js version: $(node -v)"
 echo "OS platform: $(uname -s)"
 
+# Build documentation before packaging
+echo "Building documentation..."
+npm run docs:build
+
 # Run the SEA build script with .cjs extension
 node build-sea.cjs $PLATFORM
 

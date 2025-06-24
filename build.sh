@@ -33,28 +33,36 @@ npm run build
 cd ..
 cp -r client/dist/* dist/public/
 
-# Step 3: Copy server files
+# Step 3: Build documentation
+echo "Building documentation..."
+npm run docs:build
+
+# Copy generated docs into dist
+mkdir -p dist/public/help
+cp -r docs/book/* dist/public/help/
+
+# Step 4: Copy server files
 echo "Copying server files..."
 cp -r server/*.js dist/server/
 cp server/*.cjs dist/server/ # Make sure to copy the CommonJS entry point
 cp -r server/adapters dist/server/
 cp server/package.json dist/server/
 
-# Step 4: Copy config files
+# Step 5: Copy config files
 echo "Copying configuration files..."
 cp package.json dist/
 
-# Step 5: Copy contents files
+# Step 6: Copy contents files
 echo "Copying contents files..."
 mkdir -p dist/contents
 cp -r contents/* dist/contents/
 
-# Step 6: Copy examples folder
+# Step 7: Copy examples folder
 echo "Copying examples folder..."
 mkdir -p dist/examples
 cp -r examples/* dist/examples/
 
-# Step 7: Copy .env file if it exists
+# Step 8: Copy .env file if it exists
 if [ -f .env ]; then
   echo "Copying .env file..."
   cp .env dist/
@@ -62,7 +70,7 @@ else
   echo "No .env file found, skipping..."
 fi
 
-# Step 8: Install production dependencies
+# Step 9: Install production dependencies
 echo "Installing production dependencies..."
 cd dist
 npm install --production
@@ -72,7 +80,7 @@ cd ../..
 
 echo "Production build completed successfully!"
 
-# Step 9: Create binary with Node.js SEA if version is compatible
+# Step 10: Create binary with Node.js SEA if version is compatible
 if [ "$SEA_BUILD" = true ] && { [ "$1" == "--binary" ] || [ "$1" == "-b" ]; }; then
   echo "Creating binary executable using Node.js SEA..."
   ./build-sea.sh

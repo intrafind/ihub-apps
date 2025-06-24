@@ -17,6 +17,7 @@ const appName = 'ai-hub-apps';
 const outputDir = path.join(__dirname, 'dist-bin');
 const contentsDir = path.join(__dirname, 'contents');
 const clientPublicDir = path.join(__dirname, 'client/dist');
+const docsBookDir = path.join(__dirname, 'docs/book');
 const serverDir = path.join(__dirname, 'server');
 const examplesDir = path.join(__dirname, 'examples');
 const configEnvPath = path.join(__dirname, 'config.env');
@@ -425,6 +426,11 @@ try {
   
   // Copy client public files
   fs.cpSync(clientPublicDir, path.join(outputDir, 'public'), { recursive: true });
+
+  // Copy generated documentation
+  if (fs.existsSync(docsBookDir)) {
+    fs.cpSync(docsBookDir, path.join(outputDir, 'public', 'help'), { recursive: true });
+  }
   
   // Create a simple launcher shell script on Unix platforms
   if (os.platform() !== 'win32') {
