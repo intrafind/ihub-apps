@@ -58,6 +58,10 @@
     }
   },
   "disclaimer": {
+    "title":{
+      "en": "Usage Guidelines",
+      "de": "Nutzungshinweise"
+    },
     "text": {
       "en": "This AI platform (CAI Hub) is used to test selected AI pilot applications and is intended to investigate their feasibility. The apps provided use artificial intelligence (large language models -LLMs). AI is a tool and is intended to support us in our work. As with all AI systems, you should always critically scrutinize the answers provided by the various AI apps and check their plausibility. These are open source AI models that are provided on the basis of public data at fixed training deadlines. The AI has no knowledge of events after its training cut-off date and has no access to internal BMAS data. We hope you enjoy trying it out!",
       "de": "Diese KI-Plattform (CAI Hub) dient der Erprobung von ausgewählten KI-Pilotanwendungen und soll deren Machbarkeit untersuchen. Die bereitgestellten Apps verwenden Künstliche Intelligenz (große Sprachmodelle -LLMs). KI ist ein Werkzeug und soll uns bei der Arbeit unterstützen. Wie bei allen KI-Systemen sollten Sie auch die Antworten der verschiedenen KI-Apps stets noch einmal kritisch hinterfragen und die Plausibilität prüfen. Es handelt sich um Open Source KI-Modelle die auf der Basis von öffentliche Daten zu festen Trainingsstichtagen bereitgestellt werden. Die KI hat keine Kenntnisse von Ereignissen nach ihrem Trainingsstichtag und hat keinen Zugriff auf interne Daten des BMAS. Wir wünschen Ihnen viel Spaß beim Ausprobieren!"
