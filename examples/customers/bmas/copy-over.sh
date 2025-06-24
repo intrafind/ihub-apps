@@ -3,8 +3,8 @@
 # Script to copy content from copy-over folder to kipitz folder
 # This will overlay/replace existing files but keep other files intact
 
-SOURCE_DIR="kipitz/examples/customers/bmas"
-DEST_DIR="kipitz"
+SOURCE_DIR="."
+DEST_DIR="../../../../kipitz"
 
 # Check if source directory exists
 if [ ! -d "$SOURCE_DIR" ]; then
@@ -40,6 +40,30 @@ if [ $COPY_RESULT -eq 0 ]; then
 else
     echo "Error: Failed to copy files."
     exit 1
+fi
+
+if [ "$1" == "intrafind" ]; then
+    echo "Benenne Dateien mit Endung '.intrafind' im Verzeichnis $DEST_DIR um ..."
+
+    # Finde und benenne alle passenden Dateien um
+    find "$DEST_DIR" -type f -name "*.intrafind" | while read -r datei; do
+        neues_name="${datei%.intrafind}"
+        cp "$datei" "$neues_name"
+        echo "Umbenannt: $datei -> $neues_name"
+    done
+
+    echo "Fertig."
+elif [ "$1" == "bmas" ]; then
+    echo "Benenne Dateien mit Endung '.bmas' im Verzeichnis $DEST_DIR um ..."
+
+    # Finde und benenne alle passenden Dateien um
+    find "$DEST_DIR" -type f -name "*.bmas" | while read -r datei; do
+        neues_name="${datei%.bmas}"
+        cp "$datei" "$neues_name"
+        echo "Umbenannt: $datei -> $neues_name"
+    done
+
+    echo "Fertig."
 fi
 
 echo "Script completed."

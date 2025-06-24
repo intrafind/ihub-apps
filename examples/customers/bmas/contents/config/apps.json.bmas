@@ -1,0 +1,342 @@
+[
+  {
+    "id": "chat-gemma-3-27b",
+    "order": 3,
+    "name": {
+      "en": "AI-Chatbot (Gemma 3 27b)",
+      "de": "KI-Chatbot (Gemma 3 27b)"
+    },
+    "description": {
+      "en": "Generative AI assistant with AI model - Gemma 3 27b - without access to BMAS data.",
+      "de": "Generativer KI-Assistent mit KI-Modell - Gemma 3 27b - ohne Zugriff auf BMAS Daten."
+    },
+    "color": "#4F46E5",
+    "icon": "chat-bubbles",
+    "system": {
+      "en": "You are CAI, which stands for conversational artificial intelligence, and you are an advanced AI assistant at the BMAS, although you do not have access to internal BMAS data. Answer the user's questions accurately and concisely.",
+      "de": "Du bist CAI, das steht für conversational artificial intelligence und du bist ein fortschrittlicher KI-Assistent im BMAS, der allerdings keinen Zugriff auf interne Daten des BMAS hat. Beantworte die Fragen des Nutzers präzise und knapp."
+    },
+    "tokenLimit": 4096,
+    "preferredModel": "local-vllm-gemma-3-27b",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "keep",
+    "preferredTemperature": 0.7,
+    "sendChatHistory": true,
+    "microphone": {
+      "enabled": false
+    },
+    "settings": {
+      "enabled": true,
+      "model": {
+        "enabled": false
+      },
+      "temperature": {
+        "enabled": false
+      },
+      "outputFormat": {
+        "enabled": false
+      },
+      "chatHistory": {
+        "enabled": false
+      },
+      "style": {
+        "enabled": true
+      }
+    }
+  },
+  {
+    "id": "email-composer",
+    "order": 4,
+    "name": {
+      "en": "Email Assistant",
+      "de": "E-Mail-Assistent"
+    },
+    "description": {
+      "en": "Supports the creation of professional Emails - without access to BMAS data.",
+      "de": "Unterstützt bei der Erstellung von professionellen E-Mails – ohne Zugriff auf BMAS Daten."
+    },
+    "color": "#2563EB",
+    "icon": "mail",
+    "system": {
+      "en": "You are an email writing assistant. Help users write professional, clear, and effective emails for various business and personal contexts. Ensure the tone is appropriate for the intended audience.",
+      "de": "Du bist ein Assistent für das Schreiben von E-Mails. Hilf Nutzern, professionelle, klare und effektive E-Mails für verschiedene geschäftliche und persönliche Kontexte zu verfassen. Stelle sicher, dass der Ton für die Zielgruppe geeignet ist."
+    },
+    "tokenLimit": 4000,
+    "preferredModel": "local-vllm-gemma-3-27b",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "professional",
+    "preferredTemperature": 0.6,
+    "sendChatHistory": false,
+    "prompt": {
+      "en": "Write a {{type}} email to {{recipient}} regarding {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}",
+      "de": "Schreibe eine {{type}} E-Mail an {{recipient}} bezüglich {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}"
+    },
+    "microphone": {
+      "enabled": false
+    },
+    "settings": {
+      "enabled": true,
+      "model": {
+        "enabled": false
+      },
+      "temperature": {
+        "enabled": false
+      },
+      "outputFormat": {
+        "enabled": false
+      },
+      "chatHistory": {
+        "enabled": false
+      },
+      "style": {
+        "enabled": true
+      }
+    },
+    "allowEmptyContent": true,
+    "messagePlaceholder": {
+      "en": "Here you can give me additional information about the creation of the mail...",
+      "de": "Hier kannst du mir zusätzliche Informationen zur Erstellung der Mail geben..."
+    },
+    "variables": [
+      {
+        "name": "type",
+        "label": {
+          "en": "Email Type",
+          "de": "E-Mail-Typ"
+        },
+        "type": "string",
+        "defaultValue": {
+          "en": "professional",
+          "de": "professionell"
+        },
+        "required": true,
+        "predefinedValues": [
+          {
+            "label": {
+              "en": "Standard",
+              "de": "Standard"
+            },
+            "value": "professional"
+          },
+          {
+            "label": {
+              "en": "Follow-up",
+              "de": "Nachverfolgung"
+            },
+            "value": "follow-up"
+          },
+          {
+            "label": {
+              "en": "Request",
+              "de": "Anfrage"
+            },
+            "value": "request"
+          },
+          {
+            "label": {
+              "en": "Thank you",
+              "de": "Danke"
+            },
+            "value": "thank you"
+          },
+          {
+            "label": {
+              "en": "Introduction",
+              "de": "Einführung"
+            },
+            "value": "introduction"
+          },
+          {
+            "label": {
+              "en": "Complaint",
+              "de": "Beschwerde"
+            },
+            "value": "complaint resolution"
+          }
+        ]
+      },
+      {
+        "name": "recipient",
+        "label": {
+          "en": "Recipient",
+          "de": "Empfänger"
+        },
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "subject",
+        "label": {
+          "en": "Subject",
+          "de": "Betreff"
+        },
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "tone",
+        "label": {
+          "en": "Tone",
+          "de": "Ton"
+        },
+        "type": "string",
+        "defaultValue": {
+          "en": "Use a professional tone.",
+          "de": "Verwende einen professionellen Ton."
+        },
+        "predefinedValues": [
+          {
+            "label": {
+              "en": "Professional",
+              "de": "Professionell"
+            },
+            "value": "Use a professional tone."
+          },
+          {
+            "label": {
+              "en": "Friendly",
+              "de": "Freundlich"
+            },
+            "value": "Use a friendly and approachable tone."
+          },
+          {
+            "label": {
+              "en": "Formal",
+              "de": "Formell"
+            },
+            "value": "Use a formal tone."
+          },
+          {
+            "label": {
+              "en": "Assertive",
+              "de": "Bestimmend"
+            },
+            "value": "Use an assertive and confident tone."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dictation",
+    "order": 5,
+    "name": {
+      "en": "Dictation Assistant",
+      "de": "Diktier-Assistent"
+    },
+    "description": {
+      "en": "Use this app to record your voice and convert it to text",
+      "de": "Verwende diese App, um deine Stimme aufzunehmen und in Text umzuwandeln"
+    },
+    "color": "#10B981",
+    "icon": "question-mark-circle",
+    "system": {
+      "en": "You are a helpful assistant, which receives a transcript recorded with a microphone. Your job is to check the text, format it properly and return it, so the user can copy it from the chat. Do NOT add any additional information.",
+      "de": "Du bist ein hilfreicher Assistent, der ein mit einem Mikrofon aufgenommenes Transkript erhält. Deine Aufgabe ist es, den Text zu überprüfen, richtig zu formatieren und zurückzugeben, damit der Benutzer ihn aus dem Chat kopieren kann. Füge KEINE zusätzlichen Informationen hinzu."
+    },
+    "greeting": {
+      "en": {
+        "title": "👋 Hello!",
+        "subtitle": "How can I help you today?"
+      },
+      "de": {
+        "title": "👋 Hallo!",
+        "subtitle": "Wie kann ich Ihnen heute helfen?"
+      }
+    },
+    "messagePlaceholder": {
+      "en": "Please speak the text by tapping the microphone icon.",
+      "de": "Bitte sprich den Text ein, indem du auf das Mikrofon-Symbol tippst."
+    },
+    "tokenLimit": 8000,
+    "preferredModel": "local-vllm-gemma-3-27b",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.3,
+    "sendChatHistory": false,
+    "prompt": {
+      "en": "{{content}}",
+      "de": "{{content}}"
+    },
+    "inputMode": {
+      "type": "multiline",
+      "rows": 5,
+      "microphone": {
+        "enabled": true,
+        "mode": "manual",
+        "showTranscript": true
+      }
+    },
+    "settings": {
+      "speechRecognition": {
+        "service": "azure",
+        "host": "https://bmas01lal/"
+      },
+      "enabled": true,
+      "model": {
+        "enabled": false
+      },
+      "temperature": {
+        "enabled": false
+      },
+      "outputFormat": {
+        "enabled": false
+      },
+      "chatHistory": {
+        "enabled": false
+      },
+      "style": {
+        "enabled": true
+      }
+    }
+  },
+  {
+    "id": "Note-assistant",
+    "order": 6,
+    "name": {
+      "en": "Note assistant",
+      "de": "Vermerks-Assistent"
+    },
+    "description": {
+      "en": "Generative AI assistant for creating professional notes - without access to internal BMAS data.",
+      "de": "Generativer KI-Assistent zur Erstellung professioneller Vermerke - ohne Zugriff auf interne BMAS Daten."
+    },
+    "color": "#4F46E5",
+    "icon": "chat-bubbles",
+    "system": {
+      "en": "You are an AI assistant for creating memos at the Federal Ministry of Labor and Social Affairs (BMAS). The note is divided into the sections 1. vote, 2. facts and 3. evaluation. The vote should be formulated precisely and be a maximum of 3 sentences long. The facts should contain detailed information and factual statements. The evaluation should be concise and precise and take into account the statements in the facts. At the end of the evaluation, the following sentence should be included after a line break “Department (Dept.) has co-signed or was involved.” Add the following notes at the end: 1. no internal BMAS data was taken into account in the note, only public training data from the AI model. 2. the statements should always be checked again in detail for accuracy.",
+      "de": "Du bist ein KI-Assistent zur Erstellung von Vermerken im Bundesministerium für Arbeit und Soziales (BMAS). Der Vermerk ist in die Abschnitte 1. Votum, 2. Sachverhalt und 3. Bewertung gegliedert. Das Votum sollte präzise formuliert und maximal 3 Sätze lang sein. Der Sachverhalt sollte ausführliche Informationen und Tatsachendarstellungen enthalten. Die Bewertung sollte knapp und präzise aufgebaut und die Ausführungen im Sachverhaltes berücksichtigen. Am Ende der Bewertung sollte nach einer Zeilenschaltung folgender Satz enthalten sein „Abteilung (Abt.) hat mitgezeichnet bzw. war beteiligt.“ Ergänze am Ende etwas abgesetzt noch folgenden Hinweise: 1. Im Vermerk wurden keine internen Daten des BMAS berücksichtigt, sondern ausschließlich öffentliche Trainingsdaten des KI-Models. 2. Die Ausführungen sollten stets noch einmal ausführlich auf Richtigkeit geprüft werden."
+    },
+    "tokenLimit": 4096,
+    "preferredModel": "local-vllm-gemma-3-27b",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "keep",
+    "preferredTemperature": 0.7,
+    "sendChatHistory": true,
+    "messagePlaceholder": {
+      "en": "What topic should the memo cover and what key aspects should it address?",
+      "de": "Welches Thema soll der Vermerk behandeln und auf welche zentralen Aspekte soll eingegangen werden?"
+    },
+    "settings": {
+      "enabled": true,
+      "model": {
+        "enabled": false
+      },
+      "temperature": {
+        "enabled": false
+      },
+      "outputFormat": {
+        "enabled": false
+      },
+      "chatHistory": {
+        "enabled": false
+      },
+      "style": {
+        "enabled": true
+      }
+    },
+    "microphone": {
+      "enabled": false
+    }
+  }
+]
