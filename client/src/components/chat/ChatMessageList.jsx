@@ -17,7 +17,9 @@ const ChatMessageList = ({
   chatId,
   modelId,
   editable = false,
-  compact = false
+  compact = false,
+  onOpenInCanvas,
+  canvasEnabled = false
 }) => {
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
@@ -69,6 +71,8 @@ const ChatMessageList = ({
               chatId={chatId}
               modelId={modelId}
               compact={compact}
+              onOpenInCanvas={onOpenInCanvas}
+              canvasEnabled={canvasEnabled}
             />
           </div>
         </div>

@@ -8,59 +8,29 @@ import React, {
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   fetchAppDetails,
-  fetchModels,
-  fetchStyles,
   sendAppChatMessage,
   isTimeoutError,
   generateMagicPrompt,
 } from "../api/api";
-import AppConfigForm from "../components/AppConfigForm";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useTranslation } from "react-i18next";
 import { getLocalizedContent } from "../utils/localizeContent";
+import Icon from "../components/Icon";
 
 // Import our custom hooks and components
 import useEventSource from "../utils/useEventSource";
 import useChatMessages from "../utils/useChatMessages";
 import useVoiceCommands from "../utils/useVoiceCommands";
-import ChatHeader from "../components/chat/ChatHeader";
+import useAppSettings from "../hooks/useAppSettings";
 import ChatInput from "../components/chat/ChatInput";
 import ChatMessageList from "../components/chat/ChatMessageList";
 import InputVariables from "../components/chat/InputVariables";
+import SharedAppHeader from "../components/SharedAppHeader";
 import { useUIConfig } from "../components/UIConfigContext";
 import cache, { CACHE_KEYS } from "../utils/cache"; // Import cache for manual clearing
 import { recordAppUsage } from "../utils/recentApps";
-import Icon from "../components/Icon";
-
-/**
- * Save app settings and variables to sessionStorage
- * @param {string} appId - The ID of the app
- * @param {Object} settings - Settings to save
- */
-const saveAppSettings = (appId, settings) => {
-  try {
-    const key = `ai_hub_app_settings_${appId}`;
-    sessionStorage.setItem(key, JSON.stringify(settings));
-  } catch (error) {
-    console.error("Error saving app settings to sessionStorage:", error);
-  }
-};
-
-/**
- * Load app settings and variables from sessionStorage
- * @param {string} appId - The ID of the app
- * @returns {Object|null} The saved settings or null if not found
- */
-const loadAppSettings = (appId) => {
-  try {
-    const key = `ai_hub_app_settings_${appId}`;
-    const saved = sessionStorage.getItem(key);
-    return saved ? JSON.parse(saved) : null;
-  } catch (error) {
-    console.error("Error loading app settings from sessionStorage:", error);
-    return null;
-  }
-};
+import { isMarkdown } from "../utils/markdownUtils";
+import { saveAppSettings, loadAppSettings } from '../utils/appSettings';
 
 /**
  * Initialize variables with default values from app configuration
@@ -138,20 +108,11 @@ const StarterPromptsView = ({ starterPrompts, onSelectPrompt }) => {
   return (
     <div className="text-center text-gray-500 space-y-6 w-full">
       <div className="space-y-2">
-        <svg
-          className="w-12 h-12 mx-auto mb-3 text-indigo-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-          />
-        </svg>
+        <Icon 
+          name="light-bulb" 
+          size="2xl" 
+          className="mx-auto mb-3 text-indigo-400" 
+        />
         <h3 className="text-xl font-semibold text-gray-700 mb-1">
           {t('pages.appChat.starterPromptsTitle', 'Starter Prompts')}
         </h3>
@@ -175,19 +136,11 @@ const StarterPromptsView = ({ starterPrompts, onSelectPrompt }) => {
           >
             <div className="flex items-start space-x-3 h-full">
               <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors mt-0.5">
-                <svg
-                  className="w-4 h-4 text-indigo-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  />
-                </svg>
+                <Icon 
+                  name="sparkles" 
+                  size="sm" 
+                  className="text-indigo-600" 
+                />
               </div>
               <div className="flex-1 min-w-0 flex flex-col justify-start">
                 <p className="font-semibold text-gray-900 text-sm leading-5 mb-1">
@@ -292,21 +245,30 @@ const AppChat = () => {
   const [searchParams] = useSearchParams();
   const prefillMessage = searchParams.get('prefill') || "";
   const [app, setApp] = useState(null);
-  const [models, setModels] = useState([]);
-  const [styles, setStyles] = useState({});
   const [input, setInput] = useState(prefillMessage);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(null);
-  const [selectedStyle, setSelectedStyle] = useState("normal");
-  const [selectedOutputFormat, setSelectedOutputFormat] = useState("markdown");
-  const [sendChatHistory, setSendChatHistory] = useState(false);
-  const [temperature, setTemperature] = useState(0.7);
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(false);
-  const { setHeaderColor } = useUIConfig();
+  const { uiConfig } = useUIConfig();
+
+  // Shared app settings hook
+  const {
+    selectedModel,
+    selectedStyle,
+    selectedOutputFormat,
+    temperature,
+    sendChatHistory,
+    models,
+    styles,
+    setSelectedModel,
+    setSelectedStyle,
+    setSelectedOutputFormat,
+    setTemperature,
+    setSendChatHistory,
+  } = useAppSettings(appId, app);
 
   const [maxTokens, setMaxTokens] = useState(null);
   const [useMaxTokens, setUseMaxTokens] = useState(false);
@@ -372,6 +334,15 @@ const AppChat = () => {
         });
       }
       setUseMaxTokens(false);
+      
+      // Keep the original auto-redirect logic disabled for now
+      if (shouldAutoRedirectToCanvas(finalContent, input)) {
+        console.log("Auto-redirecting to canvas mode with content:", finalContent);
+        setTimeout(() => {
+          const encodedContent = encodeURIComponent(finalContent);
+          navigate(`/apps/${appId}/canvas?content=${encodedContent}`);
+        }, 1000); // Small delay to allow user to see the response
+      }
     },
     onError: (error) => {
       // Update with an error message
@@ -486,7 +457,6 @@ const AppChat = () => {
   });
 
   // Get UI config for fallback to widget greeting
-  const { uiConfig } = useUIConfig();
   const widgetConfig = uiConfig?.widget || {};
 
   const hasVariablesToSend =
@@ -515,28 +485,8 @@ const AppChat = () => {
         // Safety check for component unmounting during async operations
         if (!isMounted) return;
 
-        if (appData?.color) {
-          setHeaderColor(appData.color);
-        }
-
-        // Batch related state updates
-        const initialState = {
-          app: appData,
-          temperature: appData.preferredTemperature || 0.7,
-          selectedStyle: appData.preferredStyle || "normal",
-          selectedOutputFormat: appData.preferredOutputFormat || "markdown",
-          sendChatHistory:
-            appData.sendChatHistory !== undefined
-              ? appData.sendChatHistory
-              : false,
-        };
-
         if (isMounted) {
-          setApp(initialState.app);
-          setTemperature(initialState.temperature);
-          setSelectedStyle(initialState.selectedStyle);
-          setSelectedOutputFormat(initialState.selectedOutputFormat);
-          setSendChatHistory(initialState.sendChatHistory);
+          setApp(appData);
         }
 
         // Process variables if available
@@ -547,27 +497,7 @@ const AppChat = () => {
           }
         }
 
-        // Fetch models and styles in parallel to optimize loading
-        const [modelsData, stylesData] = await Promise.all([
-          fetchModels(),
-          fetchStyles(),
-        ]);
-
-        // Exit if component unmounted during fetch
-        if (!isMounted) return;
-
-        // Determine model to select
-        let modelToSelect = appData.preferredModel;
-        if (appData.allowedModels && appData.allowedModels.length > 0) {
-          if (!appData.allowedModels.includes(appData.preferredModel)) {
-            modelToSelect = appData.allowedModels[0];
-          }
-        }
-
         if (isMounted) {
-          setModels(modelsData);
-          setStyles(stylesData);
-          setSelectedModel(modelToSelect);
           setError(null);
         }
       } catch (err) {
@@ -593,59 +523,32 @@ const AppChat = () => {
     return () => {
       isMounted = false;
     };
-  }, [appId, currentLanguage, setHeaderColor]); // Remove t from dependencies
+  }, [appId, currentLanguage, t]);
 
-  // Load saved settings from sessionStorage when initializing
+  // Load saved variables from sessionStorage when initializing
   useEffect(() => {
     if (app && !loading) {
       const savedSettings = loadAppSettings(appId);
-      if (savedSettings) {
-        // Restore settings if they exist
-        if (savedSettings.selectedModel)
-          setSelectedModel(savedSettings.selectedModel);
-        if (savedSettings.selectedStyle)
-          setSelectedStyle(savedSettings.selectedStyle);
-        if (savedSettings.selectedOutputFormat)
-          setSelectedOutputFormat(savedSettings.selectedOutputFormat);
-        if (savedSettings.sendChatHistory !== undefined)
-          setSendChatHistory(savedSettings.sendChatHistory);
-        if (savedSettings.temperature)
-          setTemperature(savedSettings.temperature);
-        if (savedSettings.variables) setVariables(savedSettings.variables);
-
+      if (savedSettings && savedSettings.variables) {
+        setVariables(savedSettings.variables);
         console.log(
-          "Restored app settings from sessionStorage:",
-          savedSettings
+          "Restored app variables from sessionStorage:",
+          savedSettings.variables
         );
       }
     }
   }, [app, loading, appId]);
 
-  // Save settings to sessionStorage whenever they change
+  // Save variables to sessionStorage whenever they change
   useEffect(() => {
     if (app && !loading) {
       const settings = {
-        selectedModel,
-        selectedStyle,
-        selectedOutputFormat,
-        sendChatHistory,
-        temperature,
         variables,
       };
 
       saveAppSettings(appId, settings);
     }
-  }, [
-    app,
-    loading,
-    appId,
-    selectedModel,
-    selectedStyle,
-    selectedOutputFormat,
-    sendChatHistory,
-    temperature,
-    variables,
-  ]);
+  }, [app, loading, appId, variables]);
 
   // Calculate the welcome message to display (if any) - show greeting when configured
   const welcomeMessage = useMemo(() => {
@@ -1046,6 +949,10 @@ const AppChat = () => {
     setShowParameters(!showParameters);
   };
 
+  const toggleCanvas = () => {
+    navigate(`/apps/${appId}/canvas`);
+  };
+
   const handleParametersOk = () => {
     // Apply temp variables to actual variables
     setVariables({ ...tempVariables });
@@ -1103,6 +1010,26 @@ const AppChat = () => {
     }
   }, [variables, showParameters]);
 
+  /**
+   * Determine if the response should trigger auto-redirect to canvas mode
+   * Simplified to check if canvas is enabled and response is substantial
+   * @param {string} response - The AI response content
+   * @param {string} userInput - The user's input that triggered the response
+   * @returns {boolean} True if should redirect to canvas
+   */
+  const shouldAutoRedirectToCanvas = (response, userInput) => {
+    if (!response || !userInput || !app) return false;
+    return response.length > 200 && app?.features?.canvas === true;
+  };
+
+  // Handle opening content in canvas mode
+  const handleOpenInCanvas = useCallback((content) => {
+    if (!content || !app) return;
+    
+    const encodedContent = encodeURIComponent(content);
+    navigate(`/apps/${appId}/canvas?content=${encodedContent}`);
+  }, [navigate, appId, app]);
+
   if (loading) {
     return <LoadingSpinner message={t("app.loading")} />;
   }
@@ -1126,65 +1053,33 @@ const AppChat = () => {
     );
   }
 
-  // App icon
-  const appIcon = (
-    <svg
-      className="w-6 h-6 text-white"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-      />
-    </svg>
-  );
-
   return (
     <div className="flex flex-col h-[calc(100vh-10rem)] max-h-[calc(100vh-10rem)] min-h-0 overflow-hidden pt-4 pb-2">
-      {/* App Header - using our reusable ChatHeader component */}
-      <ChatHeader
-        title={app?.name}
-        description={app?.description}
-        color={app?.color}
-        icon={appIcon}
-        showClearButton={messages.length > 0}
-        showConfigButton={true}
-        showParametersButton={
-          app?.variables && app.variables.length > 0
-        }
+      {/* Shared App Header */}
+      <SharedAppHeader
+        app={app}
+        appId={appId}
+        mode="chat"
+        messages={messages}
         onClearChat={clearChat}
+        currentLanguage={currentLanguage}
+        models={models}
+        styles={styles}
+        selectedModel={selectedModel}
+        selectedStyle={selectedStyle}
+        selectedOutputFormat={selectedOutputFormat}
+        sendChatHistory={sendChatHistory}
+        temperature={temperature}
+        onModelChange={setSelectedModel}
+        onStyleChange={setSelectedStyle}
+        onOutputFormatChange={setSelectedOutputFormat}
+        onSendChatHistoryChange={setSendChatHistory}
+        onTemperatureChange={setTemperature}
+        showConfig={showConfig}
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}
-        currentLanguage={currentLanguage}
-        isMobile={window.innerWidth < 768}
-        parametersVisible={showParameters}
+        showParameters={showParameters}
       />
-
-      {showConfig && (
-        <div className="bg-gray-100 p-4 rounded-lg mb-4">
-          <AppConfigForm
-            app={app}
-            models={models}
-            styles={styles}
-            selectedModel={selectedModel}
-            selectedStyle={selectedStyle}
-            selectedOutputFormat={selectedOutputFormat}
-            sendChatHistory={sendChatHistory}
-            temperature={temperature}
-            onModelChange={setSelectedModel}
-            onStyleChange={setSelectedStyle}
-            onOutputFormatChange={setSelectedOutputFormat}
-            onSendChatHistoryChange={setSendChatHistory}
-            onTemperatureChange={setTemperature}
-            currentLanguage={currentLanguage}
-          />
-        </div>
-      )}
 
       {app?.variables && app.variables.length > 0 && showParameters && (
         <div 
@@ -1205,20 +1100,11 @@ const AppChat = () => {
                 onClick={handleParametersCancel}
                 className="text-gray-500 hover:text-gray-700 p-1"
               >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+                <Icon 
+                  name="close" 
+                  size="lg" 
+                  className="text-current" 
+                />
               </button>
             </div>
             <div className="p-4 overflow-y-auto flex-1">
@@ -1266,6 +1152,8 @@ const AppChat = () => {
                         appId={appId}
                         chatId={chatId.current}
                         modelId={selectedModel}
+                        onOpenInCanvas={handleOpenInCanvas}
+                        canvasEnabled={app?.features?.canvas === true}
                       />
                     </div>
                   ) : (
@@ -1335,6 +1223,8 @@ const AppChat = () => {
                         appId={appId}
                         chatId={chatId.current}
                         modelId={selectedModel}
+                        onOpenInCanvas={handleOpenInCanvas}
+                        canvasEnabled={app?.features?.canvas === true}
                       />
                     </div>
                   ) : (
@@ -1403,6 +1293,8 @@ const AppChat = () => {
                     onSelectPrompt={handleStarterPromptClick}
                     welcomeMessage={welcomeMessage}
                     showCenteredInput={shouldCenterInput}
+                    onOpenInCanvas={handleOpenInCanvas}
+                    canvasEnabled={app?.features?.canvas === true}
                   />
                 </div>
                 <div className="flex-shrink-0 px-4 pt-2">
@@ -1461,6 +1353,8 @@ const AppChat = () => {
                   onSelectPrompt={handleStarterPromptClick}
                   welcomeMessage={welcomeMessage}
                   showCenteredInput={shouldCenterInput}
+                  onOpenInCanvas={handleOpenInCanvas} 
+                  canvasEnabled={app?.features?.canvas === true}
                 />
 
                 <ChatInput

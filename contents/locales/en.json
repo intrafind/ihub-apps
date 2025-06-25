@@ -263,5 +263,27 @@
     "title": "Disclaimer",
     "accept": "I Understand",
     "versionInfo": "Version {{version}}, Last Updated: {{date}}"
+  },
+  "canvas": {
+    "toolbox": {
+      "aiWriting": "AI Writing",
+      "textEditing": "Text Editing",
+      "toneStyle": "Tone & Style",
+      "utilities": "Utilities"
+    },
+    "continue": "Continue writing",
+    "summarize": "Summarize",
+    "outline": "Create outline",
+    "expand": "Expand",
+    "condense": "Condense",
+    "paraphrase": "Paraphrase",
+    "clarify": "Clarify",
+    "formal": "Formal",
+    "casual": "Casual",
+    "professional": "Professional",
+    "creative": "Creative",
+    "translate": "Translate",
+    "grammar": "Grammar",
+    "format": "Format"
   }
 }

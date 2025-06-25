@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import { useTranslation } from 'react-i18next';
+import Icon from './Icon';
 
 // Error boundary wrapper component
 class ErrorBoundaryComponent extends Component {
@@ -51,9 +52,7 @@ const ErrorFallback = ({ error, errorInfo, resetErrorBoundary }) => {
   return (
     <div role="alert" className="p-4 m-4 bg-red-50 border border-red-200 rounded-md">
       <div className="flex items-center mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
+        <Icon name="exclamation-triangle" size="lg" className="text-red-500 mr-2" />
         <h2 className="text-xl font-bold text-red-700">{t('error.title', 'Something went wrong')}</h2>
       </div>
       

@@ -54,6 +54,13 @@
       "general": "Fehler bei der Spracheingabe. Bitte versuchen Sie es erneut."
     }
   },
+  "canvas": {
+    "voiceInput": {
+      "ariaLabel": "Text in Editor diktieren",
+      "tooltipManual": "In Editor diktieren (Strg+M) - manuell",
+      "tooltipAutomatic": "In Editor diktieren (Strg+M) - automatisch"
+    }
+  },
   "chatMessage": {
     "copy": "Kopieren",
     "copied": "Kopiert!",

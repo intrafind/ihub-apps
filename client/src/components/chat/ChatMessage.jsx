@@ -16,7 +16,9 @@ const ChatMessage = ({
   appId,
   chatId,
   modelId,
-  compact = false  // New prop to indicate compact mode (for widget or mobile)
+  compact = false,  // New prop to indicate compact mode (for widget or mobile)
+  onOpenInCanvas,
+  canvasEnabled = false
 }) => {
   const { t } = useTranslation();
   const isUser = message.role === 'user';
@@ -334,6 +336,18 @@ const ChatMessage = ({
               </>
             )}
           </button>
+          
+          {/* Open in Canvas button for assistant messages */}
+          {!isUser && !isError && canvasEnabled && onOpenInCanvas && (
+            <button
+              onClick={() => onOpenInCanvas(message.content)}
+              className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+              title={t('chatMessage.openInCanvas', 'Open in Canvas')}
+            >
+              <Icon name="document-text" size="sm" />
+              {!compact && <span>{t('chatMessage.openInCanvas', 'Canvas')}</span>}
+            </button>
+          )}
           
           {isUser && editable && (
             <>

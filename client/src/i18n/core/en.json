@@ -54,6 +54,13 @@
       "general": "Voice input error. Please try again."
     }
   },
+  "canvas": {
+    "voiceInput": {
+      "ariaLabel": "Dictate text to editor",
+      "tooltipManual": "Dictate to editor (Ctrl+M) - manual",
+      "tooltipAutomatic": "Dictate to editor (Ctrl+M) - automatic"
+    }
+  },
   "chatMessage": {
     "copy": "Copy",
     "copied": "Copied!",

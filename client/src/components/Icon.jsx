@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import {
   ArrowLeftIcon,
+  ArrowRightIcon,
+  ArrowUturnLeftIcon,
+  ArrowUturnRightIcon,
   CameraIcon,
   ChatBubbleLeftRightIcon,
   CheckIcon as OutlineCheckIcon,
   CheckCircleIcon as OutlineCheckCircleIcon,
   ClipboardIcon,
   PencilSquareIcon,
+  PencilIcon,
   ArrowPathIcon,
   TrashIcon as OutlineTrashIcon,
   HandThumbUpIcon as OutlineHandThumbUpIcon,
@@ -34,7 +38,16 @@ import {
   XCircleIcon,
   UserIcon,
   ExclamationCircleIcon as OutlineExclamationCircleIcon,
-  AcademicCapIcon as OutlineAcademicCapIcon
+  ExclamationTriangleIcon as OutlineExclamationTriangleIcon,
+  AcademicCapIcon as OutlineAcademicCapIcon,
+  ListBulletIcon,
+  PlusCircleIcon,
+  MinusCircleIcon,
+  SwatchIcon,
+  BriefcaseIcon,
+  PaintBrushIcon,
+  Bars3Icon,
+  FaceFrownIcon as OutlineFaceFrownIcon
 } from '@heroicons/react/24/outline';
 import {
   CameraIcon as SolidCameraIcon,
@@ -48,6 +61,7 @@ import {
   MicrophoneIcon as SolidMicrophoneIcon,
   StarIcon as SolidStarIcon,
   ExclamationCircleIcon as SolidExclamationCircleIcon,
+  ExclamationTriangleIcon as SolidExclamationTriangleIcon,
   QuestionMarkCircleIcon as SolidQuestionMarkCircleIcon,
   GlobeAltIcon as SolidGlobeAltIcon,
   SparklesIcon as SolidSparklesIcon,
@@ -60,24 +74,44 @@ import {
   CodeBracketIcon as SolidCodeBracketIcon,
   ClockIcon as SolidClockIcon,
   AcademicCapIcon as SolidAcademicCapIcon,
-  InformationCircleIcon as SolidInformationCircleIcon
+  InformationCircleIcon as SolidInformationCircleIcon,
+  PlusCircleIcon as SolidPlusCircleIcon,
+  MinusCircleIcon as SolidMinusCircleIcon,
+  SwatchIcon as SolidSwatchIcon,
+  BriefcaseIcon as SolidBriefcaseIcon,
+  PaintBrushIcon as SolidPaintBrushIcon,
+  FaceFrownIcon as SolidFaceFrownIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
   arrowLeft: { outline: ArrowLeftIcon, solid: ArrowLeftIcon },
+  'arrow-right': { outline: ArrowRightIcon, solid: ArrowRightIcon },
+  undo: { outline: ArrowUturnLeftIcon, solid: ArrowUturnLeftIcon },
+  redo: { outline: ArrowUturnRightIcon, solid: ArrowUturnRightIcon },
   camera: { outline: CameraIcon, solid: SolidCameraIcon },
   chat: { outline: ChatBubbleLeftRightIcon, solid: ChatBubbleLeftRightIcon },
   check: { outline: OutlineCheckIcon, solid: SolidCheckIcon },
   'check-circle': { outline: OutlineCheckCircleIcon, solid: SolidCheckCircleIcon },
   clearCircle: { outline: XCircleIcon, solid: XCircleIcon },
   close: { outline: XMarkIcon, solid: XMarkIcon },
+  cog: { outline: Cog6ToothIcon, solid: Cog6ToothIcon },
+  'color-swatch': { outline: SwatchIcon, solid: SolidSwatchIcon },
   copy: { outline: ClipboardIcon, solid: ClipboardIcon },
   'document-text': { outline: OutlineDocumentTextIcon, solid: SolidDocumentTextIcon },
   edit: { outline: PencilSquareIcon, solid: PencilSquareIcon },
   'exclamation-circle': { outline: OutlineExclamationCircleIcon, solid: SolidExclamationCircleIcon },
+  'exclamation-triangle': { outline: OutlineExclamationTriangleIcon, solid: SolidExclamationTriangleIcon },
+  'face-frown': { outline: OutlineFaceFrownIcon, solid: SolidFaceFrownIcon },
+  format: { outline: Bars3Icon, solid: Bars3Icon },
   'information-circle': { outline: OutlineInformationCircleIcon, solid: SolidInformationCircleIcon },
+  list: { outline: ListBulletIcon, solid: ListBulletIcon },
+  menu: { outline: Bars3Icon, solid: Bars3Icon },
   microphone: { outline: OutlineMicrophoneIcon, solid: SolidMicrophoneIcon },
+  'minus-circle': { outline: MinusCircleIcon, solid: SolidMinusCircleIcon },
+  'paint-brush': { outline: PaintBrushIcon, solid: SolidPaintBrushIcon },
   'paper-clip': { outline: OutlinePaperClipIcon, solid: SolidPaperClipIcon },
+  pencil: { outline: PencilIcon, solid: PencilIcon },
+  'plus-circle': { outline: PlusCircleIcon, solid: SolidPlusCircleIcon },
   refresh: { outline: ArrowPathIcon, solid: ArrowPathIcon },
   search: { outline: MagnifyingGlassIcon, solid: MagnifyingGlassIcon },
   settings: { outline: Cog6ToothIcon, solid: Cog6ToothIcon },
@@ -107,6 +141,7 @@ const iconMap = {
   code: { outline: OutlineCodeBracketIcon, solid: SolidCodeBracketIcon },
   clock: { outline: ClockIcon, solid: SolidClockIcon },
   'academic-cap': { outline: OutlineAcademicCapIcon, solid: SolidAcademicCapIcon },
+  briefcase: { outline: BriefcaseIcon, solid: SolidBriefcaseIcon },
 };
 
 const sizeClasses = {

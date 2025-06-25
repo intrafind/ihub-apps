@@ -69,7 +69,7 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
               className="px-3 py-1 text-sm border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50 flex items-center"
               onClick={onClose}
             >
-              {t('pages.promptsList.useInApp', 'Open app')}
+              {t('pages.promptsList.useInApp', 'Try it')}
             </Link>
           )}
           <button
