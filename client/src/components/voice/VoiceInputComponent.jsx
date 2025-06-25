@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import VoiceFeedback from "./VoiceFeedback";
-import useVoiceRecognition from "../hooks/useVoiceRecognition";
+import useVoiceRecognition from "../../hooks/useVoiceRecognition";
 import VoiceInputButton from "./VoiceInputButton";
 
 const VoiceInputComponent = ({ app, onSpeechResult, inputRef, disabled = false, onCommand = null }) => {
