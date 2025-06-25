@@ -17,13 +17,12 @@ import FloatingToolbox from '../components/canvas/FloatingToolbox';
 import CanvasContentConfirmationModal from '../components/canvas/CanvasContentConfirmationModal';
 
 // Import hooks and utilities
-import useEventSource from '../hooks/useEventSource';
-import useChatMessages from '../hooks/useChatMessages';
+import useAppChat from '../hooks/useAppChat';
 import useVoiceCommands from '../hooks/useVoiceCommands';
 import useCanvasEditing from '../hooks/useCanvasEditing';
 import useAppSettings from '../hooks/useAppSettings';
 import useCanvasContent from '../hooks/useCanvasContent';
-import { fetchAppDetails, sendAppChatMessage } from '../api/api';
+import { fetchAppDetails } from '../api/api';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { markdownToHtml, isMarkdown } from '../utils/markdownUtils';
 
@@ -78,7 +77,6 @@ const AppCanvas = () => {
   } = useCanvasContent(appId, null);
   
   // Chat states
-  const [processing, setProcessing] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [panelSizes, setPanelSizes] = useState({ chat: 35, canvas: 65 });
   const [isDragging, setIsDragging] = useState(false);
@@ -97,83 +95,15 @@ const AppCanvas = () => {
   // Chat message management
   const {
     messages,
-    addUserMessage,
-    addAssistantMessage,
-    updateAssistantMessage,
-    setMessageError,
+    processing,
+    sendMessage: sendChatMessage,
+    resendMessage: prepareResend,
     deleteMessage,
     editMessage,
-    addSystemMessage,
     clearMessages,
-    getMessagesForApi,
-  } = useChatMessages(chatId.current);
-
-  // Event source for streaming responses
-  const { initEventSource, cleanupEventSource } = useEventSource({
-    appId,
-    chatId: chatId.current,
-    onChunk: (fullContent) => {
-      if (window.lastMessageId) {
-        updateAssistantMessage(window.lastMessageId, fullContent, true);
-      }
-    },
-    onDone: (finalContent, info) => {
-      if (window.lastMessageId) {
-        updateAssistantMessage(window.lastMessageId, finalContent, false, {
-          finishReason: info.finishReason,
-        });
-      }
-      setProcessing(false);
-      
-      // If this was a text edit operation, apply the result to the canvas
-      if (window.pendingEdit) {
-        applyEditResult(finalContent, window.pendingEdit.action);
-        window.pendingEdit = null;
-      }
-    },
-    onError: (error) => {
-      if (window.lastMessageId) {
-        setMessageError(window.lastMessageId, error.message);
-      }
-      setProcessing(false);
-      window.pendingEdit = null;
-    },
-    onConnected: async (event) => {
-      // Handle when connection is established - send the actual message
-      try {
-        if (window.pendingMessageData) {
-          const { appId, chatId, messages, params } = window.pendingMessageData;
-
-          console.log(
-            "Canvas connection established, sending pending message with parameters:",
-            params
-          );
-
-          await sendAppChatMessage(appId, chatId, messages, params);
-
-          // Clear the pending data after sending
-          window.pendingMessageData = null;
-        }
-      } catch (error) {
-        console.error("Error sending canvas message on connection:", error);
-
-        if (window.lastMessageId) {
-          setMessageError(
-            window.lastMessageId,
-            t(
-              "error.failedToGenerateResponse",
-              "Error: Failed to generate response. Please try again or select a different model."
-            )
-          );
-        }
-
-        cleanupEventSource();
-        setProcessing(false);
-        window.pendingEdit = null;
-      }
-    },
-    onProcessingChange: setProcessing,
-  });
+    cancelGeneration,
+    addSystemMessage,
+  } = useAppChat({ appId, chatId: chatId.current });
 
   // Handle general prompt submission - simplified to match AppChat
   const handlePromptSubmit = useCallback(async (e, options = {}) => {
@@ -193,10 +123,8 @@ const AppCanvas = () => {
       return;
     }
     
-    // Clean up any existing event source connection before starting a new request
-    cleanupEventSource();
-    
-    setProcessing(true);
+    // Clean up any existing generation before starting a new request
+    cancelGeneration();
     
     // Clear the input field if using the input value (not for edit actions)
     if (!inputText) {
@@ -213,62 +141,44 @@ const AppCanvas = () => {
     }
     
     try {
-      // Generate exchange ID
-      const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      
-      // Add user message
-      addUserMessage(textToSubmit, { 
-        rawContent: textToSubmit,
-        selectedText: selectedText || null, 
-        hasDocumentContext: !!editorContent.trim(),
-        ...options
-      });
-      
-      // Store the exchangeId for debugging
-      window.lastMessageId = exchangeId;
-      
-      // Add assistant message placeholder
-      addAssistantMessage(exchangeId);
-      
-      // Create message for the API
-      const messageForAPI = {
-        role: 'user',
-        content: contextualInput,
-        messageId: exchangeId,
-        ...options
-      };
-      
-      // Get messages for the API
-      const messagesForAPI = getMessagesForApi(sendChatHistory, messageForAPI);
-      
-      // Store the request parameters
-      window.pendingMessageData = {
-        appId,
-        chatId: chatId.current,
-        messages: messagesForAPI,
+      sendChatMessage({
+        displayMessage: {
+          content: textToSubmit,
+          meta: {
+            rawContent: textToSubmit,
+            selectedText: selectedText || null,
+            hasDocumentContext: !!editorContent.trim(),
+            ...options,
+          },
+        },
+        apiMessage: {
+          content: contextualInput,
+          ...options,
+        },
         params: {
           modelId: selectedModel,
-          style: options?.bypassAppPrompts ? 'normal' : selectedStyle, // Use normal style for quick actions
+          style: options?.bypassAppPrompts ? 'normal' : selectedStyle,
           temperature,
           outputFormat: selectedOutputFormat,
           language: currentLanguage,
-          bypassAppPrompts: true //options?.bypassAppPrompts || false, // Pass the flag to backend
+          bypassAppPrompts: true,
         },
-      };
+        sendChatHistory,
+      });
 
-      // Initialize event source
-      initEventSource(`/api/apps/${appId}/chat/${chatId.current}`);
+      if (!inputText) {
+        setInputValue('');
+      }
     } catch (error) {
       console.error('Error sending prompt:', error);
       addSystemMessage(
-        `Error: ${t("error.sendMessageFailed", "Failed to send message.")} ${
-          error.message || t("error.tryAgain", "Please try again.")
+        `Error: ${t('error.sendMessageFailed', 'Failed to send message.')} ${
+          error.message || t('error.tryAgain', 'Please try again.')
         }`,
         true
       );
-      setProcessing(false);
     }
-  }, [inputValue, selectedText, editorContent, addUserMessage, addAssistantMessage, addSystemMessage, getMessagesForApi, appId, selectedModel, selectedStyle, temperature, selectedOutputFormat, currentLanguage, initEventSource, processing, t]);
+  }, [inputValue, selectedText, editorContent, sendChatMessage, addSystemMessage, appId, selectedModel, selectedStyle, temperature, selectedOutputFormat, currentLanguage, sendChatHistory, t]);
 
   // Voice commands setup
   const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
@@ -287,13 +197,11 @@ const AppCanvas = () => {
 
   // Resend message functionality for ChatInput
   const handleResendMessage = useCallback((messageId, editedContent) => {
-    // Find the message to resend
-    const messageToResend = messages.find(m => m.id === messageId);
-    if (messageToResend && messageToResend.role === 'user') {
-      // Pass the text directly for resend
-      handlePromptSubmit(editedContent || messageToResend.content);
+    const text = prepareResend(messageId, editedContent);
+    if (text) {
+      handlePromptSubmit(text);
     }
-  }, [messages, handlePromptSubmit]);
+  }, [prepareResend, handlePromptSubmit]);
 
   // Initialize canvas editing after handlePromptSubmit is defined
   const { handleSelectionChange, handleEditAction } = useCanvasEditing({
@@ -338,9 +246,9 @@ const AppCanvas = () => {
   // Cleanup event source when component unmounts
   useEffect(() => {
     return () => {
-      cleanupEventSource();
+      cancelGeneration();
     };
-  }, [cleanupEventSource]);
+  }, [cancelGeneration]);
 
   // Save settings when they change (same as AppChat)
   useEffect(() => {
@@ -385,21 +293,9 @@ const AppCanvas = () => {
 
   // Handle canceling/stopping the current request
   const handleCancel = useCallback(() => {
-    cleanupEventSource();
-
-    // Update the last message to indicate the generation was cancelled
-    if (window.lastMessageId) {
-      updateAssistantMessage(
-        window.lastMessageId,
-        messages.find((m) => m.id === window.lastMessageId)?.content +
-          t("message.generationCancelled", " [Generation cancelled]"),
-        false
-      );
-    }
-
-    setProcessing(false);
+    cancelGeneration();
     window.pendingEdit = null;
-  }, [cleanupEventSource, updateAssistantMessage, messages, t]);
+  }, [cancelGeneration]);
 
   // Handle input change for controlled input
   const handleInputChange = useCallback((e) => {
@@ -650,7 +546,6 @@ const AppCanvas = () => {
           chatId={chatId.current}
           selectedText={selectedText}
           width={panelSizes.chat}
-          cleanupEventSource={cleanupEventSource}
         />
 
         {/* Resize Handle */}

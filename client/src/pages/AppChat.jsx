@@ -8,7 +8,6 @@ import React, {
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   fetchAppDetails,
-  sendAppChatMessage,
   isTimeoutError,
   generateMagicPrompt,
 } from "../api/api";
@@ -18,12 +17,14 @@ import { getLocalizedContent } from "../utils/localizeContent";
 import Icon from "../components/Icon";
 
 // Import our custom hooks and components
-import useEventSource from "../hooks/useEventSource";
-import useChatMessages from "../hooks/useChatMessages";
+import useAppChat from "../hooks/useAppChat";
 import useVoiceCommands from "../hooks/useVoiceCommands";
 import useAppSettings from "../hooks/useAppSettings";
 import ChatInput from "../components/chat/ChatInput";
 import ChatMessageList from "../components/chat/ChatMessageList";
+import StarterPromptsView from "../components/chat/StarterPromptsView";
+import GreetingView from "../components/chat/GreetingView";
+import NoMessagesView from "../components/chat/NoMessagesView";
 import InputVariables from "../components/chat/InputVariables";
 import SharedAppHeader from "../components/SharedAppHeader";
 import { useUIConfig } from "../components/UIConfigContext";
@@ -99,143 +100,18 @@ const getInitializedVariables = (app, currentLanguage) => {
   return initialVars;
 };
 
-/**
- * Component for displaying starter prompts
- */
-const StarterPromptsView = ({ starterPrompts, onSelectPrompt }) => {
-  const { t, i18n } = useTranslation();
-
-  return (
-    <div className="text-center text-gray-500 space-y-6 w-full">
-      <div className="space-y-2">
-        <Icon 
-          name="light-bulb" 
-          size="2xl" 
-          className="mx-auto mb-3 text-indigo-400" 
-        />
-        <h3 className="text-xl font-semibold text-gray-700 mb-1">
-          {t('pages.appChat.starterPromptsTitle', 'Starter Prompts')}
-        </h3>
-        <p className="text-sm text-gray-500 max-w-md mx-auto md:px-4">
-          {t('pages.appChat.starterPromptsSubtitle', 'Choose a prompt below to get started quickly')}
-        </p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 w-full max-w-4xl mx-auto px-4 pb-4">
-        {starterPrompts.map((sp, idx) => (
-          <button
-            key={idx}
-            type="button"
-            className="group relative p-4 text-left bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300 transition-all duration-200 transform hover:-translate-y-0.5 h-full min-h-[100px] flex flex-col"
-            onClick={() =>
-              onSelectPrompt &&
-              onSelectPrompt({
-                ...sp,
-                message: getLocalizedContent(sp.message, i18n.language),
-              })
-            }
-          >
-            <div className="flex items-start space-x-3 h-full">
-              <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors mt-0.5">
-                <Icon 
-                  name="sparkles" 
-                  size="sm" 
-                  className="text-indigo-600" 
-                />
-              </div>
-              <div className="flex-1 min-w-0 flex flex-col justify-start">
-                <p className="font-semibold text-gray-900 text-sm leading-5 mb-1">
-                  {getLocalizedContent(sp.title, i18n.language)}
-                </p>
-                <p className="text-xs text-gray-500 leading-4 overflow-hidden" style={{
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical'
-                }}>
-                  {getLocalizedContent(sp.message, i18n.language)}
-                </p>
-              </div>
-            </div>
-            <div className="absolute inset-0 rounded-xl border border-transparent group-hover:border-indigo-200 transition-colors pointer-events-none"></div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-/**
- * Component for displaying greeting message
- */
-const GreetingView = ({ welcomeMessage }) => {
-  const { t } = useTranslation();
-
-  // Handle both old string format and new title/subtitle object format
-  let title, subtitle;
-  
-  if (typeof welcomeMessage === 'object' && welcomeMessage !== null) {
-    // New format with title and subtitle
-    title = welcomeMessage.title || '';
-    subtitle = welcomeMessage.subtitle || '';
-  } else if (typeof welcomeMessage === 'string') {
-    // Legacy format - use the string as title
-    title = welcomeMessage;
-    subtitle = t('pages.appChat.noMessagesSubtitle', 'Start a conversation by sending a message!');
-  } else {
-    // Fallback
-    title = t('pages.appChat.noMessagesTitle', 'Welcome!');
-    subtitle = t('pages.appChat.noMessagesSubtitle', 'Start a conversation by sending a message!');
-  }
-
-  return (
-    <div className="text-center text-gray-500 space-y-6 w-full">
-      <div className="px-4">
-        <Icon name="chat-bubble" size="3xl" className="mx-auto mb-4 text-gray-400" />
-        <h3 className="text-lg font-semibold mb-2">
-          {title}
-        </h3>
-        <p className="text-sm max-w-md mx-auto">
-          {subtitle}
-        </p>
-      </div>
-    </div>
-  );
-};
-
-/**
- * Component for displaying no messages state
- */
-const NoMessagesView = () => {
-  const { t } = useTranslation();
-
-  return (
-    <div className="text-center text-gray-500 space-y-6 w-full">
-      <div className="px-4">
-        <Icon name="chat-bubble" size="3xl" className="mx-auto mb-4 text-gray-400" />
-        <h3 className="text-lg font-semibold mb-2">
-          {t('pages.appChat.noMessagesTitle', 'No Messages Yet')}
-        </h3>
-        <p className="text-sm max-w-md mx-auto">
-          {t('pages.appChat.noMessagesSubtitle', 'Start a conversation by sending a message!')}
-        </p>
-      </div>
-    </div>
-  );
-};
-
-/**
- * Renders the appropriate startup state component
- */
 const renderStartupState = (app, welcomeMessage, handleStarterPromptClick) => {
   const starterPrompts = app?.starterPrompts || [];
-  
   if (starterPrompts.length > 0) {
-    return <StarterPromptsView starterPrompts={starterPrompts} onSelectPrompt={handleStarterPromptClick} />;
+    return (
+      <StarterPromptsView starterPrompts={starterPrompts} onSelectPrompt={handleStarterPromptClick} />
+    );
   } else if (welcomeMessage) {
     return <GreetingView welcomeMessage={welcomeMessage} />;
-  } else {
-    return <NoMessagesView />;
   }
+  return <NoMessagesView />;
 };
+
 
 const AppChat = () => {
   const { t, i18n } = useTranslation();
@@ -247,7 +123,6 @@ const AppChat = () => {
   const [app, setApp] = useState(null);
   const [input, setInput] = useState(prefillMessage);
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
   const [variables, setVariables] = useState({});
@@ -302,96 +177,23 @@ const AppChat = () => {
     return persistentId;
   });
 
-  // Use our custom chat messages hook for managing messages
   const {
     messages,
-    addUserMessage,
-    addAssistantMessage,
-    updateAssistantMessage,
-    setMessageError,
+    processing,
+    sendMessage: sendChatMessage,
+    resendMessage: prepareResend,
     deleteMessage,
     editMessage,
-    addSystemMessage,
     clearMessages,
-    getMessagesForApi,
-  } = useChatMessages(stableChatId);
-
-  // Use our custom event source hook for SSE connections
-  const { initEventSource, cleanupEventSource, isConnected } = useEventSource({
-    appId,
-    chatId: chatId.current,
-    onChunk: (fullContent) => {
-      // Update the current assistant message with the new content
-      if (window.lastMessageId) {
-        updateAssistantMessage(window.lastMessageId, fullContent, true);
-      }
-    },
-    onDone: (finalContent, info) => {
-      // Mark the message as no longer loading
-      if (window.lastMessageId) {
-        updateAssistantMessage(window.lastMessageId, finalContent, false, {
-          finishReason: info.finishReason,
-        });
-      }
-      setUseMaxTokens(false);
-      
-      // Keep the original auto-redirect logic disabled for now
-      if (shouldAutoRedirectToCanvas(finalContent, input)) {
-        console.log("Auto-redirecting to canvas mode with content:", finalContent);
-        setTimeout(() => {
-          const encodedContent = encodeURIComponent(finalContent);
-          navigate(`/apps/${appId}/canvas?content=${encodedContent}`);
-        }, 1000); // Small delay to allow user to see the response
-      }
-    },
-    onError: (error) => {
-      // Update with an error message
-      if (window.lastMessageId) {
-        setMessageError(window.lastMessageId, error.message);
-      }
-      setUseMaxTokens(false);
-    },
-    onConnected: async (event) => {
-      // Handle when connection is established
-      try {
-        if (window.pendingMessageData) {
-          const { appId, chatId, messages, params } = window.pendingMessageData;
-
-          console.log(
-            "Connection established, sending pending message with parameters:",
-            params
-          );
-
-          await sendAppChatMessage(appId, chatId, messages, params);
-
-          // Clear the pending data after sending
-          window.pendingMessageData = null;
-        }
-      } catch (error) {
-        console.error("Error sending message on connection:", error);
-
-        if (window.lastMessageId) {
-          setMessageError(
-            window.lastMessageId,
-            t(
-              "error.failedToGenerateResponse",
-              "Error: Failed to generate response. Please try again or select a different model."
-            )
-          );
-        }
-
-        cleanupEventSource();
-        setProcessing(false);
-      }
-    },
-    onProcessingChange: setProcessing,
-  });
+    cancelGeneration,
+    addSystemMessage,
+  } = useAppChat({ appId, chatId: stableChatId });
 
   // Set up voice commands
   const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
     messages,
     clearChat: () => {
-      cleanupEventSource();
+      cancelGeneration();
       clearMessages();
       chatId.current = `chat-${Date.now()}`;
       
@@ -661,24 +463,8 @@ const AppChat = () => {
   };
 
   const handleResendMessage = (messageId, editedContent, useMaxTokens = false) => {
-    const messageToResend = messages.find((msg) => msg.id === messageId);
-    if (!messageToResend) return;
-
-    let contentToResend = editedContent;
-
-    if (messageToResend.role === 'assistant') {
-      const idx = messages.findIndex((msg) => msg.id === messageId);
-      const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
-      if (!prevUser) return;
-      contentToResend = prevUser.rawContent || prevUser.content;
-      // remove the user message and everything after it, including the assistant reply
-      deleteMessage(prevUser.id);
-    } else {
-      deleteMessage(messageId);
-      if (contentToResend === undefined) {
-        contentToResend = messageToResend.rawContent || messageToResend.content;
-      }
-    }
+    const contentToResend = prepareResend(messageId, editedContent);
+    if (!contentToResend) return;
 
     setInput(contentToResend);
     if (useMaxTokens) {
@@ -706,7 +492,7 @@ const AppChat = () => {
         )
       )
     ) {
-      cleanupEventSource();
+      cancelGeneration();
       clearMessages();
       chatId.current = `chat-${Date.now()}`;
       
@@ -748,182 +534,82 @@ const AppChat = () => {
     }
   };
 
-  const cancelGeneration = useCallback(() => {
-    cleanupEventSource();
-
-    // Update the last message to indicate the generation was cancelled
-    if (window.lastMessageId) {
-      updateAssistantMessage(
-        window.lastMessageId,
-        messages.find((m) => m.id === window.lastMessageId)?.content +
-          t("message.generationCancelled", " [Generation cancelled]"),
-        false
-      );
-    }
-
-    setProcessing(false);
-  }, [cleanupEventSource, updateAssistantMessage, messages, t]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Ensure input isn't empty before proceeding or we have an image or file
     if (!input.trim() && !selectedImage && !selectedFile && !app?.allowEmptyContent) {
       return;
     }
 
-    // Check for required variables
     if (app?.variables) {
       const missingRequiredVars = app.variables
         .filter((v) => v.required)
         .filter((v) => !variables[v.name] || variables[v.name].trim() === "");
-
       if (missingRequiredVars.length > 0) {
-        // Show inline error instead of using setError
         const errorMessage =
-          t(
-            "error.missingRequiredFields",
-            "Please fill in all required fields:"
-          ) +
-          " " +
-          missingRequiredVars
-            .map((v) => getLocalizedContent(v.label, currentLanguage))
-            .join(", ");
-
+          t('error.missingRequiredFields', 'Please fill in all required fields:') +
+          ' ' +
+          missingRequiredVars.map((v) => getLocalizedContent(v.label, currentLanguage)).join(', ');
         addSystemMessage(errorMessage, true);
-
-        // Highlight missing fields by scrolling to parameters section on mobile
         if (window.innerWidth < 768 && !showParameters) {
           toggleParameters();
         }
-
         return;
       }
     }
 
-    // Prevent sending during active processing
-    if (processing) {
-      return;
-    }
+    if (processing) return;
 
-    // Calculate the final input, including image data or file data if available
     let finalInput = input.trim();
     let messageContent = finalInput;
     let messageData = null;
 
-    // If we have an image, prepare it for display in the message
     if (selectedImage) {
-      // For the message displayed to the user, create a simple display with text + image
       const imgPreview = `<img src="${selectedImage.base64}" alt="Uploaded image" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
-      
-      // If there's text, combine it with the image, otherwise just show the image
       messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
-      
-      // Store the full image data for API transmission
-      messageData = {
-        imageData: selectedImage
-      };
+      messageData = { imageData: selectedImage };
     }
 
-    // If we have a file, prepare it for display in the message
     if (selectedFile) {
-      // For the message displayed to the user, show only a simple file indicator
-      const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">
-        <span style="margin-right: 4px;">📎</span>
-        <span>${selectedFile.fileName}</span>
-      </div>`;
-      
-      // If there's text, combine it with the file indicator, otherwise just show the file indicator
+      const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${selectedFile.fileName}</span>\n      </div>`;
       messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
-      
-      // Store the full file data for API transmission
-      messageData = {
-        fileData: selectedFile
-      };
+      messageData = { fileData: selectedFile };
     }
 
-    try {
-      cleanupEventSource();
-      setProcessing(true);
-
-      const originalUserInput = input;
-
-      // Generate a single message ID for the entire exchange (request, response, and feedback)
-      const exchangeId = `msg-${Date.now()}-${Math.floor(
-        Math.random() * 1000
-      )}`;
-      console.log("Generated exchange ID:", exchangeId);
-
-      // Create the user message
-      addUserMessage(messageContent, {
-        rawContent: originalUserInput,
-        variables:
-          app?.variables && app.variables.length > 0
-            ? { ...variables }
-            : undefined,
-        ...messageData
-      });
-
-      setInput("");
-      setOriginalInput(null);
-      // Clear the selected image after sending
-      setSelectedImage(null);
-      // Close the image uploader
-      setShowImageUploader(false);
-      // Clear the selected file after sending
-      setSelectedFile(null);
-      // Close the file uploader
-      setShowFileUploader(false);
-
-      // Store the exchangeId in a window property for debugging
-      window.lastMessageId = exchangeId;
-
-      // Add assistant message placeholder
-      addAssistantMessage(exchangeId);
-
-      // Create message for the API
-      const messageForAPI = {
-        role: "user",
-        content: originalUserInput,
+    sendChatMessage({
+      displayMessage: {
+        content: messageContent,
+        meta: {
+          rawContent: input,
+          variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined,
+          ...messageData,
+        },
+      },
+      apiMessage: {
+        content: input,
         promptTemplate: app?.prompt || null,
         variables: { ...variables },
-        messageId: exchangeId, // Send the exchangeId to the server
-        imageData: selectedImage, // Include image data if available
-        fileData: selectedFile // Include file data if available
-      };
+        imageData: selectedImage,
+        fileData: selectedFile,
+      },
+      params: {
+        modelId: selectedModel,
+        style: selectedStyle,
+        temperature,
+        outputFormat: selectedOutputFormat,
+        language: currentLanguage,
+        ...(useMaxTokens ? { useMaxTokens: true } : {}),
+      },
+      sendChatHistory,
+    });
 
-      // Get messages for the API
-      const messagesForAPI = getMessagesForApi(sendChatHistory, messageForAPI);
-
-      // Store the request parameters for use in the onConnected callback
-      window.pendingMessageData = {
-        appId,
-        chatId: chatId.current,
-        messages: messagesForAPI,
-        params: {
-          modelId: selectedModel,
-          style: selectedStyle,
-          temperature,
-          outputFormat: selectedOutputFormat,
-          language: currentLanguage,
-          ...(useMaxTokens ? { useMaxTokens: true } : {}),
-        },
-      };
-
-      // Initialize event source - the actual message sending happens in the onConnected callback
-      initEventSource(`/api/apps/${appId}/chat/${chatId.current}`);
-    } catch (err) {
-      console.error("Error sending message:", err);
-
-      addSystemMessage(
-        `Error: ${t("error.sendMessageFailed", "Failed to send message.")} ${
-          err.message || t("error.tryAgain", "Please try again.")
-        }`,
-        true
-      );
-
-      setProcessing(false);
-    }
+    setInput('');
+    setOriginalInput(null);
+    setSelectedImage(null);
+    setShowImageUploader(false);
+    setSelectedFile(null);
+    setShowFileUploader(false);
   };
 
   // Function to clear app cache and reload
