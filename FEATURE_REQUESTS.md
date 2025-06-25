@@ -22,7 +22,7 @@
 - share the authentication from the ifinder login with our app via a short lived token or similar?
 - invoke the prompt database via the canvas floating toolbar
 - add a prompt input similar like in gemini to it
-- request suggestions and shown them next to the editor
+- request suggestions and show them next to the editor
 - improve chat input design
 
 
