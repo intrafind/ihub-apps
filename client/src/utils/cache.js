@@ -337,10 +337,10 @@ class Cache {
 
 // Default TTL values (in milliseconds)
 export const DEFAULT_CACHE_TTL = {
-  SHORT: 30 * 1000,           // 1 minute
-  MEDIUM: 30 * 1000,      // 5 minutes
-  LONG: 30 * 1000,       // 30 minutes
-  VERY_LONG: 30 * 1000 // 24 hours
+  SHORT: 60 * 1000,               // 1 minute
+  MEDIUM: 5 * 60 * 1000,          // 5 minutes
+  LONG: 30 * 60 * 1000,           // 30 minutes
+  VERY_LONG: 24 * 60 * 60 * 1000  // 24 hours
 };
 
 // Cache key definitions for consistency

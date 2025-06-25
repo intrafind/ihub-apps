@@ -9,8 +9,8 @@ import ChatInput from '../chat/ChatInput';
 import Icon from '../Icon';
 
 // Import hooks
-import useEventSource from '../../utils/useEventSource';
-import useChatMessages from '../../utils/useChatMessages';
+import useEventSource from '../../hooks/useEventSource';
+import useChatMessages from '../../hooks/useChatMessages';
 
 // Widget-specific styling
 import './ChatWidget.css';

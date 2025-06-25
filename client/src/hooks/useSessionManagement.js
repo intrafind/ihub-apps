@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { getSessionId, renewSession, getSessionInfo } from './sessionManager';
+import { getSessionId, renewSession, getSessionInfo } from '../utils/sessionManager.js';
 import apiService from '../api/api';
 
 /**
