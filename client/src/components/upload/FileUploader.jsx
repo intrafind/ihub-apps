@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import Icon from './Icon';
+import Icon from '../Icon';
 import pdf2md from '@opendocsg/pdf2md';
 import Uploader from './Uploader';
 

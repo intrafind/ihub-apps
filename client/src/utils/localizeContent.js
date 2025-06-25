@@ -1,1 +1,1 @@
-export { getLocalizedContent } from '../../shared/localize.js';
+export { getLocalizedContent } from '../../../shared/localize.js';
