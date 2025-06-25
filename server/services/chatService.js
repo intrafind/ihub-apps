@@ -17,6 +17,7 @@ export async function prepareChatRequest({
   outputFormat,
   language,
   useMaxTokens = false,
+  bypassAppPrompts = false,
   verifyApiKey,
   processMessageTemplates,
   res,
@@ -43,7 +44,7 @@ export async function prepareChatRequest({
   }
 
   // Prepare messages for the model
-  const llmMessages = await processMessageTemplates(messages, app, style, outputFormat, language);
+  const llmMessages = await processMessageTemplates(messages, bypassAppPrompts ? null : app, style, outputFormat, language);
 
   // Determine token limit based on app configuration and retry flag
   const appTokenLimit = app.tokenLimit || 1024;

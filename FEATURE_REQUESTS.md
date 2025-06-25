@@ -20,6 +20,10 @@
 - invoke an app with a document, a set of documents or even a whole search result 
 - be able to invoke a minimized version from within the ifinder
 - share the authentication from the ifinder login with our app via a short lived token or similar?
+- invoke the prompt database via the canvas floating toolbar
+- add a prompt input similar like in gemini to it
+- request suggestions and show them next to the editor
+- improve chat input design
 
 
 Done

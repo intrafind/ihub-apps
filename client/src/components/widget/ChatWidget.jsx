@@ -6,6 +6,7 @@ import { sendAppChatMessage } from '../../api/api';
 // Import existing chat components
 import ChatMessageList from '../chat/ChatMessageList';
 import ChatInput from '../chat/ChatInput';
+import Icon from '../Icon';
 
 // Import hooks
 import useEventSource from '../../utils/useEventSource';
@@ -385,13 +386,9 @@ const ChatWidget = ({
           aria-label={isOpen ? "Close chat" : "Open chat"}
         >
           {isOpen ? (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            <Icon name="close" size="lg" />
           ) : (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M21 11.5C21 16.1944 16.9706 20 12 20C11.5 20 10.0318 19.8754 9 19.5C8.85394 19.4613 8.70414 19.4554 8.55456 19.483C8.40498 19.5107 8.26444 19.5712 8.15 19.66C7.45 20.2 5.25 22 3.5 22C3.5 22 5.5 19 4.5 16C3.2 14.8 2 13 2 11.5C2 6.80558 6.02944 3 11 3H13C17.9706 3 21 6.80558 21 11.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            <Icon name="chat" size="lg" />
           )}
         </button>
       )}
@@ -421,9 +418,7 @@ const ChatWidget = ({
               onClick={toggleWidget}
               aria-label="Close chat"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <Icon name="close" size="md" />
             </button>
           </div>
         </div>

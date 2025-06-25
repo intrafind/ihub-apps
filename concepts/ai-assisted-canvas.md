@@ -1,6 +1,12 @@
 # AI-Assisted Canvas Concept
 
-This document outlines a proposed rich‑text editor that integrates AI-driven drafting and editing capabilities. The goal is to let users collaborate with an AI model while writing documents.
+This document outlines a special mode for our apps. In this mode, the focus is on the document creation / editing with a rich‑text editor that integrates AI-driven drafting and editing capabilities. The goal is to let users create new documents like "draft me a blog article about ai apps" and collaborate with an AI model while writing documents.
+This writing consists of clarifying content, adjusting the style, formatting, length, etc. of selected passages. Add new passages with the help of the ai. etc. 
+
+Similar implementations are the canvas implementation of google gemini, openai or microsoft copilot. Also inspired by OpenCanvas from langchain-ai https://opencanvas.langchain.com/ https://github.com/langchain-ai/open-canvas, which should be reviewed when started.
+
+## Important Notes
+Make sure to reuse the existing features we have implemented for the apps like model selection, system prompts, variables, starter prompts, ... etc. 
 
 ## Overview & Goals
 - **Purpose:** Provide a canvas where the AI can draft, edit and format text directly in the editor.
@@ -21,8 +27,10 @@ This document outlines a proposed rich‑text editor that integrates AI-driven d
    - Activate a mode where the AI adds inline suggestions rather than replacing the text automatically.
 5. **Formatting**
    - Support headings, bold, italic and lists via a toolbar.
+6. **Clarification**
+   - Highlight any snippet and ask the AI to clarify, summarize, ... or prompt it to do something with it
 6. **Export & Share**
-   - Export the document to Google Docs or generate a shareable link.
+   - Export the document to Google Docs, Word, PDF or just copy it in different formats
 7. **Use snippets in chat**
    - Selected text can be sent to the chat pane for further discussion with the AI.
 
@@ -46,10 +54,6 @@ This document outlines a proposed rich‑text editor that integrates AI-driven d
 ### Rich‑Text Formatting Toolbar
 - Standard formatting options with undo/redo and version navigation.
 
-### Export & Share
-- Option to export to Google Docs.
-- Generate a link for others to continue editing within the canvas.
-
 ## AI & Backend Workflow
 1. User prompt or edit request is sent to the AI model.
 2. The AI's response populates or updates the canvas.
@@ -57,7 +61,6 @@ This document outlines a proposed rich‑text editor that integrates AI-driven d
 4. Suggest Edits inserts comment‑style notes instead of replacing text.
 5. Formatting is handled locally in the editor.
 6. Version history is tracked client‑side and may be synced to a backend.
-7. Export and sharing trigger API calls to produce a Google Doc or share link.
 
 ## UI/UX Considerations
 - Highlighted regions show quick‑edit buttons.
@@ -79,13 +82,6 @@ This document outlines a proposed rich‑text editor that integrates AI-driven d
 ## Non‑Goals
 - No real‑time multi‑user cursors.
 - Focus only on text documents (no code execution or live preview).
-
-## Milestones
-1. MVP with drafting, quick editing and a basic formatting toolbar.
-2. Add Suggest Edits mode.
-3. Implement export to Google Docs.
-4. Support shareable canvas links via a backend service.
-5. Add version history UI.
 
 ## Summary
 The AI‑assisted canvas combines a chat interface with a rich‑text editor, enabling users to create and refine documents collaboratively with an AI model. Quick edits, section‑specific transformations and easy export aim to streamline the drafting process.

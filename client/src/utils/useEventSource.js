@@ -180,6 +180,9 @@ function useEventSource({
     eventSource.addEventListener('chunk', eventSource.onchunk);
     
     eventSource.ondone = (event) => {
+      if (process.env.REACT_APP_DEBUG === 'true') {
+        console.log('SSE stream done event received');
+      }
       let info = {};
       if (event.data) {
         try {

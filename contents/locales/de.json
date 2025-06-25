@@ -257,5 +257,27 @@
     "title": "Haftungsausschluss",
     "accept": "Ich verstehe",
     "versionInfo": "Version {{version}}, Zuletzt aktualisiert: {{date}}"
+  },
+  "canvas": {
+    "toolbox": {
+      "aiWriting": "KI-Schreiben",
+      "textEditing": "Textbearbeitung",
+      "toneStyle": "Ton & Stil",
+      "utilities": "Dienstprogramme"
+    },
+    "continue": "Weiterschreiben",
+    "summarize": "Zusammenfassen",
+    "outline": "Gliederung erstellen",
+    "expand": "Erweitern",
+    "condense": "Verdichten",
+    "paraphrase": "Umformulieren",
+    "clarify": "Klarstellen",
+    "formal": "Formell",
+    "casual": "Lässig",
+    "professional": "Professionell",
+    "creative": "Kreativ",
+    "translate": "Übersetzen",
+    "grammar": "Grammatik",
+    "format": "Formatieren"
   }
 }

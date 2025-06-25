@@ -114,7 +114,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
   app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
     try {
       const { appId, chatId } = req.params;
-      const { messages, modelId, temperature, style, outputFormat, language, useMaxTokens } = req.body;
+      const { messages, modelId, temperature, style, outputFormat, language, useMaxTokens, bypassAppPrompts } = req.body;
       const clientLanguage = language || req.headers['accept-language']?.split(',')[0] || 'en';
       let messageId = null;
       if (messages && Array.isArray(messages) && messages.length > 0) {
@@ -156,6 +156,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
           outputFormat,
           language: clientLanguage,
           useMaxTokens,
+          bypassAppPrompts,
           verifyApiKey,
           processMessageTemplates,
           res
@@ -184,6 +185,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
           outputFormat,
           language: clientLanguage,
           useMaxTokens,
+          bypassAppPrompts,
           verifyApiKey,
           processMessageTemplates,
           clientRes

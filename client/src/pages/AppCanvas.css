@@ -1,0 +1,516 @@
+/* Modern AI-Assisted Canvas Styles */
+
+/* Main Layout */
+.canvas-container {
+  background: white;
+}
+
+/* Modern Canvas Editor */
+.modern-canvas-editor .ql-container {
+  border: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  border-radius: 0 0 8px 8px;
+  background: white;
+  position: relative;
+  height: 100%;
+}
+
+.modern-canvas-editor .ql-editor {
+  padding: 24px;
+  min-height: 100%;
+  max-height: 100%;
+  border: none;
+  background: white;
+  box-shadow: none;
+  border-radius: 0 0 8px 8px;
+  overflow-y: auto;
+}
+
+.modern-canvas-editor .ql-editor:focus {
+  outline: none;
+}
+
+.modern-canvas-editor .ql-editor.ql-blank::before {
+  color: #9ca3af;
+  font-style: normal;
+  font-weight: 400;
+  left: 24px;
+  position: absolute;
+  top: 24px;
+}
+
+/* Modern Toolbar Styles */
+.modern-toolbar {
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.modern-toolbar .modern-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  padding-right: 32px;
+}
+
+.modern-toolbar .modern-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+
+.modern-toolbar .modern-btn:hover {
+  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+  color: #374151;
+}
+
+.modern-toolbar .modern-btn.ql-active {
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  color: #1e40af;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.modern-toolbar .modern-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.modern-toolbar .modern-btn.disabled:hover {
+  background: transparent;
+  transform: none;
+}
+
+/* Floating Toolbox */
+.floating-toolbox {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(229, 231, 235, 0.5);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Smooth scale animations for toolbox buttons */
+.floating-toolbox button {
+  transform-origin: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.floating-toolbox button:hover {
+  transform: scale(1.05);
+}
+
+.floating-toolbox button:active {
+  transform: scale(0.95);
+}
+
+/* Enhanced hover effects for expanded tools */
+.floating-toolbox .absolute button:hover {
+  transform: translateX(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Floating toolbox expanded panels */
+.floating-toolbox .absolute {
+  z-index: 60 !important;
+  white-space: nowrap;
+}
+
+/* Ensure expanded panels are visible and properly positioned */
+.floating-toolbox .absolute > div {
+  background: white;
+  border: 1px solid rgba(229, 231, 235, 0.8);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(20px);
+}
+
+/* Animation for expanded panels */
+.floating-toolbox .absolute > div {
+  animation: slideInFromRight 0.2s ease-out;
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Chat Panel Improvements */
+.canvas-chat-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(229, 231, 235, 0.5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Resize Handle */
+.canvas-resize-handle {
+  transition: all 0.2s;
+  opacity: 0.6;
+  position: relative;
+  background: linear-gradient(to bottom, #e5e7eb, #d1d5db);
+}
+
+.canvas-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 24px;
+  background: rgba(107, 114, 128, 0.5);
+  border-radius: 1px;
+  transition: all 0.2s;
+}
+
+.canvas-resize-handle:hover::after {
+  background: #6366f1;
+  height: 32px;
+  width: 3px;
+}
+
+.canvas-resize-handle:hover {
+  opacity: 1;
+  transform: scaleX(1.5);
+}
+
+/* Typography improvements */
+.modern-canvas-editor .ql-editor h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 1.5rem;
+  margin-top: 2rem;
+  color: #111827;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.modern-canvas-editor .ql-editor h2 {
+  font-size: 1.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-bottom: 1rem;
+  margin-top: 2rem;
+  color: #111827;
+}
+
+.modern-canvas-editor .ql-editor h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
+  margin-top: 1.5rem;
+  color: #111827;
+}
+
+.modern-canvas-editor .ql-editor p {
+  margin-bottom: 1.25rem;
+  color: #374151;
+  line-height: 1.7;
+}
+
+.modern-canvas-editor .ql-editor ul,
+.modern-canvas-editor .ql-editor ol {
+  margin-bottom: 1.25rem;
+  padding-left: 1.5rem;
+}
+
+.modern-canvas-editor .ql-editor li {
+  margin-bottom: 0.5rem;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.modern-canvas-editor .ql-editor blockquote {
+  border-left: 4px solid #e5e7eb;
+  margin: 1.5rem 0;
+  padding: 1rem 0 1rem 1.5rem;
+  background: #f9fafb;
+  font-style: normal;
+  color: #6b7280;
+  border-radius: 0 8px 8px 0;
+}
+
+.modern-canvas-editor .ql-editor code {
+  background: #f1f5f9;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 0.875em;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.modern-canvas-editor .ql-editor pre {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #1e293b;
+}
+
+.modern-canvas-editor .ql-editor a {
+  color: #2563eb;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.modern-canvas-editor .ql-editor a:hover {
+  border-bottom-color: #2563eb;
+}
+
+/* Selection styles - Multiple specificity levels to ensure they work */
+.modern-canvas-editor .ql-editor::selection {
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: inherit !important;
+}
+
+.modern-canvas-editor .ql-editor ::-moz-selection {
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: inherit !important;
+}
+
+/* Additional selection targeting for Quill content */
+.modern-canvas-editor ::selection {
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: inherit !important;
+}
+
+.modern-canvas-editor ::-moz-selection {
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: inherit !important;
+}
+
+/* Ensure text selection is enabled and visible */
+.modern-canvas-editor .ql-editor {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
+/* Force selection highlighting to be visible */
+.modern-canvas-editor .ql-editor * {
+  user-select: text !important;
+}
+
+/* Override any Quill selection styles */
+.ql-editor::selection,
+.ql-editor *::selection {
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: inherit !important;
+}
+
+.ql-editor::-moz-selection,
+.ql-editor *::-moz-selection {
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: inherit !important;
+}
+
+/* Global canvas selection styles as fallback */
+.canvas-editor ::selection {
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: inherit !important;
+}
+
+.canvas-editor ::-moz-selection {
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: inherit !important;
+}
+
+/* High specificity selection styles to override Quill defaults */
+.modern-canvas-editor.ql-container .ql-editor::selection {
+  background: rgba(59, 130, 246, 0.3) !important;
+  color: inherit !important;
+}
+
+.modern-canvas-editor.ql-container .ql-editor::-moz-selection {
+  background: rgba(59, 130, 246, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Target ReactQuill component directly */
+.react-quill .ql-editor::selection {
+  background: rgba(59, 130, 246, 0.3) !important;
+  color: inherit !important;
+}
+
+.react-quill .ql-editor::-moz-selection {
+  background: rgba(59, 130, 246, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Very specific targeting for all possible Quill structures */
+div.ql-container div.ql-editor::selection,
+div.ql-container div.ql-editor *::selection {
+  background: rgba(59, 130, 246, 0.3) !important;
+  color: inherit !important;
+}
+
+div.ql-container div.ql-editor::-moz-selection,
+div.ql-container div.ql-editor *::-moz-selection {
+  background: rgba(59, 130, 246, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Absolute fallback - target everything in the canvas area */
+body ::selection {
+  background: rgba(59, 130, 246, 0.25) !important;
+}
+
+body ::-moz-selection {
+  background: rgba(59, 130, 246, 0.25) !important;
+}
+
+/* Legacy canvas-editor styles for backward compatibility */
+.canvas-editor .ql-container {
+  border: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.canvas-editor .ql-editor {
+  padding: 24px;
+  height: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.canvas-editor .ql-editor:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.floating-toolbox {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Pulse animation for AI indicators */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.6);
+  }
+}
+
+.ai-processing {
+  animation: pulse-glow 2s infinite;
+}
+
+/* Enhanced processing indicator */
+.processing-indicator {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+
+/* Smooth fade transitions for panels */
+.canvas-chat-panel,
+.modern-canvas-editor {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Focus states for better accessibility */
+.floating-toolbox button:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+
+/* Enhanced modern editor scrollbar */
+.modern-canvas-editor .ql-editor::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modern-canvas-editor .ql-editor::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+.modern-canvas-editor .ql-editor::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #e2e8f0, #cbd5e1);
+  border-radius: 4px;
+  border: 1px solid #f1f5f9;
+}
+
+.modern-canvas-editor .ql-editor::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, #cbd5e1, #94a3b8);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .floating-toolbox {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    top: auto;
+    transform: none;
+  }
+  
+  .modern-canvas-editor .ql-editor {
+    padding: 20px;
+  }
+  
+  .modern-toolbar {
+    padding: 12px 16px;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .canvas-container {
+    background: #0f172a;
+  }
+  
+  .modern-canvas-editor .ql-editor {
+    background: #1e293b;
+    color: #f1f5f9;
+  }
+  
+  .modern-toolbar {
+    background: #334155;
+    border-color: #475569;
+  }
+  
+  .floating-toolbox {
+    background: #1e293b;
+    border-color: #475569;
+  }
+}
+
+

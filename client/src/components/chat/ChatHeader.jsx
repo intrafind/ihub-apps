@@ -15,10 +15,13 @@ const ChatHeader = ({
   showClearButton = false,
   showConfigButton = true,
   showParametersButton = false,
+  showCanvasButton = false,
+  showBackToChatButton = false,
   parametersVisible = false,
   onClearChat,
   onToggleConfig,
   onToggleParameters,
+  onToggleCanvas,
   currentLanguage,
   isMobile = false
 }) => {
@@ -102,6 +105,26 @@ const ChatHeader = ({
 
         {/* Action buttons on the right */}
         <div className="flex flex-col items-start space-y-2 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-2">
+          {showBackToChatButton && (
+            <button
+              onClick={onToggleCanvas}
+              className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded flex items-center"
+              title={t('pages.appCanvas.backToChat', 'Back to Chat')}
+            >
+              <Icon name="chat" size="sm" className="sm:mr-1" />
+              <span className="hidden sm:inline">{t('pages.appCanvas.backToChat', 'Back to Chat')}</span>
+            </button>
+          )}
+          {showCanvasButton && (
+            <button
+              onClick={onToggleCanvas}
+              className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1 rounded flex items-center"
+              title={t('pages.appChat.canvasMode', 'Canvas Mode')}
+            >
+              <Icon name="document-text" size="sm" className="sm:mr-1" />
+              <span className="hidden sm:inline">{t('pages.appChat.canvas', 'Canvas')}</span>
+            </button>
+          )}
           {showClearButton && (
             <button
               onClick={onClearChat}
