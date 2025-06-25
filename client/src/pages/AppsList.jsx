@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom';
 import { fetchApps } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { useLocalizedTranslation } from '../utils/useLocalizedTranslation';
+import { useLocalizedTranslation } from '../hooks/useLocalizedTranslation';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { getFavoriteApps, isAppFavorite, toggleFavoriteApp } from '../utils/favoriteApps';
 import { getRecentAppIds } from '../utils/recentApps';

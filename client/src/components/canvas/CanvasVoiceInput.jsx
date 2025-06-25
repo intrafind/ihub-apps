@@ -1,9 +1,9 @@
 import React, { useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import VoiceFeedback from "../VoiceFeedback";
+import { VoiceFeedback } from "../voice";
 import useVoiceRecognition from "../../hooks/useVoiceRecognition";
 import Icon from "../Icon";
-import "../VoiceInput.css";
+import "../voice/VoiceInput.css";
 
 const CanvasVoiceInput = ({ app, onSpeechResult, disabled = false, quillRef }) => {
   const { t } = useTranslation();

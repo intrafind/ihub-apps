@@ -1,10 +1,9 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import VoiceInputComponent from "../VoiceInputComponent";
+import { VoiceInputComponent } from "../voice";
 import Icon from "../Icon";
 import MagicPromptLoader from "../MagicPromptLoader";
-import ImageUploader from "../ImageUploader";
-import FileUploader from "../FileUploader";
+import { ImageUploader, FileUploader } from "../upload";
 import PromptSearch from "../PromptSearch";
 import { useUIConfig } from "../UIConfigContext";
 

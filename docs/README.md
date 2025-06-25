@@ -5,6 +5,7 @@ This book contains configuration details and user instructions for the AI Hub Ap
 ## User Guide
 
 - [Getting Started](user-guide.md)
+- [Architecture Overview](architecture.md)
 
 ## Configuration
 

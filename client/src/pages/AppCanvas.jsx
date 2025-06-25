@@ -17,9 +17,9 @@ import FloatingToolbox from '../components/canvas/FloatingToolbox';
 import CanvasContentConfirmationModal from '../components/canvas/CanvasContentConfirmationModal';
 
 // Import hooks and utilities
-import useEventSource from '../utils/useEventSource';
-import useChatMessages from '../utils/useChatMessages';
-import useVoiceCommands from '../utils/useVoiceCommands';
+import useEventSource from '../hooks/useEventSource';
+import useChatMessages from '../hooks/useChatMessages';
+import useVoiceCommands from '../hooks/useVoiceCommands';
 import useCanvasEditing from '../hooks/useCanvasEditing';
 import useAppSettings from '../hooks/useAppSettings';
 import useCanvasContent from '../hooks/useCanvasContent';

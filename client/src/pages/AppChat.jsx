@@ -18,9 +18,9 @@ import { getLocalizedContent } from "../utils/localizeContent";
 import Icon from "../components/Icon";
 
 // Import our custom hooks and components
-import useEventSource from "../utils/useEventSource";
-import useChatMessages from "../utils/useChatMessages";
-import useVoiceCommands from "../utils/useVoiceCommands";
+import useEventSource from "../hooks/useEventSource";
+import useChatMessages from "../hooks/useChatMessages";
+import useVoiceCommands from "../hooks/useVoiceCommands";
 import useAppSettings from "../hooks/useAppSettings";
 import ChatInput from "../components/chat/ChatInput";
 import ChatMessageList from "../components/chat/ChatMessageList";

@@ -3,6 +3,7 @@ import express from 'express';
 import { loadJson, loadText } from './configLoader.js';
 import { getApiKeyForModel } from './utils.js';
 import { sendSSE, clients, activeRequests } from './sse.js';
+import { getLocalizedContent } from '../shared/localize.js';
 
 export function setupMiddleware(app) {
   app.use(cors());
@@ -10,31 +11,6 @@ export function setupMiddleware(app) {
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 }
 
-export function getLocalizedContent(content, language = 'en', fallbackLanguage = 'en') {
-  if (content === null || content === undefined) return '';
-  if (typeof content === 'string') return content;
-  if (typeof content === 'object') {
-    try {
-      if (content[language]) return content[language];
-      if (content[fallbackLanguage]) return content[fallbackLanguage];
-      const available = Object.keys(content);
-      if (available.length > 0) {
-        if (language !== 'en') console.error(`Missing translation for language: ${language}`);
-        return content[available[0]];
-      }
-      return '';
-    } catch (err) {
-      console.error('Error accessing content object:', err);
-      return '';
-    }
-  }
-  try {
-    return String(content);
-  } catch (e) {
-    console.error('Failed to convert content to string:', e);
-    return '';
-  }
-}
 
 export async function getLocalizedError(errorKey, params = {}, language = 'en') {
   try {

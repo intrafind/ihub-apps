@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import DisclaimerPopup from './DisclaimerPopup';
 import SmartSearch from './SmartSearch';
-import { updateSettingsFromUrl } from '../utils/integrationSettings';
+import { updateSettingsFromUrl, saveIntegrationSettings } from '../utils/integrationSettings';
 import Icon from './Icon';
 
 const Layout = () => {
@@ -35,11 +35,7 @@ const Layout = () => {
 
   // Store integration settings in localStorage for use by other components
   useEffect(() => {
-    localStorage.setItem('aiHubIntegrationSettings', JSON.stringify({
-      showHeader,
-      showFooter,
-      language
-    }));
+    saveIntegrationSettings({ showHeader, showFooter, language });
   }, [showHeader, showFooter, language]);
 
   const headerColorStyle = {

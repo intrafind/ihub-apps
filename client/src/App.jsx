@@ -12,7 +12,7 @@ import WidgetPage from './pages/WidgetPage';
 import AdminUsageReports from './pages/AdminUsageReports';
 import AppProviders from './components/AppProviders';
 import { withErrorBoundary } from './components/ErrorBoundary';
-import useSessionManagement from './utils/useSessionManagement';
+import useSessionManagement from './hooks/useSessionManagement';
 import { useUIConfig } from './components/UIConfigContext';
 import DocumentTitle from './components/DocumentTitle';
 
