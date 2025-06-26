@@ -123,9 +123,6 @@ const AppCanvas = () => {
       return;
     }
     
-    // Clean up any existing generation before starting a new request
-    cancelGeneration();
-    
     // Clear the input field if using the input value (not for edit actions)
     if (!inputText) {
       setInputValue('');

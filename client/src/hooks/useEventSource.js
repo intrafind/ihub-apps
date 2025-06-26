@@ -180,17 +180,16 @@ function useEventSource({
     eventSource.addEventListener('chunk', eventSource.onchunk);
     
     eventSource.ondone = (event) => {
-      if (process.env.REACT_APP_DEBUG === 'true') {
-        console.log('SSE stream done event received');
-      }
+      console.log('✅ SSE done event received');
       let info = {};
       if (event.data) {
         try {
           info = JSON.parse(event.data);
         } catch (e) {
-          console.warn('Failed to parse done event data:', e);
+          console.warn('❌ Failed to parse done event data:', e);
         }
       }
+      
       if (onDone) {
         onDone(fullContentRef.current, info);
       }

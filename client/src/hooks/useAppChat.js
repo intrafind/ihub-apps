@@ -15,6 +15,7 @@ function useAppChat({ appId, chatId: initialChatId }) {
 
   const {
     messages,
+    messagesRef,
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,
@@ -26,19 +27,24 @@ function useAppChat({ appId, chatId: initialChatId }) {
     getMessagesForApi,
   } = useChatMessages(chatIdRef.current);
 
-  const { initEventSource, cleanupEventSource } = useEventSource({
-    appId,
-    chatId: chatIdRef.current,
+  // Use refs to store the latest callback functions to avoid recreating EventSource
+  const callbacksRef = useRef({});
+  
+  // Update callbacks ref
+  callbacksRef.current = {
     onChunk: (fullContent) => {
       if (window.lastMessageId) {
         updateAssistantMessage(window.lastMessageId, fullContent, true);
       }
     },
     onDone: (finalContent, info) => {
+      console.log('✅ Message completed:', { contentLength: finalContent?.length || 0, finishReason: info.finishReason, messageId: window.lastMessageId });
       if (window.lastMessageId) {
         updateAssistantMessage(window.lastMessageId, finalContent, false, {
           finishReason: info.finishReason,
         });
+      } else {
+        console.warn('❌ No lastMessageId found in onDone callback');
       }
       setProcessing(false);
     },
@@ -65,12 +71,44 @@ function useAppChat({ appId, chatId: initialChatId }) {
             )
           );
         }
-        cleanupEventSource();
+        // Use the cleanup function from the hook
+        cleanupEventSourceRef.current?.();
         setProcessing(false);
       }
-    },
+    }
+  };
+
+  // Create stable callback wrappers that call the ref functions
+  const stableOnChunk = useCallback((fullContent) => {
+    callbacksRef.current.onChunk(fullContent);
+  }, []);
+  
+  const stableOnDone = useCallback((finalContent, info) => {
+    callbacksRef.current.onDone(finalContent, info);
+  }, []);
+  
+  const stableOnError = useCallback((error) => {
+    callbacksRef.current.onError(error);
+  }, []);
+  
+  const stableOnConnected = useCallback(async () => {
+    await callbacksRef.current.onConnected();
+  }, []);
+
+  const cleanupEventSourceRef = useRef();
+
+  const { initEventSource, cleanupEventSource } = useEventSource({
+    appId,
+    chatId: chatIdRef.current,
+    onChunk: stableOnChunk,
+    onDone: stableOnDone,
+    onError: stableOnError,
+    onConnected: stableOnConnected,
     onProcessingChange: setProcessing,
   });
+
+  // Store cleanup function in ref for access in callbacks
+  cleanupEventSourceRef.current = cleanupEventSource;
 
   /**
    * Send a chat message and start streaming the response.
@@ -157,15 +195,15 @@ function useAppChat({ appId, chatId: initialChatId }) {
   const cancelGeneration = useCallback(() => {
     cleanupEventSource();
     if (window.lastMessageId) {
+      const currentMessage = messagesRef.current.find((m) => m.id === window.lastMessageId);
       updateAssistantMessage(
         window.lastMessageId,
-        messages.find((m) => m.id === window.lastMessageId)?.content +
-          t('message.generationCancelled', ' [Generation cancelled]'),
+        (currentMessage?.content || '') + t('message.generationCancelled', ' [Generation cancelled]'),
         false
       );
     }
     setProcessing(false);
-  }, [cleanupEventSource, updateAssistantMessage, messages, t]);
+  }, [cleanupEventSource, updateAssistantMessage, t]);
 
   return {
     chatId: chatIdRef.current,

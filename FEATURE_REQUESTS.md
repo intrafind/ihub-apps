@@ -24,6 +24,7 @@
 - add a prompt input similar like in gemini to it
 - request suggestions and show them next to the editor
 - improve chat input design
+- let a prompt return quick actions, so the user doesn't has to type if it is an OR or YES/NO question
 
 
 Done

@@ -103,8 +103,12 @@ function useChatMessages(chatId = 'default') {
    * @param {boolean} isLoading - Whether the message is still loading
    */
   const updateAssistantMessage = useCallback((id, content, isLoading = true, extra = {}) => {
-    setMessages(prev =>
-      prev.map(msg =>
+    if (isLoading === false) {
+      console.log('✅ Setting message to completed state:', { id, contentLength: content?.length || 0 });
+    }
+    
+    setMessages(prev => {
+      const updatedMessages = prev.map(msg =>
         msg.id === id
           ? {
               ...msg,
@@ -115,8 +119,10 @@ function useChatMessages(chatId = 'default') {
               _contentLength: content.length // Track content length to ensure React detects changes
             }
           : msg
-      )
-    );
+      );
+      
+      return updatedMessages;
+    });
   }, []);
 
   /**
@@ -219,6 +225,7 @@ function useChatMessages(chatId = 'default') {
 
   return {
     messages,
+    messagesRef,
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,
