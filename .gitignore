@@ -44,3 +44,6 @@ coverage/
 docs/book/
 book/
 ai-input/
+# Attachments for generated images
+attachments/
+

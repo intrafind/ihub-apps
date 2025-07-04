@@ -13,8 +13,10 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `REQUEST_TIMEOUT` | LLM request timeout in milliseconds | `60000` |
 | `WORKERS` | Number of Node.js cluster workers | CPU count |
 | `OPENAI_API_KEY` | API key for OpenAI models | – |
+| `OPENAI_IMAGE_API_KEY` | API key for OpenAI image models (falls back to `OPENAI_API_KEY`) | – |
 | `ANTHROPIC_API_KEY` | API key for Anthropic models | – |
 | `GOOGLE_API_KEY` | API key for Google models | – |
+| `GOOGLE_IMAGEN_API_KEY` | API key for Google image models (falls back to `GOOGLE_API_KEY`) | – |
 | `DEFAULT_API_KEY` | Fallback API key used when a model specific key is missing | – |
 | `LOCAL_API_KEY` | Generic API key for local models | – |
 | `CONTENTS_DIR` | Directory containing the `contents` folder | `contents` |

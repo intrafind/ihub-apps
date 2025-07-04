@@ -1,8 +1,22 @@
+import { getAttachmentPath } from '../../services/imageService.js';
 import path from 'path';
 import fs from 'fs/promises';
 import { getRootDir } from '../../pathUtils.js';
 
 export default function registerAttachmentRoutes(app) {
+  app.get('/api/apps/:appId/chat/:chatId/attachments/:attachmentId', async (req, res) => {
+    try {
+      const { chatId, attachmentId } = req.params;
+      const filePath = getAttachmentPath(chatId, attachmentId);
+      res.sendFile(filePath, err => {
+        if (err) res.status(404).json({ error: 'Attachment not found' });
+      });
+    } catch (err) {
+      console.error('Attachment error', err);
+      res.status(500).json({ error: 'Failed to fetch attachment' });
+    }
+  });
+
   app.get('/api/chat/:chatId/tools/:toolId/attachments/:attachmentId', async (req, res) => {
     const { chatId, toolId, attachmentId } = req.params;
     if (!/^[A-Za-z0-9_-]+$/.test(chatId) || !/^[A-Za-z0-9_-]+$/.test(toolId) || !/^[A-Za-z0-9._-]+$/.test(attachmentId)) {

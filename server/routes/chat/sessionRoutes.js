@@ -2,6 +2,7 @@ import { loadJson } from '../../configLoader.js';
 import { createCompletionRequest } from '../../adapters/index.js';
 import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
 import { sendSSE, clients, activeRequests } from '../../sse.js';
+import { generateImage } from '../../services/imageService.js';
 import {
   prepareChatRequest,
   executeStreamingResponse,
@@ -172,6 +173,19 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
         if (prep.tools && prep.tools.length > 0) {
           return processChatWithTools({ prep, res, buildLogData, messageId, DEFAULT_TIMEOUT, getLocalizedError, clientLanguage });
         }
+        if (prep.model.url.includes('/images')) {
+          try {
+            const lastMsg = messages[messages.length - 1] || {};
+            const promptText = lastMsg.content || '';
+            const { attachmentId } = await generateImage({ model: prep.model, prompt: promptText, apiKey: prep.apiKey, chatId, imageData: lastMsg.imageData });
+            const imageUrl = `/api/apps/${appId}/chat/${chatId}/attachments/${attachmentId}`;
+            await logInteraction('chat_response', buildLogData(false, { responseType: 'success', response: '[image]' }));
+            return res.json({ choices: [{ message: { content: `<img src="${imageUrl}" alt="Generated image" style="max-width: 100%;" />` } }], messageId });
+          } catch (err) {
+            console.error('Image generation failed:', err);
+            return res.status(500).json({ error: 'Image generation failed' });
+          }
+        }
         return executeNonStreamingResponse({ request: prep.request, res, buildLogData, messageId, model: prep.model, llmMessages: prep.llmMessages, DEFAULT_TIMEOUT });
       } else {
         const clientRes = clients.get(chatId).response;
@@ -209,6 +223,19 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
         if (prep.tools && prep.tools.length > 0) {
           console.log(`Processing chat with tools for chat ID: ${chatId}`);
           await processChatWithTools({ prep, clientRes, chatId, buildLogData, messageId, DEFAULT_TIMEOUT, getLocalizedError, clientLanguage });
+        } else if (prep.model.url.includes('/images')) {
+          try {
+            const lastMsg = messages[messages.length - 1] || {};
+            const promptText = lastMsg.content || '';
+            const { attachmentId } = await generateImage({ model: prep.model, prompt: promptText, apiKey: prep.apiKey, chatId, imageData: lastMsg.imageData });
+            const imageUrl = `/api/apps/${appId}/chat/${chatId}/attachments/${attachmentId}`;
+            sendSSE(clientRes, 'chunk', { content: `<img src="${imageUrl}" alt="Generated image" style="max-width: 100%;" />` });
+            sendSSE(clientRes, 'done', {});
+            await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: '[image]' }));
+          } catch (err) {
+            console.error('Image generation failed:', err);
+            sendSSE(clientRes, 'error', { message: 'Image generation failed' });
+          }
         } else {
           await executeStreamingResponse({ request: prep.request, chatId, clientRes, buildLogData, model: prep.model, llmMessages: prep.llmMessages, DEFAULT_TIMEOUT, getLocalizedError, clientLanguage });
         }

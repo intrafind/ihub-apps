@@ -14,4 +14,5 @@
     - [Microphone Feature](microphone-feature.md)
     - [Web Tools](web-tools.md)
     - [Magic Prompt](magic-prompt-feature.md)
+    - [Image Generation](image-generation-feature.md)
     - [Server Configuration](server-config.md)
