@@ -101,6 +101,8 @@
       "shareConversation": "Unterhaltung teilen",
       "copyToClipboard": "In die Zwischenablage kopieren",
       "copied": "In die Zwischenablage kopiert!",
+      "showThoughts": "Denkanalyse anzeigen",
+      "hideThoughts": "Denkanalyse verbergen",
       "configureApp": "Konfigurieren",
       "inputParameters": "Eingabeparameter",
       "parameters": "Parameter",

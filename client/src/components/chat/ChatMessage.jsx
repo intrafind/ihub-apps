@@ -42,6 +42,7 @@ const ChatMessage = ({
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState(null); // Track active feedback button
+  const [showThoughts, setShowThoughts] = useState(false);
 
   // Configure marked renderer and copy buttons
   useEffect(() => {
@@ -300,6 +301,23 @@ const ChatMessage = ({
       >
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
+        {!isUser && message.thoughts && message.thoughts.length > 0 && (
+          <div className="mt-1 text-xs text-gray-600">
+            <button
+              onClick={() => setShowThoughts(!showThoughts)}
+              className="underline"
+            >
+              {showThoughts ? t('pages.appChat.hideThoughts') : t('pages.appChat.showThoughts')}
+            </button>
+            {showThoughts && (
+              <ul className="list-disc pl-4 mt-1 space-y-1">
+                {message.thoughts.map((th, idx) => (
+                  <li key={idx}>{typeof th === 'string' ? th : JSON.stringify(th)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
       
       {/* Info about finish reason and retry options */}

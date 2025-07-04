@@ -175,7 +175,8 @@ const GoogleAdapter = {
         complete: false,
         error: false,
         errorMessage: null,
-        finishReason: null
+        finishReason: null,
+        thinking: []
       };
 
       const { events, done } = parseSSEBuffer(buffer);
@@ -191,6 +192,16 @@ const GoogleAdapter = {
                 result.content.push(part.text);
               }
             }
+          }
+
+          if (data.candidates && data.candidates[0]?.safetyRatings) {
+            result.thinking.push({ type: 'safety', info: data.candidates[0].safetyRatings });
+          }
+          if (data.candidates && data.candidates[0]?.citationMetadata) {
+            result.thinking.push({ type: 'citation', info: data.candidates[0].citationMetadata });
+          }
+          if (data.promptFeedback) {
+            result.thinking.push({ type: 'feedback', info: data.promptFeedback });
           }
 
           if (data.candidates && data.candidates[0]?.finishReason) {
