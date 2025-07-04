@@ -74,6 +74,10 @@ Models can be specified in app configurations using the `preferredModel` propert
 "preferredModel": "gpt-4"
 ```
 
+To designate a fallback model, add a `"default": true` property to one of the
+model objects in `models.json`. If a preferred model is not defined for an app,
+the server will use the model marked as default.
+
 Apps can also specify which models are allowed to be used:
 
 ```json

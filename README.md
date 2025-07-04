@@ -297,10 +297,13 @@ This file defines the available LLM models:
     "description": "Model description",
     "provider": "openai|anthropic|google",
     "maxTokens": 16000,
+    "default": true,
     "endpointOverride": "https://custom-endpoint.com" (optional)
   }
 ]
 ```
+
+Add `"default": true` to one model to designate it as the fallback when apps do not specify a preferred model.
 
 The `provider` field determines which adapter is used to format requests to the LLM.
 

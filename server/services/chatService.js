@@ -38,7 +38,10 @@ export async function prepareChatRequest({
   if (!models) {
     return { error: 'Failed to load models configuration' };
   }
-  const model = models.find(m => m.id === (modelId || app.preferredModel));
+  const defaultModel = models.find(m => m.default)?.id;
+  const model = models.find(
+    m => m.id === (modelId || app.preferredModel || defaultModel)
+  );
   if (!model) {
     return { error: 'modelNotFound' };
   }

@@ -2,6 +2,7 @@
   {
     "id": "gpt-3.5-turbo",
     "modelId": "gpt-3.5-turbo",
+    "default": true,
     "name": "GPT-3.5 Turbo",
     "description": "Fast and efficient model for most everyday tasks and conversations",
     "url": "https://api.openai.com/v1/chat/completions",
