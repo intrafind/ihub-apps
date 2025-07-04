@@ -89,13 +89,13 @@
     "provider": "openai",
     "tokenLimit": 1,
     "supportsTools": false
-  }
+  },
   {
     "id": "imagen-4",
-    "modelId": "imagen-4",
+    "modelId": "imagen-4.0-generate-preview-06-06",
     "name": "Imagen 4",
     "description": "Google image generation model",
-    "url": "https://generativelanguage.googleapis.com/v1beta/models/imagen-4:generateImage",
+    "url": "https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-preview-06-06:predict",
     "provider": "google",
     "tokenLimit": 1,
     "supportsTools": false
