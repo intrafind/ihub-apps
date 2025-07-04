@@ -147,6 +147,24 @@ function useChatMessages(chatId = 'default') {
   }, []);
 
   /**
+   * Append a thought entry to an assistant message
+   * @param {string} id - The ID of the message to update
+   * @param {string|Object} thought - The thought data
+   */
+  const addMessageThought = useCallback((id, thought) => {
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === id
+          ? {
+              ...msg,
+              thoughts: [...(msg.thoughts || []), thought]
+            }
+          : msg
+      )
+    );
+  }, []);
+
+  /**
    * Set an error on a message
    * @param {string} id - The ID of the message to update
    * @param {string} errorMessage - The error message
@@ -250,6 +268,7 @@ function useChatMessages(chatId = 'default') {
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,
+    addMessageThought,
     setMessageError,
     deleteMessage,
     editMessage,

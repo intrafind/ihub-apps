@@ -223,6 +223,11 @@ export async function executeStreamingResponse({
             fullResponse += textContent;
           }
         }
+        if (result && result.thinking && result.thinking.length > 0) {
+          for (const thought of result.thinking) {
+            sendSSE(clientRes, 'thinking', { thought });
+          }
+        }
         if (result && result.error) {
           await logInteraction('chat_error', buildLogData(true, {
             responseType: 'error',

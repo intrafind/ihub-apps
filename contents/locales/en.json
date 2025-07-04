@@ -101,6 +101,8 @@
       "shareConversation": "Share conversation",
       "copyToClipboard": "Copy to clipboard",
       "copied": "Copied to clipboard!",
+      "showThoughts": "Show reasoning",
+      "hideThoughts": "Hide reasoning",
       "configureApp": "Configure",
       "parameters": "Parameters",
       "inputParameters": "Input Parameters",
