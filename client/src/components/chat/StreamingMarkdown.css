@@ -63,12 +63,47 @@
     margin: 1em 0 !important;
   }
   
-  /* Force immediate render of copy buttons */
-  & .code-copy-btn {
-    position: absolute !important;
-    top: 0.5rem !important;
-    right: 0.5rem !important;
+  /* Force immediate render of toolbar buttons */
+  & .code-copy-btn,
+  & .code-download-btn {
     z-index: 10 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+  }
+  
+  /* Ensure toolbar renders immediately with proper layout */
+  & .code-block-toolbar {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  & .code-block-toolbar > div {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+  }
+  
+  /* Force horizontal layout even in widget/iframe contexts */
+  &.chat-widget-content .code-block-toolbar,
+  .chat-widget-panel & .code-block-toolbar {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  &.chat-widget-content .code-block-toolbar > div,
+  .chat-widget-panel & .code-block-toolbar > div {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
   }
   
   /* Ensure lists render immediately */

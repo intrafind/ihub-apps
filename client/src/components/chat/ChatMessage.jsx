@@ -21,11 +21,19 @@ const ChatMessage = ({
   canvasEnabled = false
 }) => {
   const { t } = useTranslation();
+
+  // Debug loading state changes
+  useEffect(() => {
+    if (message.id && message.role === 'assistant') {
+      console.log(`💬 Message ${message.id} loading state:`, message.loading);
+    }
+  }, [message.loading, message.id, message.role]);
+
   const isUser = message.role === 'user';
   const isError = message.error === true;
   const hasVariables = message.variables && Object.keys(message.variables).length > 0;
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(message.content);
+  const [editedContent, setEditedContent] = useState(typeof message.content === 'string' ? message.content : (message.content || ''));
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
@@ -71,7 +79,8 @@ const ChatMessage = ({
   }, [outputFormat, isUser, isEditing, message.content]);
 
   const handleCopyToClipboard = () => {
-    navigator.clipboard.writeText(message.content)
+    const contentToCopy = typeof message.content === 'string' ? message.content : (message.content || '');
+    navigator.clipboard.writeText(contentToCopy)
       .then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
@@ -90,7 +99,7 @@ const ChatMessage = ({
 
   const handleEdit = () => {
     setIsEditing(true);
-    setEditedContent(message.content);
+    setEditedContent(typeof message.content === 'string' ? message.content : (message.content || ''));
   };
 
   const handleResend = (useMaxTokens = false) => {
@@ -118,7 +127,7 @@ const ChatMessage = ({
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    setEditedContent(message.content);
+    setEditedContent(typeof message.content === 'string' ? message.content : (message.content || ''));
   };
 
   // Handle feedback submission
@@ -184,11 +193,14 @@ const ChatMessage = ({
 
   // Render the message content based on the output format
   const renderContent = () => {
+    // Ensure content is always a string for rendering
+    const contentToRender = typeof message.content === 'string' ? message.content : (message.content || '');
+    
     // For HTML content, check if it contains image tags or file indicators and render them properly
     const hasImageContent =
       !!message.imageData ||
-      (message.content &&
-        (message.content.includes('<img') || message.content.includes('data:image')));
+      (contentToRender && typeof contentToRender === 'string' &&
+        (contentToRender.includes('<img') || contentToRender.includes('data:image')));
 
     const hasFileContent = !!message.fileData;
     
@@ -222,12 +234,12 @@ const ChatMessage = ({
     }
 
     if (message.loading) {
-      console.log('Rendering loading state for message:', message.content);
+      console.log('🔄 Rendering loading state for message:', contentToRender);
       // For loading assistant messages with markdown, still use the StreamingMarkdown component
       if (outputFormat === 'markdown' && !isUser) {
         return (
           <div className="flex flex-col">
-            <StreamingMarkdown content={message.content} />
+            <StreamingMarkdown content={contentToRender} />
             <div className="flex mt-2">
               <span className="inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span>
               <span className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></span>
@@ -239,7 +251,7 @@ const ChatMessage = ({
       // For user messages or non-markdown, render as plain text
       return (
         <div className="flex items-center">
-          <span>{message.content}</span>
+          <span>{contentToRender}</span>
           <span className="ml-2 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span>
           <span className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></span>
           <span className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></span>
@@ -251,7 +263,7 @@ const ChatMessage = ({
       return (
         <div className="flex items-center">
           <Icon name="exclamation-circle" className="mr-1.5 text-red-500 flex-shrink-0" />
-          <span className="break-all">{message.content}</span>
+          <span className="break-all">{contentToRender}</span>
         </div>
       );
     }
@@ -261,18 +273,18 @@ const ChatMessage = ({
       return (
         <div 
           className="break-words whitespace-normal" 
-          dangerouslySetInnerHTML={{ __html: message.content }}
+          dangerouslySetInnerHTML={{ __html: contentToRender }}
         />
       );
     }
     
     if (outputFormat === 'markdown' && !isUser) {
-      console.log('Rendering markdown content:', message.content);
+      console.log('✅ Rendering completed markdown content:', contentToRender?.length || 0, 'chars');
       // Use StreamingMarkdown component for better real-time rendering
-      return <StreamingMarkdown content={message.content} />;
+      return <StreamingMarkdown content={contentToRender} />;
     }
     
-    return <div className="break-words whitespace-normal" style={{boxSizing: 'content-box', display: 'inline-block'}}>{message.content}</div>;
+    return <div className="break-words whitespace-normal" style={{boxSizing: 'content-box', display: 'inline-block'}}>{contentToRender}</div>;
   };
 
   return (
@@ -281,7 +293,6 @@ const ChatMessage = ({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      <MarkdownRenderer />
       <div
         className={`chat-widget-message-content whitespace-normal ${
           isError ? 'error' : ''

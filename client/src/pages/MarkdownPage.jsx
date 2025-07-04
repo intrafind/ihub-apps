@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { marked } from 'marked';
 import { fetchPageContent } from '../api/api';
-import { configureMarked } from '../components/MarkdownRenderer';
+import MarkdownRenderer, { configureMarked } from '../components/MarkdownRenderer';
 
 const MarkdownPage = () => {
   const { t, i18n } = useTranslation();
@@ -72,6 +72,7 @@ const MarkdownPage = () => {
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
+      <MarkdownRenderer />
       <div className="prose prose-sm sm:prose lg:prose-lg mx-auto">
         <div className="markdown-content" 
              dangerouslySetInnerHTML={{ __html: parsedContent }}></div>

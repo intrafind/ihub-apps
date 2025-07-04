@@ -123,9 +123,6 @@ const AppCanvas = () => {
       return;
     }
     
-    // Clean up any existing generation before starting a new request
-    cancelGeneration();
-    
     // Clear the input field if using the input value (not for edit actions)
     if (!inputText) {
       setInputValue('');
@@ -197,11 +194,13 @@ const AppCanvas = () => {
 
   // Resend message functionality for ChatInput
   const handleResendMessage = useCallback((messageId, editedContent) => {
-    const text = prepareResend(messageId, editedContent);
-    if (text) {
-      handlePromptSubmit(text);
+    const resendData = prepareResend(messageId, editedContent);
+    const { content: text } = resendData;
+    
+    if (text || app?.allowEmptyContent) {
+      handlePromptSubmit(text || '');
     }
-  }, [prepareResend, handlePromptSubmit]);
+  }, [prepareResend, handlePromptSubmit, app?.allowEmptyContent]);
 
   // Initialize canvas editing after handlePromptSubmit is defined
   const { handleSelectionChange, handleEditAction } = useCanvasEditing({

@@ -175,6 +175,16 @@
         "en": "pages/en/faq.md",
         "de": "pages/de/faq.md"
       }
+    },
+    "opensearch-analysis-script": {
+      "title": {
+        "en": "OpenSearch Analysis Script",
+        "de": "OpenSearch Analyse-Skript"
+      },
+      "filePath": {
+        "en": "pages/en/opensearch-analysis-script.md",
+        "de": "pages/en/opensearch-analysis-script.md"
+      }
     }
   }
 }

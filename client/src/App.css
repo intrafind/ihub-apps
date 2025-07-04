@@ -68,7 +68,8 @@
 }
 
 .markdown-content pre {
-  @apply mb-4 rounded-md overflow-auto;
+  @apply mb-0 rounded-t-lg overflow-auto;
+  margin: 0; /* Remove default margin since we have the container */
 }
 
 .markdown-content code {
@@ -76,6 +77,53 @@
   word-break: break-all;
   white-space: pre-wrap;
   overflow-wrap: break-word;
+}
+
+/* Code block container styling */
+.markdown-content .code-block-container {
+  @apply mb-4;
+}
+
+.markdown-content .code-block-toolbar {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.markdown-content .code-block-toolbar > div {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+}
+
+.markdown-content .code-copy-btn,
+.markdown-content .code-download-btn {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
+}
+
+/* Ensure toolbar is always horizontal even in widget/iframe contexts */
+div .markdown-content .code-block-toolbar,
+.chat-widget-panel .markdown-content .code-block-toolbar,
+.chat-widget-panel .code-block-toolbar {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+div .markdown-content .code-block-toolbar > div,
+.chat-widget-panel .markdown-content .code-block-toolbar > div,
+.chat-widget-panel .code-block-toolbar > div {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
 }
 
 /* Specific styling for long unbroken strings like base64 */

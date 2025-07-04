@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useUIConfig } from '../UIConfigContext';
 import { v4 as uuidv4 } from 'uuid';
 import { sendAppChatMessage } from '../../api/api';
@@ -108,14 +108,12 @@ const ChatWidget = ({
     }
   }, [messages, isOpen]);
   
-  // Use the existing EventSource hook for streaming
-  const {
-    initEventSource,
-    cleanupEventSource,
-    isConnected
-  } = useEventSource({
-    appId,
-    chatId,
+  // Use refs to store the latest callback functions to avoid recreating EventSource
+  const callbacksRef = useRef({});
+  const cleanupEventSourceRef = useRef();
+  
+  // Update callbacks ref
+  callbacksRef.current = {
     onChunk: (fullContent) => {
       if (window.lastMessageId) {
         updateAssistantMessage(window.lastMessageId, fullContent, true);
@@ -155,12 +153,46 @@ const ChatWidget = ({
           setMessageError(window.lastMessageId, 'Error: Failed to generate response');
         }
         
-        cleanupEventSource();
+        cleanupEventSourceRef.current?.();
         setProcessing(false);
       }
-    },
+    }
+  };
+
+  // Create stable callback wrappers
+  const stableOnChunk = useCallback((fullContent) => {
+    callbacksRef.current.onChunk(fullContent);
+  }, []);
+  
+  const stableOnDone = useCallback((finalContent, info) => {
+    callbacksRef.current.onDone(finalContent, info);
+  }, []);
+  
+  const stableOnError = useCallback((error) => {
+    callbacksRef.current.onError(error);
+  }, []);
+  
+  const stableOnConnected = useCallback(async (event) => {
+    await callbacksRef.current.onConnected(event);
+  }, []);
+
+  // Use the existing EventSource hook for streaming
+  const {
+    initEventSource,
+    cleanupEventSource,
+    isConnected
+  } = useEventSource({
+    appId,
+    chatId,
+    onChunk: stableOnChunk,
+    onDone: stableOnDone,
+    onError: stableOnError,
+    onConnected: stableOnConnected,
     onProcessingChange: setProcessing
   });
+
+  // Store cleanup function in ref
+  cleanupEventSourceRef.current = cleanupEventSource;
   
   // Helper functions for localized content
   const getUserLanguage = () => {
@@ -271,12 +303,14 @@ const ChatWidget = ({
     if (!messageToResend) return;
 
     let contentToResend = editedContent;
+    let variablesToRestore = null;
 
     if (messageToResend.role === 'assistant') {
       const idx = messages.findIndex((msg) => msg.id === messageId);
       const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
       if (!prevUser) return;
       contentToResend = prevUser.rawContent || prevUser.content;
+      variablesToRestore = prevUser.meta?.variables || null;
       // remove the user message and everything after it (including the assistant)
       deleteMessage(prevUser.id);
     } else {
@@ -284,9 +318,17 @@ const ChatWidget = ({
       if (contentToResend === undefined) {
         contentToResend = messageToResend.rawContent || messageToResend.content;
       }
+      variablesToRestore = messageToResend.meta?.variables || null;
     }
 
-    setInput(contentToResend);
+    // Allow resending even with empty content (for variable-only messages)
+    setInput(contentToResend || '');
+    
+    // Restore variables if they exist
+    if (variablesToRestore) {
+      setVariables(variablesToRestore);
+    }
+    
     if (useMaxTokens) {
       setUseMaxTokens(true);
     }

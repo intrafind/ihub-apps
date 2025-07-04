@@ -170,12 +170,59 @@ const AppChat = () => {
   const inputRef = useRef(null);
   const chatId = useRef(`chat-${Date.now()}`);
 
-  // Create a stable chat ID that persists across refreshes
-  const [stableChatId] = useState(() => {
+  // Create a reactive chat ID that changes with appId
+  const stableChatId = useMemo(() => {
     // Use URL appId for consistency and stability
     const persistentId = `app-${appId}`;
     return persistentId;
-  });
+  }, [appId]); // This will change when appId changes
+
+  /**
+   * Determine if the response should trigger auto-redirect to canvas mode
+   * Simplified to check if canvas is enabled and response is substantial
+   * @param {string} response - The AI response content
+   * @param {string} userInput - The user's input that triggered the response
+   * @returns {boolean} True if should redirect to canvas
+   */
+  const shouldAutoRedirectToCanvas = useCallback((response, userInput) => {
+    console.log('🔍 shouldAutoRedirectToCanvas check:', {
+      hasResponse: !!response,
+      responseLength: response?.length || 0,
+      hasUserInput: !!userInput,
+      hasApp: !!app,
+      canvasEnabled: app?.features?.canvas
+    });
+    
+    if (!response || !userInput || !app) return false;
+    const shouldRedirect = response.length > 200 && app?.features?.canvas === true;
+    
+    console.log('📋 Auto-redirect decision:', { shouldRedirect, responseLength: response.length, canvasEnabled: app?.features?.canvas });
+    return shouldRedirect;
+  }, [app]);
+
+  // Handle opening content in canvas mode
+  const handleOpenInCanvas = useCallback((content) => {
+    if (!content || !app) return;
+    
+    const encodedContent = encodeURIComponent(content);
+    navigate(`/apps/${appId}/canvas?content=${encodedContent}`);
+  }, [navigate, appId, app]);
+
+  // Handle auto-redirect to canvas when message is completed
+  const handleMessageComplete = useCallback((aiResponse, userInput) => {
+    console.log('🎯 handleMessageComplete called:', { 
+      responseLength: aiResponse?.length || 0, 
+      userInput, 
+      canvasEnabled: app?.features?.canvas,
+      shouldRedirect: shouldAutoRedirectToCanvas(aiResponse, userInput)
+    });
+    
+    // Check if we should auto-redirect to canvas mode
+    if (shouldAutoRedirectToCanvas(aiResponse, userInput)) {
+      console.log('🎨 Auto-redirecting to canvas mode with response:', { responseLength: aiResponse?.length, userInput });
+      handleOpenInCanvas(aiResponse);
+    }
+  }, [shouldAutoRedirectToCanvas, handleOpenInCanvas, app]);
 
   const {
     messages,
@@ -187,7 +234,11 @@ const AppChat = () => {
     clearMessages,
     cancelGeneration,
     addSystemMessage,
-  } = useAppChat({ appId, chatId: stableChatId });
+  } = useAppChat({ 
+    appId, 
+    chatId: stableChatId,
+    onMessageComplete: handleMessageComplete
+  });
 
   // Set up voice commands
   const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
@@ -463,10 +514,19 @@ const AppChat = () => {
   };
 
   const handleResendMessage = (messageId, editedContent, useMaxTokens = false) => {
-    const contentToResend = prepareResend(messageId, editedContent);
-    if (!contentToResend) return;
+    const resendData = prepareResend(messageId, editedContent);
+    const { content: contentToResend, variables: variablesToRestore } = resendData;
+    
+    // Allow resending if there's content OR if the app allows empty content (for variable-only messages)
+    if (!contentToResend && !app?.allowEmptyContent) return;
 
-    setInput(contentToResend);
+    setInput(contentToResend || '');
+    
+    // Restore variables if they exist
+    if (variablesToRestore) {
+      setVariables(variablesToRestore);
+    }
+    
     if (useMaxTokens) {
       setUseMaxTokens(true);
     }
@@ -695,26 +755,6 @@ const AppChat = () => {
       setTempVariables({ ...variables });
     }
   }, [variables, showParameters]);
-
-  /**
-   * Determine if the response should trigger auto-redirect to canvas mode
-   * Simplified to check if canvas is enabled and response is substantial
-   * @param {string} response - The AI response content
-   * @param {string} userInput - The user's input that triggered the response
-   * @returns {boolean} True if should redirect to canvas
-   */
-  const shouldAutoRedirectToCanvas = (response, userInput) => {
-    if (!response || !userInput || !app) return false;
-    return response.length > 200 && app?.features?.canvas === true;
-  };
-
-  // Handle opening content in canvas mode
-  const handleOpenInCanvas = useCallback((content) => {
-    if (!content || !app) return;
-    
-    const encodedContent = encodeURIComponent(content);
-    navigate(`/apps/${appId}/canvas?content=${encodedContent}`);
-  }, [navigate, appId, app]);
 
   if (loading) {
     return <LoadingSpinner message={t("app.loading")} />;

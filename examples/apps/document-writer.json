@@ -1,0 +1,71 @@
+{
+  "id": "document-writer",
+  "order": 1,
+  "name": {
+    "en": "Document Writer",
+    "de": "Dokument Verfasser"
+  },
+  "description": {
+    "en": "Create and edit documents with AI assistance",
+    "de": "Erstelle und bearbeite Dokumente mit KI-Unterstützung"
+  },
+  "color": "#10B981",
+  "icon": "document-text",
+  "system": {
+    "en": "You are a professional writing assistant. Help users create well-structured, clear, and comprehensive documents. Focus on providing substantial content that would benefit from editing in a visual editor.",
+    "de": "Du bist ein professioneller Schreibassistent. Hilf Nutzern beim Erstellen gut strukturierter, klarer und umfassender Dokumente."
+  },
+  "tokenLimit": 4000,
+  "preferredModel": "gpt-4",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "professional",
+  "preferredTemperature": 0.7,
+  "sendChatHistory": true,
+  "features": {
+    "canvas": true,
+    "imageUpload": false,
+    "fileUpload": false,
+    "magicPrompt": {
+      "enabled": true
+    }
+  },
+  "prompt": {
+    "en": "Create a comprehensive document about {{topic}}. Include relevant sections, detailed explanations, and proper formatting.",
+    "de": "Erstelle ein umfassendes Dokument über {{topic}}. Füge relevante Abschnitte, detaillierte Erklärungen und angemessene Formatierung hinzu."
+  },
+  "variables": [
+    {
+      "name": "topic",
+      "label": {
+        "en": "Document Topic",
+        "de": "Dokumentthema"
+      },
+      "type": "string",
+      "defaultValue": {
+        "en": "AI in Business",
+        "de": "KI im Geschäftswesen"
+      },
+      "required": true
+    }
+  ],
+  "starterPrompts": [
+    {
+      "text": {
+        "en": "Write a business proposal for implementing AI solutions",
+        "de": "Schreibe einen Geschäftsvorschlag für die Implementierung von KI-Lösungen"
+      }
+    },
+    {
+      "text": {
+        "en": "Create a technical specification document",
+        "de": "Erstelle ein technisches Spezifikationsdokument"
+      }
+    },
+    {
+      "text": {
+        "en": "Draft a comprehensive project plan",
+        "de": "Entwerfe einen umfassenden Projektplan"
+      }
+    }
+  ]
+}
