@@ -194,11 +194,13 @@ const AppCanvas = () => {
 
   // Resend message functionality for ChatInput
   const handleResendMessage = useCallback((messageId, editedContent) => {
-    const text = prepareResend(messageId, editedContent);
-    if (text) {
-      handlePromptSubmit(text);
+    const resendData = prepareResend(messageId, editedContent);
+    const { content: text } = resendData;
+    
+    if (text || app?.allowEmptyContent) {
+      handlePromptSubmit(text || '');
     }
-  }, [prepareResend, handlePromptSubmit]);
+  }, [prepareResend, handlePromptSubmit, app?.allowEmptyContent]);
 
   // Initialize canvas editing after handlePromptSubmit is defined
   const { handleSelectionChange, handleEditAction } = useCanvasEditing({

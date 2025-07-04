@@ -12,6 +12,9 @@ function useChatMessages(chatId = 'default') {
   // Use sessionStorage for persistence during page refreshes
   const storageKey = `ai_hub_chat_messages_${chatId}`;
   
+  // Track the previous chatId to detect changes
+  const prevChatIdRef = useRef(chatId);
+  
   // Initialize state from sessionStorage if available
   const loadInitialMessages = () => {
     try {
@@ -25,6 +28,24 @@ function useChatMessages(chatId = 'default') {
 
   const [messages, setMessages] = useState(loadInitialMessages);
   
+  // Load messages when chatId changes (app switching)
+  useEffect(() => {
+    if (prevChatIdRef.current !== chatId && prevChatIdRef.current !== null) {
+      console.log('[useChatMessages] ChatId changed from', prevChatIdRef.current, 'to', chatId, '- loading messages for new chat');
+      // Load messages for the new chatId
+      const newStorageKey = `ai_hub_chat_messages_${chatId}`;
+      try {
+        const storedMessages = sessionStorage.getItem(newStorageKey);
+        const newMessages = storedMessages ? JSON.parse(storedMessages) : [];
+        setMessages(newMessages);
+      } catch (error) {
+        console.error('Error loading messages from sessionStorage for new chatId:', error);
+        setMessages([]);
+      }
+    }
+    prevChatIdRef.current = chatId;
+  }, [chatId]);
+
   // Use a ref to store a copy of messages for read-only operations
   const messagesRef = useRef(messages);
   

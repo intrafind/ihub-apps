@@ -303,12 +303,14 @@ const ChatWidget = ({
     if (!messageToResend) return;
 
     let contentToResend = editedContent;
+    let variablesToRestore = null;
 
     if (messageToResend.role === 'assistant') {
       const idx = messages.findIndex((msg) => msg.id === messageId);
       const prevUser = [...messages.slice(0, idx)].reverse().find((m) => m.role === 'user');
       if (!prevUser) return;
       contentToResend = prevUser.rawContent || prevUser.content;
+      variablesToRestore = prevUser.meta?.variables || null;
       // remove the user message and everything after it (including the assistant)
       deleteMessage(prevUser.id);
     } else {
@@ -316,9 +318,17 @@ const ChatWidget = ({
       if (contentToResend === undefined) {
         contentToResend = messageToResend.rawContent || messageToResend.content;
       }
+      variablesToRestore = messageToResend.meta?.variables || null;
     }
 
-    setInput(contentToResend);
+    // Allow resending even with empty content (for variable-only messages)
+    setInput(contentToResend || '');
+    
+    // Restore variables if they exist
+    if (variablesToRestore) {
+      setVariables(variablesToRestore);
+    }
+    
     if (useMaxTokens) {
       setUseMaxTokens(true);
     }

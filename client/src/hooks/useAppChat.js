@@ -7,10 +7,17 @@ import { sendAppChatMessage } from '../api/api';
 /**
  * High level hook combining chat message management with streaming
  * communication for both chat and canvas pages.
+ * 
+ * @param {Object} options - Configuration options
+ * @param {string} options.appId - The app ID
+ * @param {string} options.chatId - The chat session ID
+ * @param {Function} options.onMessageComplete - Callback fired when a message is completed (optional)
  */
-function useAppChat({ appId, chatId: initialChatId }) {
+function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   const { t } = useTranslation();
-  const chatIdRef = useRef(initialChatId || `chat-${Date.now()}`);
+  // Use the chatId directly instead of storing it in a ref
+  // This allows the useChatMessages hook to properly react to chatId changes
+  const chatId = initialChatId || `chat-${Date.now()}`;
   const [processing, setProcessing] = useState(false);
 
   const {
@@ -25,7 +32,7 @@ function useAppChat({ appId, chatId: initialChatId }) {
     addSystemMessage,
     clearMessages,
     getMessagesForApi,
-  } = useChatMessages(chatIdRef.current);
+  } = useChatMessages(chatId); // Now this will properly react to chatId changes
 
   // Use refs to store the latest callback functions to avoid recreating EventSource
   const callbacksRef = useRef({});
@@ -43,6 +50,21 @@ function useAppChat({ appId, chatId: initialChatId }) {
         updateAssistantMessage(window.lastMessageId, finalContent, false, {
           finishReason: info.finishReason,
         });
+        
+        // Trigger onMessageComplete callback if provided
+        if (onMessageComplete && typeof onMessageComplete === 'function') {
+          console.log('🔄 Calling onMessageComplete with:', { 
+            contentLength: finalContent?.length || 0, 
+            userMessage: window.lastUserMessage,
+            hasCallback: !!onMessageComplete
+          });
+          onMessageComplete(finalContent, window.lastUserMessage);
+        } else {
+          console.log('⚠️  No onMessageComplete callback provided or not a function:', { 
+            hasCallback: !!onMessageComplete, 
+            typeOfCallback: typeof onMessageComplete 
+          });
+        }
       } else {
         console.warn('❌ No lastMessageId found in onDone callback');
       }
@@ -99,7 +121,7 @@ function useAppChat({ appId, chatId: initialChatId }) {
 
   const { initEventSource, cleanupEventSource } = useEventSource({
     appId,
-    chatId: chatIdRef.current,
+    chatId: chatId,
     onChunk: stableOnChunk,
     onDone: stableOnDone,
     onError: stableOnError,
@@ -125,8 +147,16 @@ function useAppChat({ appId, chatId: initialChatId }) {
         setProcessing(true);
         const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         window.lastMessageId = exchangeId;
+        
+        // Store the user message content for the onMessageComplete callback
+        window.lastUserMessage = apiMessage.content;
 
-        addUserMessage(displayMessage.content || displayMessage, displayMessage.meta || {});
+        // Ensure we extract content properly and default to empty string if needed
+        const contentToAdd = typeof displayMessage === 'string' 
+          ? displayMessage 
+          : (displayMessage?.content || '');
+        
+        addUserMessage(contentToAdd, displayMessage?.meta || {});
         addAssistantMessage(exchangeId);
 
         const messagesForAPI = getMessagesForApi(sendChatHistory, {
@@ -141,12 +171,12 @@ function useAppChat({ appId, chatId: initialChatId }) {
 
         window.pendingMessageData = {
           appId,
-          chatId: chatIdRef.current,
+          chatId: chatId,
           messages: messagesForAPI,
           params,
         };
 
-        initEventSource(`/api/apps/${appId}/chat/${chatIdRef.current}`);
+        initEventSource(`/api/apps/${appId}/chat/${chatId}`);
       } catch (err) {
         console.error('Error sending message:', err);
         addSystemMessage(
@@ -163,31 +193,38 @@ function useAppChat({ appId, chatId: initialChatId }) {
 
   /**
    * Prepare content for resending a previous message.
-   * Returns the text that should be put in the input field.
+   * Returns an object with content and variables to restore.
    */
   const resendMessage = useCallback(
     (messageId, editedContent) => {
       const messageToResend = messages.find((m) => m.id === messageId);
-      if (!messageToResend) return '';
+      if (!messageToResend) return { content: '', variables: null };
 
       let contentToResend = editedContent;
+      let variablesToRestore = null;
 
       if (messageToResend.role === 'assistant') {
         const idx = messages.findIndex((m) => m.id === messageId);
         const prevUser = [...messages.slice(0, idx)]
           .reverse()
           .find((m) => m.role === 'user');
-        if (!prevUser) return '';
+        if (!prevUser) return { content: '', variables: null };
         contentToResend = prevUser.rawContent || prevUser.content;
+        variablesToRestore = prevUser.meta?.variables || null;
         deleteMessage(prevUser.id);
       } else {
         deleteMessage(messageId);
         if (contentToResend === undefined) {
           contentToResend = messageToResend.rawContent || messageToResend.content;
         }
+        variablesToRestore = messageToResend.meta?.variables || null;
       }
 
-      return contentToResend;
+      // Return both content and variables
+      return {
+        content: contentToResend || '',
+        variables: variablesToRestore
+      };
     },
     [messages, deleteMessage]
   );
@@ -206,7 +243,7 @@ function useAppChat({ appId, chatId: initialChatId }) {
   }, [cleanupEventSource, updateAssistantMessage, t]);
 
   return {
-    chatId: chatIdRef.current,
+    chatId: chatId,
     messages,
     processing,
     sendMessage,
