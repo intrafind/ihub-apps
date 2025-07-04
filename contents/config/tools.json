@@ -77,6 +77,41 @@
       },
       "required": ["query"]
     }
+  },
+  {
+    "id": "deepResearch",
+    "name": "Deep Research",
+    "description": "Perform iterative web research with progress updates via SSE events.",
+    "script": "deepResearch.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "Initial search query" },
+        "maxRounds": {
+          "type": "integer",
+          "description": "Number of search iterations",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 5
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": "Number of results to process per round",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10
+        },
+        "contentMaxLength": {
+          "type": "integer",
+          "description": "Maximum length of extracted content per page",
+          "default": 3000,
+          "minimum": 500,
+          "maximum": 10000
+        },
+        "chatId": { "type": "string", "description": "Chat session ID" }
+      },
+      "required": ["query"]
+    }
   }
   ,{
     "id": "playwrightScreenshot",
