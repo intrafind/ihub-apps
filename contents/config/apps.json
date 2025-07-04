@@ -1459,6 +1459,38 @@
     "inputMode": {
       "type": "multiline"
     }
+  },
+  {
+    "id": "deep-researcher",
+    "name": {
+      "en": "Deep Researcher",
+      "de": "Tiefenforscher"
+    },
+    "description": {
+      "en": "Iterative web research with progress updates",
+      "de": "Iterative Webrecherche mit Fortschrittsmeldungen"
+    },
+    "color": "#0F766E",
+    "icon": "magnifying-glass",
+    "system": {
+      "en": "You are a specialist in deep web research. Use the deepResearch tool to search, extract and consolidate information from multiple sources. Provide progress updates and return a well-structured report with cited sources.",
+      "de": "Du bist auf tiefgehende Webrecherchen spezialisiert. Nutze das deepResearch-Tool, um Informationen aus mehreren Quellen zu suchen, zu extrahieren und zusammenzufassen. Informiere kontinuierlich über den Fortschritt und liefere einen strukturierten Bericht mit Quellenangaben."
+    },
+    "tokenLimit": 12000,
+    "preferredModel": "gpt-4",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "detailed",
+    "preferredTemperature": 0.4,
+    "sendChatHistory": false,
+    "tools": ["deepResearch"],
+    "settings": {
+      "enabled": true,
+      "model": { "enabled": true },
+      "style": { "enabled": true },
+      "temperature": { "enabled": true },
+      "outputFormat": { "enabled": true },
+      "chatHistory": { "enabled": true }
+    }
   }
 ]
 

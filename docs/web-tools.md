@@ -181,6 +181,22 @@ The "Chat with Web" app has been updated to use the enhanced web search function
    - "Comparison of electric vehicle features"
    - "Software pricing and features comparison"
 
+### 4. Deep Research (`deepResearch`)
+
+**Purpose**: Perform iterative web searches and content extraction while sending progress events to the frontend.
+
+**Usage**: Include the `chatId` parameter when called from a chat session so the tool can emit progress updates.
+
+**Example**:
+
+```json
+{
+  "query": "renewable energy market analysis",
+  "maxRounds": 2,
+  "chatId": "{currentChatId}"
+}
+```
+
 ## Technical Implementation
 
 ### Content Extraction Algorithm
