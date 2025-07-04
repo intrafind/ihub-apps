@@ -2,7 +2,6 @@
   {
     "id": "gpt-3.5-turbo",
     "modelId": "gpt-3.5-turbo",
-    "default": true,
     "name": "GPT-3.5 Turbo",
     "description": "Fast and efficient model for most everyday tasks and conversations",
     "url": "https://api.openai.com/v1/chat/completions",
@@ -58,6 +57,7 @@
     "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:streamGenerateContent",
     "provider": "google",
     "tokenLimit": 32768,
+    "default": true,
     "supportsTools": true
   },
   {
