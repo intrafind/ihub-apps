@@ -96,15 +96,30 @@
     "preferredStyle": "normal",
     "preferredTemperature": 0.7,
     "sendChatHistory": true,
-    "tools": ["enhancedWebSearch", "webContentExtractor"],
+    "tools": [
+      "enhancedWebSearch",
+      "webContentExtractor"
+    ],
     "settings": {
       "enabled": true,
-      "model": { "enabled": true },
-      "style": { "enabled": true },
-      "temperature": { "enabled": true },
-      "outputFormat": { "enabled": true },
-      "chatHistory": { "enabled": true },
-      "microphone": { "enabled": true }
+      "model": {
+        "enabled": true
+      },
+      "style": {
+        "enabled": true
+      },
+      "temperature": {
+        "enabled": true
+      },
+      "outputFormat": {
+        "enabled": true
+      },
+      "chatHistory": {
+        "enabled": true
+      },
+      "microphone": {
+        "enabled": true
+      }
     }
   },
   {
@@ -174,25 +189,77 @@
         },
         "required": true,
         "predefinedValues": [
-          {"label": {"en": "English", "de": "Englisch"}, "value": "English"},
-          {"label": {"en": "Spanish", "de": "Spanisch"}, "value": "Spanish"},
-          {"label": {"en": "French", "de": "Französisch"}, "value": "French"},
-          {"label": {"en": "German", "de": "Deutsch"}, "value": "German"},
-          {"label": {"en": "Chinese", "de": "Chinesisch"}, "value": "Chinese"},
-          {"label": {"en": "Japanese", "de": "Japanisch"}, "value": "Japanese"}
+          {
+            "label": {
+              "en": "English",
+              "de": "Englisch"
+            },
+            "value": "English"
+          },
+          {
+            "label": {
+              "en": "Spanish",
+              "de": "Spanisch"
+            },
+            "value": "Spanish"
+          },
+          {
+            "label": {
+              "en": "French",
+              "de": "Französisch"
+            },
+            "value": "French"
+          },
+          {
+            "label": {
+              "en": "German",
+              "de": "Deutsch"
+            },
+            "value": "German"
+          },
+          {
+            "label": {
+              "en": "Chinese",
+              "de": "Chinesisch"
+            },
+            "value": "Chinese"
+          },
+          {
+            "label": {
+              "en": "Japanese",
+              "de": "Japanisch"
+            },
+            "value": "Japanese"
+          }
         ]
       }
     ],
     "starterPrompts": [
       {
-        "title": { "en": "Translate to German", "de": "Auf Deutsch übersetzen" },
-        "message": { "en": "Translate the following text.", "de": "Übersetze den folgenden Text." },
-        "variables": { "language": "German" }
+        "title": {
+          "en": "Translate to German",
+          "de": "Auf Deutsch übersetzen"
+        },
+        "message": {
+          "en": "Translate the following text.",
+          "de": "Übersetze den folgenden Text."
+        },
+        "variables": {
+          "language": "German"
+        }
       },
       {
-        "title": { "en": "Translate to English", "de": "Auf Englisch übersetzen" },
-        "message": { "en": "Translate the following text.", "de": "Übersetze den folgenden Text." },
-        "variables": { "language": "English" }
+        "title": {
+          "en": "Translate to English",
+          "de": "Auf Englisch übersetzen"
+        },
+        "message": {
+          "en": "Translate the following text.",
+          "de": "Übersetze den folgenden Text."
+        },
+        "variables": {
+          "language": "English"
+        }
       }
     ]
   },
@@ -240,11 +307,41 @@
         },
         "type": "string",
         "predefinedValues": [
-          {"label": {"en": "Summarize", "de": "Zusammenfassen"}, "value": "summarize"},
-          {"label": {"en": "Extract key facts", "de": "Wichtige Fakten extrahieren"}, "value": "extract the key facts from"},
-          {"label": {"en": "Highlight action items", "de": "Aktionspunkte hervorheben"}, "value": "highlight the action items in"},
-          {"label": {"en": "List decisions", "de": "Entscheidungen auflisten"}, "value": "list all decisions mentioned in"},
-          {"label": {"en": "Summarize and recommend", "de": "Zusammenfassen und Empfehlungen geben"}, "value": "summarize and provide recommendations based on"}
+          {
+            "label": {
+              "en": "Summarize",
+              "de": "Zusammenfassen"
+            },
+            "value": "summarize"
+          },
+          {
+            "label": {
+              "en": "Extract key facts",
+              "de": "Wichtige Fakten extrahieren"
+            },
+            "value": "extract the key facts from"
+          },
+          {
+            "label": {
+              "en": "Highlight action items",
+              "de": "Aktionspunkte hervorheben"
+            },
+            "value": "highlight the action items in"
+          },
+          {
+            "label": {
+              "en": "List decisions",
+              "de": "Entscheidungen auflisten"
+            },
+            "value": "list all decisions mentioned in"
+          },
+          {
+            "label": {
+              "en": "Summarize and recommend",
+              "de": "Zusammenfassen und Empfehlungen geben"
+            },
+            "value": "summarize and provide recommendations based on"
+          }
         ]
       }
     ]
@@ -331,13 +428,55 @@
         },
         "required": true,
         "predefinedValues": [
-          {"label": {"en": "Professional", "de": "Professionell"}, "value": "professional"},
-          {"label": {"en": "Follow-up", "de": "Nachverfolgung"}, "value": "follow-up"},
-          {"label": {"en": "Request", "de": "Anfrage"}, "value": "request"},
-          {"label": {"en": "Thank you", "de": "Danke"}, "value": "thank you"},
-          {"label": {"en": "Introduction", "de": "Einführung"}, "value": "introduction"},
-          {"label": {"en": "Complaint", "de": "Beschwerde"}, "value": "complaint resolution"},
-          {"label": {"en": "Application", "de": "Bewerbung"}, "value": "job application"}
+          {
+            "label": {
+              "en": "Professional",
+              "de": "Professionell"
+            },
+            "value": "professional"
+          },
+          {
+            "label": {
+              "en": "Follow-up",
+              "de": "Nachverfolgung"
+            },
+            "value": "follow-up"
+          },
+          {
+            "label": {
+              "en": "Request",
+              "de": "Anfrage"
+            },
+            "value": "request"
+          },
+          {
+            "label": {
+              "en": "Thank you",
+              "de": "Danke"
+            },
+            "value": "thank you"
+          },
+          {
+            "label": {
+              "en": "Introduction",
+              "de": "Einführung"
+            },
+            "value": "introduction"
+          },
+          {
+            "label": {
+              "en": "Complaint",
+              "de": "Beschwerde"
+            },
+            "value": "complaint resolution"
+          },
+          {
+            "label": {
+              "en": "Application",
+              "de": "Bewerbung"
+            },
+            "value": "job application"
+          }
         ]
       },
       {
@@ -370,11 +509,41 @@
           "de": "Verwende einen professionellen Ton."
         },
         "predefinedValues": [
-          {"label": {"en": "Professional", "de": "Professionell"}, "value": "Use a professional tone."},
-          {"label": {"en": "Friendly", "de": "Freundlich"}, "value": "Use a friendly and approachable tone."},
-          {"label": {"en": "Formal", "de": "Formell"}, "value": "Use a formal tone."},
-          {"label": {"en": "Casual", "de": "Lässig"}, "value": "Use a casual tone."},
-          {"label": {"en": "Assertive", "de": "Bestimmend"}, "value": "Use an assertive and confident tone."}
+          {
+            "label": {
+              "en": "Professional",
+              "de": "Professionell"
+            },
+            "value": "Use a professional tone."
+          },
+          {
+            "label": {
+              "en": "Friendly",
+              "de": "Freundlich"
+            },
+            "value": "Use a friendly and approachable tone."
+          },
+          {
+            "label": {
+              "en": "Formal",
+              "de": "Formell"
+            },
+            "value": "Use a formal tone."
+          },
+          {
+            "label": {
+              "en": "Casual",
+              "de": "Lässig"
+            },
+            "value": "Use a casual tone."
+          },
+          {
+            "label": {
+              "en": "Assertive",
+              "de": "Bestimmend"
+            },
+            "value": "Use an assertive and confident tone."
+          }
         ]
       },
       {
@@ -388,9 +557,17 @@
     ],
     "starterPrompts": [
       {
-        "title": { "en": "Friendly intro email", "de": "Freundliche Einleitungs-E-Mail" },
-        "message": { "en": "Write an introduction email.", "de": "Schreibe eine Einleitungs-E-Mail." },
-        "variables": { "tone": "Use a friendly and approachable tone." }
+        "title": {
+          "en": "Friendly intro email",
+          "de": "Freundliche Einleitungs-E-Mail"
+        },
+        "message": {
+          "en": "Write an introduction email.",
+          "de": "Schreibe eine Einleitungs-E-Mail."
+        },
+        "variables": {
+          "tone": "Use a friendly and approachable tone."
+        }
       }
     ]
   },
@@ -429,10 +606,34 @@
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": {"en": "Create an agenda", "de": "Eine Tagesordnung erstellen"}, "value": "Create an agenda"},
-          {"label": {"en": "Generate meeting minutes", "de": "Besprechungsprotokoll erstellen"}, "value": "Generate detailed meeting minutes"},
-          {"label": {"en": "Extract action items", "de": "Aktionspunkte extrahieren"}, "value": "Extract and format action items"},
-          {"label": {"en": "Write a follow-up email", "de": "Eine Nachfass-E-Mail schreiben"}, "value": "Write a follow-up email summarizing"}
+          {
+            "label": {
+              "en": "Create an agenda",
+              "de": "Eine Tagesordnung erstellen"
+            },
+            "value": "Create an agenda"
+          },
+          {
+            "label": {
+              "en": "Generate meeting minutes",
+              "de": "Besprechungsprotokoll erstellen"
+            },
+            "value": "Generate detailed meeting minutes"
+          },
+          {
+            "label": {
+              "en": "Extract action items",
+              "de": "Aktionspunkte extrahieren"
+            },
+            "value": "Extract and format action items"
+          },
+          {
+            "label": {
+              "en": "Write a follow-up email",
+              "de": "Eine Nachfass-E-Mail schreiben"
+            },
+            "value": "Write a follow-up email summarizing"
+          }
         ]
       },
       {
@@ -444,12 +645,48 @@
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": {"en": "Team", "de": "Team"}, "value": "team"},
-          {"label": {"en": "Client", "de": "Kunde"}, "value": "client"},
-          {"label": {"en": "Project", "de": "Projekt"}, "value": "project"},
-          {"label": {"en": "Board", "de": "Vorstand"}, "value": "board"},
-          {"label": {"en": "One-on-one", "de": "Eins-zu-eins"}, "value": "one-on-one"},
-          {"label": {"en": "Standup", "de": "Tägliches Standup"}, "value": "daily standup"}
+          {
+            "label": {
+              "en": "Team",
+              "de": "Team"
+            },
+            "value": "team"
+          },
+          {
+            "label": {
+              "en": "Client",
+              "de": "Kunde"
+            },
+            "value": "client"
+          },
+          {
+            "label": {
+              "en": "Project",
+              "de": "Projekt"
+            },
+            "value": "project"
+          },
+          {
+            "label": {
+              "en": "Board",
+              "de": "Vorstand"
+            },
+            "value": "board"
+          },
+          {
+            "label": {
+              "en": "One-on-one",
+              "de": "Eins-zu-eins"
+            },
+            "value": "one-on-one"
+          },
+          {
+            "label": {
+              "en": "Standup",
+              "de": "Tägliches Standup"
+            },
+            "value": "daily standup"
+          }
         ]
       },
       {
@@ -524,9 +761,27 @@
           "de": "3"
         },
         "predefinedValues": [
-          {"label": {"en": "1 post", "de": "1 Beitrag"}, "value": "1"},
-          {"label": {"en": "3 posts", "de": "3 Beiträge"}, "value": "3"},
-          {"label": {"en": "5 posts", "de": "5 Beiträge"}, "value": "5"}
+          {
+            "label": {
+              "en": "1 post",
+              "de": "1 Beitrag"
+            },
+            "value": "1"
+          },
+          {
+            "label": {
+              "en": "3 posts",
+              "de": "3 Beiträge"
+            },
+            "value": "3"
+          },
+          {
+            "label": {
+              "en": "5 posts",
+              "de": "5 Beiträge"
+            },
+            "value": "5"
+          }
         ]
       },
       {
@@ -538,12 +793,48 @@
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": {"en": "Text posts", "de": "Textbeiträge"}, "value": "text posts"},
-          {"label": {"en": "Caption ideas", "de": "Bildunterschriften-Ideen"}, "value": "caption ideas"},
-          {"label": {"en": "Promotional posts", "de": "Werbebeiträge"}, "value": "promotional posts"},
-          {"label": {"en": "Educational posts", "de": "Bildungsbeiträge"}, "value": "educational posts"},
-          {"label": {"en": "Engagement questions", "de": "Engagement-Fragen"}, "value": "engagement questions"},
-          {"label": {"en": "Trending topic posts", "de": "Beiträge zu aktuellen Themen"}, "value": "posts related to trending topics"}
+          {
+            "label": {
+              "en": "Text posts",
+              "de": "Textbeiträge"
+            },
+            "value": "text posts"
+          },
+          {
+            "label": {
+              "en": "Caption ideas",
+              "de": "Bildunterschriften-Ideen"
+            },
+            "value": "caption ideas"
+          },
+          {
+            "label": {
+              "en": "Promotional posts",
+              "de": "Werbebeiträge"
+            },
+            "value": "promotional posts"
+          },
+          {
+            "label": {
+              "en": "Educational posts",
+              "de": "Bildungsbeiträge"
+            },
+            "value": "educational posts"
+          },
+          {
+            "label": {
+              "en": "Engagement questions",
+              "de": "Engagement-Fragen"
+            },
+            "value": "engagement questions"
+          },
+          {
+            "label": {
+              "en": "Trending topic posts",
+              "de": "Beiträge zu aktuellen Themen"
+            },
+            "value": "posts related to trending topics"
+          }
         ]
       },
       {
@@ -555,11 +846,41 @@
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": {"en": "LinkedIn", "de": "LinkedIn"}, "value": "LinkedIn"},
-          {"label": {"en": "Twitter/X", "de": "Twitter/X"}, "value": "Twitter"},
-          {"label": {"en": "Instagram", "de": "Instagram"}, "value": "Instagram"},
-          {"label": {"en": "Facebook", "de": "Facebook"}, "value": "Facebook"},
-          {"label": {"en": "TikTok", "de": "TikTok"}, "value": "TikTok"}
+          {
+            "label": {
+              "en": "LinkedIn",
+              "de": "LinkedIn"
+            },
+            "value": "LinkedIn"
+          },
+          {
+            "label": {
+              "en": "Twitter/X",
+              "de": "Twitter/X"
+            },
+            "value": "Twitter"
+          },
+          {
+            "label": {
+              "en": "Instagram",
+              "de": "Instagram"
+            },
+            "value": "Instagram"
+          },
+          {
+            "label": {
+              "en": "Facebook",
+              "de": "Facebook"
+            },
+            "value": "Facebook"
+          },
+          {
+            "label": {
+              "en": "TikTok",
+              "de": "TikTok"
+            },
+            "value": "TikTok"
+          }
         ]
       },
       {
@@ -583,11 +904,41 @@
           "de": "Verwende einen ansprechenden und gesprächigen Ton."
         },
         "predefinedValues": [
-          {"label": {"en": "Professional", "de": "Professionell"}, "value": "Use a professional and authoritative tone."},
-          {"label": {"en": "Casual", "de": "Lässig"}, "value": "Use a casual and friendly tone."},
-          {"label": {"en": "Humorous", "de": "Humorvoll"}, "value": "Use a humorous and lighthearted tone."},
-          {"label": {"en": "Inspirational", "de": "Inspirierend"}, "value": "Use an inspirational and motivational tone."},
-          {"label": {"en": "Educational", "de": "Bildend"}, "value": "Use an educational and informative tone."}
+          {
+            "label": {
+              "en": "Professional",
+              "de": "Professionell"
+            },
+            "value": "Use a professional and authoritative tone."
+          },
+          {
+            "label": {
+              "en": "Casual",
+              "de": "Lässig"
+            },
+            "value": "Use a casual and friendly tone."
+          },
+          {
+            "label": {
+              "en": "Humorous",
+              "de": "Humorvoll"
+            },
+            "value": "Use a humorous and lighthearted tone."
+          },
+          {
+            "label": {
+              "en": "Inspirational",
+              "de": "Inspirierend"
+            },
+            "value": "Use an inspirational and motivational tone."
+          },
+          {
+            "label": {
+              "en": "Educational",
+              "de": "Bildend"
+            },
+            "value": "Use an educational and informative tone."
+          }
         ]
       },
       {
@@ -635,12 +986,48 @@
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": {"en": "Create an outline", "de": "Eine Gliederung erstellen"}, "value": "Create a detailed outline for a research paper"},
-          {"label": {"en": "Generate a literature review", "de": "Eine Literaturübersicht erstellen"}, "value": "Generate a literature review"},
-          {"label": {"en": "Summarize research", "de": "Forschung zusammenfassen"}, "value": "Summarize the following research"},
-          {"label": {"en": "Analyze methodology", "de": "Methodik analysieren"}, "value": "Analyze the methodology in"},
-          {"label": {"en": "Extract key findings", "de": "Wichtige Erkenntnisse extrahieren"}, "value": "Extract key findings from"},
-          {"label": {"en": "Create research questions", "de": "Forschungsfragen erstellen"}, "value": "Create research questions for"}
+          {
+            "label": {
+              "en": "Create an outline",
+              "de": "Eine Gliederung erstellen"
+            },
+            "value": "Create a detailed outline for a research paper"
+          },
+          {
+            "label": {
+              "en": "Generate a literature review",
+              "de": "Eine Literaturübersicht erstellen"
+            },
+            "value": "Generate a literature review"
+          },
+          {
+            "label": {
+              "en": "Summarize research",
+              "de": "Forschung zusammenfassen"
+            },
+            "value": "Summarize the following research"
+          },
+          {
+            "label": {
+              "en": "Analyze methodology",
+              "de": "Methodik analysieren"
+            },
+            "value": "Analyze the methodology in"
+          },
+          {
+            "label": {
+              "en": "Extract key findings",
+              "de": "Wichtige Erkenntnisse extrahieren"
+            },
+            "value": "Extract key findings from"
+          },
+          {
+            "label": {
+              "en": "Create research questions",
+              "de": "Forschungsfragen erstellen"
+            },
+            "value": "Create research questions for"
+          }
         ]
       },
       {
@@ -664,11 +1051,41 @@
           "de": "Abschnitte mit Überschriften und Aufzählungspunkten einfügen, wo angebracht."
         },
         "predefinedValues": [
-          {"label": {"en": "Academic", "de": "Akademisch"}, "value": "Format in an academic style with proper citations where needed."},
-          {"label": {"en": "Bullet Points", "de": "Aufzählungspunkte"}, "value": "Format as bullet points for easy scanning."},
-          {"label": {"en": "Executive Summary", "de": "Management-Zusammenfassung"}, "value": "Format as an executive summary with key points highlighted."},
-          {"label": {"en": "Detailed Analysis", "de": "Detaillierte Analyse"}, "value": "Provide a detailed analysis with sections and subsections."},
-          {"label": {"en": "Pros and Cons", "de": "Vor- und Nachteile"}, "value": "Organize information into pros and cons or advantages and disadvantages."}
+          {
+            "label": {
+              "en": "Academic",
+              "de": "Akademisch"
+            },
+            "value": "Format in an academic style with proper citations where needed."
+          },
+          {
+            "label": {
+              "en": "Bullet Points",
+              "de": "Aufzählungspunkte"
+            },
+            "value": "Format as bullet points for easy scanning."
+          },
+          {
+            "label": {
+              "en": "Executive Summary",
+              "de": "Management-Zusammenfassung"
+            },
+            "value": "Format as an executive summary with key points highlighted."
+          },
+          {
+            "label": {
+              "en": "Detailed Analysis",
+              "de": "Detaillierte Analyse"
+            },
+            "value": "Provide a detailed analysis with sections and subsections."
+          },
+          {
+            "label": {
+              "en": "Pros and Cons",
+              "de": "Vor- und Nachteile"
+            },
+            "value": "Organize information into pros and cons or advantages and disadvantages."
+          }
         ]
       }
     ]
@@ -708,13 +1125,55 @@
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": {"en": "Job Description (LinkedIn)", "de": "Stellenbeschreibung (LinkedIn)"}, "value": "professional job description formatted for LinkedIn"},
-          {"label": {"en": "Job Description (General)", "de": "Stellenbeschreibung (Allgemein)"}, "value": "detailed job description"},
-          {"label": {"en": "Interview Questions", "de": "Interviewfragen"}, "value": "set of structured interview questions"},
-          {"label": {"en": "Performance Review Template", "de": "Leistungsbewertungsvorlage"}, "value": "performance review template"},
-          {"label": {"en": "Offer Letter", "de": "Angebotsschreiben"}, "value": "formal job offer letter"},
-          {"label": {"en": "Onboarding Checklist", "de": "Onboarding-Checkliste"}, "value": "new employee onboarding checklist"},
-          {"label": {"en": "Rejection Email", "de": "Ablehnungsschreiben"}, "value": "polite rejection email"}
+          {
+            "label": {
+              "en": "Job Description (LinkedIn)",
+              "de": "Stellenbeschreibung (LinkedIn)"
+            },
+            "value": "professional job description formatted for LinkedIn"
+          },
+          {
+            "label": {
+              "en": "Job Description (General)",
+              "de": "Stellenbeschreibung (Allgemein)"
+            },
+            "value": "detailed job description"
+          },
+          {
+            "label": {
+              "en": "Interview Questions",
+              "de": "Interviewfragen"
+            },
+            "value": "set of structured interview questions"
+          },
+          {
+            "label": {
+              "en": "Performance Review Template",
+              "de": "Leistungsbewertungsvorlage"
+            },
+            "value": "performance review template"
+          },
+          {
+            "label": {
+              "en": "Offer Letter",
+              "de": "Angebotsschreiben"
+            },
+            "value": "formal job offer letter"
+          },
+          {
+            "label": {
+              "en": "Onboarding Checklist",
+              "de": "Onboarding-Checkliste"
+            },
+            "value": "new employee onboarding checklist"
+          },
+          {
+            "label": {
+              "en": "Rejection Email",
+              "de": "Ablehnungsschreiben"
+            },
+            "value": "polite rejection email"
+          }
         ]
       },
       {
@@ -746,11 +1205,41 @@
         },
         "type": "string",
         "predefinedValues": [
-          {"label": {"en": "Entry Level", "de": "Einsteiger"}, "value": "entry level"},
-          {"label": {"en": "Mid Level", "de": "Mittleres Level"}, "value": "mid level"},
-          {"label": {"en": "Senior", "de": "Senior"}, "value": "senior level"},
-          {"label": {"en": "Manager", "de": "Manager"}, "value": "management level"},
-          {"label": {"en": "Executive", "de": "Führungskraft"}, "value": "executive level"}
+          {
+            "label": {
+              "en": "Entry Level",
+              "de": "Einsteiger"
+            },
+            "value": "entry level"
+          },
+          {
+            "label": {
+              "en": "Mid Level",
+              "de": "Mittleres Level"
+            },
+            "value": "mid level"
+          },
+          {
+            "label": {
+              "en": "Senior",
+              "de": "Senior"
+            },
+            "value": "senior level"
+          },
+          {
+            "label": {
+              "en": "Manager",
+              "de": "Manager"
+            },
+            "value": "management level"
+          },
+          {
+            "label": {
+              "en": "Executive",
+              "de": "Führungskraft"
+            },
+            "value": "executive level"
+          }
         ]
       },
       {
@@ -761,12 +1250,48 @@
         },
         "type": "string",
         "predefinedValues": [
-          {"label": {"en": "Full-time", "de": "Vollzeit"}, "value": "full-time"},
-          {"label": {"en": "Part-time", "de": "Teilzeit"}, "value": "part-time"},
-          {"label": {"en": "Contract", "de": "Vertrag"}, "value": "contract"},
-          {"label": {"en": "Temporary", "de": "Temporär"}, "value": "temporary"},
-          {"label": {"en": "Internship", "de": "Praktikum"}, "value": "internship"},
-          {"label": {"en": "Remote", "de": "Fernarbeit"}, "value": "remote"}
+          {
+            "label": {
+              "en": "Full-time",
+              "de": "Vollzeit"
+            },
+            "value": "full-time"
+          },
+          {
+            "label": {
+              "en": "Part-time",
+              "de": "Teilzeit"
+            },
+            "value": "part-time"
+          },
+          {
+            "label": {
+              "en": "Contract",
+              "de": "Vertrag"
+            },
+            "value": "contract"
+          },
+          {
+            "label": {
+              "en": "Temporary",
+              "de": "Temporär"
+            },
+            "value": "temporary"
+          },
+          {
+            "label": {
+              "en": "Internship",
+              "de": "Praktikum"
+            },
+            "value": "internship"
+          },
+          {
+            "label": {
+              "en": "Remote",
+              "de": "Fernarbeit"
+            },
+            "value": "remote"
+          }
         ]
       },
       {
@@ -805,7 +1330,10 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "creative",
     "preferredTemperature": 1.0,
-    "allowedModels": ["local-vllm", "gemini-1.5-flash"]
+    "allowedModels": [
+      "local-vllm",
+      "gemini-1.5-flash"
+    ]
   },
   {
     "id": "prompt-generator",
@@ -844,13 +1372,55 @@
         "type": "string",
         "required": true,
         "predefinedValues": [
-          {"label": {"en": "Instructional", "de": "Anleitend"}, "value": "instructional"},
-          {"label": {"en": "Creative", "de": "Kreativ"}, "value": "creative"},
-          {"label": {"en": "Analytical", "de": "Analytisch"}, "value": "analytical"},
-          {"label": {"en": "Conversational", "de": "Gesprächig"}, "value": "conversational"},
-          {"label": {"en": "Problem-solving", "de": "Problemlösend"}, "value": "problem-solving"},
-          {"label": {"en": "Coding", "de": "Programmierung"}, "value": "coding"},
-          {"label": {"en": "Technical", "de": "Technisch"}, "value": "technical"}
+          {
+            "label": {
+              "en": "Instructional",
+              "de": "Anleitend"
+            },
+            "value": "instructional"
+          },
+          {
+            "label": {
+              "en": "Creative",
+              "de": "Kreativ"
+            },
+            "value": "creative"
+          },
+          {
+            "label": {
+              "en": "Analytical",
+              "de": "Analytisch"
+            },
+            "value": "analytical"
+          },
+          {
+            "label": {
+              "en": "Conversational",
+              "de": "Gesprächig"
+            },
+            "value": "conversational"
+          },
+          {
+            "label": {
+              "en": "Problem-solving",
+              "de": "Problemlösend"
+            },
+            "value": "problem-solving"
+          },
+          {
+            "label": {
+              "en": "Coding",
+              "de": "Programmierung"
+            },
+            "value": "coding"
+          },
+          {
+            "label": {
+              "en": "Technical",
+              "de": "Technisch"
+            },
+            "value": "technical"
+          }
         ]
       },
       {
@@ -879,13 +1449,55 @@
           "de": "GPT-4"
         },
         "predefinedValues": [
-          {"label": {"en": "GPT-4", "de": "GPT-4"}, "value": "GPT-4"},
-          {"label": {"en": "GPT-3.5 Turbo", "de": "GPT-3.5 Turbo"}, "value": "GPT-3.5 Turbo"},
-          {"label": {"en": "Claude", "de": "Claude"}, "value": "Claude"},
-          {"label": {"en": "Gemini", "de": "Gemini"}, "value": "Gemini"},
-          {"label": {"en": "DALL-E", "de": "DALL-E"}, "value": "DALL-E"},
-          {"label": {"en": "Midjourney", "de": "Midjourney"}, "value": "Midjourney"},
-          {"label": {"en": "Custom", "de": "Benutzerdefiniert"}, "value": "a custom AI model"}
+          {
+            "label": {
+              "en": "GPT-4",
+              "de": "GPT-4"
+            },
+            "value": "GPT-4"
+          },
+          {
+            "label": {
+              "en": "GPT-3.5 Turbo",
+              "de": "GPT-3.5 Turbo"
+            },
+            "value": "GPT-3.5 Turbo"
+          },
+          {
+            "label": {
+              "en": "Claude",
+              "de": "Claude"
+            },
+            "value": "Claude"
+          },
+          {
+            "label": {
+              "en": "Gemini",
+              "de": "Gemini"
+            },
+            "value": "Gemini"
+          },
+          {
+            "label": {
+              "en": "DALL-E",
+              "de": "DALL-E"
+            },
+            "value": "DALL-E"
+          },
+          {
+            "label": {
+              "en": "Midjourney",
+              "de": "Midjourney"
+            },
+            "value": "Midjourney"
+          },
+          {
+            "label": {
+              "en": "Custom",
+              "de": "Benutzerdefiniert"
+            },
+            "value": "a custom AI model"
+          }
         ]
       },
       {
@@ -969,10 +1581,34 @@
           "de": "gpt-4"
         },
         "predefinedValues": [
-          {"label": {"en": "GPT-4", "de": "GPT-4"}, "value": "gpt-4"},
-          {"label": {"en": "GPT-3.5 Turbo", "de": "GPT-3.5 Turbo"}, "value": "gpt-3.5-turbo"},
-          {"label": {"en": "Claude", "de": "Claude"}, "value": "claude-3-opus-20240229"},
-          {"label": {"en": "Gemini 1.5 Flash", "de": "Gemini 1.5 Flash"}, "value": "gemini-1.5-flash"}
+          {
+            "label": {
+              "en": "GPT-4",
+              "de": "GPT-4"
+            },
+            "value": "gpt-4"
+          },
+          {
+            "label": {
+              "en": "GPT-3.5 Turbo",
+              "de": "GPT-3.5 Turbo"
+            },
+            "value": "gpt-3.5-turbo"
+          },
+          {
+            "label": {
+              "en": "Claude",
+              "de": "Claude"
+            },
+            "value": "claude-3-opus-20240229"
+          },
+          {
+            "label": {
+              "en": "Gemini 1.5 Flash",
+              "de": "Gemini 1.5 Flash"
+            },
+            "value": "gemini-1.5-flash"
+          }
         ]
       },
       {
@@ -988,11 +1624,41 @@
           "de": "0.7"
         },
         "predefinedValues": [
-          {"label": {"en": "0.2 (Precise)", "de": "0.2 (Präzise)"}, "value": "0.2"},
-          {"label": {"en": "0.5 (Balanced)", "de": "0.5 (Ausgewogen)"}, "value": "0.5"},
-          {"label": {"en": "0.7 (Default)", "de": "0.7 (Standard)"}, "value": "0.7"},
-          {"label": {"en": "0.9 (Creative)", "de": "0.9 (Kreativ)"}, "value": "0.9"},
-          {"label": {"en": "1.0 (Very Creative)", "de": "1.0 (Sehr kreativ)"}, "value": "1.0"}
+          {
+            "label": {
+              "en": "0.2 (Precise)",
+              "de": "0.2 (Präzise)"
+            },
+            "value": "0.2"
+          },
+          {
+            "label": {
+              "en": "0.5 (Balanced)",
+              "de": "0.5 (Ausgewogen)"
+            },
+            "value": "0.5"
+          },
+          {
+            "label": {
+              "en": "0.7 (Default)",
+              "de": "0.7 (Standard)"
+            },
+            "value": "0.7"
+          },
+          {
+            "label": {
+              "en": "0.9 (Creative)",
+              "de": "0.9 (Kreativ)"
+            },
+            "value": "0.9"
+          },
+          {
+            "label": {
+              "en": "1.0 (Very Creative)",
+              "de": "1.0 (Sehr kreativ)"
+            },
+            "value": "1.0"
+          }
         ]
       },
       {
@@ -1137,7 +1803,7 @@
       "maxFileSizeMB": 5,
       "supportedTextFormats": [
         "text/plain",
-        "text/markdown", 
+        "text/markdown",
         "text/csv",
         "application/json",
         "text/html",
@@ -1174,20 +1840,44 @@
     "preferredTemperature": 0.7,
     "starterPrompts": [
       {
-        "title": { "en": "Brainstorm a topic", "de": "Thema brainstormen" },
-        "message": { "en": "Help me brainstorm about a specific topic.", "de": "Hilf mir, über ein bestimmtes Thema zu brainstormen." }
+        "title": {
+          "en": "Brainstorm a topic",
+          "de": "Thema brainstormen"
+        },
+        "message": {
+          "en": "Help me brainstorm about a specific topic.",
+          "de": "Hilf mir, über ein bestimmtes Thema zu brainstormen."
+        }
       },
       {
-        "title": { "en": "Plan Brainstorming Session", "de": "Brainstorming-Sitzung planen" },
-        "message": { "en": "Help me plan a brainstorming session.", "de": "Hilf mir, eine Brainstorming-Sitzung zu planen." }
+        "title": {
+          "en": "Plan Brainstorming Session",
+          "de": "Brainstorming-Sitzung planen"
+        },
+        "message": {
+          "en": "Help me plan a brainstorming session.",
+          "de": "Hilf mir, eine Brainstorming-Sitzung zu planen."
+        }
       },
       {
-        "title": { "en": "Organize Ideas", "de": "Ideen organisieren" },
-        "message": { "en": "Help me find tools to organize ideas.", "de": "Hilf mir, Werkzeuge zur Ideenorganisation zu finden." }
+        "title": {
+          "en": "Organize Ideas",
+          "de": "Ideen organisieren"
+        },
+        "message": {
+          "en": "Help me find tools to organize ideas.",
+          "de": "Hilf mir, Werkzeuge zur Ideenorganisation zu finden."
+        }
       },
       {
-        "title": { "en": "Feedback and Improvement", "de": "Feedback und Verbesserungen" },
-        "message": { "en": "Give me some feedback on my session.", "de": "Gib mir Feedback zu meiner Sitzung." }
+        "title": {
+          "en": "Feedback and Improvement",
+          "de": "Feedback und Verbesserungen"
+        },
+        "message": {
+          "en": "Give me some feedback on my session.",
+          "de": "Gib mir Feedback zu meiner Sitzung."
+        }
       }
     ]
   },
@@ -1262,15 +1952,24 @@
         "required": true,
         "predefinedValues": [
           {
-            "label": { "en": "Pseudonymize", "de": "Pseudonymisieren" },
+            "label": {
+              "en": "Pseudonymize",
+              "de": "Pseudonymisieren"
+            },
             "value": "pseudonymize"
           },
           {
-            "label": { "en": "Replace with identifier list", "de": "Durch Bezeichner ersetzen" },
+            "label": {
+              "en": "Replace with identifier list",
+              "de": "Durch Bezeichner ersetzen"
+            },
             "value": "identifier"
           },
           {
-            "label": { "en": "Partial anonymization", "de": "Teilweise Anonymisierung" },
+            "label": {
+              "en": "Partial anonymization",
+              "de": "Teilweise Anonymisierung"
+            },
             "value": "partial"
           }
         ]
@@ -1312,7 +2011,7 @@
     "icon": "sparkles",
     "system": {
       "en": "You are \"Insight,\" an AI-powered prompt engineering assistant. Your core purpose is to help users who struggle to formulate effective prompts. You will take their simple, often incomplete, input and transform it into a comprehensive, precise, insightful, and diverse prompt.\n\nYour Process:\nYou will follow a four-step process for every user input:\nStep 1: Deconstruct the Initial Prompt\nFirst, analyze the user's raw input. Identify the core entities, the explicit question, and any implicit assumptions. If the prompt is highly ambiguous (e.g., \"apple,\" \"jaguar\"), briefly map out the most likely distinct meanings (e.g., Fruit vs. Tech Company) to inform the prompt generation in Step 3.\n\nStep 2: Mine the User's Intent\nTo understand the true goal behind the prompt, perform a deep analysis through the following seven layers of intent. This is the most critical step to uncover what the user truly wants to know.\n1. Surface Intent: What are they literally asking for?\n2. Practical Intent: What real-world problem are they trying to solve or what task are they trying to complete?\n3. Emotional Intent: What feelings are driving this search (e.g., aspiration, fear, curiosity, frustration)?\n4. Social Intent: How does this search relate to their relationships or social standing?\n5. Identity Intent: How does this search connect to who they are or who they want to become?\n6. Taboo Intent: What is the uncomfortable or socially unacceptable aspect of this prompt that they won't state directly?\n7. Shadow Intent: What are the unconscious motivations or underlying needs they may not even recognize in themselves?\n\nStep 3: Generate Prompt from Cognitive Personas\nBased on your intent analysis, generate exactly ONE optimized search prompt from each of the following eight cognitive perspectives. The goal is to cover all angles of the user's potential need.\n1. The Direct Assistant: Provide a clear, straightforward improvement of the user's original prompt. This should be the most direct answer to their surface-level prompt.\n2. The Expert Skeptic: Challenge the premise. Generate a prompt that seeks counter-evidence, limitations, risks, and critiques of the topic.\n3. The Detail Analyst: Go granular. Generate a prompt that obsesses over technical specifications, data, precise parameters, and objective numbers.\n4. The Historical Researcher: Provide context. Generate a prompt that explores the origin, evolution, history, and development of the subject over time.\n5. The Comparative Thinker: Explore the landscape. Generate a prompt that compares the topic to its main alternatives, competitors, or contrasting ideas, focusing on pros and cons.\n6. The Temporal Context: Ensure recency. Add a time-sensitive prompt using the current year (${currentYear}) or month to find the most up-to-date information.\n7. The Globalizer: Find the source of truth. Identify the most authoritative language and region for the subject (e.g., German for German engineering, Japanese for a specific anime, English for a global tech standard). Generate a search in that language to access native expertise.\n8. The Devil's Advocate: Actively seek to disprove the user's assumption. Generate a search framed as \"Evidence against X,\" \"Why X is false,\" or \"Problems with X\" to uncover opposing viewpoints.\n\nStep 4: Structure the Final Output\nBring all prompts, from all steps together and formulate the last and final one, which takes the others into consideration.\n\nWhen responding, check the variable 'mode':\n- If mode is 'generate', return ONLY the final prompt with no explanations.\n- If mode is 'explain', provide only the explanation. Briefly mention how the initial query was expanded, list the cognitive persona prompts with a short purpose statement for each.\n- If mode is 'explain + generate', return the final prompt followed by the explanation.\n",
-      "de": "Du bist \"Insight\", ein KI-gest\u00fctzter Prompt-Engineering-Assistent. Dein Ziel ist es, Nutzern zu helfen, die Schwierigkeiten haben, gute Prompts zu formulieren. Du nimmst ihre einfachen, oft unvollst\u00e4ndigen Eingaben und wandelst sie in umfassende, pr\u00e4zise, aufschlussreiche und vielf\u00e4ltige Prompts um.\n\nDein Prozess:\nDu folgst bei jeder Eingabe vier Schritten:\nSchritt 1: Zerlege den urspr\u00fcnglichen Prompt\nAnalysiere die Eingabe, erkenne Kernbegriffe, explizite Fragen und implizite Annahmen. Bei deutlicher Mehrdeutigkeit (z. B. \"apple\", \"jaguar\") skizziere kurz die wichtigsten Bedeutungen, um Schritt 3 vorzubereiten.\n\nSchritt 2: Erforsche die Absicht des Nutzers\nGeh die folgenden sieben Ebenen durch, um das wahre Ziel zu erkennen:\n1. Oberfl\u00e4chliche Absicht\n2. Praktische Absicht\n3. Emotionale Absicht\n4. Soziale Absicht\n5. Identit\u00e4tsabsicht\n6. Tabu-Absicht\n7. Schatten-Absicht\n\n\nSchritt 3: Generiere je einen optimierten Prompt aus acht kognitiven Perspektiven:\n1. Der direkte Assistent\n2. Der Experten-Skeptiker\n3. Der Detail-Analyst\n4. Der Historische Forscher\n5. Der Vergleichende Denker\n6. Der Zeitliche Kontext\n7. Der Globalisierer\n8. Der Advocatus Diaboli\n\nSchritt 4: Strukturiere die endg\u00fcltige Ausgabe\nFasse alle Prompts aus allen Schritten zusammen und formuliere daraus den finalen Prompt.\n\nBeim Antworten pr\u00fcfe den Wert von 'mode':\n- Ist der Modus 'generate', gib nur den finalen Prompt ohne weitere Erkl\u00e4rungen.\n- Ist der Modus 'explain', gib nur die Erkl\u00e4rung. Erw\u00e4hne kurz, wie die Eingabe erweitert wurde, und f\u00fchre die kognitiven Perspektiven mit kurzem Zweck auf.\n- Ist der Modus 'explain + generate', gib zuerst den finalen Prompt und danach die Erkl\u00e4rung.\n"
+      "de": "Du bist \"Insight\", ein KI-gestützter Prompt-Engineering-Assistent. Dein Ziel ist es, Nutzern zu helfen, die Schwierigkeiten haben, gute Prompts zu formulieren. Du nimmst ihre einfachen, oft unvollständigen Eingaben und wandelst sie in umfassende, präzise, aufschlussreiche und vielfältige Prompts um.\n\nDein Prozess:\nDu folgst bei jeder Eingabe vier Schritten:\nSchritt 1: Zerlege den ursprünglichen Prompt\nAnalysiere die Eingabe, erkenne Kernbegriffe, explizite Fragen und implizite Annahmen. Bei deutlicher Mehrdeutigkeit (z. B. \"apple\", \"jaguar\") skizziere kurz die wichtigsten Bedeutungen, um Schritt 3 vorzubereiten.\n\nSchritt 2: Erforsche die Absicht des Nutzers\nGeh die folgenden sieben Ebenen durch, um das wahre Ziel zu erkennen:\n1. Oberflächliche Absicht\n2. Praktische Absicht\n3. Emotionale Absicht\n4. Soziale Absicht\n5. Identitätsabsicht\n6. Tabu-Absicht\n7. Schatten-Absicht\n\n\nSchritt 3: Generiere je einen optimierten Prompt aus acht kognitiven Perspektiven:\n1. Der direkte Assistent\n2. Der Experten-Skeptiker\n3. Der Detail-Analyst\n4. Der Historische Forscher\n5. Der Vergleichende Denker\n6. Der Zeitliche Kontext\n7. Der Globalisierer\n8. Der Advocatus Diaboli\n\nSchritt 4: Strukturiere die endgültige Ausgabe\nFasse alle Prompts aus allen Schritten zusammen und formuliere daraus den finalen Prompt.\n\nBeim Antworten prüfe den Wert von 'mode':\n- Ist der Modus 'generate', gib nur den finalen Prompt ohne weitere Erklärungen.\n- Ist der Modus 'explain', gib nur die Erklärung. Erwähne kurz, wie die Eingabe erweitert wurde, und führe die kognitiven Perspektiven mit kurzem Zweck auf.\n- Ist der Modus 'explain + generate', gib zuerst den finalen Prompt und danach die Erklärung.\n"
     },
     "tokenLimit": 8000,
     "preferredModel": "gpt-4",
@@ -1337,9 +2036,27 @@
           "de": "generate"
         },
         "predefinedValues": [
-          { "label": { "en": "Generate", "de": "Generieren" }, "value": "generate" },
-          { "label": { "en": "Explain", "de": "Erkl\u00e4ren" }, "value": "explain" },
-          { "label": { "en": "Explain + Generate", "de": "Erkl\u00e4ren + Generieren" }, "value": "explain + generate" }
+          {
+            "label": {
+              "en": "Generate",
+              "de": "Generieren"
+            },
+            "value": "generate"
+          },
+          {
+            "label": {
+              "en": "Explain",
+              "de": "Erklären"
+            },
+            "value": "explain"
+          },
+          {
+            "label": {
+              "en": "Explain + Generate",
+              "de": "Erklären + Generieren"
+            },
+            "value": "explain + generate"
+          }
         ]
       }
     ]
@@ -1461,6 +2178,37 @@
     "inputMode": {
       "type": "multiline"
     }
+  },
+  {
+    "id": "image-generator",
+    "order": 7,
+    "name": {
+      "en": "Image Generator",
+      "de": "Bildgenerator"
+    },
+    "description": {
+      "en": "Create images from a text prompt",
+      "de": "Erzeuge Bilder aus einer Beschreibung"
+    },
+    "color": "#EC4899",
+    "icon": "photo",
+    "messagePlaceholder": {
+      "en": "Describe your image...",
+      "de": "Beschreibe dein Bild..."
+    },
+    "tokenLimit": 0,
+    "preferredModel": "dall-e-3",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.7,
+    "sendChatHistory": false,
+    "features": {
+      "imageUpload": true,
+      "imageGeneration": true
+    },
+    "prompt": {
+      "en": "{{content}}",
+      "de": "{{content}}"
+    }
   }
 ]
-

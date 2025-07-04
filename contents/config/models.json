@@ -79,5 +79,25 @@
     "provider": "local",
     "tokenLimit": 8192,
     "supportsTools": false
+  },
+  {
+    "id": "dall-e-3",
+    "modelId": "dall-e-3",
+    "name": "DALL-E 3",
+    "description": "Image generation model",
+    "url": "https://api.openai.com/v1/images/generations",
+    "provider": "openai",
+    "tokenLimit": 1,
+    "supportsTools": false
+  }
+  {
+    "id": "imagen-4",
+    "modelId": "imagen-4",
+    "name": "Imagen 4",
+    "description": "Google image generation model",
+    "url": "https://generativelanguage.googleapis.com/v1beta/models/imagen-4:generateImage",
+    "provider": "google",
+    "tokenLimit": 1,
+    "supportsTools": false
   }
 ]
