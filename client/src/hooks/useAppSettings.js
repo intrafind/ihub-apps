@@ -52,16 +52,18 @@ const useAppSettings = (appId, app) => {
 
   // Initialize settings from app data when app loads
   useEffect(() => {
-    if (!app) return;
+    if (!app || modelsLoading) return;
 
     // Set header color
     if (app.color) {
       setHeaderColor(app.color);
     }
 
+    const defaultModel = models.find((m) => m.default);
+
     // Initialize with app defaults
     const initialState = {
-      selectedModel: app.preferredModel || null,
+      selectedModel: app.preferredModel || (defaultModel ? defaultModel.id : null),
       selectedStyle: app.preferredStyle || "normal",
       temperature: app.preferredTemperature || 0.7,
       selectedOutputFormat: app.preferredOutputFormat || "markdown",
@@ -89,7 +91,7 @@ const useAppSettings = (appId, app) => {
       if (savedSettings.sendChatHistory !== undefined)
         setSendChatHistory(savedSettings.sendChatHistory);
     }
-  }, [app, appId, setHeaderColor]);
+  }, [app, appId, setHeaderColor, models, modelsLoading]);
 
   // Save settings when they change
   useEffect(() => {

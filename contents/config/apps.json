@@ -21,7 +21,6 @@
       "de": "Stelle eine Frage zu unseren häufig gestellten Fragen..."
     },
     "tokenLimit": 8000,
-    "preferredModel": "gemini-2.5-flash-preview-05-20",
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.3,
@@ -60,7 +59,6 @@
       }
     },
     "tokenLimit": 8192,
-    "preferredModel": "gpt-3.5-turbo",
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.7,
