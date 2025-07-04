@@ -45,7 +45,7 @@ Each app is defined with the following essential properties:
 | `icon` | String | Icon identifier for the app (see [Available Icons](#available-icons)) |
 | `system` | Object | Localized system prompts/instructions for the AI model |
 | `tokenLimit` | Number | Maximum token limit for context window |
-| `preferredModel` | String | Default AI model to use with this app |
+| `preferredModel` | String | Default AI model to use with this app. If omitted, the server falls back to the model marked as default in `models.json` |
 | `preferredOutputFormat` | String | Format for AI responses (markdown, text) |
 | `preferredStyle` | String | Style guidance for AI responses (normal, professional, creative, academic) |
 | `preferredTemperature` | Number | Temperature setting (0.0-1.0) controlling randomness |
