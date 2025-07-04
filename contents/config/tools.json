@@ -78,4 +78,34 @@
       "required": ["query"]
     }
   }
+  ,{
+    "id": "playwrightScreenshot",
+    "name": "Website Screenshot (Playwright)",
+    "description": "Capture a screenshot or PDF of a webpage using Playwright.",
+    "script": "playwrightScreenshot.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "description": "Target URL" },
+        "format": { "type": "string", "enum": ["png", "pdf"], "default": "png" },
+        "fullPage": { "type": "boolean", "default": true }
+      },
+      "required": ["url"]
+    }
+  },
+  {
+    "id": "seleniumScreenshot",
+    "name": "Website Screenshot (Selenium)",
+    "description": "Capture a screenshot or PDF of a webpage using Selenium.",
+    "script": "seleniumScreenshot.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "description": "Target URL" },
+        "format": { "type": "string", "enum": ["png", "pdf"], "default": "png" },
+        "fullPage": { "type": "boolean", "default": true }
+      },
+      "required": ["url"]
+    }
+  }
 ]

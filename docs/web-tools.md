@@ -4,11 +4,13 @@ This document describes the web tools available in the AI Hub Apps platform for 
 
 ## Overview
 
-The platform now includes three web-related tools:
+The platform now includes several web-related tools:
 
 1. **braveSearch** - Basic web search using Brave Search API
 2. **webContentExtractor** - Extract clean content from web pages
 3. **enhancedWebSearch** - Combined web search with automatic content extraction
+4. **playwrightScreenshot** - Capture screenshots or PDFs using Playwright
+5. **seleniumScreenshot** - Capture screenshots or PDFs using Selenium
 
 ## Tools Description
 
@@ -88,6 +90,44 @@ The platform now includes three web-related tools:
 }
 ```
 
+### 4. Playwright Screenshot (`playwrightScreenshot`)
+
+**Purpose**: Capture a screenshot or PDF of any webpage using the Playwright browser automation library. If a PDF is captured, the text is extracted and returned.
+
+**Parameters**:
+- `url` (string, required): Page URL to capture
+- `format` (string, optional): `"png"` or `"pdf"` (default: `"png"`)
+- `fullPage` (boolean, optional): Capture the full page height (default: `true`)
+
+**Returns**: Attachment information with a download URL and extracted text for PDFs.
+
+**Example Usage**:
+```javascript
+{
+  "url": "https://example.com",
+  "format": "pdf"
+}
+```
+
+### 5. Selenium Screenshot (`seleniumScreenshot`)
+
+**Purpose**: Capture screenshots or PDFs using Selenium and Chrome DevTools.
+
+**Parameters**:
+- `url` (string, required): Page URL to capture
+- `format` (string, optional): `"png"` or `"pdf"` (default: `"png"`)
+- `fullPage` (boolean, optional): Capture the full page height (default: `true`)
+
+**Returns**: Attachment information with a download URL and extracted text for PDFs.
+
+**Example Usage**:
+```javascript
+{
+  "url": "https://example.com",
+  "format": "png"
+}
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -97,6 +137,10 @@ Set the following environment variable in your `config.env` file:
 ```env
 BRAVE_SEARCH_API_KEY=your_brave_api_key_here
 ```
+
+### Installation Requirements
+
+Run `npx playwright install` after installing dependencies. Selenium tools require a local Chrome or Chromium executable available in your `PATH`.
 
 ### App Configuration
 

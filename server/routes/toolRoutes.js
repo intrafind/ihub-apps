@@ -15,6 +15,9 @@ export default function registerToolRoutes(app) {
   app.all('/api/tools/:toolId', async (req, res) => {
     const { toolId } = req.params;
     const params = req.method === 'GET' ? req.query : req.body;
+    if (req.headers['x-chat-id']) {
+      params.chatId = req.headers['x-chat-id'];
+    }
     try {
       const result = await runTool(toolId, params);
       await logInteraction('tool_usage', {
