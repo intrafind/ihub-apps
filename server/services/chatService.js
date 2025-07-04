@@ -390,8 +390,9 @@ export async function processChatWithTools({
         } catch (e) {
           console.error('Failed to parse tool arguments', e);
         }
+        args.chatId = chatId;
         console.log(`Running tool ${toolId} with args:`, args);
-        const result = await runTool(toolId, args);
+        const result = await runTool(toolId, { ...args, chatId });
 
         // Log tool usage including input and output for tracking
         await logInteraction('tool_usage', buildLogData(!!clientRes, {

@@ -104,8 +104,10 @@ Therefore we want to build a web application which talks through a small node.js
 2. Install dependencies:
    ```bash
    npm run install:all
+   npx playwright install
+   # Selenium tools require Chrome or Chromium in your PATH
    ```
-
+   
    This will install dependencies for both the client and server components.
 
 ### Development

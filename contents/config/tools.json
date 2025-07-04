@@ -18,7 +18,7 @@
   {
     "id": "webContentExtractor",
     "name": "Web Content Extractor",
-    "description": "Extract clean, readable content from a web page URL, removing ads, headers, footers, and other non-content elements. Use the 'url' parameter with a valid HTTP/HTTPS URL.",
+    "description": "Extract clean, readable content from an URL. This can be content like PDFs or webpages, removing ads, headers, footers, and other non-content elements. Use the 'url' parameter with a valid HTTP/HTTPS URL.",
     "script": "webContentExtractor.js",
     "parameters": {
       "type": "object",
@@ -76,6 +76,71 @@
         }
       },
       "required": ["query"]
+    }
+  },
+  {
+    "id": "deepResearch",
+    "name": "Deep Research",
+    "description": "Perform iterative web research with progress updates via SSE events.",
+    "script": "deepResearch.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "Initial search query" },
+        "maxRounds": {
+          "type": "integer",
+          "description": "Number of search iterations",
+          "default": 5,
+          "minimum": 3,
+          "maximum": 10
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": "Number of results to process per round",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 10
+        },
+        "contentMaxLength": {
+          "type": "integer",
+          "description": "Maximum length of extracted content per page",
+          "default": 5000,
+          "minimum": 500,
+          "maximum": 100000
+        },
+        "chatId": { "type": "string", "description": "Chat session ID" }
+      },
+      "required": ["query"]
+    }
+  }
+  ,{
+    "id": "playwrightScreenshot",
+    "name": "Website Screenshot (Playwright)",
+    "description": "Capture a screenshot or PDF of a webpage using Playwright.",
+    "script": "playwrightScreenshot.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "description": "Target URL" },
+        "format": { "type": "string", "enum": ["png", "pdf"], "default": "png" },
+        "fullPage": { "type": "boolean", "default": true }
+      },
+      "required": ["url"]
+    }
+  },
+  {
+    "id": "seleniumScreenshot",
+    "name": "Website Screenshot (Selenium)",
+    "description": "Capture a screenshot or PDF of a webpage using Selenium.",
+    "script": "seleniumScreenshot.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "description": "Target URL" },
+        "format": { "type": "string", "enum": ["png", "pdf"], "default": "png" },
+        "fullPage": { "type": "boolean", "default": true }
+      },
+      "required": ["url"]
     }
   }
 ]

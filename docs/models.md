@@ -66,19 +66,40 @@ The system currently supports the following providers:
    - Self-hosted models accessible via localhost or network
    - Example: Local vLLM implementation
 
-### Usage in Apps
+### Model Selection in Apps
 
-Models can be specified in app configurations using the `preferredModel` property, which should match an `id` from models.json:
+The AI Hub provides a flexible system for selecting which AI model an app uses. The model is determined based on the following order of precedence:
 
-```json
-"preferredModel": "gpt-4"
-```
+1.  **User Selection**: A user can manually select a model from the dropdown in the app's interface. This choice is saved for the session and overrides all other settings.
 
-To designate a fallback model, add a `"default": true` property to one of the
-model objects in `models.json`. If a preferred model is not defined for an app,
-the server will use the model marked as default.
+2.  **App-Specific Preferred Model**: You can set a specific model for an app in its configuration (e.g., in `examples/apps/chat.json`) using the `preferredModel` property. This is the default model for that specific app.
 
-Apps can also specify which models are allowed to be used:
+    ```json
+    "preferredModel": "gpt-4"
+    ```
+
+3.  **System-Wide Default Model**: If an app does not have a `preferredModel` configured, the system will look for a globally defined default model. To configure a system-wide default, add `"default": true` to a model's definition in `contents/config/models.json`.
+
+    ```json
+    {
+      "id": "gemini-2.5-flash-preview-05-20",
+      "modelId": "gemini-2.5-flash-preview-05-20",
+      "name": "Gemini 2.5",
+      "description": "Google's versatile model optimized for text and code tasks",
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:streamGenerateContent",
+      "provider": "google",
+      "tokenLimit": 32768,
+      "default": true,
+      "supportsTools": true
+    }
+    ```
+    If a default model is set, the app's model dropdown in the user interface will pre-select this model if the app has no `preferredModel`. Only one model should be marked as the default.
+
+4.  **First Available Model**: If none of the above are set, the app will simply use the first model from the list of available models.
+
+### Restricting Available Models
+
+Apps can also specify which models are allowed to be used via the `allowedModels` property. This will restrict the models available in the model selection dropdown for that app.
 
 ```json
 "allowedModels": ["local-vllm", "gemini-1.5-flash"]

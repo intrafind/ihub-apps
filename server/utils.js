@@ -333,3 +333,49 @@ export async function logNewSession(chatId, appId, metadata = {}) {
     console.error('Error logging new session:', error);
   }
 }
+
+/**
+ * Performs a simple, non-streaming completion request to a language model.
+ * @param {string} prompt - The prompt to send to the model.
+ * @param {object} options - Configuration options.
+ * @param {string} options.model - The ID of the model to use.
+ * @param {number} [options.temperature=0.7] - The temperature for the completion.
+ * @returns {Promise<string>} The content of the model's response.
+ */
+export async function simpleCompletion(prompt, { model: modelId, temperature = 0.7 }) {
+  const models = await loadJson('config/models.json');
+  const model = models.find(m => m.id === modelId);
+  if (!model) {
+    throw new Error(`Model ${modelId} not found`);
+  }
+
+  const apiKey = process.env[`${model.provider.toUpperCase()}_API_KEY`];
+  if (!apiKey) {
+    throw new Error(`API key for ${model.provider} not found in environment variables.`);
+  }
+
+  const messages = [{ role: 'user', content: prompt }];
+  const request = createCompletionRequest(model, messages, apiKey, {
+    temperature,
+    maxTokens: 4096, // Sufficient for internal tasks
+    stream: false
+  });
+
+  const response = await fetch(request.url, {
+    method: 'POST',
+    headers: request.headers,
+    body: JSON.stringify(request.body)
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`LLM API request failed with status ${response.status}: ${errorBody}`);
+  }
+
+  const responseData = await response.json();
+
+  if (model.provider === 'google') {
+    return responseData.candidates[0]?.content?.parts[0]?.text || '';
+  }
+  return responseData.choices[0]?.message?.content || '';
+}

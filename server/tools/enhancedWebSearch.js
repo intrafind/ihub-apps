@@ -12,6 +12,7 @@ export default async function enhancedWebSearch({
   maxResults = 3, 
   contentMaxLength = 3000 
 }) {
+  console.log(`Starting enhanced web search for: "${query || q}"`);
   // Accept both 'query' and 'q' parameters for flexibility
   const searchQuery = query || q;
   
