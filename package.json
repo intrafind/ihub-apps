@@ -43,6 +43,7 @@
     "express": "^5.1.0",
     "microsoft-cognitiveservices-speech-sdk": "^1.44.1",
     "node-fetch": "^3.3.0",
+    "pdf2md": "^1.0.2",
     "react-quill": "^2.0.0"
   },
   "devDependencies": {

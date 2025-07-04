@@ -18,7 +18,7 @@
   {
     "id": "webContentExtractor",
     "name": "Web Content Extractor",
-    "description": "Extract clean, readable content from a web page URL, removing ads, headers, footers, and other non-content elements. Use the 'url' parameter with a valid HTTP/HTTPS URL.",
+    "description": "Extract clean, readable content from an URL. This can be content like PDFs or webpages, removing ads, headers, footers, and other non-content elements. Use the 'url' parameter with a valid HTTP/HTTPS URL.",
     "script": "webContentExtractor.js",
     "parameters": {
       "type": "object",
@@ -90,23 +90,23 @@
         "maxRounds": {
           "type": "integer",
           "description": "Number of search iterations",
-          "default": 1,
-          "minimum": 1,
-          "maximum": 5
+          "default": 5,
+          "minimum": 3,
+          "maximum": 10
         },
         "maxResults": {
           "type": "integer",
           "description": "Number of results to process per round",
-          "default": 3,
+          "default": 5,
           "minimum": 1,
           "maximum": 10
         },
         "contentMaxLength": {
           "type": "integer",
           "description": "Maximum length of extracted content per page",
-          "default": 3000,
+          "default": 5000,
           "minimum": 500,
-          "maximum": 10000
+          "maximum": 100000
         },
         "chatId": { "type": "string", "description": "Chat session ID" }
       },

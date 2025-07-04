@@ -1,5 +1,6 @@
 import { JSDOM } from 'jsdom';
 import https from 'https';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 function createError(message, code) {
   const err = new Error(message);
@@ -12,6 +13,7 @@ function createError(message, code) {
  * Removes headers, footers, navigation, ads, and other non-content elements
  */
 export default async function webContentExtractor({ url, uri, link, maxLength = 5000, ignoreSSL = false }) {
+  console.log(`Starting content extraction from: ${url || uri || link}`);
   // Accept various URL parameter names for flexibility
   const targetUrl = url || uri || link;
   
@@ -54,6 +56,8 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
       signal: controller.signal,
       ...(dispatcher ? { dispatcher } : {})
     });
+
+    console.log(`Extracting content from webpage: ${targetUrl}`);
     
     clearTimeout(timeoutId);
 
@@ -67,7 +71,63 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
       throw createError(`Failed to fetch webpage: ${response.status} ${response.statusText}`, 'FETCH_ERROR');
     }
 
-    const html = await response.text();
+    console.log(`Extracting content from webpage: ${targetUrl}`);
+
+    // Handle PDF content
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/pdf')) {
+      console.log(`Extracting content from PDF: ${targetUrl}`);
+      
+      try {
+        const arrayBuffer = await response.arrayBuffer();
+        console.log(`PDF size: ${arrayBuffer.byteLength} bytes`);
+        
+        // Use pdfjs-dist to parse the PDF
+        const loadingTask = pdfjs.getDocument({
+          data: new Uint8Array(arrayBuffer),
+          verbosity: 0 // Suppress console output
+        });
+        
+        const pdf = await loadingTask.promise;
+        console.log(`PDF loaded successfully, ${pdf.numPages} pages`);
+        
+        let fullText = '';
+        const maxPagesToProcess = Math.min(pdf.numPages, 10); // Limit to first 10 pages for performance
+        
+        // Extract text from each page
+        for (let pageNum = 1; pageNum <= maxPagesToProcess; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map(item => item.str).join(' ');
+          fullText += pageText + '\n';
+          
+          // Stop if we have enough content
+          if (fullText.length > maxLength * 2) break;
+        }
+        
+        console.log(`PDF text extraction successful, ${fullText.length} characters extracted`);
+        
+        const textContent = fullText.substring(0, maxLength);
+        return {
+          url: targetUrl,
+          title: targetUrl.split('/').pop(), // Use filename as title
+          description: 'PDF document',
+          author: '', // pdfjs-dist doesn't easily expose metadata
+          content: textContent.trim(),
+          wordCount: textContent.trim().split(/\s+/).length,
+          extractedAt: new Date().toISOString()
+        };
+      } catch (pdfError) {
+        console.error(`PDF parsing error: ${pdfError.message}`);
+        console.error(`PDF error stack: ${pdfError.stack}`);
+        throw createError(`Failed to parse PDF: ${pdfError.message}`, 'PDF_PARSE_ERROR');
+      }
+    }
+
+    let html = await response.text();
+    // Pre-emptively remove style tags to prevent CSS parsing errors from JSDOM
+    html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+
     const dom = new JSDOM(html);
     const document = dom.window.document;
 
@@ -163,7 +223,6 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
 
   } catch (error) {
     if (error.name === 'AbortError') {
-      throw createError('Request timeout - webpage took too long to load', 'TIMEOUT');
     }
     if (/certificate|SSL/i.test(error.message) && !ignoreSSL) {
       throw createError(`TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates.`, 'TLS_ERROR');
