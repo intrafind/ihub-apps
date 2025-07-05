@@ -6,10 +6,38 @@ import { sendSSE, clients, activeRequests } from './sse.js';
 import { getLocalizedContent } from '../shared/localize.js';
 import config from './config.js';
 
-export function setupMiddleware(app) {
+/**
+ * Middleware to verify the Content-Length header before parsing the body.
+ * If the declared size exceeds the configured limit, the request is rejected
+ * immediately with a 413 status code.
+ *
+ * @param {number} limit - Maximum allowed payload size in bytes
+ * @returns {import('express').RequestHandler}
+ */
+export function checkContentLength(limit) {
+  return (req, res, next) => {
+    const lenHeader = req.headers['content-length'];
+    const length = lenHeader ? parseInt(lenHeader, 10) : NaN;
+    if (!Number.isNaN(length) && length > limit) {
+      return res.status(413).send('Payload Too Large');
+    }
+    next();
+  };
+}
+
+/**
+ * Configure Express middleware.
+ * Body parser limits are controlled by the `requestBodyLimitMB` option in
+ * `platform.json`.
+ */
+export function setupMiddleware(app, platformConfig = {}) {
+  const limitMb = parseInt(platformConfig.requestBodyLimitMB || '50', 10);
+  const limit = limitMb * 1024 * 1024;
   app.use(cors());
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+  // Reject requests with a Content-Length exceeding the configured limit
+  app.use(checkContentLength(limit));
+  app.use(express.json({ limit: `${limitMb}mb` }));
+  app.use(express.urlencoded({ limit: `${limitMb}mb`, extended: true }));
 }
 
 

@@ -66,9 +66,10 @@ if (cluster.isPrimary && workerCount > 1) {
   const contentsDir = config.CONTENTS_DIR;
   console.log(`Using contents directory: ${contentsDir}`);
 
-  // Initialize telemetry based on platform configuration
+  // Load platform configuration and initialize telemetry
+  let platformConfig = {};
   try {
-    const platformConfig = await loadJson('config/platform.json');
+    platformConfig = await loadJson('config/platform.json');
     await initTelemetry(platformConfig?.telemetry || {});
   } catch (err) {
     console.error('Failed to initialize telemetry:', err);
@@ -114,7 +115,7 @@ if (cluster.isPrimary && workerCount > 1) {
   // Error localization and API key validation implemented in serverHelpers.js
 
   // Middleware
-  setupMiddleware(app);
+  setupMiddleware(app, platformConfig);
 
   // Helper to verify API key exists for a model and provide a meaningful error
   // Implemented in serverHelpers.js
