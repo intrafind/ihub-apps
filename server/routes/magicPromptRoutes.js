@@ -1,9 +1,11 @@
 import { loadJson } from '../configLoader.js';
 import { createCompletionRequest } from '../adapters/index.js';
 import { recordMagicPrompt, estimateTokens } from '../usageTracker.js';
+import validate from '../validators/validate.js';
+import { magicPromptSchema } from '../validators/index.js';
 
 export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT }) {
-  app.post('/api/magic-prompt', async (req, res) => {
+  app.post('/api/magic-prompt', validate(magicPromptSchema), async (req, res) => {
     try {
       const { input, prompt, modelId, appId = 'direct' } = req.body;
       const language = req.headers['accept-language']?.split(',')[0] || 'en';

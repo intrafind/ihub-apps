@@ -24,7 +24,8 @@
     "node-fetch": "^3.3.0",
     "pdfjs-dist": "^5.3.31",
     "playwright": "^1.41.2",
-    "selenium-webdriver": "^4.20.0"
+    "selenium-webdriver": "^4.20.0",
+    "zod": "^3.25.74"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
