@@ -2,13 +2,14 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getRootDir } from './pathUtils.js';
+import config from './config.js';
 import { loadJson } from './configLoader.js';
 import { recordTokenUsage } from './telemetry.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const contentsDir = process.env.CONTENTS_DIR || 'contents';
+const contentsDir = config.CONTENTS_DIR;
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'usage.json');
 const SAVE_INTERVAL_MS = 10000;
 const now = () => new Date().toISOString();

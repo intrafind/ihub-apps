@@ -33,9 +33,10 @@ import {
 // Initialize environment variables
 dotenv.config();
 
+import config from './config.js';
+
 // ----- Cluster setup -----
-const workerCountEnv = process.env.WORKERS || process.env.NUM_WORKERS;
-const workerCount = workerCountEnv ? parseInt(workerCountEnv, 10) : 1;
+const workerCount = config.WORKERS;
 
 if (cluster.isPrimary && workerCount > 1) {
   console.log(`Primary process ${process.pid} starting ${workerCount} workers`);
@@ -50,7 +51,7 @@ if (cluster.isPrimary && workerCount > 1) {
 } else {
   // Determine if we're running from a packaged binary
   // Either via process.pkg (when using pkg directly) or APP_ROOT_DIR env var (our shell script approach)
-  const isPackaged = process.pkg !== undefined || process.env.APP_ROOT_DIR !== undefined;
+  const isPackaged = process.pkg !== undefined || config.APP_ROOT_DIR !== undefined;
 
   // Resolve the application root directory
   const rootDir = getRootDir();
@@ -62,7 +63,7 @@ if (cluster.isPrimary && workerCount > 1) {
   console.log(`Root directory: ${rootDir}`);
 
   // Get the contents directory, either from environment variable or use default 'contents'
-  const contentsDir = process.env.CONTENTS_DIR || 'contents';
+  const contentsDir = config.CONTENTS_DIR;
   console.log(`Using contents directory: ${contentsDir}`);
 
   // Initialize telemetry based on platform configuration
@@ -75,11 +76,11 @@ if (cluster.isPrimary && workerCount > 1) {
 
   // Create Express application
   const app = express();
-  const PORT = process.env.PORT || 3000;
-  const HOST = process.env.HOST || '0.0.0.0'; // Default to all interfaces
+  const PORT = config.PORT;
+  const HOST = config.HOST; // Default to all interfaces
 
   // Configure request timeouts
-  const DEFAULT_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || '60000', 10); // 60 seconds default
+  const DEFAULT_TIMEOUT = config.REQUEST_TIMEOUT; // already a number
 
   // Store active client connections
   // --- Additional code to handle macOS port reuse ---
@@ -145,27 +146,27 @@ if (cluster.isPrimary && workerCount > 1) {
 
   // Check for SSL configuration
   let server;
-  if (process.env.SSL_KEY && process.env.SSL_CERT) {
+  if (config.SSL_KEY && config.SSL_CERT) {
     try {
       // Import synchronous file system operations for SSL cert loading
       const fsSync = await import('fs');
       
       // SSL configuration
       const httpsOptions = {
-        key: fsSync.readFileSync(process.env.SSL_KEY),
-        cert: fsSync.readFileSync(process.env.SSL_CERT),
+        key: fsSync.readFileSync(config.SSL_KEY),
+        cert: fsSync.readFileSync(config.SSL_CERT),
         // Add macOS-specific options for socket reuse
         ...(process.platform === 'darwin' ? serverOptions : {})
       };
       
       // Add CA certificate if provided
-      if (process.env.SSL_CA) {
-        httpsOptions.ca = fsSync.readFileSync(process.env.SSL_CA);
+      if (config.SSL_CA) {
+        httpsOptions.ca = fsSync.readFileSync(config.SSL_CA);
       }
       
       // Create HTTPS server
       server = https.createServer(httpsOptions, app);
-      console.log(`Starting HTTPS server with SSL certificate from ${process.env.SSL_CERT}`);
+      console.log(`Starting HTTPS server with SSL certificate from ${config.SSL_CERT}`);
     } catch (error) {
       console.error('Error setting up HTTPS server:', error);
       console.log('Falling back to HTTP server');

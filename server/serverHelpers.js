@@ -4,6 +4,7 @@ import { loadJson, loadText } from './configLoader.js';
 import { getApiKeyForModel } from './utils.js';
 import { sendSSE, clients, activeRequests } from './sse.js';
 import { getLocalizedContent } from '../shared/localize.js';
+import config from './config.js';
 
 export function setupMiddleware(app) {
   app.use(cors());
@@ -44,7 +45,7 @@ export function validateApiKeys() {
   const missing = [];
   for (const provider of providers) {
     const envVar = `${provider.toUpperCase()}_API_KEY`;
-    if (!process.env[envVar]) missing.push(provider);
+    if (!config[envVar]) missing.push(provider);
   }
   if (missing.length > 0) {
     console.warn(`⚠️ WARNING: Missing API keys for providers: ${missing.join(', ')}`);
