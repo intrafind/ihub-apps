@@ -4,12 +4,13 @@ import path from 'path';
 import { chromium } from 'playwright';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { getRootDir } from '../pathUtils.js';
+import config from '../config.js';
 
 export default async function playwrightScreenshot({ url, format = 'png', fullPage = true, chatId = 'default' }) {
   if (!url) {
     throw new Error('url parameter is required');
   }
-  const dataDir = process.env.DATA_DIR || 'data';
+  const dataDir = config.DATA_DIR;
   const toolId = 'playwrightScreenshot';
   const ext = format === 'pdf' ? 'pdf' : 'png';
   const fileName = `${crypto.randomUUID()}.${ext}`;

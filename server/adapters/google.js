@@ -1,19 +1,18 @@
 /**
  * Google Gemini API adapter
  */
-import { parseSSEBuffer } from './streamUtils.js';
 import { formatToolsForGoogle, normalizeName } from './toolFormatter.js';
 
 const GoogleAdapter = {
   /**
-   * Format messages for Google Gemini API, including handling image data and file data
+   * Format messages for Google Gemini API, including handling image data
    */
   formatMessages(messages) {
     // Extract system message for separate handling
     let systemInstruction = '';
     const geminiContents = [];
     
-    // First pass - extract system messages and handle image data and file data
+    // First pass - extract system messages and handle image data
     for (const message of messages) {
       if (message.role === 'system') {
         // Collect system messages - ideally there should be only one
@@ -67,13 +66,7 @@ const GoogleAdapter = {
         // Convert OpenAI roles to Gemini roles
         const geminiRole = message.role === 'assistant' ? 'model' : 'user';
         
-        let textContent = message.content;
-        
-        // If there's file data, prepend it to the content
-        if (message.fileData && message.fileData.content) {
-          const fileInfo = `[File: ${message.fileData.name} (${message.fileData.type})]\n\n${message.fileData.content}\n\n`;
-          textContent = fileInfo + (textContent || '');
-        }
+        const textContent = message.content;
         
         // Check if this message contains image data
         if (message.imageData && message.imageData.base64) {
@@ -168,7 +161,7 @@ const GoogleAdapter = {
   /**
    * Process streaming response from Gemini
    */
-  processResponseBuffer(buffer) {
+  processResponseBuffer(data) {
     try {
       const result = {
         content: [],
@@ -179,33 +172,31 @@ const GoogleAdapter = {
         thinking: []
       };
 
-      const { events, done } = parseSSEBuffer(buffer);
-      if (done) result.complete = true;
+      if (!data) return result;
 
-      for (const evt of events) {
-        try {
-          const data = JSON.parse(evt);
+      try {
+        const parsed = JSON.parse(data);
 
-          if (data.candidates && data.candidates[0]?.content?.parts) {
-            for (const part of data.candidates[0].content.parts) {
-              if (part.text) {
-                result.content.push(part.text);
-              }
+        if (parsed.candidates && parsed.candidates[0]?.content?.parts) {
+          for (const part of parsed.candidates[0].content.parts) {
+            if (part.text) {
+              result.content.push(part.text);
             }
           }
+        }
 
-          if (data.candidates && data.candidates[0]?.safetyRatings) {
-            result.thinking.push({ type: 'safety', info: data.candidates[0].safetyRatings });
-          }
-          if (data.candidates && data.candidates[0]?.citationMetadata) {
-            result.thinking.push({ type: 'citation', info: data.candidates[0].citationMetadata });
-          }
-          if (data.promptFeedback) {
-            result.thinking.push({ type: 'feedback', info: data.promptFeedback });
-          }
+        if (parsed.candidates && parsed.candidates[0]?.safetyRatings) {
+          result.thinking.push({ type: 'safety', info: parsed.candidates[0].safetyRatings });
+        }
+        if (parsed.candidates && parsed.candidates[0]?.citationMetadata) {
+          result.thinking.push({ type: 'citation', info: parsed.candidates[0].citationMetadata });
+        }
+        if (parsed.promptFeedback) {
+          result.thinking.push({ type: 'feedback', info: parsed.promptFeedback });
+        }
 
-          if (data.candidates && data.candidates[0]?.finishReason) {
-            const fr = data.candidates[0].finishReason;
+        if (parsed.candidates && parsed.candidates[0]?.finishReason) {
+          const fr = parsed.candidates[0].finishReason;
             // Map Gemini finish reasons to normalized values used by the client
             // Documented reasons include STOP, MAX_TOKENS, SAFETY, RECITATION and OTHER
             if (fr === 'STOP') {
@@ -221,26 +212,26 @@ const GoogleAdapter = {
               result.finishReason = fr;
             }
           }
-        } catch (jsonError) {
-          // Fallback to regex if JSON parsing fails
-          const textMatches = evt.match(/"text":\s*"([^"]*)"/g);
-          if (textMatches) {
-            for (const match of textMatches) {
-              const textContent = match.replace(/"text":\s*"/, '').replace(/"$/, '');
-              result.content.push(textContent);
-            }
+        }
+      } catch (jsonError) {
+        // Fallback to regex if JSON parsing fails
+        const textMatches = data.match(/"text":\s*"([^"]*)"/g);
+        if (textMatches) {
+          for (const match of textMatches) {
+            const textContent = match.replace(/"text":\s*"/, '').replace(/"$/, '');
+            result.content.push(textContent);
           }
+        }
 
-          if (evt.includes('"finishReason": "STOP"') || evt.includes('"finishReason":"STOP"')) {
-            result.finishReason = 'stop';
-            result.complete = true;
-          } else if (evt.includes('"finishReason": "MAX_TOKENS"')) {
-            result.finishReason = 'length';
-            result.complete = true;
-          } else if (evt.includes('"finishReason": "SAFETY"') || evt.includes('"finishReason": "RECITATION"')) {
-            result.finishReason = 'content_filter';
-            result.complete = true;
-          }
+        if (data.includes('"finishReason": "STOP"') || data.includes('"finishReason":"STOP"')) {
+          result.finishReason = 'stop';
+          result.complete = true;
+        } else if (data.includes('"finishReason": "MAX_TOKENS"')) {
+          result.finishReason = 'length';
+          result.complete = true;
+        } else if (data.includes('"finishReason": "SAFETY"') || data.includes('"finishReason": "RECITATION"')) {
+          result.finishReason = 'content_filter';
+          result.complete = true;
         }
       }
 

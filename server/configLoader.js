@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from './pathUtils.js';
+import config from './config.js';
 
 const cache = new Map();
 const CACHE_TTL = 60 * 1000; // 60 seconds
@@ -8,7 +9,7 @@ const CACHE_TTL = 60 * 1000; // 60 seconds
 function resolvePath(relativePath) {
   const rootDir = getRootDir();
 
-  const contentsDir = process.env.CONTENTS_DIR || 'contents';
+  const contentsDir = config.CONTENTS_DIR;
 
   const normalized = path.normalize(relativePath).replace(/^(\.\.(?:[\\/]|$))+/, '');
 

@@ -18,24 +18,22 @@ const path = require('path');
 const url = require('url');
 const fs = require('fs');
 
-// Get the directory where the executable is located
-const binDir = process.env.APP_ROOT_DIR || path.dirname(process.execPath);
-console.log(`Running server from directory: ${binDir}`);
-
-// Function to dynamically import the ESM server module
 async function startServer() {
   try {
+    require('dotenv').config();
+    const { default: config } = await import('./config.js');
+
+    const binDir = config.APP_ROOT_DIR || path.dirname(process.execPath);
+    console.log(`Running server from directory: ${binDir}`);
     console.log('Initializing AI Hub Apps server...');
-    
-    // For SEA, we need to use fileURLToPath equivalent for CommonJS
+
     const serverPath = path.join(binDir, 'server', 'server.js');
     const serverUrl = url.pathToFileURL(serverPath).href;
-    
+
     console.log(`Importing server module from: ${serverUrl}`);
-    
-    // Dynamically import the ESM server module
-    const serverModule = await import(serverUrl);
-    
+
+    await import(serverUrl);
+
     console.log('Server module loaded successfully');
   } catch (err) {
     console.error('Error starting server:', err);

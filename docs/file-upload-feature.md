@@ -42,7 +42,7 @@ The file upload feature allows users to upload text files and PDF documents to t
 - File content is processed in `processMessageTemplates()`
 - All AI adapters (OpenAI, Anthropic, Google) handle file content
 - Content is automatically included in AI prompts
-- Server configured with 50MB request body limit to handle file uploads
+- Server configured with the `requestBodyLimitMB` setting in `platform.json` (default 50MB) to handle file uploads
 
 ### Configuration
 Enable file upload for an app by adding to the app configuration:
@@ -83,7 +83,7 @@ Enable file upload for an app by adding to the app configuration:
 **fileUpload.maxFileSizeMB** (number)
 - Maximum file size in megabytes
 - Default: `10`
-- Range: 1-50 (limited by server configuration)
+- Range: 1-50 (limited by the `requestBodyLimitMB` setting)
 
 **fileUpload.supportedTextFormats** (array)
 - List of supported MIME types for text files

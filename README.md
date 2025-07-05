@@ -205,6 +205,8 @@ The server can be configured through environment variables or by editing the `co
 | `ANTHROPIC_API_KEY` | Anthropic API key | (required) |
 | `GOOGLE_API_KEY` | Google AI API key | (required) |
 
+The maximum JSON request body size is configured via the `requestBodyLimitMB` option in `contents/config/platform.json`.
+
 ### SSL Configuration
 
 For HTTPS support, set these environment variables or define them in `config.env`:

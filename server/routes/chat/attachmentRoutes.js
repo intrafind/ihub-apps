@@ -2,6 +2,7 @@ import { getAttachmentPath } from '../../services/imageService.js';
 import path from 'path';
 import fs from 'fs/promises';
 import { getRootDir } from '../../pathUtils.js';
+import config from '../../config.js';
 
 export default function registerAttachmentRoutes(app) {
   app.get('/api/apps/:appId/chat/:chatId/attachments/:attachmentId', async (req, res) => {
@@ -22,7 +23,7 @@ export default function registerAttachmentRoutes(app) {
     if (!/^[A-Za-z0-9_-]+$/.test(chatId) || !/^[A-Za-z0-9_-]+$/.test(toolId) || !/^[A-Za-z0-9._-]+$/.test(attachmentId)) {
       return res.status(400).json({ error: 'Invalid parameters' });
     }
-    const dataDir = process.env.DATA_DIR || 'data';
+    const dataDir = config.DATA_DIR;
     const filePath = path.join(getRootDir(), dataDir, 'chats', chatId, 'tools', toolId, attachmentId);
     try {
       await fs.access(filePath);

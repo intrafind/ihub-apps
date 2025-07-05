@@ -1,12 +1,11 @@
 /**
  * Anthropic API adapter
  */
-import { parseSSEBuffer } from './streamUtils.js';
 import { formatToolsForAnthropic } from './toolFormatter.js';
 
 const AnthropicAdapter = {
   /**
-   * Format messages for Anthropic API, including handling image data and file data
+   * Format messages for Anthropic API, including handling image data
    */
   formatMessages(messages) {
     // Extract system message and filter it out from the messages array
@@ -14,15 +13,9 @@ const AnthropicAdapter = {
     const systemMessage = messages.find(msg => msg.role === 'system');
     const filteredMessages = messages.filter(msg => msg.role !== 'system');
     
-    // Process messages to handle image data and file data
+    // Process messages to handle image data
     const processedMessages = filteredMessages.map(msg => {
-      let content = msg.content;
-      
-      // If there's file data, prepend it to the content
-      if (msg.fileData && msg.fileData.content) {
-        const fileInfo = `[File: ${msg.fileData.name} (${msg.fileData.type})]\n\n${msg.fileData.content}\n\n`;
-        content = fileInfo + (content || '');
-      }
+      const content = msg.content;
       
       // If the message doesn't have image data, return a clean message with text content (possibly including file content)
       if (!msg.imageData) {
@@ -120,7 +113,7 @@ const AnthropicAdapter = {
   /**
    * Process streaming response from Anthropic
    */
-  processResponseBuffer(buffer) {
+  processResponseBuffer(data) {
     const result = {
       content: [],
       complete: false,
@@ -129,28 +122,24 @@ const AnthropicAdapter = {
       finishReason: null
     };
 
-    const { events, done } = parseSSEBuffer(buffer);
-    if (done) result.complete = true;
+    if (!data) return result;
+    try {
+      const parsed = JSON.parse(data);
 
-    for (const evt of events) {
-      try {
-        const data = JSON.parse(evt);
-
-        if (data.type === 'content_block_delta' && data.delta && data.delta.text) {
-          result.content.push(data.delta.text);
-        } else if (data.type === 'message_delta' && data.delta && data.delta.content) {
-          result.content.push(data.delta.content);
-        }
-
-        if (data.type === 'message_stop') {
-          result.complete = true;
-          result.finishReason = 'stop';
-        }
-      } catch (parseError) {
-        console.error('Error parsing Claude response chunk:', parseError);
-        result.error = true;
-        result.errorMessage = `Error parsing Claude response: ${parseError.message}`;
+      if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.text) {
+        result.content.push(parsed.delta.text);
+      } else if (parsed.type === 'message_delta' && parsed.delta && parsed.delta.content) {
+        result.content.push(parsed.delta.content);
       }
+
+      if (parsed.type === 'message_stop') {
+        result.complete = true;
+        result.finishReason = 'stop';
+      }
+    } catch (parseError) {
+      console.error('Error parsing Claude response chunk:', parseError);
+      result.error = true;
+      result.errorMessage = `Error parsing Claude response: ${parseError.message}`;
     }
 
     return result;

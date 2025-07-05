@@ -3,6 +3,7 @@ import { createCompletionRequest } from '../adapters/index.js';
 import { recordMagicPrompt, estimateTokens } from '../usageTracker.js';
 import validate from '../validators/validate.js';
 import { magicPromptSchema } from '../validators/index.js';
+import config from '../config.js';
 
 export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT }) {
   app.post('/api/magic-prompt', validate(magicPromptSchema), async (req, res) => {
@@ -16,7 +17,7 @@ export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_T
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }
-      const selectedModelId = modelId || process.env.MAGIC_PROMPT_MODEL || 'gpt-3.5-turbo';
+      const selectedModelId = modelId || config.MAGIC_PROMPT_MODEL || 'gpt-3.5-turbo';
       const model = models.find(m => m.id === selectedModelId);
       if (!model) {
         return res.status(400).json({ error: 'Model not found' });
@@ -25,7 +26,7 @@ export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_T
       if (!apiKey) {
         return res.status(500).json({ error: `API key not found for model: ${model.id}` });
       }
-      const systemPrompt = prompt || process.env.MAGIC_PROMPT_PROMPT || 'Improve the following prompt.';
+      const systemPrompt = prompt || config.MAGIC_PROMPT_PROMPT || 'Improve the following prompt.';
       const messages = [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: input }
