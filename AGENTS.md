@@ -25,6 +25,10 @@ This document gives Codex instructions for working with the **ai-hub-apps** repo
    which will run npm install for server and client
 3. Copy `config.env` and set the required API keys (e.g. `OPENAI_API_KEY`).
 
+## Concepts
+Every new feature, will have a concept in the folder concept folder. Always check the concept regarding information. When implementing new features, make sure that an concept document exists. If none exists, always make sure to create one.
+If one exists, make sure that you update it with decisions we have taken and where code related to the feature can be found.
+
 ## Development
 Start the development environment which runs both client and server:
 ```bash
