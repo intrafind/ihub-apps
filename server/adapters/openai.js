@@ -6,26 +6,20 @@ import { formatToolsForOpenAI } from './toolFormatter.js';
 
 const OpenAIAdapter = {
   /**
-   * Format messages for OpenAI API, including handling image data and file data
+   * Format messages for OpenAI API, including handling image data
    * @param {Array} messages - Messages to format
    * @returns {Array} Formatted messages for OpenAI API
    */
   formatMessages(messages) {
-    // Handle image data and file data in messages
+    // Handle image data in messages
     const formattedMessages = messages.map(message => {
-      let content = message.content;
-      
-      // If there's file data, prepend it to the content
-      if (message.fileData && message.fileData.content) {
-        const fileInfo = `[File: ${message.fileData.name} (${message.fileData.type})]\n\n${message.fileData.content}\n\n`;
-        content = fileInfo + (content || '');
-      }
-      
-      // If there's no image data, return a clean message with text content (possibly including file content)
+      const content = message.content;
+
+      // If there's no image data, return a clean message with text content
       if (!message.imageData) {
         return {
           role: message.role,
-          content: content
+          content
         };
       }
 

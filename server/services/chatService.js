@@ -7,6 +7,17 @@ import { getToolsForApp, runTool } from '../toolLoader.js';
 import { normalizeName } from '../adapters/toolFormatter.js';
 import { sendSSE, activeRequests } from '../sse.js';
 
+// Prepend file data to message content when present
+export function preprocessMessagesWithFileData(messages) {
+  return messages.map(msg => {
+    if (msg.fileData && msg.fileData.content) {
+      const fileInfo = `[File: ${msg.fileData.name} (${msg.fileData.type})]\n\n${msg.fileData.content}\n\n`;
+      return { ...msg, content: fileInfo + (msg.content || '') };
+    }
+    return msg;
+  });
+}
+
 // Prepare the LLM request (load app and model, process messages, verify API key)
 export async function prepareChatRequest({
   appId,
@@ -47,7 +58,8 @@ export async function prepareChatRequest({
   }
 
   // Prepare messages for the model
-  const llmMessages = await processMessageTemplates(messages, bypassAppPrompts ? null : app, style, outputFormat, language);
+  let llmMessages = await processMessageTemplates(messages, bypassAppPrompts ? null : app, style, outputFormat, language);
+  llmMessages = preprocessMessagesWithFileData(llmMessages);
 
   // Determine token limit based on app configuration and retry flag
   const appTokenLimit = app.tokenLimit || 1024;
