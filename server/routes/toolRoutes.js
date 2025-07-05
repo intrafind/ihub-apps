@@ -1,5 +1,7 @@
 import { loadTools, runTool } from '../toolLoader.js';
 import { logInteraction } from '../utils.js';
+import validate from '../validators/validate.js';
+import { runToolSchema } from '../validators/index.js';
 
 export default function registerToolRoutes(app) {
   app.get('/api/tools', async (req, res) => {
@@ -12,7 +14,7 @@ export default function registerToolRoutes(app) {
     }
   });
 
-  app.all('/api/tools/:toolId', async (req, res) => {
+  app.all('/api/tools/:toolId', validate(runToolSchema), async (req, res) => {
     const { toolId } = req.params;
     const params = req.method === 'GET' ? req.query : req.body;
     if (req.headers['x-chat-id']) {

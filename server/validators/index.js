@@ -1,0 +1,64 @@
+import { z } from 'zod';
+
+export const startSessionSchema = {
+  body: z.object({
+    sessionId: z.string().min(1),
+    type: z.string().optional(),
+    metadata: z.record(z.any()).optional()
+  })
+};
+
+export const feedbackSchema = {
+  body: z.object({
+    messageId: z.string().min(1),
+    appId: z.string().min(1),
+    chatId: z.string().min(1),
+    messageContent: z.string().optional(),
+    rating: z.string().min(1),
+    feedback: z.string().optional(),
+    modelId: z.string().optional()
+  })
+};
+
+export const magicPromptSchema = {
+  body: z.object({
+    input: z.string().min(1),
+    prompt: z.string().optional(),
+    modelId: z.string().optional(),
+    appId: z.string().optional()
+  })
+};
+
+export const runToolSchema = {
+  params: z.object({ toolId: z.string().min(1) }),
+  body: z.record(z.any()).optional(),
+  query: z.record(z.any()).optional()
+};
+
+export const chatTestSchema = {
+  params: z.object({ modelId: z.string().min(1) })
+};
+
+export const chatConnectSchema = {
+  params: z.object({
+    appId: z.string().min(1),
+    chatId: z.string().min(1)
+  })
+};
+
+export const chatPostSchema = {
+  params: z.object({
+    appId: z.string().min(1),
+    chatId: z.string().min(1)
+  }),
+  body: z.object({
+    messages: z.array(z.any()),
+    modelId: z.string().optional(),
+    temperature: z.any().optional(),
+    style: z.string().optional(),
+    outputFormat: z.string().optional(),
+    language: z.string().optional(),
+    useMaxTokens: z.any().optional(),
+    bypassAppPrompts: z.any().optional()
+  })
+};

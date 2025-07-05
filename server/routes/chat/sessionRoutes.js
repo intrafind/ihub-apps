@@ -10,9 +10,11 @@ import {
   processChatWithTools
 } from '../../services/chatService.js';
 import { estimateTokens } from '../../usageTracker.js';
+import validate from '../../validators/validate.js';
+import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 
 export default function registerSessionRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }) {
-  app.get('/api/models/:modelId/chat/test', async (req, res) => {
+  app.get('/api/models/:modelId/chat/test', validate(chatTestSchema), async (req, res) => {
     try {
       const { modelId } = req.params;
       const messages = [{ role: 'user', content: 'Say hello!' }];
@@ -78,7 +80,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
     }
   });
 
-  app.get('/api/apps/:appId/chat/:chatId', async (req, res) => {
+  app.get('/api/apps/:appId/chat/:chatId', validate(chatConnectSchema), async (req, res) => {
     try {
       const { appId, chatId } = req.params;
       res.setHeader('Content-Type', 'text/event-stream');
@@ -112,7 +114,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
     }
   });
 
-  app.post('/api/apps/:appId/chat/:chatId', async (req, res) => {
+  app.post('/api/apps/:appId/chat/:chatId', validate(chatPostSchema), async (req, res) => {
     try {
       const { appId, chatId } = req.params;
       const { messages, modelId, temperature, style, outputFormat, language, useMaxTokens, bypassAppPrompts } = req.body;

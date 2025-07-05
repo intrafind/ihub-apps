@@ -1,9 +1,11 @@
 import { logInteraction } from '../../utils.js';
 import { sendSSE } from '../../sse.js';
 import { recordFeedback } from '../../usageTracker.js';
+import validate from '../../validators/validate.js';
+import { feedbackSchema } from '../../validators/index.js';
 
 export default function registerFeedbackRoutes(app, { getLocalizedError }) {
-  app.post('/api/feedback', async (req, res) => {
+  app.post('/api/feedback', validate(feedbackSchema), async (req, res) => {
     try {
       const { messageId, appId, chatId, messageContent, rating, feedback, modelId } = req.body;
       const language = req.headers['accept-language']?.split(',')[0] || 'en';
