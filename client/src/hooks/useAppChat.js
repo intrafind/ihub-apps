@@ -20,6 +20,11 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   const chatId = initialChatId || `chat-${Date.now()}`;
   const [processing, setProcessing] = useState(false);
 
+  // Refs to keep mutable values between renders without relying on window
+  const lastMessageIdRef = useRef(null);
+  const pendingMessageDataRef = useRef(null);
+  const lastUserMessageRef = useRef(null);
+
   const {
     messages,
     messagesRef,
@@ -40,29 +45,29 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   // Update callbacks ref
   callbacksRef.current = {
     onChunk: (fullContent) => {
-      if (window.lastMessageId) {
-        updateAssistantMessage(window.lastMessageId, fullContent, true);
+      if (lastMessageIdRef.current) {
+        updateAssistantMessage(lastMessageIdRef.current, fullContent, true);
       }
     },
     onDone: (finalContent, info) => {
-      console.log('✅ Message completed:', { contentLength: finalContent?.length || 0, finishReason: info.finishReason, messageId: window.lastMessageId });
-      if (window.lastMessageId) {
-        updateAssistantMessage(window.lastMessageId, finalContent, false, {
+      console.log('✅ Message completed:', { contentLength: finalContent?.length || 0, finishReason: info.finishReason, messageId: lastMessageIdRef.current });
+      if (lastMessageIdRef.current) {
+        updateAssistantMessage(lastMessageIdRef.current, finalContent, false, {
           finishReason: info.finishReason,
         });
-        
+
         // Trigger onMessageComplete callback if provided
         if (onMessageComplete && typeof onMessageComplete === 'function') {
-          console.log('🔄 Calling onMessageComplete with:', { 
-            contentLength: finalContent?.length || 0, 
-            userMessage: window.lastUserMessage,
+          console.log('🔄 Calling onMessageComplete with:', {
+            contentLength: finalContent?.length || 0,
+            userMessage: lastUserMessageRef.current,
             hasCallback: !!onMessageComplete
           });
-          onMessageComplete(finalContent, window.lastUserMessage);
+          onMessageComplete(finalContent, lastUserMessageRef.current);
         } else {
-          console.log('⚠️  No onMessageComplete callback provided or not a function:', { 
-            hasCallback: !!onMessageComplete, 
-            typeOfCallback: typeof onMessageComplete 
+          console.log('⚠️  No onMessageComplete callback provided or not a function:', {
+            hasCallback: !!onMessageComplete,
+            typeOfCallback: typeof onMessageComplete
           });
         }
       } else {
@@ -71,22 +76,22 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       setProcessing(false);
     },
     onError: (error) => {
-      if (window.lastMessageId) {
-        setMessageError(window.lastMessageId, error.message);
+      if (lastMessageIdRef.current) {
+        setMessageError(lastMessageIdRef.current, error.message);
       }
       setProcessing(false);
     },
     onConnected: async () => {
       try {
-        if (window.pendingMessageData) {
-          const { appId, chatId, messages, params } = window.pendingMessageData;
+        if (pendingMessageDataRef.current) {
+          const { appId, chatId, messages, params } = pendingMessageDataRef.current;
           await sendAppChatMessage(appId, chatId, messages, params);
-          window.pendingMessageData = null;
+          pendingMessageDataRef.current = null;
         }
       } catch (error) {
-        if (window.lastMessageId) {
+        if (lastMessageIdRef.current) {
           setMessageError(
-            window.lastMessageId,
+            lastMessageIdRef.current,
             t(
               'error.failedToGenerateResponse',
               'Error: Failed to generate response. Please try again or select a different model.'
@@ -146,10 +151,10 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         cleanupEventSource();
         setProcessing(true);
         const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-        window.lastMessageId = exchangeId;
-        
+        lastMessageIdRef.current = exchangeId;
+
         // Store the user message content for the onMessageComplete callback
-        window.lastUserMessage = apiMessage.content;
+        lastUserMessageRef.current = apiMessage.content;
 
         // Ensure we extract content properly and default to empty string if needed
         const contentToAdd = typeof displayMessage === 'string' 
@@ -169,7 +174,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           fileData: apiMessage.fileData,
         });
 
-        window.pendingMessageData = {
+        pendingMessageDataRef.current = {
           appId,
           chatId: chatId,
           messages: messagesForAPI,
@@ -231,10 +236,10 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
 
   const cancelGeneration = useCallback(() => {
     cleanupEventSource();
-    if (window.lastMessageId) {
-      const currentMessage = messagesRef.current.find((m) => m.id === window.lastMessageId);
+    if (lastMessageIdRef.current) {
+      const currentMessage = messagesRef.current.find((m) => m.id === lastMessageIdRef.current);
       updateAssistantMessage(
-        window.lastMessageId,
+        lastMessageIdRef.current,
         (currentMessage?.content || '') + t('message.generationCancelled', ' [Generation cancelled]'),
         false
       );

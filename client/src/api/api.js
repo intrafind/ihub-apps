@@ -205,17 +205,6 @@ export const streamAppChat = async (appId, chatId) => {
  * @returns {Promise<Response>} - Response from the API
  */
 export const sendAppChatMessage = async (appId, chatId, messages, options = {}) => {
-  // Ensure the last message in the array includes the messageId if available
-  if (messages && messages.length > 0) {
-    const lastMessage = messages[messages.length - 1];
-    
-    // Log the messageId if it's being sent through
-    if (lastMessage && lastMessage.messageId) {
-      console.log(`Sending message with ID: ${lastMessage.messageId}`);
-    } else {
-      console.warn('No messageId found in the last message');
-    }
-  }
 
   if (!appId || !chatId || !messages) {
     throw new Error('Missing required parameters');
