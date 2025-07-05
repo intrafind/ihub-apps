@@ -2,7 +2,6 @@
 import OpenAIAdapter from './openai.js';
 import AnthropicAdapter from './anthropic.js';
 import GoogleAdapter from './google.js';
-export { parseSSEBuffer } from './streamUtils.js';
 
 // Adapter registry
 const adapters = {

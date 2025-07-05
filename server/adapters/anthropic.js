@@ -1,7 +1,6 @@
 /**
  * Anthropic API adapter
  */
-import { parseSSEBuffer } from './streamUtils.js';
 import { formatToolsForAnthropic } from './toolFormatter.js';
 
 const AnthropicAdapter = {
@@ -114,7 +113,7 @@ const AnthropicAdapter = {
   /**
    * Process streaming response from Anthropic
    */
-  processResponseBuffer(buffer) {
+  processResponseBuffer(data) {
     const result = {
       content: [],
       complete: false,
@@ -123,28 +122,24 @@ const AnthropicAdapter = {
       finishReason: null
     };
 
-    const { events, done } = parseSSEBuffer(buffer);
-    if (done) result.complete = true;
+    if (!data) return result;
+    try {
+      const parsed = JSON.parse(data);
 
-    for (const evt of events) {
-      try {
-        const data = JSON.parse(evt);
-
-        if (data.type === 'content_block_delta' && data.delta && data.delta.text) {
-          result.content.push(data.delta.text);
-        } else if (data.type === 'message_delta' && data.delta && data.delta.content) {
-          result.content.push(data.delta.content);
-        }
-
-        if (data.type === 'message_stop') {
-          result.complete = true;
-          result.finishReason = 'stop';
-        }
-      } catch (parseError) {
-        console.error('Error parsing Claude response chunk:', parseError);
-        result.error = true;
-        result.errorMessage = `Error parsing Claude response: ${parseError.message}`;
+      if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.text) {
+        result.content.push(parsed.delta.text);
+      } else if (parsed.type === 'message_delta' && parsed.delta && parsed.delta.content) {
+        result.content.push(parsed.delta.content);
       }
+
+      if (parsed.type === 'message_stop') {
+        result.complete = true;
+        result.finishReason = 'stop';
+      }
+    } catch (parseError) {
+      console.error('Error parsing Claude response chunk:', parseError);
+      result.error = true;
+      result.errorMessage = `Error parsing Claude response: ${parseError.message}`;
     }
 
     return result;
