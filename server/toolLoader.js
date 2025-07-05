@@ -1,4 +1,5 @@
 import { loadJson } from './configLoader.js';
+import config from './config.js';
 
 /**
  * Load tools defined locally in config/tools.json
@@ -12,7 +13,7 @@ export async function loadConfiguredTools() {
  * Discover tools from an MCP (Model Context Protocol) server if configured
  */
 export async function discoverMcpTools() {
-  const mcpUrl = process.env.MCP_SERVER_URL;
+  const mcpUrl = config.MCP_SERVER_URL;
   if (!mcpUrl) return [];
 
   try {

@@ -4,13 +4,14 @@ import path from 'path';
 import { Builder } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import { getRootDir } from '../pathUtils.js';
+import config from '../config.js';
 import pdfParse from 'pdf-parse';
 
 export default async function seleniumScreenshot({ url, format = 'png', fullPage = true, chatId = 'default' }) {
   if (!url) {
     throw new Error('url parameter is required');
   }
-  const dataDir = process.env.DATA_DIR || 'data';
+  const dataDir = config.DATA_DIR;
   const toolId = 'seleniumScreenshot';
   const ext = format === 'pdf' ? 'pdf' : 'png';
   const fileName = `${crypto.randomUUID()}.${ext}`;

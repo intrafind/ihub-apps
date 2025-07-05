@@ -1,12 +1,13 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
+import config from './config.js';
 
 export function getRootDir() {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
-  const isPackaged = process.pkg !== undefined || process.env.APP_ROOT_DIR !== undefined;
+  const isPackaged = process.pkg !== undefined || config.APP_ROOT_DIR !== undefined;
   return isPackaged
-    ? (process.env.APP_ROOT_DIR || path.dirname(process.execPath))
+    ? (config.APP_ROOT_DIR || path.dirname(process.execPath))
     : path.join(__dirname, '..');
 }

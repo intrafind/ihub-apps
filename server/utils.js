@@ -1,4 +1,5 @@
 import { loadJson } from "./configLoader.js";
+import config from "./config.js";
 
 /**
  * Helper function to get API key for a model
@@ -29,31 +30,31 @@ export async function getApiKeyForModel(modelId) {
     switch (provider) {
       case 'openai':
         if (model.url && model.url.includes('/images')) {
-          return process.env.OPENAI_IMAGE_API_KEY || process.env.OPENAI_API_KEY;
+          return config.OPENAI_IMAGE_API_KEY || config.OPENAI_API_KEY;
         }
-        return process.env.OPENAI_API_KEY;
+        return config.OPENAI_API_KEY;
       case 'anthropic':
-        return process.env.ANTHROPIC_API_KEY;
+        return config.ANTHROPIC_API_KEY;
       case 'google':
         if (model.url && model.url.includes(':generateImage')) {
-          return process.env.GOOGLE_IMAGEN_API_KEY || process.env.GOOGLE_API_KEY;
+          return config.GOOGLE_IMAGEN_API_KEY || config.GOOGLE_API_KEY;
         }
-        return process.env.GOOGLE_API_KEY;
+        return config.GOOGLE_API_KEY;
       case 'local':
         // For local models, check if there's a specific LOCAL_API_KEY or return a default empty string
         // This allows local models to work without authentication in many cases
-        return process.env.LOCAL_API_KEY || '';
+        return config.LOCAL_API_KEY || '';
       default:
         // Try to find a generic API key based on provider name (e.g., COHERE_API_KEY for provider 'cohere')
-        const genericKey = process.env[`${provider.toUpperCase()}_API_KEY`];
+        const genericKey = config[`${provider.toUpperCase()}_API_KEY`];
         if (genericKey) {
           return genericKey;
         }
         
         // Check for a default API key as last resort
-        if (process.env.DEFAULT_API_KEY) {
+        if (config.DEFAULT_API_KEY) {
           console.log(`Using DEFAULT_API_KEY for provider: ${provider}`);
-          return process.env.DEFAULT_API_KEY;
+          return config.DEFAULT_API_KEY;
         }
         
         console.error(`No API key found for provider: ${provider}`);
@@ -349,7 +350,7 @@ export async function simpleCompletion(prompt, { model: modelId, temperature = 0
     throw new Error(`Model ${modelId} not found`);
   }
 
-  const apiKey = process.env[`${model.provider.toUpperCase()}_API_KEY`];
+  const apiKey = config[`${model.provider.toUpperCase()}_API_KEY`];
   if (!apiKey) {
     throw new Error(`API key for ${model.provider} not found in environment variables.`);
   }
