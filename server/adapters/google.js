@@ -6,14 +6,14 @@ import { formatToolsForGoogle, normalizeName } from './toolFormatter.js';
 
 const GoogleAdapter = {
   /**
-   * Format messages for Google Gemini API, including handling image data and file data
+   * Format messages for Google Gemini API, including handling image data
    */
   formatMessages(messages) {
     // Extract system message for separate handling
     let systemInstruction = '';
     const geminiContents = [];
     
-    // First pass - extract system messages and handle image data and file data
+    // First pass - extract system messages and handle image data
     for (const message of messages) {
       if (message.role === 'system') {
         // Collect system messages - ideally there should be only one
@@ -67,13 +67,7 @@ const GoogleAdapter = {
         // Convert OpenAI roles to Gemini roles
         const geminiRole = message.role === 'assistant' ? 'model' : 'user';
         
-        let textContent = message.content;
-        
-        // If there's file data, prepend it to the content
-        if (message.fileData && message.fileData.content) {
-          const fileInfo = `[File: ${message.fileData.name} (${message.fileData.type})]\n\n${message.fileData.content}\n\n`;
-          textContent = fileInfo + (textContent || '');
-        }
+        const textContent = message.content;
         
         // Check if this message contains image data
         if (message.imageData && message.imageData.base64) {
