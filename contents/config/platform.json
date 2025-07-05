@@ -2,6 +2,7 @@
   "features": {
     "usageTracking": true
   },
+  "requestBodyLimitMB": 50,
   "telemetry": {
     "enabled": false,
     "metrics": true,
