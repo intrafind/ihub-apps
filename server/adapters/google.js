@@ -200,14 +200,17 @@ const GoogleAdapter = {
           }
           result.complete = true;
           const fr = parsed.candidates[0].finishReason;
-          if (fr === 'STOP') {
-            result.finishReason = 'stop';
-          } else if (fr === 'MAX_TOKENS') {
-            result.finishReason = 'length';
-          } else if (fr === 'SAFETY' || fr === 'RECITATION') {
-            result.finishReason = 'content_filter';
-          } else {
-            result.finishReason = fr;
+          // Only set finishReason from Gemini if we don't already have tool_calls
+          if (result.finishReason !== 'tool_calls') {
+            if (fr === 'STOP') {
+              result.finishReason = 'stop';
+            } else if (fr === 'MAX_TOKENS') {
+              result.finishReason = 'length';
+            } else if (fr === 'SAFETY' || fr === 'RECITATION') {
+              result.finishReason = 'content_filter';
+            } else {
+              result.finishReason = fr;
+            }
           }
         }
         // Handle streaming response chunks - process content parts
@@ -248,17 +251,23 @@ const GoogleAdapter = {
           const fr = parsed.candidates[0].finishReason;
           // Map Gemini finish reasons to normalized values used by the client
           // Documented reasons include STOP, MAX_TOKENS, SAFETY, RECITATION and OTHER
-          if (fr === 'STOP') {
-            result.finishReason = 'stop';
-            result.complete = true;
-          } else if (fr === 'MAX_TOKENS') {
-            result.finishReason = 'length';
-            result.complete = true;
-          } else if (fr === 'SAFETY' || fr === 'RECITATION') {
-            result.finishReason = 'content_filter';
-            result.complete = true;
+          // Only set finishReason from Gemini if we don't already have tool_calls
+          if (result.finishReason !== 'tool_calls') {
+            if (fr === 'STOP') {
+              result.finishReason = 'stop';
+              result.complete = true;
+            } else if (fr === 'MAX_TOKENS') {
+              result.finishReason = 'length';
+              result.complete = true;
+            } else if (fr === 'SAFETY' || fr === 'RECITATION') {
+              result.finishReason = 'content_filter';
+              result.complete = true;
+            } else {
+              result.finishReason = fr;
+            }
           } else {
-            result.finishReason = fr;
+            // If we have tool_calls, mark as complete but preserve the tool_calls finish reason
+            result.complete = true;
           }
         }
       } catch (jsonError) {
