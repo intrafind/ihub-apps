@@ -2229,7 +2229,7 @@
     "preferredStyle": "detailed",
     "preferredTemperature": 1.0,
     "sendChatHistory": false,
-    "tools": ["deepResearch"],
+    "tools": ["researchPlanner", "deepResearch"],
     "settings": {
       "enabled": true,
       "model": { "enabled": true },
