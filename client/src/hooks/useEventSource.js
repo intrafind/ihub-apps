@@ -34,6 +34,9 @@ function useEventSource({
         const ev = eventSourceRef.current;
         eventSourceRef.current = null;
         if (ev) {
+          if (ev.__handlers && ev.__handlers.events) {
+            ev.__handlers.events.forEach((evt) => ev.removeEventListener(evt, ev.__handlers.handleEvent));
+          }
           ev.onmessage = null;
           ev.onerror = null;
           ev.close();
@@ -102,8 +105,28 @@ function useEventSource({
       }
     };
 
+    const events = [
+      'connected',
+      'chunk',
+      'done',
+      'error',
+      'processing',
+      'research-start',
+      'research-query-analysis',
+      'research-round',
+      'research-results',
+      'research-fetch',
+      'research-fetched',
+      'research-refine',
+      'research-refined',
+      'research-complete',
+      'research-error'
+    ];
+
+    events.forEach((evt) => eventSource.addEventListener(evt, handleEvent));
     eventSource.onmessage = handleEvent;
     eventSource.onerror = handleEvent;
+    eventSource.__handlers = { handleEvent, events };
 
     startHeartbeat();
     return eventSource;
