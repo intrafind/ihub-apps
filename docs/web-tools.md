@@ -11,7 +11,9 @@ The platform now includes several web-related tools:
 3. **enhancedWebSearch** - Combined web search with automatic content extraction
 4. **playwrightScreenshot** - Capture screenshots or PDFs using Playwright
 5. **seleniumScreenshot** - Capture screenshots or PDFs using Selenium
-6. **queryRewriter** - Rewrite search queries for deeper results
+6. **evaluator** - Evaluate draft answers for definitiveness, freshness and completeness
+7. **answerReducer** - Merge multiple texts into one concise article
+7. **queryRewriter** - Rewrite search queries for deeper results
 
 ## Tools Description
 
@@ -128,8 +130,38 @@ The platform now includes several web-related tools:
   "format": "png"
 }
 ```
+### 6. Answer Evaluator (`evaluator`)
 
-### 6. Query Rewriter (`queryRewriter`)
+**Purpose**: Check a draft answer for definitiveness, freshness and completeness.
+
+**Parameters**:
+- `question` (string, required): Original user question
+- `answer` (string, required): Draft answer to evaluate
+- `model` (string, optional): Model ID used for the evaluation (default `gemini-1.5-flash`)
+
+**Returns**: Array `evaluation` with one entry per check containing `type`, `pass`, and `think` fields.
+
+**Example Usage**:
+```javascript
+{
+  "question": "What are the latest AI trends?",
+  "answer": "AI is progressing rapidly..."
+}
+```
+
+### 7. Answer Reducer (`answerReducer`)
+
+**Purpose**: Compress multiple text excerpts into a single well-structured article.
+
+**Usage**: Pass an array of strings under the `answers` parameter.
+
+```json
+{
+  "answers": ["text from source 1", "text from source 2"]
+}
+```
+
+### 8. Query Rewriter (`queryRewriter`)
 
 **Purpose**: Generate optimized variations of a user search query.
 
