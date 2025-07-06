@@ -1,5 +1,6 @@
 import braveSearch from './braveSearch.js';
 import webContentExtractor from './webContentExtractor.js';
+import finalizer from './finalizer.js';
 import { sendSSE, clients } from '../sse.js';
 import { simpleCompletion } from '../utils.js';
 
@@ -116,14 +117,24 @@ export default async function deepResearch({
   });
   
   // Create a detailed summary for the AI that emphasizes the URLs
-  const sourceSummary = aggregated.map((source, index) => 
+  const sourceSummary = aggregated.map((source, index) =>
     `${index + 1}. "${source.title}" - ${source.url}\n   Content: ${source.content.substring(0, 200)}...`
   ).join('\n\n');
-  
+
+  let finalAnswer = '';
+  try {
+    sendProgress('research-finalizing', { sources: aggregated.length });
+    finalAnswer = await finalizer({ question: query, results: aggregated, model });
+    sendProgress('research-finalized', { length: finalAnswer.length });
+  } catch (err) {
+    console.error('Failed to finalize answer:', err);
+  }
+
   return {
     query,
     sources: aggregated,
     sourceSummary: `Found ${aggregated.length} sources for query "${query}":\n\n${sourceSummary}`,
-    instruction: "IMPORTANT: When presenting your findings, always include the source URLs from the sources array. Each source has a 'url' field that must be cited in your response."
+    instruction: "IMPORTANT: When presenting your findings, always include the source URLs from the sources array. Each source has a 'url' field that must be cited in your response.",
+    finalAnswer
   };
 }
