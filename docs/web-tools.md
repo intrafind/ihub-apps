@@ -11,7 +11,8 @@ The platform now includes several web-related tools:
 3. **enhancedWebSearch** - Combined web search with automatic content extraction
 4. **playwrightScreenshot** - Capture screenshots or PDFs using Playwright
 5. **seleniumScreenshot** - Capture screenshots or PDFs using Selenium
-6. **answerReducer** - Merge multiple texts into one concise article
+6. **evaluator** - Evaluate draft answers for definitiveness, freshness and completeness
+7. **answerReducer** - Merge multiple texts into one concise article
 
 ## Tools Description
 
@@ -129,6 +130,37 @@ The platform now includes several web-related tools:
 }
 ```
 
+### 6. Answer Evaluator (`evaluator`)
+
+**Purpose**: Check a draft answer for definitiveness, freshness and completeness.
+
+**Parameters**:
+- `question` (string, required): Original user question
+- `answer` (string, required): Draft answer to evaluate
+- `model` (string, optional): Model ID used for the evaluation (default `gemini-1.5-flash`)
+
+**Returns**: Array `evaluation` with one entry per check containing `type`, `pass`, and `think` fields.
+
+**Example Usage**:
+```javascript
+{
+  "question": "What are the latest AI trends?",
+  "answer": "AI is progressing rapidly..."
+}
+```
+
+### 7. Answer Reducer (`answerReducer`)
+
+**Purpose**: Compress multiple text excerpts into a single well-structured article.
+
+**Usage**: Pass an array of strings under the `answers` parameter.
+
+```json
+{
+  "answers": ["text from source 1", "text from source 2"]
+}
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -195,18 +227,6 @@ The "Chat with Web" app has been updated to use the enhanced web search function
   "query": "renewable energy market analysis",
   "maxRounds": 2,
   "chatId": "{currentChatId}"
-}
-```
-
-### 5. Answer Reducer (`answerReducer`)
-
-**Purpose**: Compress multiple text excerpts into a single well-structured article.
-
-**Usage**: Pass an array of strings under the `answers` parameter.
-
-```json
-{
-  "answers": ["text from source 1", "text from source 2"]
 }
 ```
 
