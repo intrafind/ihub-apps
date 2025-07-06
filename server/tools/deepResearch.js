@@ -120,8 +120,8 @@ export default async function deepResearch({
     `${index + 1}. "${source.title}" - ${source.url}\n   Content: ${source.content.substring(0, 200)}...`
   ).join('\n\n');
   
-  return { 
-    query, 
+  return {
+    query,
     sources: aggregated,
     sourceSummary: `Found ${aggregated.length} sources for query "${query}":\n\n${sourceSummary}`,
     instruction: "IMPORTANT: When presenting your findings, always include the source URLs from the sources array. Each source has a 'url' field that must be cited in your response."
