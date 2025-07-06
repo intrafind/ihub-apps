@@ -61,7 +61,6 @@ const ChatWidget = ({
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,
-    addMessageThought,
     setMessageError,
     deleteMessage,
     editMessage,
@@ -135,11 +134,6 @@ const ChatWidget = ({
       }
       setProcessing(false);
       setUseMaxTokens(false);
-    },
-    onThinking: (data) => {
-      if (window.lastMessageId) {
-        addMessageThought(window.lastMessageId, data.thought || data);
-      }
     },
     onConnected: async (event) => {
       try {

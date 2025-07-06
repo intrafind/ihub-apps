@@ -14,7 +14,6 @@ import { checkAppChatStatus, stopAppChatStream } from '../api/api';
  * @param {Function} options.onError - Callback for when an error occurs
  * @param {Function} options.onConnected - Callback for when the connection is established
  * @param {Function} options.onProcessingChange - Callback to update processing state
- * @param {Function} options.onThinking - Callback for intermediate thinking events
  * @returns {Object} The event source management methods and references
  */
 function useEventSource({
@@ -25,8 +24,7 @@ function useEventSource({
   onDone,
   onError,
   onConnected,
-  onProcessingChange,
-  onThinking
+  onProcessingChange
 }) {
   const { t } = useTranslation();
   const eventSourceRef = useRef(null);
@@ -73,7 +71,6 @@ function useEventSource({
           eventSource.removeEventListener('chunk', eventSource.onchunk);
           eventSource.removeEventListener('done', eventSource.ondone);
           eventSource.removeEventListener('error', eventSource.onerror);
-          eventSource.removeEventListener('thinking', eventSource.onthinking);
 
           // Finally close the connection
           eventSource.close();
@@ -166,19 +163,6 @@ function useEventSource({
     };
     
     eventSource.addEventListener('connected', eventSource.onconnected);
-
-    eventSource.onthinking = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (onThinking) {
-          onThinking(data);
-        }
-      } catch (error) {
-        console.error('Error processing thinking event:', error);
-      }
-    };
-
-    eventSource.addEventListener('thinking', eventSource.onthinking);
     
     eventSource.onchunk = (event) => {
       try {
@@ -268,7 +252,6 @@ function useEventSource({
     onDone,
     onError,
     onProcessingChange,
-    onThinking,
     startHeartbeat,
     timeoutDuration
   ]);
