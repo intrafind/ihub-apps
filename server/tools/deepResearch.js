@@ -1,5 +1,7 @@
 import braveSearch from './braveSearch.js';
 import webContentExtractor from './webContentExtractor.js';
+import queryRewriter from './queryRewriter.js';
+import finalizer from './finalizer.js';
 import { sendSSE, clients } from '../sse.js';
 import { simpleCompletion } from '../utils.js';
 
@@ -12,7 +14,6 @@ import { simpleCompletion } from '../utils.js';
  *   - contentMaxLength: max characters to extract per page (default 3000)
  *   - chatId: SSE chat session id for progress events
  *   - model: The language model to use for analysis and refinement
- *   - analysisTemperature: Temperature for the initial query analysis
  *   - refineTemperature: Temperature for the query refinement
  */
 export default async function deepResearch({
@@ -22,7 +23,6 @@ export default async function deepResearch({
   contentMaxLength = 3000,
   chatId,
   model = 'gemini-1.5-flash',
-  analysisTemperature = 0.2,
   refineTemperature = 0.5
 }) {
   if (!query) {
@@ -38,24 +38,34 @@ export default async function deepResearch({
 
   sendProgress('research-start', { query });
   const aggregated = [];
-  let currentQuery = query;
+  const queryQueue = [];
+  const executed = new Set();
 
-  // Analyze the initial query to extract keywords for a better first search
+  // Use query rewriter to generate multiple search queries
   try {
-    const analysisPrompt = `Analyze the following user query and extract the most relevant keywords for a web search. Return only the keywords, separated by spaces. Query: "${query}"`;
-    const analysisResponse = await simpleCompletion(analysisPrompt, { temperature: analysisTemperature, model });
-    const keywords = analysisResponse.trim();
-    if (keywords) {
-      currentQuery = keywords;
-      sendProgress('research-query-analysis', { originalQuery: query, keywords });
+    const rewrite = await queryRewriter({ query });
+    if (rewrite && Array.isArray(rewrite.queries)) {
+      for (const q of rewrite.queries) {
+        const qs = typeof q === 'string' ? q : q.q;
+        if (qs && !queryQueue.includes(qs)) {
+          queryQueue.push(qs);
+        }
+      }
+      sendProgress('research-query-rewrite', { originalQuery: query, newQueries: queryQueue });
     }
   } catch (err) {
-    sendProgress('research-error', { message: `Failed to analyze query: ${err.message}` });
-    // Proceed with the original query if analysis fails
+    sendProgress('research-error', { message: `Failed to rewrite query: ${err.message}` });
   }
 
-  for (let round = 1; round <= maxRounds; round++) {
+  if (queryQueue.length === 0) {
+    queryQueue.push(query);
+  }
+  let round = 0;
+  let currentQuery = queryQueue.shift();
+  while (round < maxRounds && currentQuery) {
+    round += 1;
     sendProgress('research-round', { round, query: currentQuery });
+    executed.add(currentQuery);
     const search = await braveSearch({ query: currentQuery });
     sendProgress('research-results', { round, count: search.results.length });
 
@@ -86,25 +96,21 @@ export default async function deepResearch({
       try {
         const contentSummary = aggregated.map(item => `URL: ${item.url}\nTitle: ${item.title}\nContent: ${item.content}`).join('\n\n---\n\n');
         const refinePrompt = `Based on the initial query "${query}" and the following research content, generate a new, more specific search query to find deeper information. Return only the new search query.\n\n<content>\n${contentSummary}\n</content>`;
-        
+
         sendProgress('research-refine', { round });
         const refinedQuery = await simpleCompletion(refinePrompt, { temperature: refineTemperature, model });
-        
-        if (refinedQuery && refinedQuery.trim() !== currentQuery) {
-          currentQuery = refinedQuery.trim();
-          sendProgress('research-refined', { round, newQuery: currentQuery });
-        } else {
-          // If the query doesn't change, no need for more rounds
-          sendProgress('research-complete', { sources: aggregated.length, message: "Query refinement did not produce a new query. Concluding research." });
-          return { query, sources: aggregated };
+
+        const trimmed = refinedQuery.trim();
+        if (trimmed && !executed.has(trimmed) && !queryQueue.includes(trimmed)) {
+          queryQueue.push(trimmed);
         }
+        sendProgress('research-refined', { round, newQuery: trimmed });
       } catch (err) {
         sendProgress('research-error', { round, message: `Failed to refine query: ${err.message}` });
-        // Stop if refinement fails
-        sendProgress('research-complete', { sources: aggregated.length, message: "Stopping due to an error during query refinement." });
-        return { query, sources: aggregated };
       }
     }
+
+    currentQuery = queryQueue.shift();
   }
 
   sendProgress('research-complete', { sources: aggregated.length });
@@ -116,14 +122,24 @@ export default async function deepResearch({
   });
   
   // Create a detailed summary for the AI that emphasizes the URLs
-  const sourceSummary = aggregated.map((source, index) => 
+  const sourceSummary = aggregated.map((source, index) =>
     `${index + 1}. "${source.title}" - ${source.url}\n   Content: ${source.content.substring(0, 200)}...`
   ).join('\n\n');
-  
-  return { 
-    query, 
+
+  let finalAnswer = '';
+  try {
+    sendProgress('research-finalizing', { sources: aggregated.length });
+    finalAnswer = await finalizer({ question: query, results: aggregated, model });
+    sendProgress('research-finalized', { length: finalAnswer.length });
+  } catch (err) {
+    console.error('Failed to finalize answer:', err);
+  }
+
+  return {
+    query,
     sources: aggregated,
     sourceSummary: `Found ${aggregated.length} sources for query "${query}":\n\n${sourceSummary}`,
-    instruction: "IMPORTANT: When presenting your findings, always include the source URLs from the sources array. Each source has a 'url' field that must be cited in your response."
+    instruction: "IMPORTANT: When presenting your findings, always include the source URLs from the sources array. Each source has a 'url' field that must be cited in your response.",
+    finalAnswer
   };
 }

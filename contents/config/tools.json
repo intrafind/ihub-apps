@@ -110,10 +110,61 @@
         },
         "chatId": { "type": "string", "description": "Chat session ID" }
       },
-      "required": ["query"]
+    "required": ["query"]
+    }
+  },
+  {
+    "id": "researchPlanner",
+    "name": "Research Planner",
+    "description": "Break down a research topic into distinct investigative tasks",
+    "script": "researchPlanner.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "question": { "type": "string", "description": "Research topic" },
+        "teamSize": {
+          "type": "integer",
+          "description": "Number of tasks to generate",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10
+        },
+        "soundBites": { "type": "string", "description": "Additional context" }
+      },
+      "required": ["question"]
+    }
+  },
+  ,{
+    "id": "evaluator",
+    "name": "Answer Evaluator",
+    "description": "Evaluate answers for definitiveness, freshness and completeness.",
+    "script": "evaluator.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "question": { "type": "string", "description": "Original user question" },
+        "answer": { "type": "string", "description": "Draft answer to evaluate" },
+        "model": { "type": "string", "description": "Model ID for evaluation", "default": "gemini-1.5-flash" }
+      },
+      "required": ["question", "answer"]
     }
   }
   ,{
+    "id": "queryRewriter",
+    "name": "Query Rewriter",
+    "description": "Rewrite user search queries into optimized variations.",
+    "script": "queryRewriter.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "Search query to rewrite" },
+        "think": { "type": "string", "description": "User motivation" },
+        "context": { "type": "string", "description": "Optional context" },
+        "model": { "type": "string", "description": "Model id", "default": "gpt-4o" }
+      },
+      "required": ["query"]
+    }
+  },{
     "id": "playwrightScreenshot",
     "name": "Website Screenshot (Playwright)",
     "description": "Capture a screenshot or PDF of a webpage using Playwright.",
@@ -125,7 +176,20 @@
         "format": { "type": "string", "enum": ["png", "pdf"], "default": "png" },
         "fullPage": { "type": "boolean", "default": true }
       },
-      "required": ["url"]
+    "required": ["url"]
+    }
+  },
+  {
+    "id": "answerReducer",
+    "name": "Answer Reducer",
+    "description": "Merge multiple text passages into a single concise article.",
+    "script": "answerReducer.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "answers": { "type": "array", "items": { "type": "string" }, "description": "Texts to merge" }
+      },
+      "required": ["answers"]
     }
   },
   {
