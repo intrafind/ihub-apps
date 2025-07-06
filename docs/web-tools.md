@@ -11,6 +11,7 @@ The platform now includes several web-related tools:
 3. **enhancedWebSearch** - Combined web search with automatic content extraction
 4. **playwrightScreenshot** - Capture screenshots or PDFs using Playwright
 5. **seleniumScreenshot** - Capture screenshots or PDFs using Selenium
+6. **evaluator** - Evaluate draft answers for definitiveness, freshness and completeness
 
 ## Tools Description
 
@@ -125,6 +126,25 @@ The platform now includes several web-related tools:
 {
   "url": "https://example.com",
   "format": "png"
+}
+```
+
+### 6. Answer Evaluator (`evaluator`)
+
+**Purpose**: Check a draft answer for definitiveness, freshness and completeness.
+
+**Parameters**:
+- `question` (string, required): Original user question
+- `answer` (string, required): Draft answer to evaluate
+- `model` (string, optional): Model ID used for the evaluation (default `gemini-1.5-flash`)
+
+**Returns**: Array `evaluation` with one entry per check containing `type`, `pass`, and `think` fields.
+
+**Example Usage**:
+```javascript
+{
+  "question": "What are the latest AI trends?",
+  "answer": "AI is progressing rapidly..."
 }
 ```
 

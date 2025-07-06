@@ -110,7 +110,22 @@
         },
         "chatId": { "type": "string", "description": "Chat session ID" }
       },
-      "required": ["query"]
+    "required": ["query"]
+    }
+  }
+  ,{
+    "id": "evaluator",
+    "name": "Answer Evaluator",
+    "description": "Evaluate answers for definitiveness, freshness and completeness.",
+    "script": "evaluator.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "question": { "type": "string", "description": "Original user question" },
+        "answer": { "type": "string", "description": "Draft answer to evaluate" },
+        "model": { "type": "string", "description": "Model ID for evaluation", "default": "gemini-1.5-flash" }
+      },
+      "required": ["question", "answer"]
     }
   }
   ,{
