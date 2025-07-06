@@ -88,18 +88,18 @@ const ChatInput = ({
   }, [isProcessing, allowEmptySubmit, customPlaceholder, i18n.language]);
   
   // Debug logging
-  useEffect(() => {
-    console.log("ChatInput placeholder state:", {
-      customPlaceholder,
-      defaultPlaceholder,
-      placeholderRef: placeholderRef.current,
-      appPlaceholder: app?.messagePlaceholder,
-      currentLanguage: i18n.language,
-      isUsingCustom: Boolean(customPlaceholder),
-      isProcessing,
-      allowEmptySubmit
-    });
-  }, [customPlaceholder, defaultPlaceholder, isProcessing, allowEmptySubmit, i18n.language, app?.messagePlaceholder]);
+  // useEffect(() => {
+  //   console.log("ChatInput placeholder state:", {
+  //     customPlaceholder,
+  //     defaultPlaceholder,
+  //     placeholderRef: placeholderRef.current,
+  //     appPlaceholder: app?.messagePlaceholder,
+  //     currentLanguage: i18n.language,
+  //     isUsingCustom: Boolean(customPlaceholder),
+  //     isProcessing,
+  //     allowEmptySubmit
+  //   });
+  // }, [customPlaceholder, defaultPlaceholder, isProcessing, allowEmptySubmit, i18n.language, app?.messagePlaceholder]);
 
   const focusInputAtEnd = () => {
     if (actualInputRef.current) {

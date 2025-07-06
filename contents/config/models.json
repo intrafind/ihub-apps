@@ -72,32 +72,12 @@
   },
   {
     "id": "hal9000-vllm",
-    "modelId": "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
+    "modelId": "Orion-zhen/Qwen3-8B-AWQ",
     "name": "Hal 9000 vLLM",
     "description": "Advanced model with strong reasoning and knowledge capabilities",
-    "url": "http://hal9000:1897/v1/chat/completions",
+    "url": "http://hal9000:8897/v1/chat/completions",
     "provider": "local",
     "tokenLimit": 8192,
-    "supportsTools": false
-  },
-  {
-    "id": "dall-e-3",
-    "modelId": "dall-e-3",
-    "name": "DALL-E 3",
-    "description": "Image generation model",
-    "url": "https://api.openai.com/v1/images/generations",
-    "provider": "openai",
-    "tokenLimit": 1,
-    "supportsTools": false
-  },
-  {
-    "id": "imagen-4",
-    "modelId": "imagen-4.0-generate-preview-06-06",
-    "name": "Imagen 4",
-    "description": "Google image generation model",
-    "url": "https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-preview-06-06:predict",
-    "provider": "google",
-    "tokenLimit": 1,
     "supportsTools": false
   }
 ]
