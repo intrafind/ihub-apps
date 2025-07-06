@@ -167,6 +167,7 @@ const GoogleAdapter = {
     try {
       const result = {
         content: [],
+        tool_calls: [],
         complete: false,
         error: false,
         errorMessage: null,
@@ -180,9 +181,23 @@ const GoogleAdapter = {
 
         // Handle full response object (non-streaming) - detect by presence of finishReason at the top level
         // OR if the response contains all expected fields for a complete response
-        if (parsed.candidates && parsed.candidates[0]?.finishReason && parsed.candidates[0]?.content?.parts?.[0]?.text) {
+        if (parsed.candidates && parsed.candidates[0]?.finishReason && parsed.candidates[0]?.content?.parts?.[0]) {
           // This is a complete non-streaming response
-          result.content.push(parsed.candidates[0].content.parts[0].text);
+          const part = parsed.candidates[0].content.parts[0];
+          if (part.text) {
+            result.content.push(part.text);
+          }
+          if (part.functionCall) {
+            result.tool_calls.push({
+              index: 0,
+              id: 'tool_call_1',
+              function: {
+                name: part.functionCall.name,
+                arguments: JSON.stringify(part.functionCall.args || {})
+              }
+            });
+            if (!result.finishReason) result.finishReason = 'tool_calls';
+          }
           result.complete = true;
           const fr = parsed.candidates[0].finishReason;
           if (fr === 'STOP') {
@@ -197,9 +212,21 @@ const GoogleAdapter = {
         }
         // Handle streaming response chunks - process content parts
         else if (parsed.candidates && parsed.candidates[0]?.content?.parts) {
+          let idx = result.tool_calls.length;
           for (const part of parsed.candidates[0].content.parts) {
             if (part.text) {
               result.content.push(part.text);
+            }
+            if (part.functionCall) {
+              result.tool_calls.push({
+                index: idx++,
+                id: `tool_call_${idx}`,
+                function: {
+                  name: part.functionCall.name,
+                  arguments: JSON.stringify(part.functionCall.args || {})
+                }
+              });
+              if (!result.finishReason) result.finishReason = 'tool_calls';
             }
           }
         }

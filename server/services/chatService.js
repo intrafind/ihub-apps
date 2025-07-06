@@ -80,7 +80,7 @@ export async function prepareChatRequest({
   const request = createCompletionRequest(model, llmMessages, apiKey, {
     temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
     maxTokens: finalTokens,
-    stream: tools.length === 0 && !!clientRes,
+    stream: !!clientRes,
     tools
   });
 
@@ -343,174 +343,188 @@ async function fetchJsonWithTimeout(request, DEFAULT_TIMEOUT) {
   return llmResponse.json();
 }
 
-// Execute a request with potential tool calls
-export async function processChatWithTools({
+
+// Execute a request with potential tool calls - non-blocking implementation
+export function processChatWithTools({
   prep,
-  res,
-  clientRes = null,
-  chatId = null,
+  clientRes,
+  chatId,
   buildLogData,
-  messageId,
   DEFAULT_TIMEOUT,
   getLocalizedError,
   clientLanguage
 }) {
-  console.log('Preparing to process chat with tools:', prep);
   const { request, model, llmMessages, tools, apiKey, temperature, maxTokens } = prep;
+  const controller = new AbortController();
+  activeRequests.set(chatId, controller);
 
-  try {
-    console.log('Processing chat with tools:', {
-      modelId: model.id,
-      provider: model.provider,
-      messages: llmMessages,
-      tools: tools.map(t => t.id),
-      temperature,
-      maxTokens
-    });
-    const firstResponse = await fetchJsonWithTimeout(request, DEFAULT_TIMEOUT);
-    console.log('Received first response:', {
-      modelId: model.id,
-      provider: model.provider,
-      response: firstResponse
-    });
-    // Normalize the response structure across providers
-    let choice;
-    // FIXME adapter specific handling should not be here
-    if (model.provider === 'google' && firstResponse.candidates) {
-      const candidate = firstResponse.candidates[0];
-      choice = {
-        message: {
-          content: candidate.content?.parts
-            ?.map(p => p.text || '')
-            .join('') || ''
-        },
-        finish_reason: candidate.finishReason
-      };
-      // Map Gemini functionCall to OpenAI-style tool_calls array
-      const fnCall = candidate.content?.parts?.find(p => p.functionCall);
-      if (fnCall) {
-        choice.message.tool_calls = [
-          {
-            id: 'tool_call_1',
-            function: {
-              name: fnCall.functionCall.name,
-              arguments: JSON.stringify(fnCall.functionCall.args || {})
-            }
-          }
-        ];
-        choice.finish_reason = 'tool_calls';
-      }
-    } else if (firstResponse.choices) {
-      choice = firstResponse.choices[0];
+  const timeoutId = setTimeout(async () => {
+    controller.abort();
+    const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT / 1000 }, clientLanguage);
+    sendSSE(clientRes, 'error', { message: errorMessage });
+    activeRequests.delete(chatId);
+  }, DEFAULT_TIMEOUT);
+
+  fetch(request.url, {
+    method: 'POST',
+    headers: request.headers,
+    body: JSON.stringify(request.body),
+    signal: controller.signal
+  })
+  .then(async (llmResponse) => {
+    clearTimeout(timeoutId);
+
+    if (!llmResponse.ok) {
+      const errorBody = await llmResponse.text();
+      throw Object.assign(new Error(`LLM API request failed with status ${llmResponse.status}`), { code: llmResponse.status.toString(), details: errorBody });
     }
-    //FIX choice can't be logged, because it contains an object
-    console.log('Choice after normalization:', JSON.stringify(choice));
-    if (choice && choice.finish_reason === 'tool_calls' && choice.message?.tool_calls?.length > 0) {
-      const toolCalls = choice.message.tool_calls;
-      console.log('Processing tool calls:', toolCalls);
 
-      llmMessages.push({ role: 'assistant', content: choice.message.content, tool_calls: toolCalls });
+    const reader = llmResponse.body.getReader();
+    const decoder = new TextDecoder();
+    const events = [];
+    const parser = createParser({ onEvent: (e) => events.push(e) });
 
-      for (const call of toolCalls) {
-        const toolId = tools.find(t => normalizeName(t.id) === call.function.name)?.id || call.function.name;
-        let args = {};
-        try {
-          args = JSON.parse(call.function.arguments || '{}');
-        } catch (e) {
-          console.error('Failed to parse tool arguments', e);
+    let assistantContent = '';
+    const collectedToolCalls = [];
+    let finishReason = null;
+    let done = false;
+
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      if (readerDone || !activeRequests.has(chatId)) {
+        if (!activeRequests.has(chatId)) reader.cancel();
+        break;
+      }
+
+      const chunk = decoder.decode(value, { stream: true });
+      parser.feed(chunk);
+
+      while (events.length > 0) {
+        const evt = events.shift();
+        const result = processResponseBuffer(model.provider, evt.data);
+
+        if (result.error) {
+          throw Object.assign(new Error(result.errorMessage || 'Error processing response'), { code: 'PROCESSING_ERROR' });
         }
-        args.chatId = chatId;
-        console.log(`Running tool ${toolId} with args:`, args);
-        const result = await runTool(toolId, { ...args, chatId });
 
-        // Log tool usage including input and output for tracking
-        await logInteraction('tool_usage', buildLogData(!!clientRes, {
-          toolId,
-          toolInput: args,
-          toolOutput: result
-        }));
+        if (result.content?.length > 0) {
+          for (const text of result.content) {
+            assistantContent += text;
+            sendSSE(clientRes, 'chunk', { content: text });
+          }
+        }
+        
+        if (result.tool_calls?.length > 0) {
+          result.tool_calls.forEach(call => {
+            const existingCall = collectedToolCalls.find(c => c.id === call.id);
+            if (existingCall) {
+              if (call.function?.arguments) {
+                existingCall.function.arguments += call.function.arguments;
+              }
+            } else if (call.id && call.function?.name) {
+              collectedToolCalls.push({
+                id: call.id,
+                function: {
+                  name: call.function.name,
+                  arguments: call.function.arguments || ''
+                }
+              });
+            }
+          });
+        }
 
-        llmMessages.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          name: call.function.name,
-          content: JSON.stringify(result)
-        });
+        if (result.finishReason) {
+          finishReason = result.finishReason;
+        }
+
+        if (result.complete) {
+          done = true;
+          break;
+        }
       }
-
-      const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
-        temperature,
-        maxTokens,
-        stream: !!clientRes,
-        tools
-      });
-
-      if (clientRes) {
-        return executeStreamingResponse({
-          request: followRequest,
-          chatId,
-          clientRes,
-          buildLogData,
-          model,
-          llmMessages,
-          DEFAULT_TIMEOUT,
-          getLocalizedError,
-          clientLanguage
-        });
-      }
-
-      return executeNonStreamingResponse({
-        request: followRequest,
-        res,
-        buildLogData,
-        messageId,
-        model,
-        llmMessages,
-        DEFAULT_TIMEOUT
-      });
     }
 
-    // No tool calls - return or stream the first response
-    if (clientRes) {
-      const content = choice?.message?.content || '';
-      sendSSE(clientRes, 'chunk', { content });
-      sendSSE(clientRes, 'done', {});
-      await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: content.substring(0, 1000) }));
+    if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+      sendSSE(clientRes, 'done', { finishReason: finishReason || 'stop' });
+      await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
+      activeRequests.delete(chatId);
       return;
     }
+    
+    const toolNames = collectedToolCalls.map(c => c.function.name).join(', ');
+    sendSSE(clientRes, 'processing', { message: `Using tool(s): ${toolNames}...` });
 
-    firstResponse.messageId = messageId;
-    await logInteraction('chat_response', buildLogData(false, { responseType: 'success', response: choice?.message?.content?.substring(0, 1000) || '' }));
-    return res.json(firstResponse);
-  } catch (error) {
-    const errorDetails = getErrorDetails(error, model);
-    let localizedMessage = errorDetails.message;
-    if (error.code) {
-      const translated = await getLocalizedError(error.code, {}, clientLanguage);
-      if (translated && !translated.startsWith('Error:')) {
-        localizedMessage = translated;
+    llmMessages.push({ role: 'assistant', content: assistantContent, tool_calls: collectedToolCalls });
+
+    for (const call of collectedToolCalls) {
+      const toolId = tools.find(t => normalizeName(t.id) === call.function.name)?.id || call.function.name;
+      let args = {};
+      try {
+        let finalArgs = call.function.arguments.replace(/}{/g, ',');
+        try {
+          args = JSON.parse(finalArgs);
+        } catch(e) {
+          if (!finalArgs.startsWith('{')) finalArgs = '{' + finalArgs;
+          if (!finalArgs.endsWith('}')) finalArgs = finalArgs + '}';
+          try {
+             args = JSON.parse(finalArgs);
+          } catch (e2) {
+             console.error("Failed to parse tool arguments even after correction:", call.function.arguments, e2);
+             args = {};
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse tool arguments:", call.function.arguments, e);
       }
+      
+      const result = await runTool(toolId, { ...args, chatId });
+
+      await logInteraction('tool_usage', buildLogData(true, {
+        toolId,
+        toolInput: args,
+        toolOutput: result
+      }));
+
+      llmMessages.push({ role: 'tool', tool_call_id: call.id, name: call.function.name, content: JSON.stringify(result) });
     }
 
-    if (clientRes) {
+    const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
+      temperature,
+      maxTokens,
+      stream: true,
+      tools
+    });
+
+    executeStreamingResponse({
+      request: followRequest,
+      chatId,
+      clientRes,
+      buildLogData,
+      model,
+      llmMessages,
+      DEFAULT_TIMEOUT,
+      getLocalizedError,
+      clientLanguage
+    });
+
+  })
+  .catch(async (error) => {
+    clearTimeout(timeoutId);
+    if (error.name !== 'AbortError') {
+      const errorDetails = getErrorDetails(error, model);
+      let localizedMessage = errorDetails.message;
+      if (error.code) {
+        const translated = await getLocalizedError(error.code, {}, clientLanguage);
+        if (translated && !translated.startsWith('Error:')) localizedMessage = translated;
+      }
+      
       const errMsg = {
         message: localizedMessage,
         code: error.code || errorDetails.code,
-        modelId: model.id,
-        provider: model.provider,
-        recommendation: errorDetails.recommendation,
         details: error.details || error.message
       };
       sendSSE(clientRes, 'error', errMsg);
-    } else {
-      return res.status(500).json({
-        error: localizedMessage,
-        code: error.code || errorDetails.code,
-        modelId: model.id,
-        provider: model.provider,
-        recommendation: errorDetails.recommendation,
-        details: error.details || error.message
-      });
     }
-  }
+    activeRequests.delete(chatId);
+  });
 }

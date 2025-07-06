@@ -79,6 +79,7 @@ const OpenAIAdapter = {
   processResponseBuffer(data) {
     const result = {
       content: [],
+      tool_calls: [],
       complete: false,
       error: false,
       errorMessage: null,
@@ -95,16 +96,36 @@ const OpenAIAdapter = {
       const parsed = JSON.parse(data);
 
       // Handle full response object (non-streaming)
-      if (parsed.choices && parsed.choices[0]?.message?.content) {
-        result.content.push(parsed.choices[0].message.content);
+      if (parsed.choices && parsed.choices[0]?.message) {
+        if (parsed.choices[0].message.content) {
+          result.content.push(parsed.choices[0].message.content);
+        }
+        if (parsed.choices[0].message.tool_calls) {
+          result.tool_calls.push(...parsed.choices[0].message.tool_calls);
+        }
         result.complete = true;
         if (parsed.choices[0].finish_reason) {
           result.finishReason = parsed.choices[0].finish_reason;
         }
       }
       // Handle streaming response chunks
-      else if (parsed.choices && parsed.choices[0]?.delta?.content) {
-        result.content.push(parsed.choices[0].delta.content);
+      else if (parsed.choices && parsed.choices[0]?.delta) {
+        const delta = parsed.choices[0].delta;
+        if (delta.content) {
+          result.content.push(delta.content);
+        }
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const normalized = { index: tc.index };
+            if (tc.id) normalized.id = tc.id;
+            if (tc.function) {
+              normalized.function = { ...tc.function };
+            } else if (tc.delta && tc.delta.function) {
+              normalized.function = { ...tc.delta.function };
+            }
+            result.tool_calls.push(normalized);
+          }
+        }
       }
 
       if (parsed.choices && parsed.choices[0]?.finish_reason) {
