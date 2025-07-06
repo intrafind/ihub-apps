@@ -5,7 +5,7 @@ import { fetchPrompts } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Icon from '../components/Icon';
 import PromptModal from '../components/PromptModal';
-import { getFavoritePrompts, toggleFavoritePrompt } from '../utils/favoritePrompts';
+import { createFavoriteItemHelpers } from '../utils/favoriteItems';
 import { getRecentPromptIds, recordPromptUsage } from '../utils/recentPrompts';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { highlightVariables } from '../utils/highlightVariables';
@@ -23,6 +23,9 @@ const PromptsList = () => {
   const [favoritePromptIds, setFavoritePromptIds] = useState([]);
   const [recentPromptIds, setRecentPromptIds] = useState([]);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
+
+  // Create favorite prompts helpers
+  const { getFavorites: getFavoritePrompts, toggleFavorite: toggleFavoritePrompt } = createFavoriteItemHelpers('aihub_favorite_prompts');
   const [copyStatus, setCopyStatus] = useState({});
   const [searchParams] = useSearchParams();
   const { uiConfig } = useUIConfig();

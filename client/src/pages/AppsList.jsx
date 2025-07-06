@@ -4,7 +4,7 @@ import { fetchApps } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useLocalizedTranslation } from '../hooks/useLocalizedTranslation';
 import { getLocalizedContent } from '../utils/localizeContent';
-import { getFavoriteApps, isAppFavorite, toggleFavoriteApp } from '../utils/favoriteApps';
+import { createFavoriteItemHelpers } from '../utils/favoriteItems';
 import { getRecentAppIds } from '../utils/recentApps';
 import { useUIConfig } from '../components/UIConfigContext';
 import Icon from '../components/Icon';
@@ -14,6 +14,9 @@ const AppsList = () => {
   const { t, i18n } = useLocalizedTranslation();
   const currentLanguage = i18n.language;
   const { resetHeaderColor, uiConfig } = useUIConfig();
+  
+  // Create favorite apps helpers
+  const { getFavorites: getFavoriteApps, isFavorite: isAppFavorite, toggleFavorite: toggleFavoriteApp } = createFavoriteItemHelpers('aihub_favorite_apps');
   
   // Get search configuration from UI config with defaults
   const searchConfig = useMemo(() => {
