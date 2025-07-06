@@ -9,7 +9,8 @@ I've successfully implemented a comprehensive web content extraction and search 
 1. **`webContentExtractor.js`** - Extracts clean, readable content from any webpage
 2. **`enhancedWebSearch.js`** - Combines web search with automatic content extraction
 3. **`researchPlanner.js`** - Generates structured research plans
-4. **Updated existing tools configuration** in `tools.json`
+4. **`answerReducer.js`** - Merges multiple research results into one article
+5. **Updated existing tools configuration** in `tools.json`
 
 ### 🚀 Key Features
 

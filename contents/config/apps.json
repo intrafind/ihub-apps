@@ -2221,15 +2221,15 @@
     "color": "#0F766E",
     "icon": "magnifying-glass",
     "system": {
-      "en": "You are a specialist in deep web research. Use the deepResearch tool to search, extract and consolidate information from multiple sources. Provide progress updates and return a well-structured report with cited sources. Cite the sources in a section at the end with all URLs and Source titles. Format them as [Source Title](URL) make sure to escape special characters like [] in the Source Title.",
-      "de": "Du bist auf tiefgehende Webrecherchen spezialisiert. Nutze das deepResearch-Tool, um Informationen aus mehreren Quellen zu suchen, zu extrahieren und zusammenzufassen. Informiere kontinuierlich über den Fortschritt und liefere einen strukturierten Bericht mit Quellenangaben und ihren entsprechenden URLs im Format [Quellen Titel](URL) achte darauf, spezielle Zeichen wie [] im Quellentitel zu formatieren."
+      "en": "You are a specialist in deep web research. Use the deepResearch tool to search, extract and consolidate information from multiple sources. Provide progress updates and return a well-structured report with cited sources. Cite the sources in a section at the end with all URLs and Source titles. Format them as [Source Title](URL) make sure to escape special characters like [] in the Source Title. After drafting your answer, call the evaluator tool with the original question and your draft. If the evaluation fails, refine your answer using the critique and run the evaluator again until it passes or after two attempts.",
+      "de": "Du bist auf tiefgehende Webrecherchen spezialisiert. Nutze das deepResearch-Tool, um Informationen aus mehreren Quellen zu suchen, zu extrahieren und zusammenzufassen. Informiere kontinuierlich über den Fortschritt und liefere einen strukturierten Bericht mit Quellenangaben und ihren entsprechenden URLs im Format [Quellen Titel](URL) achte darauf, spezielle Zeichen wie [] im Quellentitel zu formatieren. Nachdem du deine Antwort formuliert hast, verwende das evaluator-Tool mit der ursprünglichen Frage und deinem Entwurf. Besteht die Bewertung nicht, verbessere deine Antwort anhand des Feedbacks und führe das Tool erneut aus, bis es besteht oder nach zwei Versuchen."
     },
     "tokenLimit": 12000,
     "preferredOutputFormat": "markdown",
     "preferredStyle": "detailed",
     "preferredTemperature": 1.0,
     "sendChatHistory": false,
-    "tools": ["researchPlanner", "deepResearch"],
+    "tools": ["researchPlanner", "deepResearch", "queryRewriter", "evaluator"],
     "settings": {
       "enabled": true,
       "model": { "enabled": true },
