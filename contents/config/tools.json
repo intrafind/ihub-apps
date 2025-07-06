@@ -114,6 +114,21 @@
     }
   }
   ,{
+    "id": "queryRewriter",
+    "name": "Query Rewriter",
+    "description": "Rewrite user search queries into optimized variations.",
+    "script": "queryRewriter.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "Search query to rewrite" },
+        "think": { "type": "string", "description": "User motivation" },
+        "context": { "type": "string", "description": "Optional context" },
+        "model": { "type": "string", "description": "Model id", "default": "gpt-4o" }
+      },
+      "required": ["query"]
+    }
+  },{
     "id": "playwrightScreenshot",
     "name": "Website Screenshot (Playwright)",
     "description": "Capture a screenshot or PDF of a webpage using Playwright.",

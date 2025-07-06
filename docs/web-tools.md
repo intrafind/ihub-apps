@@ -11,6 +11,7 @@ The platform now includes several web-related tools:
 3. **enhancedWebSearch** - Combined web search with automatic content extraction
 4. **playwrightScreenshot** - Capture screenshots or PDFs using Playwright
 5. **seleniumScreenshot** - Capture screenshots or PDFs using Selenium
+6. **queryRewriter** - Rewrite search queries for deeper results
 
 ## Tools Description
 
@@ -125,6 +126,24 @@ The platform now includes several web-related tools:
 {
   "url": "https://example.com",
   "format": "png"
+}
+```
+
+### 6. Query Rewriter (`queryRewriter`)
+
+**Purpose**: Generate optimized variations of a user search query.
+
+**Parameters**:
+- `query` (string, required): The original search query
+- `think` (string, optional): Additional motivation or notes
+- `context` (string, optional): Optional contextual text
+
+**Returns**: An array of rewritten queries.
+
+**Example Usage**:
+```javascript
+{
+  "query": "best renewable energy sources"
 }
 ```
 
