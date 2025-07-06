@@ -178,6 +178,7 @@ export async function executeStreamingResponse({
   getLocalizedError,
   clientLanguage
 }) {
+  // TODO localize
   sendSSE(clientRes, 'processing', { message: 'Processing your request...' });
   const controller = new AbortController();
   activeRequests.set(chatId, controller);
@@ -220,9 +221,13 @@ export async function executeStreamingResponse({
     const reader = llmResponse.body.getReader();
     const decoder = new TextDecoder();
     const events = [];
-    const parser = createParser(event => {
-      if (event.type === 'event') {
-        events.push(event);
+    const parser = createParser({
+      onEvent: (event) => {
+        console.debug('Received event:', event);
+        // Handle events without explicit type (Google sends data events without event type)
+        if (event.type === 'event' || !event.type) {
+          events.push(event);
+        }
       }
     });
     let fullResponse = '';
@@ -292,6 +297,7 @@ export async function executeStreamingResponse({
       activeRequests.delete(chatId);
     }
   }).catch(async (error) => {
+    console.error('Error occurred while processing chat:', error);
     clearTimeout(timeoutId);
     if (error.name !== 'AbortError') {
       const errorDetails = getErrorDetails(error, model);

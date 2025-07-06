@@ -113,7 +113,7 @@ const GoogleAdapter = {
    * Create a completion request for Gemini
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true, tools = null } = options;
+    const { temperature = 0.7, stream = true, tools = null, ...otherOptions } = options;
     
     // Format messages and extract system instruction
     const { contents, systemInstruction } = this.formatMessages(messages);
@@ -121,7 +121,12 @@ const GoogleAdapter = {
     // Build Gemini API URL with API key
     let url;
     if (stream) {
-      url = `${model.url}?alt=sse&key=${apiKey}`;
+      // For streaming requests, use the streamGenerateContent endpoint with alt=sse
+      // Ensure the URL ends with streamGenerateContent for streaming
+      const baseUrl = model.url.includes(':streamGenerateContent') 
+        ? model.url 
+        : model.url.replace(':generateContent', ':streamGenerateContent');
+      url = `${baseUrl}?alt=sse&key=${apiKey}`;
     } else {
       // Convert the configured streaming URL to the non-streaming endpoint
       const nonStreamingUrl = model.url.replace(':streamGenerateContent', ':generateContent');
@@ -145,10 +150,7 @@ const GoogleAdapter = {
     if (systemInstruction) {
       requestBody.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
-    
-    console.log('Request URL:', url.replace(apiKey, '[REDACTED]'));
-    console.log('Request body:', JSON.stringify(requestBody, null, 2));
-    
+
     return {
       url,
       headers: {
@@ -197,23 +199,33 @@ const GoogleAdapter = {
 
         if (parsed.candidates && parsed.candidates[0]?.finishReason) {
           const fr = parsed.candidates[0].finishReason;
-            // Map Gemini finish reasons to normalized values used by the client
-            // Documented reasons include STOP, MAX_TOKENS, SAFETY, RECITATION and OTHER
-            if (fr === 'STOP') {
-              result.finishReason = 'stop';
-              result.complete = true;
-            } else if (fr === 'MAX_TOKENS') {
-              result.finishReason = 'length';
-              result.complete = true;
-            } else if (fr === 'SAFETY' || fr === 'RECITATION') {
-              result.finishReason = 'content_filter';
-              result.complete = true;
-            } else {
-              result.finishReason = fr;
-            }
+          // Map Gemini finish reasons to normalized values used by the client
+          // Documented reasons include STOP, MAX_TOKENS, SAFETY, RECITATION and OTHER
+          if (fr === 'STOP') {
+            result.finishReason = 'stop';
+            result.complete = true;
+          } else if (fr === 'MAX_TOKENS') {
+            result.finishReason = 'length';
+            result.complete = true;
+          } else if (fr === 'SAFETY' || fr === 'RECITATION') {
+            result.finishReason = 'content_filter';
+            result.complete = true;
+          } else {
+            result.finishReason = fr;
           }
         }
       } catch (jsonError) {
+        console.error('Failed to parse Google response as JSON:', jsonError.message);
+        console.error('Raw response data that failed to parse:', data);
+        
+        // Check if this is an error response from Google API
+        if (data.includes('callbacks') && data.includes('function')) {
+          console.error('Google API returned a callbacks-related error. This suggests an issue with the request format.');
+          result.error = true;
+          result.errorMessage = data.includes('`callbacks`') ? data : 'Google API error related to callbacks parameter';
+          return result;
+        }
+        
         // Fallback to regex if JSON parsing fails
         const textMatches = data.match(/"text":\s*"([^"]*)"/g);
         if (textMatches) {
@@ -238,6 +250,8 @@ const GoogleAdapter = {
       return result;
     } catch (error) {
       console.error('Error processing Gemini response:', error);
+      console.error('Error stack:', error.stack);
+      console.error('Raw data that caused the error:', data);
       return {
         content: [],
         complete: true,

@@ -22,11 +22,11 @@ export function formatToolsForAnthropic(tools = []) {
 }
 
 export function formatToolsForGoogle(tools = []) {
-  return tools.map(t => ({
-    functionDeclarations: [{
+  return [{
+    functionDeclarations: tools.map(t => ({
       name: normalizeName(t.id || t.name),
       description: t.description || '',
       parameters: t.parameters || { type: 'object', properties: {} }
-    }]
-  }));
+    }))
+  }];
 }

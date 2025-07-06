@@ -25,6 +25,9 @@ const env = cleanEnv(process.env, {
   GOOGLE_IMAGEN_API_KEY: str({ optional: true }),
   LOCAL_API_KEY: str({ optional: true }),
   DEFAULT_API_KEY: str({ optional: true })
+}, {
+  reporter: () => {}, // Disable envalid's default reporter that shows missing variables
+  dotEnvPath: null    // Disable envalid's own dotenv loading since we handle it ourselves
 });
 
 const config = Object.freeze({
