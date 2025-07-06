@@ -1,9 +1,12 @@
 import { loadJson } from '../configLoader.js';
+import configCache from '../configCache.js';
 
 export default function registerGeneralRoutes(app, { getLocalizedError }) {
   app.get('/api/apps', async (req, res) => {
     try {
-      const apps = await loadJson('config/apps.json');
+      // Try to get apps from cache first
+      let apps = configCache.getApps();
+      
       if (!apps) {
         return res.status(500).json({ error: 'Failed to load apps configuration' });
       }
@@ -18,7 +21,10 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     try {
       const { appId } = req.params;
       const language = req.headers['accept-language']?.split(',')[0] || 'en';
-      const apps = await loadJson('config/apps.json');
+      
+      // Try to get apps from cache first
+      let apps = configCache.getApps();
+      
       if (!apps) {
         return res.status(500).json({ error: 'Failed to load apps configuration' });
       }

@@ -1,9 +1,12 @@
 import { loadJson } from '../../configLoader.js';
+import configCache from '../../configCache.js';
 
 export default function registerDataRoutes(app) {
   app.get('/api/styles', async (req, res) => {
     try {
-      const styles = await loadJson('config/styles.json');
+      // Try to get styles from cache first
+      let styles = configCache.getStyles();
+
       if (!styles) {
         return res.status(500).json({ error: 'Failed to load styles configuration' });
       }
@@ -16,7 +19,9 @@ export default function registerDataRoutes(app) {
 
   app.get('/api/prompts', async (req, res) => {
     try {
-      const prompts = await loadJson('config/prompts.json');
+      // Try to get prompts from cache first
+      let prompts = configCache.getPrompts();
+      
       if (!prompts) {
         return res.status(500).json({ error: 'Failed to load prompts configuration' });
       }
@@ -44,11 +49,15 @@ export default function registerDataRoutes(app) {
         console.log(`Language '${lang}' not supported, falling back to default language 'en'`);
         lang = 'en';
       }
-      const translations = await loadJson(`locales/${lang}.json`);
+      // Try to get translations from cache first
+      let translations = configCache.getLocalizations(lang);
+      
       if (!translations) {
         console.error(`Failed to load translations for language: ${lang}`);
         if (lang !== 'en') {
-          const enTranslations = await loadJson('locales/en.json');
+          // Try to get English translations from cache first
+          let enTranslations = configCache.getLocalizations('en');
+          
           if (enTranslations) {
             return res.json(enTranslations);
           }
@@ -59,7 +68,9 @@ export default function registerDataRoutes(app) {
     } catch (error) {
       console.error(`Error fetching translations for language ${req.params.lang}:`, error);
       try {
-        const enTranslations = await loadJson('locales/en.json');
+        // Try to get English translations from cache first as fallback
+        let enTranslations = configCache.getLocalizations('en');
+
         if (enTranslations) {
           return res.json(enTranslations);
         }
@@ -72,7 +83,9 @@ export default function registerDataRoutes(app) {
 
   app.get('/api/ui', async (req, res) => {
     try {
-      const uiConfig = await loadJson('config/ui.json');
+      // Try to get UI config from cache first
+      let uiConfig = configCache.getUI();
+      
       if (!uiConfig) {
         return res.status(500).json({ error: 'Failed to load UI configuration' });
       }

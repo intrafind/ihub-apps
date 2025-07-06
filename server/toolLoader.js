@@ -1,11 +1,17 @@
 import { loadJson } from './configLoader.js';
 import config from './config.js';
+import configCache from './configCache.js';
 
 /**
  * Load tools defined locally in config/tools.json
  */
 export async function loadConfiguredTools() {
-  const tools = await loadJson('config/tools.json');
+  // Try to get tools from cache first
+  let tools = configCache.getTools();
+  if (!tools) {
+    console.warn('Tools could not be loaded');
+  }
+
   return tools || [];
 }
 

@@ -1,11 +1,14 @@
 import { loadJson, loadText } from '../configLoader.js';
+import configCache from '../configCache.js';
 
 export default function registerPageRoutes(app) {
   app.get('/api/pages/:pageId', async (req, res) => {
     const { pageId } = req.params;
     const lang = req.query.lang || 'en';
     try {
-      const uiConfig = await loadJson('config/ui.json');
+      // Try to get UI config from cache first
+      let uiConfig = configCache.getUI();
+      
       if (!uiConfig || !uiConfig.pages || !uiConfig.pages[pageId]) {
         return res.status(404).json({ error: 'Page not found' });
       }

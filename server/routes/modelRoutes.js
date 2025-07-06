@@ -1,9 +1,12 @@
 import { loadJson } from '../configLoader.js';
+import configCache from '../configCache.js';
 
 export default function registerModelRoutes(app, { getLocalizedError }) {
   app.get('/api/models', async (req, res) => {
     try {
-      const models = await loadJson('config/models.json');
+      // Try to get models from cache first
+      let models = configCache.getModels();
+      
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }
@@ -18,7 +21,10 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
     try {
       const { modelId } = req.params;
       const language = req.headers['accept-language']?.split(',')[0] || 'en';
-      const models = await loadJson('config/models.json');
+      
+      // Try to get models from cache first
+      let models = configCache.getModels();
+      
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }

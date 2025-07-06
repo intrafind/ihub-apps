@@ -1,5 +1,6 @@
 // Chat service helper functions
 import { loadJson } from '../configLoader.js';
+import configCache from '../configCache.js';
 import { createCompletionRequest, processResponseBuffer } from '../adapters/index.js';
 import { getErrorDetails, logInteraction } from '../utils.js';
 import { recordChatRequest, recordChatResponse, estimateTokens } from '../usageTracker.js';
@@ -35,8 +36,8 @@ export async function prepareChatRequest({
   res,
   clientRes
 }) {
-  // Load app configuration
-  const apps = await loadJson('config/apps.json');
+  // Try to get apps from cache first
+  let apps = configCache.getApps();
   if (!apps) {
     return { error: 'Failed to load apps configuration' };
   }
@@ -45,8 +46,8 @@ export async function prepareChatRequest({
     return { error: 'appNotFound' };
   }
 
-  // Load models
-  const models = await loadJson('config/models.json');
+  // Try to get models from cache first
+  let models = configCache.getModels(); 
   if (!models) {
     return { error: 'Failed to load models configuration' };
   }
@@ -253,11 +254,6 @@ export async function executeStreamingResponse({
               fullResponse += textContent;
             }
           }
-          if (result && result.thinking && result.thinking.length > 0) {
-            for (const thought of result.thinking) {
-              sendSSE(clientRes, 'thinking', { thought });
-            }
-          }
           if (result && result.error) {
             await logInteraction('chat_error', buildLogData(true, {
               responseType: 'error',
@@ -379,6 +375,7 @@ export async function processChatWithTools({
     });
     // Normalize the response structure across providers
     let choice;
+    // FIXME adapter specific handling should not be here
     if (model.provider === 'google' && firstResponse.candidates) {
       const candidate = firstResponse.candidates[0];
       choice = {

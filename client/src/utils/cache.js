@@ -352,6 +352,7 @@ export const CACHE_KEYS = {
   STYLES: 'styles',
   PROMPTS: 'prompts',
   UI_CONFIG: 'ui-config',
+  PAGE_CONTENT: 'page-content',
   TRANSLATIONS: 'translations'
 };
 

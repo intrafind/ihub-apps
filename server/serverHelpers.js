@@ -5,6 +5,7 @@ import { getApiKeyForModel } from './utils.js';
 import { sendSSE, clients, activeRequests } from './sse.js';
 import { getLocalizedContent } from '../shared/localize.js';
 import config from './config.js';
+import configCache from './configCache.js';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.
@@ -43,12 +44,18 @@ export function setupMiddleware(app, platformConfig = {}) {
 
 export async function getLocalizedError(errorKey, params = {}, language = 'en') {
   try {
-    const translations = await loadJson(`locales/${language}.json`);
+    // Try to get translations from cache first
+    let translations = configCache.getLocalizations(language);
+    
     const hasServer = translations?.serverErrors && translations.serverErrors[errorKey];
     const hasTool = translations?.toolErrors && translations.toolErrors[errorKey];
     if (!translations || (!hasServer && !hasTool)) {
       if (language !== 'en') {
-        const enTranslations = await loadJson('locales/en.json');
+        // Try English translations from cache first
+        let enTranslations = configCache.getLocalizations('en');
+        if (!enTranslations) {
+          enTranslations = await loadJson('locales/en.json');
+        }
         const enServer = enTranslations?.serverErrors?.[errorKey];
         const enTool = enTranslations?.toolErrors?.[errorKey];
         if (enServer || enTool) {
@@ -155,9 +162,13 @@ export async function processMessageTemplates(messages, app, style = null, outpu
     }
     if (style) {
       try {
-        const styles = await loadJson('config/styles.json');
-        if (styles && styles[style]) {
+        // Try to get styles from cache first
+        let styles = configCache.getStyles();
+        
+        if (styles && styles[style] && style !== 'keep') {
           systemPrompt += `\n\n${styles[style]}`;
+        } else {
+          console.log(`No specific style found for '${style}'. Nothing added to system prompt.`);
         }
       } catch (err) {
         console.error('Error loading styles:', err);

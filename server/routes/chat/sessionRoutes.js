@@ -1,8 +1,9 @@
 import { loadJson } from '../../configLoader.js';
+import configCache from '../../configCache.js';
 import { createCompletionRequest } from '../../adapters/index.js';
 import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
 import { sendSSE, clients, activeRequests } from '../../sse.js';
-import { generateImage } from '../../services/imageService.js';
+
 import {
   prepareChatRequest,
   executeStreamingResponse,
@@ -18,7 +19,10 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
     try {
       const { modelId } = req.params;
       const messages = [{ role: 'user', content: 'Say hello!' }];
-      const models = await loadJson('config/models.json');
+      
+      // Try to get models from cache first
+      let models = configCache.getModels();
+      
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }
@@ -114,6 +118,73 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
     }
   });
 
+  // Extract common chat processing logic to reduce duplication
+  async function processChatRequest({ 
+    prep, 
+    buildLogData, 
+    messageId, 
+    streaming, 
+    res, 
+    clientRes, 
+    chatId, 
+    DEFAULT_TIMEOUT, 
+    getLocalizedError, 
+    clientLanguage 
+  }) {
+    const { model, llmMessages } = prep;
+    
+    // Log the request
+    const requestLog = buildLogData(streaming);
+    if (!streaming) {
+      requestLog.options.useMaxTokens = requestLog.options.useMaxTokens || false;
+    }
+    await logInteraction('chat_request', requestLog);
+    
+    // Handle requests with tools
+    if (prep.tools && prep.tools.length > 0) {
+      const toolsParams = {
+        prep,
+        buildLogData,
+        messageId,
+        DEFAULT_TIMEOUT,
+        getLocalizedError,
+        clientLanguage
+      };
+      
+      if (streaming) {
+        console.log(`Processing chat with tools for chat ID: ${chatId}`);
+        return await processChatWithTools({ ...toolsParams, clientRes, chatId });
+      } else {
+        return processChatWithTools({ ...toolsParams, res });
+      }
+    }
+    
+    // Handle standard requests without tools
+    const executionParams = {
+      request: prep.request,
+      buildLogData,
+      model: prep.model,
+      llmMessages: prep.llmMessages,
+      DEFAULT_TIMEOUT
+    };
+    
+    if (streaming) {
+      return await executeStreamingResponse({ 
+        ...executionParams, 
+        chatId, 
+        clientRes, 
+        getLocalizedError, 
+        clientLanguage 
+      });
+    } else {
+      return executeNonStreamingResponse({ 
+        ...executionParams, 
+        res, 
+        messageId 
+      });
+    }
+  }
+
   app.post('/api/apps/:appId/chat/:chatId', validate(chatPostSchema), async (req, res) => {
     try {
       const { appId, chatId } = req.params;
@@ -169,26 +240,19 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
           return res.status(prep.error === 'appNotFound' || prep.error === 'modelNotFound' ? 404 : 500).json({ error: errMsg });
         }
         ({ model, llmMessages } = prep);
-        const requestLog = buildLogData(false);
-        requestLog.options.useMaxTokens = !!useMaxTokens;
-        await logInteraction('chat_request', requestLog);
-        if (prep.tools && prep.tools.length > 0) {
-          return processChatWithTools({ prep, res, buildLogData, messageId, DEFAULT_TIMEOUT, getLocalizedError, clientLanguage });
-        }
-        if (prep.model.url.includes('/images')) {
-          try {
-            const lastMsg = messages[messages.length - 1] || {};
-            const promptText = lastMsg.content || '';
-            const { attachmentId } = await generateImage({ model: prep.model, prompt: promptText, apiKey: prep.apiKey, chatId, imageData: lastMsg.imageData });
-            const imageUrl = `/api/apps/${appId}/chat/${chatId}/attachments/${attachmentId}`;
-            await logInteraction('chat_response', buildLogData(false, { responseType: 'success', response: '[image]' }));
-            return res.json({ choices: [{ message: { content: `<img src="${imageUrl}" alt="Generated image" style="max-width: 100%;" />` } }], messageId });
-          } catch (err) {
-            console.error('Image generation failed:', err);
-            return res.status(500).json({ error: 'Image generation failed' });
-          }
-        }
-        return executeNonStreamingResponse({ request: prep.request, res, buildLogData, messageId, model: prep.model, llmMessages: prep.llmMessages, DEFAULT_TIMEOUT });
+
+        return processChatRequest({
+          prep,
+          buildLogData,
+          messageId,
+          streaming: false,
+          res,
+          clientRes: null,
+          chatId: null,
+          DEFAULT_TIMEOUT,
+          getLocalizedError,
+          clientLanguage
+        });
       } else {
         const clientRes = clients.get(chatId).response;
         clients.set(chatId, { ...clients.get(chatId), lastActivity: new Date() });
@@ -213,34 +277,20 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
         }
         model = prep.model;
         llmMessages = prep.llmMessages;
-        await logInteraction('chat_request', {
+
+        await processChatRequest({
+          prep,
+          buildLogData,
           messageId,
-          appId,
-          modelId: model.id,
-          sessionId: chatId,
-          userSessionId,
-          messages: llmMessages,
-          options: { temperature, style, outputFormat, language: clientLanguage, streaming: true }
+          streaming: true,
+          res: null,
+          clientRes,
+          chatId,
+          DEFAULT_TIMEOUT,
+          getLocalizedError,
+          clientLanguage
         });
-        if (prep.tools && prep.tools.length > 0) {
-          console.log(`Processing chat with tools for chat ID: ${chatId}`);
-          await processChatWithTools({ prep, clientRes, chatId, buildLogData, messageId, DEFAULT_TIMEOUT, getLocalizedError, clientLanguage });
-        } else if (prep.model.url.includes('/images')) {
-          try {
-            const lastMsg = messages[messages.length - 1] || {};
-            const promptText = lastMsg.content || '';
-            const { attachmentId } = await generateImage({ model: prep.model, prompt: promptText, apiKey: prep.apiKey, chatId, imageData: lastMsg.imageData });
-            const imageUrl = `/api/apps/${appId}/chat/${chatId}/attachments/${attachmentId}`;
-            sendSSE(clientRes, 'chunk', { content: `<img src="${imageUrl}" alt="Generated image" style="max-width: 100%;" />` });
-            sendSSE(clientRes, 'done', {});
-            await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: '[image]' }));
-          } catch (err) {
-            console.error('Image generation failed:', err);
-            sendSSE(clientRes, 'error', { message: 'Image generation failed' });
-          }
-        } else {
-          await executeStreamingResponse({ request: prep.request, chatId, clientRes, buildLogData, model: prep.model, llmMessages: prep.llmMessages, DEFAULT_TIMEOUT, getLocalizedError, clientLanguage });
-        }
+        
         return res.json({ status: 'streaming', chatId });
       }
     } catch (error) {

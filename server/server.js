@@ -1,14 +1,12 @@
 // Import required modules
 import express from 'express';
-import fs from 'fs/promises';
-import path from 'path';
 import dotenv from 'dotenv';
 import http from 'http';
 import https from 'https';
 import cluster from 'cluster';
-import os from 'os';
-import { loadJson, loadText } from './configLoader.js';
+import { loadJson } from './configLoader.js';
 import { getRootDir } from './pathUtils.js';
+import configCache from './configCache.js';
 
 // Import adapters and utilities
 import registerChatRoutes from "./routes/chat/index.js";
@@ -73,6 +71,14 @@ if (cluster.isPrimary && workerCount > 1) {
     await initTelemetry(platformConfig?.telemetry || {});
   } catch (err) {
     console.error('Failed to initialize telemetry:', err);
+  }
+
+  // Initialize configuration cache for optimal performance
+  try {
+    await configCache.initialize();
+  } catch (err) {
+    console.error('Failed to initialize configuration cache:', err);
+    console.warn('Server will continue with file-based configuration loading');
   }
 
   // Create Express application

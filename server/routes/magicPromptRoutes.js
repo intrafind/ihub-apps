@@ -1,4 +1,5 @@
 import { loadJson } from '../configLoader.js';
+import configCache from '../configCache.js';
 import { createCompletionRequest } from '../adapters/index.js';
 import { recordMagicPrompt, estimateTokens } from '../usageTracker.js';
 import validate from '../validators/validate.js';
@@ -13,7 +14,10 @@ export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_T
       if (!input) {
         return res.status(400).json({ error: 'Missing input' });
       }
-      const models = await loadJson('config/models.json');
+      
+      // Try to get models from cache first
+      let models = configCache.getModels();
+      
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }

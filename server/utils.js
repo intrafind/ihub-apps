@@ -1,5 +1,10 @@
 import { loadJson } from "./configLoader.js";
 import config from "./config.js";
+import { createCompletionRequest, processResponseBuffer } from "./adapters/index.js";
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import configCache from './configCache.js';
 
 /**
  * Helper function to get API key for a model
@@ -9,8 +14,9 @@ import config from "./config.js";
 
 export async function getApiKeyForModel(modelId) {
   try {
-    // Load models configuration to find the provider
-    const models = await loadJson('config/models.json');
+    // Try to get models from cache first
+    let models = configCache.getModels();
+    
     if (!models) {
       console.error('Failed to load models configuration');
       return null;
@@ -238,10 +244,6 @@ export async function logInteraction(interactionType, data) {
  */
 async function appendToLogFile(logEntry) {
   try {
-    const fs = await import('fs/promises');
-    const path = await import('path');
-    const { fileURLToPath } = await import('url');
-    
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
     
@@ -344,7 +346,9 @@ export async function logNewSession(chatId, appId, metadata = {}) {
  * @returns {Promise<string>} The content of the model's response.
  */
 export async function simpleCompletion(prompt, { model: modelId, temperature = 0.7 }) {
-  const models = await loadJson('config/models.json');
+  // Try to get models from cache first
+  let models = configCache.getModels();
+  
   const model = models.find(m => m.id === modelId);
   if (!model) {
     throw new Error(`Model ${modelId} not found`);
@@ -375,8 +379,7 @@ export async function simpleCompletion(prompt, { model: modelId, temperature = 0
 
   const responseData = await response.json();
 
-  if (model.provider === 'google') {
-    return responseData.candidates[0]?.content?.parts[0]?.text || '';
-  }
-  return responseData.choices[0]?.message?.content || '';
+  // Use the adapter to parse the response
+  const parsed = processResponseBuffer(model.provider, JSON.stringify(responseData));
+  return parsed.content.join('');
 }
