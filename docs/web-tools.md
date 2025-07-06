@@ -12,6 +12,7 @@ The platform now includes several web-related tools:
 4. **playwrightScreenshot** - Capture screenshots or PDFs using Playwright
 5. **seleniumScreenshot** - Capture screenshots or PDFs using Selenium
 6. **evaluator** - Evaluate draft answers for definitiveness, freshness and completeness
+7. **answerReducer** - Merge multiple texts into one concise article
 
 ## Tools Description
 
@@ -145,6 +146,18 @@ The platform now includes several web-related tools:
 {
   "question": "What are the latest AI trends?",
   "answer": "AI is progressing rapidly..."
+}
+```
+
+### 7. Answer Reducer (`answerReducer`)
+
+**Purpose**: Compress multiple text excerpts into a single well-structured article.
+
+**Usage**: Pass an array of strings under the `answers` parameter.
+
+```json
+{
+  "answers": ["text from source 1", "text from source 2"]
 }
 ```
 
