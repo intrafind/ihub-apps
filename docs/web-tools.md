@@ -13,6 +13,7 @@ The platform now includes several web-related tools:
 5. **seleniumScreenshot** - Capture screenshots or PDFs using Selenium
 6. **evaluator** - Evaluate draft answers for definitiveness, freshness and completeness
 7. **answerReducer** - Merge multiple texts into one concise article
+7. **queryRewriter** - Rewrite search queries for deeper results
 
 ## Tools Description
 
@@ -129,7 +130,6 @@ The platform now includes several web-related tools:
   "format": "png"
 }
 ```
-
 ### 6. Answer Evaluator (`evaluator`)
 
 **Purpose**: Check a draft answer for definitiveness, freshness and completeness.
@@ -158,6 +158,24 @@ The platform now includes several web-related tools:
 ```json
 {
   "answers": ["text from source 1", "text from source 2"]
+}
+```
+
+### 8. Query Rewriter (`queryRewriter`)
+
+**Purpose**: Generate optimized variations of a user search query.
+
+**Parameters**:
+- `query` (string, required): The original search query
+- `think` (string, optional): Additional motivation or notes
+- `context` (string, optional): Optional contextual text
+
+**Returns**: An array of rewritten queries.
+
+**Example Usage**:
+```javascript
+{
+  "query": "best renewable energy sources"
 }
 ```
 
