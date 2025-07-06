@@ -495,6 +495,9 @@ export function processChatWithTools({
       tools
     });
 
+    // Clear the timeout since we're transitioning to executeStreamingResponse
+    clearTimeout(timeoutId);
+
     executeStreamingResponse({
       request: followRequest,
       chatId,
