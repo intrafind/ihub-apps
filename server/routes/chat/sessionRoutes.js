@@ -153,7 +153,8 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
       
       if (streaming) {
         console.log(`Processing chat with tools for chat ID: ${chatId}`);
-        return await processChatWithTools({ ...toolsParams, clientRes, chatId });
+        processChatWithTools({ ...toolsParams, clientRes, chatId });
+        return;
       } else {
         return processChatWithTools({ ...toolsParams, res });
       }

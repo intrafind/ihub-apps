@@ -343,35 +343,35 @@ async function fetchJsonWithTimeout(request, DEFAULT_TIMEOUT) {
   return llmResponse.json();
 }
 
-// Execute a request with potential tool calls
-export async function processChatWithTools({
+
+// Execute a request with potential tool calls - non-blocking implementation
+export function processChatWithTools({
   prep,
-  res,
-  clientRes = null,
-  chatId = null,
+  clientRes,
+  chatId,
   buildLogData,
-  messageId,
   DEFAULT_TIMEOUT,
   getLocalizedError,
   clientLanguage
 }) {
   const { request, model, llmMessages, tools, apiKey, temperature, maxTokens } = prep;
+  const controller = new AbortController();
+  activeRequests.set(chatId, controller);
 
-  try {
-    const controller = new AbortController();
-    if (clientRes) {
-      activeRequests.set(chatId, controller);
-    }
+  const timeoutId = setTimeout(async () => {
+    controller.abort();
+    const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT / 1000 }, clientLanguage);
+    sendSSE(clientRes, 'error', { message: errorMessage });
+    activeRequests.delete(chatId);
+  }, DEFAULT_TIMEOUT);
 
-    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
-
-    const llmResponse = await fetch(request.url, {
-      method: 'POST',
-      headers: request.headers,
-      body: JSON.stringify(request.body),
-      signal: controller.signal
-    });
-
+  fetch(request.url, {
+    method: 'POST',
+    headers: request.headers,
+    body: JSON.stringify(request.body),
+    signal: controller.signal
+  })
+  .then(async (llmResponse) => {
     clearTimeout(timeoutId);
 
     if (!llmResponse.ok) {
@@ -391,7 +391,11 @@ export async function processChatWithTools({
 
     while (!done) {
       const { value, done: readerDone } = await reader.read();
-      if (readerDone) break;
+      if (readerDone || !activeRequests.has(chatId)) {
+        if (!activeRequests.has(chatId)) reader.cancel();
+        break;
+      }
+
       const chunk = decoder.decode(value, { stream: true });
       parser.feed(chunk);
 
@@ -403,25 +407,30 @@ export async function processChatWithTools({
           throw Object.assign(new Error(result.errorMessage || 'Error processing response'), { code: 'PROCESSING_ERROR' });
         }
 
-        if (result.content && result.content.length > 0) {
+        if (result.content?.length > 0) {
           for (const text of result.content) {
             assistantContent += text;
-            if (clientRes) sendSSE(clientRes, 'chunk', { content: text });
+            sendSSE(clientRes, 'chunk', { content: text });
           }
         }
-
-        if (result.tool_calls && result.tool_calls.length > 0) {
-          for (const call of result.tool_calls) {
-            const idx = call.index ?? collectedToolCalls.length;
-            if (!collectedToolCalls[idx]) {
-              collectedToolCalls[idx] = { id: call.id, function: { name: call.function?.name, arguments: '' } };
+        
+        if (result.tool_calls?.length > 0) {
+          result.tool_calls.forEach(call => {
+            const existingCall = collectedToolCalls.find(c => c.id === call.id);
+            if (existingCall) {
+              if (call.function?.arguments) {
+                existingCall.function.arguments += call.function.arguments;
+              }
+            } else if (call.id && call.function?.name) {
+              collectedToolCalls.push({
+                id: call.id,
+                function: {
+                  name: call.function.name,
+                  arguments: call.function.arguments || ''
+                }
+              });
             }
-            collectedToolCalls[idx].id = collectedToolCalls[idx].id || call.id;
-            if (call.function?.name) collectedToolCalls[idx].function.name = call.function.name;
-            if (call.function?.arguments) {
-              collectedToolCalls[idx].function.arguments += call.function.arguments;
-            }
-          }
+          });
         }
 
         if (result.finishReason) {
@@ -435,33 +444,42 @@ export async function processChatWithTools({
       }
     }
 
-    if (clientRes) {
+    if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+      sendSSE(clientRes, 'done', { finishReason: finishReason || 'stop' });
+      await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
       activeRequests.delete(chatId);
+      return;
     }
-
-    if (collectedToolCalls.length === 0) {
-      if (clientRes) {
-        sendSSE(clientRes, 'done', { finishReason: finishReason || 'stop' });
-        await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
-        return;
-      }
-
-      const responseObj = { choices: [{ message: { content: assistantContent }, finish_reason: finishReason }] };
-      responseObj.messageId = messageId;
-      await logInteraction('chat_response', buildLogData(false, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
-      return res.json(responseObj);
-    }
+    
+    const toolNames = collectedToolCalls.map(c => c.function.name).join(', ');
+    sendSSE(clientRes, 'processing', { message: `Using tool(s): ${toolNames}...` });
 
     llmMessages.push({ role: 'assistant', content: assistantContent, tool_calls: collectedToolCalls });
 
     for (const call of collectedToolCalls) {
       const toolId = tools.find(t => normalizeName(t.id) === call.function.name)?.id || call.function.name;
       let args = {};
-      try { args = JSON.parse(call.function.arguments || '{}'); } catch {}
-      args.chatId = chatId;
+      try {
+        let finalArgs = call.function.arguments.replace(/}{/g, ',');
+        try {
+          args = JSON.parse(finalArgs);
+        } catch(e) {
+          if (!finalArgs.startsWith('{')) finalArgs = '{' + finalArgs;
+          if (!finalArgs.endsWith('}')) finalArgs = finalArgs + '}';
+          try {
+             args = JSON.parse(finalArgs);
+          } catch (e2) {
+             console.error("Failed to parse tool arguments even after correction:", call.function.arguments, e2);
+             args = {};
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse tool arguments:", call.function.arguments, e);
+      }
+      
       const result = await runTool(toolId, { ...args, chatId });
 
-      await logInteraction('tool_usage', buildLogData(!!clientRes, {
+      await logInteraction('tool_usage', buildLogData(true, {
         toolId,
         toolInput: args,
         toolOutput: result
@@ -473,62 +491,40 @@ export async function processChatWithTools({
     const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
       temperature,
       maxTokens,
-      stream: !!clientRes,
+      stream: true,
       tools
     });
 
-    if (clientRes) {
-      return executeStreamingResponse({
-        request: followRequest,
-        chatId,
-        clientRes,
-        buildLogData,
-        model,
-        llmMessages,
-        DEFAULT_TIMEOUT,
-        getLocalizedError,
-        clientLanguage
-      });
-    }
-
-    return executeNonStreamingResponse({
+    executeStreamingResponse({
       request: followRequest,
-      res,
+      chatId,
+      clientRes,
       buildLogData,
-      messageId,
       model,
       llmMessages,
-      DEFAULT_TIMEOUT
+      DEFAULT_TIMEOUT,
+      getLocalizedError,
+      clientLanguage
     });
-  } catch (error) {
-    const errorDetails = getErrorDetails(error, model);
-    let localizedMessage = errorDetails.message;
-    if (error.code) {
-      const translated = await getLocalizedError(error.code, {}, clientLanguage);
-      if (translated && !translated.startsWith('Error:')) {
-        localizedMessage = translated;
-      }
-    }
 
-    if (clientRes) {
+  })
+  .catch(async (error) => {
+    clearTimeout(timeoutId);
+    if (error.name !== 'AbortError') {
+      const errorDetails = getErrorDetails(error, model);
+      let localizedMessage = errorDetails.message;
+      if (error.code) {
+        const translated = await getLocalizedError(error.code, {}, clientLanguage);
+        if (translated && !translated.startsWith('Error:')) localizedMessage = translated;
+      }
+      
       const errMsg = {
         message: localizedMessage,
         code: error.code || errorDetails.code,
-        modelId: model.id,
-        provider: model.provider,
-        recommendation: errorDetails.recommendation,
         details: error.details || error.message
       };
       sendSSE(clientRes, 'error', errMsg);
-    } else {
-      return res.status(500).json({
-        error: localizedMessage,
-        code: error.code || errorDetails.code,
-        modelId: model.id,
-        provider: model.provider,
-        recommendation: errorDetails.recommendation,
-        details: error.details || error.message
-      });
     }
-  }
+    activeRequests.delete(chatId);
+  });
 }
