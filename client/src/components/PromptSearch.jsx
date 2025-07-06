@@ -5,7 +5,7 @@ import { useUIConfig } from './UIConfigContext';
 import Fuse from 'fuse.js';
 import Icon from './Icon';
 import { fetchPrompts } from '../api/api';
-import { getFavoritePrompts } from '../utils/favoritePrompts';
+import { createFavoriteItemHelpers } from '../utils/favoriteItems';
 import { getRecentPromptIds, recordPromptUsage } from '../utils/recentPrompts';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { highlightVariables } from '../utils/highlightVariables';
@@ -23,6 +23,9 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
   const [favoritePromptIds, setFavoritePromptIds] = useState([]);
   const [recentPromptIds, setRecentPromptIds] = useState([]);
   const inputRef = useRef(null);
+
+  // Create favorite prompts helpers
+  const { getFavorites: getFavoritePrompts } = createFavoriteItemHelpers('aihub_favorite_prompts');
 
   useEffect(() => {
     if (isOpen) {

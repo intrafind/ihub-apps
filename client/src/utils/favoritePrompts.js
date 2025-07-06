@@ -1,35 +1,13 @@
 // Utility functions for handling favorite prompts using localStorage
 
+import { createFavoriteItemHelpers } from './favoriteItems';
+
 const FAVORITE_PROMPTS_KEY = 'aihub_favorite_prompts';
 
-export const getFavoritePrompts = () => {
-  try {
-    const favorites = localStorage.getItem(FAVORITE_PROMPTS_KEY);
-    return favorites ? JSON.parse(favorites) : [];
-  } catch (error) {
-    console.error('Error retrieving favorite prompts:', error);
-    return [];
-  }
-};
+// Create the favorite helpers using the factory function
+const { getFavorites, isFavorite, toggleFavorite } = createFavoriteItemHelpers(FAVORITE_PROMPTS_KEY);
 
-export const isPromptFavorite = (promptId) => {
-  const favorites = getFavoritePrompts();
-  return favorites.includes(promptId);
-};
-
-export const toggleFavoritePrompt = (promptId) => {
-  try {
-    const favorites = getFavoritePrompts();
-    const isFavorite = favorites.includes(promptId);
-
-    const newFavorites = isFavorite
-      ? favorites.filter(id => id !== promptId)
-      : [...favorites, promptId];
-
-    localStorage.setItem(FAVORITE_PROMPTS_KEY, JSON.stringify(newFavorites));
-    return !isFavorite;
-  } catch (error) {
-    console.error('Error toggling favorite prompt:', error);
-    return isPromptFavorite(promptId);
-  }
-};
+// Export with prompt-specific names for backward compatibility
+export const getFavoritePrompts = getFavorites;
+export const isPromptFavorite = isFavorite;
+export const toggleFavoritePrompt = toggleFavorite;

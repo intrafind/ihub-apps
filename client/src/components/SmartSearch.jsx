@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Icon from './Icon';
 import { fetchApps } from '../api/api';
 import { getLocalizedContent } from '../utils/localizeContent';
-import { getFavoriteApps } from '../utils/favoriteApps';
+import { createFavoriteItemHelpers } from '../utils/favoriteItems';
 import { getRecentAppIds } from '../utils/recentApps';
 import Fuse from 'fuse.js';
 
@@ -22,6 +22,9 @@ const SmartSearch = () => {
   const inputRef = useRef(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const recentAppIds = useMemo(() => getRecentAppIds(), [isOpen]);
+
+  // Create favorite apps helpers
+  const { getFavorites: getFavoriteApps } = createFavoriteItemHelpers('aihub_favorite_apps');
 
   useEffect(() => {
     const handleKeyDown = (e) => {
