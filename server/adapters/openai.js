@@ -110,11 +110,21 @@ const OpenAIAdapter = {
       }
       // Handle streaming response chunks
       else if (parsed.choices && parsed.choices[0]?.delta) {
-        if (parsed.choices[0].delta.content) {
-          result.content.push(parsed.choices[0].delta.content);
+        const delta = parsed.choices[0].delta;
+        if (delta.content) {
+          result.content.push(delta.content);
         }
-        if (parsed.choices[0].delta.tool_calls) {
-          result.tool_calls.push(...parsed.choices[0].delta.tool_calls);
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const normalized = { index: tc.index };
+            if (tc.id) normalized.id = tc.id;
+            if (tc.function) {
+              normalized.function = { ...tc.function };
+            } else if (tc.delta && tc.delta.function) {
+              normalized.function = { ...tc.delta.function };
+            }
+            result.tool_calls.push(normalized);
+          }
         }
       }
 
