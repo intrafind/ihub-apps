@@ -190,11 +190,6 @@ export const fetchModelDetails = async (modelId, options = {}) => {
   );
 };
 
-// Chat - no caching for chat operations as they're dynamic
-export const streamAppChat = async (appId, chatId) => {
-  return new EventSource(`${API_URL}/apps/${appId}/chat/${chatId}`);
-};
-
 /**
  * Sends a chat message to an app
  * 
@@ -239,19 +234,6 @@ export const fetchUsageData = async () => {
     null,
     null,
     false
-  );
-};
-
-
-export const sendDirectModelMessage = async (modelId, messages, options = {}) => {
-  return handleApiResponse(() =>
-    apiClient.post(`/models/${modelId}/chat`, {
-      messages,
-      ...options
-    }),
-    null, // No caching for chat messages
-    null,
-    false // Don't deduplicate chat requests
   );
 };
 
@@ -347,85 +329,11 @@ export const invalidateCacheByPattern = (pattern) => {
   return invalidatedCount;
 };
 
-// Advanced cache operations
-export const prefetchData = async () => {
-  try {
-    console.log('Prefetching common data...');
-    // Fetch common data in parallel
-    
-    // Get current language from localStorage and normalize it
-    const rawLanguage = localStorage.getItem('i18nextLng') || 'en';
-    const currentLanguage = rawLanguage.split('-')[0].toLowerCase();
-    
-    await Promise.all([
-      fetchUIConfig(),
-      fetchStyles(),
-      fetchModels(),
-      fetchApps(),
-      fetchTranslations(currentLanguage)
-    ]);
-    console.log('Prefetch completed successfully');
-    return true;
-  } catch (error) {
-    console.error('Prefetch failed:', error);
-    return false;
-  }
-};
-
 // Request timeout detection
 export const isTimeoutError = (error) => {
   return error?.message?.includes('timeout') || 
     error?.originalError?.message?.includes('timeout') || 
     error?.code === 'ECONNABORTED';
-};
-
-// Force refresh data from server
-export const forceRefresh = async (type, id = null) => {
-  let cacheKey;
-  let fetchFunction;
-  let options = { skipCache: true };
-  
-  switch (type) {
-    case 'app':
-      if (!id) throw new Error('App ID is required for refreshing app details');
-      cacheKey = buildCacheKey(CACHE_KEYS.APP_DETAILS, { id });
-      fetchFunction = () => fetchAppDetails(id, options);
-      break;
-    case 'apps':
-      cacheKey = CACHE_KEYS.APPS_LIST;
-      fetchFunction = () => fetchApps(options);
-      break;
-    case 'model':
-      if (!id) throw new Error('Model ID is required for refreshing model details');
-      cacheKey = buildCacheKey(CACHE_KEYS.MODEL_DETAILS, { id });
-      fetchFunction = () => fetchModelDetails(id, options);
-      break;
-    case 'models':
-      cacheKey = CACHE_KEYS.MODELS_LIST;
-      fetchFunction = () => fetchModels(options);
-      break;
-    case 'ui':
-      cacheKey = CACHE_KEYS.UI_CONFIG;
-      fetchFunction = () => fetchUIConfig(options);
-      break;
-    case 'styles':
-      cacheKey = CACHE_KEYS.STYLES;
-      fetchFunction = () => fetchStyles(options);
-      break;
-    default:
-      throw new Error(`Unknown refresh type: ${type}`);
-  }
-  
-  // First clear the cache
-  cache.delete(cacheKey);
-  
-  // Then fetch fresh data
-  const freshData = await fetchFunction();
-  
-  // Update the cache with fresh data
-  cache.set(cacheKey, freshData);
-  
-  return freshData;
 };
 
 // Translations
@@ -452,75 +360,13 @@ export const fetchPageContent = async (pageId, options = {}) => {
   );
 };
 
-// Centralized API service with consistent use of apiClient
-const apiService = {
-  /**
-   * Get UI configuration settings
-   * @returns {Promise} Promise resolving to UI config data
-   */
-  getUIConfig: async () => {
-    return fetchUIConfig();
-  },
-
-  /**
-   * Get available applications
-   * @returns {Promise} Promise resolving to apps data
-   */
-  getApps: async () => {
-    return fetchApps();
-  },
-  
-  /**
-   * Get available models
-   * @returns {Promise} Promise resolving to models data
-   */
-  getModels: async () => {
-    return fetchModels();
-  },
-  
-  /**
-   * Log session start
-   * @param {Object} sessionData - Session data to log
-   * @returns {Promise} Promise resolving to response data
-   */
-  logSessionStart: async (sessionData) => {
-    return handleApiResponse(
-      () => apiClient.post('/session/start', sessionData),
-      null, // No caching
-      null,
-      false // Don't deduplicate
-    );
-  },
-  
-  /**
-   * Send a chat message
-   * @param {string} endpoint - API endpoint for the specific chat
-   * @param {Object} messageData - Message data to send
-   * @returns {Promise} Promise resolving to response data
-   */
-  sendChatMessage: async (endpoint, messageData) => {
-    return handleApiResponse(
-      () => apiClient.post(endpoint, messageData),
-      null, // No caching for chat messages
-      null,
-      false // Don't deduplicate chat requests
-    );
-  },
-
-  // Reuse the exported functions for consistency
-  fetchPageContent,
-  fetchApps,
-  fetchAppDetails,
-  fetchModels,
-  fetchModelDetails,
-  fetchStyles,
-  fetchUIConfig,
-  fetchTranslations,
-  fetchPrompts,
-  sendAppChatMessage,
-  sendDirectModelMessage,
-  generateMagicPrompt,
-  sendMessageFeedback
+// Session management
+export const sendSessionStart = async (sessionData) => {
+  return handleApiResponse(
+    () => apiClient.post('/session/start', sessionData),
+    null, // No caching
+    null,
+    false // Don't deduplicate
+  );
 };
 
-export default apiService;

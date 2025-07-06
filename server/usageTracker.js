@@ -6,9 +6,6 @@ import config from './config.js';
 import { loadJson } from './configLoader.js';
 import { recordTokenUsage } from './telemetry.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const contentsDir = config.CONTENTS_DIR;
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'usage.json');
 const SAVE_INTERVAL_MS = 10000;

@@ -1,5 +1,4 @@
 import { logInteraction } from '../../utils.js';
-import { sendSSE } from '../../sse.js';
 import { recordFeedback } from '../../usageTracker.js';
 import validate from '../../validators/validate.js';
 import { feedbackSchema } from '../../validators/index.js';

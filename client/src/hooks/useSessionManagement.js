@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { getSessionId, renewSession, getSessionInfo } from '../utils/sessionManager.js';
-import apiService from '../api/api';
+import { sendSessionStart } from '../api/api';
 
 /**
  * Custom hook to handle session initialization and renewal
@@ -12,14 +12,14 @@ const useSessionManagement = () => {
     const sessionId = getSessionId();
     
     // Log application load with session ID
-    const logSessionStart = async () => {
+    const logSession = async () => {
       try {
         // Get session information for logging
         const sessionInfo = getSessionInfo();
         console.log('Application loaded with session ID:', sessionId);
         
         // Send session start to server using our centralized API service
-        await apiService.logSessionStart({
+        await sendSessionStart({
           type: 'app_loaded',
           sessionId,
           metadata: sessionInfo
@@ -29,7 +29,7 @@ const useSessionManagement = () => {
       }
     };
     
-    logSessionStart();
+    logSession();
     
     // Set up session renewal timer
     const renewalTimer = setInterval(() => {

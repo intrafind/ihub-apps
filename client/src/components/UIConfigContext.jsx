@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import apiService, { fetchUIConfig } from '../api/api';
+import { fetchUIConfig } from '../api/api';
 
 // Default header color as a fallback if config is not loaded
 const FALLBACK_COLOR = '#4f46e5'; // indigo-600
