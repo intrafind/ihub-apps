@@ -10,8 +10,7 @@ function useEventSource({
   chatId,
   timeoutDuration = 10000,
   onEvent,
-  onProcessingChange,
-  eventTypes = ['connected', 'chunk', 'done', 'error']
+  onProcessingChange
 }) {
   const eventSourceRef = useRef(null);
   const connectionTimeoutRef = useRef(null);
@@ -35,14 +34,15 @@ function useEventSource({
         const ev = eventSourceRef.current;
         eventSourceRef.current = null;
         if (ev) {
-          eventTypes.forEach(type => ev.removeEventListener(type, ev[`on${type}`]));
+          ev.onmessage = null;
+          ev.onerror = null;
           ev.close();
         }
       } catch (err) {
         console.error('Error cleaning up event source:', err);
       }
     }
-  }, [appId, chatId, eventTypes]);
+  }, [appId, chatId]);
 
   const startHeartbeat = useCallback(() => {
     if (heartbeatIntervalRef.current) {
@@ -88,7 +88,10 @@ function useEventSource({
       if (event.type === 'chunk' && data && data.content) {
         fullContentRef.current += data.content;
       }
-      if (event.type === 'done') {
+      if (event.type === 'connected') {
+        connectionEstablished = true;
+        clearTimeout(connectionTimeoutRef.current);
+      } else if (event.type === 'done') {
         connectionEstablished = true;
       }
       if (onEvent) onEvent({ type: event.type, data, fullContent: fullContentRef.current });
@@ -99,14 +102,12 @@ function useEventSource({
       }
     };
 
-    eventTypes.forEach(type => {
-      eventSource[`on${type}`] = handleEvent;
-      eventSource.addEventListener(type, handleEvent);
-    });
+    eventSource.onmessage = handleEvent;
+    eventSource.onerror = handleEvent;
 
     startHeartbeat();
     return eventSource;
-  }, [cleanupEventSource, onProcessingChange, onEvent, startHeartbeat, timeoutDuration, eventTypes]);
+  }, [cleanupEventSource, onProcessingChange, onEvent, startHeartbeat, timeoutDuration]);
 
   useEffect(() => {
     return () => {
