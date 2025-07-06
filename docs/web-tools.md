@@ -248,6 +248,27 @@ The "Chat with Web" app has been updated to use the enhanced web search function
 }
 ```
 
+### 6. Research Planner (`researchPlanner`)
+
+**Purpose**: Decompose a research topic into distinct tasks for a team of researchers.
+
+**Parameters**:
+- `question` (string, required): Research topic to analyze
+- `teamSize` (integer, optional): Number of tasks to create (default: 3)
+- `soundBites` (string, optional): Additional context or quotes
+
+**Returns**: JSON containing the `subproblems` array and internal reasoning in `think`.
+
+**Example Usage**:
+```json
+{
+  "question": "Impacts of AI on urban transportation",
+  "teamSize": 4,
+  "soundBites": "self-driving cars, public transit optimization"
+}
+```
+
+
 ## Technical Implementation
 
 ### Content Extraction Algorithm

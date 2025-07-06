@@ -8,8 +8,9 @@ I've successfully implemented a comprehensive web content extraction and search 
 
 1. **`webContentExtractor.js`** - Extracts clean, readable content from any webpage
 2. **`enhancedWebSearch.js`** - Combines web search with automatic content extraction
-3. **`answerReducer.js`** - Merges multiple research results into one article
-4. **Updated existing tools configuration** in `tools.json`
+3. **`researchPlanner.js`** - Generates structured research plans
+4. **`answerReducer.js`** - Merges multiple research results into one article
+5. **Updated existing tools configuration** in `tools.json`
 
 ### 🚀 Key Features
 
@@ -35,14 +36,15 @@ I've successfully implemented a comprehensive web content extraction and search 
 **New Files:**
 - `/server/tools/webContentExtractor.js`
 - `/server/tools/enhancedWebSearch.js`
+- `/server/tools/researchPlanner.js`
 - `/server/tools/test-web-tools.js`
 - `/docs/web-tools.md`
 - `/examples/apps/web-researcher.json`
 
 **Modified Files:**
 - `/server/package.json` - Added JSDOM dependency
-- `/contents/config/tools.json` - Added new tools
-- `/contents/config/apps.json` - Updated "Chat with Web" app
+- `/contents/config/tools.json` - Added new tools including `researchPlanner`
+- `/contents/config/apps.json` - Updated "Chat with Web" app and integrated planner with deep researcher
 
 ### 🎯 Enhanced Applications
 

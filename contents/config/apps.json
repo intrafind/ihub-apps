@@ -2229,7 +2229,7 @@
     "preferredStyle": "detailed",
     "preferredTemperature": 1.0,
     "sendChatHistory": false,
-    "tools": ["deepResearch", "queryRewriter", "evaluator"],
+    "tools": ["researchPlanner", "deepResearch", "queryRewriter", "evaluator"],
     "settings": {
       "enabled": true,
       "model": { "enabled": true },
