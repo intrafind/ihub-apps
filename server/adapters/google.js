@@ -113,7 +113,7 @@ const GoogleAdapter = {
    * Create a completion request for Gemini
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true, tools = null, ...otherOptions } = options;
+    const { temperature = 0.7, stream = true, tools = null } = options;
     
     // Format messages and extract system instruction
     const { contents, systemInstruction } = this.formatMessages(messages);
@@ -170,8 +170,7 @@ const GoogleAdapter = {
         complete: false,
         error: false,
         errorMessage: null,
-        finishReason: null,
-        thinking: []
+        finishReason: null
       };
 
       if (!data) return result;
@@ -179,7 +178,25 @@ const GoogleAdapter = {
       try {
         const parsed = JSON.parse(data);
 
-        if (parsed.candidates && parsed.candidates[0]?.content?.parts) {
+        // Handle full response object (non-streaming) - detect by presence of finishReason at the top level
+        // OR if the response contains all expected fields for a complete response
+        if (parsed.candidates && parsed.candidates[0]?.finishReason && parsed.candidates[0]?.content?.parts?.[0]?.text) {
+          // This is a complete non-streaming response
+          result.content.push(parsed.candidates[0].content.parts[0].text);
+          result.complete = true;
+          const fr = parsed.candidates[0].finishReason;
+          if (fr === 'STOP') {
+            result.finishReason = 'stop';
+          } else if (fr === 'MAX_TOKENS') {
+            result.finishReason = 'length';
+          } else if (fr === 'SAFETY' || fr === 'RECITATION') {
+            result.finishReason = 'content_filter';
+          } else {
+            result.finishReason = fr;
+          }
+        }
+        // Handle streaming response chunks - process content parts
+        else if (parsed.candidates && parsed.candidates[0]?.content?.parts) {
           for (const part of parsed.candidates[0].content.parts) {
             if (part.text) {
               result.content.push(part.text);
@@ -187,15 +204,18 @@ const GoogleAdapter = {
           }
         }
 
-        if (parsed.candidates && parsed.candidates[0]?.safetyRatings) {
-          result.thinking.push({ type: 'safety', info: parsed.candidates[0].safetyRatings });
-        }
-        if (parsed.candidates && parsed.candidates[0]?.citationMetadata) {
-          result.thinking.push({ type: 'citation', info: parsed.candidates[0].citationMetadata });
-        }
-        if (parsed.promptFeedback) {
-          result.thinking.push({ type: 'feedback', info: parsed.promptFeedback });
-        }
+        
+
+        // TODO we should make use of the candidate metadata
+        // if (parsed.candidates && parsed.candidates[0]?.safetyRatings) {
+        //   result.thinking.push({ type: 'safety', info: parsed.candidates[0].safetyRatings });
+        // }
+        // if (parsed.candidates && parsed.candidates[0]?.citationMetadata) {
+        //   result.thinking.push({ type: 'citation', info: parsed.candidates[0].citationMetadata });
+        // }
+        // if (parsed.promptFeedback) {
+        //   result.thinking.push({ type: 'feedback', info: parsed.promptFeedback });
+        // }
 
         if (parsed.candidates && parsed.candidates[0]?.finishReason) {
           const fr = parsed.candidates[0].finishReason;

@@ -126,7 +126,16 @@ const AnthropicAdapter = {
     try {
       const parsed = JSON.parse(data);
 
-      if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.text) {
+      // Handle full response object (non-streaming)
+      if (parsed.content && Array.isArray(parsed.content) && parsed.content[0]?.text) {
+        result.content.push(parsed.content[0].text);
+        result.complete = true;
+        if (parsed.stop_reason) {
+          result.finishReason = parsed.stop_reason === 'end_turn' ? 'stop' : parsed.stop_reason;
+        }
+      }
+      // Handle streaming response chunks
+      else if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.text) {
         result.content.push(parsed.delta.text);
       } else if (parsed.type === 'message_delta' && parsed.delta && parsed.delta.content) {
         result.content.push(parsed.delta.content);

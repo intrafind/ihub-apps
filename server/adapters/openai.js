@@ -94,7 +94,16 @@ const OpenAIAdapter = {
     try {
       const parsed = JSON.parse(data);
 
-      if (parsed.choices && parsed.choices[0]?.delta?.content) {
+      // Handle full response object (non-streaming)
+      if (parsed.choices && parsed.choices[0]?.message?.content) {
+        result.content.push(parsed.choices[0].message.content);
+        result.complete = true;
+        if (parsed.choices[0].finish_reason) {
+          result.finishReason = parsed.choices[0].finish_reason;
+        }
+      }
+      // Handle streaming response chunks
+      else if (parsed.choices && parsed.choices[0]?.delta?.content) {
         result.content.push(parsed.choices[0].delta.content);
       }
 
