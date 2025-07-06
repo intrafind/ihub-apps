@@ -80,7 +80,7 @@ export async function prepareChatRequest({
   const request = createCompletionRequest(model, llmMessages, apiKey, {
     temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
     maxTokens: finalTokens,
-    stream: tools.length === 0 && !!clientRes,
+    stream: !!clientRes,
     tools
   });
 
@@ -355,133 +355,151 @@ export async function processChatWithTools({
   getLocalizedError,
   clientLanguage
 }) {
-  console.log('Preparing to process chat with tools:', prep);
   const { request, model, llmMessages, tools, apiKey, temperature, maxTokens } = prep;
 
   try {
-    console.log('Processing chat with tools:', {
-      modelId: model.id,
-      provider: model.provider,
-      messages: llmMessages,
-      tools: tools.map(t => t.id),
-      temperature,
-      maxTokens
+    const controller = new AbortController();
+    if (clientRes) {
+      activeRequests.set(chatId, controller);
+    }
+
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
+
+    const llmResponse = await fetch(request.url, {
+      method: 'POST',
+      headers: request.headers,
+      body: JSON.stringify(request.body),
+      signal: controller.signal
     });
-    const firstResponse = await fetchJsonWithTimeout(request, DEFAULT_TIMEOUT);
-    console.log('Received first response:', {
-      modelId: model.id,
-      provider: model.provider,
-      response: firstResponse
-    });
-    // Normalize the response structure across providers
-    let choice;
-    // FIXME adapter specific handling should not be here
-    if (model.provider === 'google' && firstResponse.candidates) {
-      const candidate = firstResponse.candidates[0];
-      choice = {
-        message: {
-          content: candidate.content?.parts
-            ?.map(p => p.text || '')
-            .join('') || ''
-        },
-        finish_reason: candidate.finishReason
-      };
-      // Map Gemini functionCall to OpenAI-style tool_calls array
-      const fnCall = candidate.content?.parts?.find(p => p.functionCall);
-      if (fnCall) {
-        choice.message.tool_calls = [
-          {
-            id: 'tool_call_1',
-            function: {
-              name: fnCall.functionCall.name,
-              arguments: JSON.stringify(fnCall.functionCall.args || {})
+
+    clearTimeout(timeoutId);
+
+    if (!llmResponse.ok) {
+      const errorBody = await llmResponse.text();
+      throw Object.assign(new Error(`LLM API request failed with status ${llmResponse.status}`), { code: llmResponse.status.toString(), details: errorBody });
+    }
+
+    const reader = llmResponse.body.getReader();
+    const decoder = new TextDecoder();
+    const events = [];
+    const parser = createParser({ onEvent: (e) => events.push(e) });
+
+    let assistantContent = '';
+    const collectedToolCalls = [];
+    let finishReason = null;
+    let done = false;
+
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      if (readerDone) break;
+      const chunk = decoder.decode(value, { stream: true });
+      parser.feed(chunk);
+
+      while (events.length > 0) {
+        const evt = events.shift();
+        const result = processResponseBuffer(model.provider, evt.data);
+
+        if (result.error) {
+          throw Object.assign(new Error(result.errorMessage || 'Error processing response'), { code: 'PROCESSING_ERROR' });
+        }
+
+        if (result.content && result.content.length > 0) {
+          for (const text of result.content) {
+            assistantContent += text;
+            if (clientRes) sendSSE(clientRes, 'chunk', { content: text });
+          }
+        }
+
+        if (result.tool_calls && result.tool_calls.length > 0) {
+          for (const call of result.tool_calls) {
+            const idx = call.index ?? collectedToolCalls.length;
+            if (!collectedToolCalls[idx]) {
+              collectedToolCalls[idx] = { id: call.id, function: { name: call.function?.name, arguments: '' } };
+            }
+            collectedToolCalls[idx].id = collectedToolCalls[idx].id || call.id;
+            if (call.function?.name) collectedToolCalls[idx].function.name = call.function.name;
+            if (call.function?.arguments) {
+              collectedToolCalls[idx].function.arguments += call.function.arguments;
             }
           }
-        ];
-        choice.finish_reason = 'tool_calls';
-      }
-    } else if (firstResponse.choices) {
-      choice = firstResponse.choices[0];
-    }
-    //FIX choice can't be logged, because it contains an object
-    console.log('Choice after normalization:', JSON.stringify(choice));
-    if (choice && choice.finish_reason === 'tool_calls' && choice.message?.tool_calls?.length > 0) {
-      const toolCalls = choice.message.tool_calls;
-      console.log('Processing tool calls:', toolCalls);
-
-      llmMessages.push({ role: 'assistant', content: choice.message.content, tool_calls: toolCalls });
-
-      for (const call of toolCalls) {
-        const toolId = tools.find(t => normalizeName(t.id) === call.function.name)?.id || call.function.name;
-        let args = {};
-        try {
-          args = JSON.parse(call.function.arguments || '{}');
-        } catch (e) {
-          console.error('Failed to parse tool arguments', e);
         }
-        args.chatId = chatId;
-        console.log(`Running tool ${toolId} with args:`, args);
-        const result = await runTool(toolId, { ...args, chatId });
 
-        // Log tool usage including input and output for tracking
-        await logInteraction('tool_usage', buildLogData(!!clientRes, {
-          toolId,
-          toolInput: args,
-          toolOutput: result
-        }));
+        if (result.finishReason) {
+          finishReason = result.finishReason;
+        }
 
-        llmMessages.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          name: call.function.name,
-          content: JSON.stringify(result)
-        });
+        if (result.complete) {
+          done = true;
+          break;
+        }
       }
+    }
 
-      const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
-        temperature,
-        maxTokens,
-        stream: !!clientRes,
-        tools
-      });
+    if (clientRes) {
+      activeRequests.delete(chatId);
+    }
 
+    if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
       if (clientRes) {
-        return executeStreamingResponse({
-          request: followRequest,
-          chatId,
-          clientRes,
-          buildLogData,
-          model,
-          llmMessages,
-          DEFAULT_TIMEOUT,
-          getLocalizedError,
-          clientLanguage
-        });
+        sendSSE(clientRes, 'done', { finishReason: finishReason || 'stop' });
+        await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
+        return;
       }
 
-      return executeNonStreamingResponse({
+      const responseObj = { choices: [{ message: { content: assistantContent }, finish_reason: finishReason }] };
+      responseObj.messageId = messageId;
+      await logInteraction('chat_response', buildLogData(false, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
+      return res.json(responseObj);
+    }
+
+    llmMessages.push({ role: 'assistant', content: assistantContent, tool_calls: collectedToolCalls });
+
+    for (const call of collectedToolCalls) {
+      const toolId = tools.find(t => normalizeName(t.id) === call.function.name)?.id || call.function.name;
+      let args = {};
+      try { args = JSON.parse(call.function.arguments || '{}'); } catch {}
+      args.chatId = chatId;
+      const result = await runTool(toolId, { ...args, chatId });
+
+      await logInteraction('tool_usage', buildLogData(!!clientRes, {
+        toolId,
+        toolInput: args,
+        toolOutput: result
+      }));
+
+      llmMessages.push({ role: 'tool', tool_call_id: call.id, name: call.function.name, content: JSON.stringify(result) });
+    }
+
+    const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
+      temperature,
+      maxTokens,
+      stream: !!clientRes,
+      tools
+    });
+
+    if (clientRes) {
+      return executeStreamingResponse({
         request: followRequest,
-        res,
+        chatId,
+        clientRes,
         buildLogData,
-        messageId,
         model,
         llmMessages,
-        DEFAULT_TIMEOUT
+        DEFAULT_TIMEOUT,
+        getLocalizedError,
+        clientLanguage
       });
     }
 
-    // No tool calls - return or stream the first response
-    if (clientRes) {
-      const content = choice?.message?.content || '';
-      sendSSE(clientRes, 'chunk', { content });
-      sendSSE(clientRes, 'done', {});
-      await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: content.substring(0, 1000) }));
-      return;
-    }
-
-    firstResponse.messageId = messageId;
-    await logInteraction('chat_response', buildLogData(false, { responseType: 'success', response: choice?.message?.content?.substring(0, 1000) || '' }));
-    return res.json(firstResponse);
+    return executeNonStreamingResponse({
+      request: followRequest,
+      res,
+      buildLogData,
+      messageId,
+      model,
+      llmMessages,
+      DEFAULT_TIMEOUT
+    });
   } catch (error) {
     const errorDetails = getErrorDetails(error, model);
     let localizedMessage = errorDetails.message;

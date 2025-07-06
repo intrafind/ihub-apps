@@ -116,6 +116,7 @@ const AnthropicAdapter = {
   processResponseBuffer(data) {
     const result = {
       content: [],
+      tool_calls: [],
       complete: false,
       error: false,
       errorMessage: null,
@@ -134,16 +135,23 @@ const AnthropicAdapter = {
           result.finishReason = parsed.stop_reason === 'end_turn' ? 'stop' : parsed.stop_reason;
         }
       }
-      // Handle streaming response chunks
+      // Handle streaming content deltas
       else if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.text) {
         result.content.push(parsed.delta.text);
       } else if (parsed.type === 'message_delta' && parsed.delta && parsed.delta.content) {
         result.content.push(parsed.delta.content);
       }
 
+      // Tool streaming events
+      if (parsed.type === 'content_block_start' && parsed.content_block?.name) {
+        result.tool_calls.push({ index: parsed.index, id: parsed.content_block.id, function: { name: parsed.content_block.name, arguments: '' } });
+      } else if (parsed.type === 'input_json_delta' && parsed.delta) {
+        result.tool_calls.push({ index: parsed.index, function: { arguments: JSON.stringify(parsed.delta) } });
+      }
+
       if (parsed.type === 'message_stop') {
         result.complete = true;
-        result.finishReason = 'stop';
+        result.finishReason = parsed.stop_reason === 'tool_use' ? 'tool_calls' : (parsed.stop_reason || 'stop');
       }
     } catch (parseError) {
       console.error('Error parsing Claude response chunk:', parseError);

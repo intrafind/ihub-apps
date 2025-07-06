@@ -39,98 +39,68 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     getMessagesForApi,
   } = useChatMessages(chatId); // Now this will properly react to chatId changes
 
-  // Use refs to store the latest callback functions to avoid recreating EventSource
-  const callbacksRef = useRef({});
-  
-  // Update callbacks ref
-  callbacksRef.current = {
-    onChunk: (fullContent) => {
-      if (lastMessageIdRef.current) {
-        updateAssistantMessage(lastMessageIdRef.current, fullContent, true);
-      }
-    },
-    onDone: (finalContent, info) => {
-      console.log('✅ Message completed:', { contentLength: finalContent?.length || 0, finishReason: info.finishReason, messageId: lastMessageIdRef.current });
-      if (lastMessageIdRef.current) {
-        updateAssistantMessage(lastMessageIdRef.current, finalContent, false, {
-          finishReason: info.finishReason,
-        });
-
-        // Trigger onMessageComplete callback if provided
-        if (onMessageComplete && typeof onMessageComplete === 'function') {
-          console.log('🔄 Calling onMessageComplete with:', {
-            contentLength: finalContent?.length || 0,
-            userMessage: lastUserMessageRef.current,
-            hasCallback: !!onMessageComplete
-          });
-          onMessageComplete(finalContent, lastUserMessageRef.current);
-        } else {
-          console.log('⚠️  No onMessageComplete callback provided or not a function:', {
-            hasCallback: !!onMessageComplete,
-            typeOfCallback: typeof onMessageComplete
-          });
-        }
-      } else {
-        console.warn('❌ No lastMessageId found in onDone callback');
-      }
-      setProcessing(false);
-    },
-    onError: (error) => {
-      if (lastMessageIdRef.current) {
-        setMessageError(lastMessageIdRef.current, error.message);
-      }
-      setProcessing(false);
-    },
-    onConnected: async () => {
-      try {
-        if (pendingMessageDataRef.current) {
-          const { appId, chatId, messages, params } = pendingMessageDataRef.current;
-          await sendAppChatMessage(appId, chatId, messages, params);
-          pendingMessageDataRef.current = null;
-        }
-      } catch (error) {
-        if (lastMessageIdRef.current) {
-          setMessageError(
-            lastMessageIdRef.current,
-            t(
-              'error.failedToGenerateResponse',
-              'Error: Failed to generate response. Please try again or select a different model.'
-            )
-          );
-        }
-        // Use the cleanup function from the hook
-        cleanupEventSourceRef.current?.();
-        setProcessing(false);
-      }
-    }
-  };
-
-  // Create stable callback wrappers that call the ref functions
-  const stableOnChunk = useCallback((fullContent) => {
-    callbacksRef.current.onChunk(fullContent);
-  }, []);
-  
-  const stableOnDone = useCallback((finalContent, info) => {
-    callbacksRef.current.onDone(finalContent, info);
-  }, []);
-  
-  const stableOnError = useCallback((error) => {
-    callbacksRef.current.onError(error);
-  }, []);
-  
-  const stableOnConnected = useCallback(async () => {
-    await callbacksRef.current.onConnected();
-  }, []);
-
   const cleanupEventSourceRef = useRef();
+
+  const handleEvent = useCallback(
+    async (event) => {
+      const { type, fullContent, data } = event;
+      switch (type) {
+        case 'connected':
+          if (pendingMessageDataRef.current) {
+            try {
+              const { appId, chatId, messages, params } = pendingMessageDataRef.current;
+              await sendAppChatMessage(appId, chatId, messages, params);
+              pendingMessageDataRef.current = null;
+            } catch (error) {
+              if (lastMessageIdRef.current) {
+                setMessageError(
+                  lastMessageIdRef.current,
+                  t(
+                    'error.failedToGenerateResponse',
+                    'Error: Failed to generate response. Please try again or select a different model.'
+                  )
+                );
+              }
+              cleanupEventSourceRef.current?.();
+              setProcessing(false);
+            }
+          }
+          break;
+        case 'chunk':
+          if (lastMessageIdRef.current) {
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true);
+          }
+          break;
+        case 'done':
+          if (lastMessageIdRef.current) {
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
+              finishReason: data?.finishReason,
+            });
+            if (onMessageComplete) {
+              onMessageComplete(fullContent, lastUserMessageRef.current);
+            }
+          }
+          setProcessing(false);
+          break;
+        case 'error':
+          if (lastMessageIdRef.current) {
+            setMessageError(lastMessageIdRef.current, data?.message || 'Error');
+          }
+          setProcessing(false);
+          break;
+        default:
+          if (data?.message) {
+            addSystemMessage('🔍 ' + data.message, false);
+          }
+      }
+    },
+    [pendingMessageDataRef, sendAppChatMessage, setMessageError, updateAssistantMessage, onMessageComplete, addSystemMessage, t]
+  );
 
   const { initEventSource, cleanupEventSource } = useEventSource({
     appId,
     chatId: chatId,
-    onChunk: stableOnChunk,
-    onDone: stableOnDone,
-    onError: stableOnError,
-    onConnected: stableOnConnected,
+    onEvent: handleEvent,
     onProcessingChange: setProcessing,
   });
 
