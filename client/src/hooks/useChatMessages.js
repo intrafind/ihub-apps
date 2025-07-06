@@ -79,12 +79,14 @@ function useChatMessages(chatId = 'default') {
    * @returns {string} The ID of the created message
    */
   const addUserMessage = useCallback((content, metadata = {}) => {
-    const { rawContent, ...rest } = metadata;
+    const { rawContent, imageData, fileData, ...rest } = metadata;
     const id = `user-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const userMessage = {
       id,
       role: 'user',
       content,
+      imageData, // Add this
+      fileData,  // Add this
       ...rest
     };
 
@@ -144,24 +146,6 @@ function useChatMessages(chatId = 'default') {
       
       return updatedMessages;
     });
-  }, []);
-
-  /**
-   * Append a thought entry to an assistant message
-   * @param {string} id - The ID of the message to update
-   * @param {string|Object} thought - The thought data
-   */
-  const addMessageThought = useCallback((id, thought) => {
-    setMessages(prev =>
-      prev.map(msg =>
-        msg.id === id
-          ? {
-              ...msg,
-              thoughts: [...(msg.thoughts || []), thought]
-            }
-          : msg
-      )
-    );
   }, []);
 
   /**
@@ -268,7 +252,6 @@ function useChatMessages(chatId = 'default') {
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,
-    addMessageThought,
     setMessageError,
     deleteMessage,
     editMessage,

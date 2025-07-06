@@ -515,16 +515,26 @@ const AppChat = () => {
 
   const handleResendMessage = (messageId, editedContent, useMaxTokens = false) => {
     const resendData = prepareResend(messageId, editedContent);
-    const { content: contentToResend, variables: variablesToRestore } = resendData;
+    const { content: contentToResend, variables: variablesToRestore, imageData: imageDataToRestore, fileData: fileDataToRestore } = resendData;
     
     // Allow resending if there's content OR if the app allows empty content (for variable-only messages)
-    if (!contentToResend && !app?.allowEmptyContent) return;
+    if (!contentToResend && !imageDataToRestore && !fileDataToRestore && !app?.allowEmptyContent) return;
 
     setInput(contentToResend || '');
     
     // Restore variables if they exist
     if (variablesToRestore) {
       setVariables(variablesToRestore);
+    }
+    
+    // Restore image data if it exists
+    if (imageDataToRestore) {
+      setSelectedImage(imageDataToRestore);
+    }
+    
+    // Restore file data if it exists
+    if (fileDataToRestore) {
+      setSelectedFile(fileDataToRestore);
     }
     
     if (useMaxTokens) {

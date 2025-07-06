@@ -161,7 +161,11 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           ? displayMessage 
           : (displayMessage?.content || '');
         
-        addUserMessage(contentToAdd, displayMessage?.meta || {});
+        addUserMessage(contentToAdd, { 
+          ...(displayMessage?.meta || {}), 
+          imageData: apiMessage.imageData, 
+          fileData: apiMessage.fileData 
+        });
         addAssistantMessage(exchangeId);
 
         const messagesForAPI = getMessagesForApi(sendChatHistory, {
@@ -203,19 +207,23 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   const resendMessage = useCallback(
     (messageId, editedContent) => {
       const messageToResend = messages.find((m) => m.id === messageId);
-      if (!messageToResend) return { content: '', variables: null };
+      if (!messageToResend) return { content: '', variables: null, imageData: null, fileData: null };
 
       let contentToResend = editedContent;
       let variablesToRestore = null;
+      let imageDataToRestore = null;
+      let fileDataToRestore = null;
 
       if (messageToResend.role === 'assistant') {
         const idx = messages.findIndex((m) => m.id === messageId);
         const prevUser = [...messages.slice(0, idx)]
           .reverse()
           .find((m) => m.role === 'user');
-        if (!prevUser) return { content: '', variables: null };
+        if (!prevUser) return { content: '', variables: null, imageData: null, fileData: null };
         contentToResend = prevUser.rawContent || prevUser.content;
         variablesToRestore = prevUser.meta?.variables || null;
+        imageDataToRestore = prevUser.imageData || null;
+        fileDataToRestore = prevUser.fileData || null;
         deleteMessage(prevUser.id);
       } else {
         deleteMessage(messageId);
@@ -223,12 +231,16 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           contentToResend = messageToResend.rawContent || messageToResend.content;
         }
         variablesToRestore = messageToResend.meta?.variables || null;
+        imageDataToRestore = messageToResend.imageData || null;
+        fileDataToRestore = messageToResend.fileData || null;
       }
 
-      // Return both content and variables
+      // Return content, variables, and file data
       return {
         content: contentToResend || '',
-        variables: variablesToRestore
+        variables: variablesToRestore,
+        imageData: imageDataToRestore,
+        fileData: fileDataToRestore
       };
     },
     [messages, deleteMessage]
