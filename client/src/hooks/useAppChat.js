@@ -89,9 +89,11 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           setProcessing(false);
           break;
         default:
-          if (data?.message) {
-            addSystemMessage('🔍 ' + data.message, false);
-          }
+          // TODO Implement proper handling of unknown messages as well as display them in the frontend
+          // if (data?.message) {
+          //   addSystemMessage('🔍 ' + data.message, false);
+          // }
+          console.log('🔍 Unknown event type:', type, data);
       }
     },
     [pendingMessageDataRef, sendAppChatMessage, setMessageError, updateAssistantMessage, onMessageComplete, addSystemMessage, t]

@@ -23,11 +23,11 @@ const ChatMessage = ({
   const { t } = useTranslation();
 
   // Debug loading state changes
-  useEffect(() => {
-    if (message.id && message.role === 'assistant') {
-      console.log(`💬 Message ${message.id} loading state:`, message.loading);
-    }
-  }, [message.loading, message.id, message.role]);
+  // useEffect(() => {
+  //   if (message.id && message.role === 'assistant') {
+  //     console.log(`💬 Message ${message.id} loading state:`, message.loading);
+  //   }
+  // }, [message.loading, message.id, message.role]);
 
   const isUser = message.role === 'user';
   const isError = message.error === true;
@@ -235,7 +235,7 @@ const ChatMessage = ({
     }
 
     if (message.loading) {
-      console.log('🔄 Rendering loading state for message:', contentToRender);
+      // console.log('🔄 Rendering loading state for message:', contentToRender);
       // For loading assistant messages with markdown, still use the StreamingMarkdown component
       if (outputFormat === 'markdown' && !isUser) {
         return (
@@ -280,7 +280,7 @@ const ChatMessage = ({
     }
     
     if (outputFormat === 'markdown' && !isUser) {
-      console.log('✅ Rendering completed markdown content:', contentToRender?.length || 0, 'chars');
+      // console.log('✅ Rendering completed markdown content:', contentToRender?.length || 0, 'chars');
       // Use StreamingMarkdown component for better real-time rendering
       return <StreamingMarkdown content={contentToRender} />;
     }

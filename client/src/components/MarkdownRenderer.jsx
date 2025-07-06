@@ -205,7 +205,7 @@ export const configureMarked = () => {
   const currentDomain =
     typeof window !== 'undefined' ? window.location.hostname : '';
   renderer.link = function(href, title, text) {
-    console.log('Link renderer called:', { href: JSON.stringify(href), title, text });
+    // console.log('Link renderer called:', { href: JSON.stringify(href), title, text });
     
     // Extract the actual URL and title from href - handle both string and object cases
     let actualHref;
