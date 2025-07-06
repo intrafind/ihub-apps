@@ -189,12 +189,14 @@ const GoogleAdapter = {
           }
           if (part.functionCall) {
             result.tool_calls.push({
+              index: 0,
               id: 'tool_call_1',
               function: {
                 name: part.functionCall.name,
                 arguments: JSON.stringify(part.functionCall.args || {})
               }
             });
+            if (!result.finishReason) result.finishReason = 'tool_calls';
           }
           result.complete = true;
           const fr = parsed.candidates[0].finishReason;
@@ -210,18 +212,21 @@ const GoogleAdapter = {
         }
         // Handle streaming response chunks - process content parts
         else if (parsed.candidates && parsed.candidates[0]?.content?.parts) {
+          let idx = result.tool_calls.length;
           for (const part of parsed.candidates[0].content.parts) {
             if (part.text) {
               result.content.push(part.text);
             }
             if (part.functionCall) {
               result.tool_calls.push({
-                id: 'tool_call',
+                index: idx++,
+                id: `tool_call_${idx}`,
                 function: {
                   name: part.functionCall.name,
                   arguments: JSON.stringify(part.functionCall.args || {})
                 }
               });
+              if (!result.finishReason) result.finishReason = 'tool_calls';
             }
           }
         }

@@ -439,7 +439,7 @@ export async function processChatWithTools({
       activeRequests.delete(chatId);
     }
 
-    if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+    if (collectedToolCalls.length === 0) {
       if (clientRes) {
         sendSSE(clientRes, 'done', { finishReason: finishReason || 'stop' });
         await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
