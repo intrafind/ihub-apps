@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import MarkdownRenderer, { configureMarked } from '../MarkdownRenderer';
 import { sendMessageFeedback } from '../../api/api';
 import MessageVariables from './MessageVariables';
 import Icon from '../Icon';
 import StreamingMarkdown from './StreamingMarkdown';
+import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../utils/markdownUtils';
 
 const ChatMessage = ({ 
   message, 
@@ -18,6 +19,7 @@ const ChatMessage = ({
   modelId,
   compact = false,  // New prop to indicate compact mode (for widget or mobile)
   onOpenInCanvas,
+  onInsert,
   canvasEnabled = false
 }) => {
   const { t } = useTranslation();
@@ -43,10 +45,23 @@ const ChatMessage = ({
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState(null); // Track active feedback button
   const [showThoughts, setShowThoughts] = useState(false);
+  const [showCopyMenu, setShowCopyMenu] = useState(false);
+  const copyMenuRef = useRef(null);
 
   // Configure marked renderer and copy buttons
   useEffect(() => {
     configureMarked();
+  }, []);
+
+  // Close copy menu on outside click
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (copyMenuRef.current && !copyMenuRef.current.contains(e.target)) {
+        setShowCopyMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
   // Post-process the rendered markdown to add target="_blank" to external links
@@ -79,13 +94,31 @@ const ChatMessage = ({
     }
   }, [outputFormat, isUser, isEditing, message.content]);
 
-  const handleCopyToClipboard = () => {
-    const contentToCopy = typeof message.content === 'string' ? message.content : (message.content || '');
-    navigator.clipboard.writeText(contentToCopy)
+  const handleCopy = (format = 'text') => {
+    const raw = typeof message.content === 'string' ? message.content : (message.content || '');
+    let html = isMarkdown(raw) ? markdownToHtml(raw) : raw;
+    let markdown = isMarkdown(raw) ? raw : htmlToMarkdown(raw);
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    const plain = temp.textContent || temp.innerText || '';
+
+    let data;
+    switch (format) {
+      case 'html':
+        data = html;
+        break;
+      case 'markdown':
+        data = markdown;
+        break;
+      default:
+        data = plain;
+    }
+
+    navigator.clipboard.writeText(data)
       .then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
-        console.log('Content copied to clipboard');
+        setTimeout(() => setCopied(false), 2000);
+        setShowCopyMenu(false);
       })
       .catch(err => {
         console.error('Failed to copy content: ', err);
@@ -348,23 +381,45 @@ const ChatMessage = ({
           showActions ? 'opacity-100' : 'opacity-0'
         } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}>
           {/* Standard actions first */}
-          <button
-            onClick={handleCopyToClipboard}
-            className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
-            title={t('pages.appChat.copyToClipboard')}
-          >
-            {copied ? (
-              <>
-                <Icon name="check" size="sm" />
-                {!compact && <span>{t('chatMessage.copied')}</span>}
-              </>
-            ) : (
-              <>
-                <Icon name="copy" size="sm" />
-                {!compact && <span>{t('chatMessage.copy')}</span>}
-              </>
+          <div className="relative" ref={copyMenuRef}>
+            <button
+              onClick={() => handleCopy('text')}
+              className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
+              title={t('pages.appChat.copyToClipboard')}
+            >
+              {copied ? (
+                <>
+                  <Icon name="check" size="sm" />
+                  {!compact && <span>{t('chatMessage.copied')}</span>}
+                </>
+              ) : (
+                <>
+                  <Icon name="copy" size="sm" />
+                  {!compact && <span>{t('chatMessage.copy')}</span>}
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => setShowCopyMenu(!showCopyMenu)}
+              className="ml-1 hover:text-gray-700"
+              title={t('canvas.export.copyOptions', 'Copy Options')}
+            >
+              <Icon name="chevron-down" size="sm" />
+            </button>
+            {showCopyMenu && (
+              <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded shadow z-10 text-gray-700">
+                <button onClick={() => handleCopy('text')} className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left">
+                  {t('canvas.export.copyText', 'Copy as Text')}
+                </button>
+                <button onClick={() => handleCopy('markdown')} className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left">
+                  {t('canvas.export.copyMarkdown', 'Copy as Markdown')}
+                </button>
+                <button onClick={() => handleCopy('html')} className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left">
+                  {t('canvas.export.copyHTML', 'Copy as HTML')}
+                </button>
+              </div>
             )}
-          </button>
+          </div>
           
           {/* Open in Canvas button for assistant messages */}
           {!isUser && !isError && canvasEnabled && onOpenInCanvas && (
@@ -375,6 +430,17 @@ const ChatMessage = ({
             >
               <Icon name="document-text" size="sm" />
               {!compact && <span>{t('chatMessage.openInCanvas', 'Canvas')}</span>}
+            </button>
+          )}
+
+          {!isUser && !isError && canvasEnabled && onInsert && (
+            <button
+              onClick={() => onInsert(message.content)}
+              className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+              title={t('canvas.insertIntoDocument', 'Insert into document')}
+            >
+              <Icon name="arrow-right" size="sm" />
+              {!compact && <span>{t('canvas.insert', 'Insert')}</span>}
             </button>
           )}
           

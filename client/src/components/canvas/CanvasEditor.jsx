@@ -4,6 +4,7 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import Icon from '../Icon';
 import QuillToolbar from './QuillToolbar';
+import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../utils/markdownUtils';
 
 const CanvasEditor = ({
   content,
@@ -38,6 +39,63 @@ const CanvasEditor = ({
     'header', 'bold', 'italic', 'underline', 'strike',
     'list', 'bullet', 'blockquote', 'code-block', 'link'
   ];
+
+  // Custom clipboard handlers for cut/copy/paste
+  useEffect(() => {
+    if (!editorRef?.current) return;
+    const quill = editorRef.current.getEditor();
+    const Quill = ReactQuill.Quill;
+    const temp = new Quill(document.createElement('div'));
+
+    const handleCopyCut = (e, cut = false) => {
+      const sel = quill.getSelection();
+      if (!sel || sel.length === 0) return;
+      e.preventDefault();
+      const delta = quill.getContents(sel.index, sel.length);
+      temp.setContents(delta);
+      const html = temp.root.innerHTML;
+      const markdown = htmlToMarkdown(html);
+      const plain = temp.root.textContent || temp.root.innerText || '';
+      e.clipboardData.setData('text/plain', plain);
+      e.clipboardData.setData('text/html', html);
+      e.clipboardData.setData('text/markdown', markdown);
+      if (cut) quill.deleteText(sel.index, sel.length, 'user');
+    };
+
+    const handlePaste = (e) => {
+      e.preventDefault();
+      const htmlData = e.clipboardData.getData('text/html');
+      const mdData = e.clipboardData.getData('text/markdown');
+      const textData = e.clipboardData.getData('text/plain');
+      let html = htmlData;
+      if (!html) {
+        if (mdData) {
+          html = markdownToHtml(mdData);
+        } else if (isMarkdown(textData)) {
+          html = markdownToHtml(textData);
+        } else {
+          html = textData;
+        }
+      }
+      const sel = quill.getSelection(true);
+      const index = sel ? sel.index : quill.getLength();
+      quill.clipboard.dangerouslyPasteHTML(index, html);
+      quill.setSelection(index + html.length, 0);
+    };
+
+    const root = quill.root;
+    const copyHandler = (e) => handleCopyCut(e, false);
+    const cutHandler = (e) => handleCopyCut(e, true);
+    root.addEventListener('copy', copyHandler);
+    root.addEventListener('cut', cutHandler);
+    root.addEventListener('paste', handlePaste);
+
+    return () => {
+      root.removeEventListener('copy', copyHandler);
+      root.removeEventListener('cut', cutHandler);
+      root.removeEventListener('paste', handlePaste);
+    };
+  }, [editorRef]);
 
   return (
     <div 

@@ -19,6 +19,7 @@ const ChatMessageList = ({
   editable = false,
   compact = false,
   onOpenInCanvas,
+  onInsert,
   canvasEnabled = false
 }) => {
   const chatContainerRef = useRef(null);
@@ -72,6 +73,7 @@ const ChatMessageList = ({
               modelId={modelId}
               compact={compact}
               onOpenInCanvas={onOpenInCanvas}
+              onInsert={onInsert}
               canvasEnabled={canvasEnabled}
             />
           </div>
