@@ -26,6 +26,7 @@ const ChatInput = ({
   disabled = false,
   imageUploadEnabled = false,
   fileUploadEnabled = false,
+  imageUploadConfig = {},
   fileUploadConfig = {},
   selectedImage = null, // Add this prop to pass from parent
   selectedFile = null, // Add this prop to pass from parent
@@ -245,6 +246,7 @@ const ChatInput = ({
           onImageSelect={onImageSelect}
           disabled={disabled || isProcessing}
           imageData={selectedImage} // Pass the actual selectedImage value from parent
+          config={imageUploadConfig}
         />
       )}
 

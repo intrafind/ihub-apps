@@ -922,6 +922,7 @@ const AppChat = () => {
                       }
                       onImageSelect={handleImageSelect}
                       imageUploadEnabled={app?.features?.imageUpload === true}
+                      imageUploadConfig={app?.imageUpload || {}}
                       onFileSelect={handleFileSelect}
                       fileUploadEnabled={app?.features?.fileUpload === true}
                       fileUploadConfig={app?.fileUpload || {}}
@@ -987,6 +988,7 @@ const AppChat = () => {
                       }
                       onImageSelect={handleImageSelect}
                       imageUploadEnabled={app?.features?.imageUpload === true}
+                      imageUploadConfig={app?.imageUpload || {}}
                       onFileSelect={handleFileSelect}
                       fileUploadEnabled={app?.features?.fileUpload === true}
                       fileUploadConfig={app?.fileUpload || {}}
@@ -1052,6 +1054,7 @@ const AppChat = () => {
                     }
                     onImageSelect={handleImageSelect}
                     imageUploadEnabled={app?.features?.imageUpload === true}
+                    imageUploadConfig={app?.imageUpload || {}}
                     onFileSelect={handleFileSelect}
                     fileUploadEnabled={app?.features?.fileUpload === true}
                     fileUploadConfig={app?.fileUpload || {}}
@@ -1111,6 +1114,7 @@ const AppChat = () => {
                   }
                   onImageSelect={handleImageSelect}
                   imageUploadEnabled={app?.features?.imageUpload === true}
+                  imageUploadConfig={app?.imageUpload || {}}
                   onFileSelect={handleFileSelect}
                   fileUploadEnabled={app?.features?.fileUpload === true}
                   fileUploadConfig={app?.fileUpload || {}}

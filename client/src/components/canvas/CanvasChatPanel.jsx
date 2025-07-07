@@ -76,6 +76,7 @@ const CanvasChatPanel = ({
           onVoiceInput={() => {}} // Voice input can be added later if needed
           selectedImage={null}
           selectedFile={null}
+          imageUploadConfig={{}}
           showImageUploader={false}
           showFileUploader={false}
           inputRef={inputRef}
