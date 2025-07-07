@@ -4,6 +4,8 @@
  */
 import configCache from './configCache.js';
 
+const lastCompleted = new Map(); // id -> timestamp when last request finished
+
 const queues = new Map(); // id -> array of pending tasks
 const actives = new Map(); // id -> number of active requests
 
@@ -25,6 +27,17 @@ function getConcurrency(id = 'default') {
   return normalizeLimit(limit);
 }
 
+function getDelay(id = 'default') {
+  const platform = configCache.getPlatform() || {};
+  const models = configCache.getModels() || [];
+  const tools = configCache.getTools() || [];
+  const model = models.find(m => m.id === id);
+  if (model && typeof model.requestDelayMs === 'number') return model.requestDelayMs;
+  const tool = tools.find(t => t.id === id);
+  if (tool && typeof tool.requestDelayMs === 'number') return tool.requestDelayMs;
+  return typeof platform.requestDelayMs === 'number' ? platform.requestDelayMs : 0;
+}
+
 export function throttledFetch(id, url, options = {}) {
   if (typeof url === 'undefined') {
     // called as throttledFetch(url)
@@ -42,12 +55,19 @@ export function throttledFetch(id, url, options = {}) {
     const execute = async () => {
       actives.set(id, actives.get(id) + 1);
       try {
+        const delay = getDelay(id);
+        const lastTime = lastCompleted.get(id) || 0;
+        const wait = Math.max(0, delay - (Date.now() - lastTime));
+        if (wait > 0) {
+          await new Promise(r => setTimeout(r, wait));
+        }
         const res = await fetch(url, options);
         resolve(res);
       } catch (err) {
         reject(err);
       } finally {
         actives.set(id, actives.get(id) - 1);
+        lastCompleted.set(id, Date.now());
         if (queue.length > 0) {
           const next = queue.shift();
           next();

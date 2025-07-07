@@ -69,7 +69,8 @@
     "provider": "mistral",
     "tokenLimit": 32000,
     "supportsTools": true,
-    "concurrency": 1
+    "concurrency": 1,
+    "requestDelayMs": 1000
   },
   {
     "id": "local-mistral",

@@ -29,6 +29,7 @@ Each model is defined with the following properties:
 | `url` | String | API endpoint URL for the model |
 | `provider` | String | Provider identifier (openai, anthropic, google, etc.) |
 | `tokenLimit` | Number | Maximum token capacity of the model's context window |
+| `requestDelayMs` | Number | Optional delay in milliseconds between API requests for this model |
 
 ### Tools
 
