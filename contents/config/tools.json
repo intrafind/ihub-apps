@@ -4,6 +4,7 @@
     "name": "Brave Web / Internet Search",
     "description": "Search the web / internet using Brave for up-to-date information. Use the 'query' parameter with your search terms.",
     "script": "braveSearch.js",
+    "concurrency": 5,
     "parameters": {
       "type": "object",
       "properties": {
@@ -20,6 +21,7 @@
     "name": "Web Content Extractor",
     "description": "Extract clean, readable content from an URL. This can be content like PDFs or webpages, removing ads, headers, footers, and other non-content elements. Use the 'url' parameter with a valid HTTP/HTTPS URL.",
     "script": "webContentExtractor.js",
+    "concurrency": 3,
     "parameters": {
       "type": "object",
       "properties": {

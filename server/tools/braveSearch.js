@@ -1,4 +1,5 @@
 import config from '../config.js';
+import { throttledFetch } from '../requestThrottler.js';
 
 export default async function braveSearch({ query, q }) {
   // Accept both 'query' and 'q' parameters for flexibility
@@ -12,7 +13,7 @@ export default async function braveSearch({ query, q }) {
     throw new Error('BRAVE_SEARCH_API_KEY is not set');
   }
   const endpoint = config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
-  const res = await fetch(`${endpoint}?q=${encodeURIComponent(searchQuery)}`, {
+  const res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(searchQuery)}`, {
     headers: {
       'X-Subscription-Token': apiKey,
       'Accept': 'application/json'

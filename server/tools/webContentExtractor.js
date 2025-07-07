@@ -1,6 +1,7 @@
 import { JSDOM } from 'jsdom';
 import https from 'https';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { throttledFetch } from '../requestThrottler.js';
 
 function createError(message, code) {
   const err = new Error(message);
@@ -44,7 +45,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
       console.warn(`Ignoring SSL certificate errors for ${targetUrl}`);
     }
 
-    const response = await fetch(targetUrl, {
+    const response = await throttledFetch('webContentExtractor', targetUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
