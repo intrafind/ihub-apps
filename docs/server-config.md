@@ -27,6 +27,7 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `MAGIC_PROMPT_PROMPT` | Default prompt used to refine user input | `Improve the following prompt.` |
 
 The concurrency of outbound requests is configured via `requestConcurrency` in `contents/config/platform.json` and can be overridden per model or tool. If this value is omitted or below `1`, requests are not throttled.
+The delay between requests can be adjusted with `requestDelayMs` in the same configuration files. A value of `0` disables the delay.
 
 ## SSL Configuration
 
