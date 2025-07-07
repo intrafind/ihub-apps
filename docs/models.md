@@ -62,7 +62,10 @@ The system currently supports the following providers:
    - Compatible with the Google Gemini API format
    - Examples: Gemini 1.5 Flash
 
-4. **Local Models** (can use any provider format they're compatible with)
+4. **Mistral** (`provider: "mistral"`)
+   - Compatible with Mistral's La Plateforme API format
+   - Examples: Mistral Small, Mixtral 8x7B
+5. **Local Models** (can use any provider format they're compatible with)
    - Self-hosted models accessible via localhost or network
    - Example: Local vLLM implementation
 
