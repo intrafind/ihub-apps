@@ -16,7 +16,7 @@ updates from tools.
 - `done` – the entire interaction has completed.
 - `session.start` – a new chat session begins.
 - `session.end` – the session is finished.
-- `llm.chunk` – streamed text from the LLM.
+- `chunk` – streamed text from the LLM.
 - `tool.call.start` – a tool invocation has begun.
 - `tool.call.progress` – optional progress for long running tools.
 - `tool.call.end` – tool invocation finished.
