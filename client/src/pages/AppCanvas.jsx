@@ -405,6 +405,15 @@ const AppCanvas = () => {
     setShowConfig(!showConfig);
   };
 
+  const clearSelectedText = useCallback(() => {
+    setSelection(null);
+    setSelectedText('');
+    if (quillRef.current) {
+      const quill = quillRef.current.getEditor();
+      quill.setSelection(null);
+    }
+  }, []);
+
   // Handle voice input for canvas editor
   const handleCanvasVoiceInput = useCallback((text) => {
     // The text is already inserted into the editor by CanvasVoiceInput component
@@ -546,6 +555,7 @@ const AppCanvas = () => {
           appId={appId}
           chatId={chatId.current}
           selectedText={selectedText}
+          onClearSelection={clearSelectedText}
           width={panelSizes.chat}
           inputRef={chatInputRef}
         />
