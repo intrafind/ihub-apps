@@ -8,6 +8,7 @@ export function sendSSE(res, event, data) {
 }
 
 actionTracker.on('fire-sse', step => {
+  console.log('Firing SSE event:', step);
   const { chatId, event } = step;
   if (!chatId) return;
   if (clients.has(chatId)) {

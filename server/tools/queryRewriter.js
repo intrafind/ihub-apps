@@ -1,3 +1,4 @@
+import { act } from 'react';
 import { simpleCompletion } from '../utils.js';
 
 function getPrompt(query, think, context) {
@@ -207,6 +208,7 @@ export default async function queryRewriter({
     throw new Error('query parameter is required');
   }
 
+  actionTracker.trackAction({ action: 'rewrite_query:start', query });
   const prompt = getPrompt(query, think, context);
   const completion = await simpleCompletion(`${prompt.system}\n${prompt.user}`, { model, temperature });
 
@@ -215,6 +217,7 @@ export default async function queryRewriter({
     const json = completion.slice(jsonStart);
     const parsed = JSON.parse(json);
     if (Array.isArray(parsed.queries)) {
+      actionTracker.trackAction({ action: 'rewrite_query:end', queries: parsed.queries });
       return parsed;
     }
   } catch (_) {
@@ -222,5 +225,6 @@ export default async function queryRewriter({
   }
 
   const lines = completion.split('\n').map(l => l.trim()).filter(Boolean);
+  actionTracker.trackAction({ action: 'rewrite_query:end', queries: lines.map(q => ({ q })) });
   return { queries: lines.map(q => ({ q })) };
 }

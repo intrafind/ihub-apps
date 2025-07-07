@@ -1,3 +1,4 @@
+import { act } from 'react';
 import braveSearch from './braveSearch.js';
 import webContentExtractor from './webContentExtractor.js';
 

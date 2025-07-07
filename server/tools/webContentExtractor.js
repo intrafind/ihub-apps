@@ -2,6 +2,7 @@ import { JSDOM } from 'jsdom';
 import https from 'https';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { throttledFetch } from '../requestThrottler.js';
+import { actionTracker } from '../actionTracker.js';
 
 function createError(message, code) {
   const err = new Error(message);
@@ -15,6 +16,7 @@ function createError(message, code) {
  */
 export default async function webContentExtractor({ url, uri, link, maxLength = 5000, ignoreSSL = false }) {
   console.log(`Starting content extraction from: ${url || uri || link}`);
+  actionTracker.trackAction({ action: 'extract_content', url: url || uri || link });
   // Accept various URL parameter names for flexibility
   const targetUrl = url || uri || link;
   
