@@ -20,9 +20,9 @@
     "supportsTools": true
   },
   {
-    "id": "claude-3-opus",
-    "modelId": "claude-3-opus-20240229",
-    "name": "Claude 3 Opus",
+    "id": "claude-4-opus",
+    "modelId": "claude-opus-4-20250514",
+    "name": "Claude 4 Opus",
     "description": "Anthropic's most capable model with exceptional reasoning abilities",
     "url": "https://api.anthropic.com/v1/messages",
     "provider": "anthropic",
@@ -30,9 +30,9 @@
     "supportsTools": true
   },
   {
-    "id": "claude-3-sonnet",
-    "modelId": "claude-3-sonnet-20240229",
-    "name": "Claude 3 Sonnet",
+    "id": "claude-4-sonnet",
+    "modelId": "claude-sonnet-4-20250514",
+    "name": "Claude 4 Sonnet",
     "description": "Balanced performance and value for enterprise and everyday tasks",
     "url": "https://api.anthropic.com/v1/messages",
     "provider": "anthropic",
