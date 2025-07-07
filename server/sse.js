@@ -6,3 +6,4 @@ export function sendSSE(res, event, data) {
   res.write(`data: ${typeof data === 'string' ? data : JSON.stringify(data)}\n\n`);
 }
 
+
