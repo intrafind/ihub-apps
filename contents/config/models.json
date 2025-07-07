@@ -36,7 +36,7 @@
     "description": "Balanced performance and value for enterprise and everyday tasks",
     "url": "https://api.anthropic.com/v1/messages",
     "provider": "anthropic",
-    "tokenLimit": 180000,
+    "tokenLimit": 64000,
     "supportsTools": true
   },
   {

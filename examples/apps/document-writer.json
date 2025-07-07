@@ -21,10 +21,14 @@
   "preferredStyle": "professional",
   "preferredTemperature": 0.7,
   "sendChatHistory": true,
+  "imageUpload": {
+    "enabled": true
+  },
+  "fileUpload": {
+    "enabled": false
+  },
   "features": {
     "canvas": true,
-    "imageUpload": false,
-    "fileUpload": false,
     "magicPrompt": {
       "enabled": true
     }

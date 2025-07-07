@@ -921,10 +921,8 @@ const AppChat = () => {
                           : undefined
                       }
                       onImageSelect={handleImageSelect}
-                      imageUploadEnabled={app?.features?.imageUpload === true}
                       imageUploadConfig={app?.imageUpload || {}}
                       onFileSelect={handleFileSelect}
-                      fileUploadEnabled={app?.features?.fileUpload === true}
                       fileUploadConfig={app?.fileUpload || {}}
                       allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
                       inputRef={inputRef}
@@ -987,10 +985,8 @@ const AppChat = () => {
                           : undefined
                       }
                       onImageSelect={handleImageSelect}
-                      imageUploadEnabled={app?.features?.imageUpload === true}
                       imageUploadConfig={app?.imageUpload || {}}
                       onFileSelect={handleFileSelect}
-                      fileUploadEnabled={app?.features?.fileUpload === true}
                       fileUploadConfig={app?.fileUpload || {}}
                       allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
                       inputRef={inputRef}
@@ -1053,10 +1049,8 @@ const AppChat = () => {
                         : undefined
                     }
                     onImageSelect={handleImageSelect}
-                    imageUploadEnabled={app?.features?.imageUpload === true}
                     imageUploadConfig={app?.imageUpload || {}}
                     onFileSelect={handleFileSelect}
-                    fileUploadEnabled={app?.features?.fileUpload === true}
                     fileUploadConfig={app?.fileUpload || {}}
                     allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
                     inputRef={inputRef}
@@ -1113,10 +1107,8 @@ const AppChat = () => {
                       : undefined
                   }
                   onImageSelect={handleImageSelect}
-                  imageUploadEnabled={app?.features?.imageUpload === true}
                   imageUploadConfig={app?.imageUpload || {}}
                   onFileSelect={handleFileSelect}
-                  fileUploadEnabled={app?.features?.fileUpload === true}
                   fileUploadConfig={app?.fileUpload || {}}
                   allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
                   inputRef={inputRef}
