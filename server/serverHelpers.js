@@ -42,19 +42,21 @@ export function setupMiddleware(app, platformConfig = {}) {
 }
 
 
-export async function getLocalizedError(errorKey, params = {}, language = 'en') {
+export async function getLocalizedError(errorKey, params = {}, language) {
+  const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+  const lang = language || defaultLang;
   try {
     // Try to get translations from cache first
-    let translations = configCache.getLocalizations(language);
+    let translations = configCache.getLocalizations(lang);
     
     const hasServer = translations?.serverErrors && translations.serverErrors[errorKey];
     const hasTool = translations?.toolErrors && translations.toolErrors[errorKey];
     if (!translations || (!hasServer && !hasTool)) {
-      if (language !== 'en') {
-        // Try English translations from cache first
-        let enTranslations = configCache.getLocalizations('en');
+      if (lang !== defaultLang) {
+        // Try default translations from cache first
+        let enTranslations = configCache.getLocalizations(defaultLang);
         if (!enTranslations) {
-          enTranslations = await loadJson('locales/en.json');
+          enTranslations = await loadJson(`locales/${defaultLang}.json`);
         }
         const enServer = enTranslations?.serverErrors?.[errorKey];
         const enTool = enTranslations?.toolErrors?.[errorKey];
@@ -90,30 +92,34 @@ export function validateApiKeys() {
   }
 }
 
-export async function verifyApiKey(model, res, clientRes = null, language = 'en') {
+export async function verifyApiKey(model, res, clientRes = null, language) {
+  const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+  const lang = language || defaultLang;
   try {
     const apiKey = await getApiKeyForModel(model.id);
     if (!apiKey) {
       console.error(`API key not found for model: ${model.id} (${model.provider}). Please set ${model.provider.toUpperCase()}_API_KEY in your environment.`);
-      const localizedErrorMessage = await getLocalizedError('apiKeyNotFound', { provider: model.provider }, language);
+      const localizedErrorMessage = await getLocalizedError('apiKeyNotFound', { provider: model.provider }, lang);
       if (clientRes) sendSSE(clientRes, 'error', { message: localizedErrorMessage });
       return false;
     }
     return apiKey;
   } catch (error) {
     console.error(`Error getting API key for model ${model.id}:`, error);
-    const localizedErrorMessage = await getLocalizedError('internalError', {}, language);
+    const localizedErrorMessage = await getLocalizedError('internalError', {}, lang);
     if (clientRes) sendSSE(clientRes, 'error', { message: localizedErrorMessage });
     return false;
   }
 }
 
-export async function processMessageTemplates(messages, app, style = null, outputFormat = null, language = 'en') {
-  console.log(`Using language '${language}' for message templates`);
+export async function processMessageTemplates(messages, app, style = null, outputFormat = null, language) {
+  const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+  const lang = language || defaultLang;
+  console.log(`Using language '${lang}' for message templates`);
   let llmMessages = [...messages].map(msg => {
     if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
       let processedContent = typeof msg.promptTemplate === 'object'
-        ? getLocalizedContent(msg.promptTemplate, language)
+        ? getLocalizedContent(msg.promptTemplate, lang)
         : (msg.promptTemplate || msg.content);
       if (typeof processedContent !== 'string') processedContent = String(processedContent || '');
       const variables = { ...msg.variables, content: msg.content };
@@ -139,7 +145,7 @@ export async function processMessageTemplates(messages, app, style = null, outpu
     userVariables = lastUserMessage.variables;
   }
   if (app && !llmMessages.some(msg => msg.role === 'system')) {
-    let systemPrompt = typeof app.system === 'object' ? getLocalizedContent(app.system, language) : (app.system || '');
+    let systemPrompt = typeof app.system === 'object' ? getLocalizedContent(app.system, lang) : (app.system || '');
     if (typeof systemPrompt !== 'string') systemPrompt = String(systemPrompt || '');
     if (Object.keys(userVariables).length > 0) {
       for (const [key, value] of Object.entries(userVariables)) {

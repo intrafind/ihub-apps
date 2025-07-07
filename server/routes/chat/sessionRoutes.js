@@ -30,7 +30,8 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
       if (!model) {
         return res.status(404).json({ error: 'Model not found' });
       }
-      const apiKey = await verifyApiKey(model, res, null, req.headers['accept-language']?.split(',')[0] || 'en');
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      const apiKey = await verifyApiKey(model, res, null, req.headers['accept-language']?.split(',')[0] || defaultLang);
       if (!apiKey) {
         return res.status(500).json({
           error: `API key not found for model: ${model.id} (${model.provider})`,
@@ -191,7 +192,8 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
     try {
       const { appId, chatId } = req.params;
       const { messages, modelId, temperature, style, outputFormat, language, useMaxTokens, bypassAppPrompts } = req.body;
-      const clientLanguage = language || req.headers['accept-language']?.split(',')[0] || 'en';
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      const clientLanguage = language || req.headers['accept-language']?.split(',')[0] || defaultLang;
       let messageId = null;
       if (messages && Array.isArray(messages) && messages.length > 0) {
         const lastMessage = messages[messages.length - 1];

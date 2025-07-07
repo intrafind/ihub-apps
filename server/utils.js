@@ -320,7 +320,7 @@ export async function logNewSession(chatId, appId, metadata = {}) {
       appId: appId || 'unknown',
       userAgent: metadata.userAgent || 'unknown',
       ipAddress: metadata.ipAddress || 'unknown',
-      language: metadata.language || 'en',
+      language: metadata.language || (configCache.getPlatform()?.defaultLanguage || 'en'),
       referrer: metadata.referrer || 'unknown'
     };
     

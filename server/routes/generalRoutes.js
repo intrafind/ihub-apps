@@ -20,7 +20,8 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
   app.get('/api/apps/:appId', async (req, res) => {
     try {
       const { appId } = req.params;
-      const language = req.headers['accept-language']?.split(',')[0] || 'en';
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
       
       // Try to get apps from cache first
       let apps = configCache.getApps();

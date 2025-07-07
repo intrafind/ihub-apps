@@ -34,10 +34,11 @@ export default function registerDataRoutes(app) {
 
   app.get('/api/translations/:lang', async (req, res) => {
     try {
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       let { lang } = req.params;
       if (!/^[a-zA-Z0-9-]{1,10}$/.test(lang)) {
         console.warn(`Suspicious language parameter received: ${lang}`);
-        lang = 'en';
+        lang = defaultLang;
       }
       const supportedLanguages = ['en', 'de'];
       const baseLanguage = lang.split('-')[0].toLowerCase();
@@ -46,18 +47,18 @@ export default function registerDataRoutes(app) {
         lang = baseLanguage;
       }
       if (!supportedLanguages.includes(lang)) {
-        console.log(`Language '${lang}' not supported, falling back to default language 'en'`);
-        lang = 'en';
+        console.log(`Language '${lang}' not supported, falling back to default language '${defaultLang}'`);
+        lang = defaultLang;
       }
       // Try to get translations from cache first
       let translations = configCache.getLocalizations(lang);
-      
+
       if (!translations) {
         console.error(`Failed to load translations for language: ${lang}`);
-        if (lang !== 'en') {
-          // Try to get English translations from cache first
-          let enTranslations = configCache.getLocalizations('en');
-          
+        if (lang !== defaultLang) {
+          // Try to get default translations from cache first
+          let enTranslations = configCache.getLocalizations(defaultLang);
+
           if (enTranslations) {
             return res.json(enTranslations);
           }
@@ -68,8 +69,8 @@ export default function registerDataRoutes(app) {
     } catch (error) {
       console.error(`Error fetching translations for language ${req.params.lang}:`, error);
       try {
-        // Try to get English translations from cache first as fallback
-        let enTranslations = configCache.getLocalizations('en');
+        // Try to get default translations from cache first as fallback
+        let enTranslations = configCache.getLocalizations(configCache.getPlatform()?.defaultLanguage || 'en');
 
         if (enTranslations) {
           return res.json(enTranslations);
@@ -92,6 +93,19 @@ export default function registerDataRoutes(app) {
       res.json(uiConfig);
     } catch (error) {
       console.error('Error fetching UI configuration:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.get('/api/platform', async (req, res) => {
+    try {
+      let platform = configCache.getPlatform();
+      if (!platform) {
+        return res.status(500).json({ error: 'Failed to load platform configuration' });
+      }
+      res.json(platform);
+    } catch (error) {
+      console.error('Error fetching platform configuration:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

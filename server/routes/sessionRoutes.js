@@ -13,7 +13,7 @@ export default function registerSessionRoutes(app) {
         ...metadata,
         userAgent: req.headers['user-agent'] || metadata?.userAgent || 'unknown',
         ipAddress: req.ip || req.connection.remoteAddress || 'unknown',
-        language: req.headers['accept-language'] || metadata?.language || 'en',
+        language: req.headers['accept-language'] || metadata?.language || (configCache.getPlatform()?.defaultLanguage || 'en'),
         referrer: req.headers['referer'] || metadata?.referrer || 'direct'
       };
       console.log(`[APP LOADED] New session started: ${sessionId} | IP: ${enrichedMetadata.ipAddress.split(':').pop()}`);
