@@ -18,6 +18,7 @@ const CanvasChatPanel = ({
   appId,
   chatId,
   selectedText,
+  onClearSelection,
   width,
   cleanupEventSource
 }) => {
@@ -48,7 +49,15 @@ const CanvasChatPanel = ({
       {/* Chat Input */}
       <div className="canvas-chat-input flex-shrink-0 p-4 border-t border-gray-200 bg-white">
         {selectedText && (
-          <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200 relative">
+            <button
+              type="button"
+              className="absolute right-2 top-2 text-gray-400 hover:text-gray-600"
+              onClick={onClearSelection}
+              title={t('common.clear', 'Clear')}
+            >
+              <Icon name="clearCircle" size="sm" />
+            </button>
             <div className="flex items-center gap-2 mb-1">
               <Icon name="cursor-text" size="sm" className="text-blue-600" />
               <span className="text-xs font-medium text-blue-800">Selected text:</span>
