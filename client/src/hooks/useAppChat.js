@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
 import useEventSource from './useEventSource';
@@ -17,7 +18,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   const { t } = useTranslation();
   // Use the chatId directly instead of storing it in a ref
   // This allows the useChatMessages hook to properly react to chatId changes
-  const chatId = initialChatId || `chat-${Date.now()}`;
+  const chatId = initialChatId || `chat-${uuidv4()}`;
   const [processing, setProcessing] = useState(false);
 
   // Refs to keep mutable values between renders without relying on window
