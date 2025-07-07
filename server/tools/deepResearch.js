@@ -29,8 +29,10 @@ export default async function deepResearch({
     throw new Error('query parameter is required');
   }
 
+  actionTracker.trackToolCallStart(chatId, { toolName: 'deepResearch', toolInput: { query } });
+
   const sendProgress = (event, data) => {
-    actionTracker.trackAction(chatId, { thisStep: { action: event, ...data } });
+    actionTracker.trackToolCallProgress(chatId, { toolName: 'deepResearch', status: 'in-progress', message: event, ...data });
   };
 
   sendProgress('research-start', { query });
@@ -137,6 +139,8 @@ export default async function deepResearch({
   } catch (err) {
     console.error('Failed to finalize answer:', err);
   }
+
+  actionTracker.trackToolCallEnd(chatId, { toolName: 'deepResearch', toolOutput: { sources: aggregated.length } });
 
   return {
     query,

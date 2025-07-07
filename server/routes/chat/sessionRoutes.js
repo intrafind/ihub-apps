@@ -223,6 +223,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
         return res.status(400).json({ error: errorMessage });
       }
       trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
+      actionTracker.trackSessionStart(chatId, { sessionId: chatId, timestamp: new Date().toISOString() });
       if (!clients.has(chatId)) {
         console.log(`No active SSE connection for chat ID: ${chatId}. Creating response without streaming.`);
         const prep = await prepareChatRequest({
