@@ -7,7 +7,17 @@ import { recordChatRequest, recordChatResponse, estimateTokens } from '../usageT
 import { getToolsForApp, runTool } from '../toolLoader.js';
 import { normalizeName } from '../adapters/toolFormatter.js';
 import { sendSSE, activeRequests } from '../sse.js';
+import { actionTracker } from '../shared/actionTracker.js';
 import { createParser } from 'eventsource-parser';
+
+function sendTrackedSSE(res, chatId, event, data) {
+  sendSSE(res, event, data);
+  try {
+    actionTracker.trackAction({ thisStep: { action: event, chatId, ...data } });
+  } catch (err) {
+    console.error('Error tracking action:', err);
+  }
+}
 
 // Prepend file data to message content when present
 export function preprocessMessagesWithFileData(messages) {
@@ -180,7 +190,7 @@ export async function executeStreamingResponse({
   clientLanguage
 }) {
   // TODO localize
-  sendSSE(clientRes, 'processing', { message: 'Processing your request...' });
+  sendTrackedSSE(clientRes, chatId, 'processing', { message: 'Processing your request...' });
   const controller = new AbortController();
   activeRequests.set(chatId, controller);
   const baseLog = buildLogData(true);
@@ -189,7 +199,7 @@ export async function executeStreamingResponse({
   const timeoutId = setTimeout(async () => {
     controller.abort();
     const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT/1000 }, clientLanguage);
-    sendSSE(clientRes, 'error', { message: errorMessage });
+    sendTrackedSSE(clientRes, chatId, 'error', { message: errorMessage });
     activeRequests.delete(chatId);
   }, DEFAULT_TIMEOUT);
 
@@ -214,7 +224,7 @@ export async function executeStreamingResponse({
         responseType: 'error',
         error: { message: errorMessage, code: llmResponse.status.toString(), details: errorBody }
       }));
-      sendSSE(clientRes, 'error', { message: errorMessage, details: errorBody });
+      sendTrackedSSE(clientRes, chatId, 'error', { message: errorMessage, details: errorBody });
       activeRequests.delete(chatId);
       return;
     }
@@ -250,7 +260,7 @@ export async function executeStreamingResponse({
           const result = processResponseBuffer(model.provider, evt.data);
           if (result && result.content && result.content.length > 0) {
             for (const textContent of result.content) {
-              sendSSE(clientRes, 'chunk', { content: textContent });
+              sendTrackedSSE(clientRes, chatId, 'chunk', { content: textContent });
               fullResponse += textContent;
             }
           }
@@ -260,7 +270,7 @@ export async function executeStreamingResponse({
               error: { message: result.errorMessage || 'Error processing response', code: 'PROCESSING_ERROR' },
               response: fullResponse
             }));
-            sendSSE(clientRes, 'error', { message: result.errorMessage || 'Error processing response' });
+            sendTrackedSSE(clientRes, chatId, 'error', { message: result.errorMessage || 'Error processing response' });
             finishReason = 'error';
             break;
           }
@@ -268,7 +278,7 @@ export async function executeStreamingResponse({
             finishReason = result.finishReason;
           }
           if (result && result.complete) {
-            sendSSE(clientRes, 'done', { finishReason });
+            sendTrackedSSE(clientRes, chatId, 'done', { finishReason });
             doneEmitted = true;
             await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: fullResponse }));
             const completionTokens = estimateTokens(fullResponse);
@@ -283,12 +293,12 @@ export async function executeStreamingResponse({
     } catch (error) {
       if (error.name !== 'AbortError') {
         const errorMessage = await getLocalizedError('responseStreamError', { error: error.message }, clientLanguage);
-        sendSSE(clientRes, 'error', { message: errorMessage });
+        sendTrackedSSE(clientRes, chatId, 'error', { message: errorMessage });
         finishReason = 'error';
       }
     } finally {
       if (!doneEmitted) {
-        sendSSE(clientRes, 'done', { finishReason: finishReason || 'connection_closed' });
+        sendTrackedSSE(clientRes, chatId, 'done', { finishReason: finishReason || 'connection_closed' });
       }
       activeRequests.delete(chatId);
     }
@@ -308,7 +318,7 @@ export async function executeStreamingResponse({
         recommendation: errorDetails.recommendation,
         details: error.message
       };
-      sendSSE(clientRes, 'error', errorMessage);
+      sendTrackedSSE(clientRes, chatId, 'error', errorMessage);
     }
     activeRequests.delete(chatId);
   });
@@ -361,7 +371,7 @@ export function processChatWithTools({
   const timeoutId = setTimeout(async () => {
     controller.abort();
     const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT / 1000 }, clientLanguage);
-    sendSSE(clientRes, 'error', { message: errorMessage });
+    sendTrackedSSE(clientRes, chatId, 'error', { message: errorMessage });
     activeRequests.delete(chatId);
   }, DEFAULT_TIMEOUT);
 
@@ -410,7 +420,7 @@ export function processChatWithTools({
         if (result.content?.length > 0) {
           for (const text of result.content) {
             assistantContent += text;
-            sendSSE(clientRes, 'chunk', { content: text });
+            sendTrackedSSE(clientRes, chatId, 'chunk', { content: text });
           }
         }
         
@@ -445,14 +455,14 @@ export function processChatWithTools({
     }
 
     if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
-      sendSSE(clientRes, 'done', { finishReason: finishReason || 'stop' });
+      sendTrackedSSE(clientRes, chatId, 'done', { finishReason: finishReason || 'stop' });
       await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
       activeRequests.delete(chatId);
       return;
     }
     
     const toolNames = collectedToolCalls.map(c => c.function.name).join(', ');
-    sendSSE(clientRes, 'processing', { message: `Using tool(s): ${toolNames}...` });
+    sendTrackedSSE(clientRes, chatId, 'processing', { message: `Using tool(s): ${toolNames}...` });
 
     llmMessages.push({ role: 'assistant', content: assistantContent, tool_calls: collectedToolCalls });
 
@@ -526,7 +536,7 @@ export function processChatWithTools({
         code: error.code || errorDetails.code,
         details: error.details || error.message
       };
-      sendSSE(clientRes, 'error', errMsg);
+      sendTrackedSSE(clientRes, chatId, 'error', errMsg);
     }
     activeRequests.delete(chatId);
   });

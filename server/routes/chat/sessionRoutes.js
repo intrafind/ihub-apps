@@ -3,6 +3,20 @@ import configCache from '../../configCache.js';
 import { createCompletionRequest } from '../../adapters/index.js';
 import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
 import { sendSSE, clients, activeRequests } from '../../sse.js';
+import { actionTracker } from '../../shared/actionTracker.js';
+
+actionTracker.on('action', step => {
+  const { chatId } = step;
+  if (!chatId) return;
+  if (clients.has(chatId)) {
+    const client = clients.get(chatId).response;
+    try {
+      sendSSE(client, 'action', step);
+    } catch (err) {
+      console.error('Error sending SSE action event:', err);
+    }
+  }
+});
 
 import {
   prepareChatRequest,

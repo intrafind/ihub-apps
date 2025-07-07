@@ -1,6 +1,6 @@
 import braveSearch from './braveSearch.js';
 import webContentExtractor from './webContentExtractor.js';
-import { sendSSE, clients } from '../sse.js';
+import { actionTracker } from '../../shared/actionTracker.js';
 import { simpleCompletion } from '../utils.js';
 
 /**
@@ -30,10 +30,7 @@ export default async function deepResearch({
   }
 
   const sendProgress = (event, data) => {
-    if (chatId && clients.has(chatId)) {
-      const client = clients.get(chatId).response;
-      sendSSE(client, event, data);
-    }
+    actionTracker.trackAction({ thisStep: { action: event, chatId, ...data } });
   };
 
   sendProgress('research-start', { query });
