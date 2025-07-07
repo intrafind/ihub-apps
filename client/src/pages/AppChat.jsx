@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   fetchAppDetails,
@@ -168,14 +169,12 @@ const AppChat = () => {
   const [magicLoading, setMagicLoading] = useState(false);
 
   const inputRef = useRef(null);
-  const chatId = useRef(`chat-${Date.now()}`);
+  const chatId = useRef(`chat-${uuidv4()}`);
 
-  // Create a reactive chat ID that changes with appId
-  const stableChatId = useMemo(() => {
-    // Use URL appId for consistency and stability
-    const persistentId = `app-${appId}`;
-    return persistentId;
-  }, [appId]); // This will change when appId changes
+  // Reset chat ID whenever the appId changes to start a fresh session
+  useEffect(() => {
+    chatId.current = `chat-${uuidv4()}`;
+  }, [appId]);
 
   /**
    * Determine if the response should trigger auto-redirect to canvas mode
@@ -234,9 +233,9 @@ const AppChat = () => {
     clearMessages,
     cancelGeneration,
     addSystemMessage,
-  } = useAppChat({ 
-    appId, 
-    chatId: stableChatId,
+  } = useAppChat({
+    appId,
+    chatId: chatId.current,
     onMessageComplete: handleMessageComplete
   });
 
@@ -246,7 +245,7 @@ const AppChat = () => {
     clearChat: () => {
       cancelGeneration();
       clearMessages();
-      chatId.current = `chat-${Date.now()}`;
+      chatId.current = `chat-${uuidv4()}`;
       
       // Reset the chat input to empty
       setInput("");
@@ -564,7 +563,7 @@ const AppChat = () => {
     ) {
       cancelGeneration();
       clearMessages();
-      chatId.current = `chat-${Date.now()}`;
+      chatId.current = `chat-${uuidv4()}`;
       
       // Reset the chat input to empty
       setInput("");
