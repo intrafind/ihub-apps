@@ -86,24 +86,24 @@ const ExportMenu = ({ content, onClose }) => {
         </div>
         <button
           onClick={handleCopyText}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors"
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors whitespace-nowrap"
         >
           <Icon name="document-text" size="sm" />
-          {t('canvas.export.copyText', 'Copy as Text')}
+          {t('canvas.export.copyText', 'as Text')}
         </button>
         <button
           onClick={handleCopyMarkdown}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors"
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors whitespace-nowrap"
         >
           <Icon name="code" size="sm" />
-          {t('canvas.export.copyMarkdown', 'Copy as Markdown')}
+          {t('canvas.export.copyMarkdown', 'as Markdown')}
         </button>
         <button
           onClick={handleCopyHTML}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors"
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors whitespace-nowrap"
         >
           <Icon name="code" size="sm" />
-          {t('canvas.export.copyHTML', 'Copy as HTML')}
+          {t('canvas.export.copyHTML', 'as HTML')}
         </button>
         
         <hr className="my-2" />
