@@ -37,6 +37,7 @@ export default async function deepResearch({
   const aggregated = [];
   const queryQueue = [];
   const executed = new Set();
+  const visitedUrls = new Set();
 
   // Use query rewriter to generate multiple search queries
   try {
@@ -68,6 +69,11 @@ export default async function deepResearch({
 
     const results = search.results.slice(0, maxResults);
     for (const result of results) {
+      if (visitedUrls.has(result.url)) {
+        sendProgress('research-skip', { round, url: result.url, reason: 'already visited' });
+        continue;
+      }
+      visitedUrls.add(result.url);
       sendProgress('research-fetch', { round, url: result.url });
       try {
         const extracted = await webContentExtractor({ url: result.url, maxLength: contentMaxLength });

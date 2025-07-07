@@ -91,7 +91,7 @@
           "type": "integer",
           "description": "Number of search iterations",
           "default": 5,
-          "minimum": 3,
+          "minimum": 5,
           "maximum": 10
         },
         "maxResults": {
@@ -106,7 +106,7 @@
           "description": "Maximum length of extracted content per page",
           "default": 5000,
           "minimum": 500,
-          "maximum": 100000
+          "maximum": 10000
         },
         "chatId": { "type": "string", "description": "Chat session ID" }
       },
@@ -134,7 +134,7 @@
       "required": ["question"]
     }
   },
-  ,{
+  {
     "id": "evaluator",
     "name": "Answer Evaluator",
     "description": "Evaluate answers for definitiveness, freshness and completeness.",
@@ -148,8 +148,8 @@
       },
       "required": ["question", "answer"]
     }
-  }
-  ,{
+  },
+  {
     "id": "queryRewriter",
     "name": "Query Rewriter",
     "description": "Rewrite user search queries into optimized variations.",
@@ -160,11 +160,12 @@
         "query": { "type": "string", "description": "Search query to rewrite" },
         "think": { "type": "string", "description": "User motivation" },
         "context": { "type": "string", "description": "Optional context" },
-        "model": { "type": "string", "description": "Model id", "default": "gpt-4o" }
+        "model": { "type": "string", "description": "Model id", "default": "gemini-2.5-flash-preview-05-20" }
       },
       "required": ["query"]
     }
-  },{
+  },
+  {
     "id": "playwrightScreenshot",
     "name": "Website Screenshot (Playwright)",
     "description": "Capture a screenshot or PDF of a webpage using Playwright.",
