@@ -94,7 +94,22 @@ const MistralAdapter = {
       // Handle full response object (non-streaming)
       if (parsed.choices && parsed.choices[0]?.message) {
         if (parsed.choices[0].message.content) {
-          result.content.push(parsed.choices[0].message.content);
+          const msgContent = parsed.choices[0].message.content;
+          if (Array.isArray(msgContent)) {
+            for (const part of msgContent) {
+              if (typeof part === 'string') {
+                result.content.push(part);
+              } else if (part && part.type === 'text' && part.text) {
+                result.content.push(part.text);
+              }
+            }
+          } else if (typeof msgContent === 'object' && msgContent !== null) {
+            if (msgContent.type === 'text' && msgContent.text) {
+              result.content.push(msgContent.text);
+            }
+          } else {
+            result.content.push(msgContent);
+          }
         }
         if (parsed.choices[0].message.tool_calls) {
           result.tool_calls.push(...parsed.choices[0].message.tool_calls);
@@ -108,7 +123,22 @@ const MistralAdapter = {
       else if (parsed.choices && parsed.choices[0]?.delta) {
         const delta = parsed.choices[0].delta;
         if (delta.content) {
-          result.content.push(delta.content);
+          const deltaContent = delta.content;
+          if (Array.isArray(deltaContent)) {
+            for (const part of deltaContent) {
+              if (typeof part === 'string') {
+                result.content.push(part);
+              } else if (part && part.type === 'text' && part.text) {
+                result.content.push(part.text);
+              }
+            }
+          } else if (typeof deltaContent === 'object' && deltaContent !== null) {
+            if (deltaContent.type === 'text' && deltaContent.text) {
+              result.content.push(deltaContent.text);
+            }
+          } else {
+            result.content.push(deltaContent);
+          }
         }
         if (delta.tool_calls) {
           for (const tc of delta.tool_calls) {
