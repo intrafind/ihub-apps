@@ -8,7 +8,8 @@ const useCanvasEditing = ({
   selection,
   setSelection,
   setSelectedText,
-  handlePromptSubmit
+  handlePromptSubmit,
+  chatInputRef
 }) => {
 
   // Handle text selection in the editor
@@ -19,6 +20,12 @@ const useCanvasEditing = ({
         setSelection(range);
         setSelectedText(selectedText.trim());
       } else {
+        // Preserve selection when the chat input is focused
+        const active = document.activeElement;
+        const inputElem = chatInputRef?.current;
+        if (inputElem && (active === inputElem || inputElem.contains(active))) {
+          return;
+        }
         setSelection(null);
         setSelectedText('');
       }
@@ -28,7 +35,7 @@ const useCanvasEditing = ({
       setSelection(null);
       setSelectedText('');
     }
-  }, [setSelection, setSelectedText]);
+  }, [setSelection, setSelectedText, chatInputRef]);
 
   // Handle edit toolbar actions - bypass app prompts and use direct AI instructions
   const handleEditAction = useCallback(async (action, description, selectedText, currentLanguage) => {

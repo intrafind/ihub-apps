@@ -19,7 +19,8 @@ const CanvasChatPanel = ({
   chatId,
   selectedText,
   width,
-  cleanupEventSource
+  cleanupEventSource,
+  inputRef
 }) => {
   const { t } = useTranslation();
 
@@ -68,7 +69,8 @@ const CanvasChatPanel = ({
           selectedFile={null}
           showImageUploader={false}
           showFileUploader={false}
-          placeholder={selectedText ? 
+          inputRef={inputRef}
+          placeholder={selectedText ?
             t('canvas.promptWithSelection', 'What would you like to do with the selected text?') :
             t('canvas.promptPlaceholder', 'Ask the AI to help with your document...')
           }
