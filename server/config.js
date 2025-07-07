@@ -19,10 +19,9 @@ const env = cleanEnv(process.env, {
   BRAVE_SEARCH_API_KEY: str({ optional: true }),
   BRAVE_SEARCH_ENDPOINT: str({ default: 'https://api.search.brave.com/res/v1/web/search', optional: true }),
   OPENAI_API_KEY: str({ optional: true }),
-  OPENAI_IMAGE_API_KEY: str({ optional: true }),
   ANTHROPIC_API_KEY: str({ optional: true }),
+  MISTRAL_API_KEY: str({ optional: true }),
   GOOGLE_API_KEY: str({ optional: true }),
-  GOOGLE_IMAGEN_API_KEY: str({ optional: true }),
   LOCAL_API_KEY: str({ optional: true }),
   DEFAULT_API_KEY: str({ optional: true })
 }, {
@@ -46,10 +45,9 @@ const config = Object.freeze({
   BRAVE_SEARCH_API_KEY: env.BRAVE_SEARCH_API_KEY,
   BRAVE_SEARCH_ENDPOINT: env.BRAVE_SEARCH_ENDPOINT,
   OPENAI_API_KEY: env.OPENAI_API_KEY,
-  OPENAI_IMAGE_API_KEY: env.OPENAI_IMAGE_API_KEY,
   ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
+  MISTRAL_API_KEY: env.MISTRAL_API_KEY,
   GOOGLE_API_KEY: env.GOOGLE_API_KEY,
-  GOOGLE_IMAGEN_API_KEY: env.GOOGLE_IMAGEN_API_KEY,
   LOCAL_API_KEY: env.LOCAL_API_KEY,
   DEFAULT_API_KEY: env.DEFAULT_API_KEY
 });

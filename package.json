@@ -28,7 +28,8 @@
     "build:binary:macos": "npm run prod:build && ./build-sea.sh",
     "build:binary:linux": "npm run prod:build && ./build-sea.sh",
     "build:binary:windows": "npm run prod:build && ./build-sea.sh",
-    "docker:test:linux": "docker run --rm -it -p 3000:3000 -v \"$(pwd)/dist-bin:/app\" -w /app -e OPENAI_API_KEY=your_openai_api_key -e ANTHROPIC_API_KEY=your_anthropic_api_key -e GOOGLE_API_KEY=your_google_api_key --platform linux/amd64 node:20-slim /bin/bash -c \"chmod +x /app/ai-hub-apps-v1.0.5-linux && /app/ai-hub-apps-v1.0.5-linux\""
+    "docker:test:linux": "docker run --rm -it -p 3000:3000 -v \"$(pwd)/dist-bin:/app\" -w /app -e OPENAI_API_KEY=your_openai_api_key -e ANTHROPIC_API_KEY=your_anthropic_api_key -e GOOGLE_API_KEY=your_google_api_key --platform linux/amd64 node:20-slim /bin/bash -c \"chmod +x /app/ai-hub-apps-v1.0.5-linux && /app/ai-hub-apps-v1.0.5-linux\"",
+    "test:mistral": "BRAVE_SEARCH_API_KEY=BSA3X8UQ9XkyNrJRwOAGV9MzaEfBIHj node server/tests/mistralAdapter.test.js"
   },
   "keywords": [
     "ai",

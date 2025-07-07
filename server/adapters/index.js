@@ -2,12 +2,14 @@
 import OpenAIAdapter from './openai.js';
 import AnthropicAdapter from './anthropic.js';
 import GoogleAdapter from './google.js';
+import MistralAdapter from './mistral.js';
 
 // Adapter registry
 const adapters = {
   'openai': OpenAIAdapter,
   'anthropic': AnthropicAdapter,
-  'google': GoogleAdapter
+  'google': GoogleAdapter,
+  'mistral': MistralAdapter
 };
 
 /**

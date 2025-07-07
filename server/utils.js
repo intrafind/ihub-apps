@@ -35,16 +35,12 @@ export async function getApiKeyForModel(modelId) {
     // Check for provider-specific API keys
     switch (provider) {
       case 'openai':
-        if (model.url && model.url.includes('/images')) {
-          return config.OPENAI_IMAGE_API_KEY || config.OPENAI_API_KEY;
-        }
         return config.OPENAI_API_KEY;
       case 'anthropic':
         return config.ANTHROPIC_API_KEY;
+      case 'mistral':
+        return config.MISTRAL_API_KEY;
       case 'google':
-        if (model.url && model.url.includes(':generateImage')) {
-          return config.GOOGLE_IMAGEN_API_KEY || config.GOOGLE_API_KEY;
-        }
         return config.GOOGLE_API_KEY;
       case 'local':
         // For local models, check if there's a specific LOCAL_API_KEY or return a default empty string

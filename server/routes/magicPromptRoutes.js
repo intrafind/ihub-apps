@@ -49,7 +49,7 @@ export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_T
       }
       const responseData = await llmResponse.json();
       let newPrompt = '';
-      if (model.provider === 'openai') {
+      if (model.provider === 'openai' || model.provider === 'mistral') {
         newPrompt = responseData.choices?.[0]?.message?.content?.trim() || '';
       } else if (model.provider === 'google') {
         const parts = responseData.candidates?.[0]?.content?.parts || [];
