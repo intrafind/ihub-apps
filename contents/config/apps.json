@@ -1768,8 +1768,9 @@
     "preferredOutputFormat": "markdown",
     "preferredStyle": "detailed",
     "preferredTemperature": 0.7,
-    "features": {
-      "imageUpload": true
+    "imageUpload": {
+      "enabled": true,
+      "resizeImages": true
     }
   },
   {
@@ -2199,9 +2200,9 @@
     "preferredStyle": "normal",
     "preferredTemperature": 0.7,
     "sendChatHistory": false,
-    "features": {
-      "imageUpload": true,
-      "imageGeneration": true
+    "imageUpload": {
+      "enabled": true,
+      "resizeImages": true
     },
     "prompt": {
       "en": "{{content}}",

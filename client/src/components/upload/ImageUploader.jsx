@@ -7,10 +7,11 @@ import './ImageUpload.css';
 /**
  * Lightweight wrapper for uploading images.
  */
-const ImageUploader = ({ onImageSelect, disabled = false, imageData = null }) => {
+const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, config = {} }) => {
   const { t } = useTranslation();
-  const MAX_FILE_SIZE_MB = 10;
-  const SUPPORTED_FORMATS = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  const MAX_FILE_SIZE_MB = config.maxFileSizeMB || 10;
+  const SUPPORTED_FORMATS = config.supportedFormats || ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  const RESIZE_IMAGES = config.resizeImages !== false;
 
   const processImage = (file) => {
     return new Promise((resolve, reject) => {
@@ -20,6 +21,22 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null }) =>
         const img = new Image();
         img.onload = () => {
           const previewUrl = URL.createObjectURL(file);
+
+          // If resizing is disabled, simply return the original image data
+          if (!RESIZE_IMAGES) {
+            return resolve({
+              preview: previewUrl,
+              data: {
+                base64: e.target.result,
+                fileName: file.name,
+                fileSize: file.size,
+                fileType: file.type,
+                width: img.width,
+                height: img.height,
+              }
+            });
+          }
+
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
@@ -45,7 +62,7 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null }) =>
               base64,
               fileName: file.name,
               fileSize: file.size,
-              fileType: file.type,
+              fileType: 'image/jpeg',
               width,
               height,
             }
