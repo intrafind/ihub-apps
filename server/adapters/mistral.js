@@ -1,3 +1,5 @@
+// server/adapters/mistral.js
+
 /**
  * Mistral "La Plateforme" API adapter
  */

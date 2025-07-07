@@ -22,7 +22,7 @@ export class ActionTracker extends EventEmitter {
   trackAction(newState = {}) {
     this.state = { ...this.state, ...newState };
     this.state.totalStep += 1;
-    this.emit('action', this.state.thisStep);
+    this.emit('fire-sse', { event: 'action', data: this.state.thisStep });
   }
 
   /**
@@ -30,6 +30,8 @@ export class ActionTracker extends EventEmitter {
    * @param {Partial<object>} newState
    */
   trackError(chatId, error = {}) {
+    const stacktrace = new Error().stack;
+    console.error(`Error for chat ID ${chatId}:`, { ...error, stacktrace });
     this.emit('fire-sse', { event: 'error', chatId, ...error });
   }
 

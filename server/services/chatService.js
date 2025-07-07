@@ -194,6 +194,8 @@ export async function executeStreamingResponse({
     activeRequests.delete(chatId);
   }, DEFAULT_TIMEOUT);
 
+  console.log(`Sending request for chat ID ${chatId} ${model.id}:`, request.body);
+
   throttledFetch(model.id, request.url, {
     method: 'POST',
     headers: request.headers,
@@ -378,13 +380,15 @@ export function processChatWithTools({
           throw Object.assign(new Error(result.errorMessage || 'Error processing response'), { code: 'PROCESSING_ERROR' });
         }
 
+        console.log(`Result for chat ID ${chatId}:`, result);
         if (result.content?.length > 0) {
           for (const text of result.content) {
             assistantContent += text;
-            actionTracker.trackAction({ chatId, event: 'chunk', message: text });
+            actionTracker.trackChunk({ chatId, message: text });
           }
         }
-        
+
+        console.log(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
         if (result.tool_calls?.length > 0) {
           result.tool_calls.forEach(call => {
             const existingCall = collectedToolCalls.find(c => c.id === call.id);
@@ -404,10 +408,12 @@ export function processChatWithTools({
           });
         }
 
+        console.log(`Finish Reason for chat ID ${chatId}:`, finishReason);
         if (result.finishReason) {
           finishReason = result.finishReason;
         }
 
+        console.log(`Completed processing for chat ID ${chatId} - done? ${done}:`, { finishReason, collectedToolCalls });
         if (result.complete) {
           done = true;
           break;
@@ -416,6 +422,7 @@ export function processChatWithTools({
     }
 
     if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+      console.log(`No tool calls to process for chat ID ${chatId}:`, { finishReason, collectedToolCalls });
       actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
       await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
       activeRequests.delete(chatId);
