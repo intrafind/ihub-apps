@@ -10,28 +10,22 @@ const MistralAdapter = {
    * @returns {Array} Formatted messages for Mistral API
    */
   formatMessages(messages) {
-    // Handle image data in messages
     const formattedMessages = messages.map(message => {
       const content = message.content;
 
-      // If there's no image data, return a clean message with text content
+      const base = { role: message.role };
+      if (message.tool_calls) base.tool_calls = message.tool_calls;
+      if (message.tool_call_id) base.tool_call_id = message.tool_call_id;
+      if (message.name) base.name = message.name;
+
       if (!message.imageData) {
-        return {
-          role: message.role,
-          content
-        };
+        return { ...base, content };
       }
 
-      // Format messages with image content for vision models
       return {
-        role: message.role,
+        ...base,
         content: [
-          // If there's text content (possibly including file content), include it
-          ...(content ? [{
-            type: "text",
-            text: content
-          }] : []),
-          // Add the image content
+          ...(content ? [{ type: "text", text: content }] : []),
           {
             type: "image_url",
             image_url: {
