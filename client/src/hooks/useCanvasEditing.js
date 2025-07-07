@@ -8,6 +8,7 @@ const useCanvasEditing = ({
   selection,
   setSelection,
   setSelectedText,
+  setCursorPosition,
   handlePromptSubmit,
   chatInputRef
 }) => {
@@ -15,6 +16,9 @@ const useCanvasEditing = ({
   // Handle text selection in the editor
   const handleSelectionChange = useCallback((range, source, editor) => {
     try {
+      if (range) {
+        setCursorPosition(range.index);
+      }
       if (range && range.length > 0) {
         const selectedText = editor.getText(range.index, range.length);
         setSelection(range);
@@ -35,7 +39,7 @@ const useCanvasEditing = ({
       setSelection(null);
       setSelectedText('');
     }
-  }, [setSelection, setSelectedText, chatInputRef]);
+  }, [setSelection, setSelectedText, setCursorPosition, chatInputRef]);
 
   // Handle edit toolbar actions - bypass app prompts and use direct AI instructions
   const handleEditAction = useCallback(async (action, description, selectedText, currentLanguage) => {

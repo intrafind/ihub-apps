@@ -46,6 +46,7 @@ import {
   SwatchIcon,
   BriefcaseIcon,
   PaintBrushIcon,
+  ChevronDownIcon,
   Bars3Icon,
   FaceFrownIcon as OutlineFaceFrownIcon
 } from '@heroicons/react/24/outline';
@@ -80,6 +81,7 @@ import {
   SwatchIcon as SolidSwatchIcon,
   BriefcaseIcon as SolidBriefcaseIcon,
   PaintBrushIcon as SolidPaintBrushIcon,
+  ChevronDownIcon as SolidChevronDownIcon,
   FaceFrownIcon as SolidFaceFrownIcon
 } from '@heroicons/react/24/solid';
 
@@ -106,6 +108,7 @@ const iconMap = {
   'information-circle': { outline: OutlineInformationCircleIcon, solid: SolidInformationCircleIcon },
   list: { outline: ListBulletIcon, solid: ListBulletIcon },
   menu: { outline: Bars3Icon, solid: Bars3Icon },
+  'chevron-down': { outline: ChevronDownIcon, solid: SolidChevronDownIcon },
   microphone: { outline: OutlineMicrophoneIcon, solid: SolidMicrophoneIcon },
   'minus-circle': { outline: MinusCircleIcon, solid: SolidMinusCircleIcon },
   'paint-brush': { outline: PaintBrushIcon, solid: SolidPaintBrushIcon },

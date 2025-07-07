@@ -61,6 +61,7 @@ const AppCanvas = () => {
   // Canvas editor states
   const [selection, setSelection] = useState(null);
   const [selectedText, setSelectedText] = useState('');
+  const [cursorPosition, setCursorPosition] = useState(0);
   const [showExportMenu, setShowExportMenu] = useState(false);
   
   // Canvas content management hook
@@ -209,6 +210,7 @@ const AppCanvas = () => {
     selection,
     setSelection,
     setSelectedText,
+    setCursorPosition,
     handlePromptSubmit,
     chatInputRef
   });
@@ -414,6 +416,21 @@ const AppCanvas = () => {
     }
   }, []);
 
+  const handleInsertAnswer = useCallback((text) => {
+    if (!quillRef.current || !text) return;
+    const quill = quillRef.current.getEditor();
+    const html = isMarkdown(text) ? markdownToHtml(text) : text;
+    const index = selection ? selection.index : cursorPosition;
+    if (selection && selection.length > 0) {
+      quill.deleteText(selection.index, selection.length);
+    }
+    quill.clipboard.dangerouslyPasteHTML(index, html);
+    quill.setSelection(index + html.length, 0);
+    setEditorContent(quill.root.innerHTML);
+    setSelection(null);
+    setSelectedText('');
+  }, [quillRef, selection, cursorPosition, setEditorContent]);
+
   // Handle voice input for canvas editor
   const handleCanvasVoiceInput = useCallback((text) => {
     // The text is already inserted into the editor by CanvasVoiceInput component
@@ -558,6 +575,7 @@ const AppCanvas = () => {
           onClearSelection={clearSelectedText}
           width={panelSizes.chat}
           inputRef={chatInputRef}
+          onInsertAnswer={handleInsertAnswer}
         />
 
         {/* Resize Handle */}
