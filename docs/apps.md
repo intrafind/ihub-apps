@@ -172,7 +172,6 @@ When a setting is disabled (`false`), the corresponding UI element will be hidde
 Optional capabilities can be enabled with a `features` object:
 ```json
 "features": {
-  "imageUpload": { "enabled": true },
   "fileUpload": true
 }
 ```
