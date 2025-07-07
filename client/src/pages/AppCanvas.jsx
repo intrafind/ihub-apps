@@ -25,6 +25,7 @@ import useCanvasContent from '../hooks/useCanvasContent';
 import { fetchAppDetails } from '../api/api';
 import { getLocalizedContent } from '../utils/localizeContent';
 import { markdownToHtml, isMarkdown } from '../utils/markdownUtils';
+import { getOrCreateChatId, resetChatId } from '../utils/chatId';
 
 // Import AI-assisted canvas specific styles
 import './AppCanvas.css';
@@ -90,7 +91,11 @@ const AppCanvas = () => {
   const [contentModalData, setContentModalData] = useState(null);
   
   const quillRef = useRef(null);
-  const chatId = useRef(`canvas-${Date.now()}`);
+  const chatId = useRef(getOrCreateChatId(appId, 'canvas'));
+
+  useEffect(() => {
+    chatId.current = getOrCreateChatId(appId, 'canvas');
+  }, [appId]);
   const chatInputRef = useRef(null);
 
   // Initialize custom hooks
@@ -185,6 +190,7 @@ const AppCanvas = () => {
     clearChat: () => {
       clearMessages();
       clearCanvasContent();
+      chatId.current = resetChatId(appId, 'canvas');
     },
     sendMessage: (text) => {
       handlePromptSubmit(text); // This will be treated as a string input
@@ -400,6 +406,7 @@ const AppCanvas = () => {
     if (window.confirm(t('canvas.confirmClear', 'Are you sure you want to clear the document and chat history?'))) {
       clearCanvasContent();
       clearMessages();
+      chatId.current = resetChatId(appId, 'canvas');
     }
   };
 
