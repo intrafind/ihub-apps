@@ -90,6 +90,7 @@ const AppCanvas = () => {
   
   const quillRef = useRef(null);
   const chatId = useRef(`canvas-${Date.now()}`);
+  const chatInputRef = useRef(null);
 
   // Initialize custom hooks
   // Chat message management
@@ -208,7 +209,8 @@ const AppCanvas = () => {
     selection,
     setSelection,
     setSelectedText,
-    handlePromptSubmit
+    handlePromptSubmit,
+    chatInputRef
   });
 
   // Load app data
@@ -545,6 +547,7 @@ const AppCanvas = () => {
           chatId={chatId.current}
           selectedText={selectedText}
           width={panelSizes.chat}
+          inputRef={chatInputRef}
         />
 
         {/* Resize Handle */}
