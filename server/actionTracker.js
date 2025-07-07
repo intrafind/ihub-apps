@@ -9,7 +9,7 @@ export class ActionTracker extends EventEmitter {
   constructor() {
     super();
     this.state = {
-      thisStep: { action: 'answer', answer: '', references: [], think: '' },
+      thisStep: { action: 'start', message: '', references: [], think: '' },
       gaps: [],
       totalStep: 0
     };
@@ -23,6 +23,30 @@ export class ActionTracker extends EventEmitter {
     this.state = { ...this.state, ...newState };
     this.state.totalStep += 1;
     this.emit('action', this.state.thisStep);
+  }
+
+  /**
+   * Merge new state data and emit an action event.
+   * @param {Partial<object>} newState
+   */
+  trackError(chatId, error = {}) {
+    this.emit('fire-sse', { event: 'error', chatId, ...error });
+  }
+
+  trackConnected(chatId) {
+    this.emit('fire-sse', { event: 'connected', chatId });
+  }
+
+  trackDisconnected(chatId, reason = {}) {
+    this.emit('fire-sse', { event: 'disconnected', chatId, ...reason });
+  }
+
+  trackDone(chatId, finishReason = {}) {
+    this.emit('fire-sse', { event: 'done', chatId, ...finishReason });
+  }
+
+  trackChunk(chatId, chunk = {}) {
+    this.emit('fire-sse', { event: 'chunk', chatId, ...chunk });
   }
 
   /**

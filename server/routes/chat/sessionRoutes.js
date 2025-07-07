@@ -1,22 +1,8 @@
-import { loadJson } from '../../configLoader.js';
 import configCache from '../../configCache.js';
 import { createCompletionRequest } from '../../adapters/index.js';
 import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
-import { sendSSE, clients, activeRequests } from '../../sse.js';
-import { actionTracker } from '../../shared/actionTracker.js';
-
-actionTracker.on('action', step => {
-  const { chatId } = step;
-  if (!chatId) return;
-  if (clients.has(chatId)) {
-    const client = clients.get(chatId).response;
-    try {
-      sendSSE(client, 'action', step);
-    } catch (err) {
-      console.error('Error sending SSE action event:', err);
-    }
-  }
-});
+import { clients, activeRequests } from '../../sse.js';
+import { actionTracker } from '../../actionTracker.js';
 
 import {
   prepareChatRequest,
@@ -24,7 +10,6 @@ import {
   executeNonStreamingResponse,
   processChatWithTools
 } from '../../services/chatService.js';
-import { estimateTokens } from '../../usageTracker.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 
@@ -105,7 +90,8 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       clients.set(chatId, { response: res, lastActivity: new Date(), appId });
-      sendSSE(res, 'connected', { chatId });
+      actionTracker.trackConnected(chatId);
+
       req.on('close', () => {
         if (clients.has(chatId)) {
           if (activeRequests.has(chatId)) {
@@ -127,7 +113,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
       if (!res.headersSent) {
         return res.status(500).json({ error: 'Internal server error' });
       }
-      sendSSE(res, 'error', { message: 'Internal server error' });
+      actionTracker.trackError(chatId, { message: 'Internal server error' });
       res.end();
     }
   });
@@ -287,7 +273,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
         });
         if (prep.error) {
           const errMsg = await getLocalizedError(prep.error, {}, clientLanguage);
-          sendSSE(clientRes, 'error', { message: errMsg });
+          actionTracker.trackError(chatId, { message: errMsg });
           return res.json({ status: 'error', message: errMsg });
         }
         model = prep.model;
@@ -328,7 +314,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
         }
       }
       const client = clients.get(chatId);
-      sendSSE(client.response, 'stopped', { message: 'Chat stream stopped by client' });
+      actionTracker.trackDisconnected(chatId, { message: 'Chat stream stopped by client' });
       client.response.end();
       clients.delete(chatId);
       console.log(`Chat stream stopped for chat ID: ${chatId}`);

@@ -1,23 +1,13 @@
 // Chat service helper functions
-import { loadJson } from '../configLoader.js';
 import configCache from '../configCache.js';
 import { createCompletionRequest, processResponseBuffer } from '../adapters/index.js';
 import { getErrorDetails, logInteraction } from '../utils.js';
 import { recordChatRequest, recordChatResponse, estimateTokens } from '../usageTracker.js';
 import { getToolsForApp, runTool } from '../toolLoader.js';
 import { normalizeName } from '../adapters/toolFormatter.js';
-import { sendSSE, activeRequests } from '../sse.js';
-import { actionTracker } from '../shared/actionTracker.js';
+import { activeRequests } from '../sse.js';
+import { actionTracker } from '../actionTracker.js';
 import { createParser } from 'eventsource-parser';
-
-function sendTrackedSSE(res, chatId, event, data) {
-  sendSSE(res, event, data);
-  try {
-    actionTracker.trackAction({ thisStep: { action: event, chatId, ...data } });
-  } catch (err) {
-    console.error('Error tracking action:', err);
-  }
-}
 
 // Prepend file data to message content when present
 export function preprocessMessagesWithFileData(messages) {
@@ -190,7 +180,7 @@ export async function executeStreamingResponse({
   clientLanguage
 }) {
   // TODO localize
-  sendTrackedSSE(clientRes, chatId, 'processing', { message: 'Processing your request...' });
+  actionTracker.trackAction({ chatId, event: 'processing', message: 'Processing your request...' });
   const controller = new AbortController();
   activeRequests.set(chatId, controller);
   const baseLog = buildLogData(true);
@@ -199,7 +189,7 @@ export async function executeStreamingResponse({
   const timeoutId = setTimeout(async () => {
     controller.abort();
     const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT/1000 }, clientLanguage);
-    sendTrackedSSE(clientRes, chatId, 'error', { message: errorMessage });
+    actionTracker.trackError(chatId, { message: errorMessage });
     activeRequests.delete(chatId);
   }, DEFAULT_TIMEOUT);
 
@@ -224,7 +214,7 @@ export async function executeStreamingResponse({
         responseType: 'error',
         error: { message: errorMessage, code: llmResponse.status.toString(), details: errorBody }
       }));
-      sendTrackedSSE(clientRes, chatId, 'error', { message: errorMessage, details: errorBody });
+      actionTracker.trackError(chatId, { message: errorMessage, details: errorBody });
       activeRequests.delete(chatId);
       return;
     }
@@ -260,7 +250,7 @@ export async function executeStreamingResponse({
           const result = processResponseBuffer(model.provider, evt.data);
           if (result && result.content && result.content.length > 0) {
             for (const textContent of result.content) {
-              sendTrackedSSE(clientRes, chatId, 'chunk', { content: textContent });
+              actionTracker.trackChunk(chatId, { content: textContent });
               fullResponse += textContent;
             }
           }
@@ -270,7 +260,7 @@ export async function executeStreamingResponse({
               error: { message: result.errorMessage || 'Error processing response', code: 'PROCESSING_ERROR' },
               response: fullResponse
             }));
-            sendTrackedSSE(clientRes, chatId, 'error', { message: result.errorMessage || 'Error processing response' });
+            actionTracker.trackError(chatId, { message: result.errorMessage || 'Error processing response' });
             finishReason = 'error';
             break;
           }
@@ -278,7 +268,7 @@ export async function executeStreamingResponse({
             finishReason = result.finishReason;
           }
           if (result && result.complete) {
-            sendTrackedSSE(clientRes, chatId, 'done', { finishReason });
+            actionTracker.trackDone(chatId, { finishReason });
             doneEmitted = true;
             await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: fullResponse }));
             const completionTokens = estimateTokens(fullResponse);
@@ -293,12 +283,12 @@ export async function executeStreamingResponse({
     } catch (error) {
       if (error.name !== 'AbortError') {
         const errorMessage = await getLocalizedError('responseStreamError', { error: error.message }, clientLanguage);
-        sendTrackedSSE(clientRes, chatId, 'error', { message: errorMessage });
+        actionTracker.trackError(chatId, { message: errorMessage });
         finishReason = 'error';
       }
     } finally {
       if (!doneEmitted) {
-        sendTrackedSSE(clientRes, chatId, 'done', { finishReason: finishReason || 'connection_closed' });
+        actionTracker.trackDone(chatId, { finishReason: finishReason || 'connection_closed' });
       }
       activeRequests.delete(chatId);
     }
@@ -318,41 +308,11 @@ export async function executeStreamingResponse({
         recommendation: errorDetails.recommendation,
         details: error.message
       };
-      sendTrackedSSE(clientRes, chatId, 'error', errorMessage);
+      actionTracker.trackError(chatId, errorMessage);
     }
     activeRequests.delete(chatId);
   });
 }
-
-// Internal helper to perform a single non-streaming request and return JSON
-async function fetchJsonWithTimeout(request, DEFAULT_TIMEOUT) {
-  let timeoutId;
-  const timeoutPromise = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => {
-      reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT/1000} seconds`));
-    }, DEFAULT_TIMEOUT);
-  });
-
-  const responsePromise = fetch(request.url, {
-    method: 'POST',
-    headers: request.headers,
-    body: JSON.stringify(request.body)
-  });
-
-  const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
-  clearTimeout(timeoutId);
-
-  if (!llmResponse.ok) {
-    const errorBody = await llmResponse.text();
-    const err = new Error(`LLM API request failed with status ${llmResponse.status}`);
-    err.code = llmResponse.status.toString();
-    err.details = errorBody;
-    throw err;
-  }
-
-  return llmResponse.json();
-}
-
 
 // Execute a request with potential tool calls - non-blocking implementation
 export function processChatWithTools({
@@ -371,7 +331,7 @@ export function processChatWithTools({
   const timeoutId = setTimeout(async () => {
     controller.abort();
     const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT / 1000 }, clientLanguage);
-    sendTrackedSSE(clientRes, chatId, 'error', { message: errorMessage });
+    actionTracker.trackError(chatId, { message: errorMessage });
     activeRequests.delete(chatId);
   }, DEFAULT_TIMEOUT);
 
@@ -420,7 +380,7 @@ export function processChatWithTools({
         if (result.content?.length > 0) {
           for (const text of result.content) {
             assistantContent += text;
-            sendTrackedSSE(clientRes, chatId, 'chunk', { content: text });
+            actionTracker.trackAction({ chatId, event: 'chunk', message: text });
           }
         }
         
@@ -455,14 +415,14 @@ export function processChatWithTools({
     }
 
     if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
-      sendTrackedSSE(clientRes, chatId, 'done', { finishReason: finishReason || 'stop' });
+      actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
       await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
       activeRequests.delete(chatId);
       return;
     }
     
     const toolNames = collectedToolCalls.map(c => c.function.name).join(', ');
-    sendTrackedSSE(clientRes, chatId, 'processing', { message: `Using tool(s): ${toolNames}...` });
+    actionTracker.trackAction({ chatId, action: 'processing', message: `Using tool(s): ${toolNames}...` });
 
     llmMessages.push({ role: 'assistant', content: assistantContent, tool_calls: collectedToolCalls });
 
@@ -536,7 +496,8 @@ export function processChatWithTools({
         code: error.code || errorDetails.code,
         details: error.details || error.message
       };
-      sendTrackedSSE(clientRes, chatId, 'error', errMsg);
+
+      actionTracker.trackError(chatId, { ...errMsg });
     }
     activeRequests.delete(chatId);
   });
