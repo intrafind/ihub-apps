@@ -171,7 +171,7 @@ export const configureMarked = () => {
             <button
               class="code-copy-btn p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1"
               data-code-id="${codeBlockId}"
-              data-code-content="${encodeURIComponent(code)}"
+              data-code-content="${encodeURIComponent(String(code))}"
               type="button"
               title="Copy code"
               aria-label="Copy code"
@@ -184,7 +184,7 @@ export const configureMarked = () => {
             <button
               class="code-download-btn p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1"
               data-code-id="${codeBlockId}"
-              data-code-content="${encodeURIComponent(code)}"
+              data-code-content="${encodeURIComponent(String(code))}"
               data-code-language="${displayLanguage}"
               type="button"
               title="Download code"
@@ -293,7 +293,13 @@ const MarkdownRenderer = () => {
       const button = e.target.closest('.code-copy-btn');
       if (!button) return;
 
-      const codeContent = decodeURIComponent(button.dataset.codeContent);
+      let codeContent = button.dataset.codeContent;
+      if (!codeContent || codeContent === '[object Object]') {
+        const codeEl = button.closest('.code-block-container')?.querySelector('pre code');
+        codeContent = codeEl ? codeEl.textContent : '';
+      } else {
+        codeContent = decodeURIComponent(codeContent);
+      }
 
       navigator.clipboard.writeText(codeContent)
         .then(() => {
@@ -339,7 +345,13 @@ const MarkdownRenderer = () => {
       const button = e.target.closest('.code-download-btn');
       if (!button) return;
 
-      const codeContent = decodeURIComponent(button.dataset.codeContent);
+      let codeContent = button.dataset.codeContent;
+      if (!codeContent || codeContent === '[object Object]') {
+        const codeEl = button.closest('.code-block-container')?.querySelector('pre code');
+        codeContent = codeEl ? codeEl.textContent : '';
+      } else {
+        codeContent = decodeURIComponent(codeContent);
+      }
       const language = button.dataset.codeLanguage || 'text';
       const fileExtension = getFileExtension(language);
       const filename = `code.${fileExtension}`;
