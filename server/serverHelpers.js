@@ -76,7 +76,7 @@ export async function getLocalizedError(errorKey, params = {}, language = 'en') 
 }
 
 export function validateApiKeys() {
-  const providers = ['openai', 'anthropic', 'google'];
+  const providers = ['openai', 'anthropic', 'google', 'mistral'];
   const missing = [];
   for (const provider of providers) {
     const envVar = `${provider.toUpperCase()}_API_KEY`;

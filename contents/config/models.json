@@ -61,6 +61,16 @@
     "supportsTools": true
   },
   {
+    "id": "mistral-small",
+    "modelId": "mistral-small-latest",
+    "name": "Mistral Small",
+    "description": "Mistral's fast model for general tasks",
+    "url": "https://api.mistral.ai/v1/chat/completions",
+    "provider": "mistral",
+    "tokenLimit": 32000,
+    "supportsTools": true
+  },
+  {
     "id": "local-vllm",
     "modelId": "stelterlab_Mistral-Small-24B-Instruct-2501-AWQ",
     "name": "Local vLLM",

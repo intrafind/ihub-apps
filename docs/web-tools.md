@@ -11,6 +11,9 @@ The platform now includes several web-related tools:
 3. **enhancedWebSearch** - Combined web search with automatic content extraction
 4. **playwrightScreenshot** - Capture screenshots or PDFs using Playwright
 5. **seleniumScreenshot** - Capture screenshots or PDFs using Selenium
+6. **evaluator** - Evaluate draft answers for definitiveness, freshness and completeness
+7. **answerReducer** - Merge multiple texts into one concise article
+7. **queryRewriter** - Rewrite search queries for deeper results
 
 ## Tools Description
 
@@ -127,6 +130,54 @@ The platform now includes several web-related tools:
   "format": "png"
 }
 ```
+### 6. Answer Evaluator (`evaluator`)
+
+**Purpose**: Check a draft answer for definitiveness, freshness and completeness.
+
+**Parameters**:
+- `question` (string, required): Original user question
+- `answer` (string, required): Draft answer to evaluate
+- `model` (string, optional): Model ID used for the evaluation (default `gemini-1.5-flash`)
+
+**Returns**: Array `evaluation` with one entry per check containing `type`, `pass`, and `think` fields.
+
+**Example Usage**:
+```javascript
+{
+  "question": "What are the latest AI trends?",
+  "answer": "AI is progressing rapidly..."
+}
+```
+
+### 7. Answer Reducer (`answerReducer`)
+
+**Purpose**: Compress multiple text excerpts into a single well-structured article.
+
+**Usage**: Pass an array of strings under the `answers` parameter.
+
+```json
+{
+  "answers": ["text from source 1", "text from source 2"]
+}
+```
+
+### 8. Query Rewriter (`queryRewriter`)
+
+**Purpose**: Generate optimized variations of a user search query.
+
+**Parameters**:
+- `query` (string, required): The original search query
+- `think` (string, optional): Additional motivation or notes
+- `context` (string, optional): Optional contextual text
+
+**Returns**: An array of rewritten queries.
+
+**Example Usage**:
+```javascript
+{
+  "query": "best renewable energy sources"
+}
+```
 
 ## Configuration
 
@@ -196,6 +247,27 @@ The "Chat with Web" app has been updated to use the enhanced web search function
   "chatId": "{currentChatId}"
 }
 ```
+
+### 6. Research Planner (`researchPlanner`)
+
+**Purpose**: Decompose a research topic into distinct tasks for a team of researchers.
+
+**Parameters**:
+- `question` (string, required): Research topic to analyze
+- `teamSize` (integer, optional): Number of tasks to create (default: 3)
+- `soundBites` (string, optional): Additional context or quotes
+
+**Returns**: JSON containing the `subproblems` array and internal reasoning in `think`.
+
+**Example Usage**:
+```json
+{
+  "question": "Impacts of AI on urban transportation",
+  "teamSize": 4,
+  "soundBites": "self-driving cars, public transit optimization"
+}
+```
+
 
 ## Technical Implementation
 
