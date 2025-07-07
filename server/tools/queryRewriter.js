@@ -1,5 +1,6 @@
 import { act } from 'react';
 import { simpleCompletion } from '../utils.js';
+import { actionTracker } from '../actionTracker.js';
 
 function getPrompt(query, think, context) {
   const currentTime = new Date();
@@ -209,7 +210,7 @@ export default async function queryRewriter({
     throw new Error('query parameter is required');
   }
 
-  actionTracker.trackAction(chatId, { action: 'rewrite_query:start', query });
+  actionTracker.trackToolCallStart(chatId, { toolName: 'queryRewriter', toolInput: { query } });
   const prompt = getPrompt(query, think, context);
   const completion = await simpleCompletion(`${prompt.system}\n${prompt.user}`, { model, temperature });
 
@@ -218,7 +219,8 @@ export default async function queryRewriter({
     const json = completion.slice(jsonStart);
     const parsed = JSON.parse(json);
     if (Array.isArray(parsed.queries)) {
-      actionTracker.trackAction(chatId, { action: 'rewrite_query:end', queries: parsed.queries });
+      actionTracker.trackToolCallProgress(chatId, { toolName: 'queryRewriter', status: 'parsed', queries: parsed.queries });
+      actionTracker.trackToolCallEnd(chatId, { toolName: 'queryRewriter', toolOutput: parsed });
       return parsed;
     }
   } catch (_) {
@@ -226,6 +228,8 @@ export default async function queryRewriter({
   }
 
   const lines = completion.split('\n').map(l => l.trim()).filter(Boolean);
-  actionTracker.trackAction(chatId, { action: 'rewrite_query:end', queries: lines.map(q => ({ q })) });
-  return { queries: lines.map(q => ({ q })) };
+  actionTracker.trackToolCallProgress(chatId, { toolName: 'queryRewriter', status: 'parsed', queries: lines.map(q => ({ q })) });
+  const output = { queries: lines.map(q => ({ q })) };
+  actionTracker.trackToolCallEnd(chatId, { toolName: 'queryRewriter', toolOutput: output });
+  return output;
 }

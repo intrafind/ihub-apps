@@ -16,7 +16,8 @@ function createError(message, code) {
  */
 export default async function webContentExtractor({ url, uri, link, maxLength = 5000, ignoreSSL = false, chatId }) {
   console.log(`Starting content extraction from: ${url || uri || link}`);
-  actionTracker.trackAction(chatId, { action: 'extract_content', url: url || uri || link });
+  actionTracker.trackToolCallStart(chatId, { toolName: 'webContentExtractor', toolInput: { url: url || uri || link } });
+  actionTracker.trackToolCallProgress(chatId, { toolName: 'webContentExtractor', status: 'loading', message: 'Fetching content' });
   // Accept various URL parameter names for flexibility
   const targetUrl = url || uri || link;
   
@@ -61,6 +62,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     });
 
     console.log(`Extracting content from webpage: ${targetUrl}`);
+    actionTracker.trackToolCallProgress(chatId, { toolName: 'webContentExtractor', status: 'parsing' });
     
     clearTimeout(timeoutId);
 
@@ -80,6 +82,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/pdf')) {
       console.log(`Extracting content from PDF: ${targetUrl}`);
+      actionTracker.trackToolCallProgress(chatId, { toolName: 'webContentExtractor', status: 'extracting', type: 'pdf' });
       
       try {
         const arrayBuffer = await response.arrayBuffer();
@@ -111,7 +114,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
         console.log(`PDF text extraction successful, ${fullText.length} characters extracted`);
         
         const textContent = fullText.substring(0, maxLength);
-        return {
+        const output = {
           url: targetUrl,
           title: targetUrl.split('/').pop(), // Use filename as title
           description: 'PDF document',
@@ -120,6 +123,8 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
           wordCount: textContent.trim().split(/\s+/).length,
           extractedAt: new Date().toISOString()
         };
+        actionTracker.trackToolCallEnd(chatId, { toolName: 'webContentExtractor', toolOutput: { type: 'pdf' } });
+        return output;
       } catch (pdfError) {
         console.error(`PDF parsing error: ${pdfError.message}`);
         console.error(`PDF error stack: ${pdfError.stack}`);
@@ -128,6 +133,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     }
 
     let html = await response.text();
+    actionTracker.trackToolCallProgress(chatId, { toolName: 'webContentExtractor', status: 'extracting', type: 'html' });
     // Pre-emptively remove style tags to prevent CSS parsing errors from JSDOM
     html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
 
@@ -214,7 +220,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     const description = document.querySelector('meta[name="description"]')?.getAttribute('content')?.trim() || '';
     const author = document.querySelector('meta[name="author"]')?.getAttribute('content')?.trim() || '';
 
-    return {
+    const output = {
       url: targetUrl,
       title: title,
       description: description,
@@ -223,6 +229,8 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
       wordCount: textContent.split(/\s+/).length,
       extractedAt: new Date().toISOString()
     };
+    actionTracker.trackToolCallEnd(chatId, { toolName: 'webContentExtractor', toolOutput: { type: 'html' } });
+    return output;
 
   } catch (error) {
     if (error.name === 'AbortError') {

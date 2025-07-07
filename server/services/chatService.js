@@ -330,6 +330,7 @@ export function processChatWithTools({
   const controller = new AbortController();
   activeRequests.set(chatId, controller);
 
+
   const timeoutId = setTimeout(async () => {
     controller.abort();
     const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT / 1000 }, clientLanguage);
@@ -454,7 +455,9 @@ export function processChatWithTools({
         console.error("Failed to parse tool arguments:", call.function.arguments, e);
       }
       
+      actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
       const result = await runTool(toolId, { ...args, chatId });
+      actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: result });
 
       await logInteraction('tool_usage', buildLogData(true, {
         toolId,

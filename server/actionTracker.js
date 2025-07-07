@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { UnifiedEvents } from '../shared/unifiedEventSchema.js';
 
 export class ActionTracker extends EventEmitter {
   constructor() {
@@ -26,11 +27,39 @@ export class ActionTracker extends EventEmitter {
   }
 
   trackDone(chatId, finishReason = {}) {
-    this.emit('fire-sse', { event: 'done', chatId, ...finishReason });
+    this.emit('fire-sse', { event: UnifiedEvents.DONE, chatId, ...finishReason });
   }
 
   trackChunk(chatId, chunk = {}) {
-    this.emit('fire-sse', { event: 'chunk', chatId, ...chunk });
+    this.emit('fire-sse', { event: UnifiedEvents.CHUNK, chatId, ...chunk });
+  }
+
+  trackSessionStart(chatId, details = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.SESSION_START, chatId, ...details });
+  }
+
+  trackSessionEnd(chatId, details = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.SESSION_END, chatId, ...details });
+  }
+
+  trackToolCallStart(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.TOOL_CALL_START, chatId, ...data });
+  }
+
+  trackToolCallProgress(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.TOOL_CALL_PROGRESS, chatId, ...data });
+  }
+
+  trackToolCallEnd(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.TOOL_CALL_END, chatId, ...data });
+  }
+
+  trackCitation(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.CITATION, chatId, ...data });
+  }
+
+  trackSafetyWarning(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.SAFETY_WARNING, chatId, ...data });
   }
 }
 
