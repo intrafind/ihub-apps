@@ -7,13 +7,14 @@ This document describes the web tools available in the AI Hub Apps platform for 
 The platform now includes several web-related tools:
 
 1. **braveSearch** - Basic web search using Brave Search API
-2. **webContentExtractor** - Extract clean content from web pages
-3. **enhancedWebSearch** - Combined web search with automatic content extraction
-4. **playwrightScreenshot** - Capture screenshots or PDFs using Playwright
-5. **seleniumScreenshot** - Capture screenshots or PDFs using Selenium
-6. **evaluator** - Evaluate draft answers for definitiveness, freshness and completeness
-7. **answerReducer** - Merge multiple texts into one concise article
-7. **queryRewriter** - Rewrite search queries for deeper results
+2. **tavilySearch** - Basic web search using Tavily API
+3. **webContentExtractor** - Extract clean content from web pages
+4. **enhancedWebSearch** - Combined web search with automatic content extraction
+5. **playwrightScreenshot** - Capture screenshots or PDFs using Playwright
+6. **seleniumScreenshot** - Capture screenshots or PDFs using Selenium
+7. **evaluator** - Evaluate draft answers for definitiveness, freshness and completeness
+8. **answerReducer** - Merge multiple texts into one concise article
+9. **queryRewriter** - Rewrite search queries for deeper results
 
 ## Tools Description
 
@@ -33,7 +34,24 @@ The platform now includes several web-related tools:
 }
 ```
 
-### 2. Web Content Extractor (`webContentExtractor`)
+### 2. Tavily Search (`tavilySearch`)
+
+**Purpose**: Search the web using the Tavily API for up-to-date information.
+
+**Parameters**:
+- `query` (string, required): Search query
+- `search_depth` (string, optional): `"basic"` or `"advanced"` (default: `"basic"`)
+- `max_results` (integer, optional): Number of results to return (default: `5`)
+
+**Returns**: List of search results with titles, URLs and brief content snippets.
+
+**Example Usage**:
+```javascript
+{
+  "query": "latest AI developments 2024"
+}
+```
+### 3. Web Content Extractor (`webContentExtractor`)
 
 **Purpose**: Extract clean, readable content from any webpage URL, automatically removing headers, footers, navigation, ads, and other non-content elements.
 
@@ -67,7 +85,7 @@ The platform now includes several web-related tools:
 - Returned errors include a `code` field so applications can translate messages
   and the UI automatically shows a localized error when possible
 
-### 3. Enhanced Web Search (`enhancedWebSearch`)
+### 4. Enhanced Web Search (`enhancedWebSearch`)
 
 **Purpose**: Performs web search and automatically extracts full content from the top results. Perfect for comprehensive information gathering and "chat with web" functionality.
 
@@ -93,7 +111,7 @@ The platform now includes several web-related tools:
 }
 ```
 
-### 4. Playwright Screenshot (`playwrightScreenshot`)
+### 5. Playwright Screenshot (`playwrightScreenshot`)
 
 **Purpose**: Capture a screenshot or PDF of any webpage using the Playwright browser automation library. If a PDF is captured, the text is extracted and returned.
 
@@ -112,7 +130,7 @@ The platform now includes several web-related tools:
 }
 ```
 
-### 5. Selenium Screenshot (`seleniumScreenshot`)
+### 6. Selenium Screenshot (`seleniumScreenshot`)
 
 **Purpose**: Capture screenshots or PDFs using Selenium and Chrome DevTools.
 
@@ -130,7 +148,7 @@ The platform now includes several web-related tools:
   "format": "png"
 }
 ```
-### 6. Answer Evaluator (`evaluator`)
+### 7. Answer Evaluator (`evaluator`)
 
 **Purpose**: Check a draft answer for definitiveness, freshness and completeness.
 
@@ -149,7 +167,7 @@ The platform now includes several web-related tools:
 }
 ```
 
-### 7. Answer Reducer (`answerReducer`)
+### 8. Answer Reducer (`answerReducer`)
 
 **Purpose**: Compress multiple text excerpts into a single well-structured article.
 
@@ -161,7 +179,7 @@ The platform now includes several web-related tools:
 }
 ```
 
-### 8. Query Rewriter (`queryRewriter`)
+### 9. Query Rewriter (`queryRewriter`)
 
 **Purpose**: Generate optimized variations of a user search query.
 
@@ -183,10 +201,11 @@ The platform now includes several web-related tools:
 
 ### Environment Variables
 
-Set the following environment variable in your `config.env` file:
+Set the following environment variables in your `config.env` file:
 
 ```env
 BRAVE_SEARCH_API_KEY=your_brave_api_key_here
+TAVILY_SEARCH_API_KEY=your_tavily_search_api_key
 ```
 
 ### Installation Requirements
@@ -327,7 +346,10 @@ This will test:
    - Set the API key in your `config.env` file
    - Restart the server after setting the key
 
-2. **"Failed to extract content"**
+2. **"TAVILY_SEARCH_API_KEY is not set"**
+   - Set the API key in your `config.env` file
+   - Restart the server after setting the key
+3. **"Failed to extract content"**
    - Check if the URL is accessible
    - Some websites may block automated requests
    - Try with a different URL to test functionality
