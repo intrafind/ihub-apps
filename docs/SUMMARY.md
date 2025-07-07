@@ -17,3 +17,4 @@
     - [Image Upload Feature](image-upload-feature.md)
     - [Image Generation](image-generation-feature.md)
     - [Server Configuration](server-config.md)
+- [Kubernetes Deployment](deployment-k8s.md)
