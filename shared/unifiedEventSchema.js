@@ -5,7 +5,7 @@ export const UnifiedEvents = {
   DONE: 'done',
   SESSION_START: 'session.start',
   SESSION_END: 'session.end',
-  CHUNK: 'llm.chunk',
+  CHUNK: 'chunk',
   TOOL_CALL_START: 'tool.call.start',
   TOOL_CALL_PROGRESS: 'tool.call.progress',
   TOOL_CALL_END: 'tool.call.end',
