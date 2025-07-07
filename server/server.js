@@ -18,6 +18,7 @@ import registerToolRoutes from "./routes/toolRoutes.js";
 import registerPageRoutes from "./routes/pageRoutes.js";
 import registerSessionRoutes from "./routes/sessionRoutes.js";
 import registerMagicPromptRoutes from "./routes/magicPromptRoutes.js";
+import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import {
   setupMiddleware,
@@ -68,6 +69,9 @@ if (cluster.isPrimary && workerCount > 1) {
   let platformConfig = {};
   try {
     platformConfig = await loadJson('config/platform.json');
+    if (platformConfig?.defaultLanguage) {
+      setDefaultLanguage(platformConfig.defaultLanguage);
+    }
     await initTelemetry(platformConfig?.telemetry || {});
   } catch (err) {
     console.error('Failed to initialize telemetry:', err);

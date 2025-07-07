@@ -353,7 +353,8 @@ export const CACHE_KEYS = {
   PROMPTS: 'prompts',
   UI_CONFIG: 'ui-config',
   PAGE_CONTENT: 'page-content',
-  TRANSLATIONS: 'translations'
+  TRANSLATIONS: 'translations',
+  PLATFORM_CONFIG: 'platform-config'
 };
 
 /**

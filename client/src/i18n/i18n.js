@@ -3,6 +3,22 @@ import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { fetchTranslations } from '../api/api';
 
+// Fetch platform configuration synchronously to get default language
+let DEFAULT_LANGUAGE = 'en';
+try {
+  const xhr = new XMLHttpRequest();
+  xhr.open('GET', '/api/platform', false);
+  xhr.send(null);
+  if (xhr.status >= 200 && xhr.status < 300) {
+    const cfg = JSON.parse(xhr.responseText);
+    if (cfg?.defaultLanguage) {
+      DEFAULT_LANGUAGE = cfg.defaultLanguage;
+    }
+  }
+} catch (e) {
+  console.warn('Failed to load platform configuration, using default language en');
+}
+
 // Import core translation files (minimal set for initial rendering)
 import enCoreTranslations from './core/en.json';
 import deCoreTranslations from './core/de.json';
@@ -23,7 +39,7 @@ const i18nInstance = i18n
         translation: deCoreTranslations
       }
     },
-    fallbackLng: 'en',
+    fallbackLng: DEFAULT_LANGUAGE,
     //debug: process.env.NODE_ENV === 'development',
     
     interpolation: {
@@ -44,7 +60,7 @@ const i18nInstance = i18n
 // Helper to normalize language codes (e.g., 'en-GB' -> 'en')
 const normalizeLanguageCode = (languageCode) => {
   // Extract the base language code
-  return languageCode?.split('-')[0].toLowerCase() || 'en';
+  return languageCode?.split('-')[0].toLowerCase() || DEFAULT_LANGUAGE;
 };
 
 // Function to load full translations from the backend
@@ -99,7 +115,7 @@ if (typeof i18n.changeLanguage === 'function') {
 }
 
 // Load full translations for the current language on initialization
-const currentLanguage = i18n.language || 'en';
+const currentLanguage = i18n.language || DEFAULT_LANGUAGE;
 console.log(`Initial language detected: ${currentLanguage}`);
 loadFullTranslations(currentLanguage);
 

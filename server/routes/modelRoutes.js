@@ -20,7 +20,8 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
   app.get('/api/models/:modelId', async (req, res) => {
     try {
       const { modelId } = req.params;
-      const language = req.headers['accept-language']?.split(',')[0] || 'en';
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
       
       // Try to get models from cache first
       let models = configCache.getModels();

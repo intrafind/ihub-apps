@@ -7,7 +7,8 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
   app.post('/api/feedback', validate(feedbackSchema), async (req, res) => {
     try {
       const { messageId, appId, chatId, messageContent, rating, feedback, modelId } = req.body;
-      const language = req.headers['accept-language']?.split(',')[0] || 'en';
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
       if (!messageId || !rating || !appId || !chatId) {
         const errorMessage = await getLocalizedError('missingFeedbackFields', {}, language);
         return res.status(400).json({ error: errorMessage });
