@@ -181,7 +181,7 @@ export async function executeStreamingResponse({
   clientLanguage
 }) {
   // TODO localize
-  actionTracker.trackAction({ chatId, event: 'processing', message: 'Processing your request...' });
+  actionTracker.trackAction(chatId, { event: 'processing', message: 'Processing your request...' });
   const controller = new AbortController();
   activeRequests.set(chatId, controller);
   const baseLog = buildLogData(true);
@@ -227,7 +227,6 @@ export async function executeStreamingResponse({
     const events = [];
     const parser = createParser({
       onEvent: (event) => {
-        console.debug('Received event:', event);
         // Handle events without explicit type (Google sends data events without event type)
         if (event.type === 'event' || !event.type) {
           events.push(event);
@@ -430,7 +429,7 @@ export function processChatWithTools({
     }
     
     const toolNames = collectedToolCalls.map(c => c.function.name).join(', ');
-    actionTracker.trackAction({ chatId, action: 'processing', message: `Using tool(s): ${toolNames}...` });
+    actionTracker.trackAction(chatId, { action: 'processing', message: `Using tool(s): ${toolNames}...` });
 
     llmMessages.push({ role: 'assistant', content: assistantContent, tool_calls: collectedToolCalls });
 

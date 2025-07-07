@@ -14,7 +14,7 @@ export default async function braveSearch({ query, q, chatId }) {
     throw new Error('BRAVE_SEARCH_API_KEY is not set');
   }
   const endpoint = config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
-  actionTracker.trackAction({ action: 'search', chatId, query: searchQuery });
+  actionTracker.trackAction(chatId, { action: 'search', query: searchQuery });
   const res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(searchQuery)}`, {
     headers: {
       'X-Subscription-Token': apiKey,

@@ -6,9 +6,9 @@ export class ActionTracker extends EventEmitter {
     this.steps = 0;
   }
 
-  trackAction(action = {}) {
+  trackAction(chatId, action = {}) {
     this.steps += 1;
-    this.emit('fire-sse', { event: 'action', steps: this.steps, ...action });
+    this.emit('fire-sse', { event: 'action', steps: this.steps, chatId, ...action });
   }
 
   trackError(chatId, error = {}) {

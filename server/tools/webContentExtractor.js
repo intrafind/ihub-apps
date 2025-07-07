@@ -16,7 +16,7 @@ function createError(message, code) {
  */
 export default async function webContentExtractor({ url, uri, link, maxLength = 5000, ignoreSSL = false, chatId }) {
   console.log(`Starting content extraction from: ${url || uri || link}`);
-  actionTracker.trackAction({ action: 'extract_content', chatId, url: url || uri || link });
+  actionTracker.trackAction(chatId, { action: 'extract_content', url: url || uri || link });
   // Accept various URL parameter names for flexibility
   const targetUrl = url || uri || link;
   
