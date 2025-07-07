@@ -1,6 +1,6 @@
 import braveSearch from './braveSearch.js';
 import webContentExtractor from './webContentExtractor.js';
-import { actionTracker } from '../../shared/actionTracker.js';
+import { actionTracker } from '../actionTracker.js';
 import queryRewriter from './queryRewriter.js';
 import finalizer from './finalizer.js';
 import { simpleCompletion } from '../utils.js';
@@ -30,7 +30,7 @@ export default async function deepResearch({
   }
 
   const sendProgress = (event, data) => {
-    actionTracker.trackAction({ thisStep: { action: event, chatId, ...data } });
+    actionTracker.trackAction({ action: event, chatId, ...data });
   };
 
   sendProgress('research-start', { query });
@@ -41,7 +41,7 @@ export default async function deepResearch({
 
   // Use query rewriter to generate multiple search queries
   try {
-    const rewrite = await queryRewriter({ query });
+    const rewrite = await queryRewriter({ query, chatId });
     if (rewrite && Array.isArray(rewrite.queries)) {
       for (const q of rewrite.queries) {
         const qs = typeof q === 'string' ? q : q.q;
@@ -64,7 +64,7 @@ export default async function deepResearch({
     round += 1;
     sendProgress('research-round', { round, query: currentQuery });
     executed.add(currentQuery);
-    const search = await braveSearch({ query: currentQuery });
+    const search = await braveSearch({ query: currentQuery, chatId });
     sendProgress('research-results', { round, count: search.results.length });
 
     const results = search.results.slice(0, maxResults);
@@ -76,7 +76,7 @@ export default async function deepResearch({
       visitedUrls.add(result.url);
       sendProgress('research-fetch', { round, url: result.url });
       try {
-        const extracted = await webContentExtractor({ url: result.url, maxLength: contentMaxLength });
+        const extracted = await webContentExtractor({ url: result.url, maxLength: contentMaxLength, chatId });
         const content = extracted.content || '';
         // Ensure we're including all relevant information for proper citation
         const sourceItem = { 
