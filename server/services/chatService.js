@@ -384,7 +384,7 @@ export function processChatWithTools({
         if (result.content?.length > 0) {
           for (const text of result.content) {
             assistantContent += text;
-            actionTracker.trackChunk({ chatId, message: text });
+            actionTracker.trackChunk(chatId, { content: text });
           }
         }
 

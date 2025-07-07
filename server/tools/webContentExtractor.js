@@ -14,9 +14,9 @@ function createError(message, code) {
  * Extract clean, readable content from a web page
  * Removes headers, footers, navigation, ads, and other non-content elements
  */
-export default async function webContentExtractor({ url, uri, link, maxLength = 5000, ignoreSSL = false }) {
+export default async function webContentExtractor({ url, uri, link, maxLength = 5000, ignoreSSL = false, chatId }) {
   console.log(`Starting content extraction from: ${url || uri || link}`);
-  actionTracker.trackAction({ action: 'extract_content', url: url || uri || link });
+  actionTracker.trackAction({ action: 'extract_content', chatId, url: url || uri || link });
   // Accept various URL parameter names for flexibility
   const targetUrl = url || uri || link;
   

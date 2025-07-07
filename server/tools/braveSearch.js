@@ -2,7 +2,7 @@ import { actionTracker } from '../actionTracker.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
 
-export default async function braveSearch({ query, q }) {
+export default async function braveSearch({ query, q, chatId }) {
   // Accept both 'query' and 'q' parameters for flexibility
   const searchQuery = query || q;
   
@@ -14,7 +14,7 @@ export default async function braveSearch({ query, q }) {
     throw new Error('BRAVE_SEARCH_API_KEY is not set');
   }
   const endpoint = config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
-  actionTracker.trackAction({ action: 'search', query: searchQuery });
+  actionTracker.trackAction({ action: 'search', chatId, query: searchQuery });
   const res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(searchQuery)}`, {
     headers: {
       'X-Subscription-Token': apiKey,
