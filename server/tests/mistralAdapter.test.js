@@ -7,9 +7,6 @@ import { loadConfiguredTools } from '../toolLoader.js';
 import config from '../config.js';
 import configCache from '../configCache.js';
 
-// Use development keys from instructions
-const MISTRAL_KEY = 'ZxC59YzIdTOcEHPwHrqxnuIfUc8r1ggW';
-
 async function testToolCall() {
   await configCache.initialize();
   const tools = await loadConfiguredTools();
