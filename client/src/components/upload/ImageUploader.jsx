@@ -12,6 +12,7 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
   const MAX_FILE_SIZE_MB = config.maxFileSizeMB || 10;
   const SUPPORTED_FORMATS = config.supportedFormats || ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
   const RESIZE_IMAGES = config.resizeImages !== false;
+  const MAX_DIMENSION = config.maxResizeDimension || 1024;
 
   const processImage = (file) => {
     return new Promise((resolve, reject) => {
@@ -41,7 +42,6 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
           let width = img.width;
           let height = img.height;
 
-          const MAX_DIMENSION = 1024;
           if (width > height && width > MAX_DIMENSION) {
             height = Math.round((height * MAX_DIMENSION) / width);
             width = MAX_DIMENSION;
