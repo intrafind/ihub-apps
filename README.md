@@ -206,6 +206,7 @@ The server can be configured through environment variables or by editing the `co
 | `GOOGLE_API_KEY` | Google AI API key | (required) |
 
 The maximum JSON request body size is configured via the `requestBodyLimitMB` option in `contents/config/platform.json`.
+Outbound request concurrency can also be tuned with the `requestConcurrency` setting in the same file and overridden per model or tool. Values below `1` or an omitted setting result in unlimited concurrency.
 
 ### SSL Configuration
 

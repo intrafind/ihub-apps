@@ -9,5 +9,6 @@
     "traces": true,
     "logs": true,
     "port": 9464
-  }
+  },
+  "requestConcurrency": 2
 }

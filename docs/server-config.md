@@ -26,6 +26,8 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `MAGIC_PROMPT_MODEL` | Default model for the magic prompt feature | `gpt-3.5-turbo` |
 | `MAGIC_PROMPT_PROMPT` | Default prompt used to refine user input | `Improve the following prompt.` |
 
+The concurrency of outbound requests is configured via `requestConcurrency` in `contents/config/platform.json` and can be overridden per model or tool. If this value is omitted or below `1`, requests are not throttled.
+
 ## SSL Configuration
 
 To enable HTTPS you must provide certificate files via environment variables:

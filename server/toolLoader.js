@@ -1,6 +1,7 @@
 import { loadJson } from './configLoader.js';
 import config from './config.js';
 import configCache from './configCache.js';
+import { throttledFetch } from './requestThrottler.js';
 
 /**
  * Load tools defined locally in config/tools.json
@@ -23,7 +24,7 @@ export async function discoverMcpTools() {
   if (!mcpUrl) return [];
 
   try {
-    const response = await fetch(`${mcpUrl.replace(/\/$/, '')}/tools`);
+    const response = await throttledFetch('mcp', `${mcpUrl.replace(/\/$/, '')}/tools`);
     if (!response.ok) {
       console.error(`Failed to fetch tools from MCP server: ${response.status}`);
       return [];

@@ -3,6 +3,7 @@ import { createCompletionRequest } from '../../adapters/index.js';
 import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
 import { clients, activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
+import { throttledFetch } from '../../requestThrottler.js';
 
 import {
   prepareChatRequest,
@@ -42,7 +43,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
         timeoutId = setTimeout(() => reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT/1000} seconds`)), DEFAULT_TIMEOUT);
       });
       try {
-        const responsePromise = fetch(request.url, {
+        const responsePromise = throttledFetch(model.id, request.url, {
           method: 'POST',
           headers: request.headers,
           body: JSON.stringify(request.body)

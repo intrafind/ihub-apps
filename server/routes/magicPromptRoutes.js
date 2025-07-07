@@ -5,6 +5,7 @@ import { recordMagicPrompt, estimateTokens } from '../usageTracker.js';
 import validate from '../validators/validate.js';
 import { magicPromptSchema } from '../validators/index.js';
 import config from '../config.js';
+import { throttledFetch } from '../requestThrottler.js';
 
 // BIG FAT TODO reuse methods like simpleCompletion and extract the adapter specifics
 export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT }) {
@@ -41,7 +42,7 @@ export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_T
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT/1000} seconds`)), DEFAULT_TIMEOUT);
       });
-      const responsePromise = fetch(request.url, { method: 'POST', headers: request.headers, body: JSON.stringify(request.body) });
+      const responsePromise = throttledFetch(model.id, request.url, { method: 'POST', headers: request.headers, body: JSON.stringify(request.body) });
       const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
       clearTimeout(timeoutId);
       if (!llmResponse.ok) {

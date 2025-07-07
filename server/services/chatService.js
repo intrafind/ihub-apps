@@ -8,6 +8,7 @@ import { normalizeName } from '../adapters/toolFormatter.js';
 import { activeRequests } from '../sse.js';
 import { actionTracker } from '../actionTracker.js';
 import { createParser } from 'eventsource-parser';
+import { throttledFetch } from '../requestThrottler.js';
 
 // Prepend file data to message content when present
 export function preprocessMessagesWithFileData(messages) {
@@ -105,7 +106,7 @@ export async function executeNonStreamingResponse({
   });
 
   try {
-    const responsePromise = fetch(request.url, {
+    const responsePromise = throttledFetch(model.id, request.url, {
       method: 'POST',
       headers: request.headers,
       body: JSON.stringify(request.body)
@@ -193,7 +194,7 @@ export async function executeStreamingResponse({
     activeRequests.delete(chatId);
   }, DEFAULT_TIMEOUT);
 
-  fetch(request.url, {
+  throttledFetch(model.id, request.url, {
     method: 'POST',
     headers: request.headers,
     body: JSON.stringify(request.body),
@@ -335,7 +336,7 @@ export function processChatWithTools({
     activeRequests.delete(chatId);
   }, DEFAULT_TIMEOUT);
 
-  fetch(request.url, {
+  throttledFetch(model.id, request.url, {
     method: 'POST',
     headers: request.headers,
     body: JSON.stringify(request.body),

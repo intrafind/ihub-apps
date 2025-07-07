@@ -4,6 +4,7 @@ import { createCompletionRequest, processResponseBuffer } from "./adapters/index
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { throttledFetch } from './requestThrottler.js';
 import configCache from './configCache.js';
 
 /**
@@ -362,7 +363,7 @@ export async function simpleCompletion(prompt, { model: modelId, temperature = 0
     stream: false
   });
 
-  const response = await fetch(request.url, {
+  const response = await throttledFetch(model.id, request.url, {
     method: 'POST',
     headers: request.headers,
     body: JSON.stringify(request.body)
