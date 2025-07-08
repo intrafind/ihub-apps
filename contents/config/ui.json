@@ -38,6 +38,13 @@
       },
       {
         "name": {
+          "en": "Admin",
+          "de": "Admin"
+        },
+        "url": "/admin/apps"
+      },
+      {
+        "name": {
           "en": "FAQ",
           "de": "FAQ"
         },

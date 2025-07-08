@@ -164,6 +164,39 @@ export default function registerAdminRoutes(app) {
     }
   });
 
+  app.post('/api/admin/apps', async (req, res) => {
+    try {
+      const newApp = req.body;
+      
+      // Validate required fields
+      if (!newApp.id || !newApp.name || !newApp.description) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      
+      // Check if app with this ID already exists
+      const rootDir = getRootDir();
+      const appFilePath = join(rootDir, 'contents', 'apps', `${newApp.id}.json`);
+      
+      try {
+        readFileSync(appFilePath, 'utf8');
+        return res.status(400).json({ error: 'App with this ID already exists' });
+      } catch (err) {
+        // File doesn't exist, which is what we want
+      }
+      
+      // Save the app to individual file
+      writeFileSync(appFilePath, JSON.stringify(newApp, null, 2));
+      
+      // Refresh the cache
+      await configCache.refreshCacheEntry('config/apps.json');
+      
+      res.json({ message: 'App created successfully', app: newApp });
+    } catch (error) {
+      console.error('Error creating app:', error);
+      res.status(500).json({ error: 'Failed to create app' });
+    }
+  });
+
   app.post('/api/admin/apps/:appId/toggle', async (req, res) => {
     try {
       const { appId } = req.params;
