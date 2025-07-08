@@ -9,11 +9,11 @@ set -e
 VERSION=$(node -p "require('./package.json').version")
 echo "Building AI Hub Apps v$VERSION for production..."
 
-# Check Node.js version - SEA requires Node.js 20+
+# Check Node.js version - SEA requires Node.js 22+
 if scripts/check-node-version.sh; then
   SEA_BUILD=true
 else
-  echo "⚠️ Warning: Node.js version 20 or later is required for SEA builds."
+  echo "⚠️ Warning: Node.js version 22 or later is required for SEA builds."
   echo "Proceeding with standard build only (no binary will be created)."
   SEA_BUILD=false
 fi
@@ -86,7 +86,7 @@ if [ "$SEA_BUILD" = true ] && { [ "$1" == "--binary" ] || [ "$1" == "-b" ]; }; t
   ./build-sea.sh
 else
   if [ "$1" == "--binary" ] || [ "$1" == "-b" ]; then
-    echo "Binary creation skipped. Please use Node.js 20+ for SEA builds."
+    echo "Binary creation skipped. Please use Node.js 22+ for SEA builds."
   fi
 fi
 

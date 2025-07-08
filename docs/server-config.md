@@ -19,12 +19,16 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `DEFAULT_API_KEY` | Fallback API key used when a model specific key is missing | – |
 | `LOCAL_API_KEY` | Generic API key for local models | – |
 | `CONTENTS_DIR` | Directory containing the `contents` folder | `contents` |
-| `APP_ROOT_DIR` | Override the application root path when running packaged binaries | – |
+| `APP_ROOT_DIR` | Application root directory used when running inside a container or packaged binary | `/app` |
 | `MCP_SERVER_URL` | URL of a Model Context Protocol server for tool discovery | – |
 | `BRAVE_SEARCH_API_KEY` | API key for the Brave Search tool | – |
 | `BRAVE_SEARCH_ENDPOINT` | Custom Brave Search API endpoint | `https://api.search.brave.com/res/v1/web/search` |
 | `MAGIC_PROMPT_MODEL` | Default model for the magic prompt feature | `gpt-3.5-turbo` |
 | `MAGIC_PROMPT_PROMPT` | Default prompt used to refine user input | `Improve the following prompt.` |
+
+The provided Docker image sets `APP_ROOT_DIR=/app` and relies on the default
+`CONTENTS_DIR=contents`, so files are loaded from `/app/contents`. Override these
+variables if your deployment uses a different directory structure.
 
 The concurrency of outbound requests is configured via `requestConcurrency` in `contents/config/platform.json` and can be overridden per model or tool. If this value is omitted or below `1`, requests are not throttled.
 The delay between requests can be adjusted with `requestDelayMs` in the same configuration files. A value of `0` disables the delay.

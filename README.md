@@ -88,9 +88,9 @@ Therefore we want to build a web application which talks through a small node.js
 
 ## Setup and Installation
 
-### Prerequisites
+-### Prerequisites
 
-- Node.js 20.x or higher
+- Node.js 22.x or higher
 - npm 8.x or higher
 
 ### Installation
@@ -148,7 +148,7 @@ npm run start:prod
 
 ### Building as Binary
 
-Node.js 20 or newer is required to create the single executable. Check your
+Node.js 22 or newer is required to create the single executable. Check your
 version with:
 
 ```bash
@@ -157,7 +157,7 @@ node -v
 
 You can package the entire application as a standalone binary using:
 
-**Prerequisite:** Node.js 20 or newer is required for creating the binary.
+**Prerequisite:** Node.js 22 or newer is required for creating the binary.
 
 ```bash
 ./build.sh --binary

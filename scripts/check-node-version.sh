@@ -1,7 +1,7 @@
 #!/bin/bash
-# Helper script to ensure Node.js version >=20
+# Helper script to ensure Node.js version >=22
 
-REQUIRED_MAJOR=20
+REQUIRED_MAJOR=22
 NODE_MAJOR=$(node -v | sed 's/v//' | cut -d. -f1)
 
 if [ "$NODE_MAJOR" -lt "$REQUIRED_MAJOR" ]; then
