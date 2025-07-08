@@ -13,7 +13,7 @@
   },
   "requestConcurrency": 2,
   "refreshSalt": {
-    "adminTriggered": 7,
-    "lastUpdated": "2025-07-08T16:04:45.821Z"
+    "salt": 9,
+    "lastUpdated": "2025-07-08T17:00:38.743Z"
   }
 }

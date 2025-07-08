@@ -58,7 +58,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Force refresh endpoint - triggers client reload by updating refresh salt
-  app.post('/api/admin/force-refresh', async (req, res) => {
+  app.post('/api/admin/client/_refresh', async (req, res) => {
     try {
       const rootDir = getRootDir();
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
@@ -69,13 +69,13 @@ export default function registerAdminRoutes(app) {
       // Initialize refreshSalt if it doesn't exist
       if (!platformConfig.refreshSalt) {
         platformConfig.refreshSalt = {
-          adminTriggered: 0,
+          salt: 0,
           lastUpdated: new Date().toISOString()
         };
       }
       
       // Increment admin-triggered value and update timestamp
-      platformConfig.refreshSalt.adminTriggered += 1;
+      platformConfig.refreshSalt.salt += 1;
       platformConfig.refreshSalt.lastUpdated = new Date().toISOString();
       
       // Write back to file
@@ -87,11 +87,11 @@ export default function registerAdminRoutes(app) {
       // Refresh specifically the platform configuration
       await configCache.refreshCacheEntry('config/platform.json');
       
-      console.log(`🔄 Force refresh triggered. New admin salt: ${platformConfig.refreshSalt.adminTriggered}`);
+      console.log(`🔄 Force refresh triggered. New admin salt: ${platformConfig.refreshSalt.salt}`);
       
       res.json({ 
         message: 'Force refresh triggered successfully',
-        newAdminSalt: platformConfig.refreshSalt.adminTriggered,
+        newAdminSalt: platformConfig.refreshSalt.salt,
         timestamp: platformConfig.refreshSalt.lastUpdated
       });
     } catch (error) {
@@ -100,7 +100,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/force-refresh', (req, res, next) => {
+  app.get('/api/admin/client/_refresh', (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
   });

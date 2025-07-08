@@ -90,7 +90,7 @@ class ConfigCache {
    */
   async refreshCacheEntry(key) {
     try {
-      const data = await loadJson(key);
+      const data = await loadJson(key, { useCache: false });
       if (data !== null) {
         this.setCacheEntry(key, data);
       }

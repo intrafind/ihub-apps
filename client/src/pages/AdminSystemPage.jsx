@@ -12,7 +12,7 @@ const AdminSystemPage = () => {
     setForceRefreshMessage('');
 
     try {
-      const response = await fetch('/api/admin/force-refresh', {
+      const response = await fetch('/api/admin/client/_refresh', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
