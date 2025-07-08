@@ -29,5 +29,5 @@
     "en": "{{content}}",
     "de": "{{content}}"
   },
-  "enabled": true
+  "enabled": false
 }
