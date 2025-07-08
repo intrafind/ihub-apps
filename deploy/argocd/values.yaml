@@ -1,9 +1,9 @@
 image:
   repository: ghcr.io/your-org/ai-hub-apps
-  tag: latest
+  tag: <REPLACE with version>
   pullPolicy: IfNotPresent
 
-s3Bucket: s3://my-aihub-config
+s3Bucket: s3://<REPLACE with s3 bucket + path>
 
 service:
   type: ClusterIP
