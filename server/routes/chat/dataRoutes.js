@@ -1,5 +1,8 @@
 import { loadJson } from '../../configLoader.js';
 import configCache from '../../configCache.js';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { getRootDir } from '../../pathUtils.js';
 
 export default function registerDataRoutes(app) {
   app.get('/api/styles', async (req, res) => {
@@ -103,7 +106,30 @@ export default function registerDataRoutes(app) {
       if (!platform) {
         return res.status(500).json({ error: 'Failed to load platform configuration' });
       }
-      res.json(platform);
+      
+      // Get app version from package.json
+      let appVersion = '1.0.0'; // fallback
+      try {
+        const rootDir = getRootDir();
+        const packageJsonPath = join(rootDir, 'package.json');
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+        appVersion = packageJson.version;
+      } catch (error) {
+        console.warn('Could not read version from package.json:', error.message);
+      }
+      
+      // Compute refresh salt combining version and admin-triggered value
+      const refreshSalt = platform.refreshSalt || { adminTriggered: 0, lastUpdated: new Date().toISOString() };
+      const computedSalt = `${appVersion}.${refreshSalt.adminTriggered}`;
+      
+      // Add version and computed salt to platform response
+      const enhancedPlatform = {
+        ...platform,
+        version: appVersion,
+        computedRefreshSalt: computedSalt
+      };
+      
+      res.json(enhancedPlatform);
     } catch (error) {
       console.error('Error fetching platform configuration:', error);
       res.status(500).json({ error: 'Internal server error' });

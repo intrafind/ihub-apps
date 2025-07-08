@@ -1,5 +1,8 @@
 import { getUsage } from '../usageTracker.js';
 import configCache from '../configCache.js';
+import { writeFileSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { getRootDir } from '../pathUtils.js';
 
 export default function registerAdminRoutes(app) {
   app.get('/api/admin/usage', async (req, res) => {
@@ -50,6 +53,54 @@ export default function registerAdminRoutes(app) {
   });
 
   app.get('/api/admin/cache/_clear', (req, res, next) => {
+    req.method = 'POST';
+    app._router.handle(req, res, next);
+  });
+
+  // Force refresh endpoint - triggers client reload by updating refresh salt
+  app.post('/api/admin/force-refresh', async (req, res) => {
+    try {
+      const rootDir = getRootDir();
+      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
+      
+      // Read current platform config
+      const platformConfig = JSON.parse(readFileSync(platformConfigPath, 'utf8'));
+      
+      // Initialize refreshSalt if it doesn't exist
+      if (!platformConfig.refreshSalt) {
+        platformConfig.refreshSalt = {
+          adminTriggered: 0,
+          lastUpdated: new Date().toISOString()
+        };
+      }
+      
+      // Increment admin-triggered value and update timestamp
+      platformConfig.refreshSalt.adminTriggered += 1;
+      platformConfig.refreshSalt.lastUpdated = new Date().toISOString();
+      
+      // Write back to file
+      writeFileSync(platformConfigPath, JSON.stringify(platformConfig, null, 2));
+      
+      // Small delay to ensure file write is complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Refresh specifically the platform configuration
+      await configCache.refreshCacheEntry('config/platform.json');
+      
+      console.log(`🔄 Force refresh triggered. New admin salt: ${platformConfig.refreshSalt.adminTriggered}`);
+      
+      res.json({ 
+        message: 'Force refresh triggered successfully',
+        newAdminSalt: platformConfig.refreshSalt.adminTriggered,
+        timestamp: platformConfig.refreshSalt.lastUpdated
+      });
+    } catch (error) {
+      console.error('Error triggering force refresh:', error);
+      res.status(500).json({ error: 'Failed to trigger force refresh' });
+    }
+  });
+
+  app.get('/api/admin/force-refresh', (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
   });

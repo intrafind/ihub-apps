@@ -10,6 +10,7 @@ import NotFound from './pages/NotFound';
 import MarkdownPage from './pages/MarkdownPage';
 import WidgetPage from './pages/WidgetPage';
 import AdminUsageReports from './pages/AdminUsageReports';
+import AdminSystemPage from './pages/AdminSystemPage';
 import AppProviders from './components/AppProviders';
 import { withErrorBoundary } from './components/ErrorBoundary';
 import useSessionManagement from './hooks/useSessionManagement';
@@ -23,6 +24,7 @@ const SafeAppCanvas = withErrorBoundary(AppCanvas);
 const SafeMarkdownPage = withErrorBoundary(MarkdownPage);
 const SafeWidgetPage = withErrorBoundary(WidgetPage);
 const SafeAdminUsage = withErrorBoundary(AdminUsageReports);
+const SafeAdminSystem = withErrorBoundary(AdminSystemPage);
 const SafePromptsList = withErrorBoundary(PromptsList);
 
 function App() {
@@ -50,6 +52,7 @@ function App() {
             <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
             <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
             <Route path="admin/usage" element={<SafeAdminUsage />} />
+            <Route path="admin/system" element={<SafeAdminSystem />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { UIConfigProvider } from "./UIConfigContext";
 import ErrorBoundaryFallback from "./ErrorBoundary";
+import { initializeForceRefresh } from "../utils/forceRefresh";
 
 /**
  * Consolidates all application-level providers in a single component
@@ -10,6 +11,20 @@ import ErrorBoundaryFallback from "./ErrorBoundary";
  * for better performance and reduced component nesting
  */
 const AppProviders = ({ children }) => {
+  // Initialize force refresh check early in the application startup
+  useEffect(() => {
+    const checkForceRefresh = async () => {
+      try {
+        await initializeForceRefresh();
+      } catch (error) {
+        console.error('Error initializing force refresh:', error);
+        // Continue with normal app startup even if force refresh fails
+      }
+    };
+    
+    checkForceRefresh();
+  }, []);
+
   return (
     <ErrorBoundaryFallback>
       <UIConfigProvider>{children}</UIConfigProvider>
