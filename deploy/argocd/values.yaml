@@ -12,4 +12,3 @@ service:
 env:
   CONTENTS_DIR: /app/contents
   APP_ROOT_DIR: /app
-
