@@ -32,6 +32,14 @@ jobs:
           cd server && npm ci && cd ..
       - name: Build application
         run: npm run prod:build
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.13.2
+      - name: Lint Helm chart
+        run: |
+          helm lint deploy/helm/ai-hub-apps
+          helm template test deploy/helm/ai-hub-apps > /dev/null
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:

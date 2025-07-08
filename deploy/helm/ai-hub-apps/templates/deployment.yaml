@@ -20,7 +20,7 @@ spec:
           emptyDir: {}
       initContainers:
         - name: fetch-customization
-          image: amazon/aws-cli
+          image: amazon/aws-cli:2.14.0
           command: ["sh", "-c"]
           args:
             - aws s3 sync {{ .Values.s3Bucket }} /data
@@ -40,6 +40,10 @@ spec:
               value: {{ .Values.env.VITE_ICON_BASE_URL }}
           volumeMounts:
             - name: data
-              mountPath: /app
+              mountPath: /app/contents
+              subPath: contents
+            - name: data
+              mountPath: /app/public
+              subPath: public
           ports:
             - containerPort: {{ .Values.service.port }}

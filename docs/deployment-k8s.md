@@ -8,7 +8,10 @@ A GitHub Actions workflow (`.github/workflows/docker-image.yml`) builds and publ
 
 ## 2. Prepare S3 Bucket
 
-Store your `contents/` and `public/` directories in an S3 bucket (e.g., `s3://my-aihub-config`). The init container uses IAM roles for the service account so no credentials are stored in the pod.
+Store your `contents/` and `public/` directories in an S3 bucket (e.g., `s3://my-aihub-config`).
+Create an IAM role with read access to the bucket and associate it with a
+Kubernetes service account (IRSA) or provide AWS credentials through a
+Secret so the init container can authenticate to S3.
 
 ## 3. Install the Helm Chart
 
@@ -21,7 +24,10 @@ helm upgrade --install ai-hub-apps ./deploy/helm/ai-hub-apps \
   --set s3Bucket=s3://my-aihub-config
 ```
 
-The chart creates a deployment with an init container that syncs files from S3 into a shared volume mounted at `/app`.
+The chart creates a deployment with an init container that syncs files from S3
+into a shared volume. The main container mounts `/app/contents` and
+`/app/public` from this volume using `subPath` so the bundled application code
+remains available.
 
 ## 4. Deploy with Argo CD
 
