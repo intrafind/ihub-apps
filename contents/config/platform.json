@@ -11,5 +11,9 @@
     "logs": true,
     "port": 9464
   },
-  "requestConcurrency": 2
+  "requestConcurrency": 2,
+  "refreshSalt": {
+    "adminTriggered": 7,
+    "lastUpdated": "2025-07-08T16:04:45.821Z"
+  }
 }
