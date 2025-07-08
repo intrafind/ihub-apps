@@ -1,0 +1,28 @@
+{
+  "id": "image-analysis",
+  "order": 10,
+  "name": {
+    "en": "Image Analyzer",
+    "de": "Bildanalyse"
+  },
+  "description": {
+    "en": "Upload and analyze images with AI",
+    "de": "Bilder hochladen und mit KI analysieren"
+  },
+  "color": "#10B981",
+  "icon": "camera",
+  "system": {
+    "en": "You are an AI image analysis assistant. Your role is to analyze images that users upload and provide detailed insights about what you see. Be detailed, accurate, and helpful.",
+    "de": "Du bist ein KI-Bildanalyseassistent. Deine Aufgabe ist es, von Benutzern hochgeladene Bilder zu analysieren und detaillierte Einblicke zu geben, was du siehst. Sei detailliert, genau und hilfreich."
+  },
+  "tokenLimit": 4096,
+  "preferredModel": "gpt-4-vision-preview",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "detailed",
+  "preferredTemperature": 0.7,
+  "imageUpload": {
+    "enabled": true,
+    "resizeImages": true
+  },
+  "enabled": true
+}

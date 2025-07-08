@@ -11,6 +11,9 @@ import MarkdownPage from './pages/MarkdownPage';
 import WidgetPage from './pages/WidgetPage';
 import AdminUsageReports from './pages/AdminUsageReports';
 import AdminSystemPage from './pages/AdminSystemPage';
+import AdminAppsPage from './pages/AdminAppsPage';
+import AdminAppEditPage from './pages/AdminAppEditPage';
+import AdminAppTestPage from './pages/AdminAppTestPage';
 import AppProviders from './components/AppProviders';
 import { withErrorBoundary } from './components/ErrorBoundary';
 import useSessionManagement from './hooks/useSessionManagement';
@@ -25,6 +28,9 @@ const SafeMarkdownPage = withErrorBoundary(MarkdownPage);
 const SafeWidgetPage = withErrorBoundary(WidgetPage);
 const SafeAdminUsage = withErrorBoundary(AdminUsageReports);
 const SafeAdminSystem = withErrorBoundary(AdminSystemPage);
+const SafeAdminApps = withErrorBoundary(AdminAppsPage);
+const SafeAdminAppEdit = withErrorBoundary(AdminAppEditPage);
+const SafeAdminAppTest = withErrorBoundary(AdminAppTestPage);
 const SafePromptsList = withErrorBoundary(PromptsList);
 
 function App() {
@@ -53,6 +59,9 @@ function App() {
             <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
             <Route path="admin/usage" element={<SafeAdminUsage />} />
             <Route path="admin/system" element={<SafeAdminSystem />} />
+            <Route path="admin/apps" element={<SafeAdminApps />} />
+            <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
+            <Route path="admin/apps/:appId/test" element={<SafeAdminAppTest />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
