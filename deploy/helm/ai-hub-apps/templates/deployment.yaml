@@ -36,8 +36,6 @@ spec:
               value: {{ .Values.env.CONTENTS_DIR }}
             - name: APP_ROOT_DIR
               value: {{ .Values.env.APP_ROOT_DIR }}
-            - name: VITE_ICON_BASE_URL
-              value: {{ .Values.env.VITE_ICON_BASE_URL }}
           volumeMounts:
             - name: data
               mountPath: /app/contents
