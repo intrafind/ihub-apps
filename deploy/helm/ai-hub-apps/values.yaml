@@ -1,0 +1,15 @@
+image:
+  repository: ghcr.io/your-org/ai-hub-apps
+  tag: latest
+  pullPolicy: IfNotPresent
+
+s3Bucket: s3://my-aihub-config
+
+service:
+  type: ClusterIP
+  port: 3000
+
+env:
+  CONTENTS_DIR: /app/contents
+  APP_ROOT_DIR: /app
+  VITE_ICON_BASE_URL: /public/icons
