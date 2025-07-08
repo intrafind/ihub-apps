@@ -1,4 +1,5 @@
 import { loadJson, loadText } from './configLoader.js';
+import { loadAllApps, loadAllAppsIncludingDisabled } from './appsLoader.js';
 
 /**
  * Configuration Cache Service
@@ -45,6 +46,14 @@ class ConfigCache {
     
     const loadPromises = this.criticalConfigs.map(async (configPath) => {
       try {
+        // Special handling for apps.json - load from both sources
+        if (configPath === 'config/apps.json') {
+          const apps = loadAllApps();
+          this.setCacheEntry(configPath, apps);
+          console.log(`✓ Cached: ${configPath} (${apps.length} enabled apps)`);
+          return;
+        }
+        
         const data = await loadJson(configPath);
         if (data !== null) {
           this.setCacheEntry(configPath, data);
@@ -90,6 +99,13 @@ class ConfigCache {
    */
   async refreshCacheEntry(key) {
     try {
+      // Special handling for apps.json - load from both sources
+      if (key === 'config/apps.json') {
+        const apps = loadAllApps();
+        this.setCacheEntry(key, apps);
+        return;
+      }
+      
       const data = await loadJson(key, { useCache: false });
       if (data !== null) {
         this.setCacheEntry(key, data);
@@ -154,6 +170,13 @@ class ConfigCache {
    */
   getApps() {
     return this.get('config/apps.json');
+  }
+
+  /**
+   * Get all apps including disabled ones (for admin purposes)
+   */
+  getAllAppsIncludingDisabled() {
+    return loadAllAppsIncludingDisabled();
   }
 
   /**

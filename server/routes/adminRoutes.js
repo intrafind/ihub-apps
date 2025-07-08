@@ -105,4 +105,121 @@ export default function registerAdminRoutes(app) {
     app._router.handle(req, res, next);
   });
 
+  // Apps management endpoints
+  app.get('/api/admin/apps', async (req, res) => {
+    try {
+      const apps = configCache.getAllAppsIncludingDisabled();
+      res.json(apps);
+    } catch (error) {
+      console.error('Error fetching all apps:', error);
+      res.status(500).json({ error: 'Failed to fetch apps' });
+    }
+  });
+
+  app.get('/api/admin/apps/:appId', async (req, res) => {
+    try {
+      const { appId } = req.params;
+      const apps = configCache.getAllAppsIncludingDisabled();
+      const app = apps.find(a => a.id === appId);
+      
+      if (!app) {
+        return res.status(404).json({ error: 'App not found' });
+      }
+      
+      res.json(app);
+    } catch (error) {
+      console.error('Error fetching app:', error);
+      res.status(500).json({ error: 'Failed to fetch app' });
+    }
+  });
+
+  app.put('/api/admin/apps/:appId', async (req, res) => {
+    try {
+      const { appId } = req.params;
+      const updatedApp = req.body;
+      
+      // Validate required fields
+      if (!updatedApp.id || !updatedApp.name || !updatedApp.description) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      
+      // Ensure the ID matches
+      if (updatedApp.id !== appId) {
+        return res.status(400).json({ error: 'App ID cannot be changed' });
+      }
+      
+      // Save the app to individual file
+      const rootDir = getRootDir();
+      const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
+      
+      writeFileSync(appFilePath, JSON.stringify(updatedApp, null, 2));
+      
+      // Refresh the cache
+      await configCache.refreshCacheEntry('config/apps.json');
+      
+      res.json({ message: 'App updated successfully', app: updatedApp });
+    } catch (error) {
+      console.error('Error updating app:', error);
+      res.status(500).json({ error: 'Failed to update app' });
+    }
+  });
+
+  app.post('/api/admin/apps/:appId/toggle', async (req, res) => {
+    try {
+      const { appId } = req.params;
+      const apps = configCache.getAllAppsIncludingDisabled();
+      const app = apps.find(a => a.id === appId);
+      
+      if (!app) {
+        return res.status(404).json({ error: 'App not found' });
+      }
+      
+      // Toggle the enabled state
+      const newEnabledState = !app.enabled;
+      app.enabled = newEnabledState;
+      
+      // Save the app to individual file
+      const rootDir = getRootDir();
+      const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
+      
+      writeFileSync(appFilePath, JSON.stringify(app, null, 2));
+      
+      // Refresh the cache
+      await configCache.refreshCacheEntry('config/apps.json');
+      
+      res.json({ 
+        message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
+        app: app,
+        enabled: newEnabledState 
+      });
+    } catch (error) {
+      console.error('Error toggling app:', error);
+      res.status(500).json({ error: 'Failed to toggle app' });
+    }
+  });
+
+  app.delete('/api/admin/apps/:appId', async (req, res) => {
+    try {
+      const { appId } = req.params;
+      const rootDir = getRootDir();
+      const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
+      
+      // Check if file exists
+      if (!readFileSync(appFilePath, 'utf8')) {
+        return res.status(404).json({ error: 'App not found' });
+      }
+      
+      // Delete the file
+      require('fs').unlinkSync(appFilePath);
+      
+      // Refresh the cache
+      await configCache.refreshCacheEntry('config/apps.json');
+      
+      res.json({ message: 'App deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting app:', error);
+      res.status(500).json({ error: 'Failed to delete app' });
+    }
+  });
+
 }
