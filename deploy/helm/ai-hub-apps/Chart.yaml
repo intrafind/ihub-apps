@@ -2,5 +2,5 @@ apiVersion: v2
 name: ai-hub-apps
 description: Deployment chart for AI Hub Apps
 version: 0.1.0
-appVersion: "1.0.5"
+appVersion: "2.0.0"
 type: application

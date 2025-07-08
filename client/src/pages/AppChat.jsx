@@ -6,6 +6,7 @@ import React, {
   useMemo,
 } from "react";
 import { v4 as uuidv4 } from "uuid";
+import { getOrCreateChatId, resetChatId } from "../utils/chatId";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   fetchAppDetails,
@@ -169,11 +170,11 @@ const AppChat = () => {
   const [magicLoading, setMagicLoading] = useState(false);
 
   const inputRef = useRef(null);
-  const chatId = useRef(`chat-${uuidv4()}`);
+  const chatId = useRef(getOrCreateChatId(appId));
 
-  // Reset chat ID whenever the appId changes to start a fresh session
+  // Restore existing chat ID when the appId changes
   useEffect(() => {
-    chatId.current = `chat-${uuidv4()}`;
+    chatId.current = getOrCreateChatId(appId);
   }, [appId]);
 
   /**
@@ -245,7 +246,7 @@ const AppChat = () => {
     clearChat: () => {
       cancelGeneration();
       clearMessages();
-      chatId.current = `chat-${uuidv4()}`;
+      chatId.current = resetChatId(appId);
       
       // Reset the chat input to empty
       setInput("");
@@ -563,7 +564,7 @@ const AppChat = () => {
     ) {
       cancelGeneration();
       clearMessages();
-      chatId.current = `chat-${uuidv4()}`;
+      chatId.current = resetChatId(appId);
       
       // Reset the chat input to empty
       setInput("");
@@ -921,10 +922,8 @@ const AppChat = () => {
                           : undefined
                       }
                       onImageSelect={handleImageSelect}
-                      imageUploadEnabled={app?.features?.imageUpload === true}
                       imageUploadConfig={app?.imageUpload || {}}
                       onFileSelect={handleFileSelect}
-                      fileUploadEnabled={app?.features?.fileUpload === true}
                       fileUploadConfig={app?.fileUpload || {}}
                       allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
                       inputRef={inputRef}
@@ -987,10 +986,8 @@ const AppChat = () => {
                           : undefined
                       }
                       onImageSelect={handleImageSelect}
-                      imageUploadEnabled={app?.features?.imageUpload === true}
                       imageUploadConfig={app?.imageUpload || {}}
                       onFileSelect={handleFileSelect}
-                      fileUploadEnabled={app?.features?.fileUpload === true}
                       fileUploadConfig={app?.fileUpload || {}}
                       allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
                       inputRef={inputRef}
@@ -1053,10 +1050,8 @@ const AppChat = () => {
                         : undefined
                     }
                     onImageSelect={handleImageSelect}
-                    imageUploadEnabled={app?.features?.imageUpload === true}
                     imageUploadConfig={app?.imageUpload || {}}
                     onFileSelect={handleFileSelect}
-                    fileUploadEnabled={app?.features?.fileUpload === true}
                     fileUploadConfig={app?.fileUpload || {}}
                     allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
                     inputRef={inputRef}
@@ -1113,10 +1108,8 @@ const AppChat = () => {
                       : undefined
                   }
                   onImageSelect={handleImageSelect}
-                  imageUploadEnabled={app?.features?.imageUpload === true}
                   imageUploadConfig={app?.imageUpload || {}}
                   onFileSelect={handleFileSelect}
-                  fileUploadEnabled={app?.features?.fileUpload === true}
                   fileUploadConfig={app?.fileUpload || {}}
                   allowEmptySubmit={app?.allowEmptyContent || selectedImage !== null || selectedFile !== null}
                   inputRef={inputRef}

@@ -23,6 +23,8 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `MCP_SERVER_URL` | URL of a Model Context Protocol server for tool discovery | – |
 | `BRAVE_SEARCH_API_KEY` | API key for the Brave Search tool | – |
 | `BRAVE_SEARCH_ENDPOINT` | Custom Brave Search API endpoint | `https://api.search.brave.com/res/v1/web/search` |
+| `TAVILY_SEARCH_API_KEY` | API key for the Tavily Search tool | – |
+| `TAVILY_ENDPOINT` | Custom Tavily API endpoint | `https://api.tavily.com/search` |
 | `MAGIC_PROMPT_MODEL` | Default model for the magic prompt feature | `gpt-3.5-turbo` |
 | `MAGIC_PROMPT_PROMPT` | Default prompt used to refine user input | `Improve the following prompt.` |
 

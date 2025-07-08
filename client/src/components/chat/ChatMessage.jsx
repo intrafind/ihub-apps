@@ -381,7 +381,7 @@ const ChatMessage = ({
           showActions ? 'opacity-100' : 'opacity-0'
         } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}>
           {/* Standard actions first */}
-          <div className="relative" ref={copyMenuRef}>
+          <div className="relative inline-flex items-center" ref={copyMenuRef}>
             <button
               onClick={() => handleCopy('text')}
               className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
@@ -408,14 +408,14 @@ const ChatMessage = ({
             </button>
             {showCopyMenu && (
               <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded shadow z-10 text-gray-700">
-                <button onClick={() => handleCopy('text')} className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left">
-                  {t('canvas.export.copyText', 'Copy as Text')}
+                <button onClick={() => handleCopy('text')} className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap">
+                  {t('canvas.export.copyText', 'as Text')}
                 </button>
-                <button onClick={() => handleCopy('markdown')} className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left">
-                  {t('canvas.export.copyMarkdown', 'Copy as Markdown')}
+                <button onClick={() => handleCopy('markdown')} className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap">
+                  {t('canvas.export.copyMarkdown', 'as Markdown')}
                 </button>
-                <button onClick={() => handleCopy('html')} className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left">
-                  {t('canvas.export.copyHTML', 'Copy as HTML')}
+                <button onClick={() => handleCopy('html')} className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap">
+                  {t('canvas.export.copyHTML', 'as HTML')}
                 </button>
               </div>
             )}

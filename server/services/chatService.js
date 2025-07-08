@@ -391,13 +391,14 @@ export function processChatWithTools({
         console.log(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
         if (result.tool_calls?.length > 0) {
           result.tool_calls.forEach(call => {
-            const existingCall = collectedToolCalls.find(c => c.id === call.id);
+            const existingCall = collectedToolCalls.find(c => (call.id && c.id === call.id) || (!call.id && c.index === call.index));
             if (existingCall) {
               if (call.function?.arguments) {
                 existingCall.function.arguments += call.function.arguments;
               }
-            } else if (call.id && call.function?.name) {
+            } else if ((call.id || call.index !== undefined) && call.function?.name) {
               collectedToolCalls.push({
+                index: call.index,
                 id: call.id,
                 function: {
                   name: call.function.name,

@@ -45,6 +45,7 @@ const CanvasChatPanel = ({
             chatId={chatId}
             compact={true}
             onInsert={onInsertAnswer}
+            canvasEnabled={true}
           />
         </div>
       </div>

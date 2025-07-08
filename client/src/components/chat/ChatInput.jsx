@@ -24,8 +24,6 @@ const ChatInput = ({
   allowEmptySubmit = false,
   inputRef = null,
   disabled = false,
-  imageUploadEnabled = false,
-  fileUploadEnabled = false,
   imageUploadConfig = {},
   fileUploadConfig = {},
   selectedImage = null, // Add this prop to pass from parent
@@ -241,7 +239,7 @@ const ChatInput = ({
           }}
         />
       )}
-      {imageUploadEnabled && showImageUploader && (
+      {imageUploadConfig?.enabled === true && showImageUploader && (
         <ImageUploader
           onImageSelect={onImageSelect}
           disabled={disabled || isProcessing}
@@ -250,7 +248,7 @@ const ChatInput = ({
         />
       )}
 
-      {fileUploadEnabled && showFileUploader && (
+      {fileUploadConfig?.enabled === true && showFileUploader && (
         <FileUploader
           onFileSelect={onFileSelect}
           disabled={disabled || isProcessing}
@@ -297,7 +295,7 @@ const ChatInput = ({
         </div>
 
         <div className="flex flex-col gap-1 justify-start">
-          {imageUploadEnabled && (
+          {imageUploadConfig?.enabled === true && (
             <button
               type="button"
               onClick={toggleImageUploader}
@@ -312,7 +310,7 @@ const ChatInput = ({
             </button>
           )}
 
-          {fileUploadEnabled && (
+          {fileUploadConfig?.enabled === true && (
             <button
               type="button"
               onClick={toggleFileUploader}

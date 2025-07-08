@@ -138,8 +138,13 @@ const AnthropicAdapter = {
       // Handle streaming content deltas
       else if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.text) {
         result.content.push(parsed.delta.text);
-      } else if (parsed.type === 'message_delta' && parsed.delta && parsed.delta.content) {
-        result.content.push(parsed.delta.content);
+      } else if (parsed.type === 'message_delta' && parsed.delta) {
+        if (parsed.delta.content) {
+          result.content.push(parsed.delta.content);
+        }
+        if (parsed.delta.stop_reason) {
+          result.finishReason = parsed.delta.stop_reason === 'tool_use' ? 'tool_calls' : parsed.delta.stop_reason;
+        }
       }
 
       // Tool streaming events

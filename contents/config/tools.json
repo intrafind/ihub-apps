@@ -17,6 +17,36 @@
     }
   },
   {
+    "id": "tavilySearch",
+    "name": "Tavily Web Search",
+    "description": "Search the web using the Tavily API. Use the 'query' parameter with your search terms.",
+    "script": "tavilySearch.js",
+    "concurrency": 5,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'"
+        },
+        "search_depth": {
+          "type": "string",
+          "enum": ["basic", "advanced"],
+          "default": "basic",
+          "description": "Depth of the search"
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum number of search results to return",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 10
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
     "id": "webContentExtractor",
     "name": "Web Content Extractor",
     "description": "Extract clean, readable content from an URL. This can be content like PDFs or webpages, removing ads, headers, footers, and other non-content elements. Use the 'url' parameter with a valid HTTP/HTTPS URL.",
