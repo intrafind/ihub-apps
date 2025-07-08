@@ -12,4 +12,4 @@ service:
 env:
   CONTENTS_DIR: /app/contents
   APP_ROOT_DIR: /app
-  VITE_ICON_BASE_URL: /public/icons
+
