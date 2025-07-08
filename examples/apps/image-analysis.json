@@ -21,7 +21,7 @@
   "preferredStyle": "detailed",
   "preferredTemperature": 0.7,
   "sendChatHistory": true,
-  "features": {
-    "imageUpload": true
+  "imageUpload": {
+    "enabled": true
   }
 }

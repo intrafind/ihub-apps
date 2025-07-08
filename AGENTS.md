@@ -58,5 +58,6 @@ Follow the instructions in [LLM_GUIDELINES.md](LLM_GUIDELINES.md):
 - Keep UI layout and styles intact unless the task requires changes.
 - Maintain configuration schemas when editing JSON files in `contents/config`.
 - Update code comments when modifying logic and preserve error handling.
+- Important! Whenever you get an API_KEY for adapters, tools or anything else, NEVER EVER write them into the code or documentation. Always use a placeholder.
 
 Always consult the documentation in `docs/` for additional details about configuration files and features.
