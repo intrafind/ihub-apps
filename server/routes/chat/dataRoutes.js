@@ -119,8 +119,8 @@ export default function registerDataRoutes(app) {
       }
       
       // Compute refresh salt combining version and admin-triggered value
-      const refreshSalt = platform.refreshSalt || { adminTriggered: 0, lastUpdated: new Date().toISOString() };
-      const computedSalt = `${appVersion}.${refreshSalt.adminTriggered}`;
+      const refreshSalt = platform.refreshSalt || { salt: 0, lastUpdated: new Date().toISOString() };
+      const computedSalt = `${appVersion}.${refreshSalt.salt}`;
       
       // Add version and computed salt to platform response
       const enhancedPlatform = {
