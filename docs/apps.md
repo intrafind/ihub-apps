@@ -50,6 +50,8 @@ Each app is defined with the following essential properties:
 | `preferredStyle` | String | Style guidance for AI responses (normal, professional, creative, academic) |
 | `preferredTemperature` | Number | Temperature setting (0.0-1.0) controlling randomness |
 | `sendChatHistory` | Boolean | Whether to include chat history in API requests |
+| `parentId` | String | Optional ID of a parent app to inherit configuration from |
+| `allowInheritance` | Boolean | If `false`, this app cannot be used as a parent |
 
 ### Advanced Configuration Options
 
@@ -396,4 +398,10 @@ Here are some practical examples of how to configure the settings for different 
   }
 }
 ```
+
+### App Inheritance
+
+Apps can inherit configuration from an existing parent app. The child app references its template using the `parentId` property. If a parent app sets `allowInheritance` to `false`, it cannot be selected as a template.
+
+Only the fields that differ from the parent must be defined in the child app file. The administration interface highlights overridden values and allows reverting to the parent's configuration.
 

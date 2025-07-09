@@ -13,6 +13,7 @@ import AdminUsageReports from './pages/AdminUsageReports';
 import AdminSystemPage from './pages/AdminSystemPage';
 import AdminAppsPage from './pages/AdminAppsPage';
 import AdminAppEditPage from './pages/AdminAppEditPage';
+import AdminAppWizardPage from './pages/AdminAppWizardPage';
 import AdminShortLinks from './pages/AdminShortLinks';
 import AdminModelEditPage from './pages/AdminModelEditPage';
 import AdminModelsPage from './pages/AdminModelsPage';
@@ -32,6 +33,7 @@ const SafeAdminUsage = withErrorBoundary(AdminUsageReports);
 const SafeAdminSystem = withErrorBoundary(AdminSystemPage);
 const SafeAdminApps = withErrorBoundary(AdminAppsPage);
 const SafeAdminAppEdit = withErrorBoundary(AdminAppEditPage);
+const SafeAdminAppWizard = withErrorBoundary(AdminAppWizardPage);
 const SafeAdminShortLinks = withErrorBoundary(AdminShortLinks);
 const SafeAdminModels = withErrorBoundary(AdminModelsPage);
 const SafeAdminModelEdit = withErrorBoundary(AdminModelEditPage);
@@ -64,6 +66,7 @@ function App() {
             <Route path="admin/usage" element={<SafeAdminUsage />} />
             <Route path="admin/system" element={<SafeAdminSystem />} />
             <Route path="admin/apps" element={<SafeAdminApps />} />
+            <Route path="admin/apps/wizard" element={<SafeAdminAppWizard />} />
             <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
             <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
             <Route path="admin/models" element={<SafeAdminModels />} />
@@ -74,5 +77,4 @@ function App() {
       </BrowserRouter>
     </AppProviders>
   );
-}
-export default App;
+}export default App;

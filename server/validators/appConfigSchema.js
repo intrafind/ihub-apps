@@ -29,6 +29,8 @@ export const appConfigSchema = z.object({
   disallowModelSelection: z.boolean().optional(),
   allowEmptyContent: z.boolean().optional(),
   enabled: z.boolean().optional(),
+  parentId: z.string().optional(),
+  allowInheritance: z.boolean().optional(),
 }).passthrough();
 
 export const knownAppKeys = Object.keys(appConfigSchema.shape);

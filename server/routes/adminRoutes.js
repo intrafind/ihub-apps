@@ -198,6 +198,38 @@ export default function registerAdminRoutes(app) {
     }
   });
 
+  // Simple generator endpoint - this would normally call an LLM
+  app.post('/api/admin/app-generator', async (req, res) => {
+    try {
+      const { description } = req.body;
+      if (!description) {
+        return res.status(400).json({ error: 'Missing description' });
+      }
+
+      const idBase = description.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 20);
+      const newApp = {
+        id: `gen-${idBase}`,
+        name: { en: description },
+        description: { en: description },
+        color: '#4F46E5',
+        icon: 'sparkles',
+        system: { en: 'You are a helpful assistant.' },
+        tokenLimit: 4096,
+        preferredModel: 'gpt-4',
+        preferredOutputFormat: 'markdown',
+        preferredStyle: 'normal',
+        preferredTemperature: 0.7,
+        sendChatHistory: true,
+        variables: []
+      };
+
+      res.json(newApp);
+    } catch (error) {
+      console.error('Error generating app:', error);
+      res.status(500).json({ error: 'Failed to generate app' });
+    }
+  });
+
   app.post('/api/admin/apps/:appId/toggle', async (req, res) => {
     try {
       const { appId } = req.params;
