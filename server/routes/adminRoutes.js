@@ -46,6 +46,9 @@ export default function registerAdminRoutes(app) {
   app.post('/api/admin/cache/_clear', async (req, res) => {
     try {
       configCache.clear();
+      // Immediately reinitialize the cache so subsequent API calls work
+      await configCache.initialize();
+
       res.json({ message: 'Configuration cache cleared successfully' });
     } catch (e) {
       console.error('Error clearing cache:', e);
