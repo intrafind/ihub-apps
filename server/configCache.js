@@ -1,5 +1,5 @@
-import { loadJson, loadText } from './configLoader.js';
-import { loadAllApps, loadAllAppsIncludingDisabled } from './appsLoader.js';
+import { loadJson } from './configLoader.js';
+import { loadAllApps } from './appsLoader.js';
 
 /**
  * Configuration Cache Service
