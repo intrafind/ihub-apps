@@ -36,22 +36,31 @@ apiClient.interceptors.request.use(config => {
 // Keep track of pending requests for deduplication
 const pendingRequests = new Map();
 
-// Enhanced retry mechanism for failed requests
-apiClient.interceptors.response.use(null, async (error) => {
-  const originalRequest = error.config;
-  
-  // Only retry GET requests, and only once
-  if (originalRequest.method === 'get' && !originalRequest._retry && !error.response) {
-    originalRequest._retry = true;
-    console.log('Network error, retrying request once:', originalRequest.url);
+// Enhanced retry mechanism for failed requests and 304 handling
+apiClient.interceptors.response.use(
+  (response) => {
+    // Handle 304 Not Modified responses properly
+    if (response.status === 304) {
+      response.isNotModified = true;
+    }
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
     
-    // Wait a moment before retrying
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return apiClient(originalRequest);
+    // Only retry GET requests, and only once
+    if (originalRequest.method === 'get' && !originalRequest._retry && !error.response) {
+      originalRequest._retry = true;
+      console.log('Network error, retrying request once:', originalRequest.url);
+      
+      // Wait a moment before retrying
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return apiClient(originalRequest);
+    }
+    
+    return Promise.reject(error);
   }
-  
-  return Promise.reject(error);
-});
+);
 
 // Handle API responses and errors consistently
 const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_TTL.MEDIUM, deduplicate = true, handleETag = false) => {
@@ -83,13 +92,14 @@ const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_T
         const response = await apiCall();
         
         // Handle 304 Not Modified response
-        if (response.status === 304) {
+        if (response.status === 304 || response.isNotModified) {
           console.log(`304 Not Modified for: ${cacheKey}`);
           const cachedData = cache.get(cacheKey);
           if (cachedData) {
             // Support both old format (direct data) and new format (with data/etag)
             return cachedData.data !== undefined ? cachedData.data : cachedData;
           }
+          // If no cached data, this is an error condition
           throw new Error('304 Not Modified but no cached data available');
         }
         
