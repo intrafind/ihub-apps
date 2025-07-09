@@ -168,15 +168,12 @@ class ConfigCache {
   /**
    * Get apps configuration
    */
-  getApps() {
+  getApps(includeDisabled = false) {
+    if (includeDisabled) {
+      // Load all apps including disabled ones, bypassing cache
+      return loadAllApps(includeDisabled);
+    }
     return this.get('config/apps.json');
-  }
-
-  /**
-   * Get all apps including disabled ones (for admin purposes)
-   */
-  getAllAppsIncludingDisabled() {
-    return loadAllAppsIncludingDisabled();
   }
 
   /**

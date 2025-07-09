@@ -93,7 +93,7 @@ export function loadAppsFromLegacyFile() {
  * Individual files take precedence over legacy apps.json
  * @returns {Array} Array of enabled app objects, sorted by order
  */
-export function loadAllApps() {
+export function loadAllApps(includeDisabled = false) {
     const individualApps = loadAppsFromFiles();
     const legacyApps = loadAppsFromLegacyFile();
     
@@ -112,7 +112,7 @@ export function loadAllApps() {
     
     // Convert map to array and filter enabled apps
     const allApps = Array.from(appsMap.values());
-    const enabledApps = allApps.filter(app => app.enabled === true);
+    const enabledApps = allApps.filter(app => app.enabled === true || includeDisabled);
     
     // Sort by order field (apps without order go to the end)
     enabledApps.sort((a, b) => {
@@ -121,41 +121,7 @@ export function loadAllApps() {
         return orderA - orderB;
     });
     
-    console.log(`🎯 Total apps loaded: ${allApps.length}, Enabled: ${enabledApps.length}, Disabled: ${allApps.length - enabledApps.length}`);
+    console.log(`🎯 Total apps loaded: ${allApps.length}, Enabled: ${enabledApps.length}, Disabled: ${allApps.length - enabledApps.length}, Include Disabled: ${includeDisabled}`);
     
     return enabledApps;
-}
-
-/**
- * Load all apps including disabled ones (for admin purposes)
- * @returns {Array} Array of all app objects, sorted by order
- */
-export function loadAllAppsIncludingDisabled() {
-    const individualApps = loadAppsFromFiles();
-    const legacyApps = loadAppsFromLegacyFile();
-    
-    // Create a map to track apps by ID
-    const appsMap = new Map();
-    
-    // Add legacy apps first
-    legacyApps.forEach(app => {
-        appsMap.set(app.id, app);
-    });
-    
-    // Individual files override legacy apps
-    individualApps.forEach(app => {
-        appsMap.set(app.id, app);
-    });
-    
-    // Convert map to array
-    const allApps = Array.from(appsMap.values());
-    
-    // Sort by order field (apps without order go to the end)
-    allApps.sort((a, b) => {
-        const orderA = a.order ?? 999;
-        const orderB = b.order ?? 999;
-        return orderA - orderB;
-    });
-    
-    return allApps;
 }

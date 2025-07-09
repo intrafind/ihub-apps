@@ -350,15 +350,6 @@ const AdminAppsPage = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/admin/apps/${app.id}/test`);
-                            }}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            {t('admin.apps.actions.test', 'Test')}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
                               toggleApp(app.id);
                             }}
                             className={`${
