@@ -3,18 +3,21 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../components/Icon';
 import AdminNavigation from '../components/AdminNavigation';
+import DynamicLanguageEditor from '../components/DynamicLanguageEditor';
+import SearchableAppsSelector from '../components/SearchableAppsSelector';
 
 const AdminPromptEditPage = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { promptId } = useParams();
   const navigate = useNavigate();
   const isNewPrompt = promptId === 'new';
+  const currentLanguage = i18n.language;
   
   const [prompt, setPrompt] = useState({
     id: '',
-    name: { en: '', de: '' },
-    description: { en: '', de: '' },
-    prompt: { en: '', de: '' },
+    name: { en: '' },
+    description: { en: '' },
+    prompt: { en: '' },
     icon: 'clipboard',
     enabled: true,
     order: undefined,
@@ -60,9 +63,9 @@ const AdminPromptEditPage = () => {
       // Ensure proper structure for editing
       const promptData = {
         ...data,
-        name: typeof data.name === 'string' ? { en: data.name, de: data.name } : data.name || { en: '', de: '' },
-        description: typeof data.description === 'string' ? { en: data.description, de: data.description } : data.description || { en: '', de: '' },
-        prompt: typeof data.prompt === 'string' ? { en: data.prompt, de: data.prompt } : data.prompt || { en: '', de: '' },
+        name: data.name || { en: '' },
+        description: data.description || { en: '' },
+        prompt: data.prompt || { en: '' },
         variables: data.variables || [],
         appId: data.appId || '',
         order: data.order,
@@ -138,7 +141,7 @@ const AdminPromptEditPage = () => {
       ...prev,
       variables: [...prev.variables, {
         name: '',
-        label: { en: '', de: '' },
+        label: { en: '' },
         type: 'string',
         required: false,
         defaultValue: ''
@@ -242,6 +245,7 @@ const AdminPromptEditPage = () => {
                     disabled={!isNewPrompt}
                     className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100"
                     placeholder="unique-prompt-id"
+                    autoComplete="off"
                   />
                   <p className="mt-2 text-sm text-gray-500">
                     {t('admin.prompts.edit.idDesc', 'Unique identifier using lowercase letters, numbers, and hyphens')}
@@ -260,6 +264,7 @@ const AdminPromptEditPage = () => {
                     onChange={(e) => setPrompt(prev => ({ ...prev, icon: e.target.value }))}
                     className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     placeholder="clipboard"
+                    autoComplete="off"
                   />
                   <p className="mt-2 text-sm text-gray-500">
                     {t('admin.prompts.edit.iconDesc', 'Heroicon name for the prompt')}
@@ -278,6 +283,7 @@ const AdminPromptEditPage = () => {
                     onChange={(e) => setPrompt(prev => ({ ...prev, order: e.target.value ? parseInt(e.target.value) : undefined }))}
                     className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     placeholder="0"
+                    autoComplete="off"
                   />
                   <p className="mt-2 text-sm text-gray-500">
                     {t('admin.prompts.edit.orderDesc', 'Display order in the prompts list')}
@@ -289,19 +295,15 @@ const AdminPromptEditPage = () => {
                   <label htmlFor="appId" className="block text-sm font-medium text-gray-700">
                     {t('admin.prompts.edit.appId', 'Linked App')}
                   </label>
-                  <select
-                    id="appId"
-                    value={prompt.appId || ''}
-                    onChange={(e) => setPrompt(prev => ({ ...prev, appId: e.target.value }))}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  >
-                    <option value="">{t('admin.prompts.edit.noApp', 'No linked app')}</option>
-                    {apps.map(app => (
-                      <option key={app.id} value={app.id}>
-                        {typeof app.name === 'object' ? app.name.en : app.name} ({app.id})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="mt-1">
+                    <SearchableAppsSelector
+                      apps={apps}
+                      value={prompt.appId}
+                      onChange={(value) => setPrompt(prev => ({ ...prev, appId: value }))}
+                      placeholder={t('admin.prompts.edit.noApp', 'No linked app')}
+                      currentLanguage={currentLanguage}
+                    />
+                  </div>
                   <p className="mt-2 text-sm text-gray-500">
                     {t('admin.prompts.edit.appIdDesc', 'Link this prompt to a specific app')}
                   </p>
@@ -343,119 +345,45 @@ const AdminPromptEditPage = () => {
             </div>
             <div className="mt-5 md:col-span-2 md:mt-0">
               <div className="space-y-6">
-                {/* English Content */}
-                <div>
-                  <h4 className="text-md font-medium text-gray-900 mb-4">
-                    {t('admin.prompts.edit.english', 'English')}
-                  </h4>
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="name-en" className="block text-sm font-medium text-gray-700">
-                        {t('admin.prompts.edit.name', 'Name')} <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        id="name-en"
-                        value={prompt.name.en}
-                        onChange={(e) => setPrompt(prev => ({ 
-                          ...prev, 
-                          name: { ...prev.name, en: e.target.value } 
-                        }))}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="Prompt name"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="description-en" className="block text-sm font-medium text-gray-700">
-                        {t('admin.prompts.edit.description', 'Description')}
-                      </label>
-                      <textarea
-                        id="description-en"
-                        rows={2}
-                        value={prompt.description.en}
-                        onChange={(e) => setPrompt(prev => ({ 
-                          ...prev, 
-                          description: { ...prev.description, en: e.target.value } 
-                        }))}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="Brief description of the prompt"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="prompt-en" className="block text-sm font-medium text-gray-700">
-                        {t('admin.prompts.edit.prompt', 'Prompt')} <span className="text-red-500">*</span>
-                      </label>
-                      <textarea
-                        id="prompt-en"
-                        rows={4}
-                        value={prompt.prompt.en}
-                        onChange={(e) => setPrompt(prev => ({ 
-                          ...prev, 
-                          prompt: { ...prev.prompt, en: e.target.value } 
-                        }))}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="The actual prompt text. Use [content] for user input placeholder."
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* German Content */}
-                <div>
-                  <h4 className="text-md font-medium text-gray-900 mb-4">
-                    {t('admin.prompts.edit.german', 'German')}
-                  </h4>
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="name-de" className="block text-sm font-medium text-gray-700">
-                        {t('admin.prompts.edit.name', 'Name')}
-                      </label>
-                      <input
-                        type="text"
-                        id="name-de"
-                        value={prompt.name.de}
-                        onChange={(e) => setPrompt(prev => ({ 
-                          ...prev, 
-                          name: { ...prev.name, de: e.target.value } 
-                        }))}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="Prompt name"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="description-de" className="block text-sm font-medium text-gray-700">
-                        {t('admin.prompts.edit.description', 'Description')}
-                      </label>
-                      <textarea
-                        id="description-de"
-                        rows={2}
-                        value={prompt.description.de}
-                        onChange={(e) => setPrompt(prev => ({ 
-                          ...prev, 
-                          description: { ...prev.description, de: e.target.value } 
-                        }))}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="Brief description of the prompt"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="prompt-de" className="block text-sm font-medium text-gray-700">
-                        {t('admin.prompts.edit.prompt', 'Prompt')}
-                      </label>
-                      <textarea
-                        id="prompt-de"
-                        rows={4}
-                        value={prompt.prompt.de}
-                        onChange={(e) => setPrompt(prev => ({ 
-                          ...prev, 
-                          prompt: { ...prev.prompt, de: e.target.value } 
-                        }))}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        placeholder="The actual prompt text. Use [content] for user input placeholder."
-                      />
-                    </div>
-                  </div>
-                </div>
+                <DynamicLanguageEditor
+                  label={t('admin.prompts.edit.name', 'Name')}
+                  value={prompt.name}
+                  onChange={(value) => setPrompt(prev => ({ ...prev, name: value }))}
+                  required={true}
+                  placeholder={{
+                    en: 'Prompt name',
+                    de: 'Prompt Name',
+                    es: 'Nombre del prompt',
+                    fr: 'Nom du prompt'
+                  }}
+                />
+                
+                <DynamicLanguageEditor
+                  label={t('admin.prompts.edit.description', 'Description')}
+                  value={prompt.description}
+                  onChange={(value) => setPrompt(prev => ({ ...prev, description: value }))}
+                  type="textarea"
+                  placeholder={{
+                    en: 'Brief description of the prompt',
+                    de: 'Kurze Beschreibung des Prompts',
+                    es: 'Breve descripción del prompt',
+                    fr: 'Brève description du prompt'
+                  }}
+                />
+                
+                <DynamicLanguageEditor
+                  label={t('admin.prompts.edit.prompt', 'Prompt')}
+                  value={prompt.prompt}
+                  onChange={(value) => setPrompt(prev => ({ ...prev, prompt: value }))}
+                  required={true}
+                  type="textarea"
+                  placeholder={{
+                    en: 'The actual prompt text. Use {{variableName}} for variables.',
+                    de: 'Der eigentliche Prompt-Text. Verwenden Sie {{variableName}} für Variablen.',
+                    es: 'El texto del prompt real. Use {{variableName}} para variables.',
+                    fr: 'Le texte du prompt réel. Utilisez {{variableName}} pour les variables.'
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -499,6 +427,7 @@ const AdminPromptEditPage = () => {
                           onChange={(e) => handleVariableChange(index, 'name', e.target.value)}
                           className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           placeholder="variable_name"
+                          autoComplete="off"
                         />
                       </div>
                       <div>
@@ -515,16 +444,17 @@ const AdminPromptEditPage = () => {
                           <option value="boolean">Boolean</option>
                         </select>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          {t('admin.prompts.edit.variableLabel', 'Label (EN)')}
-                        </label>
-                        <input
-                          type="text"
-                          value={variable.label?.en || ''}
-                          onChange={(e) => handleVariableChange(index, 'label', { ...variable.label, en: e.target.value })}
-                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                          placeholder="Variable label"
+                      <div className="col-span-2">
+                        <DynamicLanguageEditor
+                          label={t('admin.prompts.edit.variableLabel', 'Label')}
+                          value={variable.label || { en: '' }}
+                          onChange={(value) => handleVariableChange(index, 'label', value)}
+                          placeholder={{
+                            en: 'Variable label',
+                            de: 'Variablen-Label',
+                            es: 'Etiqueta de variable',
+                            fr: 'Libellé de variable'
+                          }}
                         />
                       </div>
                       <div>
@@ -537,6 +467,7 @@ const AdminPromptEditPage = () => {
                           onChange={(e) => handleVariableChange(index, 'defaultValue', e.target.value)}
                           className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           placeholder="Default value"
+                          autoComplete="off"
                         />
                       </div>
                     </div>

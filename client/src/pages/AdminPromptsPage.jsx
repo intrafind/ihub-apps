@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import Icon from '../components/Icon';
 import AdminNavigation from '../components/AdminNavigation';
+import PromptDetailsPopup from '../components/PromptDetailsPopup';
 
 const AdminPromptsPage = () => {
   const { t, i18n } = useTranslation();
@@ -15,6 +16,7 @@ const AdminPromptsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
   const [selectedPrompt, setSelectedPrompt] = useState(null);
+  const [showPromptDetails, setShowPromptDetails] = useState(false);
 
   useEffect(() => {
     loadPrompts();
@@ -83,6 +85,11 @@ const AdminPromptsPage = () => {
       console.error('Error deleting prompt:', err);
       alert(`Error: ${err.message}`);
     }
+  };
+
+  const handlePromptClick = (prompt) => {
+    setSelectedPrompt(prompt);
+    setShowPromptDetails(true);
   };
 
   const filteredPrompts = prompts.filter(prompt => {
@@ -225,7 +232,7 @@ const AdminPromptsPage = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {sortedPrompts.map((prompt) => (
-                    <tr key={prompt.id} className="hover:bg-gray-50">
+                    <tr key={prompt.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handlePromptClick(prompt)}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-8 w-8">
@@ -270,24 +277,36 @@ const AdminPromptsPage = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end space-x-2">
                           <button
-                            onClick={() => navigate(`/admin/prompts/${prompt.id}`)}
-                            className="text-indigo-600 hover:text-indigo-900"
-                          >
-                            <Icon name="pencil" className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => togglePrompt(prompt.id)}
-                            className={`${
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePrompt(prompt.id);
+                            }}
+                            className={`p-2 rounded-full ${
                               prompt.enabled !== false
-                                ? 'text-yellow-600 hover:text-yellow-900'
-                                : 'text-green-600 hover:text-green-900'
+                                ? 'text-red-600 hover:bg-red-50'
+                                : 'text-green-600 hover:bg-green-50'
                             }`}
+                            title={prompt.enabled !== false ? t('admin.prompts.disable', 'Disable') : t('admin.prompts.enable', 'Enable')}
                           >
                             <Icon name={prompt.enabled !== false ? 'eye-slash' : 'eye'} className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => deletePrompt(prompt.id)}
-                            className="text-red-600 hover:text-red-900"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/admin/prompts/${prompt.id}`);
+                            }}
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                            title={t('admin.prompts.edit', 'Edit')}
+                          >
+                            <Icon name="pencil" className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deletePrompt(prompt.id);
+                            }}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                            title={t('admin.prompts.delete', 'Delete')}
                           >
                             <Icon name="trash" className="h-4 w-4" />
                           </button>
@@ -322,6 +341,13 @@ const AdminPromptsPage = () => {
           </div>
         </div>
       )}
+      
+      {/* Prompt Details Popup */}
+      <PromptDetailsPopup
+        prompt={selectedPrompt}
+        isOpen={showPromptDetails}
+        onClose={() => setShowPromptDetails(false)}
+      />
       </div>
     </div>
   );
