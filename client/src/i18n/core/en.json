@@ -117,6 +117,29 @@
       "assertive": "Provide confident and strong responses, taking a clear stance."
     }
   },
+  "error": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred.",
+    "errorMessage": "Error details:",
+    "tryAgain": "Try Again",
+    "backToHome": "Back to Home",
+    "unauthorized": {
+      "title": "Unauthorized",
+      "message": "You are not authorized to access this page. Please log in."
+    },
+    "forbidden": {
+      "title": "Forbidden",
+      "message": "You do not have permission to access this page."
+    },
+    "serverError": {
+      "title": "Server Error",
+      "message": "The server encountered an error. Please try again later."
+    },
+    "notFound": {
+      "title": "Page Not Found",
+      "message": "The page you are looking for might have been removed or is temporarily unavailable."
+    }
+  },
   "disclaimer": {
     "title": "Disclaimer",
     "accept": "I Understand",
