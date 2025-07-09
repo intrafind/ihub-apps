@@ -14,7 +14,11 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: API_REQUEST_TIMEOUT
+  timeout: API_REQUEST_TIMEOUT,
+  // Configure axios to not treat 304 as an error
+  validateStatus: function (status) {
+    return (status >= 200 && status < 300) || status === 304;
+  }
 });
 
 // Add request interceptor to include session ID header
