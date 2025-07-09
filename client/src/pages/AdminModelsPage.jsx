@@ -64,9 +64,17 @@ const AdminModelsPage = () => {
     }
   };
 
-  const showModelDetailsPopup = (model) => {
+  const handleModelClick = (model) => {
     setSelectedModel(model);
     setShowModelDetails(true);
+  };
+
+  const closeTestResult = (modelId) => {
+    setTestResults(prev => {
+      const newResults = { ...prev };
+      delete newResults[modelId];
+      return newResults;
+    });
   };
 
   const testModel = async (modelId) => {
@@ -81,6 +89,11 @@ const AdminModelsPage = () => {
         ...prev,
         [modelId]: result
       }));
+      
+      // Auto-disappear after 5 seconds
+      setTimeout(() => {
+        closeTestResult(modelId);
+      }, 5000);
     } catch (err) {
       console.error('Model test error:', err);
       let errorMessage = 'Unknown error occurred';
@@ -105,6 +118,11 @@ const AdminModelsPage = () => {
           error: errorMessage
         }
       }));
+      
+      // Auto-disappear after 5 seconds
+      setTimeout(() => {
+        closeTestResult(modelId);
+      }, 5000);
     } finally {
       setTestingModel(null);
     }
@@ -281,7 +299,7 @@ const AdminModelsPage = () => {
           <div className="p-6">
             <div className="space-y-4">
               {filteredModels.map((model) => (
-                <div key={model.id} className="border border-gray-200 rounded-lg p-4">
+                <div key={model.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer" onClick={() => handleModelClick(model)}>
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
@@ -311,13 +329,10 @@ const AdminModelsPage = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => showModelDetailsPopup(model)}
-                        className="px-3 py-1 bg-indigo-100 text-indigo-700 text-sm rounded hover:bg-indigo-200"
-                      >
-                        View
-                      </button>
-                      <button
-                        onClick={() => testModel(model.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          testModel(model.id);
+                        }}
                         disabled={testingModel === model.id}
                         className={`px-3 py-1 text-sm rounded ${
                           testingModel === model.id
@@ -328,7 +343,10 @@ const AdminModelsPage = () => {
                         {testingModel === model.id ? 'Testing...' : 'Test'}
                       </button>
                       <button
-                        onClick={() => toggleModel(model.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleModel(model.id);
+                        }}
                         className={`px-3 py-1 text-sm rounded ${
                           model.enabled
                             ? 'bg-red-100 text-red-700 hover:bg-red-200'
@@ -338,13 +356,19 @@ const AdminModelsPage = () => {
                         {model.enabled ? 'Disable' : 'Enable'}
                       </button>
                       <button
-                        onClick={() => navigate(`/admin/models/${model.id}`)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/admin/models/${model.id}`);
+                        }}
                         className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded hover:bg-gray-200"
                       >
                         Edit
                       </button>
                       <button
-                        onClick={() => deleteModel(model.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteModel(model.id);
+                        }}
                         className="px-3 py-1 bg-red-100 text-red-700 text-sm rounded hover:bg-red-200"
                       >
                         Delete
@@ -359,18 +383,29 @@ const AdminModelsPage = () => {
                         ? 'bg-green-50 border border-green-200' 
                         : 'bg-red-50 border border-red-200'
                     }`}>
-                      <div className="flex items-center gap-2">
-                        <Icon 
-                          name={testResults[model.id].success ? "check-circle" : "x-circle"} 
-                          className={`w-4 h-4 ${
-                            testResults[model.id].success ? 'text-green-600' : 'text-red-600'
-                          }`} 
-                        />
-                        <span className={`text-sm font-medium ${
-                          testResults[model.id].success ? 'text-green-800' : 'text-red-800'
-                        }`}>
-                          {testResults[model.id].message}
-                        </span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Icon 
+                            name={testResults[model.id].success ? "check-circle" : "x-circle"} 
+                            className={`w-4 h-4 ${
+                              testResults[model.id].success ? 'text-green-600' : 'text-red-600'
+                            }`} 
+                          />
+                          <span className={`text-sm font-medium ${
+                            testResults[model.id].success ? 'text-green-800' : 'text-red-800'
+                          }`}>
+                            {testResults[model.id].message}
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            closeTestResult(model.id);
+                          }}
+                          className="p-1 hover:bg-gray-200 rounded"
+                        >
+                          <Icon name="x" className="w-4 h-4 text-gray-500" />
+                        </button>
                       </div>
                       {testResults[model.id].response && (
                         <div className="mt-2 text-sm text-gray-600">
