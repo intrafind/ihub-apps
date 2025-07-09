@@ -58,14 +58,16 @@ const AppConfigForm = ({
             onChange={(e) => onModelChange(e.target.value)}
             className="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
           >
-            {filteredModels.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-                {t(`models.descriptions.${model.id}`) !== `models.descriptions.${model.id}` ? 
-                  ` - ${t(`models.descriptions.${model.id}`)}` : 
-                  model.description ? ` - ${model.description}` : ''}
-              </option>
-            ))}
+            {filteredModels.map((model) => {
+              const name = getLocalizedContent(model.name, currentLanguage);
+              const desc = getLocalizedContent(model.description, currentLanguage);
+              return (
+                <option key={model.id} value={model.id}>
+                  {name}
+                  {desc ? ` - ${desc}` : ''}
+                </option>
+              );
+            })}
           </select>
         </div>
       )}

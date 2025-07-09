@@ -1,10 +1,15 @@
 {
   "id": "gemini-1.5-flash",
   "modelId": "gemini-1.5-flash",
-  "name": "Gemini",
-  "description": "Google's versatile model optimized for text and code tasks",
+  "name": {
+    "en": "Gemini",
+    "de": "Gemini"
+  },
+  "description": {
+    "en": "Google's versatile model optimized for text and code tasks",
+    "de": "Googles vielseitiges Modell, optimiert f\u00fcr Text- und Code-Aufgaben"
+  },
   "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent",
   "provider": "google",
   "tokenLimit": 32768,
-  "supportsTools": true
-}
+  "supportsTools": true}

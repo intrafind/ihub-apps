@@ -150,8 +150,10 @@ const AdminModelsPage = () => {
   };
 
   const filteredModels = models.filter(model => {
-    const matchesSearch = model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         model.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const localizedName = getLocalizedContent(model.name, currentLanguage).toLowerCase();
+    const localizedDescription = getLocalizedContent(model.description, currentLanguage).toLowerCase();
+    const matchesSearch = localizedName.includes(searchTerm.toLowerCase()) ||
+                         localizedDescription.includes(searchTerm.toLowerCase()) ||
                          model.provider.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesFilter = filterEnabled === 'all' || 
@@ -329,7 +331,9 @@ const AdminModelsPage = () => {
                         {t('admin.models.defaultModel')}
                       </dt>
                       <dd className="text-lg font-medium text-gray-900">
-                        {defaultModel?.name || 'None'}
+                        {defaultModel
+                          ? getLocalizedContent(defaultModel.name, currentLanguage)
+                          : 'None'}
                       </dd>
                     </dl>
                   </div>
@@ -376,14 +380,14 @@ const AdminModelsPage = () => {
                                 </div>
                                 <div className="ml-4">
                                   <div className="flex items-center">
-                                    <div className="text-sm font-medium text-gray-900">{model.name}</div>
+                                  <div className="text-sm font-medium text-gray-900">{getLocalizedContent(model.name, currentLanguage)}</div>
                                     {model.default && (
                                       <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                         {t('admin.models.status.default')}
                                       </span>
                                     )}
                                   </div>
-                                  <div className="text-sm text-gray-500">{model.description}</div>
+                                  <div className="text-sm text-gray-500">{getLocalizedContent(model.description, currentLanguage)}</div>
                                   <div className="text-xs text-gray-400">{model.id}</div>
                                 </div>
                               </div>
@@ -483,14 +487,14 @@ const AdminModelsPage = () => {
                         </div>
                         <div className="ml-4 flex-1">
                           <div className="flex items-center flex-wrap gap-2">
-                            <div className="text-sm font-medium text-gray-900">{model.name}</div>
+                            <div className="text-sm font-medium text-gray-900">{getLocalizedContent(model.name, currentLanguage)}</div>
                             {model.default && (
                               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                 {t('admin.models.status.default')}
                               </span>
                             )}
                           </div>
-                          <div className="text-sm text-gray-500 mt-1">{model.description}</div>
+                          <div className="text-sm text-gray-500 mt-1">{getLocalizedContent(model.description, currentLanguage)}</div>
                           <div className="flex items-center gap-2 mt-2">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                               model.enabled 
