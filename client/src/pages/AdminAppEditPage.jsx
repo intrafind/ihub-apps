@@ -52,7 +52,45 @@ const AdminAppEditPage = () => {
         messagePlaceholder: { en: '' },
         prompt: { en: '' },
         variables: [],
-        starterPrompts: []
+        starterPrompts: [],
+        settings: {
+          enabled: true,
+          model: { enabled: true },
+          temperature: { enabled: true },
+          outputFormat: { enabled: true },
+          chatHistory: { enabled: true },
+          style: { enabled: true }
+        },
+        inputMode: {
+          type: 'multiline',
+          rows: 5,
+          microphone: {
+            enabled: true,
+            mode: 'manual',
+            showTranscript: true
+          }
+        },
+        imageUpload: {
+          enabled: false,
+          resizeImages: true
+        },
+        fileUpload: {
+          maxFileSizeMB: 5,
+          supportedTextFormats: [
+            'text/plain',
+            'text/markdown',
+            'text/csv',
+            'application/json',
+            'text/html',
+            'text/css',
+            'text/javascript',
+            'application/javascript',
+            'text/xml'
+          ],
+          supportedPdfFormats: [
+            'application/pdf'
+          ]
+        }
       });
       setLoading(false);
     } else {
@@ -68,7 +106,51 @@ const AdminAppEditPage = () => {
         throw new Error('Failed to load app');
       }
       const data = await response.json();
-      setApp(data);
+      
+      // Ensure all configuration sections exist with defaults
+      const appWithDefaults = {
+        ...data,
+        settings: data.settings || {
+          enabled: true,
+          model: { enabled: true },
+          temperature: { enabled: true },
+          outputFormat: { enabled: true },
+          chatHistory: { enabled: true },
+          style: { enabled: true }
+        },
+        inputMode: data.inputMode || {
+          type: 'multiline',
+          rows: 5,
+          microphone: {
+            enabled: true,
+            mode: 'manual',
+            showTranscript: true
+          }
+        },
+        imageUpload: data.imageUpload || {
+          enabled: false,
+          resizeImages: true
+        },
+        fileUpload: data.fileUpload || {
+          maxFileSizeMB: 5,
+          supportedTextFormats: [
+            'text/plain',
+            'text/markdown',
+            'text/csv',
+            'application/json',
+            'text/html',
+            'text/css',
+            'text/javascript',
+            'application/javascript',
+            'text/xml'
+          ],
+          supportedPdfFormats: [
+            'application/pdf'
+          ]
+        }
+      };
+      
+      setApp(appWithDefaults);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -133,6 +215,47 @@ const AdminAppEditPage = () => {
     }));
   };
 
+  const handleVariablePredefinedValueChange = (variableIndex, valueIndex, field, value) => {
+    setApp(prev => ({
+      ...prev,
+      variables: prev.variables.map((variable, i) => 
+        i === variableIndex ? {
+          ...variable,
+          predefinedValues: variable.predefinedValues.map((predefinedValue, j) => 
+            j === valueIndex ? { ...predefinedValue, [field]: value } : predefinedValue
+          )
+        } : variable
+      )
+    }));
+  };
+
+  const addPredefinedValue = (variableIndex) => {
+    setApp(prev => ({
+      ...prev,
+      variables: prev.variables.map((variable, i) => 
+        i === variableIndex ? {
+          ...variable,
+          predefinedValues: [...(variable.predefinedValues || []), {
+            label: { en: '' },
+            value: ''
+          }]
+        } : variable
+      )
+    }));
+  };
+
+  const removePredefinedValue = (variableIndex, valueIndex) => {
+    setApp(prev => ({
+      ...prev,
+      variables: prev.variables.map((variable, i) => 
+        i === variableIndex ? {
+          ...variable,
+          predefinedValues: variable.predefinedValues.filter((_, j) => j !== valueIndex)
+        } : variable
+      )
+    }));
+  };
+
   const addVariable = () => {
     setApp(prev => ({
       ...prev,
@@ -141,7 +264,8 @@ const AdminAppEditPage = () => {
         label: { en: '' },
         type: 'string',
         required: false,
-        defaultValue: { en: '' }
+        defaultValue: { en: '' },
+        predefinedValues: []
       }]
     }));
   };
@@ -551,6 +675,71 @@ const AdminAppEditPage = () => {
                         {t('admin.apps.edit.variableRequired', 'Required')}
                       </label>
                     </div>
+
+                    {/* Predefined Values Section */}
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                          {t('admin.apps.edit.predefinedValues', 'Predefined Values')}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => addPredefinedValue(index)}
+                          className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                        >
+                          <Icon name="plus-circle" className="w-3 h-3 mr-1" />
+                          {t('admin.apps.edit.addPredefinedValue', 'Add Option')}
+                        </button>
+                      </div>
+                      
+                      {variable.predefinedValues?.map((predefinedValue, valueIndex) => (
+                        <div key={valueIndex} className="bg-gray-50 rounded-md p-3 mb-2">
+                          <div className="flex items-start justify-between mb-2">
+                            <h5 className="text-xs font-medium text-gray-700">
+                              {t('admin.apps.edit.option', 'Option {{index}}', { index: valueIndex + 1 })}
+                            </h5>
+                            <button
+                              type="button"
+                              onClick={() => removePredefinedValue(index, valueIndex)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Icon name="x" className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                {t('admin.apps.edit.value', 'Value')}
+                              </label>
+                              <input
+                                type="text"
+                                value={predefinedValue.value}
+                                onChange={(e) => handleVariablePredefinedValueChange(index, valueIndex, 'value', e.target.value)}
+                                className="block w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                placeholder={t('admin.apps.edit.valuePlaceholder', 'Enter option value')}
+                              />
+                            </div>
+                            <div>
+                              <DynamicLanguageEditor
+                                label={t('admin.apps.edit.displayLabel', 'Display Label')}
+                                value={predefinedValue.label}
+                                onChange={(value) => handleVariablePredefinedValueChange(index, valueIndex, 'label', value)}
+                                placeholder={{
+                                  en: 'Enter display label in English',
+                                  de: 'Anzeigebezeichnung auf Deutsch eingeben'
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {(!variable.predefinedValues || variable.predefinedValues.length === 0) && (
+                        <div className="text-xs text-gray-500 italic">
+                          {t('admin.apps.edit.noPredefinedValues', 'No predefined values. Add options to create a dropdown selection.')}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
                 <button
@@ -626,6 +815,361 @@ const AdminAppEditPage = () => {
                   <Icon name="plus-circle" className="w-5 h-5 mr-2" />
                   {t('admin.apps.edit.addStarterPrompt', 'Add Starter Prompt')}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Settings Configuration */}
+        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                {t('admin.apps.edit.settingsConfig', 'Settings Configuration')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {t('admin.apps.edit.settingsConfigDesc', 'Configure which settings are available to users')}
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <div className="space-y-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={app.settings?.enabled}
+                    onChange={(e) => handleInputChange('settings', { ...app.settings, enabled: e.target.checked })}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 block text-sm text-gray-900">
+                    {t('admin.apps.edit.settingsEnabled', 'Settings Panel Enabled')}
+                  </label>
+                </div>
+                
+                {app.settings?.enabled && (
+                  <div className="ml-6 space-y-3">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.settings?.model?.enabled}
+                        onChange={(e) => handleInputChange('settings', { 
+                          ...app.settings, 
+                          model: { ...app.settings.model, enabled: e.target.checked }
+                        })}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-700">
+                        {t('admin.apps.edit.modelSelectionEnabled', 'Model Selection')}
+                      </label>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.settings?.temperature?.enabled}
+                        onChange={(e) => handleInputChange('settings', { 
+                          ...app.settings, 
+                          temperature: { ...app.settings.temperature, enabled: e.target.checked }
+                        })}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-700">
+                        {t('admin.apps.edit.temperatureEnabled', 'Temperature Control')}
+                      </label>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.settings?.outputFormat?.enabled}
+                        onChange={(e) => handleInputChange('settings', { 
+                          ...app.settings, 
+                          outputFormat: { ...app.settings.outputFormat, enabled: e.target.checked }
+                        })}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-700">
+                        {t('admin.apps.edit.outputFormatEnabled', 'Output Format Selection')}
+                      </label>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.settings?.chatHistory?.enabled}
+                        onChange={(e) => handleInputChange('settings', { 
+                          ...app.settings, 
+                          chatHistory: { ...app.settings.chatHistory, enabled: e.target.checked }
+                        })}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-700">
+                        {t('admin.apps.edit.chatHistoryEnabled', 'Chat History Control')}
+                      </label>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.settings?.style?.enabled}
+                        onChange={(e) => handleInputChange('settings', { 
+                          ...app.settings, 
+                          style: { ...app.settings.style, enabled: e.target.checked }
+                        })}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-700">
+                        {t('admin.apps.edit.styleEnabled', 'Style Selection')}
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Input Mode Configuration */}
+        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                {t('admin.apps.edit.inputMode', 'Input Mode')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {t('admin.apps.edit.inputModeDesc', 'Configure how users input text and audio')}
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('admin.apps.edit.inputType', 'Input Type')}
+                  </label>
+                  <select
+                    value={app.inputMode?.type}
+                    onChange={(e) => handleInputChange('inputMode', { ...app.inputMode, type: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="singleline">{t('admin.apps.edit.singleline', 'Single Line')}</option>
+                    <option value="multiline">{t('admin.apps.edit.multiline', 'Multi Line')}</option>
+                  </select>
+                </div>
+                
+                {app.inputMode?.type === 'multiline' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      {t('admin.apps.edit.rows', 'Rows')}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={app.inputMode?.rows}
+                      onChange={(e) => handleInputChange('inputMode', { ...app.inputMode, rows: parseInt(e.target.value) })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                )}
+                
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900 mb-3">
+                    {t('admin.apps.edit.microphoneConfig', 'Microphone Configuration')}
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.inputMode?.microphone?.enabled}
+                        onChange={(e) => handleInputChange('inputMode', { 
+                          ...app.inputMode, 
+                          microphone: { ...app.inputMode.microphone, enabled: e.target.checked }
+                        })}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-700">
+                        {t('admin.apps.edit.microphoneEnabled', 'Microphone Enabled')}
+                      </label>
+                    </div>
+                    
+                    {app.inputMode?.microphone?.enabled && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            {t('admin.apps.edit.microphoneMode', 'Microphone Mode')}
+                          </label>
+                          <select
+                            value={app.inputMode?.microphone?.mode}
+                            onChange={(e) => handleInputChange('inputMode', { 
+                              ...app.inputMode, 
+                              microphone: { ...app.inputMode.microphone, mode: e.target.value }
+                            })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          >
+                            <option value="manual">{t('admin.apps.edit.manualMode', 'Manual')}</option>
+                            <option value="auto">{t('admin.apps.edit.autoMode', 'Auto')}</option>
+                          </select>
+                        </div>
+                        
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={app.inputMode?.microphone?.showTranscript}
+                            onChange={(e) => handleInputChange('inputMode', { 
+                              ...app.inputMode, 
+                              microphone: { ...app.inputMode.microphone, showTranscript: e.target.checked }
+                            })}
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                          <label className="ml-2 block text-sm text-gray-700">
+                            {t('admin.apps.edit.showTranscript', 'Show Transcript')}
+                          </label>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Image Upload Configuration */}
+        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                {t('admin.apps.edit.imageUpload', 'Image Upload')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {t('admin.apps.edit.imageUploadDesc', 'Configure image upload functionality')}
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <div className="space-y-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={app.imageUpload?.enabled}
+                    onChange={(e) => handleInputChange('imageUpload', { ...app.imageUpload, enabled: e.target.checked })}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 block text-sm text-gray-900">
+                    {t('admin.apps.edit.imageUploadEnabled', 'Image Upload Enabled')}
+                  </label>
+                </div>
+                
+                {app.imageUpload?.enabled && (
+                  <div className="ml-6">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={app.imageUpload?.resizeImages}
+                        onChange={(e) => handleInputChange('imageUpload', { ...app.imageUpload, resizeImages: e.target.checked })}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-700">
+                        {t('admin.apps.edit.resizeImages', 'Resize Images')}
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* File Upload Configuration */}
+        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                {t('admin.apps.edit.fileUpload', 'File Upload')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {t('admin.apps.edit.fileUploadDesc', 'Configure file upload settings and supported formats')}
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('admin.apps.edit.maxFileSize', 'Max File Size (MB)')}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={app.fileUpload?.maxFileSizeMB}
+                    onChange={(e) => handleInputChange('fileUpload', { 
+                      ...app.fileUpload, 
+                      maxFileSizeMB: parseInt(e.target.value)
+                    })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('admin.apps.edit.supportedTextFormats', 'Supported Text Formats')}
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      'text/plain',
+                      'text/markdown',
+                      'text/csv',
+                      'application/json',
+                      'text/html',
+                      'text/css',
+                      'text/javascript',
+                      'application/javascript',
+                      'text/xml'
+                    ].map(format => (
+                      <div key={format} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={app.fileUpload?.supportedTextFormats?.includes(format)}
+                          onChange={(e) => {
+                            const formats = app.fileUpload?.supportedTextFormats || [];
+                            const newFormats = e.target.checked 
+                              ? [...formats, format]
+                              : formats.filter(f => f !== format);
+                            handleInputChange('fileUpload', { 
+                              ...app.fileUpload, 
+                              supportedTextFormats: newFormats
+                            });
+                          }}
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        />
+                        <label className="ml-2 block text-sm text-gray-700">
+                          {format}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('admin.apps.edit.supportedPdfFormats', 'Supported PDF Formats')}
+                  </label>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={app.fileUpload?.supportedPdfFormats?.includes('application/pdf')}
+                      onChange={(e) => {
+                        const formats = e.target.checked ? ['application/pdf'] : [];
+                        handleInputChange('fileUpload', { 
+                          ...app.fileUpload, 
+                          supportedPdfFormats: formats
+                        });
+                      }}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-700">
+                      application/pdf
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

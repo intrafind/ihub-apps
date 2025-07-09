@@ -185,5 +185,53 @@
       }
     }
   ],
-  "enabled": true
+  "enabled": true,
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": false
+    },
+    "temperature": {
+      "enabled": false
+    },
+    "outputFormat": {
+      "enabled": false
+    },
+    "chatHistory": {
+      "enabled": false
+    },
+    "style": {
+      "enabled": true
+    }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "imageUpload": {
+    "enabled": true,
+    "resizeImages": true
+  },
+  "fileUpload": {
+    "maxFileSizeMB": 5,
+    "supportedTextFormats": [
+      "text/plain",
+      "text/markdown",
+      "text/csv",
+      "application/json",
+      "text/html",
+      "text/css",
+      "text/javascript",
+      "application/javascript",
+      "text/xml"
+    ],
+    "supportedPdfFormats": [
+      "application/pdf"
+    ]
+  }
 }
