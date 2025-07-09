@@ -154,8 +154,8 @@ export default function registerAdminRoutes(app) {
       
       writeFileSync(appFilePath, JSON.stringify(updatedApp, null, 2));
       
-      // Refresh the cache
-      await configCache.refreshCacheEntry('config/apps.json');
+      // Refresh the apps cache
+      await configCache.refreshAppsCache();
       
       res.json({ message: 'App updated successfully', app: updatedApp });
     } catch (error) {
@@ -187,8 +187,8 @@ export default function registerAdminRoutes(app) {
       // Save the app to individual file
       writeFileSync(appFilePath, JSON.stringify(newApp, null, 2));
       
-      // Refresh the cache
-      await configCache.refreshCacheEntry('config/apps.json');
+      // Refresh the apps cache
+      await configCache.refreshAppsCache();
       
       res.json({ message: 'App created successfully', app: newApp });
     } catch (error) {
@@ -217,8 +217,8 @@ export default function registerAdminRoutes(app) {
       
       writeFileSync(appFilePath, JSON.stringify(app, null, 2));
       
-      // Refresh the cache
-      await configCache.refreshCacheEntry('config/apps.json');
+      // Refresh the apps cache
+      await configCache.refreshAppsCache();
       
       res.json({ 
         message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
@@ -245,8 +245,8 @@ export default function registerAdminRoutes(app) {
       // Delete the file
       require('fs').unlinkSync(appFilePath);
       
-      // Refresh the cache
-      await configCache.refreshCacheEntry('config/apps.json');
+      // Refresh the apps cache
+      await configCache.refreshAppsCache();
       
       res.json({ message: 'App deleted successfully' });
     } catch (error) {
