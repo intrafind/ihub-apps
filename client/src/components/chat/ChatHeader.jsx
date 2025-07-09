@@ -15,6 +15,7 @@ const ChatHeader = ({
   showClearButton = false,
   showConfigButton = true,
   showParametersButton = false,
+  showShareButton = false,
   showCanvasButton = false,
   showBackToChatButton = false,
   parametersVisible = false,
@@ -22,6 +23,7 @@ const ChatHeader = ({
   onToggleConfig,
   onToggleParameters,
   onToggleCanvas,
+  onShare,
   currentLanguage,
   isMobile = false
 }) => {
@@ -115,9 +117,9 @@ const ChatHeader = ({
               <span className="hidden sm:inline">{t('pages.appCanvas.backToChat', 'Back to Chat')}</span>
             </button>
           )}
-          {showCanvasButton && (
-            <button
-              onClick={onToggleCanvas}
+        {showCanvasButton && (
+          <button
+            onClick={onToggleCanvas}
               className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1 rounded flex items-center"
               title={t('pages.appChat.canvasMode', 'Canvas Mode')}
             >
@@ -158,10 +160,19 @@ const ChatHeader = ({
               <span className="hidden sm:inline">{t('settings.title')}</span>
             </button>
           )}
+          {showShareButton && (
+            <button
+              onClick={onShare}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
+              title={t('common.share')}
+            >
+              <Icon name="share" size="sm" className="sm:mr-1" />
+              <span className="hidden sm:inline">{t('common.share')}</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 };
-
 export default ChatHeader;

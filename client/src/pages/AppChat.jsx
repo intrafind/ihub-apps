@@ -17,6 +17,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import { useTranslation } from "react-i18next";
 import { getLocalizedContent } from "../utils/localizeContent";
 import Icon from "../components/Icon";
+import AppShareModal from "../components/AppShareModal";
 
 // Import our custom hooks and components
 import useAppChat from "../hooks/useAppChat";
@@ -129,6 +130,7 @@ const AppChat = () => {
   const [showConfig, setShowConfig] = useState(false);
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const { uiConfig } = useUIConfig();
 
   // Shared app settings hook
@@ -815,6 +817,8 @@ const AppChat = () => {
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}
         showParameters={showParameters}
+        onShare={() => setShowShare(true)}
+        showShareButton={true}
       />
 
       {app?.variables && app.variables.length > 0 && showParameters && (
@@ -1130,19 +1134,37 @@ const AppChat = () => {
           )}
         </div>
 
-        {app?.variables && app.variables.length > 0 && (
-          <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 rounded-lg flex-shrink-0">
-            <h3 className="font-medium mb-3">
-              {t("pages.appChat.inputParameters")}
-            </h3>
-            <InputVariables
-              variables={variables}
-              setVariables={setVariables}
-              localizedVariables={localizedVariables}
-            />
-          </div>
-        )}
+      {app?.variables && app.variables.length > 0 && (
+        <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 rounded-lg flex-shrink-0">
+          <h3 className="font-medium mb-3">
+            {t("pages.appChat.inputParameters")}
+          </h3>
+          <InputVariables
+            variables={variables}
+            setVariables={setVariables}
+            localizedVariables={localizedVariables}
+          />
+        </div>
+      )}
       </div>
+      {showShare && (
+        <AppShareModal
+          appId={appId}
+          path={window.location.pathname}
+          params={{
+            model: selectedModel,
+            style: selectedStyle,
+            outfmt: selectedOutputFormat,
+            temp: temperature,
+            history: sendChatHistory,
+            prefill: prefillMessage,
+            ...Object.fromEntries(
+              Object.entries(variables).map(([k, v]) => [`var_${k}`, v])
+            ),
+          }}
+          onClose={() => setShowShare(false)}
+        />
+      )}
     </div>
   );
 };

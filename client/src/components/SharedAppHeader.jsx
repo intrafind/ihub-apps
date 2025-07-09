@@ -38,7 +38,9 @@ const SharedAppHeader = ({
   
   // Chat-specific props
   onToggleParameters,
-  showParameters
+  showParameters,
+  onShare,
+  showShareButton = false
 }) => {
   const navigate = useNavigate();
 
@@ -93,6 +95,8 @@ const SharedAppHeader = ({
           currentLanguage={currentLanguage}
           isMobile={mode === 'chat' ? window.innerWidth < 768 : undefined}
           parametersVisible={showParameters}
+          onShare={onShare}
+          showShareButton={showShareButton}
         />
       </div>
 

@@ -13,6 +13,7 @@ import AdminUsageReports from './pages/AdminUsageReports';
 import AdminSystemPage from './pages/AdminSystemPage';
 import AdminAppsPage from './pages/AdminAppsPage';
 import AdminAppEditPage from './pages/AdminAppEditPage';
+import AdminShortLinks from './pages/AdminShortLinks';
 import AppProviders from './components/AppProviders';
 import { withErrorBoundary } from './components/ErrorBoundary';
 import useSessionManagement from './hooks/useSessionManagement';
@@ -29,6 +30,7 @@ const SafeAdminUsage = withErrorBoundary(AdminUsageReports);
 const SafeAdminSystem = withErrorBoundary(AdminSystemPage);
 const SafeAdminApps = withErrorBoundary(AdminAppsPage);
 const SafeAdminAppEdit = withErrorBoundary(AdminAppEditPage);
+const SafeAdminShortLinks = withErrorBoundary(AdminShortLinks);
 const SafePromptsList = withErrorBoundary(PromptsList);
 
 function App() {
@@ -59,6 +61,7 @@ function App() {
             <Route path="admin/system" element={<SafeAdminSystem />} />
             <Route path="admin/apps" element={<SafeAdminApps />} />
             <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
+            <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
@@ -66,5 +69,4 @@ function App() {
     </AppProviders>
   );
 }
-
 export default App;

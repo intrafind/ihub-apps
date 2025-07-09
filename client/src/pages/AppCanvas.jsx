@@ -15,6 +15,7 @@ import CanvasChatPanel from '../components/canvas/CanvasChatPanel';
 import CanvasEditor from '../components/canvas/CanvasEditor';
 import FloatingToolbox from '../components/canvas/FloatingToolbox';
 import CanvasContentConfirmationModal from '../components/canvas/CanvasContentConfirmationModal';
+import AppShareModal from '../components/AppShareModal';
 
 // Import hooks and utilities
 import useAppChat from '../hooks/useAppChat';
@@ -85,6 +86,7 @@ const AppCanvas = () => {
   
   // Configuration panel states
   const [showConfig, setShowConfig] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   
   // Content confirmation modal state
   const [showContentModal, setShowContentModal] = useState(false);
@@ -560,6 +562,8 @@ const AppCanvas = () => {
         onTemperatureChange={setTemperature}
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
+        onShare={() => setShowShare(true)}
+        showShareButton={true}
       />
 
       {/* Main Content Area */}
@@ -626,6 +630,20 @@ const AppCanvas = () => {
         onAppend={handleContentModalAppend}
         onCancel={handleContentModalCancel}
       />
+      {showShare && (
+        <AppShareModal
+          appId={appId}
+          path={window.location.pathname}
+          params={{
+            model: selectedModel,
+            style: selectedStyle,
+            outfmt: selectedOutputFormat,
+            temp: temperature,
+            history: sendChatHistory,
+          }}
+          onClose={() => setShowShare(false)}
+        />
+      )}
     </div>
   );
 };

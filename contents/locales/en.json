@@ -36,7 +36,12 @@
       "viewAll": "View all prompts"
     },
     "magicPrompt": "Magic prompt",
-    "undo": "Undo"
+    "undo": "Undo",
+    "share": "Share",
+    "shortCode": "Short code",
+    "includeSettings": "Include settings & variables",
+    "codeTaken": "Code taken",
+    "codeAvailable": "Code available"
   },
   "pages": {
     "home": {
