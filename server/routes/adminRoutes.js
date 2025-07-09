@@ -108,7 +108,7 @@ export default function registerAdminRoutes(app) {
   // Apps management endpoints
   app.get('/api/admin/apps', async (req, res) => {
     try {
-      const apps = configCache.getApps(includeDisabled = true);
+      const apps = configCache.getApps(true);
       res.json(apps);
     } catch (error) {
       console.error('Error fetching all apps:', error);
@@ -119,7 +119,7 @@ export default function registerAdminRoutes(app) {
   app.get('/api/admin/apps/:appId', async (req, res) => {
     try {
       const { appId } = req.params;
-      const apps = configCache.getApps(includeDisabled = true);
+      const apps = configCache.getApps(true);
       const app = apps.find(a => a.id === appId);
       
       if (!app) {
@@ -200,7 +200,7 @@ export default function registerAdminRoutes(app) {
   app.post('/api/admin/apps/:appId/toggle', async (req, res) => {
     try {
       const { appId } = req.params;
-      const apps = configCache.getApps(includeDisabled = true);
+      const apps = configCache.getApps(true);
       const app = apps.find(a => a.id === appId);
       
       if (!app) {
