@@ -1,6 +1,7 @@
 [
   {
     "id": "summarize",
+    "category": "summarization",
     "name": { "en": "Summarize Text", "de": "Text zusammenfassen" },
     "description": { "en": "Quickly summarize a block of text.", "de": "Einen Textabschnitt schnell zusammenfassen." },
     "icon": "sparkles",
@@ -8,6 +9,7 @@
   },
   {
     "id": "translate-de",
+    "category": "translation",
     "name": { "en": "Translate to German", "de": "Ins Deutsche übersetzen" },
     "description": { "en": "Translate text into German.", "de": "Text ins Deutsche übersetzen." },
     "icon": "globe",
@@ -15,6 +17,7 @@
   },
   {
     "id": "faq-question",
+    "category": "qa",
     "name": { "en": "Ask FAQ", "de": "FAQ fragen" },
     "description": { "en": "Answer questions using the FAQ bot.", "de": "Fragen mit dem FAQ-Bot beantworten." },
     "icon": "question-mark-circle",

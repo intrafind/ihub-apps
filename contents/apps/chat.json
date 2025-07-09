@@ -1,6 +1,7 @@
 {
   "id": "chat",
   "order": 2,
+  "category": "utility",
   "name": {
     "en": "AI Chat",
     "de": "KI-Chat"
