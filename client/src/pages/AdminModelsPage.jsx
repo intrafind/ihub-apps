@@ -331,7 +331,9 @@ const AdminModelsPage = () => {
                         {t('admin.models.defaultModel')}
                       </dt>
                       <dd className="text-lg font-medium text-gray-900">
-                        {defaultModel?.name || 'None'}
+                        {defaultModel
+                          ? getLocalizedContent(defaultModel.name, currentLanguage)
+                          : 'None'}
                       </dd>
                     </dl>
                   </div>
