@@ -52,6 +52,7 @@ const AdminAppEditPage = () => {
         prompt: { en: '' },
         variables: [],
         starterPrompts: [],
+        tools: [],
         greeting: {
           en: {
             title: '👋 Hello!',
@@ -136,6 +137,7 @@ const AdminAppEditPage = () => {
       // Ensure all configuration sections exist with defaults
       const appWithDefaults = {
         ...data,
+        tools: data.tools || [],
         greeting: data.greeting || {
           en: {
             title: '👋 Hello!',
@@ -665,6 +667,59 @@ const AdminAppEditPage = () => {
                   de: 'Prompt-Vorlage auf Deutsch eingeben'
                 }}
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Tools Configuration */}
+        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                {t('admin.apps.edit.tools', 'Tools')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {t('admin.apps.edit.toolsDesc', 'Configure which tools are available for this app')}
+              </p>
+            </div>
+            <div className="mt-5 md:mt-0 md:col-span-2">
+              <div className="grid grid-cols-1 gap-3">
+                {[
+                  'researchPlanner',
+                  'deepResearch', 
+                  'queryRewriter',
+                  'evaluator',
+                  'braveSearch',
+                  'enhancedWebSearch',
+                  'tavilySearch',
+                  'webContentExtractor',
+                  'answerReducer',
+                  'finalizer',
+                  'playwrightScreenshot',
+                  'seleniumScreenshot'
+                ].map((tool) => (
+                  <div key={tool} className="flex items-center">
+                    <input
+                      id={`tool-${tool}`}
+                      name={`tool-${tool}`}
+                      type="checkbox"
+                      checked={app.tools?.includes(tool) || false}
+                      onChange={(e) => {
+                        const currentTools = app.tools || [];
+                        if (e.target.checked) {
+                          handleInputChange('tools', [...currentTools, tool]);
+                        } else {
+                          handleInputChange('tools', currentTools.filter(t => t !== tool));
+                        }
+                      }}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor={`tool-${tool}`} className="ml-3 text-sm font-medium text-gray-700">
+                      {tool}
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
