@@ -117,6 +117,29 @@
       "assertive": "Liefere selbstbewusste und starke Antworten mit einer klaren Position."
     }
   },
+  "error": {
+    "title": "Etwas ist schief gelaufen",
+    "description": "Ein unerwarteter Fehler ist aufgetreten.",
+    "errorMessage": "Fehlerdetails:",
+    "tryAgain": "Erneut versuchen",
+    "backToHome": "Zur Startseite",
+    "unauthorized": {
+      "title": "Nicht autorisiert",
+      "message": "Sie sind nicht angemeldet oder Ihre Sitzung ist abgelaufen."
+    },
+    "forbidden": {
+      "title": "Zugriff verweigert",
+      "message": "Sie haben keine Berechtigung, diese Seite zu betreten."
+    },
+    "serverError": {
+      "title": "Serverfehler",
+      "message": "Der Server hat einen Fehler festgestellt. Bitte versuchen Sie es später erneut."
+    },
+    "notFound": {
+      "title": "Seite nicht gefunden",
+      "message": "Die angeforderte Seite wurde nicht gefunden oder ist vorübergehend nicht verfügbar."
+    }
+  },
   "disclaimer": {
     "title": "Haftungsausschluss",
     "accept": "Ich verstehe",

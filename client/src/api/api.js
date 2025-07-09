@@ -112,7 +112,11 @@ const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_T
         // For 5xx server errors, store a minimal placeholder in cache with shorter TTL
         // to prevent overwhelming the server with retries on error
         if (error.response?.status >= 500 && cacheKey) {
-          const errorPlaceholder = { error: enhancedError.message, isErrorPlaceholder: true };
+          const errorPlaceholder = {
+            error: enhancedError.message,
+            isErrorPlaceholder: true,
+            status: enhancedError.status
+          };
           cache.set(cacheKey, errorPlaceholder, DEFAULT_CACHE_TTL.SHORT);
         }
         

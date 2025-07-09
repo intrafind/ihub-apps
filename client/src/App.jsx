@@ -7,6 +7,9 @@ import PromptsList from './pages/PromptsList';
 import AppChat from './pages/AppChat';
 import AppCanvas from './pages/AppCanvas';
 import NotFound from './pages/NotFound';
+import Unauthorized from './pages/Unauthorized';
+import Forbidden from './pages/Forbidden';
+import ServerError from './pages/ServerError';
 import MarkdownPage from './pages/MarkdownPage';
 import WidgetPage from './pages/WidgetPage';
 import AdminUsageReports from './pages/AdminUsageReports';
@@ -68,11 +71,13 @@ function App() {
             <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
             <Route path="admin/models" element={<SafeAdminModels />} />
             <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
+            <Route path="unauthorized" element={<Unauthorized />} />
+            <Route path="forbidden" element={<Forbidden />} />
+            <Route path="server-error" element={<ServerError />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
       </BrowserRouter>
     </AppProviders>
   );
-}
-export default App;
+}export default App;

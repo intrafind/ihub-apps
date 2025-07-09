@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Navigate } from 'react-router-dom';
 import Icon from './Icon';
 
 // Error boundary wrapper component
@@ -48,7 +49,17 @@ class ErrorBoundaryComponent extends Component {
 // Error fallback display component with reset capability and translation
 const ErrorFallback = ({ error, errorInfo, resetErrorBoundary }) => {
   const { t } = useTranslation();
-  
+
+  if (error?.status === 401) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+  if (error?.status === 403) {
+    return <Navigate to="/forbidden" replace />;
+  }
+  if (error?.status >= 500) {
+    return <Navigate to="/server-error" replace />;
+  }
+
   return (
     <div role="alert" className="p-4 m-4 bg-red-50 border border-red-200 rounded-md">
       <div className="flex items-center mb-4">
