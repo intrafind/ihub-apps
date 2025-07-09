@@ -556,7 +556,7 @@ const AdminAppEditPage = () => {
                     <option value="">{t('admin.apps.edit.selectModel', 'Select model...')}</option>
                     {availableModels.map(model => (
                       <option key={model.id} value={model.id}>
-                        {model.name}
+                        {getLocalizedContent(model.name, currentLanguage)}
                       </option>
                     ))}
                   </select>
@@ -1216,7 +1216,9 @@ const AdminAppEditPage = () => {
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                       >
                         {availableModels.map(model => (
-                          <option key={model.id} value={model.id}>{model.name}</option>
+                          <option key={model.id} value={model.id}>
+                            {getLocalizedContent(model.name, currentLanguage)}
+                          </option>
                         ))}
                       </select>
                     </div>
