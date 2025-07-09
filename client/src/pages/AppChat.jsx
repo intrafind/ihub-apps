@@ -133,8 +133,28 @@ const AppChat = () => {
   const [showShare, setShowShare] = useState(false);
   const { uiConfig } = useUIConfig();
 
-  // Apply settings and variables from URL parameters then clean them
+
+  // Shared app settings hook
+  const {
+    selectedModel,
+    selectedStyle,
+    selectedOutputFormat,
+    temperature,
+    sendChatHistory,
+    models,
+    styles,
+    setSelectedModel,
+    setSelectedStyle,
+    setSelectedOutputFormat,
+    setTemperature,
+    setSendChatHistory,
+    modelsLoading,
+  } = useAppSettings(appId, app);
+
+  // Apply settings and variables from URL parameters once app data is loaded
   useEffect(() => {
+    if (!app || modelsLoading) return;
+
     const newVars = {};
     let changed = false;
 
@@ -165,23 +185,7 @@ const AppChat = () => {
       ['model','style','outfmt','temp','history','prefill', ...Object.keys(newVars).map(v => `var_${v}`)].forEach(k => newSearch.delete(k));
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
     }
-  }, []);
-
-  // Shared app settings hook
-  const {
-    selectedModel,
-    selectedStyle,
-    selectedOutputFormat,
-    temperature,
-    sendChatHistory,
-    models,
-    styles,
-    setSelectedModel,
-    setSelectedStyle,
-    setSelectedOutputFormat,
-    setTemperature,
-    setSendChatHistory,
-  } = useAppSettings(appId, app);
+  }, [app, modelsLoading]);
 
   const [maxTokens, setMaxTokens] = useState(null);
   const [useMaxTokens, setUseMaxTokens] = useState(false);

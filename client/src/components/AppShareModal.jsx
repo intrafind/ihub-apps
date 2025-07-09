@@ -29,6 +29,7 @@ const AppShareModal = ({ appId, path, params, onClose }) => {
   const [validLength, setValidLength] = useState(code.length >= 5);
   const [createdUrl, setCreatedUrl] = useState('');
   const [creating, setCreating] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const checkCode = async (c) => {
     if (c.length < 5) {
@@ -83,6 +84,8 @@ const AppShareModal = ({ appId, path, params, onClose }) => {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(createdUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy link', err);
     }
@@ -93,30 +96,47 @@ const AppShareModal = ({ appId, path, params, onClose }) => {
       <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">{t('common.share')}</h2>
-          <button onClick={onClose} aria-label={t('common.cancel')}>\
+          <button onClick={onClose} aria-label={t('common.cancel')}>
             <Icon name="x" />
           </button>
         </div>
         {createdUrl ? (
           <div className="space-y-4">
             <p className="break-all">{createdUrl}</p>
-            <button
-              onClick={handleCopy}
-              className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center gap-1"
-            >
-              <Icon name="copy" /> {t('pages.promptsList.copyPrompt', 'Copy')}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopy}
+                className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center gap-1"
+              >
+                <Icon name="copy" /> {t('pages.promptsList.copyPrompt', 'Copy')}
+              </button>
+              {copied && (
+                <span className="text-green-600 text-sm">
+                  {t('pages.promptsList.linkCopied', 'Link copied!')}
+                </span>
+              )}
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
             <label className="block">
               <span className="text-sm font-medium">{t('common.shortCode')}</span>
-              <input
-                type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="mt-1 w-full border rounded px-2 py-1"
-              />
+              <div className="flex mt-1">
+                <input
+                  type="text"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  className="w-full border rounded-l px-2 py-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCode(generateCode())}
+                  className="border border-l-0 rounded-r px-2"
+                  title={t('pages.appChat.regenerate', 'Regenerate')}
+                >
+                  <Icon name="redo" size="sm" />
+                </button>
+              </div>
             </label>
             <div className="text-sm">
               {!validLength ? (

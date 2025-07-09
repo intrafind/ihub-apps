@@ -58,10 +58,13 @@ const AppCanvas = () => {
     setSelectedOutputFormat,
     setTemperature,
     setSendChatHistory,
+    modelsLoading,
   } = useAppSettings(appId, app);
 
-  // Apply settings from query parameters then clear them
+  // Apply settings from query parameters once data is loaded
   useEffect(() => {
+    if (!app || modelsLoading) return;
+
     const newVars = {};
     let changed = false;
 
@@ -88,7 +91,7 @@ const AppCanvas = () => {
       ['model','style','outfmt','temp','history', ...Object.keys(newVars).map(v => `var_${v}`)].forEach(k => newSearch.delete(k));
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
     }
-  }, []);
+  }, [app, modelsLoading]);
   
   // Canvas editor states
   const [selection, setSelection] = useState(null);

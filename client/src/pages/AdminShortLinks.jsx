@@ -70,39 +70,43 @@ const AdminShortLinks = () => {
         ) : error ? (
           <div className="text-red-600">{error}</div>
         ) : (
-          <div className="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead>
-                <tr>
-                  <th className="px-2 py-1 text-left text-sm font-medium text-gray-500">Code</th>
-                  <th className="px-2 py-1 text-left text-sm font-medium text-gray-500">App</th>
-                  <th className="px-2 py-1 text-left text-sm font-medium text-gray-500">User</th>
-                  <th className="px-2 py-1 text-left text-sm font-medium text-gray-500">Usage</th>
-                  <th className="px-2 py-1 text-left text-sm font-medium text-gray-500">Created</th>
-                  <th className="px-2 py-1"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {links.map(link => (
-                  <tr key={link.code}>
-                    <td className="px-2 py-1">
-                      <a href={`/s/${link.code}`} className="text-indigo-600 underline" target="_blank" rel="noreferrer">
-                        {link.code}
-                      </a>
-                    </td>
-                    <td className="px-2 py-1">{link.appId || '-'}</td>
-                    <td className="px-2 py-1">{link.userId || '-'}</td>
-                    <td className="px-2 py-1">{link.usage || 0}</td>
-                    <td className="px-2 py-1">{new Date(link.createdAt).toLocaleString()}</td>
-                    <td className="px-2 py-1 text-right">
-                      <button onClick={() => handleDelete(link.code)} className="text-red-600 hover:underline">
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
+            <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
+              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                <table className="min-w-full divide-y divide-gray-300">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Code</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">App</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">User</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Usage</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Created</th>
+                      <th className="px-6 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 bg-white">
+                    {links.map(link => (
+                      <tr key={link.code} className="hover:bg-gray-50">
+                        <td className="px-6 py-2 whitespace-nowrap">
+                          <a href={`/s/${link.code}`} className="text-indigo-600 underline" target="_blank" rel="noreferrer">
+                            {link.code}
+                          </a>
+                        </td>
+                        <td className="px-6 py-2 whitespace-nowrap">{link.appId || '-'}</td>
+                        <td className="px-6 py-2 whitespace-nowrap">{link.userId || '-'}</td>
+                        <td className="px-6 py-2 whitespace-nowrap">{link.usage || 0}</td>
+                        <td className="px-6 py-2 whitespace-nowrap">{new Date(link.createdAt).toLocaleString()}</td>
+                        <td className="px-6 py-2 whitespace-nowrap text-right">
+                          <button onClick={() => handleDelete(link.code)} className="text-red-600 hover:underline">
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
       </div>
