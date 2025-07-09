@@ -1,6 +1,20 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from './pathUtils.js';
+import { appConfigSchema, knownAppKeys } from './validators/appConfigSchema.js';
+
+function validateAppConfig(app, source) {
+    const { success, error } = appConfigSchema.safeParse(app);
+    if (!success && error) {
+        const messages = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
+        console.warn(`⚠️  Validation issues in ${source}: ${messages}`);
+    }
+
+    const unknown = Object.keys(app).filter(key => !knownAppKeys.includes(key));
+    if (unknown.length > 0) {
+        console.warn(`⚠️  Unknown keys in ${source}: ${unknown.join(', ')}`);
+    }
+}
 
 /**
  * Enhanced Apps Loader Service
@@ -39,12 +53,13 @@ export function loadAppsFromFiles() {
             const filePath = join(appsDir, file);
             const fileContent = readFileSync(filePath, 'utf8');
             const app = JSON.parse(fileContent);
-            
+
             // Add enabled field if it doesn't exist (defaults to true)
             if (app.enabled === undefined) {
                 app.enabled = true;
             }
-            
+
+            validateAppConfig(app, filePath);
             apps.push(app);
             console.log(`✅ Loaded ${app.id} (${app.enabled ? 'enabled' : 'disabled'})`);
         } catch (error) {
@@ -75,12 +90,13 @@ export function loadAppsFromLegacyFile() {
         console.log(`📄 Loading ${apps.length} apps from legacy apps.json...`);
         
         // Add enabled field if it doesn't exist (defaults to true)
-        apps.forEach(app => {
+        apps.forEach((app, idx) => {
             if (app.enabled === undefined) {
                 app.enabled = true;
             }
+            validateAppConfig(app, `${legacyAppsPath}[${idx}]`);
         });
-        
+
         return apps;
     } catch (error) {
         console.error('❌ Error loading legacy apps.json:', error.message);
