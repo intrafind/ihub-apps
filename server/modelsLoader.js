@@ -1,6 +1,20 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from './pathUtils.js';
+import { modelConfigSchema, knownModelKeys } from './validators/modelConfigSchema.js';
+
+function validateModelConfig(model, source) {
+    const { success, error } = modelConfigSchema.safeParse(model);
+    if (!success && error) {
+        const messages = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
+        console.warn(`⚠️  Validation issues in ${source}: ${messages}`);
+    }
+
+    const unknown = Object.keys(model).filter(key => !knownModelKeys.includes(key));
+    if (unknown.length > 0) {
+        console.warn(`⚠️  Unknown keys in ${source}: ${unknown.join(', ')}`);
+    }
+}
 
 /**
  * Models Loader Service
@@ -39,12 +53,13 @@ export function loadModelsFromFiles() {
             const filePath = join(modelsDir, file);
             const fileContent = readFileSync(filePath, 'utf8');
             const model = JSON.parse(fileContent);
-            
+
             // Add enabled field if it doesn't exist (defaults to true)
             if (model.enabled === undefined) {
                 model.enabled = true;
             }
-            
+
+            validateModelConfig(model, filePath);
             models.push(model);
             console.log(`✅ Loaded ${model.id} (${model.enabled ? 'enabled' : 'disabled'})`);
         } catch (error) {
@@ -75,12 +90,13 @@ export function loadModelsFromLegacyFile() {
         console.log(`📄 Loading ${models.length} models from legacy models.json...`);
         
         // Add enabled field if it doesn't exist (defaults to true)
-        models.forEach(model => {
+        models.forEach((model, idx) => {
             if (model.enabled === undefined) {
                 model.enabled = true;
             }
+            validateModelConfig(model, `${legacyModelsPath}[${idx}]`);
         });
-        
+
         return models;
     } catch (error) {
         console.error('❌ Error loading legacy models.json:', error.message);

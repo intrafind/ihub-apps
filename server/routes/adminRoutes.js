@@ -3,7 +3,7 @@ import configCache from '../configCache.js';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
-import { getLocalizedContent } from '../shared/localize.js';
+import { getLocalizedContent } from '../../shared/localize.js';
 
 export default function registerAdminRoutes(app) {
   app.get('/api/admin/usage', async (req, res) => {

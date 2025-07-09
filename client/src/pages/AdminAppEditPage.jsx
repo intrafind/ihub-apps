@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../components/DynamicLanguageEditor';
 import ToolsSelector from '../components/ToolsSelector';
 import Icon from '../components/Icon';
+import { getLocalizedContent } from '../utils/localizeContent';
 
 const AdminAppEditPage = () => {
   const { t } = useTranslation();
