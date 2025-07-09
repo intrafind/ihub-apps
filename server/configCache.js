@@ -48,9 +48,15 @@ class ConfigCache {
       try {
         // Special handling for apps.json - load from both sources
         if (configPath === 'config/apps.json') {
-          const apps = loadAllApps();
-          this.setCacheEntry(configPath, apps);
-          console.log(`✓ Cached: ${configPath} (${apps.length} enabled apps)`);
+          // Load enabled apps only
+          const enabledApps = loadAllApps(false);
+          this.setCacheEntry(configPath, enabledApps);
+          console.log(`✓ Cached: ${configPath} (${enabledApps.length} enabled apps)`);
+          
+          // Also load and cache all apps (including disabled)
+          const allApps = loadAllApps(true);
+          this.setCacheEntry('config/apps-all.json', allApps);
+          console.log(`✓ Cached: config/apps-all.json (${allApps.length} total apps)`);
           return;
         }
         
@@ -101,8 +107,24 @@ class ConfigCache {
     try {
       // Special handling for apps.json - load from both sources
       if (key === 'config/apps.json') {
-        const apps = loadAllApps();
-        this.setCacheEntry(key, apps);
+        // Refresh enabled apps cache
+        const enabledApps = loadAllApps(false);
+        this.setCacheEntry(key, enabledApps);
+        
+        // Also refresh all apps cache
+        const allApps = loadAllApps(true);
+        this.setCacheEntry('config/apps-all.json', allApps);
+        return;
+      }
+      
+      // Special handling for apps-all.json
+      if (key === 'config/apps-all.json') {
+        const allApps = loadAllApps(true);
+        this.setCacheEntry(key, allApps);
+        
+        // Also refresh enabled apps cache
+        const enabledApps = loadAllApps(false);
+        this.setCacheEntry('config/apps.json', enabledApps);
         return;
       }
       
@@ -170,8 +192,15 @@ class ConfigCache {
    */
   getApps(includeDisabled = false) {
     if (includeDisabled) {
-      // Load all apps including disabled ones, bypassing cache
-      return loadAllApps(includeDisabled);
+      // Check cache for all apps (including disabled)
+      const cachedAllApps = this.get('config/apps-all.json');
+      if (cachedAllApps !== null) {
+        return cachedAllApps;
+      }
+      // Load all apps including disabled ones and cache the result
+      const allApps = loadAllApps(includeDisabled);
+      this.setCacheEntry('config/apps-all.json', allApps);
+      return allApps;
     }
     return this.get('config/apps.json');
   }
@@ -216,6 +245,28 @@ class ConfigCache {
    */
   getLocalizations(language = 'en') {
     return this.get(`locales/${language}.json`);
+  }
+
+  /**
+   * Refresh apps cache (both enabled and all apps)
+   * Should be called when apps are modified (create, update, delete, toggle)
+   */
+  async refreshAppsCache() {
+    console.log('🔄 Refreshing apps cache...');
+    
+    try {
+      // Refresh enabled apps cache
+      const enabledApps = loadAllApps(false);
+      this.setCacheEntry('config/apps.json', enabledApps);
+      
+      // Refresh all apps cache
+      const allApps = loadAllApps(true);
+      this.setCacheEntry('config/apps-all.json', allApps);
+      
+      console.log(`✅ Apps cache refreshed: ${enabledApps.length} enabled, ${allApps.length} total`);
+    } catch (error) {
+      console.error('❌ Error refreshing apps cache:', error.message);
+    }
   }
 
   /**
