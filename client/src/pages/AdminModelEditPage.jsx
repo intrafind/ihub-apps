@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getLocalizedContent } from '../utils/localizeContent';
+import { getLocalizedContent, DEFAULT_LANGUAGE } from '../utils/localizeContent';
 import Icon from '../components/Icon';
+import DynamicLanguageEditor from '../components/DynamicLanguageEditor';
 
 const AdminModelEditPage = () => {
   const { t, i18n } = useTranslation();
@@ -21,8 +22,8 @@ const AdminModelEditPage = () => {
   const [formData, setFormData] = useState({
     id: '',
     modelId: '',
-    name: '',
-    description: '',
+    name: { [DEFAULT_LANGUAGE]: '' },
+    description: { [DEFAULT_LANGUAGE]: '' },
     url: '',
     provider: '',
     tokenLimit: '',
@@ -54,8 +55,8 @@ const AdminModelEditPage = () => {
       setFormData({
         id: model.id || '',
         modelId: model.modelId || '',
-        name: model.name || '',
-        description: model.description || '',
+        name: model.name || { [DEFAULT_LANGUAGE]: '' },
+        description: model.description || { [DEFAULT_LANGUAGE]: '' },
         url: model.url || '',
         provider: model.provider || '',
         tokenLimit: model.tokenLimit || '',
@@ -110,6 +111,13 @@ const AdminModelEditPage = () => {
     }));
   };
 
+  const handleLocalizedChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -118,7 +126,12 @@ const AdminModelEditPage = () => {
       setError(null);
       
       // Validate required fields
-      if (!formData.id || !formData.name || !formData.description || !formData.provider) {
+      if (
+        !formData.id ||
+        !getLocalizedContent(formData.name, DEFAULT_LANGUAGE) ||
+        !getLocalizedContent(formData.description, DEFAULT_LANGUAGE) ||
+        !formData.provider
+      ) {
         throw new Error(t('admin.models.edit.requiredFields'));
       }
       
@@ -206,7 +219,7 @@ const AdminModelEditPage = () => {
               <p className="mt-1 text-sm text-gray-500">
                 {isNewModel 
                   ? t('admin.models.edit.subtitleNew') 
-                  : t('admin.models.edit.subtitle', { name: formData.name })
+                  : t('admin.models.edit.subtitle', { name: getLocalizedContent(formData.name, currentLanguage) })
                 }
               </p>
             </div>
@@ -247,32 +260,21 @@ const AdminModelEditPage = () => {
                         </div>
 
                         <div className="col-span-6 sm:col-span-3">
-                          <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                            {t('admin.models.fields.name')} *
-                          </label>
-                          <input
-                            type="text"
-                            name="name"
-                            id="name"
+                          <DynamicLanguageEditor
+                            label={t('admin.models.fields.name')}
                             value={formData.name}
-                            onChange={handleChange}
-                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                            required
+                            onChange={(value) => handleLocalizedChange('name', value)}
+                            required={true}
                           />
                         </div>
 
                         <div className="col-span-6">
-                          <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                            {t('admin.models.fields.description')} *
-                          </label>
-                          <textarea
-                            id="description"
-                            name="description"
+                          <DynamicLanguageEditor
+                            label={t('admin.models.fields.description')}
                             value={formData.description}
-                            onChange={handleChange}
-                            rows={3}
-                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                            required
+                            onChange={(value) => handleLocalizedChange('description', value)}
+                            required={true}
+                            type="textarea"
                           />
                         </div>
 

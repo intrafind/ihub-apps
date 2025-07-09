@@ -1,11 +1,16 @@
 {
   "id": "gemini-2.5-flash-preview-05-20",
   "modelId": "gemini-2.5-flash-preview-05-20",
-  "name": "Gemini 2.5",
-  "description": "Google's versatile model optimized for text and code tasks",
+  "name": {
+    "en": "Gemini 2.5",
+    "de": "Gemini 2.5"
+  },
+  "description": {
+    "en": "Google's versatile model optimized for text and code tasks",
+    "de": "Googles vielseitiges Modell, optimiert f\u00fcr Text- und Code-Aufgaben"
+  },
   "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:streamGenerateContent",
   "provider": "google",
   "tokenLimit": 32768,
   "default": true,
-  "supportsTools": true
-}
+  "supportsTools": true}

@@ -1,1 +1,1 @@
-export { getLocalizedContent } from '../../../shared/localize.js';
+export { getLocalizedContent, DEFAULT_LANGUAGE } from '../../../shared/localize.js';

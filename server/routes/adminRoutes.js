@@ -3,6 +3,7 @@ import configCache from '../configCache.js';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
+import { getLocalizedContent } from '../../shared/localize.js';
 
 export default function registerAdminRoutes(app) {
   app.get('/api/admin/usage', async (req, res) => {
@@ -45,6 +46,9 @@ export default function registerAdminRoutes(app) {
   app.post('/api/admin/cache/_clear', async (req, res) => {
     try {
       configCache.clear();
+      // Immediately reinitialize the cache so subsequent API calls work
+      await configCache.initialize();
+
       res.json({ message: 'Configuration cache cleared successfully' });
     } catch (e) {
       console.error('Error clearing cache:', e);
@@ -289,7 +293,13 @@ export default function registerAdminRoutes(app) {
       const updatedModel = req.body;
       
       // Validate required fields
-      if (!updatedModel.id || !updatedModel.name || !updatedModel.description || !updatedModel.provider) {
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      if (
+        !updatedModel.id ||
+        !getLocalizedContent(updatedModel.name, defaultLang) ||
+        !getLocalizedContent(updatedModel.description, defaultLang) ||
+        !updatedModel.provider
+      ) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
       
@@ -333,7 +343,13 @@ export default function registerAdminRoutes(app) {
       const newModel = req.body;
       
       // Validate required fields
-      if (!newModel.id || !newModel.name || !newModel.description || !newModel.provider) {
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      if (
+        !newModel.id ||
+        !getLocalizedContent(newModel.name, defaultLang) ||
+        !getLocalizedContent(newModel.description, defaultLang) ||
+        !newModel.provider
+      ) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
       
