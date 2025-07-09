@@ -26,10 +26,17 @@ const AppShareModal = ({ appId, path, params, onClose }) => {
   const [includeParams, setIncludeParams] = useState(true);
   const [checking, setChecking] = useState(false);
   const [available, setAvailable] = useState(true);
+  const [validLength, setValidLength] = useState(code.length >= 5);
   const [createdUrl, setCreatedUrl] = useState('');
   const [creating, setCreating] = useState(false);
 
   const checkCode = async (c) => {
+    if (c.length < 5) {
+      setValidLength(false);
+      setAvailable(false);
+      return;
+    }
+    setValidLength(true);
     setChecking(true);
     try {
       await getShortLink(c);
@@ -46,7 +53,12 @@ const AppShareModal = ({ appId, path, params, onClose }) => {
   };
 
   useEffect(() => {
-    checkCode(code);
+    if (code.length >= 5) {
+      checkCode(code);
+    } else {
+      setValidLength(false);
+      setAvailable(false);
+    }
   }, [code]);
 
   const handleCreate = async () => {
@@ -107,7 +119,11 @@ const AppShareModal = ({ appId, path, params, onClose }) => {
               />
             </label>
             <div className="text-sm">
-              {checking ? t('common.loading') : available ? (
+              {!validLength ? (
+                <span className="text-red-600">{t('common.codeTooShort', 'Code too short')}</span>
+              ) : checking ? (
+                t('common.loading')
+              ) : available ? (
                 <span className="text-green-600">{t('common.codeAvailable')}</span>
               ) : (
                 <span className="text-red-600">{t('common.codeTaken')}</span>
@@ -127,7 +143,7 @@ const AppShareModal = ({ appId, path, params, onClose }) => {
               </button>
               <button
                 onClick={handleCreate}
-                disabled={!available || creating}
+                disabled={!validLength || !available || creating}
                 className="px-3 py-1 bg-indigo-600 text-white rounded disabled:opacity-50"
               >
                 {t('common.save')}

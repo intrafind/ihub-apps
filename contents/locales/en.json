@@ -41,7 +41,8 @@
     "shortCode": "Short code",
     "includeSettings": "Include settings & variables",
     "codeTaken": "Code taken",
-    "codeAvailable": "Code available"
+    "codeAvailable": "Code available",
+    "codeTooShort": "Code must be at least 5 characters"
   },
   "pages": {
     "home": {

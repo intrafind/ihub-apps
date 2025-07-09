@@ -59,6 +59,36 @@ const AppCanvas = () => {
     setTemperature,
     setSendChatHistory,
   } = useAppSettings(appId, app);
+
+  // Apply settings from query parameters then clear them
+  useEffect(() => {
+    const newVars = {};
+    let changed = false;
+
+    const m = searchParams.get('model');
+    if (m) { setSelectedModel(m); changed = true; }
+    const st = searchParams.get('style');
+    if (st) { setSelectedStyle(st); changed = true; }
+    const out = searchParams.get('outfmt');
+    if (out) { setSelectedOutputFormat(out); changed = true; }
+    const tempParam = searchParams.get('temp');
+    if (tempParam) { setTemperature(parseFloat(tempParam)); changed = true; }
+    const hist = searchParams.get('history');
+    if (hist) { setSendChatHistory(hist === 'true'); changed = true; }
+
+    searchParams.forEach((value, key) => {
+      if (key.startsWith('var_')) {
+        newVars[key.slice(4)] = value;
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      const newSearch = new URLSearchParams(searchParams);
+      ['model','style','outfmt','temp','history', ...Object.keys(newVars).map(v => `var_${v}`)].forEach(k => newSearch.delete(k));
+      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+    }
+  }, []);
   
   // Canvas editor states
   const [selection, setSelection] = useState(null);

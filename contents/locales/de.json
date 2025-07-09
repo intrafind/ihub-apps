@@ -43,7 +43,8 @@
     "shortCode": "Kurzcode",
     "includeSettings": "Einstellungen und Variablen einschließen",
     "codeTaken": "Code vergeben",
-    "codeAvailable": "Code verfügbar"
+    "codeAvailable": "Code verfügbar",
+    "codeTooShort": "Code zu kurz"
   },
   "pages": {
     "home": {
