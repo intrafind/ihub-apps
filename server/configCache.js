@@ -1,6 +1,7 @@
 import { loadJson } from './configLoader.js';
 import { loadAllApps } from './appsLoader.js';
 import { loadAllModels } from './modelsLoader.js';
+import { loadAllPrompts } from './promptsLoader.js';
 
 /**
  * Configuration Cache Service
@@ -72,6 +73,20 @@ class ConfigCache {
           const allModels = loadAllModels(true);
           this.setCacheEntry('config/models-all.json', allModels);
           console.log(`✓ Cached: config/models-all.json (${allModels.length} total models)`);
+          return;
+        }
+        
+        // Special handling for prompts.json - load from both sources
+        if (configPath === 'config/prompts.json') {
+          // Load enabled prompts only
+          const enabledPrompts = loadAllPrompts(false);
+          this.setCacheEntry(configPath, enabledPrompts);
+          console.log(`✓ Cached: ${configPath} (${enabledPrompts.length} enabled prompts)`);
+          
+          // Also load and cache all prompts (including disabled)
+          const allPrompts = loadAllPrompts(true);
+          this.setCacheEntry('config/prompts-all.json', allPrompts);
+          console.log(`✓ Cached: config/prompts-all.json (${allPrompts.length} total prompts)`);
           return;
         }
         
@@ -248,7 +263,18 @@ class ConfigCache {
   /**
    * Get prompts configuration
    */
-  getPrompts() {
+  getPrompts(includeDisabled = false) {
+    if (includeDisabled) {
+      // Check cache for all prompts (including disabled)
+      const cachedAllPrompts = this.get('config/prompts-all.json');
+      if (cachedAllPrompts !== null) {
+        return cachedAllPrompts;
+      }
+      // Load all prompts including disabled ones and cache the result
+      const allPrompts = loadAllPrompts(includeDisabled);
+      this.setCacheEntry('config/prompts-all.json', allPrompts);
+      return allPrompts;
+    }
     return this.get('config/prompts.json');
   }
 
@@ -314,6 +340,28 @@ class ConfigCache {
       console.log(`✅ Apps cache refreshed: ${enabledApps.length} enabled, ${allApps.length} total`);
     } catch (error) {
       console.error('❌ Error refreshing apps cache:', error.message);
+    }
+  }
+
+  /**
+   * Refresh prompts cache (both enabled and all prompts)
+   * Should be called when prompts are modified (create, update, delete, toggle)
+   */
+  async refreshPromptsCache() {
+    console.log('🔄 Refreshing prompts cache...');
+    
+    try {
+      // Refresh enabled prompts cache
+      const enabledPrompts = loadAllPrompts(false);
+      this.setCacheEntry('config/prompts.json', enabledPrompts);
+      
+      // Refresh all prompts cache
+      const allPrompts = loadAllPrompts(true);
+      this.setCacheEntry('config/prompts-all.json', allPrompts);
+      
+      console.log(`✅ Prompts cache refreshed: ${enabledPrompts.length} enabled, ${allPrompts.length} total`);
+    } catch (error) {
+      console.error('❌ Error refreshing prompts cache:', error.message);
     }
   }
 
