@@ -481,7 +481,8 @@ export default function registerAdminRoutes(app) {
       const { simpleCompletion } = await import('../utils.js');
       
       try {
-        const response = await simpleCompletion(testMessage, model.id);
+        console.log('Testing model:', model);
+        const response = await simpleCompletion(testMessage, {modelId: model.id});
         res.json({ 
           success: true, 
           message: 'Model test successful',
@@ -489,6 +490,7 @@ export default function registerAdminRoutes(app) {
           model: model
         });
       } catch (testError) {
+        console.error('Model test failed:', testError);
         res.status(500).json({ 
           success: false, 
           message: 'Model test failed',

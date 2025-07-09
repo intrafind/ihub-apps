@@ -12,6 +12,7 @@ import WidgetPage from './pages/WidgetPage';
 import AdminUsageReports from './pages/AdminUsageReports';
 import AdminSystemPage from './pages/AdminSystemPage';
 import AdminAppsPage from './pages/AdminAppsPage';
+import AdminAppEditPage from './pages/AdminAppEditPage';
 import AdminModelEditPage from './pages/AdminModelEditPage';
 import AdminModelsPage from './pages/AdminModelsPage';
 import AppProviders from './components/AppProviders';
