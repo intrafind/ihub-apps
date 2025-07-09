@@ -12,7 +12,8 @@ import WidgetPage from './pages/WidgetPage';
 import AdminUsageReports from './pages/AdminUsageReports';
 import AdminSystemPage from './pages/AdminSystemPage';
 import AdminAppsPage from './pages/AdminAppsPage';
-import AdminAppEditPage from './pages/AdminAppEditPage';
+import AdminModelEditPage from './pages/AdminModelEditPage';
+import AdminModelsPage from './pages/AdminModelsPage';
 import AppProviders from './components/AppProviders';
 import { withErrorBoundary } from './components/ErrorBoundary';
 import useSessionManagement from './hooks/useSessionManagement';
@@ -29,6 +30,8 @@ const SafeAdminUsage = withErrorBoundary(AdminUsageReports);
 const SafeAdminSystem = withErrorBoundary(AdminSystemPage);
 const SafeAdminApps = withErrorBoundary(AdminAppsPage);
 const SafeAdminAppEdit = withErrorBoundary(AdminAppEditPage);
+const SafeAdminModels = withErrorBoundary(AdminModelsPage);
+const SafeAdminModelEdit = withErrorBoundary(AdminModelEditPage);
 const SafePromptsList = withErrorBoundary(PromptsList);
 
 function App() {
@@ -59,6 +62,8 @@ function App() {
             <Route path="admin/system" element={<SafeAdminSystem />} />
             <Route path="admin/apps" element={<SafeAdminApps />} />
             <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
+            <Route path="admin/models" element={<SafeAdminModels />} />
+            <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

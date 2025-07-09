@@ -85,6 +85,13 @@
           "de": "Kontakt"
         },
         "url": "mailto:info@intrafind.com"
+      },
+      {
+        "name": {
+          "en": "Admin",
+          "de": "Admin"
+        },
+        "url": "/admin/usage"
       }
     ]
   },

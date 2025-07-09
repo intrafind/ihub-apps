@@ -1,0 +1,12 @@
+{
+  "id": "mistral-small",
+  "modelId": "mistral-small-latest",
+  "name": "Mistral Small",
+  "description": "Mistral's fast model for general tasks",
+  "url": "https://api.mistral.ai/v1/chat/completions",
+  "provider": "mistral",
+  "tokenLimit": 32000,
+  "supportsTools": true,
+  "concurrency": 1,
+  "requestDelayMs": 1000
+}
