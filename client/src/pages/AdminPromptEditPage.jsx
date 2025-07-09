@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../components/Icon';
+import AdminNavigation from '../components/AdminNavigation';
 
 const AdminPromptEditPage = () => {
   const { t } = useTranslation();
@@ -185,7 +186,9 @@ const AdminPromptEditPage = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div>
+      <AdminNavigation />
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
@@ -590,6 +593,7 @@ const AdminPromptEditPage = () => {
           </button>
         </div>
       </form>
+    </div>
     </div>
   );
 };

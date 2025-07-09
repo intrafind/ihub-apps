@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import Icon from '../components/Icon';
+import AdminNavigation from '../components/AdminNavigation';
 
 const AdminPromptsPage = () => {
   const { t, i18n } = useTranslation();
@@ -142,7 +143,9 @@ const AdminPromptsPage = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div>
+      <AdminNavigation />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-900">
@@ -319,6 +322,7 @@ const AdminPromptsPage = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };
