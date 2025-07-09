@@ -124,5 +124,119 @@
   },
   "smartSearch": {
     "placeholder": "Search apps..."
+  },
+  "admin": {
+    "models": {
+      "title": "Model Management",
+      "subtitle": "Configure and manage AI models",
+      "addNew": "Add New Model",
+      "totalModels": "Total Models",
+      "enabledModels": "Enabled",
+      "disabledModels": "Disabled",
+      "defaultModel": "Default",
+      "searchPlaceholder": "Search models...",
+      "filterAll": "All Models",
+      "filterEnabled": "Enabled Only",
+      "filterDisabled": "Disabled Only",
+      "noModelsFound": "No models found",
+      "noModelsFoundDesc": "Try adjusting your search terms.",
+      "getStarted": "Get started by adding a new model.",
+      "actions": {
+        "test": "Test",
+        "testing": "Testing...",
+        "enable": "Enable",
+        "disable": "Disable",
+        "edit": "Edit",
+        "delete": "Delete",
+        "close": "Close"
+      },
+      "status": {
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "default": "Default"
+      },
+      "fields": {
+        "id": "Model ID",
+        "name": "Model Name",
+        "description": "Description",
+        "provider": "Provider",
+        "modelId": "Model ID (API)",
+        "url": "API URL",
+        "tokenLimit": "Token Limit",
+        "supportsTools": "Supports Tools",
+        "concurrency": "Concurrency",
+        "requestDelay": "Request Delay (ms)",
+        "enabled": "Enabled",
+        "defaultModel": "Default Model"
+      },
+      "placeholders": {
+        "selectProvider": "Select provider",
+        "apiModelId": "e.g., gpt-4",
+        "apiUrl": "https://api.openai.com/v1/chat/completions"
+      },
+      "hints": {
+        "modelId": "Unique identifier for the model",
+        "apiModelId": "API model identifier"
+      },
+      "edit": {
+        "title": "Edit Model",
+        "titleNew": "Add New Model",
+        "subtitle": "Configure {{name}}",
+        "subtitleNew": "Configure a new AI model",
+        "backToModels": "Back to Models",
+        "basicInfo": "Basic Information",
+        "configuration": "Configuration",
+        "usageStats": "Usage Statistics",
+        "appsUsingModel": "Apps Using This Model",
+        "noUsageData": "No usage data available",
+        "noApps": "No apps are using this model as preferred",
+        "createModel": "Create Model",
+        "saveChanges": "Save Changes",
+        "saving": "Saving...",
+        "requiredFields": "Please fill in all required fields",
+        "success": "Model {{action}} successfully! Redirecting...",
+        "successCreated": "created",
+        "successUpdated": "updated"
+      },
+      "test": {
+        "success": "Model test successful",
+        "failed": "Model test failed",
+        "response": "Response:",
+        "error": "Error:",
+        "networkError": "Network error: Unable to connect to the model service",
+        "timeout": "Request timeout: Model service is not responding",
+        "connectionRefused": "Connection refused: Model service is not available",
+        "dnsError": "DNS error: Model service hostname not found",
+        "genericError": "Network error: {{message}}"
+      },
+      "details": {
+        "status": "Status",
+        "description": "Description",
+        "technicalDetails": "Technical Details",
+        "provider": "Provider",
+        "modelId": "Model ID",
+        "tokenLimit": "Token Limit",
+        "supportsTools": "Supports Tools",
+        "concurrency": "Concurrency",
+        "requestDelay": "Request Delay",
+        "apiConfiguration": "API Configuration",
+        "apiUrl": "API URL",
+        "usageStats": "Usage Statistics",
+        "messages": "Messages",
+        "tokens": "Tokens",
+        "appsUsingModel": "Apps Using This Model",
+        "noUsageData": "No usage data available",
+        "noApps": "No apps are using this model as their preferred choice",
+        "close": "Close",
+        "editModel": "Edit Model",
+        "editModel": "Edit Model",
+        "default": "Default",
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "delete": {
+        "confirm": "Are you sure you want to delete this model?"
+      }
+    }
   }
 }
