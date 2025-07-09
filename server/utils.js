@@ -342,11 +342,14 @@ export async function logNewSession(chatId, appId, metadata = {}) {
  * @param {number} [options.temperature=0.7] - The temperature for the completion.
  * @returns {Promise<string>} The content of the model's response.
  */
-export async function simpleCompletion(prompt, { model: modelId, temperature = 0.7 }) {
+export async function simpleCompletion(prompt, { modelId: modelId, temperature = 0.7 }) {
+  console.log('Starting simple completion...', { prompt, modelId, temperature });
   // Try to get models from cache first
   let models = configCache.getModels();
+  console.log('Available models:', models.map(m => m.id));
   
   const model = models.find(m => m.id === modelId);
+  console.log('Using model:', model);
   if (!model) {
     throw new Error(`Model ${modelId} not found`);
   }

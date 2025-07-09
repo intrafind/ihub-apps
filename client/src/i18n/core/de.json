@@ -124,5 +124,119 @@
   },
   "smartSearch": {
     "placeholder": "Apps durchsuchen..."
+  },
+  "admin": {
+    "models": {
+      "title": "Modellverwaltung",
+      "subtitle": "KI-Modelle konfigurieren und verwalten",
+      "addNew": "Neues Modell hinzufügen",
+      "totalModels": "Gesamtanzahl Modelle",
+      "enabledModels": "Aktiviert",
+      "disabledModels": "Deaktiviert",
+      "defaultModel": "Standard",
+      "searchPlaceholder": "Modelle durchsuchen...",
+      "filterAll": "Alle Modelle",
+      "filterEnabled": "Nur aktivierte",
+      "filterDisabled": "Nur deaktivierte",
+      "noModelsFound": "Keine Modelle gefunden",
+      "noModelsFoundDesc": "Versuchen Sie, Ihre Suchbegriffe anzupassen.",
+      "getStarted": "Beginnen Sie mit dem Hinzufügen eines neuen Modells.",
+      "actions": {
+        "test": "Test",
+        "testing": "Teste...",
+        "enable": "Aktivieren",
+        "disable": "Deaktivieren",
+        "edit": "Bearbeiten",
+        "delete": "Löschen",
+        "close": "Schließen"
+      },
+      "status": {
+        "enabled": "Aktiviert",
+        "disabled": "Deaktiviert",
+        "default": "Standard"
+      },
+      "fields": {
+        "id": "Modell-ID",
+        "name": "Modellname",
+        "description": "Beschreibung",
+        "provider": "Anbieter",
+        "modelId": "Modell-ID (API)",
+        "url": "API-URL",
+        "tokenLimit": "Token-Limit",
+        "supportsTools": "Unterstützt Tools",
+        "concurrency": "Parallelität",
+        "requestDelay": "Anfrage-Verzögerung (ms)",
+        "enabled": "Aktiviert",
+        "defaultModel": "Standard-Modell"
+      },
+      "placeholders": {
+        "selectProvider": "Anbieter auswählen",
+        "apiModelId": "z.B. gpt-4",
+        "apiUrl": "https://api.openai.com/v1/chat/completions"
+      },
+      "hints": {
+        "modelId": "Eindeutige Kennung für das Modell",
+        "apiModelId": "API-Modell-Kennung"
+      },
+      "edit": {
+        "title": "Modell bearbeiten",
+        "titleNew": "Neues Modell hinzufügen",
+        "subtitle": "{{name}} konfigurieren",
+        "subtitleNew": "Ein neues KI-Modell konfigurieren",
+        "backToModels": "Zurück zu Modellen",
+        "basicInfo": "Grundinformationen",
+        "configuration": "Konfiguration",
+        "usageStats": "Nutzungsstatistiken",
+        "appsUsingModel": "Apps, die dieses Modell verwenden",
+        "noUsageData": "Keine Nutzungsdaten verfügbar",
+        "noApps": "Keine Apps verwenden dieses Modell als bevorzugtes",
+        "createModel": "Modell erstellen",
+        "saveChanges": "Änderungen speichern",
+        "saving": "Speichern...",
+        "requiredFields": "Bitte füllen Sie alle erforderlichen Felder aus",
+        "success": "Modell {{action}} erfolgreich! Weiterleitung...",
+        "successCreated": "erstellt",
+        "successUpdated": "aktualisiert"
+      },
+      "test": {
+        "success": "Modelltest erfolgreich",
+        "failed": "Modelltest fehlgeschlagen",
+        "response": "Antwort:",
+        "error": "Fehler:",
+        "networkError": "Netzwerkfehler: Verbindung zum Modelldienst nicht möglich",
+        "timeout": "Anfrage-Timeout: Modelldienst antwortet nicht",
+        "connectionRefused": "Verbindung verweigert: Modelldienst ist nicht verfügbar",
+        "dnsError": "DNS-Fehler: Modelldienst-Hostname nicht gefunden",
+        "genericError": "Netzwerkfehler: {{message}}"
+      },
+      "details": {
+        "status": "Status",
+        "description": "Beschreibung",
+        "technicalDetails": "Technische Details",
+        "provider": "Anbieter",
+        "modelId": "Modell-ID",
+        "tokenLimit": "Token-Limit",
+        "supportsTools": "Unterstützt Tools",
+        "concurrency": "Parallelität",
+        "requestDelay": "Anfrage-Verzögerung",
+        "apiConfiguration": "API-Konfiguration",
+        "apiUrl": "API-URL",
+        "usageStats": "Nutzungsstatistiken",
+        "messages": "Nachrichten",
+        "tokens": "Token",
+        "appsUsingModel": "Apps, die dieses Modell verwenden",
+        "noUsageData": "Keine Nutzungsdaten verfügbar",
+        "noApps": "Keine Apps verwenden dieses Modell als bevorzugtes",
+        "close": "Schließen",
+        "editModel": "Modell bearbeiten",
+        "editModel": "Modell bearbeiten",
+        "default": "Standard",
+        "enabled": "Aktiviert",
+        "disabled": "Deaktiviert"
+      },
+      "delete": {
+        "confirm": "Sind Sie sicher, dass Sie dieses Modell löschen möchten?"
+      }
+    }
   }
 }

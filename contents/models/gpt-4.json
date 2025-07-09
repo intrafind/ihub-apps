@@ -1,0 +1,10 @@
+{
+  "id": "gpt-4",
+  "modelId": "gpt-4",
+  "name": "GPT-4",
+  "description": "Advanced model with strong reasoning and knowledge capabilities",
+  "url": "https://api.openai.com/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 8192,
+  "supportsTools": true
+}

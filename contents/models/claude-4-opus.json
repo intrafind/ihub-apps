@@ -1,0 +1,10 @@
+{
+  "id": "claude-4-opus",
+  "modelId": "claude-opus-4-20250514",
+  "name": "Claude 4 Opus",
+  "description": "Anthropic's most capable model with exceptional reasoning abilities",
+  "url": "https://api.anthropic.com/v1/messages",
+  "provider": "anthropic",
+  "tokenLimit": 200000,
+  "supportsTools": true
+}
