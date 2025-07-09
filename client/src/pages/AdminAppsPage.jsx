@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { getLocalizedContent } from '../utils/localizeContent';
+import AppDetailsPopup from '../components/AppDetailsPopup';
+import Icon from '../components/Icon';
 
 const AdminAppsPage = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
+  const [selectedApp, setSelectedApp] = useState(null);
+  const [showAppDetails, setShowAppDetails] = useState(false);
 
   useEffect(() => {
     loadApps();
@@ -77,8 +83,8 @@ const AdminAppsPage = () => {
 
   // Filter apps based on search term and enabled status
   const filteredApps = apps.filter(app => {
-    const matchesSearch = app.name.en.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         app.description.en.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = getLocalizedContent(app.name, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         getLocalizedContent(app.description, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
                          app.id.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesFilter = filterEnabled === 'all' || 
@@ -88,9 +94,17 @@ const AdminAppsPage = () => {
     return matchesSearch && matchesFilter;
   });
 
-  const getLocalizedContent = (content, lang = 'en') => {
-    if (typeof content === 'string') return content;
-    return content?.[lang] || content?.en || '';
+  const getLocalizedValue = (content) => {
+    return getLocalizedContent(content, currentLanguage);
+  };
+
+  const handleAppClick = (app) => {
+    setSelectedApp(app);
+    setShowAppDetails(true);
+  };
+
+  const clearSearch = () => {
+    setSearchTerm('');
   };
 
   if (loading) {
@@ -152,20 +166,33 @@ const AdminAppsPage = () => {
 
       {/* Search and filter controls */}
       <div className="mt-6 flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
+        <div className="flex-1 relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Icon name="search" className="h-5 w-5 text-gray-400" />
+          </div>
           <input
             type="text"
             placeholder={t('admin.apps.searchPlaceholder', 'Search apps...')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            autoComplete="off"
           />
+          {searchTerm && (
+            <button
+              onClick={clearSearch}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              aria-label="Clear search"
+            >
+              <Icon name="x" className="h-5 w-5" />
+            </button>
+          )}
         </div>
-        <div>
+        <div className="flex-shrink-0">
           <select
             value={filterEnabled}
             onChange={(e) => setFilterEnabled(e.target.value)}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3"
           >
             <option value="all">{t('admin.apps.filterAll', 'All Apps')}</option>
             <option value="enabled">{t('admin.apps.filterEnabled', 'Enabled Only')}</option>
@@ -270,7 +297,7 @@ const AdminAppsPage = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredApps.map((app) => (
-                    <tr key={app.id} className="hover:bg-gray-50">
+                    <tr key={app.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleAppClick(app)}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10">
@@ -278,12 +305,12 @@ const AdminAppsPage = () => {
                               className="h-10 w-10 rounded-full flex items-center justify-center text-white font-bold"
                               style={{ backgroundColor: app.color || '#6B7280' }}
                             >
-                              {getLocalizedContent(app.name).charAt(0).toUpperCase()}
+                              {getLocalizedValue(app.name).charAt(0).toUpperCase()}
                             </div>
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
-                              {getLocalizedContent(app.name)}
+                              {getLocalizedValue(app.name)}
                             </div>
                             <div className="text-sm text-gray-500">
                               {app.id}
@@ -312,19 +339,28 @@ const AdminAppsPage = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end space-x-2">
                           <button
-                            onClick={() => navigate(`/admin/apps/${app.id}`)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/admin/apps/${app.id}`);
+                            }}
                             className="text-indigo-600 hover:text-indigo-900"
                           >
                             {t('admin.apps.actions.edit', 'Edit')}
                           </button>
                           <button
-                            onClick={() => navigate(`/admin/apps/${app.id}/test`)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/admin/apps/${app.id}/test`);
+                            }}
                             className="text-green-600 hover:text-green-900"
                           >
                             {t('admin.apps.actions.test', 'Test')}
                           </button>
                           <button
-                            onClick={() => toggleApp(app.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleApp(app.id);
+                            }}
                             className={`${
                               app.enabled 
                                 ? 'text-red-600 hover:text-red-900' 
@@ -337,7 +373,10 @@ const AdminAppsPage = () => {
                             }
                           </button>
                           <button
-                            onClick={() => deleteApp(app.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteApp(app.id);
+                            }}
                             className="text-red-600 hover:text-red-900"
                           >
                             {t('admin.apps.actions.delete', 'Delete')}
@@ -366,6 +405,13 @@ const AdminAppsPage = () => {
           </p>
         </div>
       )}
+      
+      {/* App Details Popup */}
+      <AppDetailsPopup
+        app={selectedApp}
+        isOpen={showAppDetails}
+        onClose={() => setShowAppDetails(false)}
+      />
     </div>
   );
 };
