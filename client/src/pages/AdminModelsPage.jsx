@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import Icon from '../components/Icon';
+import ModelDetailsPopup from '../components/ModelDetailsPopup';
 
 const AdminModelsPage = () => {
   const { t, i18n } = useTranslation();
@@ -15,6 +16,8 @@ const AdminModelsPage = () => {
   const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
   const [testingModel, setTestingModel] = useState(null);
   const [testResults, setTestResults] = useState({});
+  const [selectedModel, setSelectedModel] = useState(null);
+  const [showModelDetails, setShowModelDetails] = useState(false);
 
   useEffect(() => {
     loadModels();
@@ -61,6 +64,11 @@ const AdminModelsPage = () => {
     }
   };
 
+  const showModelDetailsPopup = (model) => {
+    setSelectedModel(model);
+    setShowModelDetails(true);
+  };
+
   const testModel = async (modelId) => {
     try {
       setTestingModel(modelId);
@@ -74,9 +82,28 @@ const AdminModelsPage = () => {
         [modelId]: result
       }));
     } catch (err) {
+      console.error('Model test error:', err);
+      let errorMessage = 'Unknown error occurred';
+      
+      if (err.message.includes('fetch failed')) {
+        errorMessage = 'Network error: Unable to connect to the model service';
+      } else if (err.message.includes('timeout')) {
+        errorMessage = 'Request timeout: Model service is not responding';
+      } else if (err.message.includes('ECONNREFUSED')) {
+        errorMessage = 'Connection refused: Model service is not available';
+      } else if (err.message.includes('ENOTFOUND')) {
+        errorMessage = 'DNS error: Model service hostname not found';
+      } else {
+        errorMessage = `Network error: ${err.message}`;
+      }
+      
       setTestResults(prev => ({
         ...prev,
-        [modelId]: { success: false, message: err.message }
+        [modelId]: { 
+          success: false, 
+          message: 'Model test failed',
+          error: errorMessage
+        }
       }));
     } finally {
       setTestingModel(null);
@@ -284,6 +311,12 @@ const AdminModelsPage = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => showModelDetailsPopup(model)}
+                        className="px-3 py-1 bg-indigo-100 text-indigo-700 text-sm rounded hover:bg-indigo-200"
+                      >
+                        View
+                      </button>
+                      <button
                         onClick={() => testModel(model.id)}
                         disabled={testingModel === model.id}
                         className={`px-3 py-1 text-sm rounded ${
@@ -367,6 +400,13 @@ const AdminModelsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Model Details Popup */}
+      <ModelDetailsPopup
+        model={selectedModel}
+        isOpen={showModelDetails}
+        onClose={() => setShowModelDetails(false)}
+      />
     </div>
   );
 };

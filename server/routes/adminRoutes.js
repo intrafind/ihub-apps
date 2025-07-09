@@ -491,16 +491,61 @@ export default function registerAdminRoutes(app) {
         });
       } catch (testError) {
         console.error('Model test failed:', testError);
+        
+        // Provide more detailed error messages based on the error type
+        let errorMessage = 'Unknown error occurred';
+        let userMessage = 'Model test failed';
+        
+        if (testError.message.includes('fetch failed')) {
+          if (testError.cause?.code === 'UND_ERR_CONNECT_TIMEOUT') {
+            userMessage = 'Connection timeout';
+            errorMessage = 'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.';
+          } else if (testError.cause?.code === 'ECONNREFUSED') {
+            userMessage = 'Connection refused';
+            errorMessage = 'Unable to connect to the model service. Please verify the URL and ensure the service is running.';
+          } else if (testError.cause?.code === 'ENOTFOUND') {
+            userMessage = 'Service not found';
+            errorMessage = 'The model service hostname could not be resolved. Please check the URL configuration.';
+          } else {
+            userMessage = 'Network error';
+            errorMessage = `Network connection failed: ${testError.cause?.message || testError.message}`;
+          }
+        } else if (testError.message.includes('timeout')) {
+          userMessage = 'Request timeout';
+          errorMessage = 'The model service took too long to respond. Please try again or check the service status.';
+        } else if (testError.message.includes('401')) {
+          userMessage = 'Authentication failed';
+          errorMessage = 'Invalid API key or authentication credentials. Please check your model configuration.';
+        } else if (testError.message.includes('403')) {
+          userMessage = 'Access denied';
+          errorMessage = 'Access denied by the model service. Please check your API key permissions.';
+        } else if (testError.message.includes('404')) {
+          userMessage = 'Model not found';
+          errorMessage = 'The specified model was not found on the service. Please check the model ID configuration.';
+        } else if (testError.message.includes('429')) {
+          userMessage = 'Rate limit exceeded';
+          errorMessage = 'Too many requests to the model service. Please try again later.';
+        } else if (testError.message.includes('500')) {
+          userMessage = 'Server error';
+          errorMessage = 'The model service encountered an internal error. Please try again later.';
+        } else {
+          errorMessage = testError.message;
+        }
+        
         res.status(500).json({ 
           success: false, 
-          message: 'Model test failed',
-          error: testError.message,
+          message: userMessage,
+          error: errorMessage,
           model: model
         });
       }
     } catch (error) {
       console.error('Error testing model:', error);
-      res.status(500).json({ error: 'Failed to test model' });
+      res.status(500).json({ 
+        success: false,
+        message: 'System error',
+        error: 'Failed to test model due to a system error. Please try again.' 
+      });
     }
   });
 

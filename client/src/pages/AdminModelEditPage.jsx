@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { getLocalizedContent } from '../utils/localizeContent';
 import Icon from '../components/Icon';
 
 const AdminModelEditPage = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const { modelId } = useParams();
   const isNewModel = modelId === 'new';
@@ -450,7 +452,7 @@ const AdminModelEditPage = () => {
                   <div className="space-y-2">
                     {apps.map(app => (
                       <div key={app.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm font-medium">{app.name}</span>
+                        <span className="text-sm font-medium">{getLocalizedContent(app.name, currentLanguage)}</span>
                         <span className={`text-xs px-2 py-1 rounded-full ${
                           app.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                         }`}>
