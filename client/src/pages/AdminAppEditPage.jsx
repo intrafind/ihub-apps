@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import DynamicLanguageEditor from '../components/DynamicLanguageEditor';
+import Icon from '../components/Icon';
 
 const AdminAppEditPage = () => {
   const { t } = useTranslation();
@@ -10,17 +12,35 @@ const AdminAppEditPage = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [availableModels, setAvailableModels] = useState([]);
+
+  useEffect(() => {
+    // Load available models
+    const loadModels = async () => {
+      try {
+        const response = await fetch('/api/models');
+        if (response.ok) {
+          const models = await response.json();
+          setAvailableModels(models);
+        }
+      } catch (err) {
+        console.error('Failed to load models:', err);
+      }
+    };
+
+    loadModels();
+  }, []);
 
   useEffect(() => {
     if (appId === 'new') {
       // Initialize new app
       setApp({
         id: '',
-        name: { en: '', de: '' },
-        description: { en: '', de: '' },
+        name: { en: '' },
+        description: { en: '' },
         color: '#4F46E5',
         icon: 'chat-bubbles',
-        system: { en: '', de: '' },
+        system: { en: '' },
         tokenLimit: 4096,
         preferredModel: 'gpt-4',
         preferredOutputFormat: 'markdown',
@@ -28,7 +48,11 @@ const AdminAppEditPage = () => {
         preferredTemperature: 0.7,
         sendChatHistory: true,
         enabled: true,
-        order: 0
+        order: 0,
+        messagePlaceholder: { en: '' },
+        prompt: { en: '' },
+        variables: [],
+        starterPrompts: []
       });
       setLoading(false);
     } else {
@@ -93,13 +117,66 @@ const AdminAppEditPage = () => {
     }));
   };
 
-  const handleLocalizedChange = (field, lang, value) => {
+  const handleLocalizedChange = (field, value) => {
     setApp(prev => ({
       ...prev,
-      [field]: {
-        ...prev[field],
-        [lang]: value
-      }
+      [field]: value
+    }));
+  };
+
+  const handleVariableChange = (index, field, value) => {
+    setApp(prev => ({
+      ...prev,
+      variables: prev.variables.map((variable, i) => 
+        i === index ? { ...variable, [field]: value } : variable
+      )
+    }));
+  };
+
+  const addVariable = () => {
+    setApp(prev => ({
+      ...prev,
+      variables: [...(prev.variables || []), {
+        name: '',
+        label: { en: '' },
+        type: 'string',
+        required: false,
+        defaultValue: { en: '' }
+      }]
+    }));
+  };
+
+  const removeVariable = (index) => {
+    setApp(prev => ({
+      ...prev,
+      variables: prev.variables.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleStarterPromptChange = (index, field, value) => {
+    setApp(prev => ({
+      ...prev,
+      starterPrompts: prev.starterPrompts.map((prompt, i) => 
+        i === index ? { ...prompt, [field]: value } : prompt
+      )
+    }));
+  };
+
+  const addStarterPrompt = () => {
+    setApp(prev => ({
+      ...prev,
+      starterPrompts: [...(prev.starterPrompts || []), {
+        title: { en: '' },
+        message: { en: '' },
+        variables: {}
+      }]
+    }));
+  };
+
+  const removeStarterPrompt = (index) => {
+    setApp(prev => ({
+      ...prev,
+      starterPrompts: prev.starterPrompts.filter((_, i) => i !== index)
     }));
   };
 
@@ -206,53 +283,30 @@ const AdminAppEditPage = () => {
                   />
                 </div>
 
-                <div className="col-span-6 sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700">
-                    {t('admin.apps.edit.nameEn', 'Name (English)')}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={app.name?.en || ''}
-                    onChange={(e) => handleLocalizedChange('name', 'en', e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-
-                <div className="col-span-6 sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700">
-                    {t('admin.apps.edit.nameDe', 'Name (German)')}
-                  </label>
-                  <input
-                    type="text"
-                    value={app.name?.de || ''}
-                    onChange={(e) => handleLocalizedChange('name', 'de', e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                <div className="col-span-6">
+                  <DynamicLanguageEditor
+                    label={t('admin.apps.edit.name', 'Name')}
+                    value={app.name}
+                    onChange={(value) => handleLocalizedChange('name', value)}
+                    required={true}
+                    placeholder={{
+                      en: 'Enter app name in English',
+                      de: 'App-Name auf Deutsch eingeben'
+                    }}
                   />
                 </div>
 
                 <div className="col-span-6">
-                  <label className="block text-sm font-medium text-gray-700">
-                    {t('admin.apps.edit.descriptionEn', 'Description (English)')}
-                  </label>
-                  <textarea
-                    rows={3}
-                    required
-                    value={app.description?.en || ''}
-                    onChange={(e) => handleLocalizedChange('description', 'en', e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-
-                <div className="col-span-6">
-                  <label className="block text-sm font-medium text-gray-700">
-                    {t('admin.apps.edit.descriptionDe', 'Description (German)')}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={app.description?.de || ''}
-                    onChange={(e) => handleLocalizedChange('description', 'de', e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  <DynamicLanguageEditor
+                    label={t('admin.apps.edit.description', 'Description')}
+                    value={app.description}
+                    onChange={(value) => handleLocalizedChange('description', value)}
+                    required={true}
+                    type="textarea"
+                    placeholder={{
+                      en: 'Enter app description in English',
+                      de: 'App-Beschreibung auf Deutsch eingeben'
+                    }}
                   />
                 </div>
 
@@ -287,12 +341,14 @@ const AdminAppEditPage = () => {
                   <select
                     value={app.preferredModel}
                     onChange={(e) => handleInputChange('preferredModel', e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   >
-                    <option value="gpt-4">GPT-4</option>
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                    <option value="claude-3-opus-20240229">Claude 3 Opus</option>
-                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                    <option value="">{t('admin.apps.edit.selectModel', 'Select model...')}</option>
+                    {availableModels.map(model => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -369,30 +425,207 @@ const AdminAppEditPage = () => {
               </p>
             </div>
             <div className="mt-5 md:col-span-2 md:mt-0">
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    {t('admin.apps.edit.systemEn', 'System Instructions (English)')}
-                  </label>
-                  <textarea
-                    rows={6}
-                    value={app.system?.en || ''}
-                    onChange={(e) => handleLocalizedChange('system', 'en', e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
+              <DynamicLanguageEditor
+                label={t('admin.apps.edit.systemInstructions', 'System Instructions')}
+                value={app.system}
+                onChange={(value) => handleLocalizedChange('system', value)}
+                type="textarea"
+                placeholder={{
+                  en: 'Enter system instructions in English',
+                  de: 'Systeminstruktionen auf Deutsch eingeben'
+                }}
+                className="mb-6"
+              />
+              
+              <DynamicLanguageEditor
+                label={t('admin.apps.edit.messagePlaceholder', 'Message Placeholder')}
+                value={app.messagePlaceholder}
+                onChange={(value) => handleLocalizedChange('messagePlaceholder', value)}
+                placeholder={{
+                  en: 'Enter message placeholder in English',
+                  de: 'Nachrichtenplatzhalter auf Deutsch eingeben'
+                }}
+                className="mb-6"
+              />
+              
+              <DynamicLanguageEditor
+                label={t('admin.apps.edit.prompt', 'Prompt Template')}
+                value={app.prompt}
+                onChange={(value) => handleLocalizedChange('prompt', value)}
+                type="textarea"
+                placeholder={{
+                  en: 'Enter prompt template in English',
+                  de: 'Prompt-Vorlage auf Deutsch eingeben'
+                }}
+              />
+            </div>
+          </div>
+        </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    {t('admin.apps.edit.systemDe', 'System Instructions (German)')}
-                  </label>
-                  <textarea
-                    rows={6}
-                    value={app.system?.de || ''}
-                    onChange={(e) => handleLocalizedChange('system', 'de', e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
+        {/* Variables */}
+        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                {t('admin.apps.edit.variables', 'Variables')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {t('admin.apps.edit.variablesDesc', 'Define variables that users can set when using the app')}
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <div className="space-y-4">
+                {app.variables?.map((variable, index) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-4">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        {t('admin.apps.edit.variableTitle', 'Variable {{index}}', { index: index + 1 })}
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => removeVariable(index)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        <Icon name="x" className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          {t('admin.apps.edit.variableName', 'Name')}
+                        </label>
+                        <input
+                          type="text"
+                          value={variable.name}
+                          onChange={(e) => handleVariableChange(index, 'name', e.target.value)}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          {t('admin.apps.edit.variableType', 'Type')}
+                        </label>
+                        <select
+                          value={variable.type}
+                          onChange={(e) => handleVariableChange(index, 'type', e.target.value)}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        >
+                          <option value="string">String</option>
+                          <option value="text">Text</option>
+                          <option value="number">Number</option>
+                          <option value="boolean">Boolean</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <DynamicLanguageEditor
+                        label={t('admin.apps.edit.variableLabel', 'Label')}
+                        value={variable.label}
+                        onChange={(value) => handleVariableChange(index, 'label', value)}
+                        required={true}
+                        placeholder={{
+                          en: 'Enter variable label in English',
+                          de: 'Variablenbezeichnung auf Deutsch eingeben'
+                        }}
+                      />
+                    </div>
+                    <div className="mt-4">
+                      <DynamicLanguageEditor
+                        label={t('admin.apps.edit.variableDefaultValue', 'Default Value')}
+                        value={variable.defaultValue}
+                        onChange={(value) => handleVariableChange(index, 'defaultValue', value)}
+                        placeholder={{
+                          en: 'Enter default value in English',
+                          de: 'Standardwert auf Deutsch eingeben'
+                        }}
+                      />
+                    </div>
+                    <div className="mt-4 flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={variable.required}
+                        onChange={(e) => handleVariableChange(index, 'required', e.target.checked)}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900">
+                        {t('admin.apps.edit.variableRequired', 'Required')}
+                      </label>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addVariable}
+                  className="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <Icon name="plus-circle" className="w-5 h-5 mr-2" />
+                  {t('admin.apps.edit.addVariable', 'Add Variable')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Starter Prompts */}
+        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                {t('admin.apps.edit.starterPrompts', 'Starter Prompts')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {t('admin.apps.edit.starterPromptsDesc', 'Predefined prompts to help users get started')}
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <div className="space-y-4">
+                {app.starterPrompts?.map((prompt, index) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-4">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        {t('admin.apps.edit.starterPromptTitle', 'Starter Prompt {{index}}', { index: index + 1 })}
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => removeStarterPrompt(index)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        <Icon name="x" className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <DynamicLanguageEditor
+                        label={t('admin.apps.edit.starterPromptTitleField', 'Title')}
+                        value={prompt.title}
+                        onChange={(value) => handleStarterPromptChange(index, 'title', value)}
+                        required={true}
+                        placeholder={{
+                          en: 'Enter title in English',
+                          de: 'Titel auf Deutsch eingeben'
+                        }}
+                      />
+                      <DynamicLanguageEditor
+                        label={t('admin.apps.edit.starterPromptMessage', 'Message')}
+                        value={prompt.message}
+                        onChange={(value) => handleStarterPromptChange(index, 'message', value)}
+                        required={true}
+                        type="textarea"
+                        placeholder={{
+                          en: 'Enter message in English',
+                          de: 'Nachricht auf Deutsch eingeben'
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addStarterPrompt}
+                  className="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <Icon name="plus-circle" className="w-5 h-5 mr-2" />
+                  {t('admin.apps.edit.addStarterPrompt', 'Add Starter Prompt')}
+                </button>
               </div>
             </div>
           </div>
