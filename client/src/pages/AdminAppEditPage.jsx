@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../components/DynamicLanguageEditor';
+import ToolsSelector from '../components/ToolsSelector';
 import Icon from '../components/Icon';
 
 const AdminAppEditPage = () => {
@@ -683,43 +684,10 @@ const AdminAppEditPage = () => {
               </p>
             </div>
             <div className="mt-5 md:mt-0 md:col-span-2">
-              <div className="grid grid-cols-1 gap-3">
-                {[
-                  'researchPlanner',
-                  'deepResearch', 
-                  'queryRewriter',
-                  'evaluator',
-                  'braveSearch',
-                  'enhancedWebSearch',
-                  'tavilySearch',
-                  'webContentExtractor',
-                  'answerReducer',
-                  'finalizer',
-                  'playwrightScreenshot',
-                  'seleniumScreenshot'
-                ].map((tool) => (
-                  <div key={tool} className="flex items-center">
-                    <input
-                      id={`tool-${tool}`}
-                      name={`tool-${tool}`}
-                      type="checkbox"
-                      checked={app.tools?.includes(tool) || false}
-                      onChange={(e) => {
-                        const currentTools = app.tools || [];
-                        if (e.target.checked) {
-                          handleInputChange('tools', [...currentTools, tool]);
-                        } else {
-                          handleInputChange('tools', currentTools.filter(t => t !== tool));
-                        }
-                      }}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor={`tool-${tool}`} className="ml-3 text-sm font-medium text-gray-700">
-                      {tool}
-                    </label>
-                  </div>
-                ))}
-              </div>
+              <ToolsSelector
+                selectedTools={app.tools || []}
+                onToolsChange={(tools) => handleInputChange('tools', tools)}
+              />
             </div>
           </div>
         </div>
