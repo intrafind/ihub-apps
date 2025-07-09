@@ -132,6 +132,7 @@ const AppChat = () => {
   const [showParameters, setShowParameters] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const { uiConfig } = useUIConfig();
+  const shareEnabled = app?.features?.shortLinks !== false;
 
 
   // Shared app settings hook
@@ -856,7 +857,7 @@ const AppChat = () => {
         onToggleParameters={toggleParameters}
         showParameters={showParameters}
         onShare={() => setShowShare(true)}
-        showShareButton={true}
+        showShareButton={shareEnabled}
       />
 
       {app?.variables && app.variables.length > 0 && showParameters && (
@@ -1185,7 +1186,7 @@ const AppChat = () => {
         </div>
       )}
       </div>
-      {showShare && (
+      {shareEnabled && showShare && (
         <AppShareModal
           appId={appId}
           path={window.location.pathname}

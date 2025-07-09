@@ -120,6 +120,7 @@ const AppCanvas = () => {
   // Configuration panel states
   const [showConfig, setShowConfig] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const shareEnabled = app?.features?.shortLinks !== false;
   
   // Content confirmation modal state
   const [showContentModal, setShowContentModal] = useState(false);
@@ -596,7 +597,7 @@ const AppCanvas = () => {
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
         onShare={() => setShowShare(true)}
-        showShareButton={true}
+        showShareButton={shareEnabled}
       />
 
       {/* Main Content Area */}
@@ -663,7 +664,7 @@ const AppCanvas = () => {
         onAppend={handleContentModalAppend}
         onCancel={handleContentModalCancel}
       />
-      {showShare && (
+      {shareEnabled && showShare && (
         <AppShareModal
           appId={appId}
           path={window.location.pathname}

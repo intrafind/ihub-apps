@@ -22,7 +22,8 @@
   "preferredTemperature": 0.7,
   "sendChatHistory": false,
   "features": {
-    "canvas": true
+    "canvas": true,
+    "shortLinks": true
   },
   "inputMode": {
     "type": "multiline",
@@ -32,5 +33,4 @@
       "showTranscript": true
     }
   },
-  "enabled": true
-}
+  "enabled": true}
