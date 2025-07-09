@@ -18,6 +18,7 @@ dist-ssr/
 dist-bin/
 build/
 contents/data/*
+!contents/data/.gitkeep
 
 # Logs
 logs/

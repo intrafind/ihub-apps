@@ -372,6 +372,15 @@ export const fetchPageContent = async (pageId, options = {}) => {
   );
 };
 
+// Short links
+export const createShortLink = async (data) => {
+  return handleApiResponse(() => apiClient.post('/shortlinks', data), null, null, false);
+};
+
+export const getShortLink = async (code) => {
+  return handleApiResponse(() => apiClient.get(`/shortlinks/${code}`), null, null, false);
+};
+
 // Session management
 export const sendSessionStart = async (sessionData) => {
   return handleApiResponse(

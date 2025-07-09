@@ -17,6 +17,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import { useTranslation } from "react-i18next";
 import { getLocalizedContent } from "../utils/localizeContent";
 import Icon from "../components/Icon";
+import AppShareModal from "../components/AppShareModal";
 
 // Import our custom hooks and components
 import useAppChat from "../hooks/useAppChat";
@@ -129,7 +130,10 @@ const AppChat = () => {
   const [showConfig, setShowConfig] = useState(false);
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const { uiConfig } = useUIConfig();
+  const shareEnabled = app?.features?.shortLinks !== false;
+
 
   // Shared app settings hook
   const {
@@ -145,7 +149,44 @@ const AppChat = () => {
     setSelectedOutputFormat,
     setTemperature,
     setSendChatHistory,
+    modelsLoading,
   } = useAppSettings(appId, app);
+
+  // Apply settings and variables from URL parameters once app data is loaded
+  useEffect(() => {
+    if (!app || modelsLoading) return;
+
+    const newVars = {};
+    let changed = false;
+
+    const m = searchParams.get('model');
+    if (m) { setSelectedModel(m); changed = true; }
+    const st = searchParams.get('style');
+    if (st) { setSelectedStyle(st); changed = true; }
+    const out = searchParams.get('outfmt');
+    if (out) { setSelectedOutputFormat(out); changed = true; }
+    const tempParam = searchParams.get('temp');
+    if (tempParam) { setTemperature(parseFloat(tempParam)); changed = true; }
+    const hist = searchParams.get('history');
+    if (hist) { setSendChatHistory(hist === 'true'); changed = true; }
+
+    searchParams.forEach((value, key) => {
+      if (key.startsWith('var_')) {
+        newVars[key.slice(4)] = value;
+        changed = true;
+      }
+    });
+
+    if (Object.keys(newVars).length) {
+      setVariables(v => ({ ...v, ...newVars }));
+    }
+
+    if (changed) {
+      const newSearch = new URLSearchParams(searchParams);
+      ['model','style','outfmt','temp','history','prefill', ...Object.keys(newVars).map(v => `var_${v}`)].forEach(k => newSearch.delete(k));
+      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+    }
+  }, [app, modelsLoading]);
 
   const [maxTokens, setMaxTokens] = useState(null);
   const [useMaxTokens, setUseMaxTokens] = useState(false);
@@ -815,6 +856,8 @@ const AppChat = () => {
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}
         showParameters={showParameters}
+        onShare={() => setShowShare(true)}
+        showShareButton={shareEnabled}
       />
 
       {app?.variables && app.variables.length > 0 && showParameters && (
@@ -1130,19 +1173,37 @@ const AppChat = () => {
           )}
         </div>
 
-        {app?.variables && app.variables.length > 0 && (
-          <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 rounded-lg flex-shrink-0">
-            <h3 className="font-medium mb-3">
-              {t("pages.appChat.inputParameters")}
-            </h3>
-            <InputVariables
-              variables={variables}
-              setVariables={setVariables}
-              localizedVariables={localizedVariables}
-            />
-          </div>
-        )}
+      {app?.variables && app.variables.length > 0 && (
+        <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 rounded-lg flex-shrink-0">
+          <h3 className="font-medium mb-3">
+            {t("pages.appChat.inputParameters")}
+          </h3>
+          <InputVariables
+            variables={variables}
+            setVariables={setVariables}
+            localizedVariables={localizedVariables}
+          />
+        </div>
+      )}
       </div>
+      {shareEnabled && showShare && (
+        <AppShareModal
+          appId={appId}
+          path={window.location.pathname}
+          params={{
+            model: selectedModel,
+            style: selectedStyle,
+            outfmt: selectedOutputFormat,
+            temp: temperature,
+            history: sendChatHistory,
+            prefill: prefillMessage,
+            ...Object.fromEntries(
+              Object.entries(variables).map(([k, v]) => [`var_${k}`, v])
+            ),
+          }}
+          onClose={() => setShowShare(false)}
+        />
+      )}
     </div>
   );
 };

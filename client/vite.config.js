@@ -7,7 +7,11 @@ export default defineConfig({
   envDir: "../",
   server: {
     proxy: {
-      "/api": {
+      "/api/": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+      "/s/": {
         target: "http://localhost:3000",
         changeOrigin: true,
       },

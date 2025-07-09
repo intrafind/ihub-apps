@@ -13,6 +13,7 @@ import AdminUsageReports from './pages/AdminUsageReports';
 import AdminSystemPage from './pages/AdminSystemPage';
 import AdminAppsPage from './pages/AdminAppsPage';
 import AdminAppEditPage from './pages/AdminAppEditPage';
+import AdminShortLinks from './pages/AdminShortLinks';
 import AdminModelEditPage from './pages/AdminModelEditPage';
 import AdminModelsPage from './pages/AdminModelsPage';
 import AppProviders from './components/AppProviders';
@@ -31,6 +32,7 @@ const SafeAdminUsage = withErrorBoundary(AdminUsageReports);
 const SafeAdminSystem = withErrorBoundary(AdminSystemPage);
 const SafeAdminApps = withErrorBoundary(AdminAppsPage);
 const SafeAdminAppEdit = withErrorBoundary(AdminAppEditPage);
+const SafeAdminShortLinks = withErrorBoundary(AdminShortLinks);
 const SafeAdminModels = withErrorBoundary(AdminModelsPage);
 const SafeAdminModelEdit = withErrorBoundary(AdminModelEditPage);
 const SafePromptsList = withErrorBoundary(PromptsList);
@@ -63,6 +65,7 @@ function App() {
             <Route path="admin/system" element={<SafeAdminSystem />} />
             <Route path="admin/apps" element={<SafeAdminApps />} />
             <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
+            <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
             <Route path="admin/models" element={<SafeAdminModels />} />
             <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
             <Route path="*" element={<NotFound />} />
@@ -72,5 +75,4 @@ function App() {
     </AppProviders>
   );
 }
-
 export default App;

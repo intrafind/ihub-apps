@@ -18,6 +18,7 @@ import registerToolRoutes from "./routes/toolRoutes.js";
 import registerPageRoutes from "./routes/pageRoutes.js";
 import registerSessionRoutes from "./routes/sessionRoutes.js";
 import registerMagicPromptRoutes from "./routes/magicPromptRoutes.js";
+import registerShortLinkRoutes from "./routes/shortLinkRoutes.js";
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import {
@@ -139,6 +140,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT });
   registerChatRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT });
   registerAdminRoutes(app);
+  registerShortLinkRoutes(app);
 
 
   // --- Session Management handled in sessionRoutes ---
