@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import Icon from './Icon';
@@ -6,6 +7,7 @@ import Icon from './Icon';
 const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
+  const navigate = useNavigate();
   const [usage, setUsage] = useState(null);
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -303,7 +305,17 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end space-x-3 rounded-b-lg">
+        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-between items-center rounded-b-lg">
+          <button
+            onClick={() => {
+              navigate(`/admin/models/${model.id}`);
+              onClose();
+            }}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <Icon name="pencil" className="w-4 h-4 mr-2" />
+            {t('admin.models.details.editModel')}
+          </button>
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"

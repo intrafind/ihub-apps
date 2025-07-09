@@ -119,7 +119,7 @@ const AdminModelEditPage = () => {
       
       // Validate required fields
       if (!formData.id || !formData.name || !formData.description || !formData.provider) {
-        throw new Error('Please fill in all required fields');
+        throw new Error(t('admin.models.edit.requiredFields'));
       }
       
       // Prepare the data to send
@@ -177,319 +177,405 @@ const AdminModelEditPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading model...</p>
+          <p className="mt-4 text-gray-600">{t('app.loading')}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-100">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-6">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/admin/models')}
-                className="p-2 text-gray-600 hover:text-gray-900"
-              >
-                <Icon name="arrow-left" className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {isNewModel ? 'Add New Model' : 'Edit Model'}
-                </h1>
-                <p className="text-gray-600">
-                  {isNewModel ? 'Configure a new AI model' : `Configure ${formData.name}`}
-                </p>
-              </div>
+      <div className="bg-white shadow">
+        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center">
+            <button
+              onClick={() => navigate('/admin/models')}
+              className="mr-4 inline-flex items-center p-2 border border-transparent rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+            >
+              <Icon name="arrow-left" className="w-5 h-5" />
+              <span className="sr-only">{t('admin.models.edit.backToModels')}</span>
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {isNewModel ? t('admin.models.edit.titleNew') : t('admin.models.edit.title')}
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                {isNewModel 
+                  ? t('admin.models.edit.subtitleNew') 
+                  : t('admin.models.edit.subtitle', { name: formData.name })
+                }
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Form */}
-          <div className="lg:col-span-2">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Model ID *
-                    </label>
-                    <input
-                      type="text"
-                      name="id"
-                      value={formData.id}
-                      onChange={handleChange}
-                      disabled={!isNewModel}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                      required
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Unique identifier for the model</p>
-                  </div>
+      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          <div className="lg:grid lg:grid-cols-12 lg:gap-x-5">
+            <div className="space-y-6 sm:px-6 lg:px-0 lg:col-span-8">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+                  <div className="md:grid md:grid-cols-3 md:gap-6">
+                    <div className="md:col-span-1">
+                      <h3 className="text-lg font-medium leading-6 text-gray-900">{t('admin.models.edit.basicInfo')}</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {t('admin.models.edit.basicInfoDesc', 'Basic information about the model')}
+                      </p>
+                    </div>
+                    <div className="mt-5 md:mt-0 md:col-span-2">
+                      <div className="grid grid-cols-6 gap-6">
+                        <div className="col-span-6 sm:col-span-3">
+                          <label htmlFor="id" className="block text-sm font-medium text-gray-700">
+                            {t('admin.models.fields.id')} *
+                          </label>
+                          <input
+                            type="text"
+                            name="id"
+                            id="id"
+                            value={formData.id}
+                            onChange={handleChange}
+                            disabled={!isNewModel}
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md disabled:bg-gray-100"
+                            required
+                          />
+                          <p className="mt-2 text-sm text-gray-500">{t('admin.models.hints.modelId')}</p>
+                        </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Model Name *
-                    </label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
+                        <div className="col-span-6 sm:col-span-3">
+                          <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                            {t('admin.models.fields.name')} *
+                          </label>
+                          <input
+                            type="text"
+                            name="name"
+                            id="name"
+                            value={formData.name}
+                            onChange={handleChange}
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                            required
+                          />
+                        </div>
 
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Description *
-                    </label>
-                    <textarea
-                      name="description"
-                      value={formData.description}
-                      onChange={handleChange}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
+                        <div className="col-span-6">
+                          <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                            {t('admin.models.fields.description')} *
+                          </label>
+                          <textarea
+                            id="description"
+                            name="description"
+                            value={formData.description}
+                            onChange={handleChange}
+                            rows={3}
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                            required
+                          />
+                        </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Provider *
-                    </label>
-                    <select
-                      name="provider"
-                      value={formData.provider}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    >
-                      <option value="">Select provider</option>
-                      {providerOptions.map(option => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                        <div className="col-span-6 sm:col-span-3">
+                          <label htmlFor="provider" className="block text-sm font-medium text-gray-700">
+                            {t('admin.models.fields.provider')} *
+                          </label>
+                          <select
+                            id="provider"
+                            name="provider"
+                            value={formData.provider}
+                            onChange={handleChange}
+                            className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            required
+                          >
+                            <option value="">{t('admin.models.placeholders.selectProvider')}</option>
+                            {providerOptions.map(option => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Model ID (API)
-                    </label>
-                    <input
-                      type="text"
-                      name="modelId"
-                      value={formData.modelId}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., gpt-4"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">API model identifier</p>
-                  </div>
+                        <div className="col-span-6 sm:col-span-3">
+                          <label htmlFor="modelId" className="block text-sm font-medium text-gray-700">
+                            {t('admin.models.fields.modelId')}
+                          </label>
+                          <input
+                            type="text"
+                            name="modelId"
+                            id="modelId"
+                            value={formData.modelId}
+                            onChange={handleChange}
+                            placeholder={t('admin.models.placeholders.apiModelId')}
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                          />
+                          <p className="mt-2 text-sm text-gray-500">{t('admin.models.hints.apiModelId')}</p>
+                        </div>
 
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      API URL
-                    </label>
-                    <input
-                      type="url"
-                      name="url"
-                      value={formData.url}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="https://api.openai.com/v1/chat/completions"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Configuration</h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Token Limit
-                    </label>
-                    <input
-                      type="number"
-                      name="tokenLimit"
-                      value={formData.tokenLimit}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      min="1"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Concurrency
-                    </label>
-                    <input
-                      type="number"
-                      name="concurrency"
-                      value={formData.concurrency}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      min="1"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Request Delay (ms)
-                    </label>
-                    <input
-                      type="number"
-                      name="requestDelayMs"
-                      value={formData.requestDelayMs}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      min="0"
-                    />
+                        <div className="col-span-6">
+                          <label htmlFor="url" className="block text-sm font-medium text-gray-700">
+                            {t('admin.models.fields.url')}
+                          </label>
+                          <input
+                            type="url"
+                            name="url"
+                            id="url"
+                            value={formData.url}
+                            onChange={handleChange}
+                            placeholder={t('admin.models.placeholders.apiUrl')}
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-3">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      name="supportsTools"
-                      checked={formData.supportsTools}
-                      onChange={handleChange}
-                      className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Supports Tools</span>
-                  </label>
+                <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+                  <div className="md:grid md:grid-cols-3 md:gap-6">
+                    <div className="md:col-span-1">
+                      <h3 className="text-lg font-medium leading-6 text-gray-900">{t('admin.models.edit.configuration')}</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {t('admin.models.edit.configurationDesc', 'Advanced configuration options for the model')}
+                      </p>
+                    </div>
+                    <div className="mt-5 md:mt-0 md:col-span-2">
+                      <div className="grid grid-cols-6 gap-6">
+                        <div className="col-span-6 sm:col-span-2">
+                          <label htmlFor="tokenLimit" className="block text-sm font-medium text-gray-700">
+                            {t('admin.models.fields.tokenLimit')}
+                          </label>
+                          <input
+                            type="number"
+                            name="tokenLimit"
+                            id="tokenLimit"
+                            value={formData.tokenLimit}
+                            onChange={handleChange}
+                            min="1"
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                          />
+                        </div>
 
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      name="enabled"
-                      checked={formData.enabled}
-                      onChange={handleChange}
-                      className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Enabled</span>
-                  </label>
+                        <div className="col-span-6 sm:col-span-2">
+                          <label htmlFor="concurrency" className="block text-sm font-medium text-gray-700">
+                            {t('admin.models.fields.concurrency')}
+                          </label>
+                          <input
+                            type="number"
+                            name="concurrency"
+                            id="concurrency"
+                            value={formData.concurrency}
+                            onChange={handleChange}
+                            min="1"
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                          />
+                        </div>
 
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      name="default"
-                      checked={formData.default}
-                      onChange={handleChange}
-                      className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Default Model</span>
-                  </label>
+                        <div className="col-span-6 sm:col-span-2">
+                          <label htmlFor="requestDelayMs" className="block text-sm font-medium text-gray-700">
+                            {t('admin.models.fields.requestDelay')}
+                          </label>
+                          <input
+                            type="number"
+                            name="requestDelayMs"
+                            id="requestDelayMs"
+                            value={formData.requestDelayMs}
+                            onChange={handleChange}
+                            min="0"
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                          />
+                        </div>
+
+                        <div className="col-span-6">
+                          <fieldset>
+                            <legend className="text-base font-medium text-gray-900">Options</legend>
+                            <div className="mt-4 space-y-4">
+                              <div className="flex items-start">
+                                <div className="flex items-center h-5">
+                                  <input
+                                    id="supportsTools"
+                                    name="supportsTools"
+                                    type="checkbox"
+                                    checked={formData.supportsTools}
+                                    onChange={handleChange}
+                                    className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                  />
+                                </div>
+                                <div className="ml-3 text-sm">
+                                  <label htmlFor="supportsTools" className="font-medium text-gray-700">
+                                    {t('admin.models.fields.supportsTools')}
+                                  </label>
+                                </div>
+                              </div>
+                              <div className="flex items-start">
+                                <div className="flex items-center h-5">
+                                  <input
+                                    id="enabled"
+                                    name="enabled"
+                                    type="checkbox"
+                                    checked={formData.enabled}
+                                    onChange={handleChange}
+                                    className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                  />
+                                </div>
+                                <div className="ml-3 text-sm">
+                                  <label htmlFor="enabled" className="font-medium text-gray-700">
+                                    {t('admin.models.fields.enabled')}
+                                  </label>
+                                </div>
+                              </div>
+                              <div className="flex items-start">
+                                <div className="flex items-center h-5">
+                                  <input
+                                    id="default"
+                                    name="default"
+                                    type="checkbox"
+                                    checked={formData.default}
+                                    onChange={handleChange}
+                                    className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                  />
+                                </div>
+                                <div className="ml-3 text-sm">
+                                  <label htmlFor="default" className="font-medium text-gray-700">
+                                    {t('admin.models.fields.defaultModel')}
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          </fieldset>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              {/* Actions */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex justify-end gap-3">
+                <div className="flex justify-end">
                   <button
                     type="button"
                     onClick={() => navigate('/admin/models')}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                    className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </button>
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                   >
-                    {saving ? 'Saving...' : isNewModel ? 'Create Model' : 'Save Changes'}
+                    {saving ? t('admin.models.edit.saving') : (isNewModel ? t('admin.models.edit.createModel') : t('admin.models.edit.saveChanges'))}
                   </button>
                 </div>
-              </div>
-            </form>
-          </div>
+              </form>
+            </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Usage Stats */}
-            {!isNewModel && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Usage Statistics</h3>
-                {usage ? (
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Messages:</span>
-                      <span className="text-sm font-medium">{usage.messages?.toLocaleString() || 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Tokens:</span>
-                      <span className="text-sm font-medium">{usage.tokens?.toLocaleString() || 0}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500">No usage data available</p>
-                )}
-              </div>
-            )}
-
-            {/* Apps Using Model */}
-            {!isNewModel && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Apps Using This Model</h3>
-                {apps.length > 0 ? (
-                  <div className="space-y-2">
-                    {apps.map(app => (
-                      <div key={app.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm font-medium">{getLocalizedContent(app.name, currentLanguage)}</span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          app.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {app.enabled ? 'Enabled' : 'Disabled'}
-                        </span>
+            <div className="mt-6 lg:mt-0 lg:col-span-4">
+              <div className="space-y-6">
+                {/* Usage Stats */}
+                {!isNewModel && (
+                  <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
+                      {t('admin.models.edit.usageStats')}
+                    </h3>
+                    {usage ? (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-500">{t('admin.models.details.messages')}:</span>
+                          <span className="text-sm font-medium text-gray-900">{usage.messages?.toLocaleString() || 0}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-500">{t('admin.models.details.tokens')}:</span>
+                          <span className="text-sm font-medium text-gray-900">{usage.tokens?.toLocaleString() || 0}</span>
+                        </div>
                       </div>
-                    ))}
+                    ) : (
+                      <p className="text-sm text-gray-500">{t('admin.models.edit.noUsageData')}</p>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-sm text-gray-500">No apps are using this model as preferred</p>
+                )}
+
+                {/* Apps Using Model */}
+                {!isNewModel && (
+                  <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
+                      {t('admin.models.edit.appsUsingModel')}
+                    </h3>
+                    {apps.length > 0 ? (
+                      <div className="space-y-3">
+                        {apps.map(app => (
+                          <div key={app.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center space-x-3">
+                              <div 
+                                className="w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold"
+                                style={{ backgroundColor: app.color || '#6B7280' }}
+                              >
+                                <Icon name={app.icon || 'chat-bubbles'} className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {getLocalizedContent(app.name, currentLanguage)}
+                                </span>
+                                <div className="text-xs text-gray-500">{app.id}</div>
+                              </div>
+                            </div>
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              app.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {app.enabled ? t('admin.models.status.enabled') : t('admin.models.status.disabled')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">{t('admin.models.edit.noApps')}</p>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
         </div>
-
-        {/* Status Messages */}
-        {error && (
-          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
-            <div className="flex items-center">
-              <Icon name="x-circle" className="w-5 h-5 text-red-600 mr-2" />
-              <span className="text-red-800">{error}</span>
-            </div>
-          </div>
-        )}
-
-        {success && (
-          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
-            <div className="flex items-center">
-              <Icon name="check-circle" className="w-5 h-5 text-green-600 mr-2" />
-              <span className="text-green-800">
-                Model {isNewModel ? 'created' : 'updated'} successfully! Redirecting...
-              </span>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Status Messages */}
+      {error && (
+        <div className="fixed inset-x-0 top-0 flex items-end justify-center px-4 py-6 pointer-events-none sm:p-6 sm:items-start sm:justify-end">
+          <div className="max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <Icon name="x-circle" className="w-5 h-5 text-red-400" />
+                </div>
+                <div className="ml-3 w-0 flex-1 pt-0.5">
+                  <p className="text-sm font-medium text-gray-900">{t('common.error')}</p>
+                  <p className="mt-1 text-sm text-gray-500">{error}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {success && (
+        <div className="fixed inset-x-0 top-0 flex items-end justify-center px-4 py-6 pointer-events-none sm:p-6 sm:items-start sm:justify-end">
+          <div className="max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <Icon name="check-circle" className="w-5 h-5 text-green-400" />
+                </div>
+                <div className="ml-3 w-0 flex-1 pt-0.5">
+                  <p className="text-sm font-medium text-gray-900">
+                    {t('admin.models.edit.success', { 
+                      action: isNewModel ? t('admin.models.edit.successCreated') : t('admin.models.edit.successUpdated') 
+                    })}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
