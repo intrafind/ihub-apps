@@ -27,3 +27,4 @@ This book contains configuration details and user instructions for the AI Hub Ap
 - [Image Upload Feature](image-upload-feature.md)
 - [Image Generation](image-generation-feature.md)
 - [Server Configuration](server-config.md)
+- [Kubernetes Deployment](deployment-k8s.md)

@@ -2,7 +2,7 @@
  * Build script for Node.js Single Executable Application (SEA)
  * This uses a simpler approach to avoid postject issues
  * 
- * Requires Node.js 20.0.0 or later
+ * Requires Node.js 22.0.0 or later
  */
 
 const fs = require('fs');

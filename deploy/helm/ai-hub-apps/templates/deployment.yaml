@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-hub-apps.fullname" . }}
+  labels:
+    app: {{ include "ai-hub-apps.name" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "ai-hub-apps.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "ai-hub-apps.name" . }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccountName | default "default" }}
+      volumes:
+        - name: data
+          emptyDir: {}
+      initContainers:
+        - name: fetch-customization
+          image: amazon/aws-cli:2.14.0
+          command: ["sh", "-c"]
+          args:
+            - aws s3 sync {{ .Values.s3Bucket }} /data
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: ai-hub-apps
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: CONTENTS_DIR
+              value: {{ .Values.env.CONTENTS_DIR }}
+            - name: APP_ROOT_DIR
+              value: {{ .Values.env.APP_ROOT_DIR }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/contents
+              subPath: contents
+            - name: data
+              mountPath: /app/public
+              subPath: public
+          ports:
+            - containerPort: {{ .Values.service.port }}

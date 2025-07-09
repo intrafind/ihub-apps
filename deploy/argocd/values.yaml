@@ -1,0 +1,14 @@
+image:
+  repository: ghcr.io/your-org/ai-hub-apps
+  tag: <REPLACE with version>
+  pullPolicy: IfNotPresent
+
+s3Bucket: s3://<REPLACE with s3 bucket + path>
+
+service:
+  type: ClusterIP
+  port: 3000
+
+env:
+  CONTENTS_DIR: /app/contents
+  APP_ROOT_DIR: /app

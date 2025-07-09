@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # build-sea.sh - Build script for AI Hub Apps using Node.js Single Executable Application (SEA) 
-# Requires Node.js 20 or later
+# Requires Node.js 22 or later
 
 set -e  # Exit on errors
 

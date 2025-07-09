@@ -47,7 +47,7 @@ Start the production build with:
 ```bash
 npm run start:prod
 ```
-A standalone binary can be created with `./build.sh --binary` if Node.js 20+ is installed.
+A standalone binary can be created with `./build.sh --binary` if Node.js 22+ is installed.
 
 ## Testing
 This repository does not contain automated tests yet.
