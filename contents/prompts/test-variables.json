@@ -1,0 +1,74 @@
+{
+  "id": "test-variables",
+  "name": {
+    "en": "Test Variables",
+    "de": "Test Variablen"
+  },
+  "description": {
+    "en": "A test prompt with variables to verify the variable prefill functionality",
+    "de": "Ein Test-Prompt mit Variablen zur Überprüfung der Variablen-Vorbelegung"
+  },
+  "prompt": {
+    "en": "Please help me with the following task: {{task}}. The context is: {{context}}. The target audience is: {{audience}}.",
+    "de": "Bitte hilf mir mit der folgenden Aufgabe: {{task}}. Der Kontext ist: {{context}}. Die Zielgruppe ist: {{audience}}."
+  },
+  "variables": [
+    {
+      "name": "task",
+      "label": {
+        "en": "Task Description",
+        "de": "Aufgabenbeschreibung"
+      },
+      "type": "text",
+      "required": true,
+      "defaultValue": "Write a professional email"
+    },
+    {
+      "name": "context",
+      "label": {
+        "en": "Context",
+        "de": "Kontext"
+      },
+      "type": "text",
+      "required": false,
+      "defaultValue": "Business communication"
+    },
+    {
+      "name": "audience",
+      "label": {
+        "en": "Target Audience",
+        "de": "Zielgruppe"
+      },
+      "type": "select",
+      "required": false,
+      "defaultValue": "professional",
+      "options": [
+        {
+          "value": "professional",
+          "label": {
+            "en": "Professional",
+            "de": "Professionell"
+          }
+        },
+        {
+          "value": "casual",
+          "label": {
+            "en": "Casual",
+            "de": "Locker"
+          }
+        },
+        {
+          "value": "academic",
+          "label": {
+            "en": "Academic",
+            "de": "Akademisch"
+          }
+        }
+      ]
+    }
+  ],
+  "icon": "clipboard",
+  "enabled": true,
+  "order": 1,
+  "appId": "chat"
+}

@@ -341,36 +341,36 @@ const AdminAppsPage = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/admin/apps/${app.id}`);
+                              toggleApp(app.id);
                             }}
-                            className="text-indigo-600 hover:text-indigo-900"
+                            className={`p-2 rounded-full ${
+                              app.enabled 
+                                ? 'text-red-600 hover:bg-red-50' 
+                                : 'text-green-600 hover:bg-green-50'
+                            }`}
+                            title={app.enabled ? t('admin.apps.actions.disable', 'Disable') : t('admin.apps.actions.enable', 'Enable')}
                           >
-                            {t('admin.apps.actions.edit', 'Edit')}
+                            <Icon name={app.enabled ? 'eye-slash' : 'eye'} className="h-4 w-4" />
                           </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              toggleApp(app.id);
+                              navigate(`/admin/apps/${app.id}`);
                             }}
-                            className={`${
-                              app.enabled 
-                                ? 'text-red-600 hover:text-red-900' 
-                                : 'text-green-600 hover:text-green-900'
-                            }`}
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                            title={t('admin.apps.actions.edit', 'Edit')}
                           >
-                            {app.enabled 
-                              ? t('admin.apps.actions.disable', 'Disable')
-                              : t('admin.apps.actions.enable', 'Enable')
-                            }
+                            <Icon name="pencil" className="h-4 w-4" />
                           </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               deleteApp(app.id);
                             }}
-                            className="text-red-600 hover:text-red-900"
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                            title={t('admin.apps.actions.delete', 'Delete')}
                           >
-                            {t('admin.apps.actions.delete', 'Delete')}
+                            <Icon name="trash" className="h-4 w-4" />
                           </button>
                         </div>
                       </td>

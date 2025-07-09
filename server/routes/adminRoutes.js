@@ -565,4 +565,171 @@ export default function registerAdminRoutes(app) {
     }
   });
 
+  // Prompts management endpoints
+  app.get('/api/admin/prompts', async (req, res) => {
+    try {
+      // Get prompts with ETag from cache
+      const { data: prompts, etag } = configCache.getPromptsWithETag(true);
+      
+      if (!prompts) {
+        return res.status(500).json({ error: 'Failed to load prompts configuration' });
+      }
+      
+      // Set ETag header
+      if (etag) {
+        res.setHeader('ETag', etag);
+        
+        // Check if client has the same ETag
+        const clientETag = req.headers['if-none-match'];
+        if (clientETag && clientETag === etag) {
+          return res.status(304).end();
+        }
+      }
+      
+      res.json(prompts);
+    } catch (error) {
+      console.error('Error fetching all prompts:', error);
+      res.status(500).json({ error: 'Failed to fetch prompts' });
+    }
+  });
+
+  app.get('/api/admin/prompts/:promptId', async (req, res) => {
+    try {
+      const { promptId } = req.params;
+      const prompts = configCache.getPrompts(true);
+      const prompt = prompts.find(p => p.id === promptId);
+      
+      if (!prompt) {
+        return res.status(404).json({ error: 'Prompt not found' });
+      }
+      
+      res.json(prompt);
+    } catch (error) {
+      console.error('Error fetching prompt:', error);
+      res.status(500).json({ error: 'Failed to fetch prompt' });
+    }
+  });
+
+  app.put('/api/admin/prompts/:promptId', async (req, res) => {
+    try {
+      const { promptId } = req.params;
+      const updatedPrompt = req.body;
+      
+      // Validate required fields
+      if (!updatedPrompt.id || !updatedPrompt.name || !updatedPrompt.prompt) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      
+      // Ensure the ID matches
+      if (updatedPrompt.id !== promptId) {
+        return res.status(400).json({ error: 'Prompt ID cannot be changed' });
+      }
+      
+      // Save the prompt to individual file
+      const rootDir = getRootDir();
+      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+      
+      writeFileSync(promptFilePath, JSON.stringify(updatedPrompt, null, 2));
+      
+      // Refresh the prompts cache
+      await configCache.refreshPromptsCache();
+      
+      res.json({ message: 'Prompt updated successfully', prompt: updatedPrompt });
+    } catch (error) {
+      console.error('Error updating prompt:', error);
+      res.status(500).json({ error: 'Failed to update prompt' });
+    }
+  });
+
+  app.post('/api/admin/prompts', async (req, res) => {
+    try {
+      const newPrompt = req.body;
+      
+      // Validate required fields
+      if (!newPrompt.id || !newPrompt.name || !newPrompt.prompt) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      
+      // Check if prompt with this ID already exists
+      const rootDir = getRootDir();
+      const promptFilePath = join(rootDir, 'contents', 'prompts', `${newPrompt.id}.json`);
+      
+      try {
+        readFileSync(promptFilePath, 'utf8');
+        return res.status(400).json({ error: 'Prompt with this ID already exists' });
+      } catch (err) {
+        // File doesn't exist, which is what we want
+      }
+      
+      // Save the prompt to individual file
+      writeFileSync(promptFilePath, JSON.stringify(newPrompt, null, 2));
+      
+      // Refresh the prompts cache
+      await configCache.refreshPromptsCache();
+      
+      res.json({ message: 'Prompt created successfully', prompt: newPrompt });
+    } catch (error) {
+      console.error('Error creating prompt:', error);
+      res.status(500).json({ error: 'Failed to create prompt' });
+    }
+  });
+
+  app.post('/api/admin/prompts/:promptId/toggle', async (req, res) => {
+    try {
+      const { promptId } = req.params;
+      const prompts = configCache.getPrompts(true);
+      const prompt = prompts.find(p => p.id === promptId);
+      
+      if (!prompt) {
+        return res.status(404).json({ error: 'Prompt not found' });
+      }
+      
+      // Toggle the enabled state
+      const newEnabledState = !prompt.enabled;
+      prompt.enabled = newEnabledState;
+      
+      // Save the prompt to individual file
+      const rootDir = getRootDir();
+      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+      
+      writeFileSync(promptFilePath, JSON.stringify(prompt, null, 2));
+      
+      // Refresh the prompts cache
+      await configCache.refreshPromptsCache();
+      
+      res.json({ 
+        message: `Prompt ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
+        prompt: prompt,
+        enabled: newEnabledState 
+      });
+    } catch (error) {
+      console.error('Error toggling prompt:', error);
+      res.status(500).json({ error: 'Failed to toggle prompt' });
+    }
+  });
+
+  app.delete('/api/admin/prompts/:promptId', async (req, res) => {
+    try {
+      const { promptId } = req.params;
+      const rootDir = getRootDir();
+      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+      
+      // Check if file exists
+      if (!existsSync(promptFilePath)) {
+        return res.status(404).json({ error: 'Prompt file not found' });
+      }
+      
+      // Delete the file
+      require('fs').unlinkSync(promptFilePath);
+      
+      // Refresh the prompts cache
+      await configCache.refreshPromptsCache();
+      
+      res.json({ message: 'Prompt deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting prompt:', error);
+      res.status(500).json({ error: 'Failed to delete prompt' });
+    }
+  });
+
 }
