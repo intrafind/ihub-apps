@@ -215,7 +215,15 @@
   },
   "imageUpload": {
     "enabled": true,
-    "resizeImages": true
+    "resizeImages": true,
+    "maxFileSizeMB": 10,
+    "supportedFormats": [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/gif",
+      "image/webp"
+    ]
   },
   "fileUpload": {
     "maxFileSizeMB": 5,

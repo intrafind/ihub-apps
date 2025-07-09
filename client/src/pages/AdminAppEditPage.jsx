@@ -46,20 +46,38 @@ const AdminAppEditPage = () => {
         preferredOutputFormat: 'markdown',
         preferredStyle: 'normal',
         preferredTemperature: 0.7,
-        sendChatHistory: true,
         enabled: true,
         order: 0,
         messagePlaceholder: { en: '' },
         prompt: { en: '' },
         variables: [],
         starterPrompts: [],
+        greeting: {
+          en: {
+            title: '👋 Hello!',
+            subtitle: 'How can I help you today?'
+          }
+        },
+        allowEmptyContent: false,
+        sendChatHistory: true,
+        features: {
+          magicPrompt: {
+            enabled: false,
+            model: 'gpt-4',
+            prompt: 'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
+          }
+        },
         settings: {
           enabled: true,
           model: { enabled: true },
           temperature: { enabled: true },
           outputFormat: { enabled: true },
           chatHistory: { enabled: true },
-          style: { enabled: true }
+          style: { enabled: true },
+          speechRecognition: {
+            service: 'default',
+            host: ''
+          }
         },
         inputMode: {
           type: 'multiline',
@@ -72,7 +90,15 @@ const AdminAppEditPage = () => {
         },
         imageUpload: {
           enabled: false,
-          resizeImages: true
+          resizeImages: true,
+          maxFileSizeMB: 10,
+          supportedFormats: [
+            'image/jpeg',
+            'image/jpg', 
+            'image/png',
+            'image/gif',
+            'image/webp'
+          ]
         },
         fileUpload: {
           maxFileSizeMB: 5,
@@ -110,28 +136,58 @@ const AdminAppEditPage = () => {
       // Ensure all configuration sections exist with defaults
       const appWithDefaults = {
         ...data,
-        settings: data.settings || {
+        greeting: data.greeting || {
+          en: {
+            title: '👋 Hello!',
+            subtitle: 'How can I help you today?'
+          }
+        },
+        allowEmptyContent: data.allowEmptyContent ?? false,
+        sendChatHistory: data.sendChatHistory ?? true,
+        features: data.features || {
+          magicPrompt: {
+            enabled: false,
+            model: 'gpt-4',
+            prompt: 'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
+          }
+        },
+        settings: {
           enabled: true,
           model: { enabled: true },
           temperature: { enabled: true },
           outputFormat: { enabled: true },
           chatHistory: { enabled: true },
-          style: { enabled: true }
+          style: { enabled: true },
+          speechRecognition: {
+            service: 'default',
+            host: ''
+          },
+          ...(data.settings || {})
         },
-        inputMode: data.inputMode || {
+        inputMode: {
           type: 'multiline',
           rows: 5,
           microphone: {
             enabled: true,
             mode: 'manual',
             showTranscript: true
-          }
+          },
+          ...(data.inputMode || {})
         },
-        imageUpload: data.imageUpload || {
+        imageUpload: {
           enabled: false,
-          resizeImages: true
+          resizeImages: true,
+          maxFileSizeMB: 10,
+          supportedFormats: [
+            'image/jpeg',
+            'image/jpg', 
+            'image/png',
+            'image/gif',
+            'image/webp'
+          ],
+          ...(data.imageUpload || {})
         },
-        fileUpload: data.fileUpload || {
+        fileUpload: {
           maxFileSizeMB: 5,
           supportedTextFormats: [
             'text/plain',
@@ -146,7 +202,8 @@ const AdminAppEditPage = () => {
           ],
           supportedPdfFormats: [
             'application/pdf'
-          ]
+          ],
+          ...(data.fileUpload || {})
         }
       };
       
@@ -197,6 +254,32 @@ const AdminAppEditPage = () => {
       ...prev,
       [field]: value
     }));
+  };
+
+  const addToList = (field, subField, defaultValue) => {
+    const currentList = app[field]?.[subField] || [];
+    handleInputChange(field, {
+      ...app[field],
+      [subField]: [...currentList, defaultValue]
+    });
+  };
+
+  const removeFromList = (field, subField, index) => {
+    const currentList = app[field]?.[subField] || [];
+    handleInputChange(field, {
+      ...app[field],
+      [subField]: currentList.filter((_, i) => i !== index)
+    });
+  };
+
+  const updateListItem = (field, subField, index, value) => {
+    const currentList = app[field]?.[subField] || [];
+    const newList = [...currentList];
+    newList[index] = value;
+    handleInputChange(field, {
+      ...app[field],
+      [subField]: newList
+    });
   };
 
   const handleLocalizedChange = (field, value) => {
@@ -921,7 +1004,219 @@ const AdminAppEditPage = () => {
                         {t('admin.apps.edit.styleEnabled', 'Style Selection')}
                       </label>
                     </div>
+
+                    {/* Speech Recognition Settings */}
+                    <div className="mt-6">
+                      <h4 className="text-sm font-medium text-gray-900 mb-3">
+                        {t('admin.apps.edit.speechRecognition', 'Speech Recognition')}
+                      </h4>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">
+                            {t('admin.apps.edit.speechService', 'Speech Service')}
+                          </label>
+                          <select
+                            value={app.settings?.speechRecognition?.service}
+                            onChange={(e) => handleInputChange('settings', { 
+                              ...app.settings, 
+                              speechRecognition: { 
+                                ...app.settings.speechRecognition, 
+                                service: e.target.value 
+                              }
+                            })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          >
+                            <option value="default">{t('admin.apps.edit.defaultService', 'Default (Browser)')}</option>
+                            <option value="azure">{t('admin.apps.edit.azureService', 'Azure Speech Recognition')}</option>
+                          </select>
+                        </div>
+                        
+                        {app.settings?.speechRecognition?.service === 'azure' && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">
+                              {t('admin.apps.edit.azureHost', 'Azure Host')}
+                            </label>
+                            <input
+                              type="text"
+                              value={app.settings?.speechRecognition?.host}
+                              onChange={(e) => handleInputChange('settings', { 
+                                ...app.settings, 
+                                speechRecognition: { 
+                                  ...app.settings.speechRecognition, 
+                                  host: e.target.value 
+                                }
+                              })}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              placeholder={t('admin.apps.edit.azureHostPlaceholder', 'e.g., https://your-resource.cognitiveservices.azure.com')}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* General Settings */}
+        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                {t('admin.apps.edit.generalSettings', 'General Settings')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {t('admin.apps.edit.generalSettingsDesc', 'Configure general app behavior')}
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <div className="space-y-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={app.allowEmptyContent}
+                    onChange={(e) => handleInputChange('allowEmptyContent', e.target.checked)}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 block text-sm text-gray-700">
+                    {t('admin.apps.edit.allowEmptyContent', 'Allow Empty Content')}
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={app.sendChatHistory}
+                    onChange={(e) => handleInputChange('sendChatHistory', e.target.checked)}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 block text-sm text-gray-700">
+                    {t('admin.apps.edit.sendChatHistory', 'Send Chat History')}
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Greeting Configuration */}
+        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                {t('admin.apps.edit.greeting', 'Greeting')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {t('admin.apps.edit.greetingDesc', 'Configure the initial greeting message displayed to users')}
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <div className="space-y-4">
+                <div>
+                  <DynamicLanguageEditor
+                    label={t('admin.apps.edit.greetingTitle', 'Title')}
+                    value={app.greeting || {}}
+                    onChange={(value) => handleInputChange('greeting', value)}
+                    placeholder={{
+                      en: 'Enter greeting title in English',
+                      de: 'Begrüßungstitel auf Deutsch eingeben'
+                    }}
+                    fieldType="title"
+                  />
+                </div>
+
+                <div>
+                  <DynamicLanguageEditor
+                    label={t('admin.apps.edit.greetingSubtitle', 'Subtitle')}
+                    value={app.greeting || {}}
+                    onChange={(value) => handleInputChange('greeting', value)}
+                    placeholder={{
+                      en: 'Enter greeting subtitle in English',
+                      de: 'Begrüßungsuntertitel auf Deutsch eingeben'
+                    }}
+                    fieldType="subtitle"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Magic Prompt Configuration */}
+        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">
+                {t('admin.apps.edit.magicPrompt', 'Magic Prompt')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {t('admin.apps.edit.magicPromptDesc', 'Configure automatic prompt enhancement')}
+              </p>
+            </div>
+            <div className="mt-5 md:col-span-2 md:mt-0">
+              <div className="space-y-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={app.features?.magicPrompt?.enabled}
+                    onChange={(e) => handleInputChange('features', { 
+                      ...app.features, 
+                      magicPrompt: { 
+                        ...app.features?.magicPrompt, 
+                        enabled: e.target.checked 
+                      }
+                    })}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 block text-sm text-gray-700">
+                    {t('admin.apps.edit.magicPromptEnabled', 'Enable Magic Prompt')}
+                  </label>
+                </div>
+
+                {app.features?.magicPrompt?.enabled && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        {t('admin.apps.edit.magicPromptModel', 'Model')}
+                      </label>
+                      <select
+                        value={app.features?.magicPrompt?.model}
+                        onChange={(e) => handleInputChange('features', { 
+                          ...app.features, 
+                          magicPrompt: { 
+                            ...app.features?.magicPrompt, 
+                            model: e.target.value 
+                          }
+                        })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      >
+                        {availableModels.map(model => (
+                          <option key={model.id} value={model.id}>{model.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        {t('admin.apps.edit.magicPromptPrompt', 'Enhancement Prompt')}
+                      </label>
+                      <textarea
+                        value={app.features?.magicPrompt?.prompt}
+                        onChange={(e) => handleInputChange('features', { 
+                          ...app.features, 
+                          magicPrompt: { 
+                            ...app.features?.magicPrompt, 
+                            prompt: e.target.value 
+                          }
+                        })}
+                        rows={4}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        placeholder={t('admin.apps.edit.magicPromptPromptPlaceholder', 'Enter the system prompt for enhancing user prompts')}
+                      />
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -1059,7 +1354,7 @@ const AdminAppEditPage = () => {
                 </div>
                 
                 {app.imageUpload?.enabled && (
-                  <div className="ml-6">
+                  <div className="ml-6 space-y-4">
                     <div className="flex items-center">
                       <input
                         type="checkbox"
@@ -1070,6 +1365,57 @@ const AdminAppEditPage = () => {
                       <label className="ml-2 block text-sm text-gray-700">
                         {t('admin.apps.edit.resizeImages', 'Resize Images')}
                       </label>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        {t('admin.apps.edit.maxImageSize', 'Max Image Size (MB)')}
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={app.imageUpload?.maxFileSizeMB}
+                        onChange={(e) => handleInputChange('imageUpload', { 
+                          ...app.imageUpload, 
+                          maxFileSizeMB: parseInt(e.target.value)
+                        })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {t('admin.apps.edit.supportedImageFormats', 'Supported Image Formats')}
+                      </label>
+                      <div className="space-y-2">
+                        {app.imageUpload?.supportedFormats?.map((format, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={format}
+                              onChange={(e) => updateListItem('imageUpload', 'supportedFormats', index, e.target.value)}
+                              className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                              placeholder={t('admin.apps.edit.formatPlaceholder', 'e.g., image/jpeg')}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeFromList('imageUpload', 'supportedFormats', index)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Icon name="x" className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => addToList('imageUpload', 'supportedFormats', 'image/jpeg')}
+                          className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                        >
+                          <Icon name="plus-circle" className="w-3 h-3 mr-1" />
+                          {t('admin.apps.edit.addFormat', 'Add Format')}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1113,38 +1459,32 @@ const AdminAppEditPage = () => {
                     {t('admin.apps.edit.supportedTextFormats', 'Supported Text Formats')}
                   </label>
                   <div className="space-y-2">
-                    {[
-                      'text/plain',
-                      'text/markdown',
-                      'text/csv',
-                      'application/json',
-                      'text/html',
-                      'text/css',
-                      'text/javascript',
-                      'application/javascript',
-                      'text/xml'
-                    ].map(format => (
-                      <div key={format} className="flex items-center">
+                    {app.fileUpload?.supportedTextFormats?.map((format, index) => (
+                      <div key={index} className="flex items-center gap-2">
                         <input
-                          type="checkbox"
-                          checked={app.fileUpload?.supportedTextFormats?.includes(format)}
-                          onChange={(e) => {
-                            const formats = app.fileUpload?.supportedTextFormats || [];
-                            const newFormats = e.target.checked 
-                              ? [...formats, format]
-                              : formats.filter(f => f !== format);
-                            handleInputChange('fileUpload', { 
-                              ...app.fileUpload, 
-                              supportedTextFormats: newFormats
-                            });
-                          }}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          type="text"
+                          value={format}
+                          onChange={(e) => updateListItem('fileUpload', 'supportedTextFormats', index, e.target.value)}
+                          className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          placeholder={t('admin.apps.edit.textFormatPlaceholder', 'e.g., text/plain')}
                         />
-                        <label className="ml-2 block text-sm text-gray-700">
-                          {format}
-                        </label>
+                        <button
+                          type="button"
+                          onClick={() => removeFromList('fileUpload', 'supportedTextFormats', index)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <Icon name="x" className="w-4 h-4" />
+                        </button>
                       </div>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => addToList('fileUpload', 'supportedTextFormats', 'text/plain')}
+                      className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                    >
+                      <Icon name="plus-circle" className="w-3 h-3 mr-1" />
+                      {t('admin.apps.edit.addTextFormat', 'Add Text Format')}
+                    </button>
                   </div>
                 </div>
                 
@@ -1152,22 +1492,33 @@ const AdminAppEditPage = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     {t('admin.apps.edit.supportedPdfFormats', 'Supported PDF Formats')}
                   </label>
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={app.fileUpload?.supportedPdfFormats?.includes('application/pdf')}
-                      onChange={(e) => {
-                        const formats = e.target.checked ? ['application/pdf'] : [];
-                        handleInputChange('fileUpload', { 
-                          ...app.fileUpload, 
-                          supportedPdfFormats: formats
-                        });
-                      }}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-700">
-                      application/pdf
-                    </label>
+                  <div className="space-y-2">
+                    {app.fileUpload?.supportedPdfFormats?.map((format, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={format}
+                          onChange={(e) => updateListItem('fileUpload', 'supportedPdfFormats', index, e.target.value)}
+                          className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          placeholder={t('admin.apps.edit.pdfFormatPlaceholder', 'e.g., application/pdf')}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeFromList('fileUpload', 'supportedPdfFormats', index)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <Icon name="x" className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => addToList('fileUpload', 'supportedPdfFormats', 'application/pdf')}
+                      className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                    >
+                      <Icon name="plus-circle" className="w-3 h-3 mr-1" />
+                      {t('admin.apps.edit.addPdfFormat', 'Add PDF Format')}
+                    </button>
                   </div>
                 </div>
               </div>

@@ -9,37 +9,80 @@ const DynamicLanguageEditor = ({
   required = false, 
   type = 'text', 
   placeholder = {},
-  className = ""
+  className = "",
+  fieldType = null // For nested objects like greeting.title, greeting.subtitle
 }) => {
   const { t } = useTranslation();
   const [showAddLanguage, setShowAddLanguage] = useState(false);
   const [newLanguageCode, setNewLanguageCode] = useState('');
 
-  const languages = Object.keys(value);
+  // If fieldType is provided, we're working with nested objects
+  const currentValue = fieldType ? 
+    Object.keys(value).reduce((acc, lang) => {
+      if (value[lang] && typeof value[lang] === 'object' && value[lang][fieldType]) {
+        acc[lang] = value[lang][fieldType];
+      }
+      return acc;
+    }, {}) : value;
+
+  const languages = Object.keys(currentValue);
   const commonLanguages = ['en', 'de', 'es', 'fr', 'it', 'pt', 'nl', 'sv', 'no', 'da', 'fi', 'pl', 'cs', 'hu', 'ro', 'bg', 'hr', 'sk', 'sl', 'et', 'lv', 'lt', 'ru', 'uk', 'zh', 'ja', 'ko', 'ar', 'he', 'th', 'vi', 'hi', 'bn', 'ta', 'te', 'ml', 'kn', 'gu', 'pa', 'or', 'as', 'sa', 'ne', 'si', 'my', 'km', 'lo', 'ka', 'am', 'ti', 'so', 'sw', 'zu', 'xh', 'af', 'tr', 'az', 'kk', 'ky', 'uz', 'tg', 'mn', 'bo', 'dz', 'mk', 'al', 'sq', 'sr', 'bs', 'mt', 'cy', 'ga', 'gd', 'br', 'co', 'eu', 'ca', 'gl', 'oc', 'ast', 'an', 'ia', 'ie', 'io', 'eo', 'vo', 'la', 'grc', 'got', 'non', 'ang', 'enm', 'gmh', 'goh', 'gem', 'cel', 'ine', 'sla', 'bat', 'fin', 'hun', 'baq', 'kar', 'cau', 'sem', 'cus', 'ber', 'egy', 'cop', 'akk', 'sux', 'elx', 'peo', 'ave', 'pal', 'xpr', 'sog', 'xco', 'kho', 'pal', 'zza', 'ku', 'ckb', 'lrc', 'prs', 'tly', 'glk', 'mzn', 'ryu', 'wuu', 'yue', 'hak', 'nan', 'cdo', 'gan', 'hsn', 'xiang', 'cmn', 'lzh', 'och', 'ltc', 'mkh', 'hmn', 'tai', 'aav', 'map', 'poz', 'phi', 'pqe', 'pqw', 'pow', 'poz', 'mp', 'cmp', 'emp', 'wmp', 'plf', 'poz', 'oc', 'pqe', 'pqw', 'pow', 'poz', 'mp', 'cmp', 'emp', 'wmp', 'plf', 'poz', 'oc'];
 
   const handleAddLanguage = () => {
     if (newLanguageCode && !languages.includes(newLanguageCode)) {
-      onChange({
-        ...value,
-        [newLanguageCode]: ''
-      });
+      if (fieldType) {
+        // Handle nested object update
+        onChange({
+          ...value,
+          [newLanguageCode]: {
+            ...value[newLanguageCode],
+            [fieldType]: ''
+          }
+        });
+      } else {
+        onChange({
+          ...value,
+          [newLanguageCode]: ''
+        });
+      }
       setNewLanguageCode('');
       setShowAddLanguage(false);
     }
   };
 
   const handleRemoveLanguage = (lang) => {
-    const newValue = { ...value };
-    delete newValue[lang];
-    onChange(newValue);
+    if (fieldType) {
+      const newValue = { ...value };
+      if (newValue[lang] && typeof newValue[lang] === 'object') {
+        delete newValue[lang][fieldType];
+        // If this was the last field in the language object, remove the language entirely
+        if (Object.keys(newValue[lang]).length === 0) {
+          delete newValue[lang];
+        }
+      }
+      onChange(newValue);
+    } else {
+      const newValue = { ...value };
+      delete newValue[lang];
+      onChange(newValue);
+    }
   };
 
   const handleLanguageChange = (lang, newValue) => {
-    onChange({
-      ...value,
-      [lang]: newValue
-    });
+    if (fieldType) {
+      onChange({
+        ...value,
+        [lang]: {
+          ...value[lang],
+          [fieldType]: newValue
+        }
+      });
+    } else {
+      onChange({
+        ...value,
+        [lang]: newValue
+      });
+    }
   };
 
   const availableLanguages = commonLanguages.filter(lang => !languages.includes(lang));
@@ -106,7 +149,7 @@ const DynamicLanguageEditor = ({
             <div className="flex-1">
               {type === 'textarea' ? (
                 <textarea
-                  value={value[lang] || ''}
+                  value={currentValue[lang] || ''}
                   onChange={(e) => handleLanguageChange(lang, e.target.value)}
                   placeholder={placeholder[lang] || ''}
                   rows={3}
@@ -116,7 +159,7 @@ const DynamicLanguageEditor = ({
               ) : (
                 <input
                   type={type}
-                  value={value[lang] || ''}
+                  value={currentValue[lang] || ''}
                   onChange={(e) => handleLanguageChange(lang, e.target.value)}
                   placeholder={placeholder[lang] || ''}
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
