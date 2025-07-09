@@ -1,5 +1,6 @@
 import { loadJson } from './configLoader.js';
 import { loadAllApps } from './appsLoader.js';
+import { loadAllModels } from './modelsLoader.js';
 
 /**
  * Configuration Cache Service
@@ -57,6 +58,20 @@ class ConfigCache {
           const allApps = loadAllApps(true);
           this.setCacheEntry('config/apps-all.json', allApps);
           console.log(`✓ Cached: config/apps-all.json (${allApps.length} total apps)`);
+          return;
+        }
+        
+        // Special handling for models.json - load from both sources
+        if (configPath === 'config/models.json') {
+          // Load enabled models only
+          const enabledModels = loadAllModels(false);
+          this.setCacheEntry(configPath, enabledModels);
+          console.log(`✓ Cached: ${configPath} (${enabledModels.length} enabled models)`);
+          
+          // Also load and cache all models (including disabled)
+          const allModels = loadAllModels(true);
+          this.setCacheEntry('config/models-all.json', allModels);
+          console.log(`✓ Cached: config/models-all.json (${allModels.length} total models)`);
           return;
         }
         
@@ -183,7 +198,18 @@ class ConfigCache {
   /**
    * Get models configuration (most frequently accessed)
    */
-  getModels() {
+  getModels(includeDisabled = false) {
+    if (includeDisabled) {
+      // Check cache for all models (including disabled)
+      const cachedAllModels = this.get('config/models-all.json');
+      if (cachedAllModels !== null) {
+        return cachedAllModels;
+      }
+      // Load all models including disabled ones and cache the result
+      const allModels = loadAllModels(includeDisabled);
+      this.setCacheEntry('config/models-all.json', allModels);
+      return allModels;
+    }
     return this.get('config/models.json');
   }
 
@@ -245,6 +271,28 @@ class ConfigCache {
    */
   getLocalizations(language = 'en') {
     return this.get(`locales/${language}.json`);
+  }
+
+  /**
+   * Refresh models cache (both enabled and all models)
+   * Should be called when models are modified (create, update, delete, toggle)
+   */
+  async refreshModelsCache() {
+    console.log('🔄 Refreshing models cache...');
+    
+    try {
+      // Refresh enabled models cache
+      const enabledModels = loadAllModels(false);
+      this.setCacheEntry('config/models.json', enabledModels);
+      
+      // Refresh all models cache
+      const allModels = loadAllModels(true);
+      this.setCacheEntry('config/models-all.json', allModels);
+      
+      console.log(`✅ Models cache refreshed: ${enabledModels.length} enabled, ${allModels.length} total`);
+    } catch (error) {
+      console.error('❌ Error refreshing models cache:', error.message);
+    }
   }
 
   /**

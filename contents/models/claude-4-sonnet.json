@@ -1,0 +1,10 @@
+{
+  "id": "claude-4-sonnet",
+  "modelId": "claude-sonnet-4-20250514",
+  "name": "Claude 4 Sonnet",
+  "description": "Balanced performance and value for enterprise and everyday tasks",
+  "url": "https://api.anthropic.com/v1/messages",
+  "provider": "anthropic",
+  "tokenLimit": 64000,
+  "supportsTools": true
+}
