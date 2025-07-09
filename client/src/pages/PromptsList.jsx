@@ -301,7 +301,7 @@ const PromptsList = () => {
                     </button>
                     {p.appId && (
                       <Link
-                        to={`/apps/${p.appId}?prefill=${encodeURIComponent(p.prompt.replace('[content]', ''))}`}
+                        to={`/apps/${p.appId}?prefill=${encodeURIComponent(p.prompt.replace('[content]', ''))}${p.variables && p.variables.length > 0 ? '&' + p.variables.map(v => `var_${v.name}=${encodeURIComponent(v.defaultValue || '')}`).join('&') : ''}`}
                         className="px-3 py-1.5 text-xs border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors flex items-center justify-center gap-1"
                         onClick={(e) => { e.stopPropagation(); recordPromptUsage(p.id); }}
                       >

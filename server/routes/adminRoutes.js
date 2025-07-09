@@ -552,7 +552,24 @@ export default function registerAdminRoutes(app) {
   // Prompts management endpoints
   app.get('/api/admin/prompts', async (req, res) => {
     try {
-      const prompts = configCache.getPrompts(true);
+      // Get prompts with ETag from cache
+      const { data: prompts, etag } = configCache.getPromptsWithETag(true);
+      
+      if (!prompts) {
+        return res.status(500).json({ error: 'Failed to load prompts configuration' });
+      }
+      
+      // Set ETag header
+      if (etag) {
+        res.setHeader('ETag', etag);
+        
+        // Check if client has the same ETag
+        const clientETag = req.headers['if-none-match'];
+        if (clientETag && clientETag === etag) {
+          return res.status(304).end();
+        }
+      }
+      
       res.json(prompts);
     } catch (error) {
       console.error('Error fetching all prompts:', error);

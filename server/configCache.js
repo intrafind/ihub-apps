@@ -2,6 +2,7 @@ import { loadJson } from './configLoader.js';
 import { loadAllApps } from './appsLoader.js';
 import { loadAllModels } from './modelsLoader.js';
 import { loadAllPrompts } from './promptsLoader.js';
+import { createHash } from 'crypto';
 
 /**
  * Configuration Cache Service
@@ -108,6 +109,15 @@ class ConfigCache {
   }
 
   /**
+   * Generate ETag for data
+   */
+  generateETag(data) {
+    const hash = createHash('md5');
+    hash.update(JSON.stringify(data));
+    return `"${hash.digest('hex')}"`;
+  }
+
+  /**
    * Set a cache entry with automatic refresh timer
    */
   setCacheEntry(key, data) {
@@ -116,9 +126,13 @@ class ConfigCache {
       clearTimeout(this.refreshTimers.get(key));
     }
 
+    // Generate ETag for the data
+    const etag = this.generateETag(data);
+
     // Set cache entry
     this.cache.set(key, {
       data,
+      etag,
       timestamp: Date.now()
     });
 
@@ -185,6 +199,14 @@ class ConfigCache {
     }
 
     return entry.data;
+  }
+
+  /**
+   * Get ETag for a cache entry
+   */
+  getETag(configPath) {
+    const entry = this.cache.get(configPath);
+    return entry ? entry.etag : null;
   }
 
   /**
@@ -276,6 +298,30 @@ class ConfigCache {
       return allPrompts;
     }
     return this.get('config/prompts.json');
+  }
+
+  /**
+   * Get prompts with ETag information
+   */
+  getPromptsWithETag(includeDisabled = false) {
+    const cacheKey = includeDisabled ? 'config/prompts-all.json' : 'config/prompts.json';
+    const data = this.get(cacheKey);
+    const etag = this.getETag(cacheKey);
+    
+    if (data === null && includeDisabled) {
+      // Load all prompts including disabled ones and cache the result
+      const allPrompts = loadAllPrompts(includeDisabled);
+      this.setCacheEntry('config/prompts-all.json', allPrompts);
+      return {
+        data: allPrompts,
+        etag: this.getETag('config/prompts-all.json')
+      };
+    }
+    
+    return {
+      data,
+      etag
+    };
   }
 
   /**

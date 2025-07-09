@@ -5,6 +5,7 @@ import { getLocalizedContent } from '../utils/localizeContent';
 import Icon from '../components/Icon';
 import AdminNavigation from '../components/AdminNavigation';
 import PromptDetailsPopup from '../components/PromptDetailsPopup';
+import { fetchAdminPrompts, deletePrompt, togglePrompt, clearApiCache } from '../api/api';
 
 const AdminPromptsPage = () => {
   const { t, i18n } = useTranslation();
@@ -25,11 +26,7 @@ const AdminPromptsPage = () => {
   const loadPrompts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/prompts');
-      if (!response.ok) {
-        throw new Error('Failed to load prompts');
-      }
-      const data = await response.json();
+      const data = await fetchAdminPrompts();
       setPrompts(data);
     } catch (err) {
       setError(err.message);
@@ -38,47 +35,31 @@ const AdminPromptsPage = () => {
     }
   };
 
-  const togglePrompt = async (promptId) => {
+  const handleTogglePrompt = async (promptId) => {
     try {
-      const response = await fetch(`/api/admin/prompts/${promptId}/toggle`, {
-        method: 'POST',
-      });
+      await togglePrompt(promptId);
       
-      if (!response.ok) {
-        throw new Error('Failed to toggle prompt');
-      }
-      
-      const result = await response.json();
-      
-      // Update the prompt in the local state
-      setPrompts(prev => prev.map(prompt => 
-        prompt.id === promptId ? { ...prompt, enabled: result.enabled } : prompt
-      ));
-      
-      // Show success message
-      console.log(result.message);
+      // Clear cache and reload
+      clearApiCache('admin_prompts');
+      clearApiCache('prompts');
+      await loadPrompts();
     } catch (err) {
-      console.error('Error toggling prompt:', err);
-      alert(`Error: ${err.message}`);
+      setError(err.message);
     }
   };
 
-  const deletePrompt = async (promptId) => {
+  const handleDeletePrompt = async (promptId) => {
     if (!confirm(t('admin.prompts.deleteConfirm', 'Are you sure you want to delete this prompt?'))) {
       return;
     }
     
     try {
-      const response = await fetch(`/api/admin/prompts/${promptId}`, {
-        method: 'DELETE',
-      });
+      await deletePrompt(promptId);
       
-      if (!response.ok) {
-        throw new Error('Failed to delete prompt');
-      }
-      
-      // Remove the prompt from the local state
-      setPrompts(prev => prev.filter(prompt => prompt.id !== promptId));
+      // Clear cache and reload
+      clearApiCache('admin_prompts');
+      clearApiCache('prompts');
+      await loadPrompts();
       
       alert(t('admin.prompts.deleteSuccess', 'Prompt deleted successfully'));
     } catch (err) {
@@ -279,7 +260,7 @@ const AdminPromptsPage = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              togglePrompt(prompt.id);
+                              handleTogglePrompt(prompt.id);
                             }}
                             className={`p-2 rounded-full ${
                               prompt.enabled !== false
@@ -303,7 +284,7 @@ const AdminPromptsPage = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              deletePrompt(prompt.id);
+                              handleDeletePrompt(prompt.id);
                             }}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-full"
                             title={t('admin.prompts.delete', 'Delete')}

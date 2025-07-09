@@ -65,7 +65,7 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
           </button>
           {prompt.appId && (
             <Link
-              to={`/apps/${prompt.appId}?prefill=${encodeURIComponent(prompt.prompt.replace('[content]', ''))}`}
+              to={`/apps/${prompt.appId}?prefill=${encodeURIComponent(prompt.prompt.replace('[content]', ''))}${prompt.variables && prompt.variables.length > 0 ? '&' + prompt.variables.map(v => `var_${v.name}=${encodeURIComponent(v.defaultValue || '')}`).join('&') : ''}`}
               className="px-3 py-1 text-sm border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50 flex items-center"
               onClick={onClose}
             >

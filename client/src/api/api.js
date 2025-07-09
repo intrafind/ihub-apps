@@ -54,14 +54,15 @@ apiClient.interceptors.response.use(null, async (error) => {
 });
 
 // Handle API responses and errors consistently
-const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_TTL.MEDIUM, deduplicate = true) => {
+const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_TTL.MEDIUM, deduplicate = true, handleETag = false) => {
   try {
     // Check cache first if cacheKey is provided
     if (cacheKey) {
       const cachedData = cache.get(cacheKey);
-      if (cachedData) {
+      if (cachedData && !handleETag) {
         console.log(`Cache hit for: ${cacheKey}`);
-        return cachedData;
+        // Support both old format (direct data) and new format (with data/etag)
+        return cachedData.data !== undefined ? cachedData.data : cachedData;
       }
     }
 
@@ -80,11 +81,30 @@ const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_T
       try {
         // Make the API call
         const response = await apiCall();
+        
+        // Handle 304 Not Modified response
+        if (response.status === 304) {
+          console.log(`304 Not Modified for: ${cacheKey}`);
+          const cachedData = cache.get(cacheKey);
+          if (cachedData) {
+            // Support both old format (direct data) and new format (with data/etag)
+            return cachedData.data !== undefined ? cachedData.data : cachedData;
+          }
+          throw new Error('304 Not Modified but no cached data available');
+        }
+        
         const data = response.data;
         
         // Cache the response if cacheKey is provided
         if (cacheKey && data) {
-          cache.set(cacheKey, data, ttl);
+          const cacheEntry = { data, timestamp: Date.now() };
+          
+          // Store ETag if present
+          if (handleETag && response.headers.etag) {
+            cacheEntry.etag = response.headers.etag;
+          }
+          
+          cache.set(cacheKey, cacheEntry, ttl);
         }
         
         return data;
@@ -264,9 +284,23 @@ export const fetchPrompts = async (options = {}) => {
   const cacheKey = skipCache ? null : CACHE_KEYS.PROMPTS;
 
   return handleApiResponse(
-    () => apiClient.get('/prompts'),
+    () => {
+      const headers = {};
+      
+      // Add ETag header if we have cached data
+      if (cacheKey) {
+        const cachedData = cache.get(cacheKey);
+        if (cachedData && cachedData.etag) {
+          headers['If-None-Match'] = cachedData.etag;
+        }
+      }
+      
+      return apiClient.get('/prompts', { headers });
+    },
     cacheKey,
-    DEFAULT_CACHE_TTL.MEDIUM
+    DEFAULT_CACHE_TTL.MEDIUM,
+    true,
+    true // Enable ETag handling
   );
 };
 
@@ -388,6 +422,79 @@ export const sendSessionStart = async (sessionData) => {
     null, // No caching
     null,
     false // Don't deduplicate
+  );
+};
+
+// Admin API functions
+export const fetchAdminPrompts = async (options = {}) => {
+  const { skipCache = false } = options;
+  const cacheKey = skipCache ? null : 'admin_prompts';
+
+  return handleApiResponse(
+    () => {
+      const headers = {};
+      
+      // Add ETag header if we have cached data
+      if (cacheKey) {
+        const cachedData = cache.get(cacheKey);
+        if (cachedData && cachedData.etag) {
+          headers['If-None-Match'] = cachedData.etag;
+        }
+      }
+      
+      return apiClient.get('/admin/prompts', { headers });
+    },
+    cacheKey,
+    DEFAULT_CACHE_TTL.SHORT, // Shorter TTL for admin data
+    true,
+    true // Enable ETag handling
+  );
+};
+
+export const createPrompt = async (promptData) => {
+  return handleApiResponse(
+    () => apiClient.post('/admin/prompts', promptData),
+    null,
+    null,
+    false
+  );
+};
+
+export const updatePrompt = async (promptId, promptData) => {
+  return handleApiResponse(
+    () => apiClient.put(`/admin/prompts/${promptId}`, promptData),
+    null,
+    null,
+    false
+  );
+};
+
+export const deletePrompt = async (promptId) => {
+  return handleApiResponse(
+    () => apiClient.delete(`/admin/prompts/${promptId}`),
+    null,
+    null,
+    false
+  );
+};
+
+export const togglePrompt = async (promptId) => {
+  return handleApiResponse(
+    () => apiClient.post(`/admin/prompts/${promptId}/toggle`),
+    null,
+    null,
+    false
+  );
+};
+
+export const fetchAdminApps = async (options = {}) => {
+  const { skipCache = false } = options;
+  const cacheKey = skipCache ? null : 'admin_apps';
+
+  return handleApiResponse(
+    () => apiClient.get('/admin/apps'),
+    cacheKey,
+    DEFAULT_CACHE_TTL.SHORT
   );
 };
 

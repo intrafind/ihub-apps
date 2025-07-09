@@ -5,6 +5,7 @@ import Icon from '../components/Icon';
 import AdminNavigation from '../components/AdminNavigation';
 import DynamicLanguageEditor from '../components/DynamicLanguageEditor';
 import SearchableAppsSelector from '../components/SearchableAppsSelector';
+import { fetchAdminPrompts, createPrompt, updatePrompt, clearApiCache, fetchAdminApps } from '../api/api';
 
 const AdminPromptEditPage = () => {
   const { t, i18n } = useTranslation();
@@ -41,11 +42,8 @@ const AdminPromptEditPage = () => {
 
   const loadApps = async () => {
     try {
-      const response = await fetch('/api/admin/apps');
-      if (response.ok) {
-        const data = await response.json();
-        setApps(data);
-      }
+      const data = await fetchAdminApps();
+      setApps(data);
     } catch (err) {
       console.error('Error loading apps:', err);
     }
@@ -54,25 +52,26 @@ const AdminPromptEditPage = () => {
   const loadPrompt = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/admin/prompts/${promptId}`);
-      if (!response.ok) {
-        throw new Error('Failed to load prompt');
+      const data = await fetchAdminPrompts();
+      const promptData = data.find(p => p.id === promptId);
+      
+      if (!promptData) {
+        throw new Error('Prompt not found');
       }
-      const data = await response.json();
       
       // Ensure proper structure for editing
-      const promptData = {
-        ...data,
-        name: data.name || { en: '' },
-        description: data.description || { en: '' },
-        prompt: data.prompt || { en: '' },
-        variables: data.variables || [],
-        appId: data.appId || '',
-        order: data.order,
-        enabled: data.enabled !== false
+      const processedPrompt = {
+        ...promptData,
+        name: promptData.name || { en: '' },
+        description: promptData.description || { en: '' },
+        prompt: promptData.prompt || { en: '' },
+        variables: promptData.variables || [],
+        appId: promptData.appId || '',
+        order: promptData.order,
+        enabled: promptData.enabled !== false
       };
       
-      setPrompt(promptData);
+      setPrompt(processedPrompt);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -98,24 +97,15 @@ const AdminPromptEditPage = () => {
     try {
       setSaving(true);
       
-      const url = isNewPrompt ? '/api/admin/prompts' : `/api/admin/prompts/${promptId}`;
-      const method = isNewPrompt ? 'POST' : 'PUT';
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(prompt),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save prompt');
+      if (isNewPrompt) {
+        await createPrompt(prompt);
+      } else {
+        await updatePrompt(promptId, prompt);
       }
       
-      const result = await response.json();
-      console.log(result.message);
+      // Clear cache to force refresh
+      clearApiCache('admin_prompts');
+      clearApiCache('prompts');
       
       // Redirect to prompts list
       navigate('/admin/prompts');
