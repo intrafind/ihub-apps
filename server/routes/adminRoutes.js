@@ -4,9 +4,36 @@ import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
 import { getLocalizedContent } from '../../shared/localize.js';
+import { adminAuth, isAdminAuthRequired } from '../middleware/adminAuth.js';
 
 export default function registerAdminRoutes(app) {
-  app.get('/api/admin/usage', async (req, res) => {
+  // Admin authentication status endpoint (no auth required to check if auth is needed)
+  app.get('/api/admin/auth/status', async (req, res) => {
+    try {
+      const authRequired = isAdminAuthRequired();
+      res.json({ 
+        authRequired,
+        authenticated: !authRequired || req.headers.authorization?.startsWith('Bearer ')
+      });
+    } catch (error) {
+      console.error('Error checking admin auth status:', error);
+      res.status(500).json({ error: 'Failed to check authentication status' });
+    }
+  });
+
+  // Admin authentication test endpoint
+  app.get('/api/admin/auth/test', adminAuth, async (req, res) => {
+    try {
+      res.json({ 
+        message: 'Admin authentication successful',
+        authenticated: true
+      });
+    } catch (error) {
+      console.error('Error testing admin auth:', error);
+      res.status(500).json({ error: 'Failed to test authentication' });
+    }
+  });
+  app.get('/api/admin/usage', adminAuth, async (req, res) => {
     try {
       const data = await getUsage();
       res.json(data);
@@ -17,7 +44,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Configuration cache management endpoints
-  app.get('/api/admin/cache/stats', async (req, res) => {
+  app.get('/api/admin/cache/stats', adminAuth, async (req, res) => {
     try {
       const stats = configCache.getStats();
       res.json(stats);
@@ -27,7 +54,7 @@ export default function registerAdminRoutes(app) {
     }
   });
   // Support both POST and GET for cache refresh
-  app.post('/api/admin/cache/_refresh', async (req, res) => {
+  app.post('/api/admin/cache/_refresh', adminAuth, async (req, res) => {
     try {
       await configCache.refreshAll();
       res.json({ message: 'Configuration cache refreshed successfully' });
@@ -37,13 +64,13 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/cache/_refresh', (req, res, next) => {
+  app.get('/api/admin/cache/_refresh', adminAuth, (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
   });
 
   // Support both POST and GET for cache clear
-  app.post('/api/admin/cache/_clear', async (req, res) => {
+  app.post('/api/admin/cache/_clear', adminAuth, async (req, res) => {
     try {
       configCache.clear();
       // Immediately reinitialize the cache so subsequent API calls work
@@ -56,13 +83,13 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/cache/_clear', (req, res, next) => {
+  app.get('/api/admin/cache/_clear', adminAuth, (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
   });
 
   // Force refresh endpoint - triggers client reload by updating refresh salt
-  app.post('/api/admin/client/_refresh', async (req, res) => {
+  app.post('/api/admin/client/_refresh', adminAuth, async (req, res) => {
     try {
       const rootDir = getRootDir();
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
@@ -104,13 +131,13 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/client/_refresh', (req, res, next) => {
+  app.get('/api/admin/client/_refresh', adminAuth, (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
   });
 
   // Apps management endpoints
-  app.get('/api/admin/apps', async (req, res) => {
+  app.get('/api/admin/apps', adminAuth, async (req, res) => {
     try {
       const apps = configCache.getApps(true);
       res.json(apps);
@@ -120,7 +147,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/apps/:appId', async (req, res) => {
+  app.get('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const apps = configCache.getApps(true);
@@ -137,7 +164,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.put('/api/admin/apps/:appId', async (req, res) => {
+  app.put('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const updatedApp = req.body;
@@ -168,7 +195,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/apps', async (req, res) => {
+  app.post('/api/admin/apps', adminAuth, async (req, res) => {
     try {
       const newApp = req.body;
       
@@ -201,7 +228,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/apps/:appId/toggle', async (req, res) => {
+  app.post('/api/admin/apps/:appId/toggle', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const apps = configCache.getApps(true);
@@ -235,7 +262,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/apps/:appId', async (req, res) => {
+  app.delete('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const rootDir = getRootDir();
@@ -260,7 +287,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Models management endpoints
-  app.get('/api/admin/models', async (req, res) => {
+  app.get('/api/admin/models', adminAuth, async (req, res) => {
     try {
       const models = configCache.getModels(true);
       res.json(models);
@@ -270,7 +297,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/models/:modelId', async (req, res) => {
+  app.get('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const models = configCache.getModels(true);
@@ -287,7 +314,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.put('/api/admin/models/:modelId', async (req, res) => {
+  app.put('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const updatedModel = req.body;
@@ -338,7 +365,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models', async (req, res) => {
+  app.post('/api/admin/models', adminAuth, async (req, res) => {
     try {
       const newModel = req.body;
       
@@ -391,7 +418,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models/:modelId/toggle', async (req, res) => {
+  app.post('/api/admin/models/:modelId/toggle', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const models = configCache.getModels(true);
@@ -437,7 +464,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/models/:modelId', async (req, res) => {
+  app.delete('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const models = configCache.getModels(true);
@@ -480,7 +507,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Model testing endpoint
-  app.post('/api/admin/models/:modelId/test', async (req, res) => {
+  app.post('/api/admin/models/:modelId/test', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const models = configCache.getModels(true);
@@ -566,7 +593,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Prompts management endpoints
-  app.get('/api/admin/prompts', async (req, res) => {
+  app.get('/api/admin/prompts', adminAuth, async (req, res) => {
     try {
       // Get prompts with ETag from cache
       const { data: prompts, etag } = configCache.getPromptsWithETag(true);
@@ -593,7 +620,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/prompts/:promptId', async (req, res) => {
+  app.get('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const prompts = configCache.getPrompts(true);
@@ -610,7 +637,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.put('/api/admin/prompts/:promptId', async (req, res) => {
+  app.put('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const updatedPrompt = req.body;
@@ -641,7 +668,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/prompts', async (req, res) => {
+  app.post('/api/admin/prompts', adminAuth, async (req, res) => {
     try {
       const newPrompt = req.body;
       
@@ -674,7 +701,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/prompts/:promptId/toggle', async (req, res) => {
+  app.post('/api/admin/prompts/:promptId/toggle', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const prompts = configCache.getPrompts(true);
@@ -708,7 +735,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/prompts/:promptId', async (req, res) => {
+  app.delete('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const rootDir = getRootDir();

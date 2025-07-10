@@ -9,6 +9,12 @@ const AdminNavigation = () => {
 
   const navItems = [
     {
+      name: t('admin.nav.home', 'Home'),
+      href: '/admin',
+      icon: 'home',
+      current: location.pathname === '/admin'
+    },
+    {
       name: t('admin.nav.usage', 'Usage Reports'),
       href: '/admin/usage',
       icon: 'chart-bar',

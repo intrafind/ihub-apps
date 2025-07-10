@@ -12,6 +12,7 @@ import Forbidden from './pages/Forbidden';
 import ServerError from './pages/ServerError';
 import MarkdownPage from './pages/MarkdownPage';
 import WidgetPage from './pages/WidgetPage';
+import AdminHome from './pages/AdminHome';
 import AdminUsageReports from './pages/AdminUsageReports';
 import AdminSystemPage from './pages/AdminSystemPage';
 import AdminAppsPage from './pages/AdminAppsPage';
@@ -26,6 +27,7 @@ import { withErrorBoundary } from './components/ErrorBoundary';
 import useSessionManagement from './hooks/useSessionManagement';
 import { useUIConfig } from './components/UIConfigContext';
 import DocumentTitle from './components/DocumentTitle';
+import { AdminAuthProvider } from './hooks/useAdminAuth';
 
 // Apply error boundary to individual routes that might fail
 const SafeAppsList = withErrorBoundary(AppsList);
@@ -33,6 +35,7 @@ const SafeAppChat = withErrorBoundary(AppChat);
 const SafeAppCanvas = withErrorBoundary(AppCanvas);
 const SafeMarkdownPage = withErrorBoundary(MarkdownPage);
 const SafeWidgetPage = withErrorBoundary(WidgetPage);
+const SafeAdminHome = withErrorBoundary(AdminHome);
 const SafeAdminUsage = withErrorBoundary(AdminUsageReports);
 const SafeAdminSystem = withErrorBoundary(AdminSystemPage);
 const SafeAdminApps = withErrorBoundary(AdminAppsPage);
@@ -51,39 +54,42 @@ function App() {
 
   return (
     <AppProviders>
-      <BrowserRouter>
-        {/* Document title management - must be inside Router for useLocation/useParams */}
-        <DocumentTitle />
-        
-        <Routes>
-          {/* Widget page should be outside of the regular Layout */}
-          <Route path="/widget/chat" element={<SafeWidgetPage />} />
+      <AdminAuthProvider>
+        <BrowserRouter>
+          {/* Document title management - must be inside Router for useLocation/useParams */}
+          <DocumentTitle />
           
-          {/* Regular application routes */}
-          <Route path="/" element={<Layout />}>
-            <Route index element={<SafeAppsList />} />
-            {uiConfig?.promptsList?.enabled !== false && (
-              <Route path="prompts" element={<SafePromptsList />} />
-            )}
-            <Route path="apps/:appId" element={<SafeAppChat />} />
-            <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
-            <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
-            <Route path="admin/usage" element={<SafeAdminUsage />} />
-            <Route path="admin/system" element={<SafeAdminSystem />} />
-            <Route path="admin/apps" element={<SafeAdminApps />} />
-            <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
-            <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
-            <Route path="admin/models" element={<SafeAdminModels />} />
-            <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
-            <Route path="admin/prompts" element={<SafeAdminPrompts />} />
-            <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
-            <Route path="unauthorized" element={<Unauthorized />} />
-            <Route path="forbidden" element={<Forbidden />} />
-            <Route path="server-error" element={<ServerError />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+          <Routes>
+            {/* Widget page should be outside of the regular Layout */}
+            <Route path="/widget/chat" element={<SafeWidgetPage />} />
+            
+            {/* Regular application routes */}
+            <Route path="/" element={<Layout />}>
+              <Route index element={<SafeAppsList />} />
+              {uiConfig?.promptsList?.enabled !== false && (
+                <Route path="prompts" element={<SafePromptsList />} />
+              )}
+              <Route path="apps/:appId" element={<SafeAppChat />} />
+              <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
+              <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
+              <Route path="admin" element={<SafeAdminHome />} />
+              <Route path="admin/usage" element={<SafeAdminUsage />} />
+              <Route path="admin/system" element={<SafeAdminSystem />} />
+              <Route path="admin/apps" element={<SafeAdminApps />} />
+              <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
+              <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
+              <Route path="admin/models" element={<SafeAdminModels />} />
+              <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
+              <Route path="admin/prompts" element={<SafeAdminPrompts />} />
+              <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
+              <Route path="unauthorized" element={<Unauthorized />} />
+              <Route path="forbidden" element={<Forbidden />} />
+              <Route path="server-error" element={<ServerError />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </AdminAuthProvider>
     </AppProviders>
   );
 }export default App;
