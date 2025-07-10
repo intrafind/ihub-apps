@@ -1,6 +1,7 @@
 {
   "id": "app-generator",
   "order": 7,
+  "category": "coding",
   "name": {
     "en": "App Generator",
     "de": "App-Generator"

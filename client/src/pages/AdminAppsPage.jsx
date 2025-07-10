@@ -14,12 +14,27 @@ const AdminAppsPage = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedApp, setSelectedApp] = useState(null);
   const [showAppDetails, setShowAppDetails] = useState(false);
+  const [uiConfig, setUiConfig] = useState(null);
 
   useEffect(() => {
     loadApps();
+    loadUIConfig();
   }, []);
+
+  const loadUIConfig = async () => {
+    try {
+      const response = await fetch('/api/config/ui');
+      if (response.ok) {
+        const config = await response.json();
+        setUiConfig(config);
+      }
+    } catch (err) {
+      console.error('Failed to load UI config:', err);
+    }
+  };
 
   const loadApps = async () => {
     try {
@@ -81,7 +96,7 @@ const AdminAppsPage = () => {
     }
   };
 
-  // Filter apps based on search term and enabled status
+  // Filter apps based on search term, enabled status, and category
   const filteredApps = apps.filter(app => {
     const matchesSearch = getLocalizedContent(app.name, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
                          getLocalizedContent(app.description, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -91,7 +106,10 @@ const AdminAppsPage = () => {
                          (filterEnabled === 'enabled' && app.enabled) ||
                          (filterEnabled === 'disabled' && !app.enabled);
     
-    return matchesSearch && matchesFilter;
+    const matchesCategory = selectedCategory === 'all' || 
+                           (app.category || 'utility') === selectedCategory;
+    
+    return matchesSearch && matchesFilter && matchesCategory;
   });
 
   const getLocalizedValue = (content) => {
@@ -201,6 +219,28 @@ const AdminAppsPage = () => {
         </div>
       </div>
 
+      {/* Category filter */}
+      {uiConfig?.appsList?.categories?.enabled && (
+        <div className="mt-4 flex flex-wrap gap-2 justify-center">
+          {uiConfig.appsList.categories.list.map(category => (
+            <button
+              key={category.id}
+              onClick={() => setSelectedCategory(category.id)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                selectedCategory === category.id
+                  ? 'text-white shadow-lg transform scale-105'
+                  : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+              }`}
+              style={{
+                backgroundColor: selectedCategory === category.id ? category.color : undefined
+              }}
+            >
+              {getLocalizedContent(category.name, currentLanguage)}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div className="bg-white overflow-hidden shadow rounded-lg">
@@ -282,6 +322,9 @@ const AdminAppsPage = () => {
                       {t('admin.apps.table.app', 'App')}
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      {t('admin.apps.table.category', 'Category')}
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       {t('admin.apps.table.status', 'Status')}
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -317,6 +360,18 @@ const AdminAppsPage = () => {
                             </div>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {app.category ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                            {uiConfig?.appsList?.categories?.list?.find(cat => cat.id === app.category)?.name ? 
+                              getLocalizedContent(uiConfig.appsList.categories.list.find(cat => cat.id === app.category).name, currentLanguage) :
+                              app.category
+                            }
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">N/A</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${

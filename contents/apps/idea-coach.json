@@ -1,6 +1,7 @@
 {
   "id": "idea-coach",
   "order": 8,
+  "category": "writing",
   "name": {
     "en": "Idea Coach",
     "de": "Ideen-Coach"

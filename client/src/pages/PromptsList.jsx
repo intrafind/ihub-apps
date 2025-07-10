@@ -23,6 +23,7 @@ const PromptsList = () => {
   const [favoritePromptIds, setFavoritePromptIds] = useState([]);
   const [recentPromptIds, setRecentPromptIds] = useState([]);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
   // Create favorite prompts helpers
   const { getFavorites: getFavoritePrompts, toggleFavorite: toggleFavoritePrompt } = createFavoriteItemHelpers('aihub_favorite_prompts');
@@ -33,6 +34,15 @@ const PromptsList = () => {
   const sortConfig = useMemo(() => {
     const defaultSortConfig = { enabled: true, default: 'relevance' };
     return uiConfig?.promptsList?.sort || defaultSortConfig;
+  }, [uiConfig]);
+
+  const categoriesConfig = useMemo(() => {
+    const defaultCategoriesConfig = {
+      enabled: false,
+      showAll: true,
+      list: []
+    };
+    return uiConfig?.promptsList?.categories || defaultCategoriesConfig;
   }, [uiConfig]);
 
   const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
@@ -75,14 +85,28 @@ const PromptsList = () => {
   }, [prompts, searchParams]);
 
   const filteredPrompts = useMemo(() => {
-    if (!searchTerm) return prompts;
-    const term = searchTerm.toLowerCase();
-    return prompts.filter(p =>
-      p.name.toLowerCase().includes(term) ||
-      p.prompt.toLowerCase().includes(term) ||
-      (p.description && p.description.toLowerCase().includes(term))
-    );
-  }, [prompts, searchTerm]);
+    let filtered = prompts;
+
+    // Filter by category if enabled
+    if (categoriesConfig.enabled && selectedCategory !== 'all') {
+      filtered = filtered.filter(p => {
+        const promptCategory = p.category || 'creative'; // Default to 'creative' if no category
+        return promptCategory === selectedCategory;
+      });
+    }
+
+    // Filter by search term
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(p =>
+        p.name.toLowerCase().includes(term) ||
+        p.prompt.toLowerCase().includes(term) ||
+        (p.description && p.description.toLowerCase().includes(term))
+      );
+    }
+
+    return filtered;
+  }, [prompts, searchTerm, categoriesConfig.enabled, selectedCategory]);
 
   const sortedPrompts = useMemo(() => {
     if (!sortConfig.enabled) return filteredPrompts;
@@ -147,6 +171,11 @@ const PromptsList = () => {
     } else {
       setFavoritePromptIds(prev => prev.filter(id => id !== promptId));
     }
+  };
+
+  const handleCategorySelect = (categoryId) => {
+    setSelectedCategory(categoryId);
+    setPage(0); // Reset to first page when category changes
   };
 
   if (loading) {
@@ -218,6 +247,28 @@ const PromptsList = () => {
           )}
         </div>
       </div>
+
+      {/* Category filter */}
+      {categoriesConfig.enabled && (
+        <div className="flex flex-wrap gap-2 mb-6 justify-center">
+          {categoriesConfig.list.map(category => (
+            <button
+              key={category.id}
+              onClick={() => handleCategorySelect(category.id)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                selectedCategory === category.id
+                  ? 'text-white shadow-lg transform scale-105'
+                  : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+              }`}
+              style={{
+                backgroundColor: selectedCategory === category.id ? category.color : undefined
+              }}
+            >
+              {getLocalizedContent(category.name, i18n.language)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {filteredPrompts.length === 0 ? (
         <p className="text-gray-500">{t('pages.promptsList.noPrompts', 'No prompts found')}</p>

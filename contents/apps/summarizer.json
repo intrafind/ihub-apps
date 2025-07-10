@@ -1,6 +1,7 @@
 {
   "id": "summarizer",
   "order": 4,
+  "category": "analysis",
   "name": {
     "en": "Content Summarizer",
     "de": "Inhaltszusammenfassung"

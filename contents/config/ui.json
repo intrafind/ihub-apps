@@ -144,12 +144,128 @@
     "sort": {
       "enabled": true,
       "default": "relevance"
+    },
+    "categories": {
+      "enabled": true,
+      "showAll": true,
+      "list": [
+        {
+          "id": "all",
+          "name": {
+            "en": "All",
+            "de": "Alle"
+          },
+          "color": "#6B7280"
+        },
+        {
+          "id": "coding",
+          "name": {
+            "en": "Coding",
+            "de": "Programmierung"
+          },
+          "color": "#10B981"
+        },
+        {
+          "id": "writing",
+          "name": {
+            "en": "Creative Writing",
+            "de": "Kreatives Schreiben"
+          },
+          "color": "#F59E0B"
+        },
+        {
+          "id": "business",
+          "name": {
+            "en": "Business",
+            "de": "Geschäft"
+          },
+          "color": "#3B82F6"
+        },
+        {
+          "id": "analysis",
+          "name": {
+            "en": "Analysis",
+            "de": "Analyse"
+          },
+          "color": "#8B5CF6"
+        },
+        {
+          "id": "communication",
+          "name": {
+            "en": "Communication",
+            "de": "Kommunikation"
+          },
+          "color": "#EF4444"
+        },
+        {
+          "id": "utility",
+          "name": {
+            "en": "Utility",
+            "de": "Hilfsmittel"
+          },
+          "color": "#06B6D4"
+        }
+      ]
     }
   },
   "promptsList": {
     "sort": {
       "enabled": true,
       "default": "relevance"
+    },
+    "categories": {
+      "enabled": true,
+      "showAll": true,
+      "list": [
+        {
+          "id": "all",
+          "name": {
+            "en": "All",
+            "de": "Alle"
+          },
+          "color": "#6B7280"
+        },
+        {
+          "id": "summarization",
+          "name": {
+            "en": "Summarization",
+            "de": "Zusammenfassung"
+          },
+          "color": "#10B981"
+        },
+        {
+          "id": "translation",
+          "name": {
+            "en": "Translation",
+            "de": "Übersetzung"
+          },
+          "color": "#3B82F6"
+        },
+        {
+          "id": "qa",
+          "name": {
+            "en": "Q&A",
+            "de": "Frage & Antwort"
+          },
+          "color": "#F59E0B"
+        },
+        {
+          "id": "creative",
+          "name": {
+            "en": "Creative",
+            "de": "Kreativ"
+          },
+          "color": "#EF4444"
+        },
+        {
+          "id": "analysis",
+          "name": {
+            "en": "Analysis",
+            "de": "Analyse"
+          },
+          "color": "#8B5CF6"
+        }
+      ]
     }
   },
   "pages": {

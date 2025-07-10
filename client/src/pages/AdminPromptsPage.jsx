@@ -16,12 +16,27 @@ const AdminPromptsPage = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [showPromptDetails, setShowPromptDetails] = useState(false);
+  const [uiConfig, setUiConfig] = useState(null);
 
   useEffect(() => {
     loadPrompts();
+    loadUIConfig();
   }, []);
+
+  const loadUIConfig = async () => {
+    try {
+      const response = await fetch('/api/config/ui');
+      if (response.ok) {
+        const config = await response.json();
+        setUiConfig(config);
+      }
+    } catch (err) {
+      console.error('Failed to load UI config:', err);
+    }
+  };
 
   const loadPrompts = async () => {
     try {
@@ -84,7 +99,10 @@ const AdminPromptsPage = () => {
       (filterEnabled === 'enabled' && prompt.enabled !== false) ||
       (filterEnabled === 'disabled' && prompt.enabled === false);
     
-    return matchesSearch && matchesFilter;
+    const matchesCategory = selectedCategory === 'all' || 
+      (prompt.category || 'creative') === selectedCategory;
+    
+    return matchesSearch && matchesFilter && matchesCategory;
   });
 
   const sortedPrompts = [...filteredPrompts].sort((a, b) => {
@@ -183,6 +201,28 @@ const AdminPromptsPage = () => {
         </div>
       </div>
 
+      {/* Category filter */}
+      {uiConfig?.promptsList?.categories?.enabled && (
+        <div className="mt-4 flex flex-wrap gap-2 justify-center">
+          {uiConfig.promptsList.categories.list.map(category => (
+            <button
+              key={category.id}
+              onClick={() => setSelectedCategory(category.id)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                selectedCategory === category.id
+                  ? 'text-white shadow-lg transform scale-105'
+                  : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+              }`}
+              style={{
+                backgroundColor: selectedCategory === category.id ? category.color : undefined
+              }}
+            >
+              {getLocalizedContent(category.name, currentLanguage)}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Prompts Table */}
       <div className="mt-8 flex flex-col">
         <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
@@ -193,6 +233,9 @@ const AdminPromptsPage = () => {
                   <tr>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('admin.prompts.name', 'Name')}
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {t('admin.prompts.category', 'Category')}
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('admin.prompts.description', 'Description')}
@@ -230,6 +273,18 @@ const AdminPromptsPage = () => {
                             </div>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {prompt.category ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            {uiConfig?.promptsList?.categories?.list?.find(cat => cat.id === prompt.category)?.name ? 
+                              getLocalizedContent(uiConfig.promptsList.categories.list.find(cat => cat.id === prompt.category).name, currentLanguage) :
+                              prompt.category
+                            }
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">N/A</span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-900 max-w-xs truncate">

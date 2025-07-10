@@ -1,6 +1,7 @@
 {
   "id": "email-composer",
   "order": 5,
+  "category": "communication",
   "name": {
     "en": "Email Composer",
     "de": "E-Mail-Verfasser"
