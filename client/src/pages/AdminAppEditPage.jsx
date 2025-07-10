@@ -7,7 +7,8 @@ import Icon from '../components/Icon';
 import { getLocalizedContent } from '../utils/localizeContent';
 
 const AdminAppEditPage = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const { appId } = useParams();
   const navigate = useNavigate();
   const [app, setApp] = useState(null);
@@ -15,9 +16,10 @@ const AdminAppEditPage = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [availableModels, setAvailableModels] = useState([]);
+  const [uiConfig, setUiConfig] = useState(null);
 
   useEffect(() => {
-    // Load available models
+    // Load available models and UI config
     const loadModels = async () => {
       try {
         const response = await fetch('/api/models');
@@ -30,7 +32,20 @@ const AdminAppEditPage = () => {
       }
     };
 
+    const loadUIConfig = async () => {
+      try {
+        const response = await fetch('/api/config/ui');
+        if (response.ok) {
+          const config = await response.json();
+          setUiConfig(config);
+        }
+      } catch (err) {
+        console.error('Failed to load UI config:', err);
+      }
+    };
+
     loadModels();
+    loadUIConfig();
   }, []);
 
   useEffect(() => {
@@ -63,6 +78,7 @@ const AdminAppEditPage = () => {
         },
         allowEmptyContent: false,
         sendChatHistory: true,
+        category: 'utility',
         features: {
           magicPrompt: {
             enabled: false,
@@ -492,6 +508,24 @@ const AdminAppEditPage = () => {
                     onChange={(e) => handleInputChange('order', parseInt(e.target.value) || 0)}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('admin.apps.edit.category', 'Category')}
+                  </label>
+                  <select
+                    value={app.category || ''}
+                    onChange={(e) => handleInputChange('category', e.target.value)}
+                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  >
+                    <option value="">{t('admin.apps.edit.selectCategory', 'Select category...')}</option>
+                    {uiConfig?.appsList?.categories?.list?.filter(cat => cat.id !== 'all').map(category => (
+                      <option key={category.id} value={category.id}>
+                        {getLocalizedContent(category.name, currentLanguage)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="col-span-6">

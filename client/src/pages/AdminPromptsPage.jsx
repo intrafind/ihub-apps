@@ -16,12 +16,27 @@ const AdminPromptsPage = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [showPromptDetails, setShowPromptDetails] = useState(false);
+  const [uiConfig, setUiConfig] = useState(null);
 
   useEffect(() => {
     loadPrompts();
+    loadUIConfig();
   }, []);
+
+  const loadUIConfig = async () => {
+    try {
+      const response = await fetch('/api/config/ui');
+      if (response.ok) {
+        const config = await response.json();
+        setUiConfig(config);
+      }
+    } catch (err) {
+      console.error('Failed to load UI config:', err);
+    }
+  };
 
   const loadPrompts = async () => {
     try {
@@ -84,7 +99,10 @@ const AdminPromptsPage = () => {
       (filterEnabled === 'enabled' && prompt.enabled !== false) ||
       (filterEnabled === 'disabled' && prompt.enabled === false);
     
-    return matchesSearch && matchesFilter;
+    const matchesCategory = selectedCategory === 'all' || 
+      (prompt.category || 'creative') === selectedCategory;
+    
+    return matchesSearch && matchesFilter && matchesCategory;
   });
 
   const sortedPrompts = [...filteredPrompts].sort((a, b) => {
@@ -182,6 +200,28 @@ const AdminPromptsPage = () => {
           </select>
         </div>
       </div>
+
+      {/* Category filter */}
+      {uiConfig?.promptsList?.categories?.enabled && (
+        <div className="mt-4 flex flex-wrap gap-2 justify-center">
+          {uiConfig.promptsList.categories.list.map(category => (
+            <button
+              key={category.id}
+              onClick={() => setSelectedCategory(category.id)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                selectedCategory === category.id
+                  ? 'text-white shadow-lg transform scale-105'
+                  : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+              }`}
+              style={{
+                backgroundColor: selectedCategory === category.id ? category.color : undefined
+              }}
+            >
+              {getLocalizedContent(category.name, currentLanguage)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Prompts Table */}
       <div className="mt-8 flex flex-col">

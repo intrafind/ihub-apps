@@ -5,6 +5,7 @@ import Icon from '../components/Icon';
 import AdminNavigation from '../components/AdminNavigation';
 import DynamicLanguageEditor from '../components/DynamicLanguageEditor';
 import SearchableAppsSelector from '../components/SearchableAppsSelector';
+import { getLocalizedContent } from '../utils/localizeContent';
 import { fetchAdminPrompts, createPrompt, updatePrompt, clearApiCache, fetchAdminApps } from '../api/api';
 
 const AdminPromptEditPage = () => {
@@ -23,17 +24,20 @@ const AdminPromptEditPage = () => {
     enabled: true,
     order: undefined,
     appId: '',
-    variables: []
+    variables: [],
+    category: 'creative'
   });
 
   const [loading, setLoading] = useState(!isNewPrompt);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [apps, setApps] = useState([]);
+  const [uiConfig, setUiConfig] = useState(null);
 
   useEffect(() => {
-    // Load apps for the appId dropdown
+    // Load apps for the appId dropdown and UI config
     loadApps();
+    loadUIConfig();
     
     if (!isNewPrompt) {
       loadPrompt();
@@ -46,6 +50,18 @@ const AdminPromptEditPage = () => {
       setApps(data);
     } catch (err) {
       console.error('Error loading apps:', err);
+    }
+  };
+
+  const loadUIConfig = async () => {
+    try {
+      const response = await fetch('/api/config/ui');
+      if (response.ok) {
+        const config = await response.json();
+        setUiConfig(config);
+      }
+    } catch (err) {
+      console.error('Failed to load UI config:', err);
     }
   };
 
@@ -277,6 +293,29 @@ const AdminPromptEditPage = () => {
                   />
                   <p className="mt-2 text-sm text-gray-500">
                     {t('admin.prompts.edit.orderDesc', 'Display order in the prompts list')}
+                  </p>
+                </div>
+
+                {/* Category */}
+                <div className="col-span-6 sm:col-span-3">
+                  <label htmlFor="category" className="block text-sm font-medium text-gray-700">
+                    {t('admin.prompts.edit.category', 'Category')}
+                  </label>
+                  <select
+                    id="category"
+                    value={prompt.category || ''}
+                    onChange={(e) => setPrompt(prev => ({ ...prev, category: e.target.value }))}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  >
+                    <option value="">{t('admin.prompts.edit.selectCategory', 'Select category...')}</option>
+                    {uiConfig?.promptsList?.categories?.list?.filter(cat => cat.id !== 'all').map(category => (
+                      <option key={category.id} value={category.id}>
+                        {getLocalizedContent(category.name, currentLanguage)}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-2 text-sm text-gray-500">
+                    {t('admin.prompts.edit.categoryDesc', 'Category for organizing prompts')}
                   </p>
                 </div>
 
