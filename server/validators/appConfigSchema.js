@@ -28,6 +28,8 @@ export const appConfigSchema = z.object({
   allowedModels: z.array(z.string()).optional(),
   disallowModelSelection: z.boolean().optional(),
   allowEmptyContent: z.boolean().optional(),
+  tools: z.array(z.string()).optional(),
+  category: z.string().optional(),
   enabled: z.boolean().optional(),
 }).passthrough();
 
