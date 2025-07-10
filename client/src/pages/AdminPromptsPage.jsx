@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import Icon from '../components/Icon';
+import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import PromptDetailsPopup from '../components/PromptDetailsPopup';
 import { fetchAdminPrompts, deletePrompt, togglePrompt, clearApiCache } from '../api/api';
@@ -149,8 +150,9 @@ const AdminPromptsPage = () => {
   }
 
   return (
-    <div>
-      <AdminNavigation />
+    <AdminAuth>
+      <div>
+        <AdminNavigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
@@ -386,6 +388,7 @@ const AdminPromptsPage = () => {
       />
       </div>
     </div>
+    </AdminAuth>
   );
 };
 

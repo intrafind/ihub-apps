@@ -1,11 +1,33 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../components/Icon';
 import AdminAuth from '../components/AdminAuth';
+import { makeAdminApiCall } from '../api/adminApi';
 
 const AdminHome = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  const handleCacheRefresh = async () => {
+    try {
+      await makeAdminApiCall('/api/admin/cache/_refresh', { method: 'POST' });
+      alert('Cache refreshed successfully');
+    } catch (error) {
+      alert('Error refreshing cache: ' + error.message);
+    }
+  };
+
+  const handleCacheClear = async () => {
+    if (confirm('Are you sure you want to clear the cache?')) {
+      try {
+        await makeAdminApiCall('/api/admin/cache/_clear', { method: 'POST' });
+        alert('Cache cleared successfully');
+      } catch (error) {
+        alert('Error clearing cache: ' + error.message);
+      }
+    }
+  };
 
   const adminSections = [
     {
@@ -107,40 +129,66 @@ const AdminHome = () => {
           <div className="mt-12 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Actions</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <a
-                href="/api/admin/cache/_refresh"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => navigate('/admin/apps/new')}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              >
+                <Icon name="plus" className="h-4 w-4 mr-2" />
+                Add New App
+              </button>
+              
+              <button
+                onClick={() => navigate('/admin/models/new')}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+              >
+                <Icon name="plus" className="h-4 w-4 mr-2" />
+                Add New Model
+              </button>
+              
+              <button
+                onClick={() => navigate('/admin/prompts/new')}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Icon name="plus" className="h-4 w-4 mr-2" />
+                Add New Prompt
+              </button>
+              
+              <Link
+                to="/"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <Icon name="home" className="h-4 w-4 mr-2" />
+                Back to Apps
+              </Link>
+            </div>
+          </div>
+
+          {/* System Actions */}
+          <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">System Actions</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <button
+                onClick={handleCacheRefresh}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 <Icon name="refresh" className="h-4 w-4 mr-2" />
                 Refresh Cache
-              </a>
+              </button>
               
-              <a
-                href="/api/admin/cache/_clear"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={handleCacheClear}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
               >
                 <Icon name="trash" className="h-4 w-4 mr-2" />
                 Clear Cache
-              </a>
+              </button>
               
               <Link
                 to="/admin/system"
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
               >
                 <Icon name="cog" className="h-4 w-4 mr-2" />
                 System Settings
-              </Link>
-              
-              <Link
-                to="/"
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-              >
-                <Icon name="home" className="h-4 w-4 mr-2" />
-                Back to Apps
               </Link>
             </div>
           </div>

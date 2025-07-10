@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import Icon from '../components/Icon';
 import ModelDetailsPopup from '../components/ModelDetailsPopup';
+import AdminAuth from '../components/AdminAuth';
+import { makeAdminApiCall } from '../api/adminApi';
 
 const AdminModelsPage = () => {
   const { t, i18n } = useTranslation();
@@ -26,10 +28,7 @@ const AdminModelsPage = () => {
   const loadModels = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/models');
-      if (!response.ok) {
-        throw new Error('Failed to load models');
-      }
+      const response = await makeAdminApiCall('/api/admin/models');
       const data = await response.json();
       setModels(data);
     } catch (err) {
@@ -41,13 +40,9 @@ const AdminModelsPage = () => {
 
   const toggleModel = async (modelId) => {
     try {
-      const response = await fetch(`/api/admin/models/${modelId}/toggle`, {
+      const response = await makeAdminApiCall(`/api/admin/models/${modelId}/toggle`, {
         method: 'POST',
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to toggle model');
-      }
       
       const result = await response.json();
       
@@ -80,7 +75,7 @@ const AdminModelsPage = () => {
   const testModel = async (modelId) => {
     try {
       setTestingModel(modelId);
-      const response = await fetch(`/api/admin/models/${modelId}/test`, {
+      const response = await makeAdminApiCall(`/api/admin/models/${modelId}/test`, {
         method: 'POST',
       });
       
@@ -134,13 +129,9 @@ const AdminModelsPage = () => {
     }
 
     try {
-      const response = await fetch(`/api/admin/models/${modelId}`, {
+      await makeAdminApiCall(`/api/admin/models/${modelId}`, {
         method: 'DELETE',
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete model');
-      }
       
       // Remove the model from the local state
       setModels(prevModels => prevModels.filter(model => model.id !== modelId));
@@ -196,7 +187,8 @@ const AdminModelsPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <AdminAuth>
+      <div className="min-h-screen bg-gray-100">
       {/* Header */}
       <div className="bg-white shadow">
         <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
@@ -630,6 +622,7 @@ const AdminModelsPage = () => {
         onClose={() => setShowModelDetails(false)}
       />
     </div>
+    </AdminAuth>
   );
 };
 
