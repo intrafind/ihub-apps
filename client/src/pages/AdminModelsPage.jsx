@@ -5,6 +5,7 @@ import { getLocalizedContent } from '../utils/localizeContent';
 import Icon from '../components/Icon';
 import ModelDetailsPopup from '../components/ModelDetailsPopup';
 import AdminAuth from '../components/AdminAuth';
+import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../api/adminApi';
 
 const AdminModelsPage = () => {
@@ -49,27 +50,12 @@ const AdminModelsPage = () => {
       // Update the model in the local state
       setModels(prevModels => 
         prevModels.map(model => 
-          model.id === modelId 
-            ? { ...model, enabled: result.enabled }
-            : model
+          model.id === modelId ? { ...model, enabled: result.enabled } : model
         )
       );
     } catch (err) {
       setError(err.message);
     }
-  };
-
-  const handleModelClick = (model) => {
-    setSelectedModel(model);
-    setShowModelDetails(true);
-  };
-
-  const closeTestResult = (modelId) => {
-    setTestResults(prev => {
-      const newResults = { ...prev };
-      delete newResults[modelId];
-      return newResults;
-    });
   };
 
   const testModel = async (modelId) => {
@@ -80,107 +66,64 @@ const AdminModelsPage = () => {
       });
       
       const result = await response.json();
-      setTestResults(prev => ({
-        ...prev,
+      
+      setTestResults(prevResults => ({
+        ...prevResults,
         [modelId]: result
       }));
-      
-      // Auto-disappear after 5 seconds
-      setTimeout(() => {
-        closeTestResult(modelId);
-      }, 5000);
     } catch (err) {
-      console.error('Model test error:', err);
-      let errorMessage = 'Unknown error occurred';
-      
-      if (err.message.includes('fetch failed')) {
-        errorMessage = 'Network error: Unable to connect to the model service';
-      } else if (err.message.includes('timeout')) {
-        errorMessage = 'Request timeout: Model service is not responding';
-      } else if (err.message.includes('ECONNREFUSED')) {
-        errorMessage = 'Connection refused: Model service is not available';
-      } else if (err.message.includes('ENOTFOUND')) {
-        errorMessage = 'DNS error: Model service hostname not found';
-      } else {
-        errorMessage = `Network error: ${err.message}`;
-      }
-      
-      setTestResults(prev => ({
-        ...prev,
-        [modelId]: { 
-          success: false, 
-          message: 'Model test failed',
-          error: errorMessage
-        }
+      setTestResults(prevResults => ({
+        ...prevResults,
+        [modelId]: { error: err.message }
       }));
-      
-      // Auto-disappear after 5 seconds
-      setTimeout(() => {
-        closeTestResult(modelId);
-      }, 5000);
     } finally {
       setTestingModel(null);
     }
   };
 
-  const deleteModel = async (modelId) => {
-    if (!confirm(t('admin.models.delete.confirm'))) {
-      return;
-    }
-
-    try {
-      await makeAdminApiCall(`/api/admin/models/${modelId}`, {
-        method: 'DELETE',
-      });
-      
-      // Remove the model from the local state
-      setModels(prevModels => prevModels.filter(model => model.id !== modelId));
-    } catch (err) {
-      setError(err.message);
-    }
+  const handleModelClick = (model) => {
+    setSelectedModel(model);
+    setShowModelDetails(true);
   };
 
   const filteredModels = models.filter(model => {
-    const localizedName = getLocalizedContent(model.name, currentLanguage).toLowerCase();
-    const localizedDescription = getLocalizedContent(model.description, currentLanguage).toLowerCase();
-    const matchesSearch = localizedName.includes(searchTerm.toLowerCase()) ||
-                         localizedDescription.includes(searchTerm.toLowerCase()) ||
-                         model.provider.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = searchTerm === '' || 
+      getLocalizedContent(model.name, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getLocalizedContent(model.description, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      model.id.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesFilter = filterEnabled === 'all' || 
-                         (filterEnabled === 'enabled' && model.enabled) ||
-                         (filterEnabled === 'disabled' && !model.enabled);
+      (filterEnabled === 'enabled' && model.enabled) ||
+      (filterEnabled === 'disabled' && !model.enabled);
     
     return matchesSearch && matchesFilter;
   });
 
-  const enabledCount = models.filter(model => model.enabled).length;
-  const disabledCount = models.filter(model => !model.enabled).length;
-  const defaultModel = models.find(model => model.default);
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">{t('app.loading')}</p>
-        </div>
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-600 text-xl mb-4">{t('common.error')}</div>
-          <p className="text-gray-600">{error}</p>
-          <button 
-            onClick={loadModels}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            {t('app.retry')}
-          </button>
+      <div className="bg-red-50 border border-red-200 rounded-md p-4">
+        <div className="flex">
+          <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-red-800">
+              {t('admin.models.loadError', 'Error loading models')}
+            </h3>
+            <p className="mt-1 text-sm text-red-700">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-2 text-sm text-red-600 hover:text-red-500"
+            >
+              {t('common.retry', 'Retry')}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -188,440 +131,189 @@ const AdminModelsPage = () => {
 
   return (
     <AdminAuth>
-      <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <div className="bg-white shadow">
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          <div className="md:flex md:items-center md:justify-between">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold text-gray-900">
-                {t('admin.models.title')}
+      <div>
+        <AdminNavigation />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="sm:flex sm:items-center">
+            <div className="sm:flex-auto">
+              <h1 className="text-2xl font-semibold text-gray-900">
+                {t('admin.models.title', 'Model Management')}
               </h1>
-              <p className="mt-1 text-sm text-gray-500">
-                {t('admin.models.subtitle')}
+              <p className="mt-2 text-sm text-gray-700">
+                {t('admin.models.subtitle', 'Configure and manage AI models for your applications')}
               </p>
             </div>
-            <div className="mt-4 flex md:mt-0 md:ml-4">
+            <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
               <button
                 onClick={() => navigate('/admin/models/new')}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
               >
-                <Icon name="plus" className="w-4 h-4 mr-2" />
-                {t('admin.models.addNew')}
+                <Icon name="plus" className="h-4 w-4 mr-2" />
+                {t('admin.models.addNew', 'Add New Model')}
               </button>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
           {/* Search and Filter */}
-          <div className="bg-white shadow rounded-lg mb-6">
-            <div className="px-4 py-5 sm:p-6">
-              <div className="sm:flex sm:items-center sm:justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Icon name="search" className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder={t('admin.models.searchPlaceholder')}
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    />
-                  </div>
+          <div className="mt-8 flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Icon name="search" className="h-5 w-5 text-gray-400" />
                 </div>
-                <div className="mt-4 sm:mt-0 sm:ml-4 flex-shrink-0">
-                  <select
-                    value={filterEnabled}
-                    onChange={(e) => setFilterEnabled(e.target.value)}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3"
-                  >
-                    <option value="all">{t('admin.models.filterAll')}</option>
-                    <option value="enabled">{t('admin.models.filterEnabled')}</option>
-                    <option value="disabled">{t('admin.models.filterDisabled')}</option>
-                  </select>
-                </div>
+                <input
+                  type="text"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  placeholder={t('admin.models.searchPlaceholder', 'Search models...')}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
+            </div>
+            <div className="sm:w-48">
+              <select
+                value={filterEnabled}
+                onChange={(e) => setFilterEnabled(e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              >
+                <option value="all">{t('admin.models.filterAll', 'All Models')}</option>
+                <option value="enabled">{t('admin.models.filterEnabled', 'Enabled Only')}</option>
+                <option value="disabled">{t('admin.models.filterDisabled', 'Disabled Only')}</option>
+              </select>
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <Icon name="server" className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">
-                        {t('admin.models.totalModels')}
-                      </dt>
-                      <dd className="text-lg font-medium text-gray-900">
-                        {models.length}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <Icon name="check-circle" className="h-6 w-6 text-green-400" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">
-                        {t('admin.models.enabledModels')}
-                      </dt>
-                      <dd className="text-lg font-medium text-gray-900">
-                        {enabledCount}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <Icon name="x-circle" className="h-6 w-6 text-red-400" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">
-                        {t('admin.models.disabledModels')}
-                      </dt>
-                      <dd className="text-lg font-medium text-gray-900">
-                        {disabledCount}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <Icon name="star" className="h-6 w-6 text-yellow-400" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">
-                        {t('admin.models.defaultModel')}
-                      </dt>
-                      <dd className="text-lg font-medium text-gray-900">
-                        {defaultModel
-                          ? getLocalizedContent(defaultModel.name, currentLanguage)
-                          : 'None'}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Models table */}
-          <div className="hidden sm:block">
-            <div className="flex flex-col">
-              <div className="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-                <div className="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
-                  <div className="shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            {t('admin.models.fields.name')}
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            {t('admin.models.status.enabled')}
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            {t('admin.models.fields.provider')}
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            {t('admin.models.fields.tokenLimit')}
-                          </th>
-                          <th scope="col" className="relative px-6 py-3">
-                            <span className="sr-only">{t('admin.models.actions.test')}</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredModels.map((model) => (
-                          <tr key={model.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleModelClick(model)}>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="flex-shrink-0 h-10 w-10">
-                                  <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                                    <Icon name="server" className="h-5 w-5 text-indigo-600" />
-                                  </div>
-                                </div>
-                                <div className="ml-4">
-                                  <div className="flex items-center">
-                                  <div className="text-sm font-medium text-gray-900">{getLocalizedContent(model.name, currentLanguage)}</div>
-                                    {model.default && (
-                                      <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                        {t('admin.models.status.default')}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="text-sm text-gray-500">{getLocalizedContent(model.description, currentLanguage)}</div>
-                                  <div className="text-xs text-gray-400">{model.id}</div>
+          {/* Models Table */}
+          <div className="mt-8 flex flex-col">
+            <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
+              <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {t('admin.models.name', 'Name')}
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {t('admin.models.provider', 'Provider')}
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {t('admin.models.status', 'Status')}
+                        </th>
+                        <th scope="col" className="relative px-6 py-3">
+                          <span className="sr-only">{t('admin.models.actions', 'Actions')}</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredModels.map((model) => (
+                        <tr key={model.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleModelClick(model)}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-8 w-8">
+                                <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                                  <Icon name="cpu-chip" className="h-4 w-4 text-indigo-600" />
                                 </div>
                               </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                model.enabled 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-red-100 text-red-800'
-                              }`}>
-                                {model.enabled ? t('admin.models.status.enabled') : t('admin.models.status.disabled')}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                {model.provider}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {model.tokenLimit?.toLocaleString() || 'N/A'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <div className="flex items-center justify-end space-x-2">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    testModel(model.id);
-                                  }}
-                                  disabled={testingModel === model.id}
-                                  className={`p-2 rounded-full ${
-                                    testingModel === model.id
-                                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                      : 'text-blue-600 hover:bg-blue-50'
-                                  }`}
-                                  title={testingModel === model.id ? t('admin.models.actions.testing') : t('admin.models.actions.test')}
-                                >
-                                  <Icon name={testingModel === model.id ? "clock" : "play"} className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleModel(model.id);
-                                  }}
-                                  className={`p-2 rounded-full ${
-                                    model.enabled
-                                      ? 'text-red-600 hover:bg-red-50'
-                                      : 'text-green-600 hover:bg-green-50'
-                                  }`}
-                                  title={model.enabled ? t('admin.models.actions.disable') : t('admin.models.actions.enable')}
-                                >
-                                  <Icon name={model.enabled ? "x-circle" : "check-circle"} className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigate(`/admin/models/${model.id}`);
-                                  }}
-                                  className="p-2 text-gray-600 hover:bg-gray-50 rounded-full"
-                                  title={t('admin.models.actions.edit')}
-                                >
-                                  <Icon name="pencil" className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteModel(model.id);
-                                  }}
-                                  className="p-2 text-red-600 hover:bg-red-50 rounded-full"
-                                  title={t('admin.models.actions.delete')}
-                                >
-                                  <Icon name="trash" className="w-4 h-4" />
-                                </button>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {getLocalizedContent(model.name, currentLanguage)}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {model.id}
+                                </div>
                               </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Mobile Cards */}
-          <div className="sm:hidden">
-            <div className="bg-white shadow overflow-hidden sm:rounded-md">
-              <ul className="divide-y divide-gray-200">
-                {filteredModels.map((model) => (
-                  <li key={model.id}>
-                    <div className="px-4 py-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer" onClick={() => handleModelClick(model)}>
-                      <div className="flex items-center flex-1">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                            <Icon name="server" className="h-5 w-5 text-indigo-600" />
-                          </div>
-                        </div>
-                        <div className="ml-4 flex-1">
-                          <div className="flex items-center flex-wrap gap-2">
-                            <div className="text-sm font-medium text-gray-900">{getLocalizedContent(model.name, currentLanguage)}</div>
-                            {model.default && (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                {t('admin.models.status.default')}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-500 mt-1">{getLocalizedContent(model.description, currentLanguage)}</div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              model.enabled 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {model.provider || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              model.enabled
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-800'
                             }`}>
-                              {model.enabled ? t('admin.models.status.enabled') : t('admin.models.status.disabled')}
+                              {model.enabled ? t('admin.models.enabled', 'Enabled') : t('admin.models.disabled', 'Disabled')}
                             </span>
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {model.provider}
-                            </span>
-                          </div>
-                          <div className="text-xs text-gray-400 mt-1">
-                            {model.id} • {model.tokenLimit?.toLocaleString() || 'N/A'} tokens
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="px-4 pb-4 flex items-center justify-center space-x-4">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          testModel(model.id);
-                        }}
-                        disabled={testingModel === model.id}
-                        className={`flex items-center px-3 py-2 rounded-md text-sm font-medium ${
-                          testingModel === model.id
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'text-blue-600 hover:bg-blue-50'
-                        }`}
-                      >
-                        <Icon name={testingModel === model.id ? "clock" : "play"} className="w-4 h-4 mr-1" />
-                        {testingModel === model.id ? t('admin.models.actions.testing') : t('admin.models.actions.test')}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleModel(model.id);
-                        }}
-                        className={`flex items-center px-3 py-2 rounded-md text-sm font-medium ${
-                          model.enabled
-                            ? 'text-red-600 hover:bg-red-50'
-                            : 'text-green-600 hover:bg-green-50'
-                        }`}
-                      >
-                        <Icon name={model.enabled ? "x-circle" : "check-circle"} className="w-4 h-4 mr-1" />
-                        {model.enabled ? t('admin.models.actions.disable') : t('admin.models.actions.enable')}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/admin/models/${model.id}`);
-                        }}
-                        className="flex items-center px-3 py-2 text-gray-600 hover:bg-gray-50 rounded-md text-sm font-medium"
-                      >
-                        <Icon name="pencil" className="w-4 h-4 mr-1" />
-                        {t('admin.models.actions.edit')}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteModel(model.id);
-                        }}
-                        className="flex items-center px-3 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm font-medium"
-                      >
-                        <Icon name="trash" className="w-4 h-4 mr-1" />
-                        {t('admin.models.actions.delete')}
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end space-x-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  testModel(model.id);
+                                }}
+                                disabled={testingModel === model.id}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-full disabled:opacity-50"
+                                title={t('admin.models.test', 'Test')}
+                              >
+                                <Icon name="play" className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleModel(model.id);
+                                }}
+                                className={`p-2 rounded-full ${
+                                  model.enabled
+                                    ? 'text-red-600 hover:bg-red-50'
+                                    : 'text-green-600 hover:bg-green-50'
+                                }`}
+                                title={model.enabled ? t('admin.models.disable', 'Disable') : t('admin.models.enable', 'Enable')}
+                              >
+                                <Icon name={model.enabled ? 'eye-slash' : 'eye'} className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/admin/models/${model.id}`);
+                                }}
+                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                                title={t('admin.models.edit', 'Edit')}
+                              >
+                                <Icon name="pencil" className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
-
-          {/* Test Results */}
-          {Object.entries(testResults).map(([modelId, result]) => (
-            <div key={modelId} className={`mt-4 p-4 rounded-lg ${
-              result.success 
-                ? 'bg-green-50 border border-green-200' 
-                : 'bg-red-50 border border-red-200'
-            }`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Icon 
-                    name={result.success ? "check-circle" : "x-circle"} 
-                    className={`w-5 h-5 ${
-                      result.success ? 'text-green-600' : 'text-red-600'
-                    }`} 
-                  />
-                  <span className={`text-sm font-medium ${
-                    result.success ? 'text-green-800' : 'text-red-800'
-                  }`}>
-                    {result.success ? t('admin.models.test.success') : t('admin.models.test.failed')}
-                  </span>
-                </div>
-                <button
-                  onClick={() => closeTestResult(modelId)}
-                  className="p-1 hover:bg-gray-200 rounded"
-                >
-                  <Icon name="x" className="w-4 h-4 text-gray-500" />
-                </button>
-              </div>
-              {result.response && (
-                <div className="mt-2 text-sm text-gray-600">
-                  <strong>{t('admin.models.test.response')}</strong> {result.response}
-                </div>
-              )}
-              {result.error && (
-                <div className="mt-2 text-sm text-red-600">
-                  <strong>{t('admin.models.test.error')}</strong> {result.error}
-                </div>
-              )}
-            </div>
-          ))}
 
           {filteredModels.length === 0 && (
             <div className="text-center py-12">
-              <Icon name="server" className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">{t('admin.models.noModelsFound')}</h3>
-              <p className="text-gray-500">
-                {searchTerm ? t('admin.models.noModelsFoundDesc') : t('admin.models.getStarted')}
+              <Icon name="cpu-chip" className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900">
+                {t('admin.models.noModels', 'No models found')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {t('admin.models.noModelsDesc', 'Get started by creating a new model.')}
               </p>
+              <div className="mt-6">
+                <button
+                  onClick={() => navigate('/admin/models/new')}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <Icon name="plus" className="h-4 w-4 mr-2" />
+                  {t('admin.models.addNew', 'Add New Model')}
+                </button>
+              </div>
             </div>
           )}
+          
+          {/* Model Details Popup */}
+          <ModelDetailsPopup
+            model={selectedModel}
+            isOpen={showModelDetails}
+            onClose={() => setShowModelDetails(false)}
+          />
         </div>
       </div>
-
-      {/* Model Details Popup */}
-      <ModelDetailsPopup
-        model={selectedModel}
-        isOpen={showModelDetails}
-        onClose={() => setShowModelDetails(false)}
-      />
-    </div>
     </AdminAuth>
   );
 };
