@@ -235,6 +235,9 @@ const AdminPromptsPage = () => {
                       {t('admin.prompts.name', 'Name')}
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {t('admin.prompts.category', 'Category')}
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('admin.prompts.description', 'Description')}
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -270,6 +273,18 @@ const AdminPromptsPage = () => {
                             </div>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {prompt.category ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            {uiConfig?.promptsList?.categories?.list?.find(cat => cat.id === prompt.category)?.name ? 
+                              getLocalizedContent(uiConfig.promptsList.categories.list.find(cat => cat.id === prompt.category).name, currentLanguage) :
+                              prompt.category
+                            }
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">N/A</span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-900 max-w-xs truncate">

@@ -322,6 +322,9 @@ const AdminAppsPage = () => {
                       {t('admin.apps.table.app', 'App')}
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      {t('admin.apps.table.category', 'Category')}
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       {t('admin.apps.table.status', 'Status')}
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -357,6 +360,18 @@ const AdminAppsPage = () => {
                             </div>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {app.category ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                            {uiConfig?.appsList?.categories?.list?.find(cat => cat.id === app.category)?.name ? 
+                              getLocalizedContent(uiConfig.appsList.categories.list.find(cat => cat.id === app.category).name, currentLanguage) :
+                              app.category
+                            }
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">N/A</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
