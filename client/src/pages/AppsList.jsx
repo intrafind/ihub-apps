@@ -49,6 +49,8 @@ const AppsList = () => {
     return uiConfig?.appsList?.categories || defaultCategoriesConfig;
   }, [uiConfig]);
 
+  const [apps, setApps] = useState([]);
+
   // Only display categories that contain at least one app
   const availableCategories = useMemo(() => {
     if (!categoriesConfig.enabled) return [];
@@ -72,7 +74,6 @@ const AppsList = () => {
     setSortMethod(sortConfig.default || 'relevance');
   }, [sortConfig]);
   
-  const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
