@@ -147,6 +147,50 @@ export default function registerAdminRoutes(app) {
     }
   });
 
+  // Get apps suitable for inheritance (templates)
+  app.get('/api/admin/apps/templates', adminAuth, async (req, res) => {
+    try {
+      const apps = configCache.getApps(true);
+      const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
+      res.json(templates);
+    } catch (error) {
+      console.error('Error fetching template apps:', error);
+      res.status(500).json({ error: 'Failed to fetch template apps' });
+    }
+  });
+
+  // Get inheritance tree for an app
+  app.get('/api/admin/apps/:appId/inheritance', adminAuth, async (req, res) => {
+    try {
+      const { appId } = req.params;
+      const apps = configCache.getApps(true);
+      const app = apps.find(a => a.id === appId);
+      
+      if (!app) {
+        return res.status(404).json({ error: 'App not found' });
+      }
+
+      const inheritance = {
+        app: app,
+        parent: null,
+        children: []
+      };
+
+      // Find parent
+      if (app.parentId) {
+        inheritance.parent = apps.find(a => a.id === app.parentId);
+      }
+
+      // Find children
+      inheritance.children = apps.filter(a => a.parentId === appId);
+
+      res.json(inheritance);
+    } catch (error) {
+      console.error('Error fetching app inheritance:', error);
+      res.status(500).json({ error: 'Failed to fetch app inheritance' });
+    }
+  });
+
   app.get('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
