@@ -18,6 +18,7 @@ import AdminSystemPage from './pages/AdminSystemPage';
 import AdminAppsPage from './pages/AdminAppsPage';
 import AdminAppEditPage from './pages/AdminAppEditPage';
 import AdminShortLinks from './pages/AdminShortLinks';
+import AdminShortLinkEditPage from './pages/AdminShortLinkEditPage';
 import AdminModelEditPage from './pages/AdminModelEditPage';
 import AdminModelsPage from './pages/AdminModelsPage';
 import AdminPromptsPage from './pages/AdminPromptsPage';
@@ -41,6 +42,7 @@ const SafeAdminSystem = withErrorBoundary(AdminSystemPage);
 const SafeAdminApps = withErrorBoundary(AdminAppsPage);
 const SafeAdminAppEdit = withErrorBoundary(AdminAppEditPage);
 const SafeAdminShortLinks = withErrorBoundary(AdminShortLinks);
+const SafeAdminShortLinkEdit = withErrorBoundary(AdminShortLinkEditPage);
 const SafeAdminModels = withErrorBoundary(AdminModelsPage);
 const SafeAdminModelEdit = withErrorBoundary(AdminModelEditPage);
 const SafeAdminPrompts = withErrorBoundary(AdminPromptsPage);
@@ -78,6 +80,7 @@ function App() {
               <Route path="admin/apps" element={<SafeAdminApps />} />
               <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
               <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
+              <Route path="admin/shortlinks/:code" element={<SafeAdminShortLinkEdit />} />
               <Route path="admin/models" element={<SafeAdminModels />} />
               <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
               <Route path="admin/prompts" element={<SafeAdminPrompts />} />

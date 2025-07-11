@@ -48,7 +48,7 @@ const AdminNavigation = () => {
       name: t('admin.nav.shortlinks', 'Short Links'),
       href: '/admin/shortlinks',
       icon: 'link',
-      current: location.pathname === '/admin/shortlinks'
+      current: location.pathname.startsWith('/admin/shortlinks')
     }
   ];
 
