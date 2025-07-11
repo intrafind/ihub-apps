@@ -803,4 +803,64 @@ export default function registerAdminRoutes(app) {
     }
   });
 
+  // OpenAI-compatible completions endpoint for app generation
+  app.post('/api/completions', adminAuth, async (req, res) => {
+    try {
+      const { model, messages, temperature = 0.7, max_tokens = 1000 } = req.body;
+      
+      // Validate required fields
+      if (!model || !messages || !Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ error: 'Missing required fields: model, messages' });
+      }
+      
+      // Convert OpenAI format to our internal format
+      // Extract the user's prompt from the messages (last user message)
+      const userMessage = messages.filter(msg => msg.role === 'user').pop();
+      const systemMessage = messages.filter(msg => msg.role === 'system').pop();
+      
+      if (!userMessage) {
+        return res.status(400).json({ error: 'No user message found in messages array' });
+      }
+      
+      // Combine system and user messages into a single prompt
+      let prompt = userMessage.content;
+      if (systemMessage) {
+        prompt = `${systemMessage.content}\n\nUser: ${userMessage.content}`;
+      }
+      
+      // Use the existing simpleCompletion function
+      const { simpleCompletion } = await import('../utils.js');
+      const content = await simpleCompletion(prompt, { 
+        modelId: model, 
+        temperature: temperature 
+      });
+      
+      // Return in OpenAI format
+      res.json({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: content
+            },
+            finish_reason: 'stop',
+            index: 0
+          }
+        ],
+        model: model,
+        usage: {
+          prompt_tokens: Math.ceil(prompt.length / 4), // Rough estimate
+          completion_tokens: Math.ceil(content.length / 4), // Rough estimate
+          total_tokens: Math.ceil((prompt.length + content.length) / 4)
+        }
+      });
+    } catch (error) {
+      console.error('Error in completions endpoint:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate completion',
+        details: error.message 
+      });
+    }
+  });
+
 }
