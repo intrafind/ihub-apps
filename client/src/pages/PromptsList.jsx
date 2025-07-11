@@ -45,6 +45,23 @@ const PromptsList = () => {
     return uiConfig?.promptsList?.categories || defaultCategoriesConfig;
   }, [uiConfig]);
 
+  // Only display categories that contain at least one prompt
+  const availableCategories = useMemo(() => {
+    if (!categoriesConfig.enabled) return [];
+    const usedCategories = new Set(prompts.map(p => p.category || 'creative'));
+    return categoriesConfig.list.filter(category => {
+      if (category.id === 'all') return categoriesConfig.showAll;
+      return usedCategories.has(category.id);
+    });
+  }, [categoriesConfig, prompts]);
+
+  useEffect(() => {
+    if (selectedCategory !== 'all') {
+      const exists = prompts.some(p => (p.category || 'creative') === selectedCategory);
+      if (!exists) setSelectedCategory('all');
+    }
+  }, [prompts, selectedCategory]);
+
   const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
 
   useEffect(() => {
@@ -251,7 +268,7 @@ const PromptsList = () => {
       {/* Category filter */}
       {categoriesConfig.enabled && (
         <div className="flex flex-wrap gap-2 mb-6 justify-center">
-          {categoriesConfig.list.map(category => (
+          {availableCategories.map(category => (
             <button
               key={category.id}
               onClick={() => handleCategorySelect(category.id)}
