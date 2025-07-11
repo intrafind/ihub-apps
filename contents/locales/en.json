@@ -40,6 +40,7 @@
     "share": "Share",
     "shortCode": "Short code",
     "includeSettings": "Include settings & variables",
+    "expiresAt": "Expires At",
     "codeTaken": "Code taken",
     "codeAvailable": "Code available",
     "codeTooShort": "Code must be at least 5 characters"
@@ -129,7 +130,7 @@
   },
   "examples": {
     "helpWithTask": "Help me brainstorm ideas for my project",
-    "explainConcept": "Explain a complex topic in simple terms", 
+    "explainConcept": "Explain a complex topic in simple terms",
     "writeContent": "Help me write professional content",
     "planSomething": "Plan and organize my schedule"
   },
