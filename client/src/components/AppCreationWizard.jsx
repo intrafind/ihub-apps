@@ -648,14 +648,15 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
               content: `You are an expert AI assistant that helps create app configurations. Create a JSON configuration for an AI-enabled app based on the user's description. 
 
 The JSON should include:
+- id: A unique identifier for the app (kebab-case, no spaces, lowercase)
 - name: A short, descriptive name for the app
 - description: A brief description of what the app does
 - system: Detailed system instructions for the AI
 - category: One of: utility, productivity, creative, analysis, research, writing, educational, entertainment, business, technical
 - color: A hex color code for the app theme
 - icon: An appropriate icon name (e.g., chat-bubbles, document, search, lightbulb, etc.)
-- variables: An array of user-configurable variables if needed
-- tools: An array of tool IDs if specific tools are needed
+- variables: An array of user-configurable variables if needed (usually empty unless specific user inputs are needed)
+- tools: An array of tool IDs if specific tools are needed (e.g., ["websearch", "code-interpreter"])
 
 Respond only with the JSON configuration wrapped in \`\`\`json\`\`\` tags.`
             },
@@ -679,15 +680,30 @@ Respond only with the JSON configuration wrapped in \`\`\`json\`\`\` tags.`
           if (jsonMatch) {
             const configJson = JSON.parse(jsonMatch[1]);
             
-            // Convert to multilingual format
+            // Convert to multilingual format and merge with existing app data
             const multilingualConfig = {
-              ...configJson,
+              // Keep existing app data structure
+              ...appData,
+              
+              // Apply generated config
+              id: configJson.id || appData.id,
               name: typeof configJson.name === 'string' ? { en: configJson.name } : configJson.name,
               description: typeof configJson.description === 'string' ? { en: configJson.description } : configJson.description,
               system: typeof configJson.system === 'string' ? { en: configJson.system } : configJson.system,
+              category: configJson.category || appData.category,
+              color: configJson.color || appData.color,
+              icon: configJson.icon || appData.icon,
+              variables: configJson.variables || appData.variables,
+              tools: configJson.tools || appData.tools,
+              
+              // Mark as AI generated
               aiGenerated: true,
-              aiPrompt: prompt
+              aiPrompt: prompt,
+              useAI: true
             };
+            
+            console.log('Generated config:', configJson);
+            console.log('Multilingual config:', multilingualConfig);
             
             updateAppData(multilingualConfig);
           }
