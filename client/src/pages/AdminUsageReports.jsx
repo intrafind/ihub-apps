@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { fetchUsageData } from '../api/api';
+import { fetchAdminUsageData } from '../api/adminApi';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Icon from '../components/Icon';
+import AdminAuth from '../components/AdminAuth';
+import AdminNavigation from '../components/AdminNavigation';
 
 const StatCard = ({ title, value, icon, color, change, changeType }) => (
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -161,7 +163,7 @@ const AdminUsageReports = () => {
   const load = async () => {
     try {
       setLoading(true);
-      const data = await fetchUsageData();
+      const data = await fetchAdminUsageData();
       setUsage(data);
     } catch (e) {
       console.error('Failed to load usage data', e);
@@ -653,7 +655,9 @@ const AdminUsageReports = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <AdminAuth>
+      <AdminNavigation />
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -736,6 +740,7 @@ const AdminUsageReports = () => {
         {activeTab === 'details' && renderDetails()}
       </div>
     </div>
+    </AdminAuth>
   );
 };
 

@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import AppDetailsPopup from '../components/AppDetailsPopup';
 import Icon from '../components/Icon';
+import AdminAuth from '../components/AdminAuth';
+import AdminNavigation from '../components/AdminNavigation';
+import { fetchAdminApps, makeAdminApiCall } from '../api/adminApi';
 
 const AdminAppsPage = () => {
   const { t, i18n } = useTranslation();
@@ -39,11 +42,7 @@ const AdminAppsPage = () => {
   const loadApps = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/apps');
-      if (!response.ok) {
-        throw new Error('Failed to load apps');
-      }
-      const data = await response.json();
+      const data = await fetchAdminApps();
       setApps(data);
     } catch (err) {
       setError(err.message);
@@ -54,13 +53,9 @@ const AdminAppsPage = () => {
 
   const toggleApp = async (appId) => {
     try {
-      const response = await fetch(`/api/admin/apps/${appId}/toggle`, {
+      const response = await makeAdminApiCall(`/api/admin/apps/${appId}/toggle`, {
         method: 'POST',
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to toggle app');
-      }
       
       const result = await response.json();
       
@@ -81,13 +76,9 @@ const AdminAppsPage = () => {
     }
     
     try {
-      const response = await fetch(`/api/admin/apps/${appId}`, {
+      await makeAdminApiCall(`/api/admin/apps/${appId}`, {
         method: 'DELETE',
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete app');
-      }
       
       // Remove the app from the local state
       setApps(prevApps => prevApps.filter(app => app.id !== appId));
@@ -161,7 +152,9 @@ const AdminAppsPage = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <AdminAuth>
+      <AdminNavigation />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-900">
@@ -458,7 +451,8 @@ const AdminAppsPage = () => {
         isOpen={showAppDetails}
         onClose={() => setShowAppDetails(false)}
       />
-    </div>
+      </div>
+    </AdminAuth>
   );
 };
 

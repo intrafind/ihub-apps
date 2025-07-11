@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../components/Icon';
+import AdminAuth from '../components/AdminAuth';
+import AdminNavigation from '../components/AdminNavigation';
+import { makeAdminApiCall } from '../api/adminApi';
 
 const AdminSystemPage = () => {
   const { t } = useTranslation();
@@ -12,30 +15,20 @@ const AdminSystemPage = () => {
     setForceRefreshMessage('');
 
     try {
-      const response = await fetch('/api/admin/client/_refresh', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await makeAdminApiCall('/api/admin/client/_refresh', {
+        method: 'POST'
       });
 
       const data = await response.json();
 
-      if (response.ok) {
-        setForceRefreshMessage({
-          type: 'success',
-          text: `Force refresh triggered successfully! New salt: ${data.newAdminSalt}. All clients will refresh on their next page load.`
-        });
-      } else {
-        setForceRefreshMessage({
-          type: 'error',
-          text: data.error || 'Failed to trigger force refresh'
-        });
-      }
+      setForceRefreshMessage({
+        type: 'success',
+        text: `Force refresh triggered successfully! New salt: ${data.newAdminSalt}. All clients will refresh on their next page load.`
+      });
     } catch (error) {
       setForceRefreshMessage({
         type: 'error',
-        text: 'Error triggering force refresh: ' + error.message
+        text: error.message || 'Failed to trigger force refresh'
       });
     } finally {
       setForceRefreshLoading(false);
@@ -43,7 +36,9 @@ const AdminSystemPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <AdminAuth>
+      <AdminNavigation />
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -186,7 +181,8 @@ const AdminSystemPage = () => {
 
         </div>
       </div>
-    </div>
+      </div>
+    </AdminAuth>
   );
 };
 

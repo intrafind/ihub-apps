@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import Icon from '../components/Icon';
+import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import PromptDetailsPopup from '../components/PromptDetailsPopup';
-import { fetchAdminPrompts, deletePrompt, togglePrompt, clearApiCache } from '../api/api';
+import { fetchAdminPrompts, makeAdminApiCall } from '../api/adminApi';
 
 const AdminPromptsPage = () => {
   const { t, i18n } = useTranslation();
@@ -52,11 +53,10 @@ const AdminPromptsPage = () => {
 
   const handleTogglePrompt = async (promptId) => {
     try {
-      await togglePrompt(promptId);
+      const response = await makeAdminApiCall(`/api/admin/prompts/${promptId}/toggle`, {
+        method: 'POST',
+      });
       
-      // Clear cache and reload
-      clearApiCache('admin_prompts');
-      clearApiCache('prompts');
       await loadPrompts();
     } catch (err) {
       setError(err.message);
@@ -69,11 +69,10 @@ const AdminPromptsPage = () => {
     }
     
     try {
-      await deletePrompt(promptId);
+      await makeAdminApiCall(`/api/admin/prompts/${promptId}`, {
+        method: 'DELETE',
+      });
       
-      // Clear cache and reload
-      clearApiCache('admin_prompts');
-      clearApiCache('prompts');
       await loadPrompts();
       
       alert(t('admin.prompts.deleteSuccess', 'Prompt deleted successfully'));
@@ -149,8 +148,9 @@ const AdminPromptsPage = () => {
   }
 
   return (
-    <div>
-      <AdminNavigation />
+    <AdminAuth>
+      <div>
+        <AdminNavigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
@@ -386,6 +386,7 @@ const AdminPromptsPage = () => {
       />
       </div>
     </div>
+    </AdminAuth>
   );
 };
 

@@ -15,5 +15,8 @@
   "refreshSalt": {
     "salt": 9,
     "lastUpdated": "2025-07-08T17:00:38.743Z"
+  },
+  "admin": {
+    "secret": "platform-secret-123"
   }
 }
