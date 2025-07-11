@@ -95,6 +95,10 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
         'application/pdf'
       ]
     },
+    // Creation method flags
+    useAI: false,
+    useTemplate: false,
+    useManual: false,
     // Inheritance tracking
     parentId: templateApp?.id || null,
     inheritanceLevel: templateApp ? (templateApp.inheritanceLevel || 0) + 1 : 0,
@@ -172,9 +176,64 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     return steps.filter(step => !step.skip || !step.skip());
   };
 
+  const validateCurrentStep = () => {
+    const currentStepData = getVisibleSteps()[currentStep];
+    const missingFields = [];
+    
+    switch (currentStepData.id) {
+      case 'method':
+        if (!appData.useAI && !appData.useTemplate && !appData.useManual) {
+          missingFields.push('creationMethod');
+        }
+        break;
+      case 'ai-generation':
+        // AI generation is optional, no validation needed
+        break;
+      case 'basic-info':
+        if (!appData.id || !appData.id.trim()) {
+          missingFields.push('id');
+        }
+        if (!appData.name || !Object.values(appData.name).some(v => v && v.trim())) {
+          missingFields.push('name');
+        }
+        if (!appData.description || !Object.values(appData.description).some(v => v && v.trim())) {
+          missingFields.push('description');
+        }
+        break;
+      case 'system-prompt':
+        if (!appData.system || !Object.values(appData.system).some(v => v && v.trim())) {
+          missingFields.push('system');
+        }
+        break;
+      // Variables and tools are optional
+      case 'variables':
+      case 'tools':
+      case 'advanced':
+        break;
+      case 'review':
+        // Final validation
+        if (!appData.id || !appData.id.trim()) missingFields.push('id');
+        if (!appData.name || !Object.values(appData.name).some(v => v && v.trim())) missingFields.push('name');
+        if (!appData.description || !Object.values(appData.description).some(v => v && v.trim())) missingFields.push('description');
+        if (!appData.system || !Object.values(appData.system).some(v => v && v.trim())) missingFields.push('system');
+        break;
+    }
+    
+    return missingFields;
+  };
+
   const handleNext = async () => {
     const visibleSteps = getVisibleSteps();
+    
     if (currentStep < visibleSteps.length - 1) {
+      // Validate current step before proceeding
+      const missingFields = validateCurrentStep();
+      if (missingFields.length > 0) {
+        setError(t('admin.apps.wizard.error.missingFields', 'Please fill in all required fields before proceeding.'));
+        return;
+      }
+      
+      setError(null);
       setCurrentStep(currentStep + 1);
     } else {
       // Final step - create the app
@@ -185,6 +244,15 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
   const handleBack = () => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleFinishApp = () => {
+    // Jump to the review step
+    const visibleSteps = getVisibleSteps();
+    const reviewStepIndex = visibleSteps.findIndex(step => step.id === 'review');
+    if (reviewStepIndex !== -1) {
+      setCurrentStep(reviewStepIndex);
     }
   };
 
@@ -295,8 +363,8 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
-        <div className="mt-3">
+      <div className="relative top-8 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white max-h-[90vh] flex flex-col">
+        <div className="flex-1 flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between pb-4 border-b">
             <div>
@@ -362,7 +430,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
           </div>
 
           {/* Current step content */}
-          <div className="py-6">
+          <div className="flex-1 overflow-y-auto">
             <h4 className="text-lg font-medium text-gray-900 mb-4">
               {currentStepData.title}
             </h4>
@@ -383,11 +451,13 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
               updateAppData={updateAppData}
               templateApp={templateApp}
               revertToParent={revertToParent}
+              validateCurrentStep={validateCurrentStep}
+              error={error}
             />
           </div>
 
           {/* Navigation buttons */}
-          <div className="flex justify-between pt-4 border-t">
+          <div className="flex justify-between pt-4 border-t mt-4">
             <button
               onClick={handleBack}
               disabled={currentStep === 0}
@@ -400,18 +470,10 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
               {/* Show Finish App button from step 3 onwards */}
               {currentStep >= 2 && currentStep < visibleSteps.length - 1 && (
                 <button
-                  onClick={handleCreateApp}
-                  disabled={loading}
-                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleFinishApp}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700"
                 >
-                  {loading ? (
-                    <span className="flex items-center">
-                      <Icon name="refresh" className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                      {t('admin.apps.wizard.creating', 'Creating...')}
-                    </span>
-                  ) : (
-                    t('admin.apps.wizard.finish', 'Finish App')
-                  )}
+                  {t('admin.apps.wizard.finish', 'Finish App')}
                 </button>
               )}
               
@@ -440,8 +502,36 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
 };
 
 // Step 1: Creation Method
-const CreationMethodStep = ({ appData, updateAppData, templateApp }) => {
+const CreationMethodStep = ({ appData, updateAppData, templateApp, validateCurrentStep, error }) => {
   const { t } = useTranslation();
+  const [fieldErrors, setFieldErrors] = useState({});
+  
+  // Check for validation errors
+  React.useEffect(() => {
+    if (error && error.includes('required fields')) {
+      const missingFields = validateCurrentStep();
+      const newFieldErrors = {};
+      missingFields.forEach(field => {
+        newFieldErrors[field] = true;
+      });
+      setFieldErrors(newFieldErrors);
+    }
+  }, [error, validateCurrentStep]);
+
+  const handleMethodChange = (method) => {
+    if (method === 'ai') {
+      updateAppData({ useAI: true, useTemplate: false, useManual: false });
+    } else if (method === 'template') {
+      updateAppData({ useAI: false, useTemplate: true, useManual: false });
+    } else if (method === 'manual') {
+      updateAppData({ useAI: false, useTemplate: false, useManual: true });
+    }
+    
+    // Clear field error when user makes selection
+    if (fieldErrors.creationMethod) {
+      setFieldErrors(prev => ({ ...prev, creationMethod: false }));
+    }
+  };
   
   return (
     <div className="space-y-6">
@@ -449,14 +539,27 @@ const CreationMethodStep = ({ appData, updateAppData, templateApp }) => {
         {t('admin.apps.wizard.method.instruction', 'Choose how you want to create your app:')}
       </div>
       
+      {fieldErrors.creationMethod && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <p className="text-sm text-red-800">
+                {t('admin.apps.wizard.error.methodRequired', 'Please select a creation method')}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="space-y-4">
-        <label className="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
+        <label className={`relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${fieldErrors.creationMethod ? 'border-red-300' : ''}`}>
           <input
             type="radio"
             name="creationMethod"
             value="ai"
             checked={appData.useAI === true}
-            onChange={(e) => updateAppData({ useAI: e.target.checked })}
+            onChange={() => handleMethodChange('ai')}
             className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
           />
           <div className="ml-3 flex-1">
@@ -472,13 +575,13 @@ const CreationMethodStep = ({ appData, updateAppData, templateApp }) => {
           </div>
         </label>
 
-        <label className="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
+        <label className={`relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${fieldErrors.creationMethod ? 'border-red-300' : ''}`}>
           <input
             type="radio"
             name="creationMethod"
             value="manual"
-            checked={appData.useAI === false}
-            onChange={(e) => updateAppData({ useAI: !e.target.checked })}
+            checked={appData.useManual === true}
+            onChange={() => handleMethodChange('manual')}
             className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
           />
           <div className="ml-3 flex-1">
@@ -495,13 +598,13 @@ const CreationMethodStep = ({ appData, updateAppData, templateApp }) => {
         </label>
 
         {templateApp && (
-          <label className="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
+          <label className={`relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${fieldErrors.creationMethod ? 'border-red-300' : ''}`}>
             <input
               type="radio"
               name="creationMethod"
               value="template"
               checked={appData.useTemplate === true}
-              onChange={(e) => updateAppData({ useTemplate: e.target.checked, useAI: false })}
+              onChange={() => handleMethodChange('template')}
               className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
             />
             <div className="ml-3 flex-1">
@@ -527,6 +630,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
   const { t } = useTranslation();
   const [generating, setGenerating] = useState(false);
   const [prompt, setPrompt] = useState('');
+  const [error, setError] = useState(null);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -534,66 +638,73 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
     try {
       setGenerating(true);
       
-      // Call the app-generator app with the prompt
-      const response = await fetch('/api/chat', {
+      // Use OpenAI completion directly for app generation
+      const response = await fetch('/api/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          appId: 'app-generator',
-          messages: [{ role: 'user', content: prompt }],
-          settings: {
-            model: 'gpt-4',
-            temperature: 0.4,
-            outputFormat: 'markdown'
-          }
+          model: 'gpt-4',
+          messages: [
+            {
+              role: 'system',
+              content: `You are an expert AI assistant that helps create app configurations. Create a JSON configuration for an AI-enabled app based on the user's description. 
+
+The JSON should include:
+- name: A short, descriptive name for the app
+- description: A brief description of what the app does
+- system: Detailed system instructions for the AI
+- category: One of: utility, productivity, creative, analysis, research, writing, educational, entertainment, business, technical
+- color: A hex color code for the app theme
+- icon: An appropriate icon name (e.g., chat-bubbles, document, search, lightbulb, etc.)
+- variables: An array of user-configurable variables if needed
+- tools: An array of tool IDs if specific tools are needed
+
+Respond only with the JSON configuration wrapped in \`\`\`json\`\`\` tags.`
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.4,
+          max_tokens: 1000
         })
       });
 
       if (response.ok) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let generatedConfig = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.content) {
-                  generatedConfig += data.content;
-                }
-              } catch (e) {
-                // Ignore parsing errors
-              }
-            }
-          }
-        }
+        const data = await response.json();
+        const generatedConfig = data.choices[0].message.content;
 
         // Parse the generated JSON configuration
         try {
           const jsonMatch = generatedConfig.match(/```json\s*(\{[\s\S]*?\})\s*```/);
           if (jsonMatch) {
             const configJson = JSON.parse(jsonMatch[1]);
-            updateAppData({
+            
+            // Convert to multilingual format
+            const multilingualConfig = {
               ...configJson,
+              name: typeof configJson.name === 'string' ? { en: configJson.name } : configJson.name,
+              description: typeof configJson.description === 'string' ? { en: configJson.description } : configJson.description,
+              system: typeof configJson.system === 'string' ? { en: configJson.system } : configJson.system,
               aiGenerated: true,
               aiPrompt: prompt
-            });
+            };
+            
+            updateAppData(multilingualConfig);
           }
         } catch (e) {
           console.error('Failed to parse generated config:', e);
+          setError(t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration'));
         }
+      } else {
+        setError(t('admin.apps.wizard.ai.error.generate', 'Failed to generate app configuration'));
       }
     } catch (error) {
       console.error('Failed to generate app:', error);
+      setError(t('admin.apps.wizard.ai.error.network', 'Network error occurred while generating app'));
     } finally {
       setGenerating(false);
     }
@@ -613,6 +724,17 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
           placeholder={t('admin.apps.wizard.ai.promptPlaceholder', 'Example: Create a meeting summarizer app that takes meeting notes and extracts key points, action items, and decisions...')}
         />
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <button
         onClick={handleGenerate}
@@ -649,9 +771,10 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
 };
 
 // Step 3: Basic Information
-const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent }) => {
+const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, validateCurrentStep, error }) => {
   const { t, i18n } = useTranslation();
   const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
+  const [fieldErrors, setFieldErrors] = useState({});
   
   const isOverridden = (field) => {
     return templateApp && appData.overriddenFields?.includes(field);
@@ -665,11 +788,45 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent }) 
         [selectedLanguage]: value 
       } 
     });
+    
+    // Clear field error when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: false }));
+    }
+  };
+
+  const updateField = (field, value) => {
+    updateAppData({ [field]: value });
+    
+    // Clear field error when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: false }));
+    }
   };
 
   const getMultilingualValue = (field) => {
     const currentValue = appData[field] || {};
     return currentValue[selectedLanguage] || '';
+  };
+
+  // Check for validation errors and highlight fields
+  React.useEffect(() => {
+    if (error && error.includes('required fields')) {
+      const missingFields = validateCurrentStep();
+      const newFieldErrors = {};
+      missingFields.forEach(field => {
+        newFieldErrors[field] = true;
+      });
+      setFieldErrors(newFieldErrors);
+    }
+  }, [error, validateCurrentStep]);
+
+  const getFieldClassName = (field) => {
+    const baseClass = "mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500";
+    if (fieldErrors[field]) {
+      return `${baseClass} border-red-300 focus:border-red-500`;
+    }
+    return `${baseClass} border-gray-300 focus:border-indigo-500`;
   };
 
   return (
@@ -714,11 +871,16 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent }) 
         <input
           type="text"
           value={appData.id}
-          onChange={(e) => updateAppData({ id: e.target.value })}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          onChange={(e) => updateField('id', e.target.value)}
+          className={getFieldClassName('id')}
           placeholder={t('admin.apps.wizard.basic.appIdPlaceholder', 'e.g., my-awesome-app')}
           required
         />
+        {fieldErrors.id && (
+          <p className="mt-1 text-sm text-red-600">
+            {t('admin.apps.wizard.error.idRequired', 'App ID is required')}
+          </p>
+        )}
       </div>
 
       <div>
@@ -739,10 +901,15 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent }) 
           type="text"
           value={getMultilingualValue('name')}
           onChange={(e) => updateMultilingualField('name', e.target.value)}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className={getFieldClassName('name')}
           placeholder={t('admin.apps.wizard.basic.namePlaceholder', 'Enter app name')}
           required
         />
+        {fieldErrors.name && (
+          <p className="mt-1 text-sm text-red-600">
+            {t('admin.apps.wizard.error.nameRequired', 'App name is required')}
+          </p>
+        )}
       </div>
 
       <div>
@@ -763,10 +930,15 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent }) 
           value={getMultilingualValue('description')}
           onChange={(e) => updateMultilingualField('description', e.target.value)}
           rows={3}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className={getFieldClassName('description')}
           placeholder={t('admin.apps.wizard.basic.descriptionPlaceholder', 'Enter app description')}
           required
         />
+        {fieldErrors.description && (
+          <p className="mt-1 text-sm text-red-600">
+            {t('admin.apps.wizard.error.descriptionRequired', 'App description is required')}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -787,7 +959,7 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent }) 
           <input
             type="color"
             value={appData.color}
-            onChange={(e) => updateAppData({ color: e.target.value })}
+            onChange={(e) => updateField('color', e.target.value)}
             className="mt-1 block w-full h-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
@@ -809,7 +981,7 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent }) 
           <input
             type="text"
             value={appData.icon}
-            onChange={(e) => updateAppData({ icon: e.target.value })}
+            onChange={(e) => updateField('icon', e.target.value)}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             placeholder={t('admin.apps.wizard.basic.iconPlaceholder', 'e.g., chat-bubbles')}
           />
@@ -820,9 +992,10 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent }) 
 };
 
 // Step 4: System Prompt
-const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent }) => {
+const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent, validateCurrentStep, error }) => {
   const { t, i18n } = useTranslation();
   const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
+  const [fieldErrors, setFieldErrors] = useState({});
   
   const isOverridden = (field) => {
     return templateApp && appData.overriddenFields?.includes(field);
@@ -836,11 +1009,36 @@ const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent 
         [selectedLanguage]: value 
       } 
     });
+    
+    // Clear field error when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: false }));
+    }
   };
 
   const getMultilingualValue = (field) => {
     const currentValue = appData[field] || {};
     return currentValue[selectedLanguage] || '';
+  };
+
+  // Check for validation errors and highlight fields
+  React.useEffect(() => {
+    if (error && error.includes('required fields')) {
+      const missingFields = validateCurrentStep();
+      const newFieldErrors = {};
+      missingFields.forEach(field => {
+        newFieldErrors[field] = true;
+      });
+      setFieldErrors(newFieldErrors);
+    }
+  }, [error, validateCurrentStep]);
+
+  const getFieldClassName = (field) => {
+    const baseClass = "mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500";
+    if (fieldErrors[field]) {
+      return `${baseClass} border-red-300 focus:border-red-500`;
+    }
+    return `${baseClass} border-gray-300 focus:border-indigo-500`;
   };
 
   return (
@@ -886,10 +1084,15 @@ const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent 
           value={getMultilingualValue('system')}
           onChange={(e) => updateMultilingualField('system', e.target.value)}
           rows={6}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          className={getFieldClassName('system')}
           placeholder={t('admin.apps.wizard.system.promptPlaceholder', 'Enter system instructions that define how the AI should behave...')}
           required
         />
+        {fieldErrors.system && (
+          <p className="mt-1 text-sm text-red-600">
+            {t('admin.apps.wizard.error.systemRequired', 'System instructions are required')}
+          </p>
+        )}
       </div>
 
       <div>
@@ -1137,7 +1340,7 @@ const ToolsStep = ({ appData, updateAppData }) => {
         )}
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-3 max-h-96 overflow-y-auto">
         {filteredTools.map((tool) => (
           <label key={tool.id} className="flex items-start p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
             <input
