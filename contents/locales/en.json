@@ -296,8 +296,7 @@
   },
   "admin": {
     "apps": {
-      "createWithWizard": "Create with Wizard",
-      "createAdvanced": "Advanced Create",
+      "createApp": "Create App",
       "actions": {
         "clone": "Clone"
       },
@@ -316,6 +315,7 @@
         "back": "Back",
         "next": "Next",
         "create": "Create App",
+        "finish": "Finish App",
         "creating": "Creating...",
         "revert": "Revert to parent",
         "method": {
@@ -341,6 +341,7 @@
         "basic": {
           "title": "Basic Information",
           "description": "Configure name, description, and appearance",
+          "language": "Language",
           "appId": "App ID",
           "appIdPlaceholder": "e.g., my-awesome-app",
           "name": "App Name",
@@ -378,6 +379,8 @@
           "title": "Tools",
           "description": "Select available tools",
           "instruction": "Select the tools that will be available to your app. Tools extend the capabilities of the AI assistant.",
+          "searchPlaceholder": "Search tools...",
+          "noResults": "No tools match your search",
           "noTools": "No tools available"
         },
         "advanced": {
@@ -400,6 +403,12 @@
         },
         "error": {
           "idRequired": "App ID is required",
+          "nameRequired": "App name is required", 
+          "descriptionRequired": "App description is required",
+          "colorRequired": "App color is required",
+          "iconRequired": "App icon is required",
+          "systemRequired": "System instructions are required",
+          "tokenLimitRequired": "Token limit is required",
           "createFailed": "Failed to create app"
         }
       }
