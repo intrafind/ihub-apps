@@ -901,4 +901,37 @@ export default function registerAdminRoutes(app) {
     }
   });
 
+  // Get app-generator prompt configuration
+  app.get('/api/admin/prompts/app-generator', adminAuth, async (req, res) => {
+    try {
+      const { lang = 'en' } = req.query;
+      
+      // Get prompts from cache
+      const { data: prompts } = configCache.getPromptsWithETag();
+      
+      if (!prompts) {
+        return res.status(500).json({ error: 'Failed to load prompts configuration' });
+      }
+      
+      // Find the app-generator prompt
+      const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
+      
+      if (!appGeneratorPrompt) {
+        return res.status(404).json({ error: 'App-generator prompt not found' });
+      }
+      
+      // Return the prompt for the requested language
+      const promptText = appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt.en;
+      
+      res.json({
+        id: appGeneratorPrompt.id,
+        prompt: promptText,
+        language: lang
+      });
+    } catch (error) {
+      console.error('Error fetching app-generator prompt:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
 }

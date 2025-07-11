@@ -627,10 +627,43 @@ const CreationMethodStep = ({ appData, updateAppData, templateApp, validateCurre
 
 // Step 2: AI Generation
 const AIGenerationStep = ({ appData, updateAppData }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [generating, setGenerating] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState(null);
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [loadingPrompt, setLoadingPrompt] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
+
+  // Load the system prompt from configuration
+  useEffect(() => {
+    const loadSystemPrompt = async () => {
+      try {
+        setLoadingPrompt(true);
+        const response = await makeAdminApiCall(`/api/admin/prompts/app-generator?lang=${selectedLanguage}`);
+        if (response.ok) {
+          const data = await response.json();
+          setSystemPrompt(data.prompt);
+        } else {
+          console.error('Failed to load system prompt');
+          // Fallback to English if the selected language fails
+          if (selectedLanguage !== 'en') {
+            const fallbackResponse = await makeAdminApiCall(`/api/admin/prompts/app-generator?lang=en`);
+            if (fallbackResponse.ok) {
+              const fallbackData = await fallbackResponse.json();
+              setSystemPrompt(fallbackData.prompt);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error loading system prompt:', err);
+      } finally {
+        setLoadingPrompt(false);
+      }
+    };
+
+    loadSystemPrompt();
+  }, [selectedLanguage]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -645,20 +678,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
           messages: [
             {
               role: 'system',
-              content: `You are an expert AI assistant that helps create app configurations. Create a JSON configuration for an AI-enabled app based on the user's description. 
-
-The JSON should include:
-- id: A unique identifier for the app (kebab-case, no spaces, lowercase)
-- name: A short, descriptive name for the app
-- description: A brief description of what the app does
-- system: Detailed system instructions for the AI
-- category: One of: utility, productivity, creative, analysis, research, writing, educational, entertainment, business, technical
-- color: A hex color code for the app theme
-- icon: An appropriate icon name (e.g., chat-bubbles, document, search, lightbulb, etc.)
-- variables: An array of user-configurable variables if needed (usually empty unless specific user inputs are needed)
-- tools: An array of tool IDs if specific tools are needed (e.g., ["websearch", "code-interpreter"])
-
-Respond only with the JSON configuration wrapped in \`\`\`json\`\`\` tags.`
+              content: systemPrompt
             },
             {
               role: 'user',
@@ -687,9 +707,9 @@ Respond only with the JSON configuration wrapped in \`\`\`json\`\`\` tags.`
               
               // Apply generated config
               id: configJson.id || appData.id,
-              name: typeof configJson.name === 'string' ? { en: configJson.name } : configJson.name,
-              description: typeof configJson.description === 'string' ? { en: configJson.description } : configJson.description,
-              system: typeof configJson.system === 'string' ? { en: configJson.system } : configJson.system,
+              name: typeof configJson.name === 'string' ? { [selectedLanguage]: configJson.name } : configJson.name,
+              description: typeof configJson.description === 'string' ? { [selectedLanguage]: configJson.description } : configJson.description,
+              system: typeof configJson.system === 'string' ? { [selectedLanguage]: configJson.system } : configJson.system,
               category: configJson.category || appData.category,
               color: configJson.color || appData.color,
               icon: configJson.icon || appData.icon,
@@ -733,6 +753,20 @@ Respond only with the JSON configuration wrapped in \`\`\`json\`\`\` tags.`
     <div className="space-y-6">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
+          {t('admin.apps.wizard.ai.language', 'Language')}
+        </label>
+        <select
+          value={selectedLanguage}
+          onChange={(e) => setSelectedLanguage(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="en">English</option>
+          <option value="de">Deutsch</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           {t('admin.apps.wizard.ai.prompt', 'Describe your app')}
         </label>
         <textarea
@@ -741,7 +775,13 @@ Respond only with the JSON configuration wrapped in \`\`\`json\`\`\` tags.`
           rows={4}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           placeholder={t('admin.apps.wizard.ai.promptPlaceholder', 'Example: Create a meeting summarizer app that takes meeting notes and extracts key points, action items, and decisions...')}
+          disabled={loadingPrompt}
         />
+        {loadingPrompt && (
+          <p className="mt-1 text-sm text-gray-500">
+            {t('admin.apps.wizard.ai.loadingPrompt', 'Loading prompt configuration...')}
+          </p>
+        )}
       </div>
 
       {error && (
@@ -757,7 +797,7 @@ Respond only with the JSON configuration wrapped in \`\`\`json\`\`\` tags.`
 
       <button
         onClick={handleGenerate}
-        disabled={!prompt.trim() || generating}
+        disabled={!prompt.trim() || generating || loadingPrompt || !systemPrompt}
         className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {generating ? (

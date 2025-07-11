@@ -23,5 +23,16 @@
     "icon": "question-mark-circle",
     "prompt": { "en": "Answer using our FAQ: [content]", "de": "Beantworte mithilfe unserer FAQ: [content]" },
     "appId": "faq-bot"
+  },
+  {
+    "id": "app-generator",
+    "category": "system",
+    "name": { "en": "App Generator", "de": "App-Generator" },
+    "description": { "en": "Generate app configurations from user descriptions.", "de": "App-Konfigurationen aus Benutzerbeschreibungen generieren." },
+    "icon": "cog",
+    "prompt": { 
+      "en": "You are an expert AI assistant that helps create app configurations. Create a JSON configuration for an AI-enabled app based on the user's description. \n\nThe JSON should include:\n- id: A unique identifier for the app (kebab-case, no spaces, lowercase)\n- name: A short, descriptive name for the app\n- description: A brief description of what the app does\n- system: Detailed system instructions for the AI\n- category: One of: utility, productivity, creative, analysis, research, writing, educational, entertainment, business, technical\n- color: A hex color code for the app theme\n- icon: An appropriate icon name (e.g., chat-bubbles, document, search, lightbulb, etc.)\n- variables: An array of user-configurable variables if needed (usually empty unless specific user inputs are needed)\n- tools: An array of tool IDs if specific tools are needed (e.g., [\"websearch\", \"code-interpreter\"])\n\nRespond only with the JSON configuration wrapped in ```json``` tags.",
+      "de": "Sie sind ein Experte KI-Assistent, der bei der Erstellung von App-Konfigurationen hilft. Erstellen Sie eine JSON-Konfiguration für eine KI-fähige App basierend auf der Benutzerbeschreibung.\n\nDie JSON sollte folgende Felder enthalten:\n- id: Ein eindeutiger Bezeichner für die App (kebab-case, keine Leerzeichen, Kleinbuchstaben)\n- name: Ein kurzer, beschreibender Name für die App\n- description: Eine kurze Beschreibung, was die App tut\n- system: Detaillierte System-Anweisungen für die KI\n- category: Einer von: utility, productivity, creative, analysis, research, writing, educational, entertainment, business, technical\n- color: Ein Hex-Farbcode für das App-Theme\n- icon: Ein passender Icon-Name (z.B. chat-bubbles, document, search, lightbulb, etc.)\n- variables: Ein Array von benutzerdefinierbaren Variablen falls nötig (normalerweise leer, es sei denn spezifische Benutzereingaben sind erforderlich)\n- tools: Ein Array von Tool-IDs falls spezifische Tools benötigt werden (z.B. [\"websearch\", \"code-interpreter\"])\n\nAntworten Sie nur mit der JSON-Konfiguration, die in ```json``` Tags eingeschlossen ist."
+    }
   }
 ]
