@@ -49,6 +49,23 @@ const AppsList = () => {
     return uiConfig?.appsList?.categories || defaultCategoriesConfig;
   }, [uiConfig]);
 
+  // Only display categories that contain at least one app
+  const availableCategories = useMemo(() => {
+    if (!categoriesConfig.enabled) return [];
+    const usedCategories = new Set(apps.map(app => app.category || 'utility'));
+    return categoriesConfig.list.filter(category => {
+      if (category.id === 'all') return categoriesConfig.showAll;
+      return usedCategories.has(category.id);
+    });
+  }, [categoriesConfig, apps]);
+
+  useEffect(() => {
+    if (selectedCategory !== 'all') {
+      const exists = apps.some(app => (app.category || 'utility') === selectedCategory);
+      if (!exists) setSelectedCategory('all');
+    }
+  }, [apps, selectedCategory]);
+
   const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
 
   useEffect(() => {
@@ -480,7 +497,7 @@ const AppsList = () => {
       {/* Category filter */}
       {categoriesConfig.enabled && (
         <div className="flex flex-wrap gap-2 mb-6 justify-center">
-          {categoriesConfig.list.map(category => (
+          {availableCategories.map(category => (
             <button
               key={category.id}
               onClick={() => handleCategorySelect(category.id)}
