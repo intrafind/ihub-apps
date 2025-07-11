@@ -642,7 +642,6 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
       const response = await makeAdminApiCall('/api/completions', {
         method: 'POST',
         body: JSON.stringify({
-          model: 'gpt-4',
           messages: [
             {
               role: 'system',
@@ -697,7 +696,14 @@ Respond only with the JSON configuration wrapped in \`\`\`json\`\`\` tags.`
           setError(t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration'));
         }
       } else {
-        setError(t('admin.apps.wizard.ai.error.generate', 'Failed to generate app configuration'));
+        // Enhanced error handling - try to get the error message from the response
+        try {
+          const errorData = await response.json();
+          const errorMessage = errorData.error || errorData.message || 'Failed to generate app configuration';
+          setError(errorMessage);
+        } catch (parseError) {
+          setError(t('admin.apps.wizard.ai.error.generate', 'Failed to generate app configuration'));
+        }
       }
     } catch (error) {
       console.error('Failed to generate app:', error);

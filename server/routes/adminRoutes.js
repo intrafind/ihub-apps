@@ -809,8 +809,36 @@ export default function registerAdminRoutes(app) {
       const { model, messages, temperature = 0.7, max_tokens = 1000 } = req.body;
       
       // Validate required fields
-      if (!model || !messages || !Array.isArray(messages) || messages.length === 0) {
-        return res.status(400).json({ error: 'Missing required fields: model, messages' });
+      if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ error: 'Missing required field: messages' });
+      }
+      
+      // Get models from cache
+      let models = configCache.getModels();
+      if (!models) {
+        return res.status(500).json({ error: 'Failed to load models configuration' });
+      }
+      
+      // Use default model if no model specified
+      const defaultModel = models.find(m => m.default)?.id;
+      const modelId = model || defaultModel;
+      
+      if (!modelId) {
+        return res.status(400).json({ error: 'No model specified and no default model configured' });
+      }
+      
+      // Find the model configuration
+      const modelConfig = models.find(m => m.id === modelId);
+      if (!modelConfig) {
+        return res.status(400).json({ error: `Model not found: ${modelId}` });
+      }
+      
+      // Verify API key for the model
+      const { verifyApiKey } = await import('../serverHelpers.js');
+      const apiKey = await verifyApiKey(modelConfig, res);
+      if (!apiKey) {
+        // verifyApiKey already sent the error response
+        return;
       }
       
       // Convert OpenAI format to our internal format
@@ -831,7 +859,7 @@ export default function registerAdminRoutes(app) {
       // Use the existing simpleCompletion function
       const { simpleCompletion } = await import('../utils.js');
       const result = await simpleCompletion(prompt, { 
-        modelId: model, 
+        modelId: modelId, 
         temperature: temperature 
       });
       
@@ -847,13 +875,27 @@ export default function registerAdminRoutes(app) {
             index: 0
           }
         ],
-        model: model,
+        model: modelId,
         usage: result.usage
       });
     } catch (error) {
       console.error('Error in completions endpoint:', error);
+      
+      // Import error handling helper
+      const { getLocalizedError } = await import('../serverHelpers.js');
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      
+      // Try to get a localized error message
+      let errorMessage = 'Failed to generate completion';
+      try {
+        errorMessage = await getLocalizedError('internalError', {}, defaultLang);
+      } catch (localizationError) {
+        // Fall back to default message if localization fails
+        console.warn('Failed to get localized error message:', localizationError);
+      }
+      
       res.status(500).json({ 
-        error: 'Failed to generate completion',
+        error: errorMessage,
         details: error.message 
       });
     }
