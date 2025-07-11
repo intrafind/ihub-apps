@@ -53,7 +53,8 @@ export default async function answerReducer({ answers, model = 'gemini-1.5-flash
 
   try {
     const combined = `${prompt.system}\n\n${prompt.user}`;
-    const text = await simpleCompletion(combined, { model, temperature });
+    const result = await simpleCompletion(combined, { model, temperature });
+    const text = result.content;
 
     const totalLength = answers.reduce((acc, cur) => acc + cur.length, 0);
     if (text.length / totalLength < 0.6) {

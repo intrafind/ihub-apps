@@ -639,11 +639,8 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
       setGenerating(true);
       
       // Use OpenAI completion directly for app generation
-      const response = await fetch('/api/completions', {
+      const response = await makeAdminApiCall('/api/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           model: 'gpt-4',
           messages: [

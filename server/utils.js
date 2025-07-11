@@ -381,5 +381,14 @@ export async function simpleCompletion(prompt, { modelId: modelId, temperature =
 
   // Use the adapter to parse the response
   const parsed = processResponseBuffer(model.provider, JSON.stringify(responseData));
-  return parsed.content.join('');
+  
+  // Return both content and usage data
+  return {
+    content: parsed.content.join(''),
+    usage: responseData.usage || {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0
+    }
+  };
 }

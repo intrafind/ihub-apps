@@ -103,7 +103,8 @@ export default async function deepResearch({
         const refinePrompt = `Based on the initial query "${query}" and the following research content, generate a new, more specific search query to find deeper information. Return only the new search query.\n\n<content>\n${contentSummary}\n</content>`;
 
         sendProgress('research-refine', { round });
-        const refinedQuery = await simpleCompletion(refinePrompt, { temperature: refineTemperature, model });
+        const result = await simpleCompletion(refinePrompt, { temperature: refineTemperature, model });
+        const refinedQuery = result.content;
 
         const trimmed = refinedQuery.trim();
         if (trimmed && !executed.has(trimmed) && !queryQueue.includes(trimmed)) {

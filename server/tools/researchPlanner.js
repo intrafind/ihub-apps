@@ -18,7 +18,8 @@ export default async function researchPlanner({ question, teamSize = 3, soundBit
   const user = `\n${question}\n\n<soundbites>\n${soundBites}\n</soundbites>\n\n<think>`;
 
   const prompt = `${system}\n${user}`;
-  const response = await simpleCompletion(prompt, { model, temperature: 0.3 });
+  const result = await simpleCompletion(prompt, { model, temperature: 0.3 });
+  const response = result.content;
 
   try {
     return JSON.parse(response);

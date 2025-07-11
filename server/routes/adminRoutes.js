@@ -569,11 +569,11 @@ export default function registerAdminRoutes(app) {
       
       try {
         console.log('Testing model:', model);
-        const response = await simpleCompletion(testMessage, {modelId: model.id});
+        const result = await simpleCompletion(testMessage, {modelId: model.id});
         res.json({ 
           success: true, 
           message: 'Model test successful',
-          response: response,
+          response: result.content,
           model: model
         });
       } catch (testError) {
@@ -830,7 +830,7 @@ export default function registerAdminRoutes(app) {
       
       // Use the existing simpleCompletion function
       const { simpleCompletion } = await import('../utils.js');
-      const content = await simpleCompletion(prompt, { 
+      const result = await simpleCompletion(prompt, { 
         modelId: model, 
         temperature: temperature 
       });
@@ -841,18 +841,14 @@ export default function registerAdminRoutes(app) {
           {
             message: {
               role: 'assistant',
-              content: content
+              content: result.content
             },
             finish_reason: 'stop',
             index: 0
           }
         ],
         model: model,
-        usage: {
-          prompt_tokens: Math.ceil(prompt.length / 4), // Rough estimate
-          completion_tokens: Math.ceil(content.length / 4), // Rough estimate
-          total_tokens: Math.ceil((prompt.length + content.length) / 4)
-        }
+        usage: result.usage
       });
     } catch (error) {
       console.error('Error in completions endpoint:', error);
