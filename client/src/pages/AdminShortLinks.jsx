@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../api/adminApi';
+import ShortLinkDetailsPopup from '../components/ShortLinkDetailsPopup';
 
 const AdminShortLinks = () => {
   const { t } = useTranslation();
@@ -12,6 +13,10 @@ const AdminShortLinks = () => {
   const [error, setError] = useState(null);
   const [appIdFilter, setAppIdFilter] = useState('');
   const [userFilter, setUserFilter] = useState('');
+  const [selectedLink, setSelectedLink] = useState(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [sortField, setSortField] = useState('createdAt');
+  const [sortDir, setSortDir] = useState('desc');
 
   const loadLinks = async () => {
     try {
@@ -42,6 +47,37 @@ const AdminShortLinks = () => {
       setError(e.message);
     }
   };
+
+  const handleRowClick = (link) => {
+    setSelectedLink(link);
+    setShowDetails(true);
+  };
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDir(dir => (dir === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
+
+  const sortedLinks = useMemo(() => {
+    const list = [...links];
+    const compare = (a, b) => {
+      let x = a[sortField];
+      let y = b[sortField];
+      if (x === undefined || x === null) x = '';
+      if (y === undefined || y === null) y = '';
+      if (sortField === 'usage') {
+        return sortDir === 'asc' ? x - y : y - x;
+      }
+      return sortDir === 'asc'
+        ? String(x).localeCompare(String(y))
+        : String(y).localeCompare(String(x));
+    };
+    return list.sort(compare);
+  }, [links, sortField, sortDir]);
 
   if (loading) {
     return (
@@ -127,14 +163,29 @@ const AdminShortLinks = () => {
                   <table className="min-w-full divide-y divide-gray-300">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" onClick={() => handleSort('code')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
                           {t('admin.shortlinks.code', 'Code')}
+                          {sortField === 'code' && (
+                            <Icon name={sortDir === 'asc' ? 'chevron-down' : 'chevron-down'} className={`inline w-3 h-3 ml-1 transform ${sortDir === 'asc' ? '' : 'rotate-180'}`} />
+                          )}
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" onClick={() => handleSort('appId')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
                           {t('admin.shortlinks.appId', 'App ID')}
+                          {sortField === 'appId' && (
+                            <Icon name={sortDir === 'asc' ? 'chevron-down' : 'chevron-down'} className={`inline w-3 h-3 ml-1 transform ${sortDir === 'asc' ? '' : 'rotate-180'}`} />
+                          )}
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th scope="col" onClick={() => handleSort('userId')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
                           {t('admin.shortlinks.userId', 'User ID')}
+                          {sortField === 'userId' && (
+                            <Icon name={sortDir === 'asc' ? 'chevron-down' : 'chevron-down'} className={`inline w-3 h-3 ml-1 transform ${sortDir === 'asc' ? '' : 'rotate-180'}`} />
+                          )}
+                        </th>
+                        <th scope="col" onClick={() => handleSort('usage')} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer">
+                          {t('admin.shortlinks.usage', 'Usage')}
+                          {sortField === 'usage' && (
+                            <Icon name={sortDir === 'asc' ? 'chevron-down' : 'chevron-down'} className={`inline w-3 h-3 ml-1 transform ${sortDir === 'asc' ? '' : 'rotate-180'}`} />
+                          )}
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           {t('admin.shortlinks.createdAt', 'Created')}
@@ -145,8 +196,8 @@ const AdminShortLinks = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {links.map((link) => (
-                        <tr key={link.code} className="hover:bg-gray-50">
+                      {sortedLinks.map((link) => (
+                        <tr key={link.code} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleRowClick(link)}>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               <div className="flex-shrink-0 h-8 w-8">
@@ -173,9 +224,12 @@ const AdminShortLinks = () => {
                             {link.userId || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {link.usage || 0}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {link.createdAt ? new Date(link.createdAt).toLocaleDateString() : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => handleDelete(link.code)}
                               className="p-2 text-red-600 hover:bg-red-50 rounded-full"
@@ -193,7 +247,7 @@ const AdminShortLinks = () => {
             </div>
           </div>
 
-          {links.length === 0 && (
+          {sortedLinks.length === 0 && (
             <div className="text-center py-12">
               <Icon name="link" className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">
@@ -206,6 +260,11 @@ const AdminShortLinks = () => {
           )}
         </div>
       </div>
+      <ShortLinkDetailsPopup
+        link={selectedLink}
+        isOpen={showDetails}
+        onClose={() => setShowDetails(false)}
+      />
     </AdminAuth>
   );
 };
