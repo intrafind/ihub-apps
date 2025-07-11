@@ -257,7 +257,7 @@ const AdminPromptsPage = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {sortedPrompts.map((prompt) => (
                     <tr key={prompt.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handlePromptClick(prompt)}>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 ">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-8 w-8">
                             <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
@@ -274,7 +274,7 @@ const AdminPromptsPage = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 ">
                         {prompt.category ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                             {uiConfig?.promptsList?.categories?.list?.find(cat => cat.id === prompt.category)?.name ? 
@@ -291,17 +291,17 @@ const AdminPromptsPage = () => {
                           {prompt.description ? getLocalizedContent(prompt.description, currentLanguage) : '-'}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4  text-sm text-gray-900">
                         {prompt.order !== undefined ? prompt.order : '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4  text-sm text-gray-900 break-all">
                         {prompt.appId ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
                             {prompt.appId}
                           </span>
                         ) : '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 ">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           prompt.enabled !== false
                             ? 'bg-green-100 text-green-800'
@@ -310,7 +310,7 @@ const AdminPromptsPage = () => {
                           {prompt.enabled !== false ? t('admin.prompts.enabled', 'Enabled') : t('admin.prompts.disabled', 'Disabled')}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <td className="px-6 py-4  text-right text-sm font-medium">
                         <div className="flex items-center justify-end space-x-2">
                           <button
                             onClick={(e) => {
