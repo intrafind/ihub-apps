@@ -17,6 +17,15 @@
     "lastUpdated": "2025-07-08T17:00:38.743Z"
   },
   "admin": {
-    "secret": "platform-secret-123"
+    "secret": "platform-secret-123",
+    "pages": {
+      "home": true,
+      "usage": true,
+      "system": true,
+      "apps": true,
+      "models": true,
+      "prompts": true,
+      "shortlinks": true
+    }
   }
 }

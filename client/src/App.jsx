@@ -27,6 +27,7 @@ import AppProviders from './components/AppProviders';
 import { withErrorBoundary } from './components/ErrorBoundary';
 import useSessionManagement from './hooks/useSessionManagement';
 import { useUIConfig } from './components/UIConfigContext';
+import { usePlatformConfig } from './components/PlatformConfigContext';
 import DocumentTitle from './components/DocumentTitle';
 import { AdminAuthProvider } from './hooks/useAdminAuth';
 
@@ -53,6 +54,9 @@ function App() {
   // Use the custom hook for session management
   useSessionManagement();
   const { uiConfig } = useUIConfig();
+  const { platformConfig } = usePlatformConfig();
+  const adminPages = platformConfig?.admin?.pages || {};
+  const showAdminPage = (key) => adminPages[key] !== false;
 
   return (
     <AppProviders>
@@ -74,17 +78,39 @@ function App() {
               <Route path="apps/:appId" element={<SafeAppChat />} />
               <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
               <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
-              <Route path="admin" element={<SafeAdminHome />} />
-              <Route path="admin/usage" element={<SafeAdminUsage />} />
-              <Route path="admin/system" element={<SafeAdminSystem />} />
-              <Route path="admin/apps" element={<SafeAdminApps />} />
-              <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
-              <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
-              <Route path="admin/shortlinks/:code" element={<SafeAdminShortLinkEdit />} />
-              <Route path="admin/models" element={<SafeAdminModels />} />
-              <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
-              <Route path="admin/prompts" element={<SafeAdminPrompts />} />
-              <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
+              {showAdminPage('home') && (
+                <Route path="admin" element={<SafeAdminHome />} />
+              )}
+              {showAdminPage('usage') && (
+                <Route path="admin/usage" element={<SafeAdminUsage />} />
+              )}
+              {showAdminPage('system') && (
+                <Route path="admin/system" element={<SafeAdminSystem />} />
+              )}
+              {showAdminPage('apps') && (
+                <Route path="admin/apps" element={<SafeAdminApps />} />
+              )}
+              {showAdminPage('apps') && (
+                <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
+              )}
+              {showAdminPage('shortlinks') && (
+                <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
+              )}
+              {showAdminPage('shortlinks') && (
+                <Route path="admin/shortlinks/:code" element={<SafeAdminShortLinkEdit />} />
+              )}
+              {showAdminPage('models') && (
+                <Route path="admin/models" element={<SafeAdminModels />} />
+              )}
+              {showAdminPage('models') && (
+                <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
+              )}
+              {showAdminPage('prompts') && (
+                <Route path="admin/prompts" element={<SafeAdminPrompts />} />
+              )}
+              {showAdminPage('prompts') && (
+                <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
+              )}
               <Route path="unauthorized" element={<Unauthorized />} />
               <Route path="forbidden" element={<Forbidden />} />
               <Route path="server-error" element={<ServerError />} />
