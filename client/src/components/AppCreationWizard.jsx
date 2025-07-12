@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from './Icon';
 import { makeAdminApiCall } from '../api/adminApi';
+import { DEFAULT_LANGUAGE } from '../utils/localizeContent';
 
 const AppCreationWizard = ({ onClose, templateApp = null }) => {
   const { t } = useTranslation();
@@ -646,9 +647,9 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
           setSystemPrompt(data.prompt);
         } else {
           console.error('Failed to load system prompt');
-          // Fallback to English if the selected language fails
-          if (selectedLanguage !== 'en') {
-            const fallbackResponse = await makeAdminApiCall(`/api/admin/prompts/app-generator?lang=en`);
+          // Fallback to default language if the selected language fails
+          if (selectedLanguage !== DEFAULT_LANGUAGE) {
+            const fallbackResponse = await makeAdminApiCall(`/api/admin/prompts/app-generator?lang=${DEFAULT_LANGUAGE}`);
             if (fallbackResponse.ok) {
               const fallbackData = await fallbackResponse.json();
               setSystemPrompt(fallbackData.prompt);

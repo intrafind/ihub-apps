@@ -904,7 +904,10 @@ export default function registerAdminRoutes(app) {
   // Get app-generator prompt configuration
   app.get('/api/admin/prompts/app-generator', adminAuth, async (req, res) => {
     try {
-      const { lang = 'en' } = req.query;
+      // Get default language from platform configuration
+      const platformConfig = configCache.getPlatform();
+      const defaultLanguage = platformConfig?.defaultLanguage || 'en';
+      const { lang = defaultLanguage } = req.query;
       
       // Get prompts from cache
       const { data: prompts } = configCache.getPromptsWithETag();
@@ -921,7 +924,7 @@ export default function registerAdminRoutes(app) {
       }
       
       // Return the prompt for the requested language
-      const promptText = appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt.en;
+      const promptText = appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
       
       res.json({
         id: appGeneratorPrompt.id,
