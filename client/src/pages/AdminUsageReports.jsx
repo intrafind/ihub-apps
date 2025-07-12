@@ -4,6 +4,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Icon from '../components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
+import { useLocalizedTranslation } from '../hooks/useLocalizedTranslation';
 
 const StatCard = ({ title, value, icon, color, change, changeType }) => (
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -69,6 +70,7 @@ const TopUsersCard = ({ title, data, color }) => {
 };
 
 const AppUsageCard = ({ data }) => {
+  const { t } = useLocalizedTranslation();
   const apps = Object.entries(data || {});
   const total = apps.reduce((sum, [, value]) => sum + (typeof value === 'object' ? (value.good || 0) + (value.bad || 0) : value), 0);
 
@@ -158,6 +160,7 @@ const FeedbackCard = ({ data }) => {
 };
 
 const AdminUsageReports = () => {
+  const { t } = useLocalizedTranslation();
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
