@@ -31,7 +31,6 @@ import NoMessagesView from "../components/chat/NoMessagesView";
 import InputVariables from "../components/chat/InputVariables";
 import SharedAppHeader from "../components/SharedAppHeader";
 import { useUIConfig } from "../components/UIConfigContext";
-import cache, { CACHE_KEYS } from "../utils/cache"; // Import cache for manual clearing
 import { recordAppUsage } from "../utils/recentApps";
 import { isMarkdown } from "../utils/markdownUtils";
 import { saveAppSettings, loadAppSettings } from '../utils/appSettings';
@@ -723,11 +722,9 @@ const AppChat = () => {
     setShowFileUploader(false);
   };
 
-  // Function to clear app cache and reload
+  // Function to reload the current app
   const clearAppCache = useCallback(() => {
-    // Clear all app detail caches
-    cache.invalidateByPattern(CACHE_KEYS.APP_DETAILS);
-    // Reload the current app
+    // Client-side caching for apps was removed; simply reload
     window.location.reload();
   }, []);
 
