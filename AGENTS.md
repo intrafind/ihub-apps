@@ -70,3 +70,5 @@ Always consult the documentation in `docs/` for additional details about configu
   - Client app-specific translations: `client/src/i18n/locales/{lang}.json`
   - Server translations: `locales/{lang}.json`
   - Override keys: `contents/locales/{lang}.json`
+- Never assume English is the default. The default language is configured in the
+  backend's `platform.json` file.
