@@ -12,19 +12,27 @@ const AdminHome = () => {
   const handleCacheRefresh = async () => {
     try {
       await makeAdminApiCall('/api/admin/cache/_refresh', { method: 'POST' });
-      alert('Cache refreshed successfully');
+      alert(t('admin.home.cacheRefreshSuccess', 'Cache refreshed successfully'));
     } catch (error) {
-      alert('Error refreshing cache: ' + error.message);
+      alert(
+        t('admin.home.cacheRefreshError', 'Error refreshing cache: {{message}}', {
+          message: error.message
+        })
+      );
     }
   };
 
   const handleCacheClear = async () => {
-    if (confirm('Are you sure you want to clear the cache?')) {
+    if (confirm(t('admin.home.clearCacheConfirm', 'Are you sure you want to clear the cache?'))) {
       try {
         await makeAdminApiCall('/api/admin/cache/_clear', { method: 'POST' });
-        alert('Cache cleared successfully');
+        alert(t('admin.home.cacheClearSuccess', 'Cache cleared successfully'));
       } catch (error) {
-        alert('Error clearing cache: ' + error.message);
+        alert(
+          t('admin.home.cacheClearError', 'Error clearing cache: {{message}}', {
+            message: error.message
+          })
+        );
       }
     }
   };
@@ -32,42 +40,42 @@ const AdminHome = () => {
   const adminSections = [
     {
       title: t('admin.nav.usage', 'Usage Reports'),
-      description: 'View application usage statistics and analytics',
+      description: t('admin.home.sections.usageDesc', 'View application usage statistics and analytics'),
       href: '/admin/usage',
       icon: 'chart-bar',
       color: 'bg-blue-500'
     },
     {
       title: t('admin.nav.apps', 'Apps Management'),
-      description: 'Create, edit, and manage applications',
+      description: t('admin.home.sections.appsDesc', 'Create, edit, and manage applications'),
       href: '/admin/apps',
       icon: 'collection',
       color: 'bg-green-500'
     },
     {
       title: t('admin.nav.models', 'Models Management'),
-      description: 'Configure and manage AI models',
+      description: t('admin.home.sections.modelsDesc', 'Configure and manage AI models'),
       href: '/admin/models',
       icon: 'cpu-chip',
       color: 'bg-purple-500'
     },
     {
       title: t('admin.nav.prompts', 'Prompts Management'),
-      description: 'Create and manage prompt templates',
+      description: t('admin.home.sections.promptsDesc', 'Create and manage prompt templates'),
       href: '/admin/prompts',
       icon: 'clipboard-document-list',
       color: 'bg-indigo-500'
     },
     {
       title: t('admin.nav.system', 'System Administration'),
-      description: 'System settings and maintenance tools',
+      description: t('admin.home.sections.systemDesc', 'System settings and maintenance tools'),
       href: '/admin/system',
       icon: 'cog',
       color: 'bg-orange-500'
     },
     {
       title: t('admin.nav.shortlinks', 'Short Links'),
-      description: 'Manage application short links',
+      description: t('admin.home.sections.shortlinksDesc', 'Manage application short links'),
       href: '/admin/shortlinks',
       icon: 'link',
       color: 'bg-teal-500'
@@ -84,9 +92,11 @@ const AdminHome = () => {
               <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-indigo-100 mb-4">
                 <Icon name="shield-check" className="h-8 w-8 text-indigo-600" />
               </div>
-              <h1 className="text-4xl font-bold text-gray-900">Admin Dashboard</h1>
+              <h1 className="text-4xl font-bold text-gray-900">
+                {t('admin.home.title', 'Admin Dashboard')}
+              </h1>
               <p className="text-gray-600 mt-2 text-lg">
-                Welcome to the AI Hub Apps administration center
+                {t('admin.home.welcome', 'Welcome to the AI Hub Apps administration center')}
               </p>
             </div>
           </div>
@@ -127,14 +137,16 @@ const AdminHome = () => {
 
           {/* Quick Actions */}
           <div className="mt-12 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Actions</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              {t('admin.home.quickActions', 'Quick Actions')}
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <button
                 onClick={() => navigate('/admin/apps/new')}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
               >
                 <Icon name="plus" className="h-4 w-4 mr-2" />
-                Add New App
+                {t('admin.home.addNewApp', 'Add New App')}
               </button>
               
               <button
@@ -142,7 +154,7 @@ const AdminHome = () => {
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
               >
                 <Icon name="plus" className="h-4 w-4 mr-2" />
-                Add New Model
+                {t('admin.home.addNewModel', 'Add New Model')}
               </button>
               
               <button
@@ -150,7 +162,7 @@ const AdminHome = () => {
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="plus" className="h-4 w-4 mr-2" />
-                Add New Prompt
+                {t('admin.home.addNewPrompt', 'Add New Prompt')}
               </button>
               
               <Link
@@ -158,21 +170,23 @@ const AdminHome = () => {
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 <Icon name="home" className="h-4 w-4 mr-2" />
-                Back to Apps
+                {t('admin.home.backToApps', 'Back to Apps')}
               </Link>
             </div>
           </div>
 
           {/* System Actions */}
           <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">System Actions</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              {t('admin.home.systemActions', 'System Actions')}
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <button
                 onClick={handleCacheRefresh}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 <Icon name="refresh" className="h-4 w-4 mr-2" />
-                Refresh Cache
+                {t('admin.home.refreshCache', 'Refresh Cache')}
               </button>
               
               <button
@@ -180,7 +194,7 @@ const AdminHome = () => {
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
               >
                 <Icon name="trash" className="h-4 w-4 mr-2" />
-                Clear Cache
+                {t('admin.home.clearCache', 'Clear Cache')}
               </button>
               
               <Link
@@ -188,7 +202,7 @@ const AdminHome = () => {
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
               >
                 <Icon name="cog" className="h-4 w-4 mr-2" />
-                System Settings
+                {t('admin.home.systemSettings', 'System Settings')}
               </Link>
             </div>
           </div>
