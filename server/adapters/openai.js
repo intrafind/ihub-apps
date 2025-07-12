@@ -47,7 +47,7 @@ const OpenAIAdapter = {
    * Create a completion request for OpenAI
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true, tools = null, toolChoice = undefined } = options;
+    const { temperature = 0.7, stream = true, tools = null, toolChoice = undefined, responseFormat = null, responseSchema = null } = options;
 
     const body = {
       model: model.modelId,
@@ -59,6 +59,9 @@ const OpenAIAdapter = {
 
     if (tools && tools.length > 0) body.tools = formatToolsForOpenAI(tools);
     if (toolChoice) body.tool_choice = toolChoice;
+    if ((responseFormat && responseFormat === 'json') || responseSchema) {
+      body.response_format = { type: 'json_object' };
+    }
 
     return {
       url: model.url,
