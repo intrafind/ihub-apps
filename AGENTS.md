@@ -61,3 +61,11 @@ Follow the instructions in [LLM_GUIDELINES.md](LLM_GUIDELINES.md):
 - Important! Whenever you get an API_KEY for adapters, tools or anything else, NEVER EVER write them into the code or documentation. Always use a placeholder.
 
 Always consult the documentation in `docs/` for additional details about configuration files and features.
+
+## Internationalization (i18n)
+- Every user-facing string or configuration key must be internationalized.
+- Provide translations for at least English (`en`) and German (`de`).
+- Update the relevant translation files when adding or modifying keys:
+  - Client core translations: `client/src/i18n/core/{lang}.json`
+  - Client app-specific translations: `client/src/i18n/locales/{lang}.json`
+  - Server translations: `contents/locales/{lang}.json`
