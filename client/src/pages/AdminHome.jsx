@@ -43,14 +43,6 @@ const AdminHome = () => {
 
   const adminSections = [
     {
-      key: 'usage',
-      title: t('admin.nav.usage', 'Usage Reports'),
-      description: t('admin.home.sections.usageDesc', 'View application usage statistics and analytics'),
-      href: '/admin/usage',
-      icon: 'chart-bar',
-      color: 'bg-blue-500'
-    },
-    {
       key: 'apps',
       title: t('admin.nav.apps', 'Apps Management'),
       description: t('admin.home.sections.appsDesc', 'Create, edit, and manage applications'),
@@ -74,21 +66,29 @@ const AdminHome = () => {
       icon: 'clipboard-document-list',
       color: 'bg-indigo-500'
     },
-    {
-      key: 'system',
-      title: t('admin.nav.system', 'System Administration'),
-      description: t('admin.home.sections.systemDesc', 'System settings and maintenance tools'),
-      href: '/admin/system',
-      icon: 'cog',
-      color: 'bg-orange-500'
-    },
-    {
+        {
       key: 'shortlinks',
       title: t('admin.nav.shortlinks', 'Short Links'),
       description: t('admin.home.sections.shortlinksDesc', 'Manage application short links'),
       href: '/admin/shortlinks',
       icon: 'link',
       color: 'bg-teal-500'
+    },
+    {
+      key: 'usage',
+      title: t('admin.nav.usage', 'Usage Reports'),
+      description: t('admin.home.sections.usageDesc', 'View application usage statistics and analytics'),
+      href: '/admin/usage',
+      icon: 'chart-bar',
+      color: 'bg-blue-500'
+    },
+    {
+      key: 'system',
+      title: t('admin.nav.system', 'System Administration'),
+      description: t('admin.home.sections.systemDesc', 'System settings and maintenance tools'),
+      href: '/admin/system',
+      icon: 'none',
+      color: 'bg-orange-500'
     }
   ];
 
@@ -187,40 +187,6 @@ const AdminHome = () => {
                 <Icon name="home" className="h-4 w-4 mr-2" />
                 {t('admin.home.backToApps', 'Back to Apps')}
               </Link>
-            </div>
-          </div>
-
-          {/* System Actions */}
-          <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">
-              {t('admin.home.systemActions', 'System Actions')}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <button
-                onClick={handleCacheRefresh}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <Icon name="refresh" className="h-4 w-4 mr-2" />
-                {t('admin.home.refreshCache', 'Refresh Cache')}
-              </button>
-              
-              <button
-                onClick={handleCacheClear}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              >
-                <Icon name="trash" className="h-4 w-4 mr-2" />
-                {t('admin.home.clearCache', 'Clear Cache')}
-              </button>
-              
-              {isEnabled('system') && (
-                <Link
-                  to="/admin/system"
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
-                >
-                  <Icon name="cog" className="h-4 w-4 mr-2" />
-                  {t('admin.home.systemSettings', 'System Settings')}
-                </Link>
-              )}
             </div>
           </div>
         </div>

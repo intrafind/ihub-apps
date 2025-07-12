@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { fetchAdminUsageData } from '../api/adminApi';
+import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Icon from '../components/Icon';
 import AdminAuth from '../components/AdminAuth';
@@ -69,6 +70,7 @@ const TopUsersCard = ({ title, data, color }) => {
 };
 
 const AppUsageCard = ({ data }) => {
+  const { t, i18n } = useTranslation();
   const apps = Object.entries(data || {});
   const total = apps.reduce((sum, [, value]) => sum + (typeof value === 'object' ? (value.good || 0) + (value.bad || 0) : value), 0);
 
@@ -158,6 +160,7 @@ const FeedbackCard = ({ data }) => {
 };
 
 const AdminUsageReports = () => {
+  const { t, i18n } = useTranslation();
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');

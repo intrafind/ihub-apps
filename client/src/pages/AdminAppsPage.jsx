@@ -235,7 +235,7 @@ const AdminAppsPage = () => {
       )}
 
       {/* Stats */}
-      <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
+      {/* <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
@@ -301,7 +301,7 @@ const AdminAppsPage = () => {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Apps table */}
       <div className="mt-8 flex flex-col">

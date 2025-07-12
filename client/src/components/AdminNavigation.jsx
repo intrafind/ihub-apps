@@ -20,20 +20,6 @@ const AdminNavigation = () => {
       current: location.pathname === '/admin'
     },
     {
-      key: 'usage',
-      name: t('admin.nav.usage', 'Usage Reports'),
-      href: '/admin/usage',
-      icon: 'chart-bar',
-      current: location.pathname === '/admin/usage'
-    },
-    {
-      key: 'system',
-      name: t('admin.nav.system', 'System'),
-      href: '/admin/system',
-      icon: 'cog',
-      current: location.pathname === '/admin/system'
-    },
-    {
       key: 'apps',
       name: t('admin.nav.apps', 'Apps'),
       href: '/admin/apps',
@@ -60,7 +46,21 @@ const AdminNavigation = () => {
       href: '/admin/shortlinks',
       icon: 'link',
       current: location.pathname.startsWith('/admin/shortlinks')
-    }
+    },    
+    {
+      key: 'usage',
+      name: t('admin.nav.usage', 'Usage Reports'),
+      href: '/admin/usage',
+      icon: 'chart-bar',
+      current: location.pathname === '/admin/usage'
+    },
+    {
+      key: 'system',
+      name: t('admin.nav.system', 'System'),
+      href: '/admin/system',
+      icon: 'cog',
+      current: location.pathname === '/admin/system'
+    },
   ];
 
   return (
