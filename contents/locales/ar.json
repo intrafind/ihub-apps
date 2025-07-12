@@ -40,7 +40,6 @@
     "share": "Share",
     "shortCode": "Short code",
     "includeSettings": "Include settings & variables",
-    "expiresAt": "Expires At",
     "codeTaken": "Code taken",
     "codeAvailable": "Code available",
     "codeTooShort": "Code must be at least 5 characters"
@@ -130,7 +129,7 @@
   },
   "examples": {
     "helpWithTask": "Help me brainstorm ideas for my project",
-    "explainConcept": "Explain a complex topic in simple terms",
+    "explainConcept": "Explain a complex topic in simple terms", 
     "writeContent": "Help me write professional content",
     "planSomething": "Plan and organize my schedule"
   },
@@ -295,125 +294,5 @@
     "translate": "Translate",
     "grammar": "Grammar",
     "format": "Format"
-  },
-  "admin": {
-    "apps": {
-      "createApp": "Create App",
-      "actions": {
-        "clone": "Clone"
-      },
-      "template": {
-        "title": "Choose App Template",
-        "description": "Start with an existing app as a template, or create from scratch",
-        "searchPlaceholder": "Search apps...",
-        "createFromScratch": "Create from Scratch",
-        "createFromScratchDescription": "Start with a blank app configuration",
-        "loading": "Loading apps...",
-        "noApps": "No apps found matching your search"
-      },
-      "wizard": {
-        "title": "Create New App",
-        "basedOn": "Based on",
-        "back": "Back",
-        "next": "Next",
-        "create": "Create App",
-        "finish": "Finish App",
-        "creating": "Creating...",
-        "revert": "Revert to parent",
-        "method": {
-          "title": "Creation Method",
-          "description": "How would you like to create your app?",
-          "instruction": "Choose how you want to create your app:",
-          "ai": "AI-Generated",
-          "aiDescription": "Describe what your app should do, and AI will generate the configuration for you.",
-          "manual": "Manual Configuration",
-          "manualDescription": "Configure your app step by step with full control over all settings.",
-          "template": "Based on Template",
-          "templateDescription": "Start with the configuration from \"{templateName}\" and customize it."
-        },
-        "ai": {
-          "title": "AI Generation",
-          "description": "Describe what your app should do",
-          "prompt": "Describe your app",
-          "promptPlaceholder": "Example: Create a meeting summarizer app that takes meeting notes and extracts key points, action items, and decisions...",
-          "generate": "Generate App",
-          "generating": "Generating...",
-          "success": "App configuration generated successfully! You can review and modify it in the next steps."
-        },
-        "basic": {
-          "title": "Basic Information",
-          "description": "Configure name, description, and appearance",
-          "language": "Language",
-          "appId": "App ID",
-          "appIdPlaceholder": "e.g., my-awesome-app",
-          "name": "App Name",
-          "namePlaceholder": "Enter app name",
-          "description": "Description",
-          "descriptionPlaceholder": "Enter app description",
-          "color": "Color",
-          "icon": "Icon",
-          "iconPlaceholder": "e.g., chat-bubbles"
-        },
-        "system": {
-          "title": "System Instructions",
-          "description": "Define how your app should behave",
-          "prompt": "System Instructions",
-          "promptPlaceholder": "Enter system instructions that define how the AI should behave...",
-          "messagePlaceholder": "Message Placeholder",
-          "messagePlaceholderPlaceholder": "Enter your message here...",
-          "model": "Preferred Model",
-          "temperature": "Temperature"
-        },
-        "variables": {
-          "title": "Variables",
-          "description": "Add user-configurable variables",
-          "instruction": "Variables allow users to customize the app behavior. They can be used in the prompt template with {{variableName}} syntax.",
-          "variable": "Variable {{index}}",
-          "name": "Name",
-          "namePlaceholder": "e.g., targetLanguage",
-          "type": "Type",
-          "label": "Label",
-          "labelPlaceholder": "e.g., Target Language",
-          "required": "Required",
-          "add": "Add Variable"
-        },
-        "tools": {
-          "title": "Tools",
-          "description": "Select available tools",
-          "instruction": "Select the tools that will be available to your app. Tools extend the capabilities of the AI assistant.",
-          "searchPlaceholder": "Search tools...",
-          "noResults": "No tools match your search",
-          "noTools": "No tools available"
-        },
-        "advanced": {
-          "title": "Advanced Settings",
-          "description": "Configure advanced features",
-          "instruction": "Configure advanced settings for your app.",
-          "allowEmptyContent": "Allow Empty Content",
-          "sendChatHistory": "Send Chat History",
-          "imageUpload": "Enable Image Upload",
-          "category": "Category",
-          "order": "Display Order"
-        },
-        "review": {
-          "title": "Review & Create",
-          "description": "Review your app configuration",
-          "instruction": "Review your app configuration before creating it.",
-          "basedOn": "Based on template: {templateName}",
-          "overridden": "Overridden fields: {fields}",
-          "warning": "Once created, you can edit the app configuration but cannot change its ID. Make sure the ID is unique and descriptive."
-        },
-        "error": {
-          "idRequired": "App ID is required",
-          "nameRequired": "App name is required", 
-          "descriptionRequired": "App description is required",
-          "colorRequired": "App color is required",
-          "iconRequired": "App icon is required",
-          "systemRequired": "System instructions are required",
-          "tokenLimitRequired": "Token limit is required",
-          "createFailed": "Failed to create app"
-        }
-      }
-    }
   }
 }

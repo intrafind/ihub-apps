@@ -18,3 +18,4 @@
     - [Image Upload Feature](image-upload-feature.md)
     - [Image Generation](image-generation-feature.md)
     - [Server Configuration](server-config.md)
+    - [RTL Support](rtl-support.md)
