@@ -62,4 +62,12 @@ Follow the instructions in [LLM_GUIDELINES.md](LLM_GUIDELINES.md):
 
 Always consult the documentation in `docs/` for additional details about configuration files and features.
 
+## Internationalization (i18n)
+- Every user-facing string or configuration key must be internationalized.
+- Provide translations for at least English (`en`) and German (`de`).
+- Update the relevant translation files when adding or modifying keys:
+  - Client core translations: `client/src/i18n/core/{lang}.json`
+  - Client app-specific translations: `client/src/i18n/locales/{lang}.json`
+  - Server translations: `contents/locales/{lang}.json`
+
 Always create a new branch from master before you start changes, open a pull request in draft mode, and when complete, you assign it to the one, who gave you the task.
