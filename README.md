@@ -389,7 +389,8 @@ The application supports internationalization through localization files:
 
 ### Server-side Localization
 
-Server-side strings are defined in `config/locales/{lang}.json` files.
+Server-side strings are built into the application under `locales/{lang}.json`.
+Create files in `contents/locales/{lang}.json` to override individual keys.
 
 ### Client-side Localization
 

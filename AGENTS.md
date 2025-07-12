@@ -68,4 +68,5 @@ Always consult the documentation in `docs/` for additional details about configu
 - Update the relevant translation files when adding or modifying keys:
   - Client core translations: `client/src/i18n/core/{lang}.json`
   - Client app-specific translations: `client/src/i18n/locales/{lang}.json`
-  - Server translations: `contents/locales/{lang}.json`
+  - Server translations: `locales/{lang}.json`
+  - Override keys: `contents/locales/{lang}.json`
