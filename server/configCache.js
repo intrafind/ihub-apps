@@ -1,4 +1,4 @@
-import { loadJson } from './configLoader.js';
+import { loadJson, loadBuiltinLocaleJson } from './configLoader.js';
 import { loadAllApps } from './appsLoader.js';
 import { loadAllModels } from './modelsLoader.js';
 import { loadAllPrompts } from './promptsLoader.js';
@@ -29,15 +29,16 @@ class ConfigCache {
     // List of critical configuration files to preload
     this.criticalConfigs = [
       'config/models.json',
-      'config/apps.json', 
+      'config/apps.json',
       'config/tools.json',
       'config/styles.json',
       'config/prompts.json',
       'config/platform.json',
-      'config/ui.json',
-      'locales/en.json',
-      'locales/de.json'
+      'config/ui.json'
     ];
+
+    // Built-in locales that should always be preloaded
+    this.defaultLocales = ['en', 'de'];
   }
 
   /**
@@ -103,7 +104,9 @@ class ConfigCache {
       }
     });
 
-    await Promise.all(loadPromises);
+    const localePromises = this.defaultLocales.map((lang) => this.loadAndCacheLocale(lang));
+
+    await Promise.all([...loadPromises, ...localePromises]);
     this.isInitialized = true;
     console.log(`✅ Configuration cache initialized with ${this.cache.size} files`);
   }
@@ -115,6 +118,23 @@ class ConfigCache {
     const hash = createHash('md5');
     hash.update(JSON.stringify(data));
     return `"${hash.digest('hex')}"`;
+  }
+
+  mergeLocaleData(base = {}, overrides = {}, path = '') {
+    const result = { ...base };
+    if (typeof overrides !== 'object' || overrides === null) return result;
+    for (const [key, value] of Object.entries(overrides)) {
+      if (!(key in base)) {
+        console.warn(`Unknown locale key '${path + key}' in overrides`);
+        continue;
+      }
+      if (typeof value === 'object' && value !== null && typeof base[key] === 'object') {
+        result[key] = this.mergeLocaleData(base[key], value, `${path + key}.`);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
   }
 
   /**
@@ -172,6 +192,12 @@ class ConfigCache {
         return;
       }
       
+      if (key.startsWith('locales/')) {
+        const lang = key.split('/')[1].replace('.json', '');
+        await this.loadAndCacheLocale(lang);
+        return;
+      }
+
       const data = await loadJson(key, { useCache: false });
       if (data !== null) {
         this.setCacheEntry(key, data);
@@ -343,6 +369,22 @@ class ConfigCache {
    */
   getLocalizations(language = 'en') {
     return this.get(`locales/${language}.json`);
+  }
+
+  async loadAndCacheLocale(language) {
+    try {
+      const base = await loadBuiltinLocaleJson(`${language}.json`);
+      if (!base) {
+        console.warn(`⚠️  Failed to load builtin locale for ${language}`);
+        return;
+      }
+      const overrides = await loadJson(`locales/${language}.json`) || {};
+      const merged = this.mergeLocaleData(base, overrides);
+      this.setCacheEntry(`locales/${language}.json`, merged);
+      console.log(`✓ Cached locale: ${language}`);
+    } catch (error) {
+      console.error(`❌ Error caching locale ${language}:`, error.message);
+    }
   }
 
   /**

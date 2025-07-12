@@ -8,6 +8,7 @@
     - [Styles](styles.md)
     - [Prompts Database](prompts.md)
     - [Content Management](content-management.md)
+    - [Localization](localization.md)
   - [Features]()
     - [Tools (Experimental)](tools.md)
     - [File Upload Feature](file-upload-feature.md)
