@@ -806,7 +806,7 @@ export default function registerAdminRoutes(app) {
   // OpenAI-compatible completions endpoint for app generation
   app.post('/api/completions', adminAuth, async (req, res) => {
     try {
-      const { model, messages, temperature = 0.7, max_tokens = 1000 } = req.body;
+      const { model, messages, temperature = 0.7, max_tokens = 8192 } = req.body;
       
       // Validate required fields
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -841,27 +841,14 @@ export default function registerAdminRoutes(app) {
         return;
       }
       
-      // Convert OpenAI format to our internal format
-      // Extract the user's prompt from the messages (last user message)
-      const userMessage = messages.filter(msg => msg.role === 'user').pop();
-      const systemMessage = messages.filter(msg => msg.role === 'system').pop();
-      
-      if (!userMessage) {
-        return res.status(400).json({ error: 'No user message found in messages array' });
-      }
-      
-      // Combine system and user messages into a single prompt
-      let prompt = userMessage.content;
-      if (systemMessage) {
-        prompt = `${systemMessage.content}\n\nUser: ${userMessage.content}`;
-      }
-      
       // Use the existing simpleCompletion function
       const { simpleCompletion } = await import('../utils.js');
-      const result = await simpleCompletion(prompt, { 
+      const result = await simpleCompletion(messages, { 
         modelId: modelId, 
         temperature: temperature 
       });
+
+      console.log('Completion result:', JSON.stringify(result, null, 2));
       
       // Return in OpenAI format
       res.json({

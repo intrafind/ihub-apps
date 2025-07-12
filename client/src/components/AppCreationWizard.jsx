@@ -686,13 +686,13 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
               content: prompt
             }
           ],
-          temperature: 0.4,
-          max_tokens: 1000
+          temperature: 1.0
         })
       });
 
       if (response.ok) {
         const data = await response.json();
+        console.log('AI generation result:', JSON.stringify(data, null, 2));
         const generatedConfig = data.choices[0].message.content;
 
         // Parse the generated JSON configuration
@@ -700,6 +700,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
           const jsonMatch = generatedConfig.match(/```json\s*(\{[\s\S]*?\})\s*```/);
           if (jsonMatch) {
             const configJson = JSON.parse(jsonMatch[1]);
+            console.log('Generated config:', configJson);
             
             // Convert to multilingual format and merge with existing app data
             const multilingualConfig = {
@@ -727,6 +728,9 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
             console.log('Multilingual config:', multilingualConfig);
             
             updateAppData(multilingualConfig);
+          } else {
+            console.error('No valid JSON found in generated config');
+            setError(t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration'));
           }
         } catch (e) {
           console.error('Failed to parse generated config:', e);

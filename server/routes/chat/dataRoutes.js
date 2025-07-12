@@ -97,7 +97,7 @@ export default function registerDataRoutes(app) {
     }
   });
 
-  app.get('/api/ui', async (req, res) => {
+  app.get('/api/configs/ui', async (req, res) => {
     try {
       // Try to get UI config from cache first
       let uiConfig = configCache.getUI();
@@ -112,7 +112,7 @@ export default function registerDataRoutes(app) {
     }
   });
 
-  app.get('/api/platform', async (req, res) => {
+  app.get('/api/configs/platform', async (req, res) => {
     try {
       let platform = configCache.getPlatform();
       if (!platform) {

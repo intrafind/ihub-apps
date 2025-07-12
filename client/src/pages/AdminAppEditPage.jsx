@@ -37,7 +37,7 @@ const AdminAppEditPage = () => {
 
     const loadUIConfig = async () => {
       try {
-        const response = await fetch('/api/config/ui');
+        const response = await fetch('/api/configs/ui');
         if (response.ok) {
           const config = await response.json();
           setUiConfig(config);
