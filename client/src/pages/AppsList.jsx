@@ -49,6 +49,19 @@ const AppsList = () => {
     return uiConfig?.appsList?.categories || defaultCategoriesConfig;
   }, [uiConfig]);
 
+
+  // State declarations must come before any useMemo/useEffect that references them
+  const [apps, setApps] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [favoriteApps, setFavoriteApps] = useState([]);
+  const [displayCount, setDisplayCount] = useState(0);
+  const [translationsLoaded, setTranslationsLoaded] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const recentAppIds = useMemo(() => getRecentAppIds(), [apps]);
+  const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
+
   // Only display categories that contain at least one app
   const availableCategories = useMemo(() => {
     if (!categoriesConfig.enabled) return [];
@@ -66,22 +79,10 @@ const AppsList = () => {
     }
   }, [apps, selectedCategory]);
 
-  const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
-
   useEffect(() => {
     setSortMethod(sortConfig.default || 'relevance');
   }, [sortConfig]);
-  
-  const [apps, setApps] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [favoriteApps, setFavoriteApps] = useState([]);
-  const [displayCount, setDisplayCount] = useState(0);
-  const [translationsLoaded, setTranslationsLoaded] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const recentAppIds = useMemo(() => getRecentAppIds(), [apps]);
-  
+
   const gridRef = useRef(null);
   const containerRef = useRef(null);
 

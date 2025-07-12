@@ -17,6 +17,8 @@
 2. **Data Flow**: Do not alter the flow of data between the client and server without explicit instruction.
 3. **Local Storage**: Preserve the existing local storage mechanisms for user preferences and history.
 4. **API Compatibility**: Maintain compatibility with the existing API structure.
+5. **Internationalization**: All new or modified user-facing keys must have translations for English (`en`) and German (`de`). Update the appropriate JSON files under `client/src/i18n`, `locales` and the override files in `contents/locales`.
+6. **Default Language**: Never assume English is the default language. Always rely on the `defaultLanguage` value configured in the backend.
 
 ## Code Modification Rules
 1. **Minimal Changes**: Make only the necessary changes to implement the requested feature or fix.
