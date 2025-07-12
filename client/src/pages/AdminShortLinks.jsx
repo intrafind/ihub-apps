@@ -1,13 +1,15 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { useTranslation } from "react-i18next";
-import Icon from "../components/Icon";
-import AdminAuth from "../components/AdminAuth";
-import AdminNavigation from "../components/AdminNavigation";
-import { makeAdminApiCall } from "../api/adminApi";
-import ShortLinkDetailsPopup from "../components/ShortLinkDetailsPopup";
+import React, { useEffect, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import Icon from '../components/Icon';
+import AdminAuth from '../components/AdminAuth';
+import AdminNavigation from '../components/AdminNavigation';
+import { makeAdminApiCall } from '../api/adminApi';
+import ShortLinkDetailsPopup from '../components/ShortLinkDetailsPopup';
 
 const AdminShortLinks = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -135,6 +137,15 @@ const AdminShortLinks = () => {
                   "Manage and monitor short links for your applications",
                 )}
               </p>
+            </div>
+            <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+              <button
+                onClick={() => navigate('/admin/shortlinks/new')}
+                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+              >
+                <Icon name="plus" className="h-4 w-4 mr-2" />
+                {t('admin.shortlinks.addNew', 'Add New Link')}
+              </button>
             </div>
           </div>
 
