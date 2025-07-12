@@ -68,6 +68,7 @@ Always consult the documentation in `docs/` for additional details about configu
 - Update the relevant translation files when adding or modifying keys:
   - Client core translations: `client/src/i18n/core/{lang}.json`
   - Client app-specific translations: `client/src/i18n/locales/{lang}.json`
-  - Server translations: `contents/locales/{lang}.json`
+  - Server translations: `locales/{lang}.json`
+  - Override keys: `contents/locales/{lang}.json`
 
 Always create a new branch from master before you start changes, open a pull request in draft mode, and when complete, you assign it to the one, who gave you the task.
