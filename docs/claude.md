@@ -19,4 +19,6 @@ All strings related to Claude models or apps must include English (`en`) and Ger
 - Client translations: `client/src/i18n/core/{lang}.json`
 - Server translations: `locales/{lang}.json` (built-in)
 - Overrides: `contents/locales/{lang}.json`
+- Never assume English is the default language. Use the `defaultLanguage` value
+  from the backend platform configuration.
 
