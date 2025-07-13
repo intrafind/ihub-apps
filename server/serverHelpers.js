@@ -112,7 +112,7 @@ export async function verifyApiKey(model, res, clientRes = null, language) {
   }
 }
 
-export async function processMessageTemplates(messages, app, style = null, outputFormat = null, language) {
+export async function processMessageTemplates(messages, app, style = null, outputFormat = null, language, outputSchema = null) {
   const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
   const lang = language || defaultLang;
   console.log(`Using language '${lang}' for message templates`);
@@ -184,6 +184,12 @@ export async function processMessageTemplates(messages, app, style = null, outpu
       systemPrompt += '\n\nPlease format your response using Markdown syntax for better readability.';
     } else if (outputFormat === 'html') {
       systemPrompt += '\n\nPlease format your response using HTML tags for better readability and structure.';
+    } else if (outputFormat === 'json' || outputSchema) {
+      systemPrompt += '\n\nRespond only with valid JSON.';
+      if (outputSchema) {
+        const schemaStr = JSON.stringify(outputSchema);
+        systemPrompt += ` The JSON must match this schema: ${schemaStr}`;
+      }
     }
     llmMessages.unshift({ role: 'system', content: systemPrompt });
   }

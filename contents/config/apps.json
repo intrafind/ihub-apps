@@ -1696,7 +1696,42 @@
           "de": "Weitere Details oder spezielle Anforderungen für deine App."
         }
       }
-    ]
+    ],
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "object",
+          "properties": {
+            "en": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "en"
+          ]
+        },
+        "description": {
+          "type": "object",
+          "properties": {
+            "en": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "en"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ]
+    }
   },
   {
     "id": "dictation",
@@ -2230,14 +2265,29 @@
     "preferredStyle": "detailed",
     "preferredTemperature": 1.0,
     "sendChatHistory": false,
-    "tools": ["researchPlanner", "deepResearch", "queryRewriter", "evaluator"],
+    "tools": [
+      "researchPlanner",
+      "deepResearch",
+      "queryRewriter",
+      "evaluator"
+    ],
     "settings": {
       "enabled": true,
-      "model": { "enabled": true },
-      "style": { "enabled": true },
-      "temperature": { "enabled": true },
-      "outputFormat": { "enabled": true },
-      "chatHistory": { "enabled": true }
+      "model": {
+        "enabled": true
+      },
+      "style": {
+        "enabled": true
+      },
+      "temperature": {
+        "enabled": true
+      },
+      "outputFormat": {
+        "enabled": true
+      },
+      "chatHistory": {
+        "enabled": true
+      }
     }
   }
 ]
