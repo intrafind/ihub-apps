@@ -71,7 +71,7 @@ const AnthropicAdapter = {
    * Create a completion request for Anthropic
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true, maxTokens = 1024, tools = null } = options;
+    const { temperature = 0.7, stream = true, maxTokens = 1024, tools = null, responseFormat = null, responseSchema = null } = options;
     
     // Format messages and extract system prompt
     const { messages: formattedMessages, systemPrompt } = this.formatMessages(messages);
@@ -90,6 +90,9 @@ const AnthropicAdapter = {
 
     if (tools && tools.length > 0) {
       requestBody.tools = formatToolsForAnthropic(tools);
+    }
+    if ((responseFormat && responseFormat === 'json') || responseSchema) {
+      requestBody.response_format = { type: 'json_object' };
     }
     
     // Only add system parameter if we have a system message

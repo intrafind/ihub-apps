@@ -61,7 +61,7 @@ export async function prepareChatRequest({
   }
 
   // Prepare messages for the model
-  let llmMessages = await processMessageTemplates(messages, bypassAppPrompts ? null : app, style, outputFormat, language);
+  let llmMessages = await processMessageTemplates(messages, bypassAppPrompts ? null : app, style, outputFormat, language, app.outputSchema);
   llmMessages = preprocessMessagesWithFileData(llmMessages);
 
   // Determine token limit based on app configuration and retry flag
@@ -82,7 +82,9 @@ export async function prepareChatRequest({
     temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
     maxTokens: finalTokens,
     stream: !!clientRes,
-    tools
+    tools,
+    responseFormat: outputFormat,
+    responseSchema: app.outputSchema
   });
 
   return { app, model, llmMessages, request, tools, apiKey, temperature: parseFloat(temperature) || app.preferredTemperature || 0.7, maxTokens: finalTokens };
@@ -473,7 +475,9 @@ export function processChatWithTools({
       temperature,
       maxTokens,
       stream: true,
-      tools
+      tools,
+      responseFormat: outputFormat,
+      responseSchema: app.outputSchema
     });
 
     // Clear the timeout since we're transitioning to executeStreamingResponse
