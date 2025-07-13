@@ -92,7 +92,7 @@ const AnthropicAdapter = {
       requestBody.tools = formatToolsForAnthropic(tools);
     }
     if ((responseFormat && responseFormat === 'json') || responseSchema) {
-      requestBody.response_format = { type: 'json_object' };
+      requestBody.response_format = 'json';
     }
     
     // Only add system parameter if we have a system message

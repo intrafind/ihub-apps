@@ -146,7 +146,7 @@ const GoogleAdapter = {
       requestBody.tools = formatToolsForGoogle(tools);
     }
     if ((responseFormat && responseFormat === 'json') || responseSchema) {
-      requestBody.responseMimeType = 'application/json';
+      requestBody.response_mime_type = 'application/json';
     }
     
     // Add system instruction if present
