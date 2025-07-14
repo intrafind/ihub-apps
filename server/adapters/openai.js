@@ -21,7 +21,11 @@ const OpenAIAdapter = {
 
       // Handle image data in messages
       if (!message.imageData) {
-        return { ...base, content };
+        const finalContent =
+          base.tool_calls && (content === undefined || content === '')
+            ? null
+            : content;
+        return { ...base, content: finalContent };
       }
 
       // Format messages with image content for vision models

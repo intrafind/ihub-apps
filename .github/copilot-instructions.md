@@ -66,9 +66,7 @@ Always consult the documentation in `docs/` for additional details about configu
 - Every user-facing string or configuration key must be internationalized.
 - Provide translations for at least English (`en`) and German (`de`).
 - Update the relevant translation files when adding or modifying keys:
-  - Client core translations: `client/src/i18n/core/{lang}.json`
-  - Client app-specific translations: `client/src/i18n/locales/{lang}.json`
-  - Server translations: `locales/{lang}.json`
+  - Built-in translations: `shared/i18n/{lang}.json`
   - Override keys: `contents/locales/{lang}.json`
 - Never assume English is the default. Respect the `defaultLanguage` defined in
   `contents/config/platform.json`.

@@ -4,11 +4,11 @@ This document describes how server-side translations are loaded and how customer
 
 ## Built-in Locale Files
 
-Default translations are stored in the repository under the `locales/` directory. These files are included in the application bundle. Example:
+Default translations are stored in the repository under the `shared/i18n/` directory. These files are included in the application bundle. Example:
 
 ```text
-locales/en.json
-locales/de.json
+shared/i18n/en.json
+shared/i18n/de.json
 ```
 
 ## Override Locale Files
@@ -27,7 +27,7 @@ Save this as `contents/locales/de.json`. During startup the server merges these 
 
 ## Merge Behaviour
 
-1. The server loads the built-in file from `locales/{lang}.json`.
+1. The server loads the built-in file from `shared/i18n/{lang}.json`.
 2. If an override file exists in `contents/locales/{lang}.json` it is loaded and merged into the base file.
 3. When merging, keys from the override file replace the built-in values.
 4. If the override contains keys that do not exist in the built-in file a warning is printed.
