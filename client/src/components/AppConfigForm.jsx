@@ -32,9 +32,13 @@ const AppConfigForm = ({
   // Available output formats
   const outputFormats = [
     { id: 'markdown', name: t('appConfig.markdown', 'Markdown') },
-    { id: 'text', name: t('appConfig.plainText', 'Plain Text') },
-    { id: 'json', name: t('appConfig.json', 'JSON') }
+    { id: 'text', name: t('appConfig.plainText', 'Plain Text') }
   ];
+
+  // Only show JSON when an outputSchema is configured
+  if (app?.outputSchema) {
+    outputFormats.push({ id: 'json', name: t('appConfig.json', 'JSON') });
+  }
 
   // If settings are completely disabled, don't show the form
   if (app?.settings?.enabled === false) {
