@@ -5,6 +5,9 @@ import DynamicLanguageEditor from '../components/DynamicLanguageEditor';
 import ToolsSelector from '../components/ToolsSelector';
 import Icon from '../components/Icon';
 import { getLocalizedContent } from '../utils/localizeContent';
+import { makeAdminApiCall } from '../api/adminApi';
+import AdminAuth from '../components/AdminAuth';
+import AdminNavigation from '../components/AdminNavigation';
 
 const AdminAppEditPage = () => {
   const { t, i18n } = useTranslation();
@@ -34,7 +37,7 @@ const AdminAppEditPage = () => {
 
     const loadUIConfig = async () => {
       try {
-        const response = await fetch('/api/config/ui');
+        const response = await fetch('/api/configs/ui');
         if (response.ok) {
           const config = await response.json();
           setUiConfig(config);
@@ -146,10 +149,7 @@ const AdminAppEditPage = () => {
   const loadApp = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/admin/apps/${appId}`);
-      if (!response.ok) {
-        throw new Error('Failed to load app');
-      }
+      const response = await makeAdminApiCall(`/api/admin/apps/${appId}`);
       const data = await response.json();
       
       // Ensure all configuration sections exist with defaults
@@ -248,18 +248,10 @@ const AdminAppEditPage = () => {
       const method = appId === 'new' ? 'POST' : 'PUT';
       const url = appId === 'new' ? `/api/admin/apps` : `/api/admin/apps/${appId}`;
       
-      const response = await fetch(url, {
+      const response = await makeAdminApiCall(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(app),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save app');
-      }
 
       navigate('/admin/apps');
     } catch (err) {
@@ -443,7 +435,9 @@ const AdminAppEditPage = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <AdminAuth>
+      <AdminNavigation />
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-900">
@@ -1608,6 +1602,7 @@ const AdminAppEditPage = () => {
         </div>
       </form>
     </div>
+    </AdminAuth>
   );
 };
 

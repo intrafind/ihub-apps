@@ -61,3 +61,13 @@ export const fetchAdminPrompts = async () => {
   const response = await makeAdminApiCall('/api/admin/prompts');
   return response.json();
 };
+
+export const fetchAdminAppTemplates = async () => {
+  const response = await makeAdminApiCall('/api/admin/apps/templates');
+  return response.json();
+};
+
+export const fetchAppInheritance = async (appId) => {
+  const response = await makeAdminApiCall(`/api/admin/apps/${appId}/inheritance`);
+  return response.json();
+};

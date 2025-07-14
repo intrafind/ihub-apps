@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import AppDetailsPopup from '../components/AppDetailsPopup';
+import AppCreationWizard from '../components/AppCreationWizard';
+import AppTemplateSelector from '../components/AppTemplateSelector';
 import Icon from '../components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
@@ -20,6 +22,9 @@ const AdminAppsPage = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedApp, setSelectedApp] = useState(null);
   const [showAppDetails, setShowAppDetails] = useState(false);
+  const [showCreationWizard, setShowCreationWizard] = useState(false);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [uiConfig, setUiConfig] = useState(null);
 
   useEffect(() => {
@@ -29,7 +34,7 @@ const AdminAppsPage = () => {
 
   const loadUIConfig = async () => {
     try {
-      const response = await fetch('/api/config/ui');
+      const response = await fetch('/api/configs/ui');
       if (response.ok) {
         const config = await response.json();
         setUiConfig(config);
@@ -116,6 +121,28 @@ const AdminAppsPage = () => {
     setSearchTerm('');
   };
 
+  const handleCreateApp = () => {
+    setShowTemplateSelector(true);
+  };
+
+  const handleTemplateSelected = (template) => {
+    setSelectedTemplate(template);
+    setShowTemplateSelector(false);
+    setShowCreationWizard(true);
+  };
+
+  const handleWizardClose = () => {
+    setShowCreationWizard(false);
+    setSelectedTemplate(null);
+    // Reload apps to show any newly created app
+    loadApps();
+  };
+
+  const handleCloneApp = (app) => {
+    setSelectedTemplate(app);
+    setShowCreationWizard(true);
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -168,9 +195,10 @@ const AdminAppsPage = () => {
           <button
             type="button"
             className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-            onClick={() => navigate('/admin/apps/new')}
+            onClick={handleCreateApp}
           >
-            {t('admin.apps.addNew', 'Add New App')}
+            <Icon name="plus" className="h-4 w-4 mr-2" />
+            {t('admin.apps.createApp', 'Create App')}
           </button>
         </div>
       </div>
@@ -403,6 +431,16 @@ const AdminAppsPage = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              handleCloneApp(app);
+                            }}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                            title={t('admin.apps.actions.clone', 'Clone')}
+                          >
+                            <Icon name="copy" className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               navigate(`/admin/apps/${app.id}`);
                             }}
                             className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
@@ -451,6 +489,22 @@ const AdminAppsPage = () => {
         isOpen={showAppDetails}
         onClose={() => setShowAppDetails(false)}
       />
+
+      {/* Template Selector */}
+      {showTemplateSelector && (
+        <AppTemplateSelector
+          onSelect={handleTemplateSelected}
+          onClose={() => setShowTemplateSelector(false)}
+        />
+      )}
+
+      {/* App Creation Wizard */}
+      {showCreationWizard && (
+        <AppCreationWizard
+          templateApp={selectedTemplate}
+          onClose={handleWizardClose}
+        />
+      )}
       </div>
     </AdminAuth>
   );

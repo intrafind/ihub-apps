@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Icon from '../components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
+import { useLocalizedTranslation } from '../hooks/useLocalizedTranslation';
 
 const StatCard = ({ title, value, icon, color, change, changeType }) => (
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

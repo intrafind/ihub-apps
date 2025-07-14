@@ -28,8 +28,8 @@ export default async function evaluator({ question, answer, model = 'gemini-1.5-
   const results = [];
   for (const type of types) {
     try {
-      const completion = await simpleCompletion(prompts[type], { model, temperature: 0 });
-      const parsed = JSON.parse(completion.trim());
+      const result = await simpleCompletion(prompts[type], { model, temperature: 0 });
+      const parsed = JSON.parse(result.content.trim());
       results.push({ type, ...parsed });
       if (!parsed.pass) break;
     } catch (err) {

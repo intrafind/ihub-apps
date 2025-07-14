@@ -147,6 +147,50 @@ export default function registerAdminRoutes(app) {
     }
   });
 
+  // Get apps suitable for inheritance (templates)
+  app.get('/api/admin/apps/templates', adminAuth, async (req, res) => {
+    try {
+      const apps = configCache.getApps(true);
+      const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
+      res.json(templates);
+    } catch (error) {
+      console.error('Error fetching template apps:', error);
+      res.status(500).json({ error: 'Failed to fetch template apps' });
+    }
+  });
+
+  // Get inheritance tree for an app
+  app.get('/api/admin/apps/:appId/inheritance', adminAuth, async (req, res) => {
+    try {
+      const { appId } = req.params;
+      const apps = configCache.getApps(true);
+      const app = apps.find(a => a.id === appId);
+      
+      if (!app) {
+        return res.status(404).json({ error: 'App not found' });
+      }
+
+      const inheritance = {
+        app: app,
+        parent: null,
+        children: []
+      };
+
+      // Find parent
+      if (app.parentId) {
+        inheritance.parent = apps.find(a => a.id === app.parentId);
+      }
+
+      // Find children
+      inheritance.children = apps.filter(a => a.parentId === appId);
+
+      res.json(inheritance);
+    } catch (error) {
+      console.error('Error fetching app inheritance:', error);
+      res.status(500).json({ error: 'Failed to fetch app inheritance' });
+    }
+  });
+
   app.get('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
@@ -525,11 +569,11 @@ export default function registerAdminRoutes(app) {
       
       try {
         console.log('Testing model:', model);
-        const response = await simpleCompletion(testMessage, {modelId: model.id});
+        const result = await simpleCompletion(testMessage, {modelId: model.id});
         res.json({ 
           success: true, 
           message: 'Model test successful',
-          response: response,
+          response: result.content,
           model: model
         });
       } catch (testError) {
@@ -756,6 +800,127 @@ export default function registerAdminRoutes(app) {
     } catch (error) {
       console.error('Error deleting prompt:', error);
       res.status(500).json({ error: 'Failed to delete prompt' });
+    }
+  });
+
+  // OpenAI-compatible completions endpoint for app generation
+  app.post('/api/completions', adminAuth, async (req, res) => {
+    try {
+      const { model, messages, temperature = 0.7, max_tokens = 8192 } = req.body;
+      
+      // Validate required fields
+      if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ error: 'Missing required field: messages' });
+      }
+      
+      // Get models from cache
+      let models = configCache.getModels();
+      if (!models) {
+        return res.status(500).json({ error: 'Failed to load models configuration' });
+      }
+      
+      // Use default model if no model specified
+      const defaultModel = models.find(m => m.default)?.id;
+      const modelId = model || defaultModel;
+      
+      if (!modelId) {
+        return res.status(400).json({ error: 'No model specified and no default model configured' });
+      }
+      
+      // Find the model configuration
+      const modelConfig = models.find(m => m.id === modelId);
+      if (!modelConfig) {
+        return res.status(400).json({ error: `Model not found: ${modelId}` });
+      }
+      
+      // Verify API key for the model
+      const { verifyApiKey } = await import('../serverHelpers.js');
+      const apiKey = await verifyApiKey(modelConfig, res);
+      if (!apiKey) {
+        // verifyApiKey already sent the error response
+        return;
+      }
+      
+      // Use the existing simpleCompletion function
+      const { simpleCompletion } = await import('../utils.js');
+      const result = await simpleCompletion(messages, { 
+        modelId: modelId, 
+        temperature: temperature 
+      });
+
+      console.log('Completion result:', JSON.stringify(result, null, 2));
+      
+      // Return in OpenAI format
+      res.json({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: result.content
+            },
+            finish_reason: 'stop',
+            index: 0
+          }
+        ],
+        model: modelId,
+        usage: result.usage
+      });
+    } catch (error) {
+      console.error('Error in completions endpoint:', error);
+      
+      // Import error handling helper
+      const { getLocalizedError } = await import('../serverHelpers.js');
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      
+      // Try to get a localized error message
+      let errorMessage = 'Failed to generate completion';
+      try {
+        errorMessage = await getLocalizedError('internalError', {}, defaultLang);
+      } catch (localizationError) {
+        // Fall back to default message if localization fails
+        console.warn('Failed to get localized error message:', localizationError);
+      }
+      
+      res.status(500).json({ 
+        error: errorMessage,
+        details: error.message 
+      });
+    }
+  });
+
+  // Get app-generator prompt configuration
+  app.get('/api/admin/prompts/app-generator', adminAuth, async (req, res) => {
+    try {
+      // Get default language from platform configuration
+      const platformConfig = configCache.getPlatform();
+      const defaultLanguage = platformConfig?.defaultLanguage || 'en';
+      const { lang = defaultLanguage } = req.query;
+      
+      // Get prompts from cache
+      const { data: prompts } = configCache.getPromptsWithETag();
+      
+      if (!prompts) {
+        return res.status(500).json({ error: 'Failed to load prompts configuration' });
+      }
+      
+      // Find the app-generator prompt
+      const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
+      
+      if (!appGeneratorPrompt) {
+        return res.status(404).json({ error: 'App-generator prompt not found' });
+      }
+      
+      // Return the prompt for the requested language
+      const promptText = appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
+      
+      res.json({
+        id: appGeneratorPrompt.id,
+        prompt: promptText,
+        language: lang
+      });
+    } catch (error) {
+      console.error('Error fetching app-generator prompt:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 

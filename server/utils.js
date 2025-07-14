@@ -342,8 +342,8 @@ export async function logNewSession(chatId, appId, metadata = {}) {
  * @param {number} [options.temperature=0.7] - The temperature for the completion.
  * @returns {Promise<string>} The content of the model's response.
  */
-export async function simpleCompletion(prompt, { modelId: modelId, temperature = 0.7 }) {
-  console.log('Starting simple completion...', { prompt, modelId, temperature });
+export async function simpleCompletion(messages, { modelId: modelId, temperature = 0.7 }) {
+  console.log('Starting simple completion...', { messages: JSON.stringify(messages, null, 2), modelId, temperature });
   // Try to get models from cache first
   let models = configCache.getModels();
   console.log('Available models:', models.map(m => m.id));
@@ -359,10 +359,10 @@ export async function simpleCompletion(prompt, { modelId: modelId, temperature =
     throw new Error(`API key for ${model.provider} not found in environment variables.`);
   }
 
-  const messages = [{ role: 'user', content: prompt }];
+  // const messages = [{ role: 'user', content: prompt }];
   const request = createCompletionRequest(model, messages, apiKey, {
     temperature,
-    maxTokens: 4096, // Sufficient for internal tasks
+    maxTokens: 8192, // Sufficient for internal tasks
     stream: false
   });
 
@@ -381,5 +381,14 @@ export async function simpleCompletion(prompt, { modelId: modelId, temperature =
 
   // Use the adapter to parse the response
   const parsed = processResponseBuffer(model.provider, JSON.stringify(responseData));
-  return parsed.content.join('');
+  
+  // Return both content and usage data
+  return {
+    content: parsed.content.join(''),
+    usage: responseData.usage || {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0
+    }
+  };
 }

@@ -326,7 +326,7 @@ export const fetchUIConfig = async (options = {}) => {
   const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.UI_CONFIG, { language });
 
   return handleApiResponse(
-    () => apiClient.get('/ui', { params: { language } }),
+    () => apiClient.get('/configs/ui', { params: { language } }),
     cacheKey,
     DEFAULT_CACHE_TTL.LONG
   );
@@ -338,7 +338,7 @@ export const fetchPlatformConfig = async (options = {}) => {
   const cacheKey = skipCache ? null : CACHE_KEYS.PLATFORM_CONFIG;
 
   return handleApiResponse(
-    () => apiClient.get('/platform'),
+    () => apiClient.get('/configs/platform'),
     cacheKey,
     DEFAULT_CACHE_TTL.LONG
   );
