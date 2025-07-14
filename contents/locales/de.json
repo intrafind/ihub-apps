@@ -288,5 +288,20 @@
     "translate": "Übersetzen",
     "grammar": "Grammatik",
     "format": "Formatieren"
+  },
+  "admin": {
+    "apps": {
+      "wizard": {
+        "ai": {
+          "language": "Sprache",
+          "loadingPrompt": "Lade Prompt-Konfiguration...",
+          "error": {
+            "parse": "Generierte Konfiguration konnte nicht gelesen werden",
+            "generate": "Konfiguration konnte nicht generiert werden",
+            "network": "Netzwerkfehler bei der Generierung der App"
+          }
+        }
+      }
+    }
   }
 }

@@ -843,9 +843,16 @@ export default function registerAdminRoutes(app) {
       
       // Use the existing simpleCompletion function
       const { simpleCompletion } = await import('../utils.js');
-      const result = await simpleCompletion(messages, { 
-        modelId: modelId, 
-        temperature: temperature 
+
+      // Retrieve output schema from the app-generator config if available
+      const apps = configCache.getApps(true);
+      const generatorApp = apps.find(a => a.id === 'app-generator');
+
+      const result = await simpleCompletion(messages, {
+        modelId: modelId,
+        temperature: temperature,
+        responseFormat: 'json',
+        responseSchema: generatorApp?.outputSchema
       });
 
       console.log('Completion result:', JSON.stringify(result, null, 2));

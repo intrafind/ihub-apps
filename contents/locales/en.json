@@ -337,7 +337,14 @@
           "promptPlaceholder": "Example: Create a meeting summarizer app that takes meeting notes and extracts key points, action items, and decisions...",
           "generate": "Generate App",
           "generating": "Generating...",
-          "success": "App configuration generated successfully! You can review and modify it in the next steps."
+          "success": "App configuration generated successfully! You can review and modify it in the next steps.",
+          "language": "Language",
+          "loadingPrompt": "Loading prompt configuration...",
+          "error": {
+            "parse": "Failed to parse generated configuration",
+            "generate": "Failed to generate app configuration",
+            "network": "Network error occurred while generating app"
+          }
         },
         "basic": {
           "title": "Basic Information",
@@ -347,7 +354,6 @@
           "appIdPlaceholder": "e.g., my-awesome-app",
           "name": "App Name",
           "namePlaceholder": "Enter app name",
-          "description": "Description",
           "descriptionPlaceholder": "Enter app description",
           "color": "Color",
           "icon": "Icon",
@@ -404,7 +410,7 @@
         },
         "error": {
           "idRequired": "App ID is required",
-          "nameRequired": "App name is required", 
+          "nameRequired": "App name is required",
           "descriptionRequired": "App description is required",
           "colorRequired": "App color is required",
           "iconRequired": "App icon is required",
