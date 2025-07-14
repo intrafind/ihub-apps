@@ -2,6 +2,27 @@ import { loadJson } from './configLoader.js';
 import { loadAllApps } from './appsLoader.js';
 import { loadAllModels } from './modelsLoader.js';
 
+function expandToolFunctions(tools = []) {
+  const expanded = [];
+  for (const tool of tools) {
+    if (tool.functions && typeof tool.functions === 'object') {
+      for (const [fn, cfg] of Object.entries(tool.functions)) {
+        expanded.push({
+          ...tool,
+          id: `${tool.id}.${fn}`,
+          name: cfg.name || `${tool.name} ${fn}`,
+          description: cfg.description || tool.description,
+          parameters: cfg.parameters || {},
+          method: fn
+        });
+      }
+    } else {
+      expanded.push(tool);
+    }
+  }
+  return expanded;
+}
+
 /**
  * Configuration Cache Service
  * 
@@ -77,7 +98,10 @@ class ConfigCache {
         
         const data = await loadJson(configPath);
         if (data !== null) {
-          this.setCacheEntry(configPath, data);
+          // Expand tool functions into individual entries
+          const finalData =
+            configPath === 'config/tools.json' ? expandToolFunctions(data) : data;
+          this.setCacheEntry(configPath, finalData);
           console.log(`✓ Cached: ${configPath}`);
         } else {
           console.warn(`⚠️  Failed to load: ${configPath}`);
@@ -145,7 +169,9 @@ class ConfigCache {
       
       const data = await loadJson(key, { useCache: false });
       if (data !== null) {
-        this.setCacheEntry(key, data);
+        const finalData =
+          key === 'config/tools.json' ? expandToolFunctions(data) : data;
+        this.setCacheEntry(key, finalData);
       }
     } catch (error) {
       console.error(`Error refreshing cache for ${key}:`, error.message);

@@ -72,7 +72,7 @@ export async function getToolsForApp(app) {
  * @param {object} params - Parameters passed to the tool
  */
 export async function runTool(toolId, params = {}) {
-  if (!/^[A-Za-z0-9_-]+$/.test(toolId)) {
+  if (!/^[A-Za-z0-9_.-]+$/.test(toolId)) {
     throw new Error('Invalid tool id');
   }
 
@@ -90,8 +90,9 @@ export async function runTool(toolId, params = {}) {
 
   try {
     const mod = await import(`./tools/${scriptName}`);
-    if (typeof mod.default !== 'function') {
-      throw new Error(`Tool ${toolId} does not export a default function`);
+    const fn = tool.method ? mod[tool.method] : mod.default;
+    if (typeof fn !== 'function') {
+      throw new Error(`Tool ${toolId} does not export function ${tool.method || 'default'}`);
     }
 
     // Apply default parameter values defined in the tool schema
@@ -103,7 +104,7 @@ export async function runTool(toolId, params = {}) {
       }
     }
 
-    return await mod.default(params);
+    return await fn(params);
   } catch (err) {
     console.error(`Failed to execute tool ${toolId}:`, err);
     throw err;
