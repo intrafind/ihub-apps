@@ -697,10 +697,19 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
 
         // Parse the generated JSON configuration
         try {
-          const jsonMatch = generatedConfig.match(/```json\s*(\{[\s\S]*?\})\s*```/);
-          if (jsonMatch) {
-            const configJson = JSON.parse(jsonMatch[1]);
-            console.log('Generated config:', configJson);
+          let configJson;
+
+          // Prefer direct JSON when structured output is enabled
+          try {
+            configJson = JSON.parse(generatedConfig);
+          } catch {
+            const jsonMatch = generatedConfig.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+            if (jsonMatch) {
+              configJson = JSON.parse(jsonMatch[1]);
+            }
+          }
+
+          if (configJson) {
             
             // Convert to multilingual format and merge with existing app data
             const multilingualConfig = {
