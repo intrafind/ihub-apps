@@ -56,7 +56,8 @@ export async function getLocalizedError(errorKey, params = {}, language) {
         // Try default translations from cache first
         let enTranslations = configCache.getLocalizations(defaultLang);
         if (!enTranslations) {
-          enTranslations = await loadJson(`locales/${defaultLang}.json`);
+          await configCache.loadAndCacheLocale(defaultLang);
+          enTranslations = configCache.getLocalizations(defaultLang);
         }
         const enServer = enTranslations?.serverErrors?.[errorKey];
         const enTool = enTranslations?.toolErrors?.[errorKey];
