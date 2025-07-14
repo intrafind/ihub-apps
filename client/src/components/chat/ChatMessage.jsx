@@ -317,11 +317,18 @@ const ChatMessage = ({
     }
     
     if (!isUser && (outputFormat === 'markdown' || outputFormat === 'json')) {
-      const mdContent =
-        outputFormat === 'json'
-          ? `\u0060\u0060\u0060json\n${contentToRender}\n\u0060\u0060\u0060`
-          : contentToRender;
-      // Use StreamingMarkdown component for better real-time rendering
+      let mdContent = contentToRender;
+      if (outputFormat === 'json') {
+        let jsonString = '';
+        try {
+          jsonString = typeof message.content === 'string'
+            ? JSON.stringify(JSON.parse(message.content), null, 2)
+            : JSON.stringify(message.content, null, 2);
+        } catch (e) {
+          jsonString = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+        }
+        mdContent = `\u0060\u0060\u0060json\n${jsonString}\n\u0060\u0060\u0060`;
+      }
       return <StreamingMarkdown content={mdContent} />;
     }
     

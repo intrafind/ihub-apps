@@ -157,7 +157,7 @@ export const configureMarked = () => {
     );
     
     // Display language name, fallback to 'text' if not specified
-    const displayLanguage = language || 'text';
+    const displayLanguage = language || code.lang || 'text';
     const languageDisplayName = getLanguageDisplayName(displayLanguage);
     
     return `
