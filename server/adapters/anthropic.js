@@ -88,11 +88,24 @@ const AnthropicAdapter = {
       max_tokens: maxTokens
     };
 
-    if (tools && tools.length > 0) {
-      requestBody.tools = formatToolsForAnthropic(tools);
+    let finalTools = tools ? [...tools] : [];
+    if (responseSchema) {
+      finalTools.push({
+        name: 'json',
+        description: 'Respond with a JSON object.',
+        parameters: responseSchema
+      });
+      requestBody.tool_choice = { type: 'tool', name: 'json' };
     }
-    if ((responseFormat && responseFormat === 'json') || responseSchema) {
-      requestBody.response_format = { type: 'json_object' };
+
+    if (finalTools.length > 0) {
+      requestBody.tools = formatToolsForAnthropic(finalTools);
+    }
+
+    if (responseSchema) {
+      // When using a tool for structured output, omit response_format
+    } else if (responseFormat && responseFormat === 'json') {
+      requestBody.response_format = 'json';
     }
     
     // Only add system parameter if we have a system message
