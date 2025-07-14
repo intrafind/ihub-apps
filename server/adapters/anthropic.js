@@ -102,11 +102,11 @@ const AnthropicAdapter = {
       requestBody.tools = formatToolsForAnthropic(finalTools);
     }
 
-    if (responseSchema) {
-      // When using a tool for structured output, omit response_format
-    } else if (responseFormat && responseFormat === 'json') {
-      requestBody.response_format = 'json';
-    }
+    // if (responseSchema) {
+    //   // When using a tool for structured output, omit response_format
+    // } else if (responseFormat && responseFormat === 'json') {
+    //   requestBody.response_format = 'json';
+    // }
     
     // Only add system parameter if we have a system message
     if (systemPrompt) {
@@ -120,7 +120,7 @@ const AnthropicAdapter = {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey || '', // Provide empty string to avoid undefined
-        'anthropic-version': '2023-06-01'
+        'anthropic-version': '2023-06-01' // TODO check if still accurate
       },
       body: requestBody
     };
