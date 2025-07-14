@@ -238,6 +238,73 @@
         "fullPage": { "type": "boolean", "default": true }
       },
       "required": ["url"]
+  },
+  {
+    "id": "entraPeopleSearch",
+    "name": "Entra People Search",
+    "description": "Query the corporate directory for people and teams",
+    "script": "entraPeopleSearch.js",
+    "functions": {
+      "findUser": {
+        "description": "Find a user by name or email",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "description": "User name or email" }
+          },
+          "required": ["name"]
+        }
+      },
+      "getAllUserDetails": {
+        "description": "Get all details for a user",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "userId": { "type": "string", "description": "User identifier" }
+          },
+          "required": ["userId"]
+        }
+      },
+      "getUserManager": {
+        "description": "Get the direct manager of a user",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "userId": { "type": "string", "description": "User identifier" }
+          },
+          "required": ["userId"]
+        }
+      },
+      "getUserGroups": {
+        "description": "List teams the user belongs to",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "userId": { "type": "string", "description": "User identifier" }
+          },
+          "required": ["userId"]
+        }
+      },
+      "getTeamMembers": {
+        "description": "Get members of a team",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "teamId": { "type": "string", "description": "Team identifier" }
+          },
+          "required": ["teamId"]
+        }
+      },
+      "getUserPhotoBase64": {
+        "description": "Get a user's profile photo as Base64",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "userId": { "type": "string", "description": "User identifier" }
+          },
+          "required": ["userId"]
+        }
+      }
     }
   }
 ]
