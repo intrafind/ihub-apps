@@ -33,6 +33,8 @@ const ChatWidget = ({
   const messagesEndRef = useRef(null);
   const greetingAddedRef = useRef(false);
   const containerRef = useRef(null);
+  const lastMessageIdRef = useRef(null);
+  const pendingMessageDataRef = useRef(null);
   
   // Create a chat ID
   const [chatId] = useState(() => uuidv4());
@@ -115,13 +117,13 @@ const ChatWidget = ({
   // Update callbacks ref
   callbacksRef.current = {
     onChunk: (fullContent) => {
-      if (window.lastMessageId) {
-        updateAssistantMessage(window.lastMessageId, fullContent, true);
+      if (lastMessageIdRef.current) {
+        updateAssistantMessage(lastMessageIdRef.current, fullContent, true);
       }
     },
     onDone: (finalContent, info) => {
-      if (window.lastMessageId) {
-        updateAssistantMessage(window.lastMessageId, finalContent, false, {
+      if (lastMessageIdRef.current) {
+        updateAssistantMessage(lastMessageIdRef.current, finalContent, false, {
           finishReason: info.finishReason
         });
       }
@@ -129,28 +131,28 @@ const ChatWidget = ({
       setUseMaxTokens(false);
     },
     onError: (error) => {
-      if (window.lastMessageId) {
-        setMessageError(window.lastMessageId, error.message);
+      if (lastMessageIdRef.current) {
+        setMessageError(lastMessageIdRef.current, error.message);
       }
       setProcessing(false);
       setUseMaxTokens(false);
     },
     onConnected: async (event) => {
       try {
-        if (window.pendingMessageData) {
-          const { appId, chatId, messages, params } = window.pendingMessageData;
+        if (pendingMessageDataRef.current) {
+          const { appId, chatId, messages, params } = pendingMessageDataRef.current;
           
           // Send the message to the API
           await sendAppChatMessage(appId, chatId, messages, params);
           
           // Clear the pending data after sending
-          window.pendingMessageData = null;
+          pendingMessageDataRef.current = null;
         }
       } catch (error) {
         console.error('Error sending message on connection:', error);
         
-        if (window.lastMessageId) {
-          setMessageError(window.lastMessageId, 'Error: Failed to generate response');
+        if (lastMessageIdRef.current) {
+          setMessageError(lastMessageIdRef.current, 'Error: Failed to generate response');
         }
         
         cleanupEventSourceRef.current?.();
@@ -356,7 +358,7 @@ const ChatWidget = ({
       
       // Create a unique ID for the assistant's response message
       const assistantMessageId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      window.lastMessageId = assistantMessageId;
+      lastMessageIdRef.current = assistantMessageId;
       
       // Add placeholder message for the assistant's response with empty content (no loading text)
       addAssistantMessage(assistantMessageId, '', true);
@@ -372,7 +374,7 @@ const ChatWidget = ({
       const messagesForAPI = getMessagesForApi(true, messageForAPI);
       
       // Store the request parameters for use in the onConnected callback
-      window.pendingMessageData = {
+      pendingMessageDataRef.current = {
         appId,
         chatId,
         messages: messagesForAPI,
@@ -393,8 +395,8 @@ const ChatWidget = ({
       console.error('Error sending message:', error);
       
       // Display error message
-      if (window.lastMessageId) {
-        setMessageError(window.lastMessageId, `Error: ${error.message || 'Failed to send message'}`);
+      if (lastMessageIdRef.current) {
+        setMessageError(lastMessageIdRef.current, `Error: ${error.message || 'Failed to send message'}`);
       }
       
       setProcessing(false);

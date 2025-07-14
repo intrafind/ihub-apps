@@ -74,17 +74,6 @@ const ChatInput = ({
     : t("pages.appChat.messagePlaceholder", "Type here...");
   
   // Store the current placeholder in a ref to ensure it persists
-  const placeholderRef = useRef(defaultPlaceholder);
-  
-  // Only update the placeholder ref when relevant dependencies change
-  useEffect(() => {
-    placeholderRef.current = defaultPlaceholder;
-    
-    // Set the placeholder on the input element directly when it changes
-    if (actualInputRef.current) {
-      actualInputRef.current.placeholder = defaultPlaceholder;
-    }
-  }, [isProcessing, allowEmptySubmit, customPlaceholder, i18n.language]);
   
   // Debug logging
   // useEffect(() => {
@@ -265,7 +254,7 @@ const ChatInput = ({
           onKeyDown={handleKeyDown}
           disabled={disabled || isProcessing}
           className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 pr-10"
-          placeholder={placeholderRef.current}
+          placeholder={defaultPlaceholder}
           ref={actualInputRef}
           style={{ 
             resize: multilineMode ? "vertical" : "none",

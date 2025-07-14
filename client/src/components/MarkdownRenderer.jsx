@@ -287,7 +287,6 @@ export const configureMarked = () => {
 
 const MarkdownRenderer = () => {
   useEffect(() => {
-    configureMarked();
 
     const handleCodeCopyClick = (e) => {
       const button = e.target.closest('.code-copy-btn');

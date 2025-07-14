@@ -279,6 +279,7 @@ const QuillToolbar = ({
                     if (currentFormat.link) {
                       quill.format('link', false);
                     } else {
+                      // TODO: Replace with a proper UI modal for link input.
                       const url = prompt('Enter URL:');
                       if (url) {
                         quill.format('link', url);

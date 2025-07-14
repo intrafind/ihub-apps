@@ -21,6 +21,7 @@ class Cache {
     this.persistenceEnabled = options.persistence !== false;
     this.persistenceKey = options.persistenceKey || 'ai_hub_cache';
     this.storageType = options.storageType || 'session'; // 'session' or 'local'
+    this.saveTimeout = null;
     
     // Start cleanup interval (every 5 minutes)
     this.cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
@@ -90,7 +91,7 @@ class Cache {
 
     // Save to persistent storage if enabled
     if (this.persistenceEnabled) {
-      this.saveToStorage();
+      this.debouncedSaveToStorage();
     }
     
     return value;
@@ -107,7 +108,7 @@ class Cache {
       
       // Update persistent storage if enabled
       if (this.persistenceEnabled) {
-        this.saveToStorage();
+        this.debouncedSaveToStorage();
       }
     }
     return result;
@@ -151,7 +152,7 @@ class Cache {
       
       // Update persistent storage if enabled
       if (this.persistenceEnabled && count > 0) {
-        this.saveToStorage();
+        this.debouncedSaveToStorage();
       }
     }
     
@@ -182,65 +183,6 @@ class Cache {
     }
   }
   
-  /**
-   * Get statistics about cache usage
-   * @returns {Object} Cache statistics
-   */
-  getStats() {
-    return {
-      ...this.stats,
-      size: this.store.size,
-      hitRate: this.stats.hits / (this.stats.hits + this.stats.misses) || 0
-    };
-  }
-  
-  /**
-   * Invalidate cache entries by pattern
-   * @param {string|RegExp} pattern - String prefix or RegExp pattern to match keys
-   * @returns {number} Number of invalidated entries
-   */
-  invalidateByPattern(pattern) {
-    let count = 0;
-    const isRegExp = pattern instanceof RegExp;
-    
-    for (const key of this.store.keys()) {
-      if (
-        (isRegExp && pattern.test(key)) || 
-        (!isRegExp && key.startsWith(pattern))
-      ) {
-        this.delete(key);
-        count++;
-      }
-    }
-    
-    // Update persistent storage if enabled and items were deleted
-    if (this.persistenceEnabled && count > 0) {
-      this.saveToStorage();
-    }
-    
-    return count;
-  }
-  
-  /**
-   * Check if a key exists in the cache (without updating access time)
-   * @param {string} key - The cache key
-   * @returns {boolean} True if the key exists and is not expired
-   */
-  has(key) {
-    if (!this.store.has(key)) {
-      return false;
-    }
-    
-    const cachedItem = this.store.get(key);
-    
-    // Check if item has expired
-    if (cachedItem.expiry && cachedItem.expiry < Date.now()) {
-      this.delete(key);
-      return false;
-    }
-    
-    return true;
-  }
   
   /**
    * Get the number of items in the cache
@@ -294,6 +236,12 @@ class Cache {
       }
     }
   }
+
+  debouncedSaveToStorage() {
+    if (!this.persistenceEnabled) return;
+    clearTimeout(this.saveTimeout);
+    this.saveTimeout = setTimeout(() => this.saveToStorage(), 500);
+  }
   
   /**
    * Load cache from storage
@@ -328,16 +276,6 @@ class Cache {
     }
   }
   
-  /**
-   * Destroy the cache and clean up the cleanup interval
-   */
-  destroy() {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
-    this.clear();
-  }
 }
 
 // Default TTL values (in milliseconds)
@@ -353,12 +291,9 @@ export const CACHE_KEYS = {
   APPS_LIST: 'apps-list',
   APP_DETAILS: 'app-details',
   MODELS_LIST: 'models-list',
-  MODEL_DETAILS: 'model-details',
   STYLES: 'styles',
   PROMPTS: 'prompts',
   UI_CONFIG: 'ui-config',
-  PAGE_CONTENT: 'page-content',
-  TRANSLATIONS: 'translations',
   PLATFORM_CONFIG: 'platform-config'
 };
 
