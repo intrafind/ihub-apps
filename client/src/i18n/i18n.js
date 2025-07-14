@@ -20,8 +20,8 @@ try {
 }
 
 // Import core translation files (minimal set for initial rendering)
-import enCoreTranslations from './core/en.json';
-import deCoreTranslations from './core/de.json';
+import enCoreTranslations from '../../../shared/i18n/en.json';
+import deCoreTranslations from '../../../shared/i18n/de.json';
 
 // Initialize i18next instance
 const i18nInstance = i18n

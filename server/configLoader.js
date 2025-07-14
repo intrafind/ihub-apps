@@ -55,7 +55,7 @@ export async function loadBuiltinLocaleJson(relativePath) {
   try {
     const rootDir = getRootDir();
     const normalized = path.normalize(relativePath).replace(/^(\.\.(?:[\\/]|$))+/, '');
-    const filePath = path.join(rootDir, 'locales', normalized);
+    const filePath = path.join(rootDir, 'shared', 'i18n', normalized);
     const data = await fs.readFile(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
