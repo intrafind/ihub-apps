@@ -146,7 +146,7 @@ const GoogleAdapter = {
       requestBody.tools = formatToolsForGoogle(tools);
     }
     if ((responseFormat && responseFormat === 'json') || responseSchema) {
-      requestBody.generationConfig.response_mime_type = 'application/json';
+      requestBody.generationConfig.responseMimeType = 'application/json';
       if (responseSchema) {
         requestBody.generationConfig.response_schema = responseSchema;
       }
