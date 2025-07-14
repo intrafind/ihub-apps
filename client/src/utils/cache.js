@@ -5,7 +5,6 @@
  * - Memory usage limits
  * - Cache statistics
  * - Automated cleanup
- * - Optional persistent storage (disabled for now)
  */
 class Cache {
   constructor(options = {}) {
@@ -18,14 +17,12 @@ class Cache {
       deletes: 0,
       cleanups: 0
     };
-    this.persistenceEnabled = options.persistence !== false;
+    this.persistenceEnabled = options.persistence === true;
     this.persistenceKey = options.persistenceKey || 'ai_hub_cache';
     this.storageType = options.storageType || 'session'; // 'session' or 'local'
     
     // Start cleanup interval (every 5 minutes)
     this.cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
-
-    // Persistent storage is disabled; no-op on initialization
   }
   
   /**
@@ -236,7 +233,7 @@ class Cache {
   getStorageObject() {
     return this.storageType === 'local' ? localStorage : sessionStorage;
   }
-  
+
   /**
    * Save cache to storage
    * @private
@@ -244,7 +241,7 @@ class Cache {
   saveToStorage() {
     // Persistence disabled - no-op
   }
-  
+
   /**
    * Load cache from storage
    * @private
@@ -307,9 +304,11 @@ export const buildCacheKey = (baseKey, params = {}) => {
   return paramsStr ? `${baseKey}?${paramsStr}` : baseKey;
 };
 
-// Create a singleton cache instance without persistence
+// Create a singleton cache instance without persistent storage
 const cache = new Cache({
-  persistence: false
+  persistence: false,
+  persistenceKey: 'ai_hub_apps_cache',
+  storageType: 'session'
 });
 
 // Add global access in development for debugging

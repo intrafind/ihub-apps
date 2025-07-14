@@ -389,20 +389,19 @@ The application supports internationalization through localization files:
 
 ### Server-side Localization
 
-Server-side strings are built into the application under `locales/{lang}.json`.
-Create files in `contents/locales/{lang}.json` to override individual keys.
+Server-side strings are built into the application under `shared/i18n/{lang}.json`.
+Create files in `contents/locales/{lang}.json` to override individual keys if customization is needed.
 
 ### Client-side Localization
 
-Client-side translations are stored in:
-- Core translations: `client/src/i18n/core/{lang}.json`
-- App-specific translations: `client/src/i18n/locales/{lang}.json`
+Client-side translations are shared with the server and stored in `shared/i18n/{lang}.json`.
 
 ### Adding a New Language
 
-1. Create a new JSON file in each of these directories named after the language code (e.g., `fr.json` for French)
-2. Copy the structure from an existing language file and translate all values
-3. Update the language selector in `client/src/components/LanguageSelector.jsx` to include the new language
+1. Create a new JSON file in `shared/i18n/` named after the language code (e.g., `fr.json`).
+2. Optionally create an override file in `contents/locales/` if you need to customize specific keys.
+3. Copy the structure from an existing language file and translate all values.
+4. Update the language selector in `client/src/components/LanguageSelector.jsx` to include the new language.
 
 ## Creating Custom Pages
 
