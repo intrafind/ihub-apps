@@ -12,8 +12,9 @@ Apps may define an `outputSchema` property containing a JSON Schema. When presen
 - `processMessageTemplates` injects system instructions to reply only with JSON and references the schema when defined.
 - `chatService.prepareChatRequest` forwards `responseFormat` and `responseSchema` options to the selected model adapter.
 - Adapters translate these options to provider specific parameters:
-  - **OpenAI/Mistral** use `response_format: { type: 'json_object' }` when JSON output is requested.
+  - **OpenAI** uses `response_format: { type: 'json_object' }` when JSON output is requested.
+  - **Mistral** uses `response_format: { type: 'json_schema', json_schema: { schema, name: 'response', strict: true } }` when a schema is provided (falling back to `json_object` without a schema).
   - **Anthropic** uses `response_format: { type: 'json_object' }`.
-  - **Google Gemini** sets `generationConfig.responseMimeType` to `application/json` and passes the schema via `generationConfig.responseSchema`.
+  - **Google Gemini** sets `generationConfig.response_mime_type` to `application/json` and passes the schema via `generationConfig.response_schema`.
 
 This ensures consistent structured responses across supported models.

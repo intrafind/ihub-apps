@@ -60,7 +60,16 @@ const MistralAdapter = {
 
     if (tools && tools.length > 0) body.tools = formatToolsForOpenAI(tools);
     if (toolChoice) body.tool_choice = toolChoice;
-    if ((responseFormat && responseFormat === 'json') || responseSchema) {
+    if (responseSchema) {
+      body.response_format = {
+        type: 'json_schema',
+        json_schema: {
+          schema: responseSchema,
+          name: 'response',
+          strict: true
+        }
+      };
+    } else if (responseFormat && responseFormat === 'json') {
       body.response_format = { type: 'json_object' };
     }
 
