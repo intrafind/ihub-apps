@@ -806,7 +806,14 @@ export default function registerAdminRoutes(app) {
   // OpenAI-compatible completions endpoint for app generation
   app.post('/api/completions', adminAuth, async (req, res) => {
     try {
-      const { model, messages, temperature = 0.7, max_tokens = 8192 } = req.body;
+      const { 
+        model,
+        messages,
+        temperature = 0.7, 
+        maxTokens = 8192,
+        responseFormat = null,
+        responseSchema = null 
+      } = req.body;
       
       // Validate required fields
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -844,15 +851,12 @@ export default function registerAdminRoutes(app) {
       // Use the existing simpleCompletion function
       const { simpleCompletion } = await import('../utils.js');
 
-      // Retrieve output schema from the app-generator config if available
-      const apps = configCache.getApps(true);
-      const generatorApp = apps.find(a => a.id === 'app-generator');
-
       const result = await simpleCompletion(messages, {
         modelId: modelId,
         temperature: temperature,
-        responseFormat: 'json',
-        responseSchema: generatorApp?.outputSchema
+        responseFormat: responseFormat,
+        responseSchema: responseSchema,
+        maxTokens: maxTokens
       });
 
       console.log('Completion result:', JSON.stringify(result, null, 2));

@@ -56,12 +56,43 @@
           "en",
           "de"
         ]
+      },
+      "system": {
+        "type": "object",
+        "properties": {
+          "en": {
+            "type": "string"
+          },
+          "de": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "en",
+          "de"
+        ]
+      },
+      "sendChatHistory": {
+        "type": "boolean"
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "category": {
+        "type": "string"
       }
     },
     "required": [
       "id",
       "name",
-      "description"
+      "description",
+      "sendChatHistory",
+      "tools",
+      "category",
+      "system"
     ]
   }
 }

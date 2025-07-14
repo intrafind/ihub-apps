@@ -9,7 +9,7 @@
     "en": "Google's versatile model optimized for text and code tasks",
     "de": "Googles vielseitiges Modell, optimiert f\u00fcr Text- und Code-Aufgaben"
   },
-  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:streamGenerateContent",
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:streamGenerateContent",
   "provider": "google",
   "tokenLimit": 32768,
   "default": true,

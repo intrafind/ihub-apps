@@ -11,6 +11,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // FIXME - we should remove this and instead just use verification if the collected informations are correct
   const [appData, setAppData] = useState({
     id: '',
     name: { en: '' },
@@ -632,38 +633,38 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
   const [generating, setGenerating] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState(null);
-  const [systemPrompt, setSystemPrompt] = useState('');
+  const [appGeneratorPrompt, setAppGeneratorPrompt] = useState(null);
   const [loadingPrompt, setLoadingPrompt] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
 
-  // Load the system prompt from configuration
+  // Load the app generator prompt from configuration
   useEffect(() => {
-    const loadSystemPrompt = async () => {
+    const loadAppGeneratorPrompt = async () => {
       try {
         setLoadingPrompt(true);
         const response = await makeAdminApiCall(`/api/admin/prompts/app-generator?lang=${selectedLanguage}`);
         if (response.ok) {
           const data = await response.json();
-          setSystemPrompt(data.prompt);
+          setAppGeneratorPrompt(data);
         } else {
-          console.error('Failed to load system prompt');
+          console.error('Failed to load app generator prompt');
           // Fallback to default language if the selected language fails
           if (selectedLanguage !== DEFAULT_LANGUAGE) {
             const fallbackResponse = await makeAdminApiCall(`/api/admin/prompts/app-generator?lang=${DEFAULT_LANGUAGE}`);
             if (fallbackResponse.ok) {
               const fallbackData = await fallbackResponse.json();
-              setSystemPrompt(fallbackData.prompt);
+              setAppGeneratorPrompt(fallbackData);
             }
           }
         }
       } catch (err) {
-        console.error('Error loading system prompt:', err);
+        console.error('Error loading app generator prompt:', err);
       } finally {
         setLoadingPrompt(false);
       }
     };
 
-    loadSystemPrompt();
+    loadAppGeneratorPrompt();
   }, [selectedLanguage]);
 
   const handleGenerate = async () => {
@@ -679,13 +680,15 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
           messages: [
             {
               role: 'system',
-              content: systemPrompt
+              content: appGeneratorPrompt.prompt
             },
             {
               role: 'user',
               content: prompt
             }
           ],
+          responseFormat: 'json',
+          responseSchema: appGeneratorPrompt.outputSchema,
           temperature: 1.0
         })
       });
@@ -811,7 +814,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
 
       <button
         onClick={handleGenerate}
-        disabled={!prompt.trim() || generating || loadingPrompt || !systemPrompt}
+        disabled={!prompt.trim() || generating || loadingPrompt || !appGeneratorPrompt}
         className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {generating ? (

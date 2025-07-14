@@ -351,6 +351,7 @@ export async function simpleCompletion(
     modelId = null,
     model = null,
     temperature = 0.7,
+    maxTokens = 8192,
     responseFormat = null,
     responseSchema = null
   } = {}
@@ -379,7 +380,7 @@ export async function simpleCompletion(
 
   const request = createCompletionRequest(modelConfig, msgArray, apiKey, {
     temperature,
-    maxTokens: 8192, // Sufficient for internal tasks
+    maxTokens,
     stream: false,
     responseFormat,
     responseSchema
