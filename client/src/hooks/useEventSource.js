@@ -17,22 +17,38 @@ function useEventSource({
   const heartbeatIntervalRef = useRef(null);
   const fullContentRef = useRef('');
 
-  const cleanupEventSource = useCallback(() => {
+  const cleanupEventSource = useCallback(async () => {
     if (eventSourceRef.current) {
+      const ev = eventSourceRef.current;
+      eventSourceRef.current = null;
+      
       try {
         if (heartbeatIntervalRef.current) {
           clearInterval(heartbeatIntervalRef.current);
           heartbeatIntervalRef.current = null;
         }
+      } catch (err) {
+        console.error('Error clearing heartbeat interval:', err);
+      }
+
+      try {
         if (connectionTimeoutRef.current) {
           clearTimeout(connectionTimeoutRef.current);
           connectionTimeoutRef.current = null;
         }
+      } catch (err) {
+        console.error('Error clearing connection timeout:', err);
+      }
+
+      try {
         if (appId && chatId) {
-          stopAppChatStream(appId, chatId).catch(err => console.warn('Failed to stop chat stream:', err));
+          await stopAppChatStream(appId, chatId);
         }
-        const ev = eventSourceRef.current;
-        eventSourceRef.current = null;
+      } catch (err) {
+        console.warn('Failed to stop chat stream:', err);
+      }
+
+      try {
         if (ev) {
           if (ev.__handlers && ev.__handlers.events) {
             ev.__handlers.events.forEach((evt) => ev.removeEventListener(evt, ev.__handlers.handleEvent));
