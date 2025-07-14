@@ -48,23 +48,3 @@ export const htmlToMarkdown = (html) => {
  * @param {string} text - The text to analyze
  * @returns {boolean} True if text appears to be markdown
  */
-export const isMarkdown = (text) => {
-  if (!text || typeof text !== 'string') {
-    return false;
-  }
-
-  // Simple heuristics to detect markdown
-  const markdownPatterns = [
-    /^#{1,6}\s+/, // Headers
-    /\*\*.*?\*\*/, // Bold
-    /\*.*?\*/, // Italic
-    /`.*?`/, // Inline code
-    /```[\s\S]*?```/, // Code blocks
-    /^\s*[-*+]\s+/, // Unordered lists
-    /^\s*\d+\.\s+/, // Ordered lists
-    /^\s*>\s+/, // Blockquotes
-    /\[.*?\]\(.*?\)/, // Links
-  ];
-
-  return markdownPatterns.some(pattern => pattern.test(text));
-};

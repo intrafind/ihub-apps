@@ -1,9 +1,11 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../Icon';
+import TurndownService from 'turndown';
 
 const ExportMenu = ({ content, onClose }) => {
   const { t } = useTranslation();
+  const turndownService = new TurndownService();
   
   const handleCopyText = () => {
     // Convert HTML to plain text
@@ -20,20 +22,7 @@ const ExportMenu = ({ content, onClose }) => {
   };
 
   const handleCopyMarkdown = () => {
-    // Basic HTML to Markdown conversion
-    let markdown = content
-      .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n')
-      .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n')
-      .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n')
-      .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
-      .replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**')
-      .replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
-      .replace(/<ul[^>]*>(.*?)<\/ul>/gi, '$1\n')
-      .replace(/<ol[^>]*>(.*?)<\/ol>/gi, '$1\n')
-      .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
-      .replace(/<br[^>]*>/gi, '\n')
-      .replace(/<[^>]*>/g, ''); // Remove remaining HTML tags
-    
+    const markdown = turndownService.turndown(content);
     navigator.clipboard.writeText(markdown).then(() => {
       console.log('✅ Markdown copied to clipboard');
     }).catch(err => {

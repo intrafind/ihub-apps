@@ -7,8 +7,6 @@ const subscriptionId = import.meta.env.VITE_AZURE_SUBSCRIPTION_ID;
 class AzureSpeechRecognition {
   recognition;
   lang = "de-DE";
-  continuous = false;
-  interimResults = true;
   host = "";
 
   constructor() {}
@@ -51,19 +49,6 @@ class AzureSpeechRecognition {
     });
   }
 
-  stop() {
-    if (this.recognition) {
-      this.recognition.stopContinuousRecognitionAsync(
-        () => {
-          console.log("Recording stopped!");
-        },
-        (error) => {
-          throw new Error(error);
-        }
-      );
-    }
-    this.recognition = null;
-  }
 
   initRecognizer() {
     try {
@@ -146,22 +131,6 @@ class AzureSpeechRecognition {
 
   set lang(lang) {
     this.lang = lang;
-  }
-
-  get continuous() {
-    return this.continuous;
-  }
-
-  set continuous(continuous) {
-    this.continuous = continuous;
-  }
-
-  get interimResults() {
-    return this.interimResults;
-  }
-
-  set interimResults(interimResults) {
-    this.interimResults = interimResults;
   }
 }
 

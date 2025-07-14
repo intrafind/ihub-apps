@@ -30,6 +30,7 @@ import { useUIConfig } from './components/UIConfigContext';
 import { usePlatformConfig } from './components/PlatformConfigContext';
 import DocumentTitle from './components/DocumentTitle';
 import { AdminAuthProvider } from './hooks/useAdminAuth';
+import { configureMarked } from './components/MarkdownRenderer';
 
 // Apply error boundary to individual routes that might fail
 const SafeAppsList = withErrorBoundary(AppsList);
@@ -57,6 +58,10 @@ function App() {
   const { platformConfig } = usePlatformConfig();
   const adminPages = platformConfig?.admin?.pages || {};
   const showAdminPage = (key) => adminPages[key] !== false;
+
+  React.useEffect(() => {
+    configureMarked();
+  }, []);
 
   return (
     <AppProviders>

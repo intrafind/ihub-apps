@@ -57,5 +57,5 @@ export function createRecentItemHelpers({ prefix, max = 5, expirationMs = 7 * 24
       .map(([id]) => id);
   };
 
-  return { getMap, recordUsage, getIds };
+  return { recordUsage, getIds };
 }
