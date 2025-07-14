@@ -66,7 +66,7 @@ apiClient.interceptors.response.use(
   }
 );
 
-// Handle API responses and errors consistently
+// Handle API responses and errors consistently using in-memory caching
 const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_TTL.MEDIUM, deduplicate = true, handleETag = false) => {
   try {
     // Check cache first if cacheKey is provided

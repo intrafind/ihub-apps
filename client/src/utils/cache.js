@@ -5,7 +5,7 @@
  * - Memory usage limits
  * - Cache statistics
  * - Automated cleanup
- * - Persistent storage (using sessionStorage to be tab-specific)
+ * - In-memory only (no persistent storage)
  */
 class Cache {
   constructor(options = {}) {
@@ -25,10 +25,7 @@ class Cache {
     // Start cleanup interval (every 5 minutes)
     this.cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
 
-    // Load persistent data if enabled
-    if (this.persistenceEnabled) {
-      this.loadFromStorage();
-    }
+    // Persistence disabled by default
   }
   
   /**
@@ -88,10 +85,7 @@ class Cache {
     
     this.stats.sets++;
 
-    // Save to persistent storage if enabled
-    if (this.persistenceEnabled) {
-      this.saveToStorage();
-    }
+    // No persistent storage
     
     return value;
   }
@@ -104,11 +98,6 @@ class Cache {
     const result = this.store.delete(key);
     if (result) {
       this.stats.deletes++;
-      
-      // Update persistent storage if enabled
-      if (this.persistenceEnabled) {
-        this.saveToStorage();
-      }
     }
     return result;
   }
@@ -121,14 +110,7 @@ class Cache {
     this.store.clear();
     this.stats.deletes += size;
     
-    // Clear persistent storage if enabled
-    if (this.persistenceEnabled) {
-      try {
-        this.getStorageObject().removeItem(this.persistenceKey);
-      } catch (error) {
-        console.error(`Failed to clear persistent cache ${this.storageType}Storage:`, error);
-      }
-    }
+    // No persistent storage cleanup needed
   }
   
   /**
@@ -148,11 +130,6 @@ class Cache {
     if (count > 0) {
       this.stats.cleanups++;
       this.stats.deletes += count;
-      
-      // Update persistent storage if enabled
-      if (this.persistenceEnabled && count > 0) {
-        this.saveToStorage();
-      }
     }
     
     return count;
@@ -213,10 +190,7 @@ class Cache {
       }
     }
     
-    // Update persistent storage if enabled and items were deleted
-    if (this.persistenceEnabled && count > 0) {
-      this.saveToStorage();
-    }
+
     
     return count;
   }
@@ -253,46 +227,14 @@ class Cache {
    * Get the storage object based on configuration
    * @private
    */
-  getStorageObject() {
-    return this.storageType === 'local' ? localStorage : sessionStorage;
-  }
+
   
   /**
    * Save cache to storage
    * @private
    */
   saveToStorage() {
-    if (!this.persistenceEnabled) return;
-    
-    try {
-      // Convert Map to Array for serialization
-      const serializable = Array.from(this.store.entries())
-        .filter(([, item]) => {
-          // Filter out expired items
-          return !item.expiry || item.expiry > Date.now();
-        })
-        .filter(([, item]) => {
-          // Filter out items that shouldn't be persisted
-          return item.value && !item.value.doNotPersist;
-        })
-        .map(([key, item]) => {
-          // Only store necessary data
-          return [key, {
-            value: item.value,
-            expiry: item.expiry,
-            createdAt: item.createdAt
-          }];
-        });
-      
-      this.getStorageObject().setItem(this.persistenceKey, JSON.stringify(serializable));
-    } catch (error) {
-      console.error(`Failed to save cache to ${this.storageType}Storage:`, error);
-      // If storage fails, disable persistence to prevent further attempts
-      if (error.name === 'QuotaExceededError') {
-        console.warn(`${this.storageType}Storage quota exceeded, disabling cache persistence`);
-        this.persistenceEnabled = false;
-      }
-    }
+    // Persistence disabled - no-op
   }
   
   /**
@@ -300,32 +242,7 @@ class Cache {
    * @private
    */
   loadFromStorage() {
-    if (!this.persistenceEnabled) return;
-    
-    try {
-      const stored = this.getStorageObject().getItem(this.persistenceKey);
-      
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const now = Date.now();
-        
-        // Convert Array back to Map
-        for (const [key, item] of parsed) {
-          // Skip expired items
-          if (item.expiry && item.expiry < now) continue;
-          
-          this.store.set(key, {
-            ...item,
-            lastAccessed: now,
-            hits: 0
-          });
-        }
-        
-        console.log(`Loaded ${this.store.size} items from persistent cache (${this.storageType}Storage)`);
-      }
-    } catch (error) {
-      console.error(`Failed to load cache from ${this.storageType}Storage:`, error);
-    }
+    // Persistence disabled - no-op
   }
   
   /**
@@ -382,11 +299,9 @@ export const buildCacheKey = (baseKey, params = {}) => {
   return paramsStr ? `${baseKey}?${paramsStr}` : baseKey;
 };
 
-// Create a singleton cache instance with persistence enabled using sessionStorage
-const cache = new Cache({ 
-  persistence: true,
-  persistenceKey: 'ai_hub_apps_cache',
-  storageType: 'session'
+// Create a singleton cache instance without persistence
+const cache = new Cache({
+  persistence: false
 });
 
 // Add global access in development for debugging
