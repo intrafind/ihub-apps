@@ -436,7 +436,9 @@ export function processChatWithTools({
     const toolNames = collectedToolCalls.map(c => c.function.name).join(', ');
     actionTracker.trackAction(chatId, { action: 'processing', message: `Using tool(s): ${toolNames}...` });
 
-    llmMessages.push({ role: 'assistant', content: assistantContent, tool_calls: collectedToolCalls });
+    const assistantMessage = { role: 'assistant', tool_calls: collectedToolCalls };
+    assistantMessage.content = assistantContent || null;
+    llmMessages.push(assistantMessage);
 
     for (const call of collectedToolCalls) {
       const toolId = tools.find(t => normalizeName(t.id) === call.function.name)?.id || call.function.name;

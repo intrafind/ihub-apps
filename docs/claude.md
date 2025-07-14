@@ -16,8 +16,7 @@ To add or adjust a Claude model, edit the corresponding JSON file in `contents/m
 ## Internationalization
 All strings related to Claude models or apps must include English (`en`) and German (`de`) translations. Update the following files when adding new keys:
 
-- Client translations: `client/src/i18n/core/{lang}.json`
-- Server translations: `locales/{lang}.json` (built-in)
+- Built-in translations: `shared/i18n/{lang}.json`
 - Overrides: `contents/locales/{lang}.json`
 - Never assume English is the default language. Use the `defaultLanguage` value
   from the backend platform configuration.

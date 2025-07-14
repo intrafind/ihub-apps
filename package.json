@@ -44,15 +44,15 @@
   "dependencies": {
     "concurrently": "^9.2.0",
     "cors": "^2.8.5",
-    "dotenv": "^17.0.1",
+    "dotenv": "^17.2.0",
     "express": "^5.1.0",
-    "microsoft-cognitiveservices-speech-sdk": "^1.44.1",
+    "microsoft-cognitiveservices-speech-sdk": "^1.45.0",
     "node-fetch": "^3.3.0",
     "pdf2md": "^1.0.2",
     "react-quill": "^2.0.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25.5",
+    "esbuild": "^0.25.6",
     "nodemon": "^3.1.10",
     "postject": "^1.0.0-alpha.6",
     "rimraf": "^6.0.1"
