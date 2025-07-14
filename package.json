@@ -46,7 +46,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.0.1",
     "express": "^5.1.0",
-    "microsoft-cognitiveservices-speech-sdk": "^1.44.1",
+    "microsoft-cognitiveservices-speech-sdk": "^1.45.0",
     "node-fetch": "^3.3.0",
     "pdf2md": "^1.0.2",
     "react-quill": "^2.0.0"
