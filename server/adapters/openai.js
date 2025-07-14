@@ -154,6 +154,11 @@ const OpenAIAdapter = {
             } else if (tc.delta && tc.delta.function) {
               normalized.function = { ...tc.delta.function };
             }
+            if (tc.type || (tc.delta && tc.delta.type)) {
+              normalized.type = tc.type || tc.delta.type;
+            } else {
+              normalized.type = 'function';
+            }
             result.tool_calls.push(normalized);
           }
         }

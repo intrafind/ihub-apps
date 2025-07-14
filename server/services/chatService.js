@@ -402,6 +402,7 @@ export function processChatWithTools({
               collectedToolCalls.push({
                 index: call.index,
                 id: call.id,
+                type: call.type || 'function',
                 function: {
                   name: call.function.name,
                   arguments: call.function.arguments || ''
