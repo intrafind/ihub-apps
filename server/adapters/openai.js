@@ -49,6 +49,8 @@ const OpenAIAdapter = {
   createCompletionRequest(model, messages, apiKey, options = {}) {
     const { temperature = 0.7, stream = true, tools = null, toolChoice = undefined, responseFormat = null, responseSchema = null } = options;
 
+    console.log('Original messages:', JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData }))));
+
     const body = {
       model: model.modelId,
       messages: this.formatMessages(messages),
@@ -62,6 +64,8 @@ const OpenAIAdapter = {
     if ((responseFormat && responseFormat === 'json') || responseSchema) {
       body.response_format = { type: 'json_object' };
     }
+
+    console.log('OpenAI request body:', body);
 
     return {
       url: model.url,

@@ -290,7 +290,10 @@ To enforce structured responses from the model, provide an `outputSchema` with a
 }
 ```
 
-Structured output works with all supported adapters (OpenAI, Mistral, Anthropic and Google Gemini). When an `outputSchema` is provided the server enables the provider's JSON mode automatically.
+Structured output works with all supported adapters. When an `outputSchema` is provided the server enables the provider's JSON mode automatically. The server translates the request as follows:
+* **OpenAI/Mistral**: `response_format: { type: 'json_object' }`
+* **Anthropic**: `response_format: { type: 'json_object' }`
+* **Google Gemini**: `generationConfig.responseMimeType` set to `application/json` and the schema passed as `generationConfig.responseSchema`
 
 When `true`, users can submit the form without entering content in the main input field.
 

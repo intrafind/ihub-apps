@@ -146,13 +146,18 @@ const GoogleAdapter = {
       requestBody.tools = formatToolsForGoogle(tools);
     }
     if ((responseFormat && responseFormat === 'json') || responseSchema) {
-      requestBody.response_mime_type = 'application/json';
+      requestBody.generationConfig.responseMimeType = 'application/json';
+      if (responseSchema) {
+        requestBody.generationConfig.responseSchema = responseSchema;
+      }
     }
     
     // Add system instruction if present
     if (systemInstruction) {
       requestBody.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
+
+    console.log('Google request body:', requestBody);
 
     return {
       url,
