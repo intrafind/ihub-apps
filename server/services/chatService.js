@@ -417,7 +417,7 @@ export function processChatWithTools({
           finishReason = result.finishReason;
         }
 
-        console.log(`Completed processing for chat ID ${chatId} - done? ${done}:`, { finishReason, collectedToolCalls });
+        console.log(`Completed processing for chat ID ${chatId} - done? ${done}:`, JSON.stringify({ finishReason, collectedToolCalls }, null, 2));
         if (result.complete) {
           done = true;
           break;
@@ -426,7 +426,7 @@ export function processChatWithTools({
     }
 
     if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
-      console.log(`No tool calls to process for chat ID ${chatId}:`, { finishReason, collectedToolCalls });
+      console.log(`No tool calls to process for chat ID ${chatId}:`, JSON.stringify({ finishReason, collectedToolCalls }, null, 2));
       actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
       await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
       activeRequests.delete(chatId);
