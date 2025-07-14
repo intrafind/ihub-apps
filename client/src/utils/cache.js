@@ -5,7 +5,6 @@
  * - Memory usage limits
  * - Cache statistics
  * - Automated cleanup
- * - Optional persistent storage (sessionStorage)
  */
 class Cache {
   constructor(options = {}) {
@@ -24,8 +23,6 @@ class Cache {
     
     // Start cleanup interval (every 5 minutes)
     this.cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
-
-    // No persistent storage loading (disabled)
   }
   
   /**
@@ -85,10 +82,7 @@ class Cache {
     
     this.stats.sets++;
 
-    // Save to persistent storage if enabled
-    if (this.persistenceEnabled) {
-      this.saveToStorage();
-    }
+    // Persistent storage is disabled
     
     return value;
   }
@@ -101,11 +95,7 @@ class Cache {
     const result = this.store.delete(key);
     if (result) {
       this.stats.deletes++;
-      
-      // Update persistent storage if enabled
-      if (this.persistenceEnabled) {
-        this.saveToStorage();
-      }
+      // No persistent storage updates
     }
     return result;
   }
@@ -118,14 +108,7 @@ class Cache {
     this.store.clear();
     this.stats.deletes += size;
     
-    // Clear persistent storage if enabled
-    if (this.persistenceEnabled) {
-      try {
-        this.getStorageObject().removeItem(this.persistenceKey);
-      } catch (error) {
-        console.error(`Failed to clear persistent cache ${this.storageType}Storage:`, error);
-      }
-    }
+    // Persistent storage disabled
   }
   
   /**
@@ -146,10 +129,7 @@ class Cache {
       this.stats.cleanups++;
       this.stats.deletes += count;
       
-      // Update persistent storage if enabled
-      if (this.persistenceEnabled && count > 0) {
-        this.saveToStorage();
-      }
+      // No persistent storage updates
     }
     
     return count;
