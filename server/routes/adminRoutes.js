@@ -1,6 +1,8 @@
 import { getUsage } from '../usageTracker.js';
 import configCache from '../configCache.js';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
+import { promises as fs } from 'fs';
+import { atomicWriteJSON } from '../utils/atomicWrite.js';
 import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
 import { getLocalizedContent } from '../../shared/localize.js';
@@ -95,7 +97,8 @@ export default function registerAdminRoutes(app) {
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
       
       // Read current platform config
-      const platformConfig = JSON.parse(readFileSync(platformConfigPath, 'utf8'));
+      const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
+      const platformConfig = JSON.parse(platformConfigData);
       
       // Initialize refreshSalt if it doesn't exist
       if (!platformConfig.refreshSalt) {
@@ -109,8 +112,8 @@ export default function registerAdminRoutes(app) {
       platformConfig.refreshSalt.salt += 1;
       platformConfig.refreshSalt.lastUpdated = new Date().toISOString();
       
-      // Write back to file
-      writeFileSync(platformConfigPath, JSON.stringify(platformConfig, null, 2));
+      // Write back to file atomically
+      await atomicWriteJSON(platformConfigPath, platformConfig);
       
       // Small delay to ensure file write is complete
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -227,7 +230,7 @@ export default function registerAdminRoutes(app) {
       const rootDir = getRootDir();
       const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
       
-      writeFileSync(appFilePath, JSON.stringify(updatedApp, null, 2));
+      await atomicWriteJSON(appFilePath, updatedApp);
       
       // Refresh the apps cache
       await configCache.refreshAppsCache();
@@ -260,7 +263,7 @@ export default function registerAdminRoutes(app) {
       }
       
       // Save the app to individual file
-      writeFileSync(appFilePath, JSON.stringify(newApp, null, 2));
+      await fs.writeFile(appFilePath, JSON.stringify(newApp, null, 2));
       
       // Refresh the apps cache
       await configCache.refreshAppsCache();
@@ -290,7 +293,7 @@ export default function registerAdminRoutes(app) {
       const rootDir = getRootDir();
       const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
       
-      writeFileSync(appFilePath, JSON.stringify(app, null, 2));
+      await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
       
       // Refresh the apps cache
       await configCache.refreshAppsCache();
@@ -388,7 +391,7 @@ export default function registerAdminRoutes(app) {
             // Remove default from other models
             const otherModelPath = join(getRootDir(), 'contents', 'models', `${model.id}.json`);
             model.default = false;
-            writeFileSync(otherModelPath, JSON.stringify(model, null, 2));
+            await fs.writeFile(otherModelPath, JSON.stringify(model, null, 2));
           }
         }
       }
@@ -397,7 +400,7 @@ export default function registerAdminRoutes(app) {
       const rootDir = getRootDir();
       const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
       
-      writeFileSync(modelFilePath, JSON.stringify(updatedModel, null, 2));
+      await fs.writeFile(modelFilePath, JSON.stringify(updatedModel, null, 2));
       
       // Refresh the models cache
       await configCache.refreshModelsCache();
@@ -444,13 +447,13 @@ export default function registerAdminRoutes(app) {
             // Remove default from other models
             const otherModelPath = join(getRootDir(), 'contents', 'models', `${model.id}.json`);
             model.default = false;
-            writeFileSync(otherModelPath, JSON.stringify(model, null, 2));
+            await fs.writeFile(otherModelPath, JSON.stringify(model, null, 2));
           }
         }
       }
       
       // Save the model to individual file
-      writeFileSync(modelFilePath, JSON.stringify(newModel, null, 2));
+      await fs.writeFile(modelFilePath, JSON.stringify(newModel, null, 2));
       
       // Refresh the models cache
       await configCache.refreshModelsCache();
@@ -483,7 +486,7 @@ export default function registerAdminRoutes(app) {
           enabledModels[0].default = true;
           // Save the new default model
           const newDefaultPath = join(getRootDir(), 'contents', 'models', `${enabledModels[0].id}.json`);
-          writeFileSync(newDefaultPath, JSON.stringify(enabledModels[0], null, 2));
+          await fs.writeFile(newDefaultPath, JSON.stringify(enabledModels[0], null, 2));
         }
         model.default = false;
       }
@@ -492,7 +495,7 @@ export default function registerAdminRoutes(app) {
       const rootDir = getRootDir();
       const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
       
-      writeFileSync(modelFilePath, JSON.stringify(model, null, 2));
+      await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
       
       // Refresh the models cache
       await configCache.refreshModelsCache();
@@ -525,7 +528,7 @@ export default function registerAdminRoutes(app) {
           otherModels[0].default = true;
           // Save the new default model
           const newDefaultPath = join(getRootDir(), 'contents', 'models', `${otherModels[0].id}.json`);
-          writeFileSync(newDefaultPath, JSON.stringify(otherModels[0], null, 2));
+          await fs.writeFile(newDefaultPath, JSON.stringify(otherModels[0], null, 2));
         }
       }
       
@@ -700,7 +703,7 @@ export default function registerAdminRoutes(app) {
       const rootDir = getRootDir();
       const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
       
-      writeFileSync(promptFilePath, JSON.stringify(updatedPrompt, null, 2));
+      await fs.writeFile(promptFilePath, JSON.stringify(updatedPrompt, null, 2));
       
       // Refresh the prompts cache
       await configCache.refreshPromptsCache();
@@ -733,7 +736,7 @@ export default function registerAdminRoutes(app) {
       }
       
       // Save the prompt to individual file
-      writeFileSync(promptFilePath, JSON.stringify(newPrompt, null, 2));
+      await fs.writeFile(promptFilePath, JSON.stringify(newPrompt, null, 2));
       
       // Refresh the prompts cache
       await configCache.refreshPromptsCache();
@@ -763,7 +766,7 @@ export default function registerAdminRoutes(app) {
       const rootDir = getRootDir();
       const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
       
-      writeFileSync(promptFilePath, JSON.stringify(prompt, null, 2));
+      await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
       
       // Refresh the prompts cache
       await configCache.refreshPromptsCache();

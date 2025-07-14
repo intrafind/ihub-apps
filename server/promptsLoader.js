@@ -1,4 +1,5 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
+import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getRootDir } from './pathUtils.js';
 
@@ -20,7 +21,7 @@ import { getRootDir } from './pathUtils.js';
  * Load prompts from individual files in contents/prompts/
  * @returns {Array} Array of prompt objects
  */
-export function loadPromptsFromFiles() {
+export async function loadPromptsFromFiles() {
     const rootDir = getRootDir();
     const promptsDir = join(rootDir, 'contents', 'prompts');
     
@@ -30,14 +31,15 @@ export function loadPromptsFromFiles() {
     }
     
     const prompts = [];
-    const files = readdirSync(promptsDir).filter(file => file.endsWith('.json'));
+    const dirContents = await fs.readdir(promptsDir);
+    const files = dirContents.filter(file => file.endsWith('.json'));
     
     console.log(`💬 Loading ${files.length} individual prompt files...`);
     
     for (const file of files) {
         try {
             const filePath = join(promptsDir, file);
-            const content = readFileSync(filePath, 'utf8');
+            const content = await fs.readFile(filePath, 'utf8');
             const prompt = JSON.parse(content);
             
             // Validate required fields
@@ -59,7 +61,7 @@ export function loadPromptsFromFiles() {
  * Load prompts from legacy prompts.json file
  * @returns {Array} Array of prompt objects
  */
-export function loadPromptsFromLegacyFile() {
+export async function loadPromptsFromLegacyFile() {
     const rootDir = getRootDir();
     const promptsFile = join(rootDir, 'contents', 'config', 'prompts.json');
     
@@ -70,7 +72,7 @@ export function loadPromptsFromLegacyFile() {
     
     try {
         console.log('📄 Loading legacy prompts.json...');
-        const content = readFileSync(promptsFile, 'utf8');
+        const content = await fs.readFile(promptsFile, 'utf8');
         const prompts = JSON.parse(content);
         
         if (!Array.isArray(prompts)) {
@@ -90,9 +92,9 @@ export function loadPromptsFromLegacyFile() {
  * @param {boolean} includeDisabled Include disabled prompts
  * @returns {Array} Array of prompt objects
  */
-export function loadAllPrompts(includeDisabled = false) {
-    const individualPrompts = loadPromptsFromFiles();
-    const legacyPrompts = loadPromptsFromLegacyFile();
+export async function loadAllPrompts(includeDisabled = false) {
+    const individualPrompts = await loadPromptsFromFiles();
+    const legacyPrompts = await loadPromptsFromLegacyFile();
     
     // Combine prompts, giving priority to individual files
     const allPrompts = [...individualPrompts];

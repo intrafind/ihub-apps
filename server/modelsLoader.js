@@ -1,4 +1,5 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
+import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getRootDir } from './pathUtils.js';
 import { modelConfigSchema, knownModelKeys } from './validators/modelConfigSchema.js';
@@ -34,7 +35,7 @@ function validateModelConfig(model, source) {
  * Load models from individual files in contents/models/
  * @returns {Array} Array of model objects
  */
-export function loadModelsFromFiles() {
+export async function loadModelsFromFiles() {
     const rootDir = getRootDir();
     const modelsDir = join(rootDir, 'contents', 'models');
     
@@ -44,14 +45,15 @@ export function loadModelsFromFiles() {
     }
     
     const models = [];
-    const files = readdirSync(modelsDir).filter(file => file.endsWith('.json'));
+    const dirContents = await fs.readdir(modelsDir);
+    const files = dirContents.filter(file => file.endsWith('.json'));
     
     console.log(`🤖 Loading ${files.length} individual model files...`);
     
     for (const file of files) {
         try {
             const filePath = join(modelsDir, file);
-            const fileContent = readFileSync(filePath, 'utf8');
+            const fileContent = await fs.readFile(filePath, 'utf8');
             const model = JSON.parse(fileContent);
 
             // Add enabled field if it doesn't exist (defaults to true)
@@ -74,7 +76,7 @@ export function loadModelsFromFiles() {
  * Load models from legacy models.json file
  * @returns {Array} Array of model objects
  */
-export function loadModelsFromLegacyFile() {
+export async function loadModelsFromLegacyFile() {
     const rootDir = getRootDir();
     const legacyModelsPath = join(rootDir, 'contents', 'config', 'models.json');
     
@@ -84,7 +86,7 @@ export function loadModelsFromLegacyFile() {
     }
     
     try {
-        const fileContent = readFileSync(legacyModelsPath, 'utf8');
+        const fileContent = await fs.readFile(legacyModelsPath, 'utf8');
         const models = JSON.parse(fileContent);
         
         console.log(`📄 Loading ${models.length} models from legacy models.json...`);
@@ -136,9 +138,9 @@ function ensureOneDefaultModel(models) {
  * @param {boolean} includeDisabled - Whether to include disabled models
  * @returns {Array} Array of model objects
  */
-export function loadAllModels(includeDisabled = false) {
-    const individualModels = loadModelsFromFiles();
-    const legacyModels = loadModelsFromLegacyFile();
+export async function loadAllModels(includeDisabled = false) {
+    const individualModels = await loadModelsFromFiles();
+    const legacyModels = await loadModelsFromLegacyFile();
     
     // Create a map to track models by ID
     const modelsMap = new Map();

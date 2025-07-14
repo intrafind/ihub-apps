@@ -1,4 +1,5 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
+import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getRootDir } from './pathUtils.js';
 import { appConfigSchema, knownAppKeys } from './validators/appConfigSchema.js';
@@ -34,7 +35,7 @@ function validateAppConfig(app, source) {
  * Load apps from individual files in contents/apps/
  * @returns {Array} Array of app objects
  */
-export function loadAppsFromFiles() {
+export async function loadAppsFromFiles() {
     const rootDir = getRootDir();
     const appsDir = join(rootDir, 'contents', 'apps');
     
@@ -44,14 +45,15 @@ export function loadAppsFromFiles() {
     }
     
     const apps = [];
-    const files = readdirSync(appsDir).filter(file => file.endsWith('.json'));
+    const dirContents = await fs.readdir(appsDir);
+    const files = dirContents.filter(file => file.endsWith('.json'));
     
     console.log(`📱 Loading ${files.length} individual app files...`);
     
     for (const file of files) {
         try {
             const filePath = join(appsDir, file);
-            const fileContent = readFileSync(filePath, 'utf8');
+            const fileContent = await fs.readFile(filePath, 'utf8');
             const app = JSON.parse(fileContent);
 
             // Add enabled field if it doesn't exist (defaults to true)
@@ -74,7 +76,7 @@ export function loadAppsFromFiles() {
  * Load apps from legacy apps.json file
  * @returns {Array} Array of app objects
  */
-export function loadAppsFromLegacyFile() {
+export async function loadAppsFromLegacyFile() {
     const rootDir = getRootDir();
     const legacyAppsPath = join(rootDir, 'contents', 'config', 'apps.json');
     
@@ -84,7 +86,7 @@ export function loadAppsFromLegacyFile() {
     }
     
     try {
-        const fileContent = readFileSync(legacyAppsPath, 'utf8');
+        const fileContent = await fs.readFile(legacyAppsPath, 'utf8');
         const apps = JSON.parse(fileContent);
         
         console.log(`📄 Loading ${apps.length} apps from legacy apps.json...`);
@@ -109,9 +111,9 @@ export function loadAppsFromLegacyFile() {
  * Individual files take precedence over legacy apps.json
  * @returns {Array} Array of enabled app objects, sorted by order
  */
-export function loadAllApps(includeDisabled = false) {
-    const individualApps = loadAppsFromFiles();
-    const legacyApps = loadAppsFromLegacyFile();
+export async function loadAllApps(includeDisabled = false) {
+    const individualApps = await loadAppsFromFiles();
+    const legacyApps = await loadAppsFromLegacyFile();
     
     // Create a map to track apps by ID
     const appsMap = new Map();
