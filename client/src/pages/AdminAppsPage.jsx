@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 import AppDetailsPopup from '../components/AppDetailsPopup';
+import AppCreationWizard from '../components/AppCreationWizard';
+import AppTemplateSelector from '../components/AppTemplateSelector';
 import Icon from '../components/Icon';
+import AdminAuth from '../components/AdminAuth';
+import AdminNavigation from '../components/AdminNavigation';
+import { fetchAdminApps, makeAdminApiCall } from '../api/adminApi';
 
 const AdminAppsPage = () => {
   const { t, i18n } = useTranslation();
@@ -14,21 +19,35 @@ const AdminAppsPage = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedApp, setSelectedApp] = useState(null);
   const [showAppDetails, setShowAppDetails] = useState(false);
+  const [showCreationWizard, setShowCreationWizard] = useState(false);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [uiConfig, setUiConfig] = useState(null);
 
   useEffect(() => {
     loadApps();
+    loadUIConfig();
   }, []);
+
+  const loadUIConfig = async () => {
+    try {
+      const response = await fetch('/api/configs/ui');
+      if (response.ok) {
+        const config = await response.json();
+        setUiConfig(config);
+      }
+    } catch (err) {
+      console.error('Failed to load UI config:', err);
+    }
+  };
 
   const loadApps = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/apps');
-      if (!response.ok) {
-        throw new Error('Failed to load apps');
-      }
-      const data = await response.json();
+      const data = await fetchAdminApps();
       setApps(data);
     } catch (err) {
       setError(err.message);
@@ -39,13 +58,9 @@ const AdminAppsPage = () => {
 
   const toggleApp = async (appId) => {
     try {
-      const response = await fetch(`/api/admin/apps/${appId}/toggle`, {
+      const response = await makeAdminApiCall(`/api/admin/apps/${appId}/toggle`, {
         method: 'POST',
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to toggle app');
-      }
       
       const result = await response.json();
       
@@ -66,13 +81,9 @@ const AdminAppsPage = () => {
     }
     
     try {
-      const response = await fetch(`/api/admin/apps/${appId}`, {
+      await makeAdminApiCall(`/api/admin/apps/${appId}`, {
         method: 'DELETE',
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete app');
-      }
       
       // Remove the app from the local state
       setApps(prevApps => prevApps.filter(app => app.id !== appId));
@@ -81,7 +92,7 @@ const AdminAppsPage = () => {
     }
   };
 
-  // Filter apps based on search term and enabled status
+  // Filter apps based on search term, enabled status, and category
   const filteredApps = apps.filter(app => {
     const matchesSearch = getLocalizedContent(app.name, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
                          getLocalizedContent(app.description, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -91,7 +102,10 @@ const AdminAppsPage = () => {
                          (filterEnabled === 'enabled' && app.enabled) ||
                          (filterEnabled === 'disabled' && !app.enabled);
     
-    return matchesSearch && matchesFilter;
+    const matchesCategory = selectedCategory === 'all' || 
+                           (app.category || 'utility') === selectedCategory;
+    
+    return matchesSearch && matchesFilter && matchesCategory;
   });
 
   const getLocalizedValue = (content) => {
@@ -105,6 +119,28 @@ const AdminAppsPage = () => {
 
   const clearSearch = () => {
     setSearchTerm('');
+  };
+
+  const handleCreateApp = () => {
+    setShowTemplateSelector(true);
+  };
+
+  const handleTemplateSelected = (template) => {
+    setSelectedTemplate(template);
+    setShowTemplateSelector(false);
+    setShowCreationWizard(true);
+  };
+
+  const handleWizardClose = () => {
+    setShowCreationWizard(false);
+    setSelectedTemplate(null);
+    // Reload apps to show any newly created app
+    loadApps();
+  };
+
+  const handleCloneApp = (app) => {
+    setSelectedTemplate(app);
+    setShowCreationWizard(true);
   };
 
   if (loading) {
@@ -143,7 +179,9 @@ const AdminAppsPage = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <AdminAuth>
+      <AdminNavigation />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-900">
@@ -157,9 +195,10 @@ const AdminAppsPage = () => {
           <button
             type="button"
             className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-            onClick={() => navigate('/admin/apps/new')}
+            onClick={handleCreateApp}
           >
-            {t('admin.apps.addNew', 'Add New App')}
+            <Icon name="plus" className="h-4 w-4 mr-2" />
+            {t('admin.apps.createApp', 'Create App')}
           </button>
         </div>
       </div>
@@ -201,8 +240,30 @@ const AdminAppsPage = () => {
         </div>
       </div>
 
+      {/* Category filter */}
+      {uiConfig?.appsList?.categories?.enabled && (
+        <div className="mt-4 flex flex-wrap gap-2 justify-center">
+          {uiConfig.appsList.categories.list.map(category => (
+            <button
+              key={category.id}
+              onClick={() => setSelectedCategory(category.id)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                selectedCategory === category.id
+                  ? 'text-white shadow-lg transform scale-105'
+                  : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+              }`}
+              style={{
+                backgroundColor: selectedCategory === category.id ? category.color : undefined
+              }}
+            >
+              {getLocalizedContent(category.name, currentLanguage)}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Stats */}
-      <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
+      {/* <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
@@ -268,7 +329,7 @@ const AdminAppsPage = () => {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Apps table */}
       <div className="mt-8 flex flex-col">
@@ -280,6 +341,9 @@ const AdminAppsPage = () => {
                   <tr>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       {t('admin.apps.table.app', 'App')}
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      {t('admin.apps.table.category', 'Category')}
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       {t('admin.apps.table.status', 'Status')}
@@ -319,6 +383,18 @@ const AdminAppsPage = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
+                        {app.category ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                            {uiConfig?.appsList?.categories?.list?.find(cat => cat.id === app.category)?.name ? 
+                              getLocalizedContent(uiConfig.appsList.categories.list.find(cat => cat.id === app.category).name, currentLanguage) :
+                              app.category
+                            }
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">N/A</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                           app.enabled 
                             ? 'bg-green-100 text-green-800' 
@@ -341,36 +417,46 @@ const AdminAppsPage = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/admin/apps/${app.id}`);
+                              toggleApp(app.id);
                             }}
-                            className="text-indigo-600 hover:text-indigo-900"
+                            className={`p-2 rounded-full ${
+                              app.enabled 
+                                ? 'text-red-600 hover:bg-red-50' 
+                                : 'text-green-600 hover:bg-green-50'
+                            }`}
+                            title={app.enabled ? t('admin.apps.actions.disable', 'Disable') : t('admin.apps.actions.enable', 'Enable')}
                           >
-                            {t('admin.apps.actions.edit', 'Edit')}
+                            <Icon name={app.enabled ? 'eye-slash' : 'eye'} className="h-4 w-4" />
                           </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              toggleApp(app.id);
+                              handleCloneApp(app);
                             }}
-                            className={`${
-                              app.enabled 
-                                ? 'text-red-600 hover:text-red-900' 
-                                : 'text-green-600 hover:text-green-900'
-                            }`}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                            title={t('admin.apps.actions.clone', 'Clone')}
                           >
-                            {app.enabled 
-                              ? t('admin.apps.actions.disable', 'Disable')
-                              : t('admin.apps.actions.enable', 'Enable')
-                            }
+                            <Icon name="copy" className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/admin/apps/${app.id}`);
+                            }}
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                            title={t('admin.apps.actions.edit', 'Edit')}
+                          >
+                            <Icon name="pencil" className="h-4 w-4" />
                           </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               deleteApp(app.id);
                             }}
-                            className="text-red-600 hover:text-red-900"
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                            title={t('admin.apps.actions.delete', 'Delete')}
                           >
-                            {t('admin.apps.actions.delete', 'Delete')}
+                            <Icon name="trash" className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
@@ -403,7 +489,24 @@ const AdminAppsPage = () => {
         isOpen={showAppDetails}
         onClose={() => setShowAppDetails(false)}
       />
-    </div>
+
+      {/* Template Selector */}
+      {showTemplateSelector && (
+        <AppTemplateSelector
+          onSelect={handleTemplateSelected}
+          onClose={() => setShowTemplateSelector(false)}
+        />
+      )}
+
+      {/* App Creation Wizard */}
+      {showCreationWizard && (
+        <AppCreationWizard
+          templateApp={selectedTemplate}
+          onClose={handleWizardClose}
+        />
+      )}
+      </div>
+    </AdminAuth>
   );
 };
 

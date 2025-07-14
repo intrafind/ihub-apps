@@ -40,12 +40,17 @@ const AppsList = () => {
     return uiConfig?.appsList?.sort || defaultSortConfig;
   }, [uiConfig]);
 
-  const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
+  const categoriesConfig = useMemo(() => {
+    const defaultCategoriesConfig = {
+      enabled: false,
+      showAll: true,
+      list: []
+    };
+    return uiConfig?.appsList?.categories || defaultCategoriesConfig;
+  }, [uiConfig]);
 
-  useEffect(() => {
-    setSortMethod(sortConfig.default || 'relevance');
-  }, [sortConfig]);
-  
+
+  // State declarations must come before any useMemo/useEffect that references them
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -53,8 +58,31 @@ const AppsList = () => {
   const [favoriteApps, setFavoriteApps] = useState([]);
   const [displayCount, setDisplayCount] = useState(0);
   const [translationsLoaded, setTranslationsLoaded] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const recentAppIds = useMemo(() => getRecentAppIds(), [apps]);
-  
+  const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
+
+  // Only display categories that contain at least one app
+  const availableCategories = useMemo(() => {
+    if (!categoriesConfig.enabled) return [];
+    const usedCategories = new Set(apps.map(app => app.category || 'utility'));
+    return categoriesConfig.list.filter(category => {
+      if (category.id === 'all') return categoriesConfig.showAll;
+      return usedCategories.has(category.id);
+    });
+  }, [categoriesConfig, apps]);
+
+  useEffect(() => {
+    if (selectedCategory !== 'all') {
+      const exists = apps.some(app => (app.category || 'utility') === selectedCategory);
+      if (!exists) setSelectedCategory('all');
+    }
+  }, [apps, selectedCategory]);
+
+  useEffect(() => {
+    setSortMethod(sortConfig.default || 'relevance');
+  }, [sortConfig]);
+
   const gridRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -223,6 +251,14 @@ const AppsList = () => {
     setDisplayCount(prev => prev + increment);
   }, [calculateVisibleAppCount]);
 
+  // Category selection handler
+  const handleCategorySelect = useCallback((categoryId) => {
+    setSelectedCategory(categoryId);
+    // Reset display count when category changes
+    const visibleCount = calculateVisibleAppCount();
+    setDisplayCount(visibleCount);
+  }, [calculateVisibleAppCount]);
+
   // Memoized filtered apps to avoid recomputing on every render
   const filteredApps = useMemo(() => {
     return apps.filter(app => {
@@ -230,10 +266,18 @@ const AppsList = () => {
         // Safety check
         if (!app) return false;
         
+        // Category filtering
+        if (categoriesConfig.enabled && selectedCategory !== 'all') {
+          const appCategory = app.category || 'utility'; // Default to 'utility' if no category
+          if (appCategory !== selectedCategory) {
+            return false;
+          }
+        }
+        
         // Determine if search is enabled from config
         const isSearchEnabled = searchConfig.enabled;
         
-        // If search is disabled, show all apps
+        // If search is disabled, show all apps (after category filter)
         if (!isSearchEnabled) {
           return true;
         }
@@ -257,7 +301,7 @@ const AppsList = () => {
         return false;
       }
     });
-  }, [apps, searchTerm, currentLanguage, searchConfig.enabled]);
+  }, [apps, searchTerm, currentLanguage, searchConfig.enabled, categoriesConfig.enabled, selectedCategory]);
   
   // Memoized sorted apps to avoid recomputing on every render
   const sortedApps = useMemo(() => {
@@ -409,8 +453,8 @@ const AppsList = () => {
           }`}
         >
           <div className="relative flex-grow">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <Icon name="search" className="text-gray-400" />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Icon name="search" className="h-5 w-5 text-gray-400" />
             </div>
             <input
               type="text"
@@ -420,7 +464,7 @@ const AppsList = () => {
               }
               value={searchTerm}
               onChange={handleSearchChange}
-              className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               autoComplete="off"
               data-lpignore="true"
               data-1p-ignore="true"
@@ -448,6 +492,28 @@ const AppsList = () => {
               </select>
             </div>
           )}
+        </div>
+      )}
+      
+      {/* Category filter */}
+      {categoriesConfig.enabled && (
+        <div className="flex flex-wrap gap-2 mb-6 justify-center">
+          {availableCategories.map(category => (
+            <button
+              key={category.id}
+              onClick={() => handleCategorySelect(category.id)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                selectedCategory === category.id
+                  ? 'text-white shadow-lg transform scale-105'
+                  : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+              }`}
+              style={{
+                backgroundColor: selectedCategory === category.id ? category.color : undefined
+              }}
+            >
+              {getLocalizedContent(category.name, currentLanguage)}
+            </button>
+          ))}
         </div>
       )}
 

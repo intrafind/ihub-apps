@@ -183,5 +183,39 @@
       }
     }
   ],
-  "enabled": true
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "object",
+        "properties": {
+          "en": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "en"
+        ]
+      },
+      "description": {
+        "type": "object",
+        "properties": {
+          "en": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "en"
+        ]
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "description"
+    ]
+  }
 }

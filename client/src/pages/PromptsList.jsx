@@ -23,6 +23,7 @@ const PromptsList = () => {
   const [favoritePromptIds, setFavoritePromptIds] = useState([]);
   const [recentPromptIds, setRecentPromptIds] = useState([]);
   const [selectedPrompt, setSelectedPrompt] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
   // Create favorite prompts helpers
   const { getFavorites: getFavoritePrompts, toggleFavorite: toggleFavoritePrompt } = createFavoriteItemHelpers('aihub_favorite_prompts');
@@ -34,6 +35,32 @@ const PromptsList = () => {
     const defaultSortConfig = { enabled: true, default: 'relevance' };
     return uiConfig?.promptsList?.sort || defaultSortConfig;
   }, [uiConfig]);
+
+  const categoriesConfig = useMemo(() => {
+    const defaultCategoriesConfig = {
+      enabled: false,
+      showAll: true,
+      list: []
+    };
+    return uiConfig?.promptsList?.categories || defaultCategoriesConfig;
+  }, [uiConfig]);
+
+  // Only display categories that contain at least one prompt
+  const availableCategories = useMemo(() => {
+    if (!categoriesConfig.enabled) return [];
+    const usedCategories = new Set(prompts.map(p => p.category || 'creative'));
+    return categoriesConfig.list.filter(category => {
+      if (category.id === 'all') return categoriesConfig.showAll;
+      return usedCategories.has(category.id);
+    });
+  }, [categoriesConfig, prompts]);
+
+  useEffect(() => {
+    if (selectedCategory !== 'all') {
+      const exists = prompts.some(p => (p.category || 'creative') === selectedCategory);
+      if (!exists) setSelectedCategory('all');
+    }
+  }, [prompts, selectedCategory]);
 
   const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
 
@@ -75,14 +102,28 @@ const PromptsList = () => {
   }, [prompts, searchParams]);
 
   const filteredPrompts = useMemo(() => {
-    if (!searchTerm) return prompts;
-    const term = searchTerm.toLowerCase();
-    return prompts.filter(p =>
-      p.name.toLowerCase().includes(term) ||
-      p.prompt.toLowerCase().includes(term) ||
-      (p.description && p.description.toLowerCase().includes(term))
-    );
-  }, [prompts, searchTerm]);
+    let filtered = prompts;
+
+    // Filter by category if enabled
+    if (categoriesConfig.enabled && selectedCategory !== 'all') {
+      filtered = filtered.filter(p => {
+        const promptCategory = p.category || 'creative'; // Default to 'creative' if no category
+        return promptCategory === selectedCategory;
+      });
+    }
+
+    // Filter by search term
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(p =>
+        p.name.toLowerCase().includes(term) ||
+        p.prompt.toLowerCase().includes(term) ||
+        (p.description && p.description.toLowerCase().includes(term))
+      );
+    }
+
+    return filtered;
+  }, [prompts, searchTerm, categoriesConfig.enabled, selectedCategory]);
 
   const sortedPrompts = useMemo(() => {
     if (!sortConfig.enabled) return filteredPrompts;
@@ -149,6 +190,11 @@ const PromptsList = () => {
     }
   };
 
+  const handleCategorySelect = (categoryId) => {
+    setSelectedCategory(categoryId);
+    setPage(0); // Reset to first page when category changes
+  };
+
   if (loading) {
     return <LoadingSpinner message={t('app.loading')} />;
   }
@@ -179,12 +225,12 @@ const PromptsList = () => {
       <div className="w-full max-w-md sm:max-w-lg lg:max-w-xl mb-8">
         <div className="flex flex-col sm:flex-row items-stretch gap-4">
           <div className="relative flex-grow">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <Icon name="search" className="text-gray-400" />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Icon name="search" className="h-5 w-5 text-gray-400" />
             </div>
             <input
               type="text"
-              className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder={t('pages.promptsList.searchPlaceholder', 'Search prompts...')}
               value={searchTerm}
               onChange={handleSearchChange}
@@ -218,6 +264,28 @@ const PromptsList = () => {
           )}
         </div>
       </div>
+
+      {/* Category filter */}
+      {categoriesConfig.enabled && (
+        <div className="flex flex-wrap gap-2 mb-6 justify-center">
+          {availableCategories.map(category => (
+            <button
+              key={category.id}
+              onClick={() => handleCategorySelect(category.id)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                selectedCategory === category.id
+                  ? 'text-white shadow-lg transform scale-105'
+                  : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+              }`}
+              style={{
+                backgroundColor: selectedCategory === category.id ? category.color : undefined
+              }}
+            >
+              {getLocalizedContent(category.name, i18n.language)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {filteredPrompts.length === 0 ? (
         <p className="text-gray-500">{t('pages.promptsList.noPrompts', 'No prompts found')}</p>
@@ -301,7 +369,7 @@ const PromptsList = () => {
                     </button>
                     {p.appId && (
                       <Link
-                        to={`/apps/${p.appId}?prefill=${encodeURIComponent(p.prompt.replace('[content]', ''))}`}
+                        to={`/apps/${p.appId}?prefill=${encodeURIComponent(p.prompt.replace('[content]', ''))}${p.variables && p.variables.length > 0 ? '&' + p.variables.map(v => `var_${v.name}=${encodeURIComponent(v.defaultValue || '')}`).join('&') : ''}`}
                         className="px-3 py-1.5 text-xs border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors flex items-center justify-center gap-1"
                         onClick={(e) => { e.stopPropagation(); recordPromptUsage(p.id); }}
                       >

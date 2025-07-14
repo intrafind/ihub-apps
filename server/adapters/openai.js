@@ -47,7 +47,9 @@ const OpenAIAdapter = {
    * Create a completion request for OpenAI
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true, tools = null, toolChoice = undefined } = options;
+    const { temperature = 0.7, stream = true, tools = null, toolChoice = undefined, responseFormat = null, responseSchema = null } = options;
+
+    console.log('Original messages:', JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData }))));
 
     const body = {
       model: model.modelId,
@@ -59,6 +61,38 @@ const OpenAIAdapter = {
 
     if (tools && tools.length > 0) body.tools = formatToolsForOpenAI(tools);
     if (toolChoice) body.tool_choice = toolChoice;
+    if (responseSchema) {
+      // Deep clone incoming schema and enforce additionalProperties:false on all objects
+      const schemaClone = JSON.parse(JSON.stringify(responseSchema));
+      const enforceNoExtras = (node) => {
+        console.log('Enforcing no extras on schema node:', node);
+        if (node && node.type === 'object') {
+          node.additionalProperties = false;
+        }
+        if (node.properties) {
+          Object.values(node.properties).forEach(enforceNoExtras);
+        }
+        if (node.items) {
+          const items = Array.isArray(node.items) ? node.items : [node.items];
+          items.forEach(enforceNoExtras);
+        }
+      };
+      enforceNoExtras(schemaClone);
+
+      body.response_format = {
+        type: 'json_schema',
+        json_schema: {
+          schema: schemaClone,
+          name: 'response',
+          strict: true
+        }
+      };
+      console.log('Using response schema for structured output:', JSON.stringify(body.response_format, null, 2));
+    } else if (responseFormat === 'json') {
+      body.response_format = { type: 'json_object' };
+    }
+
+    console.log('OpenAI request body:', body);
 
     return {
       url: model.url,

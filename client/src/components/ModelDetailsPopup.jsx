@@ -85,7 +85,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-900">
-                {model.name}
+                {getLocalizedContent(model.name, currentLanguage)}
               </h3>
               <p className="text-sm text-gray-500">{model.id}</p>
             </div>
@@ -136,7 +136,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
               {t('admin.models.details.description', 'Description')}
             </h4>
             <p className="text-sm text-gray-600 leading-relaxed">
-              {model.description}
+              {getLocalizedContent(model.description, currentLanguage)}
             </p>
           </div>
 

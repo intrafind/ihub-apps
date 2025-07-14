@@ -56,6 +56,11 @@ class Cache {
     cachedItem.hits++;
     this.stats.hits++;
     
+    // Support both old format (direct value) and new format (with data/etag)
+    if (cachedItem.value && typeof cachedItem.value === 'object' && cachedItem.value.data !== undefined) {
+      return cachedItem.value; // Return the whole object with data/etag
+    }
+    
     return cachedItem.value;
   }
   

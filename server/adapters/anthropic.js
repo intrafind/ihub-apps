@@ -71,7 +71,7 @@ const AnthropicAdapter = {
    * Create a completion request for Anthropic
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true, maxTokens = 1024, tools = null } = options;
+    const { temperature = 0.7, stream = true, maxTokens = 1024, tools = null, responseFormat = null, responseSchema = null } = options;
     
     // Format messages and extract system prompt
     const { messages: formattedMessages, systemPrompt } = this.formatMessages(messages);
@@ -88,9 +88,25 @@ const AnthropicAdapter = {
       max_tokens: maxTokens
     };
 
-    if (tools && tools.length > 0) {
-      requestBody.tools = formatToolsForAnthropic(tools);
+    let finalTools = tools ? [...tools] : [];
+    if (responseSchema) {
+      finalTools.push({
+        name: 'json',
+        description: 'Respond with a JSON object.',
+        parameters: responseSchema
+      });
+      requestBody.tool_choice = { type: 'tool', name: 'json' };
     }
+
+    if (finalTools.length > 0) {
+      requestBody.tools = formatToolsForAnthropic(finalTools);
+    }
+
+    // if (responseSchema) {
+    //   // When using a tool for structured output, omit response_format
+    // } else if (responseFormat && responseFormat === 'json') {
+    //   requestBody.response_format = 'json';
+    // }
     
     // Only add system parameter if we have a system message
     if (systemPrompt) {
@@ -104,7 +120,7 @@ const AnthropicAdapter = {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey || '', // Provide empty string to avoid undefined
-        'anthropic-version': '2023-06-01'
+        'anthropic-version': '2023-06-01' // TODO check if still accurate
       },
       body: requestBody
     };

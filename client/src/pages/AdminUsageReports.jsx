@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { fetchUsageData } from '../api/api';
+import { fetchAdminUsageData } from '../api/adminApi';
+import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Icon from '../components/Icon';
+import AdminAuth from '../components/AdminAuth';
+import AdminNavigation from '../components/AdminNavigation';
+import { useLocalizedTranslation } from '../hooks/useLocalizedTranslation';
 
 const StatCard = ({ title, value, icon, color, change, changeType }) => (
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -67,12 +71,15 @@ const TopUsersCard = ({ title, data, color }) => {
 };
 
 const AppUsageCard = ({ data }) => {
+  const { t, i18n } = useTranslation();
   const apps = Object.entries(data || {});
   const total = apps.reduce((sum, [, value]) => sum + (typeof value === 'object' ? (value.good || 0) + (value.bad || 0) : value), 0);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">App Usage Distribution</h3>
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        {t('admin.usage.appUsageDistribution', 'App Usage Distribution')}
+      </h3>
       <div className="space-y-4">
         {apps.map(([app, value]) => {
           const displayValue = typeof value === 'object' ? (value.good || 0) + (value.bad || 0) : value;
@@ -154,6 +161,7 @@ const FeedbackCard = ({ data }) => {
 };
 
 const AdminUsageReports = () => {
+  const { t, i18n } = useTranslation();
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
@@ -161,7 +169,7 @@ const AdminUsageReports = () => {
   const load = async () => {
     try {
       setLoading(true);
-      const data = await fetchUsageData();
+      const data = await fetchAdminUsageData();
       setUsage(data);
     } catch (e) {
       console.error('Failed to load usage data', e);
@@ -218,8 +226,12 @@ const AdminUsageReports = () => {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center">
         <div className="text-red-500 text-6xl mb-4">⚠️</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">No Data Available</h2>
-        <p className="text-gray-600">Unable to load usage statistics.</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          {t('admin.usage.noDataTitle', 'No Data Available')}
+        </h2>
+        <p className="text-gray-600">
+          {t('admin.usage.noDataDesc', 'Unable to load usage statistics.')}
+        </p>
       </div>
     </div>
   );
@@ -227,12 +239,12 @@ const AdminUsageReports = () => {
   const { messages, tokens, feedback, magicPrompt, lastUpdated, lastReset } = usage;
 
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: <Icon name="chart" size="md" /> },
-    { id: 'users', label: 'Users', icon: <Icon name="users" size="md" /> },
-    { id: 'apps', label: 'Applications', icon: <Icon name="settings" size="md" /> },
-    { id: 'magic', label: 'Magic Prompt', icon: <Icon name="sparkles" size="md" /> },
-    { id: 'feedback', label: 'Feedback', icon: <Icon name="thumbs-up" size="md" /> },
-    { id: 'details', label: 'Details', icon: <Icon name="chat" size="md" /> }
+    { id: 'overview', label: t('admin.usage.tabs.overview', 'Overview'), icon: <Icon name="chart" size="md" /> },
+    { id: 'users', label: t('admin.usage.tabs.users', 'Users'), icon: <Icon name="users" size="md" /> },
+    { id: 'apps', label: t('admin.usage.tabs.apps', 'Applications'), icon: <Icon name="settings" size="md" /> },
+    { id: 'magic', label: t('admin.usage.tabs.magic', 'Magic Prompt'), icon: <Icon name="sparkles" size="md" /> },
+    { id: 'feedback', label: t('admin.usage.tabs.feedback', 'Feedback'), icon: <Icon name="thumbs-up" size="md" /> },
+    { id: 'details', label: t('admin.usage.tabs.details', 'Details'), icon: <Icon name="chat" size="md" /> }
   ];
 
   const renderOverview = () => (
@@ -240,25 +252,25 @@ const AdminUsageReports = () => {
       {/* Main Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Total Messages"
+          title={t('admin.usage.totalMessages', 'Total Messages')}
           value={messages.total}
           icon={<Icon name="chat" size="lg" className="text-white" />}
           color="bg-blue-500"
         />
         <StatCard
-          title="Total Tokens"
+          title={t('admin.usage.totalTokens', 'Total Tokens')}
           value={tokens.total}
           icon={<Icon name="document-text" size="lg" className="text-white" />}
           color="bg-green-500"
         />
         <StatCard
-          title="Magic Prompts"
+          title={t('admin.usage.magicPrompts', 'Magic Prompts')}
           value={magicPrompt.total}
           icon={<Icon name="sparkles" size="lg" className="text-white" />}
           color="bg-purple-500"
         />
         <StatCard
-          title="Feedback Score"
+          title={t('admin.usage.feedbackScore', 'Feedback Score')}
           value={`${feedback.good}/${feedback.good + feedback.bad}`}
           icon={<Icon name="thumbs-up" size="lg" className="text-white" />}
           color="bg-amber-500"
@@ -268,10 +280,12 @@ const AdminUsageReports = () => {
       {/* Token Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Token Distribution</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            {t('admin.usage.tokenDistribution', 'Token Distribution')}
+          </h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Prompt Tokens</span>
+              <span className="text-gray-600">{t('admin.usage.promptTokens', 'Prompt Tokens')}</span>
               <span className="font-semibold">{new Intl.NumberFormat().format(tokens.prompt.total)}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
@@ -281,7 +295,7 @@ const AdminUsageReports = () => {
               ></div>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Completion Tokens</span>
+              <span className="text-gray-600">{t('admin.usage.completionTokens', 'Completion Tokens')}</span>
               <span className="font-semibold">{new Intl.NumberFormat().format(tokens.completion.total)}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
@@ -327,7 +341,9 @@ const AdminUsageReports = () => {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <AppUsageCard data={messages.perApp} />
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">App Token Usage</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          {t('admin.usage.appTokenUsage', 'App Token Usage')}
+        </h3>
         <div className="space-y-4">
           {Object.entries(tokens.perApp || {}).map(([app, tokenCount]) => (
             <div key={app} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
@@ -653,27 +669,33 @@ const AdminUsageReports = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <AdminAuth>
+      <AdminNavigation />
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="text-gray-600 mt-1">Usage analytics and system overview</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {t('admin.usage.title', 'Admin Dashboard')}
+              </h1>
+              <p className="text-gray-600 mt-1">
+                {t('admin.usage.subtitle', 'Usage analytics and system overview')}
+              </p>
             </div>
             <div className="flex space-x-3">
               <button
                 onClick={downloadCsv}
                 className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                Download CSV
+                {t('admin.usage.downloadCsv', 'Download CSV')}
               </button>
               <button
                 onClick={downloadJson}
                 className="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                Download JSON
+                {t('admin.usage.downloadJson', 'Download JSON')}
               </button>
             </div>
           </div>
@@ -685,19 +707,19 @@ const AdminUsageReports = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div>
-              <div className="text-sm text-gray-600">Last Updated</div>
+              <div className="text-sm text-gray-600">{t('admin.usage.lastUpdated', 'Last Updated')}</div>
               <div className="text-sm font-medium">{new Date(lastUpdated).toLocaleString()}</div>
             </div>
             <div>
-              <div className="text-sm text-gray-600">Last Reset</div>
+              <div className="text-sm text-gray-600">{t('admin.usage.lastReset', 'Last Reset')}</div>
               <div className="text-sm font-medium">{new Date(lastReset).toLocaleString()}</div>
             </div>
             <div>
-              <div className="text-sm text-gray-600">Active Users</div>
+              <div className="text-sm text-gray-600">{t('admin.usage.activeUsers', 'Active Users')}</div>
               <div className="text-sm font-medium">{Object.keys(messages.perUser || {}).length}</div>
             </div>
             <div>
-              <div className="text-sm text-gray-600">Active Apps</div>
+              <div className="text-sm text-gray-600">{t('admin.usage.activeApps', 'Active Apps')}</div>
               <div className="text-sm font-medium">{Object.keys(messages.perApp || {}).length}</div>
             </div>
           </div>
@@ -736,6 +758,7 @@ const AdminUsageReports = () => {
         {activeTab === 'details' && renderDetails()}
       </div>
     </div>
+    </AdminAuth>
   );
 };
 

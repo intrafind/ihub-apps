@@ -3,9 +3,37 @@ import configCache from '../configCache.js';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
+import { getLocalizedContent } from '../../shared/localize.js';
+import { adminAuth, isAdminAuthRequired } from '../middleware/adminAuth.js';
 
 export default function registerAdminRoutes(app) {
-  app.get('/api/admin/usage', async (req, res) => {
+  // Admin authentication status endpoint (no auth required to check if auth is needed)
+  app.get('/api/admin/auth/status', async (req, res) => {
+    try {
+      const authRequired = isAdminAuthRequired();
+      res.json({ 
+        authRequired,
+        authenticated: !authRequired || req.headers.authorization?.startsWith('Bearer ')
+      });
+    } catch (error) {
+      console.error('Error checking admin auth status:', error);
+      res.status(500).json({ error: 'Failed to check authentication status' });
+    }
+  });
+
+  // Admin authentication test endpoint
+  app.get('/api/admin/auth/test', adminAuth, async (req, res) => {
+    try {
+      res.json({ 
+        message: 'Admin authentication successful',
+        authenticated: true
+      });
+    } catch (error) {
+      console.error('Error testing admin auth:', error);
+      res.status(500).json({ error: 'Failed to test authentication' });
+    }
+  });
+  app.get('/api/admin/usage', adminAuth, async (req, res) => {
     try {
       const data = await getUsage();
       res.json(data);
@@ -16,7 +44,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Configuration cache management endpoints
-  app.get('/api/admin/cache/stats', async (req, res) => {
+  app.get('/api/admin/cache/stats', adminAuth, async (req, res) => {
     try {
       const stats = configCache.getStats();
       res.json(stats);
@@ -26,7 +54,7 @@ export default function registerAdminRoutes(app) {
     }
   });
   // Support both POST and GET for cache refresh
-  app.post('/api/admin/cache/_refresh', async (req, res) => {
+  app.post('/api/admin/cache/_refresh', adminAuth, async (req, res) => {
     try {
       await configCache.refreshAll();
       res.json({ message: 'Configuration cache refreshed successfully' });
@@ -36,15 +64,18 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/cache/_refresh', (req, res, next) => {
+  app.get('/api/admin/cache/_refresh', adminAuth, (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
   });
 
   // Support both POST and GET for cache clear
-  app.post('/api/admin/cache/_clear', async (req, res) => {
+  app.post('/api/admin/cache/_clear', adminAuth, async (req, res) => {
     try {
       configCache.clear();
+      // Immediately reinitialize the cache so subsequent API calls work
+      await configCache.initialize();
+
       res.json({ message: 'Configuration cache cleared successfully' });
     } catch (e) {
       console.error('Error clearing cache:', e);
@@ -52,13 +83,13 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/cache/_clear', (req, res, next) => {
+  app.get('/api/admin/cache/_clear', adminAuth, (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
   });
 
   // Force refresh endpoint - triggers client reload by updating refresh salt
-  app.post('/api/admin/client/_refresh', async (req, res) => {
+  app.post('/api/admin/client/_refresh', adminAuth, async (req, res) => {
     try {
       const rootDir = getRootDir();
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
@@ -100,13 +131,13 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/client/_refresh', (req, res, next) => {
+  app.get('/api/admin/client/_refresh', adminAuth, (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
   });
 
   // Apps management endpoints
-  app.get('/api/admin/apps', async (req, res) => {
+  app.get('/api/admin/apps', adminAuth, async (req, res) => {
     try {
       const apps = configCache.getApps(true);
       res.json(apps);
@@ -116,7 +147,51 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/apps/:appId', async (req, res) => {
+  // Get apps suitable for inheritance (templates)
+  app.get('/api/admin/apps/templates', adminAuth, async (req, res) => {
+    try {
+      const apps = configCache.getApps(true);
+      const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
+      res.json(templates);
+    } catch (error) {
+      console.error('Error fetching template apps:', error);
+      res.status(500).json({ error: 'Failed to fetch template apps' });
+    }
+  });
+
+  // Get inheritance tree for an app
+  app.get('/api/admin/apps/:appId/inheritance', adminAuth, async (req, res) => {
+    try {
+      const { appId } = req.params;
+      const apps = configCache.getApps(true);
+      const app = apps.find(a => a.id === appId);
+      
+      if (!app) {
+        return res.status(404).json({ error: 'App not found' });
+      }
+
+      const inheritance = {
+        app: app,
+        parent: null,
+        children: []
+      };
+
+      // Find parent
+      if (app.parentId) {
+        inheritance.parent = apps.find(a => a.id === app.parentId);
+      }
+
+      // Find children
+      inheritance.children = apps.filter(a => a.parentId === appId);
+
+      res.json(inheritance);
+    } catch (error) {
+      console.error('Error fetching app inheritance:', error);
+      res.status(500).json({ error: 'Failed to fetch app inheritance' });
+    }
+  });
+
+  app.get('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const apps = configCache.getApps(true);
@@ -133,7 +208,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.put('/api/admin/apps/:appId', async (req, res) => {
+  app.put('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const updatedApp = req.body;
@@ -164,7 +239,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/apps', async (req, res) => {
+  app.post('/api/admin/apps', adminAuth, async (req, res) => {
     try {
       const newApp = req.body;
       
@@ -197,7 +272,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/apps/:appId/toggle', async (req, res) => {
+  app.post('/api/admin/apps/:appId/toggle', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const apps = configCache.getApps(true);
@@ -231,7 +306,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/apps/:appId', async (req, res) => {
+  app.delete('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const rootDir = getRootDir();
@@ -256,7 +331,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Models management endpoints
-  app.get('/api/admin/models', async (req, res) => {
+  app.get('/api/admin/models', adminAuth, async (req, res) => {
     try {
       const models = configCache.getModels(true);
       res.json(models);
@@ -266,7 +341,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/models/:modelId', async (req, res) => {
+  app.get('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const models = configCache.getModels(true);
@@ -283,13 +358,19 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.put('/api/admin/models/:modelId', async (req, res) => {
+  app.put('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const updatedModel = req.body;
       
       // Validate required fields
-      if (!updatedModel.id || !updatedModel.name || !updatedModel.description || !updatedModel.provider) {
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      if (
+        !updatedModel.id ||
+        !getLocalizedContent(updatedModel.name, defaultLang) ||
+        !getLocalizedContent(updatedModel.description, defaultLang) ||
+        !updatedModel.provider
+      ) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
       
@@ -328,12 +409,18 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models', async (req, res) => {
+  app.post('/api/admin/models', adminAuth, async (req, res) => {
     try {
       const newModel = req.body;
       
       // Validate required fields
-      if (!newModel.id || !newModel.name || !newModel.description || !newModel.provider) {
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      if (
+        !newModel.id ||
+        !getLocalizedContent(newModel.name, defaultLang) ||
+        !getLocalizedContent(newModel.description, defaultLang) ||
+        !newModel.provider
+      ) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
       
@@ -375,7 +462,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models/:modelId/toggle', async (req, res) => {
+  app.post('/api/admin/models/:modelId/toggle', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const models = configCache.getModels(true);
@@ -421,7 +508,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/models/:modelId', async (req, res) => {
+  app.delete('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const models = configCache.getModels(true);
@@ -464,7 +551,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Model testing endpoint
-  app.post('/api/admin/models/:modelId/test', async (req, res) => {
+  app.post('/api/admin/models/:modelId/test', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const models = configCache.getModels(true);
@@ -482,11 +569,11 @@ export default function registerAdminRoutes(app) {
       
       try {
         console.log('Testing model:', model);
-        const response = await simpleCompletion(testMessage, {modelId: model.id});
+        const result = await simpleCompletion(testMessage, {modelId: model.id});
         res.json({ 
           success: true, 
           message: 'Model test successful',
-          response: response,
+          response: result.content,
           model: model
         });
       } catch (testError) {
@@ -546,6 +633,305 @@ export default function registerAdminRoutes(app) {
         message: 'System error',
         error: 'Failed to test model due to a system error. Please try again.' 
       });
+    }
+  });
+
+  // Prompts management endpoints
+  app.get('/api/admin/prompts', adminAuth, async (req, res) => {
+    try {
+      // Get prompts with ETag from cache
+      const { data: prompts, etag } = configCache.getPromptsWithETag(true);
+      
+      if (!prompts) {
+        return res.status(500).json({ error: 'Failed to load prompts configuration' });
+      }
+      
+      // Set ETag header
+      if (etag) {
+        res.setHeader('ETag', etag);
+        
+        // Check if client has the same ETag
+        const clientETag = req.headers['if-none-match'];
+        if (clientETag && clientETag === etag) {
+          return res.status(304).end();
+        }
+      }
+      
+      res.json(prompts);
+    } catch (error) {
+      console.error('Error fetching all prompts:', error);
+      res.status(500).json({ error: 'Failed to fetch prompts' });
+    }
+  });
+
+  app.get('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
+    try {
+      const { promptId } = req.params;
+      const prompts = configCache.getPrompts(true);
+      const prompt = prompts.find(p => p.id === promptId);
+      
+      if (!prompt) {
+        return res.status(404).json({ error: 'Prompt not found' });
+      }
+      
+      res.json(prompt);
+    } catch (error) {
+      console.error('Error fetching prompt:', error);
+      res.status(500).json({ error: 'Failed to fetch prompt' });
+    }
+  });
+
+  app.put('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
+    try {
+      const { promptId } = req.params;
+      const updatedPrompt = req.body;
+      
+      // Validate required fields
+      if (!updatedPrompt.id || !updatedPrompt.name || !updatedPrompt.prompt) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      
+      // Ensure the ID matches
+      if (updatedPrompt.id !== promptId) {
+        return res.status(400).json({ error: 'Prompt ID cannot be changed' });
+      }
+      
+      // Save the prompt to individual file
+      const rootDir = getRootDir();
+      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+      
+      writeFileSync(promptFilePath, JSON.stringify(updatedPrompt, null, 2));
+      
+      // Refresh the prompts cache
+      await configCache.refreshPromptsCache();
+      
+      res.json({ message: 'Prompt updated successfully', prompt: updatedPrompt });
+    } catch (error) {
+      console.error('Error updating prompt:', error);
+      res.status(500).json({ error: 'Failed to update prompt' });
+    }
+  });
+
+  app.post('/api/admin/prompts', adminAuth, async (req, res) => {
+    try {
+      const newPrompt = req.body;
+      
+      // Validate required fields
+      if (!newPrompt.id || !newPrompt.name || !newPrompt.prompt) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      
+      // Check if prompt with this ID already exists
+      const rootDir = getRootDir();
+      const promptFilePath = join(rootDir, 'contents', 'prompts', `${newPrompt.id}.json`);
+      
+      try {
+        readFileSync(promptFilePath, 'utf8');
+        return res.status(400).json({ error: 'Prompt with this ID already exists' });
+      } catch (err) {
+        // File doesn't exist, which is what we want
+      }
+      
+      // Save the prompt to individual file
+      writeFileSync(promptFilePath, JSON.stringify(newPrompt, null, 2));
+      
+      // Refresh the prompts cache
+      await configCache.refreshPromptsCache();
+      
+      res.json({ message: 'Prompt created successfully', prompt: newPrompt });
+    } catch (error) {
+      console.error('Error creating prompt:', error);
+      res.status(500).json({ error: 'Failed to create prompt' });
+    }
+  });
+
+  app.post('/api/admin/prompts/:promptId/toggle', adminAuth, async (req, res) => {
+    try {
+      const { promptId } = req.params;
+      const prompts = configCache.getPrompts(true);
+      const prompt = prompts.find(p => p.id === promptId);
+      
+      if (!prompt) {
+        return res.status(404).json({ error: 'Prompt not found' });
+      }
+      
+      // Toggle the enabled state
+      const newEnabledState = !prompt.enabled;
+      prompt.enabled = newEnabledState;
+      
+      // Save the prompt to individual file
+      const rootDir = getRootDir();
+      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+      
+      writeFileSync(promptFilePath, JSON.stringify(prompt, null, 2));
+      
+      // Refresh the prompts cache
+      await configCache.refreshPromptsCache();
+      
+      res.json({ 
+        message: `Prompt ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
+        prompt: prompt,
+        enabled: newEnabledState 
+      });
+    } catch (error) {
+      console.error('Error toggling prompt:', error);
+      res.status(500).json({ error: 'Failed to toggle prompt' });
+    }
+  });
+
+  app.delete('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
+    try {
+      const { promptId } = req.params;
+      const rootDir = getRootDir();
+      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+      
+      // Check if file exists
+      if (!existsSync(promptFilePath)) {
+        return res.status(404).json({ error: 'Prompt file not found' });
+      }
+      
+      // Delete the file
+      require('fs').unlinkSync(promptFilePath);
+      
+      // Refresh the prompts cache
+      await configCache.refreshPromptsCache();
+      
+      res.json({ message: 'Prompt deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting prompt:', error);
+      res.status(500).json({ error: 'Failed to delete prompt' });
+    }
+  });
+
+  // OpenAI-compatible completions endpoint for app generation
+  app.post('/api/completions', adminAuth, async (req, res) => {
+    try {
+      const { 
+        model,
+        messages,
+        temperature = 0.7, 
+        maxTokens = 8192,
+        responseFormat = null,
+        responseSchema = null 
+      } = req.body;
+      
+      // Validate required fields
+      if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ error: 'Missing required field: messages' });
+      }
+      
+      // Get models from cache
+      let models = configCache.getModels();
+      if (!models) {
+        return res.status(500).json({ error: 'Failed to load models configuration' });
+      }
+      
+      // Use default model if no model specified
+      const defaultModel = models.find(m => m.default)?.id;
+      const modelId = model || defaultModel;
+      
+      if (!modelId) {
+        return res.status(400).json({ error: 'No model specified and no default model configured' });
+      }
+      
+      // Find the model configuration
+      const modelConfig = models.find(m => m.id === modelId);
+      if (!modelConfig) {
+        return res.status(400).json({ error: `Model not found: ${modelId}` });
+      }
+      
+      // Verify API key for the model
+      const { verifyApiKey } = await import('../serverHelpers.js');
+      const apiKey = await verifyApiKey(modelConfig, res);
+      if (!apiKey) {
+        // verifyApiKey already sent the error response
+        return;
+      }
+      
+      // Use the existing simpleCompletion function
+      const { simpleCompletion } = await import('../utils.js');
+
+      const result = await simpleCompletion(messages, {
+        modelId: modelId,
+        temperature: temperature,
+        responseFormat: responseFormat,
+        responseSchema: responseSchema,
+        maxTokens: maxTokens
+      });
+
+      console.log('Completion result:', JSON.stringify(result, null, 2));
+      
+      // Return in OpenAI format
+      res.json({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: result.content
+            },
+            finish_reason: 'stop',
+            index: 0
+          }
+        ],
+        model: modelId,
+        usage: result.usage
+      });
+    } catch (error) {
+      console.error('Error in completions endpoint:', error);
+      
+      // Import error handling helper
+      const { getLocalizedError } = await import('../serverHelpers.js');
+      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+      
+      // Try to get a localized error message
+      let errorMessage = 'Failed to generate completion';
+      try {
+        errorMessage = await getLocalizedError('internalError', {}, defaultLang);
+      } catch (localizationError) {
+        // Fall back to default message if localization fails
+        console.warn('Failed to get localized error message:', localizationError);
+      }
+      
+      res.status(500).json({ 
+        error: errorMessage,
+        details: error.message 
+      });
+    }
+  });
+
+  // Get app-generator prompt configuration
+  app.get('/api/admin/prompts/app-generator', adminAuth, async (req, res) => {
+    try {
+      // Get default language from platform configuration
+      const platformConfig = configCache.getPlatform();
+      const defaultLanguage = platformConfig?.defaultLanguage || 'en';
+      const { lang = defaultLanguage } = req.query;
+      
+      // Get prompts from cache
+      const { data: prompts } = configCache.getPromptsWithETag();
+      
+      if (!prompts) {
+        return res.status(500).json({ error: 'Failed to load prompts configuration' });
+      }
+      
+      // Find the app-generator prompt
+      const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
+      
+      if (!appGeneratorPrompt) {
+        return res.status(404).json({ error: 'App-generator prompt not found' });
+      }
+      
+      // Return the prompt for the requested language
+      const promptText = appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
+      
+      res.json({
+        id: appGeneratorPrompt.id,
+        prompt: promptText,
+        language: lang
+      });
+    } catch (error) {
+      console.error('Error fetching app-generator prompt:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 

@@ -24,7 +24,8 @@ export default async function finalizer({ question, results = [], model = 'gemin
   const prompt = `${system}\n\nThe following knowledge items are provided for your reference:\n${knowledge}\n\n${question}`;
 
   try {
-    return await simpleCompletion(prompt, { model, temperature: 0.7 });
+    const result = await simpleCompletion(prompt, { model, temperature: 0.7 });
+    return result.content;
   } catch (err) {
     console.error('finalizer failed:', err);
     return '';

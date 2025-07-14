@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../components/Icon';
+import AdminAuth from '../components/AdminAuth';
+import AdminNavigation from '../components/AdminNavigation';
+import { makeAdminApiCall } from '../api/adminApi';
 
 const AdminSystemPage = () => {
   const { t } = useTranslation();
@@ -12,30 +15,26 @@ const AdminSystemPage = () => {
     setForceRefreshMessage('');
 
     try {
-      const response = await fetch('/api/admin/client/_refresh', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await makeAdminApiCall('/api/admin/client/_refresh', {
+        method: 'POST'
       });
 
       const data = await response.json();
 
-      if (response.ok) {
-        setForceRefreshMessage({
-          type: 'success',
-          text: `Force refresh triggered successfully! New salt: ${data.newAdminSalt}. All clients will refresh on their next page load.`
-        });
-      } else {
-        setForceRefreshMessage({
-          type: 'error',
-          text: data.error || 'Failed to trigger force refresh'
-        });
-      }
+      setForceRefreshMessage({
+        type: 'success',
+        text: t(
+          'admin.system.triggerSuccess',
+          'Force refresh triggered successfully! New salt: {{salt}}. All clients will refresh on their next page load.',
+          { salt: data.newAdminSalt }
+        )
+      });
     } catch (error) {
       setForceRefreshMessage({
         type: 'error',
-        text: 'Error triggering force refresh: ' + error.message
+        text:
+          t('admin.system.triggerError', 'Failed to trigger force refresh') +
+          (error.message ? `: ${error.message}` : '')
       });
     } finally {
       setForceRefreshLoading(false);
@@ -43,14 +42,20 @@ const AdminSystemPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <AdminAuth>
+      <AdminNavigation />
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">System Administration</h1>
-              <p className="text-gray-600 mt-1">Manage system-wide settings and maintenance</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {t('admin.system.title', 'System Administration')}
+              </h1>
+              <p className="text-gray-600 mt-1">
+                {t('admin.system.description', 'Manage system-wide settings and maintenance')}
+              </p>
             </div>
           </div>
         </div>
@@ -69,22 +74,28 @@ const AdminSystemPage = () => {
                 </div>
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Force Client Refresh</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {t('admin.system.forceTitle', 'Force Client Refresh')}
+                </h3>
                 <p className="text-gray-600 mb-4">
-                  Trigger a force refresh for all clients. This will clear all browser caches, localStorage, 
-                  and force clients to reload all assets (JS, CSS, fonts, configurations) without using 
-                  browser cache. The disclaimer acceptance will be preserved.
+                  {t(
+                    'admin.system.forceDesc',
+                    'Trigger a force refresh for all clients. This will clear all browser caches, localStorage, and force clients to reload all assets (JS, CSS, fonts, configurations) without using browser cache. The disclaimer acceptance will be preserved.'
+                  )}
                 </p>
                 
                 <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-4">
                   <div className="flex">
                     <Icon name="warning" size="md" className="text-amber-500 mt-0.5 mr-3" />
                     <div>
-                      <h4 className="text-sm font-medium text-amber-800">Warning</h4>
+                      <h4 className="text-sm font-medium text-amber-800">
+                        {t('admin.system.warningTitle', 'Warning')}
+                      </h4>
                       <p className="text-sm text-amber-700 mt-1">
-                        This action will force all connected clients to reload their browsers on their 
-                        next page interaction. Use this when deploying critical updates or when clients 
-                        need to clear cached data.
+                        {t(
+                          'admin.system.warningDesc',
+                          'This action will force all connected clients to reload their browsers on their next page interaction. Use this when deploying critical updates or when clients need to clear cached data.'
+                        )}
                       </p>
                     </div>
                   </div>
@@ -131,12 +142,12 @@ const AdminSystemPage = () => {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      Triggering Force Refresh...
+                      {t('admin.system.triggering', 'Triggering Force Refresh...')}
                     </>
                   ) : (
                     <>
                       <Icon name="refresh" size="md" className="mr-2" />
-                      Trigger Force Refresh
+                      {t('admin.system.trigger', 'Trigger Force Refresh')}
                     </>
                   )}
                 </button>
@@ -153,10 +164,14 @@ const AdminSystemPage = () => {
                 </div>
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Server Cache Management</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {t('admin.system.cacheTitle', 'Server Cache Management')}
+                </h3>
                 <p className="text-gray-600 mb-4">
-                  Manage server-side configuration cache. Use these tools to refresh or clear 
-                  cached configuration files on the server.
+                  {t(
+                    'admin.system.cacheDesc',
+                    'Manage server-side configuration cache. Use these tools to refresh or clear cached configuration files on the server.'
+                  )}
                 </p>
                 
                 <div className="flex space-x-4">
@@ -167,7 +182,7 @@ const AdminSystemPage = () => {
                     className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     <Icon name="refresh" size="md" className="mr-2" />
-                    Refresh Cache
+                    {t('admin.system.refreshCache', 'Refresh Cache')}
                   </a>
                   
                   <a
@@ -177,7 +192,7 @@ const AdminSystemPage = () => {
                     className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                   >
                     <Icon name="trash" size="md" className="mr-2" />
-                    Clear Cache
+                    {t('admin.system.clearCache', 'Clear Cache')}
                   </a>
                 </div>
               </div>
@@ -186,7 +201,8 @@ const AdminSystemPage = () => {
 
         </div>
       </div>
-    </div>
+      </div>
+    </AdminAuth>
   );
 };
 

@@ -32,9 +32,13 @@ const AppConfigForm = ({
   // Available output formats
   const outputFormats = [
     { id: 'markdown', name: t('appConfig.markdown', 'Markdown') },
-    { id: 'text', name: t('appConfig.plainText', 'Plain Text') },
-    { id: 'json', name: t('appConfig.json', 'JSON') }
+    { id: 'text', name: t('appConfig.plainText', 'Plain Text') }
   ];
+
+  // Only show JSON when an outputSchema is configured
+  if (app?.outputSchema) {
+    outputFormats.push({ id: 'json', name: t('appConfig.json', 'JSON') });
+  }
 
   // If settings are completely disabled, don't show the form
   if (app?.settings?.enabled === false) {
@@ -58,14 +62,16 @@ const AppConfigForm = ({
             onChange={(e) => onModelChange(e.target.value)}
             className="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
           >
-            {filteredModels.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-                {t(`models.descriptions.${model.id}`) !== `models.descriptions.${model.id}` ? 
-                  ` - ${t(`models.descriptions.${model.id}`)}` : 
-                  model.description ? ` - ${model.description}` : ''}
-              </option>
-            ))}
+            {filteredModels.map((model) => {
+              const name = getLocalizedContent(model.name, currentLanguage);
+              const desc = getLocalizedContent(model.description, currentLanguage);
+              return (
+                <option key={model.id} value={model.id}>
+                  {name}
+                  {desc ? ` - ${desc}` : ''}
+                </option>
+              );
+            })}
           </select>
         </div>
       )}

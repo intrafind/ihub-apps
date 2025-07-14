@@ -28,7 +28,15 @@ export const appConfigSchema = z.object({
   allowedModels: z.array(z.string()).optional(),
   disallowModelSelection: z.boolean().optional(),
   allowEmptyContent: z.boolean().optional(),
+  tools: z.array(z.string()).optional(),
+  outputSchema: z.any().optional(),
+  category: z.string().optional(),
   enabled: z.boolean().optional(),
+  // Inheritance fields
+  allowInheritance: z.boolean().optional(),
+  parentId: z.string().optional(),
+  inheritanceLevel: z.number().optional(),
+  overriddenFields: z.array(z.string()).optional(),
 }).passthrough();
 
 export const knownAppKeys = Object.keys(appConfigSchema.shape);

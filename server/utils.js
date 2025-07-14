@@ -338,35 +338,55 @@ export async function logNewSession(chatId, appId, metadata = {}) {
  * Performs a simple, non-streaming completion request to a language model.
  * @param {string} prompt - The prompt to send to the model.
  * @param {object} options - Configuration options.
- * @param {string} options.model - The ID of the model to use.
+ * @param {string} [options.modelId] - The ID of the model to use.
+ * @param {string} [options.model] - Alias for modelId.
  * @param {number} [options.temperature=0.7] - The temperature for the completion.
+ * @param {string} [options.responseFormat] - Desired output format ('json').
+ * @param {object} [options.responseSchema] - Optional JSON schema for structured output.
  * @returns {Promise<string>} The content of the model's response.
  */
-export async function simpleCompletion(prompt, { modelId: modelId, temperature = 0.7 }) {
-  console.log('Starting simple completion...', { prompt, modelId, temperature });
+export async function simpleCompletion(
+  messages,
+  {
+    modelId = null,
+    model = null,
+    temperature = 0.7,
+    maxTokens = 8192,
+    responseFormat = null,
+    responseSchema = null
+  } = {}
+) {
+  const resolvedModelId = modelId || model;
+
+  console.log('Starting simple completion...', { messages: JSON.stringify(messages, null, 2), modelId: resolvedModelId, temperature });
   // Try to get models from cache first
   let models = configCache.getModels();
   console.log('Available models:', models.map(m => m.id));
-  
-  const model = models.find(m => m.id === modelId);
-  console.log('Using model:', model);
-  if (!model) {
-    throw new Error(`Model ${modelId} not found`);
+
+  const modelConfig = models.find(m => m.id === resolvedModelId);
+  console.log('Using model:', modelConfig);
+  if (!modelConfig) {
+    throw new Error(`Model ${resolvedModelId} not found`);
   }
 
-  const apiKey = config[`${model.provider.toUpperCase()}_API_KEY`];
+  const apiKey = config[`${modelConfig.provider.toUpperCase()}_API_KEY`];
   if (!apiKey) {
-    throw new Error(`API key for ${model.provider} not found in environment variables.`);
+    throw new Error(`API key for ${modelConfig.provider} not found in environment variables.`);
   }
 
-  const messages = [{ role: 'user', content: prompt }];
-  const request = createCompletionRequest(model, messages, apiKey, {
+  const msgArray = Array.isArray(messages)
+    ? messages
+    : [{ role: 'user', content: messages }];
+
+  const request = createCompletionRequest(modelConfig, msgArray, apiKey, {
     temperature,
-    maxTokens: 4096, // Sufficient for internal tasks
-    stream: false
+    maxTokens,
+    stream: false,
+    responseFormat,
+    responseSchema
   });
 
-  const response = await throttledFetch(model.id, request.url, {
+  const response = await throttledFetch(modelConfig.id, request.url, {
     method: 'POST',
     headers: request.headers,
     body: JSON.stringify(request.body)
@@ -380,6 +400,15 @@ export async function simpleCompletion(prompt, { modelId: modelId, temperature =
   const responseData = await response.json();
 
   // Use the adapter to parse the response
-  const parsed = processResponseBuffer(model.provider, JSON.stringify(responseData));
-  return parsed.content.join('');
+  const parsed = processResponseBuffer(modelConfig.provider, JSON.stringify(responseData));
+  
+  // Return both content and usage data
+  return {
+    content: parsed.content.join(''),
+    usage: responseData.usage || {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0
+    }
+  };
 }

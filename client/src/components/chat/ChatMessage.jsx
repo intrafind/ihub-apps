@@ -269,11 +269,15 @@ const ChatMessage = ({
 
     if (message.loading) {
       // console.log('🔄 Rendering loading state for message:', contentToRender);
-      // For loading assistant messages with markdown, still use the StreamingMarkdown component
-      if (outputFormat === 'markdown' && !isUser) {
+      // For loading assistant messages with markdown or JSON, use StreamingMarkdown
+      if (!isUser && (outputFormat === 'markdown' || outputFormat === 'json')) {
+        const mdContent =
+          outputFormat === 'json'
+            ? `\u0060\u0060\u0060json\n${contentToRender}\n\u0060\u0060\u0060`
+            : contentToRender;
         return (
           <div className="flex flex-col">
-            <StreamingMarkdown content={contentToRender} />
+            <StreamingMarkdown content={mdContent} />
             <div className="flex mt-2">
               <span className="inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span>
               <span className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></span>
@@ -312,10 +316,20 @@ const ChatMessage = ({
       );
     }
     
-    if (outputFormat === 'markdown' && !isUser) {
-      // console.log('✅ Rendering completed markdown content:', contentToRender?.length || 0, 'chars');
-      // Use StreamingMarkdown component for better real-time rendering
-      return <StreamingMarkdown content={contentToRender} />;
+    if (!isUser && (outputFormat === 'markdown' || outputFormat === 'json')) {
+      let mdContent = contentToRender;
+      if (outputFormat === 'json') {
+        let jsonString = '';
+        try {
+          jsonString = typeof message.content === 'string'
+            ? JSON.stringify(JSON.parse(message.content), null, 2)
+            : JSON.stringify(message.content, null, 2);
+        } catch (e) {
+          jsonString = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+        }
+        mdContent = `\u0060\u0060\u0060json\n${jsonString}\n\u0060\u0060\u0060`;
+      }
+      return <StreamingMarkdown content={mdContent} />;
     }
     
     return <div className="break-words whitespace-normal" style={{boxSizing: 'content-box', display: 'inline-block'}}>{contentToRender}</div>;

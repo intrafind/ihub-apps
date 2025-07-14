@@ -1,3 +1,4 @@
+import configCache from '../../configCache.js';
 import { logInteraction } from '../../utils.js';
 import { recordFeedback } from '../../usageTracker.js';
 import validate from '../../validators/validate.js';

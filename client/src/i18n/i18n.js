@@ -7,7 +7,7 @@ import { fetchTranslations } from '../api/api';
 let DEFAULT_LANGUAGE = 'en';
 try {
   const xhr = new XMLHttpRequest();
-  xhr.open('GET', '/api/platform', false);
+  xhr.open('GET', '/api/configs/platform', false);
   xhr.send(null);
   if (xhr.status >= 200 && xhr.status < 300) {
     const cfg = JSON.parse(xhr.responseText);

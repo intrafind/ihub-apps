@@ -1,0 +1,30 @@
+{
+  "id": "test-prompt",
+  "name": {
+    "en": "Test Prompt",
+    "de": ""
+  },
+  "description": {
+    "en": "A test prompt for demonstration purposes",
+    "de": ""
+  },
+  "prompt": {
+    "en": "Please help me with the following task: {{task}}",
+    "de": ""
+  },
+  "icon": "clipboard",
+  "enabled": true,
+  "appId": "",
+  "variables": [
+    {
+      "name": "task",
+      "label": {
+        "en": "Task Description",
+        "de": ""
+      },
+      "type": "string",
+      "required": false,
+      "defaultValue": ""
+    }
+  ]
+}
