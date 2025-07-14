@@ -1,10 +1,15 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { getRootDir } from './pathUtils.js';
-import config from './config.js';
+import fs from "fs/promises";
+import path from "path";
+import { getRootDir } from "./pathUtils.js";
+import config from "./config.js";
 
 const contentsDir = config.CONTENTS_DIR;
-const dataFile = path.join(getRootDir(), contentsDir, 'data', 'shortlinks.json');
+const dataFile = path.join(
+  getRootDir(),
+  contentsDir,
+  "data",
+  "shortlinks.json",
+);
 const SAVE_INTERVAL_MS = 10000;
 
 let links = null;
@@ -13,6 +18,11 @@ let saveTimer = null;
 
 const now = () => new Date().toISOString();
 
+export function isLinkExpired(link) {
+  if (!link || !link.expiresAt) return false;
+  return new Date(link.expiresAt) <= new Date();
+}
+
 function createDefault() {
   return { links: [], lastUpdated: now() };
 }
@@ -20,7 +30,7 @@ function createDefault() {
 async function loadLinks() {
   if (links) return links;
   try {
-    const data = await fs.readFile(dataFile, 'utf8');
+    const data = await fs.readFile(dataFile, "utf8");
     links = JSON.parse(data);
     links.lastUpdated = links.lastUpdated || now();
   } catch {
@@ -44,49 +54,72 @@ function scheduleSave() {
     try {
       await saveLinks();
     } catch (e) {
-      console.error('Failed to save short link data', e);
+      console.error("Failed to save short link data", e);
     }
   }, SAVE_INTERVAL_MS);
 }
 
 function generateCode(length = 6) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let code = '';
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let code = "";
   for (let i = 0; i < length; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
 }
 
-export async function createLink({ code, appId, userId, path = null, params = null, url = null, includeParams = false }) {
+export async function createLink({
+  code,
+  appId,
+  userId,
+  path = null,
+  params = null,
+  url = null,
+  includeParams = false,
+  expiresAt = null,
+}) {
   await loadLinks();
   let finalCode = code;
   if (finalCode) {
-    if (links.links.some(l => l.code === finalCode)) {
-      throw new Error('Code already exists');
+    if (links.links.some((l) => l.code === finalCode)) {
+      throw new Error("Code already exists");
     }
   } else {
     do {
       finalCode = generateCode();
-    } while (links.links.some(l => l.code === finalCode));
+    } while (links.links.some((l) => l.code === finalCode));
   }
 
   let finalUrl = url;
   if (!finalUrl) {
-    const basePath = path || (appId ? `/apps/${appId}` : '/');
-    const dummy = new URL('http://localhost');
+    const basePath = path || (appId ? `/apps/${appId}` : "/");
+    const dummy = new URL("http://localhost");
     dummy.pathname = basePath;
-    if (includeParams && params && typeof params === 'object') {
+    if (includeParams && params && typeof params === "object") {
       for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== null && v !== '') {
+        if (v !== undefined && v !== null && v !== "") {
           dummy.searchParams.set(k, String(v));
         }
       }
     }
-    finalUrl = dummy.pathname + (dummy.search ? `?${dummy.searchParams.toString()}` : '');
+    finalUrl =
+      dummy.pathname +
+      (dummy.search ? `?${dummy.searchParams.toString()}` : "");
   }
 
-  const link = { code: finalCode, appId, userId, path, params, url: finalUrl, includeParams, createdAt: now(), usage: 0 };
+  const link = {
+    code: finalCode,
+    appId,
+    userId,
+    path,
+    params,
+    url: finalUrl,
+    includeParams,
+    createdAt: now(),
+    usage: 0,
+    expiresAt,
+  };
   links.links.push(link);
   dirty = true;
   scheduleSave();
@@ -95,17 +128,17 @@ export async function createLink({ code, appId, userId, path = null, params = nu
 
 export async function getLink(code) {
   await loadLinks();
-  return links.links.find(l => l.code === code);
+  return links.links.find((l) => l.code === code);
 }
 
 export async function isCodeAvailable(code) {
   await loadLinks();
-  return !links.links.some(l => l.code === code);
+  return !links.links.some((l) => l.code === code);
 }
 
 export async function recordUsage(code) {
   await loadLinks();
-  const link = links.links.find(l => l.code === code);
+  const link = links.links.find((l) => l.code === code);
   if (link) {
     link.usage = (link.usage || 0) + 1;
     link.lastUsed = now();
@@ -117,7 +150,7 @@ export async function recordUsage(code) {
 
 export async function deleteLink(code) {
   await loadLinks();
-  const idx = links.links.findIndex(l => l.code === code);
+  const idx = links.links.findIndex((l) => l.code === code);
   if (idx !== -1) {
     links.links.splice(idx, 1);
     dirty = true;
@@ -129,7 +162,7 @@ export async function deleteLink(code) {
 
 export async function updateLink(code, data) {
   await loadLinks();
-  const link = links.links.find(l => l.code === code);
+  const link = links.links.find((l) => l.code === code);
   if (!link) return null;
   Object.assign(link, data, { code });
   dirty = true;
@@ -140,9 +173,12 @@ export async function updateLink(code, data) {
 export async function searchLinks({ appId, userId } = {}) {
   await loadLinks();
   return links.links.filter(
-    l => (!appId || l.appId === appId) && (!userId || l.userId === userId)
+    (l) => (!appId || l.appId === appId) && (!userId || l.userId === userId),
   );
 }
 
 loadLinks();
-setInterval(() => { if (dirty) saveLinks().catch(e => console.error('Short link save error:', e)); }, SAVE_INTERVAL_MS);
+setInterval(() => {
+  if (dirty)
+    saveLinks().catch((e) => console.error("Short link save error:", e));
+}, SAVE_INTERVAL_MS);

@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { UIConfigProvider } from "./UIConfigContext";
+import { PlatformConfigProvider } from "./PlatformConfigContext";
 import ErrorBoundaryFallback from "./ErrorBoundary";
 import { initializeForceRefresh } from "../utils/forceRefresh";
 
@@ -27,7 +28,9 @@ const AppProviders = ({ children }) => {
 
   return (
     <ErrorBoundaryFallback>
-      <UIConfigProvider>{children}</UIConfigProvider>
+      <PlatformConfigProvider>
+        <UIConfigProvider>{children}</UIConfigProvider>
+      </PlatformConfigProvider>
     </ErrorBoundaryFallback>
   );
 };

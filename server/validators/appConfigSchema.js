@@ -29,6 +29,7 @@ export const appConfigSchema = z.object({
   disallowModelSelection: z.boolean().optional(),
   allowEmptyContent: z.boolean().optional(),
   tools: z.array(z.string()).optional(),
+  outputSchema: z.any().optional(),
   category: z.string().optional(),
   enabled: z.boolean().optional(),
   // Inheritance fields

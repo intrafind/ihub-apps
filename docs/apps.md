@@ -50,6 +50,7 @@ Each app is defined with the following essential properties:
 | `preferredStyle` | String | Style guidance for AI responses (normal, professional, creative, academic) |
 | `preferredTemperature` | Number | Temperature setting (0.0-1.0) controlling randomness |
 | `sendChatHistory` | Boolean | Whether to include chat history in API requests |
+| `outputSchema` | Object | JSON schema describing the structured response format |
 
 ### Advanced Configuration Options
 
@@ -280,6 +281,21 @@ Apps can be configured to allow empty content submission:
 "allowEmptyContent": true
 ```
 
+To enforce structured responses from the model, provide an `outputSchema` with a JSON Schema definition:
+
+```json
+"outputSchema": {
+  "type": "object",
+  "properties": { "id": {"type": "string"} }
+}
+```
+
+Structured output works with all supported adapters. When an `outputSchema` is provided the server enables the provider's JSON mode automatically. The server translates the request as follows:
+* **OpenAI**: `response_format: { type: 'json_object' }`
+* **Mistral**: `response_format: { type: 'json_schema', json_schema: { schema, name: 'response', strict: true } }`
+* **Anthropic**: adds a `json` tool with your schema and forces the model to use it
+* **Google Gemini**: `generationConfig.response_mime_type` set to `application/json` and the schema passed as `generationConfig.response_schema`
+
 When `true`, users can submit the form without entering content in the main input field.
 
 #### Other Options
@@ -287,6 +303,7 @@ When `true`, users can submit the form without entering content in the main inpu
 - `allowEmptyContent`: Allow submission without content input
 - `allowedModels`: Restrict which models can be used with this app
 - `disallowModelSelection`: Prevent user from changing the model
+- `outputSchema`: JSON schema defining the required structure of the AI response
 
 ### Available Icons
 

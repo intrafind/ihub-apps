@@ -113,7 +113,7 @@ const GoogleAdapter = {
    * Create a completion request for Gemini
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true, tools = null } = options;
+    const { temperature = 0.7, stream = true, tools = null, responseFormat = null, responseSchema = null } = options;
     
     // Format messages and extract system instruction
     const { contents, systemInstruction } = this.formatMessages(messages);
@@ -145,11 +145,19 @@ const GoogleAdapter = {
     if (tools && tools.length > 0) {
       requestBody.tools = formatToolsForGoogle(tools);
     }
+    if ((responseFormat && responseFormat === 'json') || responseSchema) {
+      requestBody.generationConfig.responseMimeType = 'application/json';
+      if (responseSchema) {
+        requestBody.generationConfig.response_schema = responseSchema;
+      }
+    }
     
     // Add system instruction if present
     if (systemInstruction) {
       requestBody.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
+
+    console.log('Google request body:', requestBody);
 
     return {
       url,

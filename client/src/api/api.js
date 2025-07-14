@@ -184,24 +184,22 @@ const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_T
 
 // Apps
 export const fetchApps = async (options = {}) => {
-  const { skipCache = false, language = null } = options;
-  const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.APPS_LIST, { language });
-  
+  const { language = null } = options;
+
   return handleApiResponse(
     () => apiClient.get('/apps', { params: { language } }),
-    cacheKey,
-    DEFAULT_CACHE_TTL.MEDIUM
+    null, // no client-side caching for apps list
+    null
   );
 };
 
 export const fetchAppDetails = async (appId, options = {}) => {
-  const { skipCache = false, language = null } = options;
-  const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.APP_DETAILS, { id: appId, language });
-  
+  const { language = null } = options;
+
   return handleApiResponse(
     () => apiClient.get(`/apps/${appId}`, { params: { language } }),
-    cacheKey,
-    DEFAULT_CACHE_TTL.MEDIUM
+    null, // no client-side caching for app details
+    null
   );
 };
 

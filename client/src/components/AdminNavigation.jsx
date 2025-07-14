@@ -2,61 +2,72 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
+import { usePlatformConfig } from './PlatformConfigContext';
 
 const AdminNavigation = () => {
   const { t } = useTranslation();
   const location = useLocation();
+  const { platformConfig } = usePlatformConfig();
+  const pageConfig = platformConfig?.admin?.pages || {};
+  const isEnabled = (key) => pageConfig[key] !== false;
 
   const navItems = [
     {
+      key: 'home',
       name: t('admin.nav.home', 'Home'),
       href: '/admin',
       icon: 'home',
       current: location.pathname === '/admin'
     },
     {
-      name: t('admin.nav.usage', 'Usage Reports'),
-      href: '/admin/usage',
-      icon: 'chart-bar',
-      current: location.pathname === '/admin/usage'
-    },
-    {
-      name: t('admin.nav.system', 'System'),
-      href: '/admin/system',
-      icon: 'cog',
-      current: location.pathname === '/admin/system'
-    },
-    {
+      key: 'apps',
       name: t('admin.nav.apps', 'Apps'),
       href: '/admin/apps',
       icon: 'collection',
       current: location.pathname.startsWith('/admin/apps')
     },
     {
+      key: 'models',
       name: t('admin.nav.models', 'Models'),
       href: '/admin/models',
       icon: 'cpu-chip',
       current: location.pathname.startsWith('/admin/models')
     },
     {
+      key: 'prompts',
       name: t('admin.nav.prompts', 'Prompts'),
       href: '/admin/prompts',
       icon: 'clipboard-document-list',
       current: location.pathname.startsWith('/admin/prompts')
     },
     {
+      key: 'shortlinks',
       name: t('admin.nav.shortlinks', 'Short Links'),
       href: '/admin/shortlinks',
       icon: 'link',
       current: location.pathname.startsWith('/admin/shortlinks')
-    }
+    },    
+    {
+      key: 'usage',
+      name: t('admin.nav.usage', 'Usage Reports'),
+      href: '/admin/usage',
+      icon: 'chart-bar',
+      current: location.pathname === '/admin/usage'
+    },
+    {
+      key: 'system',
+      name: t('admin.nav.system', 'System'),
+      href: '/admin/system',
+      icon: 'cog',
+      current: location.pathname === '/admin/system'
+    },
   ];
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex space-x-8">
-          {navItems.map((item) => (
+          {navItems.filter(item => isEnabled(item.key)).map((item) => (
             <Link
               key={item.name}
               to={item.href}
