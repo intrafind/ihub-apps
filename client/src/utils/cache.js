@@ -81,8 +81,6 @@ class Cache {
     });
     
     this.stats.sets++;
-
-    // Persistent storage is disabled
     
     return value;
   }
@@ -95,7 +93,6 @@ class Cache {
     const result = this.store.delete(key);
     if (result) {
       this.stats.deletes++;
-      // No persistent storage updates
     }
     return result;
   }
@@ -107,8 +104,6 @@ class Cache {
     const size = this.store.size;
     this.store.clear();
     this.stats.deletes += size;
-    
-    // Persistent storage disabled
   }
   
   /**
@@ -128,8 +123,6 @@ class Cache {
     if (count > 0) {
       this.stats.cleanups++;
       this.stats.deletes += count;
-      
-      // No persistent storage updates
     }
     
     return count;
@@ -190,10 +183,7 @@ class Cache {
       }
     }
     
-    // Update persistent storage if enabled and items were deleted
-    if (this.persistenceEnabled && count > 0) {
-      this.saveToStorage();
-    }
+
     
     return count;
   }
@@ -226,14 +216,6 @@ class Cache {
     return this.store.size;
   }
   
-  /**
-   * Get the storage object based on configuration
-   * @private
-   */
-  getStorageObject() {
-    return this.storageType === 'local' ? localStorage : sessionStorage;
-  }
-
   /**
    * Save cache to storage
    * @private
