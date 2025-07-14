@@ -328,7 +328,7 @@ export function processChatWithTools({
   getLocalizedError,
   clientLanguage
 }) {
-  const { request, model, llmMessages, tools, apiKey, temperature, maxTokens } = prep;
+  const { request, model, llmMessages, tools, apiKey, temperature, maxTokens, responseFormat, responseSchema } = prep;
   const controller = new AbortController();
   activeRequests.set(chatId, controller);
 
@@ -479,8 +479,8 @@ export function processChatWithTools({
       maxTokens,
       stream: true,
       tools,
-      responseFormat: outputFormat,
-      responseSchema: app.outputSchema
+      responseFormat: responseFormat,
+      responseSchema: responseSchema
     });
 
     // Clear the timeout since we're transitioning to executeStreamingResponse

@@ -238,6 +238,7 @@
         "fullPage": { "type": "boolean", "default": true }
       },
       "required": ["url"]
+    }
   },
   {
     "id": "entraPeopleSearch",
