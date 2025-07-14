@@ -3,6 +3,7 @@ import { UIConfigProvider } from "./UIConfigContext";
 import { PlatformConfigProvider } from "./PlatformConfigContext";
 import ErrorBoundaryFallback from "./ErrorBoundary";
 import { initializeForceRefresh } from "../utils/forceRefresh";
+import useLanguageDirection from "../hooks/useLanguageDirection";
 
 /**
  * Consolidates all application-level providers in a single component
@@ -25,6 +26,9 @@ const AppProviders = ({ children }) => {
     
     checkForceRefresh();
   }, []);
+
+  // Adjust text direction based on selected language
+  useLanguageDirection();
 
   return (
     <ErrorBoundaryFallback>

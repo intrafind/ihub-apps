@@ -55,7 +55,7 @@ export default function registerDataRoutes(app) {
         console.warn(`Suspicious language parameter received: ${lang}`);
         lang = defaultLang;
       }
-      const supportedLanguages = ['en', 'de'];
+      const supportedLanguages = ['en', 'de', 'ar'];
       const baseLanguage = lang.split('-')[0].toLowerCase();
       if (!supportedLanguages.includes(lang) && supportedLanguages.includes(baseLanguage)) {
         console.log(`Language '${lang}' not directly supported, falling back to '${baseLanguage}'`);

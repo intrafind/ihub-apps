@@ -22,6 +22,7 @@ try {
 // Import core translation files (minimal set for initial rendering)
 import enCoreTranslations from './core/en.json';
 import deCoreTranslations from './core/de.json';
+import arCoreTranslations from './core/ar.json';
 
 // Initialize i18next instance
 const i18nInstance = i18n
@@ -37,6 +38,9 @@ const i18nInstance = i18n
       },
       de: {
         translation: deCoreTranslations
+      },
+      ar: {
+        translation: arCoreTranslations
       }
     },
     fallbackLng: DEFAULT_LANGUAGE,

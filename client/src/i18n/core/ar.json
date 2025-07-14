@@ -20,9 +20,9 @@
     "enter": "Enter"
   },
   "languages": {
-    "en": "English",
-    "de": "German"
-    "ar": "Arabic",
+    "en": "الإنجليزية",
+    "de": "الألمانية"
+    "ar": "العربية"
   },
   "feedback": {
     "thumbsUp": "This response was helpful",
@@ -260,77 +260,6 @@
       },
       "delete": {
         "confirm": "Are you sure you want to delete this model?"
-      }
-    },
-    "home": {
-      "title": "Admin Dashboard",
-      "welcome": "Welcome to the AI Hub Apps administration center",
-      "quickActions": "Quick Actions",
-      "systemActions": "System Actions",
-      "addNewApp": "Add New App",
-      "addNewModel": "Add New Model",
-      "addNewPrompt": "Add New Prompt",
-      "backToApps": "Back to Apps",
-      "refreshCache": "Refresh Cache",
-      "clearCache": "Clear Cache",
-      "systemSettings": "System Settings",
-      "cacheRefreshSuccess": "Cache refreshed successfully",
-      "cacheRefreshError": "Error refreshing cache: {{message}}",
-      "clearCacheConfirm": "Are you sure you want to clear the cache?",
-      "cacheClearSuccess": "Cache cleared successfully",
-      "cacheClearError": "Error clearing cache: {{message}}",
-      "sections": {
-        "usageDesc": "View application usage statistics and analytics",
-        "appsDesc": "Create, edit, and manage applications",
-        "modelsDesc": "Configure and manage AI models",
-        "promptsDesc": "Create and manage prompt templates",
-        "systemDesc": "System settings and maintenance tools",
-        "shortlinksDesc": "Manage application short links"
-      }
-    },
-    "system": {
-      "title": "System Administration",
-      "description": "Manage system-wide settings and maintenance",
-      "forceTitle": "Force Client Refresh",
-      "forceDesc": "Trigger a force refresh for all clients. This will clear all browser caches, localStorage, and force clients to reload all assets (JS, CSS, fonts, configurations) without using browser cache. The disclaimer acceptance will be preserved.",
-      "warningTitle": "Warning",
-      "warningDesc": "This action will force all connected clients to reload their browsers on their next page interaction. Use this when deploying critical updates or when clients need to clear cached data.",
-      "trigger": "Trigger Force Refresh",
-      "triggering": "Triggering Force Refresh...",
-      "triggerSuccess": "Force refresh triggered successfully! New salt: {{salt}}. All clients will refresh on their next page load.",
-      "triggerError": "Failed to trigger force refresh",
-      "cacheTitle": "Server Cache Management",
-      "cacheDesc": "Manage server-side configuration cache. Use these tools to refresh or clear cached configuration files on the server.",
-      "refreshCache": "Refresh Cache",
-      "clearCache": "Clear Cache"
-    },
-    "usage": {
-      "title": "Admin Dashboard",
-      "subtitle": "Usage analytics and system overview",
-      "downloadCsv": "Download CSV",
-      "downloadJson": "Download JSON",
-      "lastUpdated": "Last Updated",
-      "lastReset": "Last Reset",
-      "activeUsers": "Active Users",
-      "activeApps": "Active Apps",
-      "noDataTitle": "No Data Available",
-      "noDataDesc": "Unable to load usage statistics.",
-      "totalMessages": "Total Messages",
-      "totalTokens": "Total Tokens",
-      "magicPrompts": "Magic Prompts",
-      "feedbackScore": "Feedback Score",
-      "tokenDistribution": "Token Distribution",
-      "promptTokens": "Prompt Tokens",
-      "completionTokens": "Completion Tokens",
-      "appUsageDistribution": "App Usage Distribution",
-      "appTokenUsage": "App Token Usage",
-      "tabs": {
-        "overview": "Overview",
-        "users": "Users",
-        "apps": "Applications",
-        "magic": "Magic Prompt",
-        "feedback": "Feedback",
-        "details": "Details"
       }
     }
   }
