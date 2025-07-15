@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import Icon from '../components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
-import { makeAdminApiCall } from '../api/adminApi';
+import Icon from '../../components/Icon';
+import AdminAuth from '../../components/AdminAuth';
+import AdminNavigation from '../../components/AdminNavigation';
+import { makeAdminApiCall } from '../../api/adminApi';
 
 const AdminSystemPage = () => {
   const { t } = useTranslation();

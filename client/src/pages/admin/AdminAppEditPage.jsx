@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import DynamicLanguageEditor from '../components/DynamicLanguageEditor';
-import ToolsSelector from '../components/ToolsSelector';
-import Icon from '../components/Icon';
-import { getLocalizedContent } from '../utils/localizeContent';
-import { makeAdminApiCall } from '../api/adminApi';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
+import DynamicLanguageEditor from '../../components/DynamicLanguageEditor';
+import ToolsSelector from '../../components/ToolsSelector';
+import Icon from '../../components/Icon';
+import { getLocalizedContent } from '../../utils/localizeContent';
+import { makeAdminApiCall } from '../../api/adminApi';
+import AdminAuth from '../../components/AdminAuth';
+import AdminNavigation from '../../components/AdminNavigation';
 
 const AdminAppEditPage = () => {
   const { t, i18n } = useTranslation();

@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import Icon from '../components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
-import { makeAdminApiCall } from '../api/adminApi';
-import ShortLinkDetailsPopup from '../components/ShortLinkDetailsPopup';
+import Icon from '../../components/Icon';
+import AdminAuth from '../../components/AdminAuth';
+import AdminNavigation from '../../components/AdminNavigation';
+import { makeAdminApiCall } from '../../api/adminApi';
+import ShortLinkDetailsPopup from '../../components/ShortLinkDetailsPopup';
 
 const AdminShortLinks = () => {
   const { t } = useTranslation();

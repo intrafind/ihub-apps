@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import AdminNavigation from "../components/AdminNavigation";
-import AdminAuth from "../components/AdminAuth";
-import { makeAdminApiCall } from "../api/adminApi";
+import AdminNavigation from "../../components/AdminNavigation";
+import AdminAuth from "../../components/AdminAuth";
+import { makeAdminApiCall } from "../../api/adminApi";
 
 const AdminShortLinkEditPage = () => {
   const { code } = useParams();

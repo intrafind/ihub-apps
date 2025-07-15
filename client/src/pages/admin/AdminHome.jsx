@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import Icon from '../components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import { makeAdminApiCall } from '../api/adminApi';
-import { usePlatformConfig } from '../components/PlatformConfigContext';
+import Icon from '../../components/Icon';
+import AdminAuth from '../../components/AdminAuth';
+import { makeAdminApiCall } from '../../api/adminApi';
+import { usePlatformConfig } from '../../components/PlatformConfigContext';
 
 const AdminHome = () => {
   const { t } = useTranslation();
