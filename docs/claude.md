@@ -21,3 +21,28 @@ All strings related to Claude models or apps must include English (`en`) and Ger
 - Never assume English is the default language. Use the `defaultLanguage` value
   from the backend platform configuration.
 
+## Development and Testing
+
+### Server Startup Testing
+After making any changes to the server code, especially imports, dependencies, or architecture, always test that the server starts correctly:
+
+```bash
+# Test server startup with timeout to catch errors quickly
+timeout 10s node server/server.js || echo "Server startup check completed"
+
+# Test full development environment
+timeout 15s npm run dev || echo "Development environment startup check completed"
+```
+
+**Important**: This testing should be done after every build or significant refactoring to ensure:
+- No import errors
+- No missing dependencies
+- Server starts without runtime errors
+- All modules load correctly
+
+If the server fails to start, check the error output for:
+- Missing or incorrect import paths
+- Module export/import mismatches
+- Syntax errors
+- Missing dependencies
+

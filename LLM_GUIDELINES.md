@@ -42,6 +42,15 @@
 1. **Client-Server Interaction**: Test both client and server components after changes.
 2. **Model Integration**: Verify continued compatibility with all LLM providers.
 3. **Error Scenarios**: Test error handling paths remain functional.
+4. **Server Startup Testing**: After every build or significant refactoring, test server startup:
+   ```bash
+   # Test server startup with timeout to catch errors quickly
+   timeout 10s node server/server.js || echo "Server startup check completed"
+   
+   # Test full development environment
+   timeout 15s npm run dev || echo "Development environment startup check completed"
+   ```
+   This ensures no import errors, missing dependencies, or runtime errors.
 
 ## Adaptation Requirements
 These guidelines may be superseded by explicit instructions, but should be followed by default to maintain project integrity.

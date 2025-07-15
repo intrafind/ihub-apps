@@ -123,6 +123,20 @@ This will:
 - Launch the Vite development server for the client
 - Enable hot reloading for both client and server changes
 
+### Testing Server Startup
+
+After making changes to server code, always test that the server starts correctly:
+
+```bash
+# Test server startup with timeout to catch errors quickly
+timeout 10s node server/server.js || echo "Server startup check completed"
+
+# Test full development environment
+timeout 15s npm run dev || echo "Development environment startup check completed"
+```
+
+This should be done after every build or significant refactoring to ensure no import errors, missing dependencies, or runtime errors.
+
 ## Building for Production
 
 ### Standard Production Build

@@ -52,6 +52,29 @@ A standalone binary can be created with `./build.sh --binary` if Node.js 20+ is 
 ## Testing
 This repository does not contain automated tests yet.
 
+### Manual Server Startup Testing
+After any code changes, especially to server architecture, imports, or dependencies, always test that the server starts correctly:
+
+```bash
+# Test server startup with timeout to catch errors quickly
+timeout 10s node server/server.js || echo "Server startup check completed"
+
+# Test full development environment
+timeout 15s npm run dev || echo "Development environment startup check completed"
+```
+
+**Critical**: This testing must be done after every build or significant refactoring to ensure:
+- No import/export errors
+- No missing dependencies  
+- Server starts without runtime errors
+- All modules load correctly
+
+Common issues to watch for:
+- Import path mismatches (e.g., `import from './utils.js'` when function is in `./usageTracker.js`)
+- Variable scope issues (e.g., variables declared in wrong scope)
+- Missing module exports
+- Syntax errors
+
 ## Guidelines
 Follow the instructions in [LLM_GUIDELINES.md](LLM_GUIDELINES.md):
 - Preserve existing functionality and architecture.
