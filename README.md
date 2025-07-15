@@ -126,11 +126,41 @@ This will:
 - Launch the Vite development server for the client
 - Enable hot reloading for both client and server changes
 
+### Code Quality and Linting
+
+The project uses automated linting and formatting to ensure code quality:
+
+```bash
+# Check all files for linting issues
+npm run lint
+
+# Auto-fix linting issues where possible
+npm run lint:fix
+
+# Format all files with Prettier
+npm run format
+
+# Check if files are properly formatted
+npm run format:check
+```
+
+**Automated Systems:**
+
+- **Pre-commit hooks**: Automatically run linting on staged files
+- **CI/CD**: GitHub Actions runs linting checks on PRs and pushes
+- **ESLint 9.x**: Modern flat config with comprehensive rules
+- **Prettier**: Consistent code formatting
+
+**Important**: Always run `npm run lint:fix` before committing. Pre-commit hooks will prevent commits with linting errors.
+
 ### Testing Server Startup
 
 After making changes to server code, always test that the server starts correctly:
 
 ```bash
+# Run linting first, then test server startup
+npm run lint:fix
+
 # Test server startup with timeout to catch errors quickly
 timeout 10s node server/server.js || echo "Server startup check completed"
 
@@ -138,7 +168,7 @@ timeout 10s node server/server.js || echo "Server startup check completed"
 timeout 15s npm run dev || echo "Development environment startup check completed"
 ```
 
-This should be done after every build or significant refactoring to ensure no import errors, missing dependencies, or runtime errors.
+This should be done after every build or significant refactoring to ensure no linting errors, import errors, missing dependencies, or runtime errors.
 
 ## Building for Production
 

@@ -25,11 +25,13 @@
 
 ## Code Modification Rules
 
-1. **Minimal Changes**: Make only the necessary changes to implement the requested feature or fix.
-2. **Documentation**: Maintain or update code comments to reflect changes.
-3. **Error Handling**: Preserve or enhance existing error handling mechanisms.
-4. **No Performance Degradation**: Avoid changes that could introduce performance issues.
-5. **Test Impact**: Consider test implications when making changes.
+1. **Code Quality First**: Always run `npm run lint:fix` before making any changes or commits.
+2. **Minimal Changes**: Make only the necessary changes to implement the requested feature or fix.
+3. **Documentation**: Maintain or update code comments to reflect changes.
+4. **Error Handling**: Preserve or enhance existing error handling mechanisms.
+5. **No Performance Degradation**: Avoid changes that could introduce performance issues.
+6. **Test Impact**: Consider test implications when making changes.
+7. **Linting Compliance**: All code must pass ESLint and Prettier checks before committing.
 
 ## Security Considerations
 
@@ -46,12 +48,23 @@
 
 ## Testing Guidelines
 
-1. **Client-Server Interaction**: Test both client and server components after changes.
-2. **Model Integration**: Verify continued compatibility with all LLM providers.
-3. **Error Scenarios**: Test error handling paths remain functional.
-4. **Server Startup Testing**: After every build or significant refactoring, test server startup:
+1. **Code Quality Checks**: Always run linting before testing:
 
    ```bash
+   # Run linting and formatting before any testing
+   npm run lint:fix
+   npm run format
+   ```
+
+2. **Client-Server Interaction**: Test both client and server components after changes.
+3. **Model Integration**: Verify continued compatibility with all LLM providers.
+4. **Error Scenarios**: Test error handling paths remain functional.
+5. **Server Startup Testing**: After every build or significant refactoring, test server startup:
+
+   ```bash
+   # MANDATORY: Run linting first
+   npm run lint:fix
+
    # Test server startup with timeout to catch errors quickly
    timeout 10s node server/server.js || echo "Server startup check completed"
 
@@ -59,7 +72,12 @@
    timeout 15s npm run dev || echo "Development environment startup check completed"
    ```
 
-   This ensures no import errors, missing dependencies, or runtime errors.
+   This ensures no linting violations, import errors, missing dependencies, or runtime errors.
+
+6. **Pre-commit Testing**: The automated pre-commit hooks will run linting on staged files. If they fail:
+   - Fix the linting issues
+   - Stage the fixed files
+   - Commit again
 
 ## Adaptation Requirements
 
