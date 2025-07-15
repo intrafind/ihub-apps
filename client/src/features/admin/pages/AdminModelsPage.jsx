@@ -29,11 +29,24 @@ const AdminModelsPage = () => {
   const loadModels = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await makeAdminApiCall('/api/admin/models');
       const data = await response.json();
-      setModels(data);
+
+      console.log('Models loaded:', data);
+      console.log('Models count:', Array.isArray(data) ? data.length : 'Not an array');
+
+      // Ensure we have an array
+      const modelsArray = Array.isArray(data) ? data : [];
+      setModels(modelsArray);
+
+      if (modelsArray.length === 0) {
+        console.warn('No models returned from API');
+      }
     } catch (err) {
+      console.error('Error loading models:', err);
       setError(err.message);
+      setModels([]); // Set empty array on error
     } finally {
       setLoading(false);
     }

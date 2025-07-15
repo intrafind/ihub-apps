@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIConfig } from '../contexts/UIConfigContext';
+import { i18nService } from '../../i18n/i18n';
 
 const LanguageSelector = () => {
   const { i18n, t } = useTranslation();
@@ -13,20 +14,8 @@ const LanguageSelector = () => {
 
     try {
       setIsChanging(true);
-      console.log(`Changing language to: ${language}`);
-
-      // Use the custom changeLanguage method we defined in i18n.js
-      if (typeof i18n.changeLanguage === 'function') {
-        await i18n.changeLanguage(language);
-        console.log(`Language changed to: ${language}`);
-      } else {
-        console.error('i18n.changeLanguage is not a function', i18n);
-        // Fallback method if changeLanguage is not available
-        if (i18n.language !== language) {
-          localStorage.setItem('i18nextLng', language);
-          window.location.reload(); // Reload to apply the language change
-        }
-      }
+      await i18nService.changeLanguage(language);
+      console.log(`Language changed to: ${language}`);
     } catch (error) {
       console.error('Error changing language:', error);
     } finally {

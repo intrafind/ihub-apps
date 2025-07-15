@@ -42,10 +42,23 @@ const AdminPromptsPage = () => {
   const loadPrompts = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await fetchAdminPrompts();
-      setPrompts(data);
+
+      console.log('Prompts loaded:', data);
+      console.log('Prompts count:', Array.isArray(data) ? data.length : 'Not an array');
+
+      // Ensure we have an array
+      const promptsArray = Array.isArray(data) ? data : [];
+      setPrompts(promptsArray);
+
+      if (promptsArray.length === 0) {
+        console.warn('No prompts returned from API');
+      }
     } catch (err) {
+      console.error('Error loading prompts:', err);
       setError(err.message);
+      setPrompts([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
