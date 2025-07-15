@@ -74,42 +74,27 @@ class ConfigCache {
         // Special handling for apps.json - load from both sources
         if (configPath === 'config/apps.json') {
           // Load enabled apps only
-          const enabledApps = await loadAllApps(false);
+          const enabledApps = await loadAllApps(true);
           this.setCacheEntry(configPath, enabledApps);
           console.log(`✓ Cached: ${configPath} (${enabledApps.length} enabled apps)`);
-
-          // Also load and cache all apps (including disabled)
-          const allApps = await loadAllApps(true);
-          this.setCacheEntry('config/apps-all.json', allApps);
-          console.log(`✓ Cached: config/apps-all.json (${allApps.length} total apps)`);
           return;
         }
 
         // Special handling for models.json - load from both sources
         if (configPath === 'config/models.json') {
-          // Load enabled models only
-          const enabledModels = await loadAllModels(false);
-          this.setCacheEntry(configPath, enabledModels);
-          console.log(`✓ Cached: ${configPath} (${enabledModels.length} enabled models)`);
-
           // Also load and cache all models (including disabled)
           const allModels = await loadAllModels(true);
-          this.setCacheEntry('config/models-all.json', allModels);
-          console.log(`✓ Cached: config/models-all.json (${allModels.length} total models)`);
+          this.setCacheEntry('config/models.json', allModels);
+          console.log(`✓ Cached: config/models.json (${allModels.length} total models)`);
           return;
         }
 
         // Special handling for prompts.json - load from both sources
         if (configPath === 'config/prompts.json') {
           // Load enabled prompts only
-          const enabledPrompts = await loadAllPrompts(false);
+          const enabledPrompts = await loadAllPrompts(true);
           this.setCacheEntry(configPath, enabledPrompts);
           console.log(`✓ Cached: ${configPath} (${enabledPrompts.length} enabled prompts)`);
-
-          // Also load and cache all prompts (including disabled)
-          const allPrompts = await loadAllPrompts(true);
-          this.setCacheEntry('config/prompts-all.json', allPrompts);
-          console.log(`✓ Cached: config/prompts-all.json (${allPrompts.length} total prompts)`);
           return;
         }
 
