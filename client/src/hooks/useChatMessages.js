@@ -4,17 +4,17 @@ import { useState, useCallback, useRef, useEffect } from 'react';
  * Custom hook for managing chat messages
  * Messages will persist during page refreshes using sessionStorage
  * Each new browser tab will start with a new chat session
- * 
+ *
  * @param {string} chatId - The ID of the current chat for storage purposes
  * @returns {Object} Chat message management functions and state
  */
 function useChatMessages(chatId = 'default') {
   // Use sessionStorage for persistence during page refreshes
   const storageKey = `ai_hub_chat_messages_${chatId}`;
-  
+
   // Track the previous chatId to detect changes
   const prevChatIdRef = useRef(chatId);
-  
+
   // Initialize state from sessionStorage if available
   const loadInitialMessages = () => {
     try {
@@ -27,11 +27,17 @@ function useChatMessages(chatId = 'default') {
   };
 
   const [messages, setMessages] = useState(loadInitialMessages);
-  
+
   // Load messages when chatId changes (app switching)
   useEffect(() => {
     if (prevChatIdRef.current !== chatId && prevChatIdRef.current !== null) {
-      console.log('[useChatMessages] ChatId changed from', prevChatIdRef.current, 'to', chatId, '- loading messages for new chat');
+      console.log(
+        '[useChatMessages] ChatId changed from',
+        prevChatIdRef.current,
+        'to',
+        chatId,
+        '- loading messages for new chat'
+      );
       // Load messages for the new chatId
       const newStorageKey = `ai_hub_chat_messages_${chatId}`;
       try {
@@ -48,7 +54,7 @@ function useChatMessages(chatId = 'default') {
 
   // Use a ref to store a copy of messages for read-only operations
   const messagesRef = useRef(messages);
-  
+
   // Update the ref whenever state changes
   useEffect(() => {
     messagesRef.current = messages;
@@ -59,7 +65,7 @@ function useChatMessages(chatId = 'default') {
     try {
       // Filter out greeting messages for persistence
       const persistableMessages = messages.filter(msg => !msg.isGreeting);
-      
+
       // Only save if we have messages
       if (persistableMessages.length > 0) {
         sessionStorage.setItem(storageKey, JSON.stringify(persistableMessages));
@@ -86,14 +92,14 @@ function useChatMessages(chatId = 'default') {
       role: 'user',
       content,
       imageData, // Add this
-      fileData,  // Add this
+      fileData, // Add this
       ...rest
     };
 
     if (rawContent !== undefined) {
       userMessage.rawContent = rawContent;
     }
-    
+
     setMessages(prev => [...prev, userMessage]);
     return id;
   }, []);
@@ -105,17 +111,17 @@ function useChatMessages(chatId = 'default') {
    */
   const addAssistantMessage = useCallback((exchangeId = null) => {
     const id = exchangeId || `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    
+
     setMessages(prev => [
       ...prev,
       {
         id,
         role: 'assistant',
         content: '',
-        loading: true,
+        loading: true
       }
     ]);
-    
+
     return id;
   }, []);
 
@@ -127,9 +133,12 @@ function useChatMessages(chatId = 'default') {
    */
   const updateAssistantMessage = useCallback((id, content, isLoading = true, extra = {}) => {
     if (isLoading === false) {
-      console.log('✅ Setting message to completed state:', { id, contentLength: content?.length || 0 });
+      console.log('✅ Setting message to completed state:', {
+        id,
+        contentLength: content?.length || 0
+      });
     }
-    
+
     setMessages(prev => {
       const updatedMessages = prev.map(msg =>
         msg.id === id
@@ -143,7 +152,7 @@ function useChatMessages(chatId = 'default') {
             }
           : msg
       );
-      
+
       return updatedMessages;
     });
   }, []);
@@ -154,8 +163,8 @@ function useChatMessages(chatId = 'default') {
    * @param {string} errorMessage - The error message
    */
   const setMessageError = useCallback((id, errorMessage) => {
-    setMessages(prev => 
-      prev.map(msg => 
+    setMessages(prev =>
+      prev.map(msg =>
         msg.id === id
           ? { ...msg, content: `Error: ${errorMessage}`, loading: false, error: true }
           : msg
@@ -167,7 +176,7 @@ function useChatMessages(chatId = 'default') {
    * Delete a message and all subsequent messages
    * @param {string} messageId - The ID of the message to delete
    */
-  const deleteMessage = useCallback((messageId) => {
+  const deleteMessage = useCallback(messageId => {
     // Using messagesRef instead of messages dependency
     const messageIndex = messagesRef.current.findIndex(msg => msg.id === messageId);
     if (messageIndex !== -1) {
@@ -199,7 +208,7 @@ function useChatMessages(chatId = 'default') {
    */
   const addSystemMessage = useCallback((content, isError = false) => {
     const id = `system-${Date.now()}`;
-    
+
     setMessages(prev => [
       ...prev,
       {
@@ -210,7 +219,7 @@ function useChatMessages(chatId = 'default') {
         isErrorMessage: isError
       }
     ]);
-    
+
     return id;
   }, []);
 
@@ -230,14 +239,12 @@ function useChatMessages(chatId = 'default') {
   const getMessagesForApi = useCallback((includeFull = true, additionalMessage = null) => {
     // Using messagesRef instead of messages dependency
     // Filter out greeting messages for API requests
-    let messagesForApi = includeFull ? 
-      messagesRef.current.filter(msg => !msg.isGreeting) : 
-      [];
-    
+    let messagesForApi = includeFull ? messagesRef.current.filter(msg => !msg.isGreeting) : [];
+
     if (additionalMessage) {
       messagesForApi = [...messagesForApi, additionalMessage];
     }
-    
+
     // Strip UI-specific properties that the API doesn't need
     return messagesForApi.map(msg => {
       const { id, loading, error, isErrorMessage, rawContent, isGreeting, ...apiMsg } = msg;

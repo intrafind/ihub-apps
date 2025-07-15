@@ -33,7 +33,12 @@
     "test:mistral": "node server/tests/mistralAdapter.test.js",
     "test:anthropic": "node server/tests/anthropicAdapter.test.js",
     "test:google": "node server/tests/googleAdapter.test.js",
-    "test:all": "npm run test:openai && npm run test:mistral && npm run test:anthropic && npm run test:google"
+    "test:all": "npm run test:openai && npm run test:mistral && npm run test:anthropic && npm run test:google",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
   },
   "keywords": [
     "ai",
@@ -53,8 +58,13 @@
   },
   "devDependencies": {
     "esbuild": "^0.25.6",
+    "eslint": "^9.18.0",
+    "globals": "^15.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
     "nodemon": "^3.1.10",
     "postject": "^1.0.0-alpha.6",
+    "prettier": "^3.4.2",
     "rimraf": "^6.0.1"
   },
   "engines": {

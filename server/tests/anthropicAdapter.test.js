@@ -1,11 +1,17 @@
 import assert from 'assert';
 import AnthropicAdapter from '../adapters/anthropic.js';
 
-const model = { modelId: 'claude-4-sonnet', url: 'https://api.anthropic.com/v1/messages', provider: 'anthropic' };
+const model = {
+  modelId: 'claude-4-sonnet',
+  url: 'https://api.anthropic.com/v1/messages',
+  provider: 'anthropic'
+};
 const messages = [{ role: 'user', content: 'test' }];
 
 const schema = { type: 'object', properties: { foo: { type: 'string' } }, required: ['foo'] };
-const req = AnthropicAdapter.createCompletionRequest(model, messages, 'key', { responseSchema: schema });
+const req = AnthropicAdapter.createCompletionRequest(model, messages, 'key', {
+  responseSchema: schema
+});
 
 const jsonTool = req.body.tools.find(t => t.name === 'json');
 assert.ok(jsonTool, 'json tool added');

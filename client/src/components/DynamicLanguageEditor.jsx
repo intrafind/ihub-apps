@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 
-const DynamicLanguageEditor = ({ 
-  label, 
-  value = {}, 
-  onChange, 
-  required = false, 
-  type = 'text', 
+const DynamicLanguageEditor = ({
+  label,
+  value = {},
+  onChange,
+  required = false,
+  type = 'text',
   placeholder = {},
-  className = "",
+  className = '',
   fieldType = null // For nested objects like greeting.title, greeting.subtitle
 }) => {
   const { t } = useTranslation();
@@ -17,16 +17,188 @@ const DynamicLanguageEditor = ({
   const [newLanguageCode, setNewLanguageCode] = useState('');
 
   // If fieldType is provided, we're working with nested objects
-  const currentValue = fieldType ? 
-    Object.keys(value).reduce((acc, lang) => {
-      if (value[lang] && typeof value[lang] === 'object' && value[lang][fieldType]) {
-        acc[lang] = value[lang][fieldType];
-      }
-      return acc;
-    }, {}) : value;
+  const currentValue = fieldType
+    ? Object.keys(value).reduce((acc, lang) => {
+        if (value[lang] && typeof value[lang] === 'object' && value[lang][fieldType]) {
+          acc[lang] = value[lang][fieldType];
+        }
+        return acc;
+      }, {})
+    : value;
 
   const languages = Object.keys(currentValue);
-  const commonLanguages = ['en', 'de', 'es', 'fr', 'it', 'pt', 'nl', 'sv', 'no', 'da', 'fi', 'pl', 'cs', 'hu', 'ro', 'bg', 'hr', 'sk', 'sl', 'et', 'lv', 'lt', 'ru', 'uk', 'zh', 'ja', 'ko', 'ar', 'he', 'th', 'vi', 'hi', 'bn', 'ta', 'te', 'ml', 'kn', 'gu', 'pa', 'or', 'as', 'sa', 'ne', 'si', 'my', 'km', 'lo', 'ka', 'am', 'ti', 'so', 'sw', 'zu', 'xh', 'af', 'tr', 'az', 'kk', 'ky', 'uz', 'tg', 'mn', 'bo', 'dz', 'mk', 'al', 'sq', 'sr', 'bs', 'mt', 'cy', 'ga', 'gd', 'br', 'co', 'eu', 'ca', 'gl', 'oc', 'ast', 'an', 'ia', 'ie', 'io', 'eo', 'vo', 'la', 'grc', 'got', 'non', 'ang', 'enm', 'gmh', 'goh', 'gem', 'cel', 'ine', 'sla', 'bat', 'fin', 'hun', 'baq', 'kar', 'cau', 'sem', 'cus', 'ber', 'egy', 'cop', 'akk', 'sux', 'elx', 'peo', 'ave', 'pal', 'xpr', 'sog', 'xco', 'kho', 'pal', 'zza', 'ku', 'ckb', 'lrc', 'prs', 'tly', 'glk', 'mzn', 'ryu', 'wuu', 'yue', 'hak', 'nan', 'cdo', 'gan', 'hsn', 'xiang', 'cmn', 'lzh', 'och', 'ltc', 'mkh', 'hmn', 'tai', 'aav', 'map', 'poz', 'phi', 'pqe', 'pqw', 'pow', 'poz', 'mp', 'cmp', 'emp', 'wmp', 'plf', 'poz', 'oc', 'pqe', 'pqw', 'pow', 'poz', 'mp', 'cmp', 'emp', 'wmp', 'plf', 'poz', 'oc'];
+  const commonLanguages = [
+    'en',
+    'de',
+    'es',
+    'fr',
+    'it',
+    'pt',
+    'nl',
+    'sv',
+    'no',
+    'da',
+    'fi',
+    'pl',
+    'cs',
+    'hu',
+    'ro',
+    'bg',
+    'hr',
+    'sk',
+    'sl',
+    'et',
+    'lv',
+    'lt',
+    'ru',
+    'uk',
+    'zh',
+    'ja',
+    'ko',
+    'ar',
+    'he',
+    'th',
+    'vi',
+    'hi',
+    'bn',
+    'ta',
+    'te',
+    'ml',
+    'kn',
+    'gu',
+    'pa',
+    'or',
+    'as',
+    'sa',
+    'ne',
+    'si',
+    'my',
+    'km',
+    'lo',
+    'ka',
+    'am',
+    'ti',
+    'so',
+    'sw',
+    'zu',
+    'xh',
+    'af',
+    'tr',
+    'az',
+    'kk',
+    'ky',
+    'uz',
+    'tg',
+    'mn',
+    'bo',
+    'dz',
+    'mk',
+    'al',
+    'sq',
+    'sr',
+    'bs',
+    'mt',
+    'cy',
+    'ga',
+    'gd',
+    'br',
+    'co',
+    'eu',
+    'ca',
+    'gl',
+    'oc',
+    'ast',
+    'an',
+    'ia',
+    'ie',
+    'io',
+    'eo',
+    'vo',
+    'la',
+    'grc',
+    'got',
+    'non',
+    'ang',
+    'enm',
+    'gmh',
+    'goh',
+    'gem',
+    'cel',
+    'ine',
+    'sla',
+    'bat',
+    'fin',
+    'hun',
+    'baq',
+    'kar',
+    'cau',
+    'sem',
+    'cus',
+    'ber',
+    'egy',
+    'cop',
+    'akk',
+    'sux',
+    'elx',
+    'peo',
+    'ave',
+    'pal',
+    'xpr',
+    'sog',
+    'xco',
+    'kho',
+    'pal',
+    'zza',
+    'ku',
+    'ckb',
+    'lrc',
+    'prs',
+    'tly',
+    'glk',
+    'mzn',
+    'ryu',
+    'wuu',
+    'yue',
+    'hak',
+    'nan',
+    'cdo',
+    'gan',
+    'hsn',
+    'xiang',
+    'cmn',
+    'lzh',
+    'och',
+    'ltc',
+    'mkh',
+    'hmn',
+    'tai',
+    'aav',
+    'map',
+    'poz',
+    'phi',
+    'pqe',
+    'pqw',
+    'pow',
+    'poz',
+    'mp',
+    'cmp',
+    'emp',
+    'wmp',
+    'plf',
+    'poz',
+    'oc',
+    'pqe',
+    'pqw',
+    'pow',
+    'poz',
+    'mp',
+    'cmp',
+    'emp',
+    'wmp',
+    'plf',
+    'poz',
+    'oc'
+  ];
 
   const handleAddLanguage = () => {
     if (newLanguageCode && !languages.includes(newLanguageCode)) {
@@ -50,7 +222,7 @@ const DynamicLanguageEditor = ({
     }
   };
 
-  const handleRemoveLanguage = (lang) => {
+  const handleRemoveLanguage = lang => {
     if (fieldType) {
       const newValue = { ...value };
       if (newValue[lang] && typeof newValue[lang] === 'object') {
@@ -109,7 +281,7 @@ const DynamicLanguageEditor = ({
           <div className="flex items-center space-x-2">
             <select
               value={newLanguageCode}
-              onChange={(e) => setNewLanguageCode(e.target.value)}
+              onChange={e => setNewLanguageCode(e.target.value)}
               className="block w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             >
               <option value="">{t('admin.apps.edit.selectLanguage', 'Select...')}</option>
@@ -122,7 +294,7 @@ const DynamicLanguageEditor = ({
             <input
               type="text"
               value={newLanguageCode}
-              onChange={(e) => setNewLanguageCode(e.target.value.toLowerCase())}
+              onChange={e => setNewLanguageCode(e.target.value.toLowerCase())}
               placeholder={t('admin.apps.edit.languageCode', 'Language code (e.g., en, de, es)')}
               className="flex-1 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             />
@@ -150,7 +322,7 @@ const DynamicLanguageEditor = ({
               {type === 'textarea' ? (
                 <textarea
                   value={currentValue[lang] || ''}
-                  onChange={(e) => handleLanguageChange(lang, e.target.value)}
+                  onChange={e => handleLanguageChange(lang, e.target.value)}
                   placeholder={placeholder[lang] || ''}
                   rows={3}
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
@@ -160,7 +332,7 @@ const DynamicLanguageEditor = ({
                 <input
                   type={type}
                   value={currentValue[lang] || ''}
-                  onChange={(e) => handleLanguageChange(lang, e.target.value)}
+                  onChange={e => handleLanguageChange(lang, e.target.value)}
                   placeholder={placeholder[lang] || ''}
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   required={required && lang === 'en'}
@@ -181,7 +353,10 @@ const DynamicLanguageEditor = ({
 
       {languages.length === 0 && (
         <div className="text-sm text-gray-500 italic">
-          {t('admin.apps.edit.noLanguages', 'No languages configured. Add a language to get started.')}
+          {t(
+            'admin.apps.edit.noLanguages',
+            'No languages configured. Add a language to get started.'
+          )}
         </div>
       )}
     </div>

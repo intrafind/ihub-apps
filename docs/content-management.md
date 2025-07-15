@@ -38,6 +38,7 @@ Content files can be incorporated into apps using the `sourcePath` property in a
 ```
 
 When an app has a `sourcePath` defined:
+
 - The contents of the specified file are loaded when the app is used
 - The content is made available to the app through variables (typically `{{source}}` or `{{content}}`)
 - The app can reference, search, and use this content when generating responses
@@ -61,9 +62,11 @@ Example from the FAQ content:
 ## General Questions
 
 ### What is AI Hub Apps?
+
 AI Hub Apps is a platform that provides a collection of specialized AI assistants...
 
 ### How do I start using an app?
+
 Simply click on any app tile from the main dashboard...
 ```
 
@@ -108,4 +111,3 @@ To update content:
 3. The application will automatically use the updated content on next access
 
 No server restart is required when updating content files, as they are loaded dynamically when accessed.
-

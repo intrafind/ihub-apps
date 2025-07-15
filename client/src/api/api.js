@@ -25,15 +25,15 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(config => {
   // Get session ID (creates a new one if needed)
   const sessionId = getSessionId();
-  
+
   // Renew session if it's close to expiry
   if (shouldRenewSession()) {
     renewSession();
   }
-  
+
   // Add session ID to request headers
   config.headers['X-Session-ID'] = sessionId;
-  
+
   return config;
 });
 
@@ -42,26 +42,26 @@ const pendingRequests = new Map();
 
 // Enhanced retry mechanism for failed requests and 304 handling
 apiClient.interceptors.response.use(
-  (response) => {
+  response => {
     // Handle 304 Not Modified responses properly
     if (response.status === 304) {
       response.isNotModified = true;
     }
     return response;
   },
-  async (error) => {
+  async error => {
     const originalRequest = error.config;
-    
+
     // Only retry GET requests, and only once
     if (originalRequest.method === 'get' && !originalRequest._retry && !error.response) {
       originalRequest._retry = true;
       console.log('Network error, retrying request once:', originalRequest.url);
-      
+
       // Wait a moment before retrying
       await new Promise(resolve => setTimeout(resolve, 1000));
       return apiClient(originalRequest);
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -69,7 +69,13 @@ apiClient.interceptors.response.use(
 // Handle API responses with in-memory caching and optional ETag support
 // Cache entries live only for the lifetime of the page. Data is kept in memory
 // and not persisted to sessionStorage.
-const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_TTL.MEDIUM, deduplicate = true, handleETag = false) => {
+const handleApiResponse = async (
+  apiCall,
+  cacheKey = null,
+  ttl = DEFAULT_CACHE_TTL.MEDIUM,
+  deduplicate = true,
+  handleETag = false
+) => {
   try {
     // Check cache first if cacheKey is provided
     if (cacheKey) {
@@ -90,13 +96,13 @@ const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_T
         return pendingRequest;
       }
     }
-    
+
     // Create a promise for the API call
     const requestPromise = (async () => {
       try {
         // Make the API call
         const response = await apiCall();
-        
+
         // Handle 304 Not Modified response
         if (response.status === 304 || response.isNotModified) {
           console.log(`304 Not Modified for: ${cacheKey}`);
@@ -108,21 +114,21 @@ const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_T
           // If no cached data, this is an error condition
           throw new Error('304 Not Modified but no cached data available');
         }
-        
+
         const data = response.data;
-        
+
         // Cache the response if cacheKey is provided
         if (cacheKey && data) {
           const cacheEntry = { data, timestamp: Date.now() };
-          
+
           // Store ETag if present
           if (handleETag && response.headers.etag) {
             cacheEntry.etag = response.headers.etag;
           }
-          
+
           cache.set(cacheKey, cacheEntry, ttl);
         }
-        
+
         return data;
       } catch (error) {
         // Enhance error object with useful information
@@ -131,20 +137,20 @@ const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_T
         );
         enhancedError.status = error.response?.status || 500;
         enhancedError.originalError = error;
-        
+
         // Add request details to error for better debugging
         enhancedError.requestDetails = {
           url: error.config?.url,
           method: error.config?.method,
           timestamp: new Date().toISOString()
         };
-        
-        console.error(`API Error: ${enhancedError.message}`, { 
+
+        console.error(`API Error: ${enhancedError.message}`, {
           status: enhancedError.status,
           details: error.response?.data,
           url: error.config?.url
         });
-        
+
         // For 5xx server errors, store a minimal placeholder in cache with shorter TTL
         // to prevent overwhelming the server with retries on error
         if (error.response?.status >= 500 && cacheKey) {
@@ -155,7 +161,7 @@ const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_T
           };
           cache.set(cacheKey, errorPlaceholder, DEFAULT_CACHE_TTL.SHORT);
         }
-        
+
         throw enhancedError;
       } finally {
         // Always clear the pending request reference when done
@@ -164,11 +170,11 @@ const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_T
         }
       }
     })();
-    
+
     // Store the promise for deduplication
     if (deduplicate && cacheKey) {
       pendingRequests.set(cacheKey, requestPromise);
-      
+
       // Set a timeout to remove the pending request if it takes too long
       setTimeout(() => {
         if (pendingRequests.get(cacheKey) === requestPromise) {
@@ -176,7 +182,7 @@ const handleApiResponse = async (apiCall, cacheKey = null, ttl = DEFAULT_CACHE_T
         }
       }, API_REQUEST_TIMEOUT + 1000); // Slightly longer than the actual timeout
     }
-    
+
     return requestPromise;
   } catch (error) {
     console.error('Error in handleApiResponse wrapper:', error);
@@ -209,18 +215,14 @@ export const fetchAppDetails = async (appId, options = {}) => {
 export const fetchModels = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : CACHE_KEYS.MODELS_LIST;
-  
-  return handleApiResponse(
-    () => apiClient.get('/models'),
-    cacheKey,
-    DEFAULT_CACHE_TTL.MEDIUM
-  );
+
+  return handleApiResponse(() => apiClient.get('/models'), cacheKey, DEFAULT_CACHE_TTL.MEDIUM);
 };
 
 export const fetchModelDetails = async (modelId, options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.MODEL_DETAILS, { id: modelId });
-  
+
   return handleApiResponse(
     () => apiClient.get(`/models/${modelId}`),
     cacheKey,
@@ -230,7 +232,7 @@ export const fetchModelDetails = async (modelId, options = {}) => {
 
 /**
  * Sends a chat message to an app
- * 
+ *
  * @param {string} appId - The ID of the app to chat with
  * @param {string} chatId - The ID of the chat session
  * @param {Array} messages - Array of message objects with role and content
@@ -238,17 +240,17 @@ export const fetchModelDetails = async (modelId, options = {}) => {
  * @returns {Promise<Response>} - Response from the API
  */
 export const sendAppChatMessage = async (appId, chatId, messages, options = {}) => {
-
   if (!appId || !chatId || !messages) {
     throw new Error('Missing required parameters');
   }
-  
+
   // Using apiClient instead of direct fetch
-  return handleApiResponse(() => 
-    apiClient.post(`/apps/${appId}/chat/${chatId}`, {
-      messages,
-      ...options
-    }),
+  return handleApiResponse(
+    () =>
+      apiClient.post(`/apps/${appId}/chat/${chatId}`, {
+        messages,
+        ...options
+      }),
     null, // No caching for chat messages
     null,
     false // Don't deduplicate chat requests
@@ -256,9 +258,9 @@ export const sendAppChatMessage = async (appId, chatId, messages, options = {}) 
 };
 
 // Send message feedback (thumbs up/down with optional comments)
-export const sendMessageFeedback = async (feedbackData) => {
-  return handleApiResponse(() => 
-    apiClient.post('/feedback', feedbackData),
+export const sendMessageFeedback = async feedbackData => {
+  return handleApiResponse(
+    () => apiClient.post('/feedback', feedbackData),
     null, // No caching for feedback
     null,
     false // Don't deduplicate feedback requests
@@ -267,12 +269,7 @@ export const sendMessageFeedback = async (feedbackData) => {
 
 // Admin usage data
 export const fetchUsageData = async () => {
-  return handleApiResponse(
-    () => apiClient.get('/admin/usage'),
-    null,
-    null,
-    false
-  );
+  return handleApiResponse(() => apiClient.get('/admin/usage'), null, null, false);
 };
 
 export const generateMagicPrompt = async (input, options = {}) => {
@@ -289,11 +286,7 @@ export const fetchStyles = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : CACHE_KEYS.STYLES;
 
-  return handleApiResponse(
-    () => apiClient.get('/styles'),
-    cacheKey,
-    DEFAULT_CACHE_TTL.LONG
-  );
+  return handleApiResponse(() => apiClient.get('/styles'), cacheKey, DEFAULT_CACHE_TTL.LONG);
 };
 
 // Prompts
@@ -304,7 +297,7 @@ export const fetchPrompts = async (options = {}) => {
   return handleApiResponse(
     () => {
       const headers = {};
-      
+
       // Add ETag header if we have cached data
       if (cacheKey) {
         const cachedData = cache.get(cacheKey);
@@ -312,7 +305,7 @@ export const fetchPrompts = async (options = {}) => {
           headers['If-None-Match'] = cachedData.etag;
         }
       }
-      
+
       return apiClient.get('/prompts', { headers });
     },
     cacheKey,
@@ -347,9 +340,9 @@ export const fetchPlatformConfig = async (options = {}) => {
 };
 
 // Test model
-export const testModel = async (modelId) => {
-  return handleApiResponse(() => 
-    apiClient.get(`/models/${modelId}/chat/test`),
+export const testModel = async modelId => {
+  return handleApiResponse(
+    () => apiClient.get(`/models/${modelId}/chat/test`),
     null, // No caching for test calls
     null,
     false // Don't deduplicate test requests
@@ -358,8 +351,8 @@ export const testModel = async (modelId) => {
 
 // Stop an ongoing streaming chat session
 export const stopAppChatStream = async (appId, chatId) => {
-  return handleApiResponse(() => 
-    apiClient.post(`/apps/${appId}/chat/${chatId}/stop`),
+  return handleApiResponse(
+    () => apiClient.post(`/apps/${appId}/chat/${chatId}/stop`),
     null, // No caching
     null,
     false // Don't deduplicate
@@ -368,8 +361,8 @@ export const stopAppChatStream = async (appId, chatId) => {
 
 // Check if a chat session is still active
 export const checkAppChatStatus = async (appId, chatId) => {
-  return handleApiResponse(() => 
-    apiClient.get(`/apps/${appId}/chat/${chatId}/status`),
+  return handleApiResponse(
+    () => apiClient.get(`/apps/${appId}/chat/${chatId}/status`),
     null, // Don't cache status checks
     null,
     false // Don't deduplicate status checks
@@ -387,24 +380,26 @@ export const clearApiCache = (key = null) => {
 };
 
 // Invalidate specific cache entries based on prefix or pattern
-export const invalidateCacheByPattern = (pattern) => {
+export const invalidateCacheByPattern = pattern => {
   const invalidatedCount = cache.invalidateByPattern(pattern);
   console.log(`Invalidated ${invalidatedCount} cache entries matching: ${pattern}`);
   return invalidatedCount;
 };
 
 // Request timeout detection
-export const isTimeoutError = (error) => {
-  return error?.message?.includes('timeout') || 
-    error?.originalError?.message?.includes('timeout') || 
-    error?.code === 'ECONNABORTED';
+export const isTimeoutError = error => {
+  return (
+    error?.message?.includes('timeout') ||
+    error?.originalError?.message?.includes('timeout') ||
+    error?.code === 'ECONNABORTED'
+  );
 };
 
 // Translations
 export const fetchTranslations = async (language, options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.TRANSLATIONS, { language });
-  
+
   return handleApiResponse(
     () => apiClient.get(`/translations/${language}`),
     cacheKey,
@@ -415,8 +410,10 @@ export const fetchTranslations = async (language, options = {}) => {
 // Pages
 export const fetchPageContent = async (pageId, options = {}) => {
   const { skipCache = false, language = null } = options;
-  const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.PAGE_CONTENT, { id: pageId, language });
-  
+  const cacheKey = skipCache
+    ? null
+    : buildCacheKey(CACHE_KEYS.PAGE_CONTENT, { id: pageId, language });
+
   return handleApiResponse(
     () => apiClient.get(`/pages/${pageId}`, { params: { lang: language } }),
     cacheKey,
@@ -425,16 +422,16 @@ export const fetchPageContent = async (pageId, options = {}) => {
 };
 
 // Short links
-export const createShortLink = async (data) => {
+export const createShortLink = async data => {
   return handleApiResponse(() => apiClient.post('/shortlinks', data), null, null, false);
 };
 
-export const getShortLink = async (code) => {
+export const getShortLink = async code => {
   return handleApiResponse(() => apiClient.get(`/shortlinks/${code}`), null, null, false);
 };
 
 // Session management
-export const sendSessionStart = async (sessionData) => {
+export const sendSessionStart = async sessionData => {
   return handleApiResponse(
     () => apiClient.post('/session/start', sessionData),
     null, // No caching
@@ -451,7 +448,7 @@ export const fetchAdminPrompts = async (options = {}) => {
   return handleApiResponse(
     () => {
       const headers = {};
-      
+
       // Add ETag header if we have cached data
       if (cacheKey) {
         const cachedData = cache.get(cacheKey);
@@ -459,7 +456,7 @@ export const fetchAdminPrompts = async (options = {}) => {
           headers['If-None-Match'] = cachedData.etag;
         }
       }
-      
+
       return apiClient.get('/admin/prompts', { headers });
     },
     cacheKey,
@@ -469,13 +466,8 @@ export const fetchAdminPrompts = async (options = {}) => {
   );
 };
 
-export const createPrompt = async (promptData) => {
-  return handleApiResponse(
-    () => apiClient.post('/admin/prompts', promptData),
-    null,
-    null,
-    false
-  );
+export const createPrompt = async promptData => {
+  return handleApiResponse(() => apiClient.post('/admin/prompts', promptData), null, null, false);
 };
 
 export const updatePrompt = async (promptId, promptData) => {
@@ -487,16 +479,11 @@ export const updatePrompt = async (promptId, promptData) => {
   );
 };
 
-export const deletePrompt = async (promptId) => {
-  return handleApiResponse(
-    () => apiClient.delete(`/admin/prompts/${promptId}`),
-    null,
-    null,
-    false
-  );
+export const deletePrompt = async promptId => {
+  return handleApiResponse(() => apiClient.delete(`/admin/prompts/${promptId}`), null, null, false);
 };
 
-export const togglePrompt = async (promptId) => {
+export const togglePrompt = async promptId => {
   return handleApiResponse(
     () => apiClient.post(`/admin/prompts/${promptId}/toggle`),
     null,
@@ -509,10 +496,5 @@ export const fetchAdminApps = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : 'admin_apps';
 
-  return handleApiResponse(
-    () => apiClient.get('/admin/apps'),
-    cacheKey,
-    DEFAULT_CACHE_TTL.SHORT
-  );
+  return handleApiResponse(() => apiClient.get('/admin/apps'), cacheKey, DEFAULT_CACHE_TTL.SHORT);
 };
-

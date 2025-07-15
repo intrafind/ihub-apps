@@ -4,7 +4,12 @@ import { simpleCompletion } from '../utils.js';
  * Generate a research plan by decomposing a question into focused tasks.
  * Returns JSON with a list of subproblems and a think note.
  */
-export default async function researchPlanner({ question, teamSize = 3, soundBites = '', model = 'gemini-1.5-flash' }) {
+export default async function researchPlanner({
+  question,
+  teamSize = 3,
+  soundBites = '',
+  model = 'gemini-1.5-flash'
+}) {
   if (!question) {
     throw new Error('question parameter is required');
   }

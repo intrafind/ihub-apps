@@ -12,4 +12,5 @@
   "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent",
   "provider": "google",
   "tokenLimit": 32768,
-  "supportsTools": true}
+  "supportsTools": true
+}

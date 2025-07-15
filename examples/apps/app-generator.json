@@ -65,10 +65,13 @@
         "de": "gpt-4"
       },
       "predefinedValues": [
-        {"label": {"en": "GPT-4", "de": "GPT-4"}, "value": "gpt-4"},
-        {"label": {"en": "GPT-3.5 Turbo", "de": "GPT-3.5 Turbo"}, "value": "gpt-3.5-turbo"},
-        {"label": {"en": "Claude", "de": "Claude"}, "value": "claude-3-opus-20240229"},
-        {"label": {"en": "Gemini 1.5 Flash", "de": "Gemini 1.5 Flash"}, "value": "gemini-1.5-flash"}
+        { "label": { "en": "GPT-4", "de": "GPT-4" }, "value": "gpt-4" },
+        { "label": { "en": "GPT-3.5 Turbo", "de": "GPT-3.5 Turbo" }, "value": "gpt-3.5-turbo" },
+        { "label": { "en": "Claude", "de": "Claude" }, "value": "claude-3-opus-20240229" },
+        {
+          "label": { "en": "Gemini 1.5 Flash", "de": "Gemini 1.5 Flash" },
+          "value": "gemini-1.5-flash"
+        }
       ]
     },
     {
@@ -84,11 +87,11 @@
         "de": "0.7"
       },
       "predefinedValues": [
-        {"label": {"en": "0.2 (Precise)", "de": "0.2 (Präzise)"}, "value": "0.2"},
-        {"label": {"en": "0.5 (Balanced)", "de": "0.5 (Ausgewogen)"}, "value": "0.5"},
-        {"label": {"en": "0.7 (Default)", "de": "0.7 (Standard)"}, "value": "0.7"},
-        {"label": {"en": "0.9 (Creative)", "de": "0.9 (Kreativ)"}, "value": "0.9"},
-        {"label": {"en": "1.0 (Very Creative)", "de": "1.0 (Sehr kreativ)"}, "value": "1.0"}
+        { "label": { "en": "0.2 (Precise)", "de": "0.2 (Präzise)" }, "value": "0.2" },
+        { "label": { "en": "0.5 (Balanced)", "de": "0.5 (Ausgewogen)" }, "value": "0.5" },
+        { "label": { "en": "0.7 (Default)", "de": "0.7 (Standard)" }, "value": "0.7" },
+        { "label": { "en": "0.9 (Creative)", "de": "0.9 (Kreativ)" }, "value": "0.9" },
+        { "label": { "en": "1.0 (Very Creative)", "de": "1.0 (Sehr kreativ)" }, "value": "1.0" }
       ]
     },
     {
@@ -129,13 +132,21 @@
       }
     }
   ],
-  "allowEmptyContent": true
-  ,"outputSchema": {
+  "allowEmptyContent": true,
+  "outputSchema": {
     "type": "object",
     "properties": {
-      "id": {"type": "string"},
-      "name": {"type": "object", "properties": {"en": {"type": "string"}}, "required": ["en"]},
-      "description": {"type": "object", "properties": {"en": {"type": "string"}}, "required": ["en"]}
+      "id": { "type": "string" },
+      "name": {
+        "type": "object",
+        "properties": { "en": { "type": "string" } },
+        "required": ["en"]
+      },
+      "description": {
+        "type": "object",
+        "properties": { "en": { "type": "string" } },
+        "required": ["en"]
+      }
     },
     "required": ["id", "name", "description"]
   }

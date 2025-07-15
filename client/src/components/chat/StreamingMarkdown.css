@@ -6,63 +6,80 @@
   display: inline-block;
   box-sizing: content-box;
   max-width: 100%;
-  
+
   /* Ensure all elements have proper display properties immediately */
-  & p, & div, & blockquote, & ul, & ol, & h1, & h2, & h3, & h4, & h5, & h6 {
+  & p,
+  & div,
+  & blockquote,
+  & ul,
+  & ol,
+  & h1,
+  & h2,
+  & h3,
+  & h4,
+  & h5,
+  & h6 {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
-  
-  & a, & em, & strong, & code:not(pre code), & span {
+
+  & a,
+  & em,
+  & strong,
+  & code:not(pre code),
+  & span {
     display: inline !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
-  
+
   & table {
     display: table !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
-  
-  & thead, & tbody {
+
+  & thead,
+  & tbody {
     display: table-row-group !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
-  
+
   & tr {
     display: table-row !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
-  
-  & th, & td {
+
+  & th,
+  & td {
     display: table-cell !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
-  
-  & pre, & code {
+
+  & pre,
+  & code {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
-  
+
   /* Remove all animations and transitions that might delay rendering */
   & * {
     transition: none !important;
     animation: none !important;
   }
-  
+
   /* Ensure code blocks render immediately */
   & .code-block-container {
     position: relative !important;
     display: block !important;
     margin: 1em 0 !important;
   }
-  
+
   /* Force immediate render of toolbar buttons */
   & .code-copy-btn,
   & .code-download-btn {
@@ -71,7 +88,7 @@
     flex-direction: row !important;
     align-items: center !important;
   }
-  
+
   /* Ensure toolbar renders immediately with proper layout */
   & .code-block-toolbar {
     display: flex !important;
@@ -88,7 +105,7 @@
     align-items: center !important;
     gap: 0.5rem !important;
   }
-  
+
   /* Force horizontal layout even in widget/iframe contexts */
   &.chat-widget-content .code-block-toolbar,
   .chat-widget-panel & .code-block-toolbar {
@@ -105,9 +122,10 @@
     align-items: center !important;
     gap: 0.5rem !important;
   }
-  
+
   /* Ensure lists render immediately */
-  & ul li, & ol li {
+  & ul li,
+  & ol li {
     display: list-item !important;
     visibility: visible !important;
   }

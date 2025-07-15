@@ -39,17 +39,17 @@ const AdminModelsPage = () => {
     }
   };
 
-  const toggleModel = async (modelId) => {
+  const toggleModel = async modelId => {
     try {
       const response = await makeAdminApiCall(`/api/admin/models/${modelId}/toggle`, {
-        method: 'POST',
+        method: 'POST'
       });
-      
+
       const result = await response.json();
-      
+
       // Update the model in the local state
-      setModels(prevModels => 
-        prevModels.map(model => 
+      setModels(prevModels =>
+        prevModels.map(model =>
           model.id === modelId ? { ...model, enabled: result.enabled } : model
         )
       );
@@ -58,15 +58,15 @@ const AdminModelsPage = () => {
     }
   };
 
-  const testModel = async (modelId) => {
+  const testModel = async modelId => {
     try {
       setTestingModel(modelId);
       const response = await makeAdminApiCall(`/api/admin/models/${modelId}/test`, {
-        method: 'POST',
+        method: 'POST'
       });
-      
+
       const result = await response.json();
-      
+
       setTestResults(prevResults => ({
         ...prevResults,
         [modelId]: result
@@ -81,21 +81,27 @@ const AdminModelsPage = () => {
     }
   };
 
-  const handleModelClick = (model) => {
+  const handleModelClick = model => {
     setSelectedModel(model);
     setShowModelDetails(true);
   };
 
   const filteredModels = models.filter(model => {
-    const matchesSearch = searchTerm === '' || 
-      getLocalizedContent(model.name, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getLocalizedContent(model.description, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch =
+      searchTerm === '' ||
+      getLocalizedContent(model.name, currentLanguage)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      getLocalizedContent(model.description, currentLanguage)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
       model.id.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesFilter = filterEnabled === 'all' || 
+
+    const matchesFilter =
+      filterEnabled === 'all' ||
       (filterEnabled === 'enabled' && model.enabled) ||
       (filterEnabled === 'disabled' && !model.enabled);
-    
+
     return matchesSearch && matchesFilter;
   });
 
@@ -166,19 +172,21 @@ const AdminModelsPage = () => {
                   className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder={t('admin.models.searchPlaceholder', 'Search models...')}
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={e => setSearchTerm(e.target.value)}
                 />
               </div>
             </div>
             <div className="sm:w-48">
               <select
                 value={filterEnabled}
-                onChange={(e) => setFilterEnabled(e.target.value)}
+                onChange={e => setFilterEnabled(e.target.value)}
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               >
                 <option value="all">{t('admin.models.filterAll', 'All Models')}</option>
                 <option value="enabled">{t('admin.models.filterEnabled', 'Enabled Only')}</option>
-                <option value="disabled">{t('admin.models.filterDisabled', 'Disabled Only')}</option>
+                <option value="disabled">
+                  {t('admin.models.filterDisabled', 'Disabled Only')}
+                </option>
               </select>
             </div>
           </div>
@@ -191,13 +199,22 @@ const AdminModelsPage = () => {
                   <table className="min-w-full divide-y divide-gray-300">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
                           {t('admin.models.name', 'Name')}
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
                           {t('admin.models.provider', 'Provider')}
                         </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
                           {t('admin.models.status', 'Status')}
                         </th>
                         <th scope="col" className="relative px-6 py-3">
@@ -206,8 +223,12 @@ const AdminModelsPage = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredModels.map((model) => (
-                        <tr key={model.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleModelClick(model)}>
+                      {filteredModels.map(model => (
+                        <tr
+                          key={model.id}
+                          className="hover:bg-gray-50 cursor-pointer"
+                          onClick={() => handleModelClick(model)}
+                        >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               <div className="flex-shrink-0 h-8 w-8">
@@ -219,9 +240,7 @@ const AdminModelsPage = () => {
                                 <div className="text-sm font-medium text-gray-900">
                                   {getLocalizedContent(model.name, currentLanguage)}
                                 </div>
-                                <div className="text-sm text-gray-500">
-                                  {model.id}
-                                </div>
+                                <div className="text-sm text-gray-500">{model.id}</div>
                               </div>
                             </div>
                           </td>
@@ -229,18 +248,22 @@ const AdminModelsPage = () => {
                             {model.provider || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              model.enabled
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {model.enabled ? t('admin.models.enabled', 'Enabled') : t('admin.models.disabled', 'Disabled')}
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                model.enabled
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}
+                            >
+                              {model.enabled
+                                ? t('admin.models.enabled', 'Enabled')
+                                : t('admin.models.disabled', 'Disabled')}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex items-center justify-end space-x-2">
                               <button
-                                onClick={(e) => {
+                                onClick={e => {
                                   e.stopPropagation();
                                   testModel(model.id);
                                 }}
@@ -251,7 +274,7 @@ const AdminModelsPage = () => {
                                 <Icon name="play" className="h-4 w-4" />
                               </button>
                               <button
-                                onClick={(e) => {
+                                onClick={e => {
                                   e.stopPropagation();
                                   toggleModel(model.id);
                                 }}
@@ -260,12 +283,19 @@ const AdminModelsPage = () => {
                                     ? 'text-red-600 hover:bg-red-50'
                                     : 'text-green-600 hover:bg-green-50'
                                 }`}
-                                title={model.enabled ? t('admin.models.disable', 'Disable') : t('admin.models.enable', 'Enable')}
+                                title={
+                                  model.enabled
+                                    ? t('admin.models.disable', 'Disable')
+                                    : t('admin.models.enable', 'Enable')
+                                }
                               >
-                                <Icon name={model.enabled ? 'eye-slash' : 'eye'} className="h-4 w-4" />
+                                <Icon
+                                  name={model.enabled ? 'eye-slash' : 'eye'}
+                                  className="h-4 w-4"
+                                />
                               </button>
                               <button
-                                onClick={(e) => {
+                                onClick={e => {
                                   e.stopPropagation();
                                   navigate(`/admin/models/${model.id}`);
                                 }}
@@ -305,7 +335,7 @@ const AdminModelsPage = () => {
               </div>
             </div>
           )}
-          
+
           {/* Model Details Popup */}
           <ModelDetailsPopup
             model={selectedModel}

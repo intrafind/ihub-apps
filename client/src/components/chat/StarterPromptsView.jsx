@@ -10,16 +10,15 @@ const StarterPromptsView = ({ starterPrompts = [], onSelectPrompt }) => {
   return (
     <div className="text-center text-gray-500 space-y-6 w-full">
       <div className="space-y-2">
-        <Icon
-          name="light-bulb"
-          size="2xl"
-          className="mx-auto mb-3 text-indigo-400"
-        />
+        <Icon name="light-bulb" size="2xl" className="mx-auto mb-3 text-indigo-400" />
         <h3 className="text-xl font-semibold text-gray-700 mb-1">
           {t('pages.appChat.starterPromptsTitle', 'Starter Prompts')}
         </h3>
         <p className="text-sm text-gray-500 max-w-md mx-auto md:px-4">
-          {t('pages.appChat.starterPromptsSubtitle', 'Choose a prompt below to get started quickly')}
+          {t(
+            'pages.appChat.starterPromptsSubtitle',
+            'Choose a prompt below to get started quickly'
+          )}
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 w-full max-w-4xl mx-auto px-4 pb-4">
@@ -32,7 +31,7 @@ const StarterPromptsView = ({ starterPrompts = [], onSelectPrompt }) => {
               onSelectPrompt &&
               onSelectPrompt({
                 ...sp,
-                message: getLocalizedContent(sp.message, i18n.language),
+                message: getLocalizedContent(sp.message, i18n.language)
               })
             }
           >
@@ -46,7 +45,11 @@ const StarterPromptsView = ({ starterPrompts = [], onSelectPrompt }) => {
                 </p>
                 <p
                   className="text-xs text-gray-500 leading-4 overflow-hidden"
-                  style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
+                  style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical'
+                  }}
                 >
                   {getLocalizedContent(sp.message, i18n.language)}
                 </p>

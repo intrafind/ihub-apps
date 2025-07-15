@@ -43,7 +43,6 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(express.urlencoded({ limit: `${limitMb}mb`, extended: true }));
 }
 
-
 const errorHandler = new ErrorHandler();
 
 export async function getLocalizedError(errorKey, params = {}, language) {
@@ -61,15 +60,23 @@ export async function verifyApiKey(model, res, clientRes = null, language) {
   return result.success ? result.apiKey : false;
 }
 
-export async function processMessageTemplates(messages, app, style = null, outputFormat = null, language, outputSchema = null) {
+export async function processMessageTemplates(
+  messages,
+  app,
+  style = null,
+  outputFormat = null,
+  language,
+  outputSchema = null
+) {
   const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
   const lang = language || defaultLang;
   console.log(`Using language '${lang}' for message templates`);
   let llmMessages = [...messages].map(msg => {
     if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
-      let processedContent = typeof msg.promptTemplate === 'object'
-        ? getLocalizedContent(msg.promptTemplate, lang)
-        : (msg.promptTemplate || msg.content);
+      let processedContent =
+        typeof msg.promptTemplate === 'object'
+          ? getLocalizedContent(msg.promptTemplate, lang)
+          : msg.promptTemplate || msg.content;
       if (typeof processedContent !== 'string') processedContent = String(processedContent || '');
       const variables = { ...msg.variables, content: msg.content };
       if (variables && Object.keys(variables).length > 0) {
@@ -94,7 +101,8 @@ export async function processMessageTemplates(messages, app, style = null, outpu
     userVariables = lastUserMessage.variables;
   }
   if (app && !llmMessages.some(msg => msg.role === 'system')) {
-    let systemPrompt = typeof app.system === 'object' ? getLocalizedContent(app.system, lang) : (app.system || '');
+    let systemPrompt =
+      typeof app.system === 'object' ? getLocalizedContent(app.system, lang) : app.system || '';
     if (typeof systemPrompt !== 'string') systemPrompt = String(systemPrompt || '');
     if (Object.keys(userVariables).length > 0) {
       for (const [key, value] of Object.entries(userVariables)) {
@@ -112,14 +120,17 @@ export async function processMessageTemplates(messages, app, style = null, outpu
         console.log(`Loaded source content (${sourceContent?.length || 0} characters)`);
       } catch (error) {
         console.error(`Error loading source content from ${sourcePath}:`, error);
-        systemPrompt = systemPrompt.replace('{{source}}', `Error loading content from ${sourcePath}: ${error.message}. Please check the file path and try again.`);
+        systemPrompt = systemPrompt.replace(
+          '{{source}}',
+          `Error loading content from ${sourcePath}: ${error.message}. Please check the file path and try again.`
+        );
       }
     }
     if (style) {
       try {
         // Try to get styles from cache first
         let styles = configCache.getStyles();
-        
+
         if (styles && styles[style] && style !== 'keep') {
           systemPrompt += `\n\n${styles[style]}`;
         } else {
@@ -130,9 +141,11 @@ export async function processMessageTemplates(messages, app, style = null, outpu
       }
     }
     if (outputFormat === 'markdown') {
-      systemPrompt += '\n\nPlease format your response using Markdown syntax for better readability.';
+      systemPrompt +=
+        '\n\nPlease format your response using Markdown syntax for better readability.';
     } else if (outputFormat === 'html') {
-      systemPrompt += '\n\nPlease format your response using HTML tags for better readability and structure.';
+      systemPrompt +=
+        '\n\nPlease format your response using HTML tags for better readability and structure.';
     } else if (outputFormat === 'json' || outputSchema) {
       systemPrompt += '\n\nRespond only with valid JSON.';
       if (outputSchema) {

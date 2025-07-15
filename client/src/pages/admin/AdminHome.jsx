@@ -11,7 +11,7 @@ const AdminHome = () => {
   const navigate = useNavigate();
   const { platformConfig } = usePlatformConfig();
   const pageConfig = platformConfig?.admin?.pages || {};
-  const isEnabled = (key) => pageConfig[key] !== false;
+  const isEnabled = key => pageConfig[key] !== false;
 
   const handleCacheRefresh = async () => {
     try {
@@ -66,7 +66,7 @@ const AdminHome = () => {
       icon: 'clipboard-document-list',
       color: 'bg-indigo-500'
     },
-        {
+    {
       key: 'shortlinks',
       title: t('admin.nav.shortlinks', 'Short Links'),
       description: t('admin.home.sections.shortlinksDesc', 'Manage application short links'),
@@ -77,7 +77,10 @@ const AdminHome = () => {
     {
       key: 'usage',
       title: t('admin.nav.usage', 'Usage Reports'),
-      description: t('admin.home.sections.usageDesc', 'View application usage statistics and analytics'),
+      description: t(
+        'admin.home.sections.usageDesc',
+        'View application usage statistics and analytics'
+      ),
       href: '/admin/usage',
       icon: 'chart-bar',
       color: 'bg-blue-500'
@@ -125,7 +128,7 @@ const AdminHome = () => {
                   {t('admin.home.addNewApp', 'Add New App')}
                 </button>
               )}
-              
+
               {isEnabled('models') && (
                 <button
                   onClick={() => navigate('/admin/models/new')}
@@ -135,7 +138,7 @@ const AdminHome = () => {
                   {t('admin.home.addNewModel', 'Add New Model')}
                 </button>
               )}
-              
+
               {isEnabled('prompts') && (
                 <button
                   onClick={() => navigate('/admin/prompts/new')}
@@ -144,7 +147,7 @@ const AdminHome = () => {
                   <Icon name="plus" className="h-4 w-4 mr-2" />
                   {t('admin.home.addNewPrompt', 'Add New Prompt')}
                 </button>
-              )}  
+              )}
               <Link
                 to="/"
                 className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -155,34 +158,34 @@ const AdminHome = () => {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {adminSections.filter(s => isEnabled(s.key)).map((section, index) => (
-              <Link
-                key={index}
-                to={section.href}
-                className="group relative bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-gray-300 transition-all duration-200 overflow-hidden"
-              >
-                <div className="p-6">
-                  <div className="flex items-center mb-4">
-                    <div className={`p-3 rounded-lg ${section.color} flex-shrink-0`}>
-                      <Icon name={section.icon} className="h-6 w-6 text-white" />
+            {adminSections
+              .filter(s => isEnabled(s.key))
+              .map((section, index) => (
+                <Link
+                  key={index}
+                  to={section.href}
+                  className="group relative bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-gray-300 transition-all duration-200 overflow-hidden"
+                >
+                  <div className="p-6">
+                    <div className="flex items-center mb-4">
+                      <div className={`p-3 rounded-lg ${section.color} flex-shrink-0`}>
+                        <Icon name={section.icon} className="h-6 w-6 text-white" />
+                      </div>
+                      <div className="ml-4">
+                        <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600">
+                          {section.title}
+                        </h3>
+                      </div>
                     </div>
-                    <div className="ml-4">
-                      <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600">
-                        {section.title}
-                      </h3>
-                    </div>
+                    <p className="text-gray-600 text-sm leading-relaxed">{section.description}</p>
                   </div>
-                  <p className="text-gray-600 text-sm leading-relaxed">
-                    {section.description}
-                  </p>
-                </div>
-                
-                {/* Hover effect arrow */}
-                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <Icon name="arrow-right" className="h-5 w-5 text-gray-400" />
-                </div>
-              </Link>
-            ))}
+
+                  {/* Hover effect arrow */}
+                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <Icon name="arrow-right" className="h-5 w-5 text-gray-400" />
+                  </div>
+                </Link>
+              ))}
           </div>
 
           {/* Quick Actions */}

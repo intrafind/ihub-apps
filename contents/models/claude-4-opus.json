@@ -12,4 +12,5 @@
   "url": "https://api.anthropic.com/v1/messages",
   "provider": "anthropic",
   "tokenLimit": 200000,
-  "supportsTools": true}
+  "supportsTools": true
+}

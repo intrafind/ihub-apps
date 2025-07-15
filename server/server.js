@@ -9,16 +9,16 @@ import { getRootDir } from './pathUtils.js';
 import configCache from './configCache.js';
 
 // Import adapters and utilities
-import registerChatRoutes from "./routes/chat/index.js";
-import registerAdminRoutes from "./routes/adminRoutes.js";
-import registerStaticRoutes from "./routes/staticRoutes.js";
-import registerGeneralRoutes from "./routes/generalRoutes.js";
-import registerModelRoutes from "./routes/modelRoutes.js";
-import registerToolRoutes from "./routes/toolRoutes.js";
-import registerPageRoutes from "./routes/pageRoutes.js";
-import registerSessionRoutes from "./routes/sessionRoutes.js";
-import registerMagicPromptRoutes from "./routes/magicPromptRoutes.js";
-import registerShortLinkRoutes from "./routes/shortLinkRoutes.js";
+import registerChatRoutes from './routes/chat/index.js';
+import registerAdminRoutes from './routes/adminRoutes.js';
+import registerStaticRoutes from './routes/staticRoutes.js';
+import registerGeneralRoutes from './routes/generalRoutes.js';
+import registerModelRoutes from './routes/modelRoutes.js';
+import registerToolRoutes from './routes/toolRoutes.js';
+import registerPageRoutes from './routes/pageRoutes.js';
+import registerSessionRoutes from './routes/sessionRoutes.js';
+import registerMagicPromptRoutes from './routes/magicPromptRoutes.js';
+import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import {
@@ -58,7 +58,7 @@ if (cluster.isPrimary && workerCount > 1) {
   if (isPackaged) {
     console.log(`Running in packaged binary mode with APP_ROOT_DIR: ${rootDir}`);
   } else {
-    console.log(`Running in normal mode`);
+    console.log('Running in normal mode');
   }
   console.log(`Root directory: ${rootDir}`);
 
@@ -107,7 +107,7 @@ if (cluster.isPrimary && workerCount > 1) {
   /**
    * Gets the localized value from a potentially multi-language object
    * Similar to client-side getLocalizedContent utility
-   * 
+   *
    * @param {Object|string} content - Content that might be a translation object or direct string
    * @param {string} language - Current language code (e.g., 'en', 'de')
    * @param {string} [fallbackLanguage='en'] - Fallback language if requested language is not available
@@ -117,7 +117,7 @@ if (cluster.isPrimary && workerCount > 1) {
 
   /**
    * Gets a localized error message from the translations
-   * 
+   *
    * @param {string} errorKey - The key for the error message in serverErrors
    * @param {Object} params - Parameters to replace in the message
    * @param {string} language - The language code
@@ -138,10 +138,14 @@ if (cluster.isPrimary && workerCount > 1) {
   registerPageRoutes(app);
   registerSessionRoutes(app);
   registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT });
-  registerChatRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT });
+  registerChatRoutes(app, {
+    verifyApiKey,
+    processMessageTemplates,
+    getLocalizedError,
+    DEFAULT_TIMEOUT
+  });
   registerAdminRoutes(app);
   registerShortLinkRoutes(app);
-
 
   // --- Session Management handled in sessionRoutes ---
 
@@ -163,7 +167,7 @@ if (cluster.isPrimary && workerCount > 1) {
     try {
       // Import synchronous file system operations for SSL cert loading
       const fsSync = await import('fs');
-      
+
       // SSL configuration
       const httpsOptions = {
         key: fsSync.readFileSync(config.SSL_KEY),
@@ -171,12 +175,12 @@ if (cluster.isPrimary && workerCount > 1) {
         // Add macOS-specific options for socket reuse
         ...(process.platform === 'darwin' ? serverOptions : {})
       };
-      
+
       // Add CA certificate if provided
       if (config.SSL_CA) {
         httpsOptions.ca = fsSync.readFileSync(config.SSL_CA);
       }
-      
+
       // Create HTTPS server
       server = https.createServer(httpsOptions, app);
       console.log(`Starting HTTPS server with SSL certificate from ${config.SSL_CERT}`);

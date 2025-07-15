@@ -1,4 +1,3 @@
-
 {
   "id": "summarizer",
   "order": 4,
@@ -35,11 +34,26 @@
       },
       "type": "string",
       "predefinedValues": [
-        {"label": {"en": "Summarize", "de": "Zusammenfassen"}, "value": "summarize"},
-        {"label": {"en": "Extract key facts", "de": "Wichtige Fakten extrahieren"}, "value": "extract the key facts from"},
-        {"label": {"en": "Highlight action items", "de": "Aktionspunkte hervorheben"}, "value": "highlight the action items in"},
-        {"label": {"en": "List decisions", "de": "Entscheidungen auflisten"}, "value": "list all decisions mentioned in"},
-        {"label": {"en": "Summarize and recommend", "de": "Zusammenfassen und Empfehlungen geben"}, "value": "summarize and provide recommendations based on"}
+        { "label": { "en": "Summarize", "de": "Zusammenfassen" }, "value": "summarize" },
+        {
+          "label": { "en": "Extract key facts", "de": "Wichtige Fakten extrahieren" },
+          "value": "extract the key facts from"
+        },
+        {
+          "label": { "en": "Highlight action items", "de": "Aktionspunkte hervorheben" },
+          "value": "highlight the action items in"
+        },
+        {
+          "label": { "en": "List decisions", "de": "Entscheidungen auflisten" },
+          "value": "list all decisions mentioned in"
+        },
+        {
+          "label": {
+            "en": "Summarize and recommend",
+            "de": "Zusammenfassen und Empfehlungen geben"
+          },
+          "value": "summarize and provide recommendations based on"
+        }
       ]
     }
   ]

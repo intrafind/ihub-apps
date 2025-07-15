@@ -14,19 +14,23 @@ const AppsList = () => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { resetHeaderColor, uiConfig } = useUIConfig();
-  
+
   // Create favorite apps helpers
-  const { getFavorites: getFavoriteApps, isFavorite: isAppFavorite, toggleFavorite: toggleFavoriteApp } = createFavoriteItemHelpers('aihub_favorite_apps');
-  
+  const {
+    getFavorites: getFavoriteApps,
+    isFavorite: isAppFavorite,
+    toggleFavorite: toggleFavoriteApp
+  } = createFavoriteItemHelpers('aihub_favorite_apps');
+
   // Get search configuration from UI config with defaults
   const searchConfig = useMemo(() => {
     const defaultSearchConfig = {
       enabled: true,
       placeholder: {
-        en: "Search apps...",
-        de: "Apps suchen..."
+        en: 'Search apps...',
+        de: 'Apps suchen...'
       },
-      width: "w-full sm:w-2/3 lg:w-1/3"
+      width: 'w-full sm:w-2/3 lg:w-1/3'
     };
 
     return uiConfig?.appsList?.search || defaultSearchConfig;
@@ -48,7 +52,6 @@ const AppsList = () => {
     };
     return uiConfig?.appsList?.categories || defaultCategoriesConfig;
   }, [uiConfig]);
-
 
   // State declarations must come before any useMemo/useEffect that references them
   const [apps, setApps] = useState([]);
@@ -89,26 +92,27 @@ const AppsList = () => {
   // Calculate how many apps can fit in the viewport
   const calculateVisibleAppCount = useCallback(() => {
     if (!gridRef.current || !containerRef.current) return 9; // Default fallback
-    
+
     const gridRect = gridRef.current.getBoundingClientRect();
     const containerRect = containerRef.current.getBoundingClientRect();
-    
+
     // Calculate available height for the grid
     // Consider the top part of the page and some padding for the load more button
     const headerHeight = gridRect.top - containerRect.top;
     const availableHeight = window.innerHeight - headerHeight - 120; // 120px for load more button and padding
-    
+
     // Approximate height of each app card (you may need to adjust this)
     const appCardHeight = 250; // Typical height in pixels including margins
-    
+
     // Calculate visible rows based on available height
     const visibleRows = Math.max(1, Math.floor(availableHeight / appCardHeight));
-    
+
     // Calculate columns based on screen width (matches the grid-cols classes)
     let columns = 1;
-    if (window.innerWidth >= 1024) columns = 3; // lg breakpoint
+    if (window.innerWidth >= 1024)
+      columns = 3; // lg breakpoint
     else if (window.innerWidth >= 640) columns = 2; // sm breakpoint
-    
+
     return visibleRows * columns;
   }, []);
 
@@ -118,13 +122,13 @@ const AppsList = () => {
       const visibleCount = calculateVisibleAppCount();
       setDisplayCount(visibleCount);
     };
-    
+
     // Calculate initial count
     handleResize();
-    
+
     // Add resize listener
     window.addEventListener('resize', handleResize);
-    
+
     return () => {
       window.removeEventListener('resize', handleResize);
     };
@@ -134,41 +138,43 @@ const AppsList = () => {
   useEffect(() => {
     // Store mounted state to prevent state updates after unmount
     let isMounted = true;
-    
+
     const loadApps = async () => {
       try {
         setLoading(true);
-        
+
         // Add a small delay to allow i18n to fully initialize
         // This helps prevent the rapid re-renders
         await new Promise(resolve => setTimeout(resolve, 100));
-        
+
         // Only proceed if still mounted
         if (!isMounted) return;
-        
+
         console.log('Fetching apps data...');
         const appsData = await fetchApps();
-        
+
         // Bail out if component unmounted during fetch
         if (!isMounted) return;
-        
+
         // Safety check for empty or invalid data
         if (!appsData || !Array.isArray(appsData)) {
           console.error('Invalid apps data received:', appsData);
-          setError(t('error.invalidDataFormat', 'Failed to load applications: Invalid data format'));
+          setError(
+            t('error.invalidDataFormat', 'Failed to load applications: Invalid data format')
+          );
           setApps([]);
           return;
         }
-        
+
         // Load favorite apps from localStorage
         const favorites = getFavoriteApps();
-        
+
         // Batch our state updates to prevent multiple renders
         if (isMounted) {
           setApps(appsData);
           setFavoriteApps(favorites);
           setError(null);
-          
+
           // Calculate visible app count after data is loaded
           const visibleCount = calculateVisibleAppCount();
           setDisplayCount(visibleCount);
@@ -176,7 +182,9 @@ const AppsList = () => {
       } catch (err) {
         console.error('Error loading apps:', err);
         if (isMounted) {
-          setError(t('error.loadingFailed', 'Failed to load applications. Please try again later.'));
+          setError(
+            t('error.loadingFailed', 'Failed to load applications. Please try again later.')
+          );
           setApps([]); // Ensure apps is initialized as empty array on error
         }
       } finally {
@@ -185,9 +193,9 @@ const AppsList = () => {
         }
       }
     };
-    
+
     loadApps();
-    
+
     // Cleanup function to handle component unmount
     return () => {
       isMounted = false;
@@ -206,7 +214,7 @@ const AppsList = () => {
   // Language change handler to ensure proper UI updates
   // Only re-render on actual language changes, not on every render
   const prevLanguageRef = useRef(currentLanguage);
-  
+
   useEffect(() => {
     // Only update if the language actually changed from the previous value
     if (prevLanguageRef.current !== currentLanguage) {
@@ -222,7 +230,7 @@ const AppsList = () => {
   }, [resetHeaderColor]);
 
   // Direct search handler without debounce
-  const handleSearchChange = useCallback((e) => {
+  const handleSearchChange = useCallback(e => {
     const value = e.target.value;
     setSearchTerm(value);
   }, []);
@@ -234,7 +242,7 @@ const AppsList = () => {
   const handleToggleFavorite = useCallback((e, appId) => {
     e.preventDefault(); // Stop event propagation to avoid navigating to the app
     e.stopPropagation();
-    
+
     const newStatus = toggleFavoriteApp(appId);
     // Update the favorite apps list in state
     if (newStatus) {
@@ -252,12 +260,15 @@ const AppsList = () => {
   }, [calculateVisibleAppCount]);
 
   // Category selection handler
-  const handleCategorySelect = useCallback((categoryId) => {
-    setSelectedCategory(categoryId);
-    // Reset display count when category changes
-    const visibleCount = calculateVisibleAppCount();
-    setDisplayCount(visibleCount);
-  }, [calculateVisibleAppCount]);
+  const handleCategorySelect = useCallback(
+    categoryId => {
+      setSelectedCategory(categoryId);
+      // Reset display count when category changes
+      const visibleCount = calculateVisibleAppCount();
+      setDisplayCount(visibleCount);
+    },
+    [calculateVisibleAppCount]
+  );
 
   // Memoized filtered apps to avoid recomputing on every render
   const filteredApps = useMemo(() => {
@@ -265,7 +276,7 @@ const AppsList = () => {
       try {
         // Safety check
         if (!app) return false;
-        
+
         // Category filtering
         if (categoriesConfig.enabled && selectedCategory !== 'all') {
           const appCategory = app.category || 'utility'; // Default to 'utility' if no category
@@ -273,36 +284,45 @@ const AppsList = () => {
             return false;
           }
         }
-        
+
         // Determine if search is enabled from config
         const isSearchEnabled = searchConfig.enabled;
-        
+
         // If search is disabled, show all apps (after category filter)
         if (!isSearchEnabled) {
           return true;
         }
-        
+
         // Skip filtering if search term is empty
         if (searchTerm === '') {
           return true;
         }
-        
+
         // Safely get localized content with fallbacks
         const appName = app.name ? getLocalizedContent(app.name, currentLanguage) || '' : '';
-        const appDescription = app.description ? getLocalizedContent(app.description, currentLanguage) || '' : '';
-        
+        const appDescription = app.description
+          ? getLocalizedContent(app.description, currentLanguage) || ''
+          : '';
+
         // Check for matches in name or description
         const nameMatches = appName.toLowerCase().includes(searchTerm.toLowerCase());
         const descriptionMatches = appDescription.toLowerCase().includes(searchTerm.toLowerCase());
-        
+
         return nameMatches || descriptionMatches;
       } catch (err) {
         console.error('Error filtering app:', app, err);
         return false;
       }
     });
-  }, [apps, searchTerm, currentLanguage, searchConfig.enabled, categoriesConfig.enabled, selectedCategory]);
-  
+  }, [
+    apps,
+    searchTerm,
+    currentLanguage,
+    searchConfig.enabled,
+    categoriesConfig.enabled,
+    selectedCategory
+  ]);
+
   // Memoized sorted apps to avoid recomputing on every render
   const sortedApps = useMemo(() => {
     const sortByDefault = (a, b) => {
@@ -363,9 +383,7 @@ const AppsList = () => {
     const nameCompare = (a, b, dir = 'asc') => {
       const aName = getLocalizedContent(a.name, currentLanguage) || '';
       const bName = getLocalizedContent(b.name, currentLanguage) || '';
-      return dir === 'asc'
-        ? aName.localeCompare(bName)
-        : bName.localeCompare(aName);
+      return dir === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
     };
 
     const list = [...filteredApps];
@@ -387,7 +405,7 @@ const AppsList = () => {
 
     return list.sort(sortByDefault);
   }, [filteredApps, favoriteApps, recentAppIds, currentLanguage, sortMethod, sortConfig.enabled]);
-  
+
   // Memoized displayed apps for progressive loading
   const displayedApps = useMemo(() => {
     return sortedApps.slice(0, displayCount);
@@ -408,7 +426,7 @@ const AppsList = () => {
     return (
       <div className="text-center py-12">
         <div className="text-red-500 mb-4">{error}</div>
-        <button 
+        <button
           className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
           onClick={() => window.location.reload()}
         >
@@ -422,9 +440,13 @@ const AppsList = () => {
   if (apps.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="text-yellow-500 mb-4">{t('error.noAppsAvailable', 'No apps available from server')}</div>
-        <p className="mb-4">{t('error.checkServer', 'Check if the server is running and returning data correctly.')}</p>
-        <button 
+        <div className="text-yellow-500 mb-4">
+          {t('error.noAppsAvailable', 'No apps available from server')}
+        </div>
+        <p className="mb-4">
+          {t('error.checkServer', 'Check if the server is running and returning data correctly.')}
+        </p>
+        <button
           className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
           onClick={() => window.location.reload()}
         >
@@ -438,13 +460,22 @@ const AppsList = () => {
     <div ref={containerRef} className="container mx-auto py-8 px-4 flex flex-col">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-2 flex items-center justify-center">
-          <Icon name={uiConfig?.icons?.appsListLogo || 'apps-svg-logo'} className="text-indigo-600 w-[4rem] h-[4rem] mr-2" />
+          <Icon
+            name={uiConfig?.icons?.appsListLogo || 'apps-svg-logo'}
+            className="text-indigo-600 w-[4rem] h-[4rem] mr-2"
+          />
           {/* Use title from UI config if available, otherwise use translation */}
-          {uiConfig?.appsList?.title ? getLocalizedContent(uiConfig.appsList.title, currentLanguage) : t('pages.appsList.title')}
+          {uiConfig?.appsList?.title
+            ? getLocalizedContent(uiConfig.appsList.title, currentLanguage)
+            : t('pages.appsList.title')}
         </h1>
-        <p className="text-gray-600">{uiConfig?.appsList?.subtitle ? getLocalizedContent(uiConfig.appsList.subtitle, currentLanguage) : t('pages.appsList.subtitle')}</p>
+        <p className="text-gray-600">
+          {uiConfig?.appsList?.subtitle
+            ? getLocalizedContent(uiConfig.appsList.subtitle, currentLanguage)
+            : t('pages.appsList.subtitle')}
+        </p>
       </div>
-      
+
       {/* Conditional rendering of search based on configuration */}
       {searchConfig.enabled && (
         <div
@@ -484,7 +515,7 @@ const AppsList = () => {
               <select
                 className="h-full border rounded-lg py-2 px-3 w-full sm:w-auto"
                 value={sortMethod}
-                onChange={(e) => setSortMethod(e.target.value)}
+                onChange={e => setSortMethod(e.target.value)}
               >
                 <option value="relevance">{t('pages.appsList.sort.relevance', 'Relevance')}</option>
                 <option value="nameAsc">{t('pages.appsList.sort.nameAsc', 'Name A-Z')}</option>
@@ -494,7 +525,7 @@ const AppsList = () => {
           )}
         </div>
       )}
-      
+
       {/* Category filter */}
       {categoriesConfig.enabled && (
         <div className="flex flex-wrap gap-2 mb-6 justify-center">
@@ -521,7 +552,7 @@ const AppsList = () => {
         <div className="text-center py-8">
           <p className="text-gray-500">{t('pages.appsList.noApps')}</p>
           {searchConfig.enabled && searchTerm ? (
-            <button 
+            <button
               onClick={() => {
                 clearSearch();
               }}
@@ -534,16 +565,16 @@ const AppsList = () => {
       ) : (
         <>
           <div className="flex justify-center w-full">
-            <div 
-              ref={gridRef} 
+            <div
+              ref={gridRef}
               className={`grid gap-6 ${
-                displayedApps.length === 1 
-                  ? 'grid-cols-1 max-w-md mx-auto' 
+                displayedApps.length === 1
+                  ? 'grid-cols-1 max-w-md mx-auto'
                   : displayedApps.length === 2
                     ? 'grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto'
                     : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
               }`}
-              role="list" 
+              role="list"
               aria-label="Apps list"
             >
               {displayedApps.map(app => (
@@ -553,14 +584,24 @@ const AppsList = () => {
                   role="listitem"
                 >
                   <button
-                    onClick={(e) => handleToggleFavorite(e, app.id)}
+                    onClick={e => handleToggleFavorite(e, app.id)}
                     className="absolute top-2 right-2 z-10 p-1 bg-white bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
-                    title={favoriteApps.includes(app.id) ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
-                    aria-label={favoriteApps.includes(app.id) ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
+                    title={
+                      favoriteApps.includes(app.id)
+                        ? t('pages.appsList.unfavorite')
+                        : t('pages.appsList.favorite')
+                    }
+                    aria-label={
+                      favoriteApps.includes(app.id)
+                        ? t('pages.appsList.unfavorite')
+                        : t('pages.appsList.favorite')
+                    }
                   >
-                    <Icon 
-                      name="star" 
-                      className={favoriteApps.includes(app.id) ? 'text-yellow-500' : 'text-gray-400'}
+                    <Icon
+                      name="star"
+                      className={
+                        favoriteApps.includes(app.id) ? 'text-yellow-500' : 'text-gray-400'
+                      }
                       solid={favoriteApps.includes(app.id)}
                     />
                   </button>
@@ -575,7 +616,11 @@ const AppsList = () => {
                         style={{ backgroundColor: app.color || '#4f46e5' }}
                       >
                         <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
-                          <Icon name={app.icon || 'lightning-bolt'} size="xl" className="text-white" />
+                          <Icon
+                            name={app.icon || 'lightning-bolt'}
+                            size="xl"
+                            className="text-white"
+                          />
                         </div>
                       </div>
                       <div className="px-4 py-2 flex flex-col flex-1">
@@ -583,16 +628,32 @@ const AppsList = () => {
                           {getLocalizedContent(app.name, currentLanguage) || app.id}
                           {favoriteApps.includes(app.id) && (
                             <span className="ml-2 hidden sm:inline-block" aria-label="Favorite">
-                              <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
+                              <Icon
+                                name="star"
+                                size="sm"
+                                className="text-yellow-500"
+                                solid={true}
+                              />
                             </span>
                           )}
                           {recentAppIds.includes(app.id) && (
-                            <span className="ml-1 inline-block" aria-label={t('pages.appsList.recent')} title={t('pages.appsList.recent')}>
-                              <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
+                            <span
+                              className="ml-1 inline-block"
+                              aria-label={t('pages.appsList.recent')}
+                              title={t('pages.appsList.recent')}
+                            >
+                              <Icon
+                                name="clock"
+                                size="sm"
+                                className="text-indigo-600"
+                                solid={true}
+                              />
                             </span>
                           )}
                         </h3>
-                        <p className="text-gray-600 text-sm flex-grow">{getLocalizedContent(app.description, currentLanguage) || ''}</p>
+                        <p className="text-gray-600 text-sm flex-grow">
+                          {getLocalizedContent(app.description, currentLanguage) || ''}
+                        </p>
                       </div>
                     </div>
                   </Link>
@@ -600,7 +661,7 @@ const AppsList = () => {
               ))}
             </div>
           </div>
-            
+
           {/* Load More Button */}
           {hasMoreApps && (
             <div className="text-center mt-6">

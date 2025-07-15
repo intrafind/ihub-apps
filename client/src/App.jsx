@@ -57,7 +57,7 @@ function App() {
   const { uiConfig } = useUIConfig();
   const { platformConfig } = usePlatformConfig();
   const adminPages = platformConfig?.admin?.pages || {};
-  const showAdminPage = (key) => adminPages[key] !== false;
+  const showAdminPage = key => adminPages[key] !== false;
 
   React.useEffect(() => {
     configureMarked();
@@ -69,11 +69,11 @@ function App() {
         <BrowserRouter>
           {/* Document title management - must be inside Router for useLocation/useParams */}
           <DocumentTitle />
-          
+
           <Routes>
             {/* Widget page should be outside of the regular Layout */}
             <Route path="/widget/chat" element={<SafeWidgetPage />} />
-            
+
             {/* Regular application routes */}
             <Route path="/" element={<Layout />}>
               <Route index element={<SafeAppsList />} />
@@ -83,18 +83,12 @@ function App() {
               <Route path="apps/:appId" element={<SafeAppChat />} />
               <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
               <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
-              {showAdminPage('home') && (
-                <Route path="admin" element={<SafeAdminHome />} />
-              )}
-              {showAdminPage('usage') && (
-                <Route path="admin/usage" element={<SafeAdminUsage />} />
-              )}
+              {showAdminPage('home') && <Route path="admin" element={<SafeAdminHome />} />}
+              {showAdminPage('usage') && <Route path="admin/usage" element={<SafeAdminUsage />} />}
               {showAdminPage('system') && (
                 <Route path="admin/system" element={<SafeAdminSystem />} />
               )}
-              {showAdminPage('apps') && (
-                <Route path="admin/apps" element={<SafeAdminApps />} />
-              )}
+              {showAdminPage('apps') && <Route path="admin/apps" element={<SafeAdminApps />} />}
               {showAdminPage('apps') && (
                 <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
               )}
@@ -126,4 +120,5 @@ function App() {
       </AdminAuthProvider>
     </AppProviders>
   );
-}export default App;
+}
+export default App;

@@ -24,22 +24,22 @@ export default function registerDataRoutes(app) {
     try {
       // Get prompts with ETag from cache
       const { data: prompts, etag } = configCache.getPromptsWithETag();
-      
+
       if (!prompts) {
         return res.status(500).json({ error: 'Failed to load prompts configuration' });
       }
-      
+
       // Set ETag header
       if (etag) {
         res.setHeader('ETag', etag);
-        
+
         // Check if client has the same ETag
         const clientETag = req.headers['if-none-match'];
         if (clientETag && clientETag === etag) {
           return res.status(304).end();
         }
       }
-      
+
       res.json(prompts);
     } catch (error) {
       console.error('Error fetching prompts:', error);
@@ -62,7 +62,9 @@ export default function registerDataRoutes(app) {
         lang = baseLanguage;
       }
       if (!supportedLanguages.includes(lang)) {
-        console.log(`Language '${lang}' not supported, falling back to default language '${defaultLang}'`);
+        console.log(
+          `Language '${lang}' not supported, falling back to default language '${defaultLang}'`
+        );
         lang = defaultLang;
       }
       // Try to get translations from cache first
@@ -85,7 +87,9 @@ export default function registerDataRoutes(app) {
       console.error(`Error fetching translations for language ${req.params.lang}:`, error);
       try {
         // Try to get default translations from cache first as fallback
-        let enTranslations = configCache.getLocalizations(configCache.getPlatform()?.defaultLanguage || 'en');
+        let enTranslations = configCache.getLocalizations(
+          configCache.getPlatform()?.defaultLanguage || 'en'
+        );
 
         if (enTranslations) {
           return res.json(enTranslations);
@@ -101,7 +105,7 @@ export default function registerDataRoutes(app) {
     try {
       // Try to get UI config from cache first
       let uiConfig = configCache.getUI();
-      
+
       if (!uiConfig) {
         return res.status(500).json({ error: 'Failed to load UI configuration' });
       }
@@ -118,7 +122,7 @@ export default function registerDataRoutes(app) {
       if (!platform) {
         return res.status(500).json({ error: 'Failed to load platform configuration' });
       }
-      
+
       // Get app version from package.json
       let appVersion = '1.0.0'; // fallback
       try {
@@ -129,18 +133,21 @@ export default function registerDataRoutes(app) {
       } catch (error) {
         console.warn('Could not read version from package.json:', error.message);
       }
-      
+
       // Compute refresh salt combining version and admin-triggered value
-      const refreshSalt = platform.refreshSalt || { salt: 0, lastUpdated: new Date().toISOString() };
+      const refreshSalt = platform.refreshSalt || {
+        salt: 0,
+        lastUpdated: new Date().toISOString()
+      };
       const computedSalt = `${appVersion}.${refreshSalt.salt}`;
-      
+
       // Add version and computed salt to platform response
       const enhancedPlatform = {
         ...platform,
         version: appVersion,
         computedRefreshSalt: computedSalt
       };
-      
+
       res.json(enhancedPlatform);
     } catch (error) {
       console.error('Error fetching platform configuration:', error);

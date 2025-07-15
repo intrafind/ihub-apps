@@ -3,9 +3,11 @@
 This document provides details about using Anthropic's Claude models within AI Hub Apps.
 
 ## Overview
+
 Claude models are accessed via the Anthropic Messages API. Configuration files under `contents/models` define the available models. Each model entry specifies the API endpoint, token limits, and display names.
 
 ## Configuration
+
 To add or adjust a Claude model, edit the corresponding JSON file in `contents/models/`. Provide:
 
 - `id`: unique identifier
@@ -14,6 +16,7 @@ To add or adjust a Claude model, edit the corresponding JSON file in `contents/m
 - `description`: object with `en` and `de` translations
 
 ## Internationalization
+
 All strings related to Claude models or apps must include English (`en`) and German (`de`) translations. Update the following files when adding new keys:
 
 - Built-in translations: `shared/i18n/{lang}.json`
@@ -24,6 +27,7 @@ All strings related to Claude models or apps must include English (`en`) and Ger
 ## Development and Testing
 
 ### Server Startup Testing
+
 After making any changes to the server code, especially imports, dependencies, or architecture, always test that the server starts correctly:
 
 ```bash
@@ -35,14 +39,15 @@ timeout 15s npm run dev || echo "Development environment startup check completed
 ```
 
 **Important**: This testing should be done after every build or significant refactoring to ensure:
+
 - No import errors
 - No missing dependencies
 - Server starts without runtime errors
 - All modules load correctly
 
 If the server fails to start, check the error output for:
+
 - Missing or incorrect import paths
 - Module export/import mismatches
 - Syntax errors
 - Missing dependencies
-

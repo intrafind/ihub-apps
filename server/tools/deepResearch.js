@@ -32,7 +32,12 @@ export default async function deepResearch({
   actionTracker.trackToolCallStart(chatId, { toolName: 'deepResearch', toolInput: { query } });
 
   const sendProgress = (event, data) => {
-    actionTracker.trackToolCallProgress(chatId, { toolName: 'deepResearch', status: 'in-progress', message: event, ...data });
+    actionTracker.trackToolCallProgress(chatId, {
+      toolName: 'deepResearch',
+      status: 'in-progress',
+      message: event,
+      ...data
+    });
   };
 
   sendProgress('research-start', { query });
@@ -78,12 +83,15 @@ export default async function deepResearch({
       visitedUrls.add(result.url);
       sendProgress('research-fetch', { round, url: result.url });
       try {
-        const extracted = await webContentExtractor({ url: result.url, maxLength: contentMaxLength });
+        const extracted = await webContentExtractor({
+          url: result.url,
+          maxLength: contentMaxLength
+        });
         const content = extracted.content || '';
         // Ensure we're including all relevant information for proper citation
-        const sourceItem = { 
-          url: result.url, 
-          title: result.title || extracted.title || 'No title', 
+        const sourceItem = {
+          url: result.url,
+          title: result.title || extracted.title || 'No title',
           content: content,
           description: result.description || extracted.description || '',
           extractedAt: extracted.extractedAt || new Date().toISOString()
@@ -99,11 +107,16 @@ export default async function deepResearch({
     // If it's not the last round, analyze content and refine the query
     if (round < maxRounds && aggregated.length > 0) {
       try {
-        const contentSummary = aggregated.map(item => `URL: ${item.url}\nTitle: ${item.title}\nContent: ${item.content}`).join('\n\n---\n\n');
+        const contentSummary = aggregated
+          .map(item => `URL: ${item.url}\nTitle: ${item.title}\nContent: ${item.content}`)
+          .join('\n\n---\n\n');
         const refinePrompt = `Based on the initial query "${query}" and the following research content, generate a new, more specific search query to find deeper information. Return only the new search query.\n\n<content>\n${contentSummary}\n</content>`;
 
         sendProgress('research-refine', { round });
-        const result = await simpleCompletion(refinePrompt, { temperature: refineTemperature, model });
+        const result = await simpleCompletion(refinePrompt, {
+          temperature: refineTemperature,
+          model
+        });
         const refinedQuery = result.content;
 
         const trimmed = refinedQuery.trim();
@@ -112,7 +125,10 @@ export default async function deepResearch({
         }
         sendProgress('research-refined', { round, newQuery: trimmed });
       } catch (err) {
-        sendProgress('research-error', { round, message: `Failed to refine query: ${err.message}` });
+        sendProgress('research-error', {
+          round,
+          message: `Failed to refine query: ${err.message}`
+        });
       }
     }
 
@@ -120,17 +136,20 @@ export default async function deepResearch({
   }
 
   sendProgress('research-complete', { sources: aggregated.length });
-  
+
   // Log the final result structure for debugging
   console.log(`Deep research completed. Query: "${query}", Sources found: ${aggregated.length}`);
   aggregated.forEach((source, index) => {
     console.log(`Source ${index + 1}: ${source.url} - "${source.title}"`);
   });
-  
+
   // Create a detailed summary for the AI that emphasizes the URLs
-  const sourceSummary = aggregated.map((source, index) =>
-    `${index + 1}. "${source.title}" - ${source.url}\n   Content: ${source.content.substring(0, 200)}...`
-  ).join('\n\n');
+  const sourceSummary = aggregated
+    .map(
+      (source, index) =>
+        `${index + 1}. "${source.title}" - ${source.url}\n   Content: ${source.content.substring(0, 200)}...`
+    )
+    .join('\n\n');
 
   let finalAnswer = '';
   try {
@@ -141,13 +160,17 @@ export default async function deepResearch({
     console.error('Failed to finalize answer:', err);
   }
 
-  actionTracker.trackToolCallEnd(chatId, { toolName: 'deepResearch', toolOutput: { sources: aggregated.length } });
+  actionTracker.trackToolCallEnd(chatId, {
+    toolName: 'deepResearch',
+    toolOutput: { sources: aggregated.length }
+  });
 
   return {
     query,
     sources: aggregated,
     sourceSummary: `Found ${aggregated.length} sources for query "${query}":\n\n${sourceSummary}`,
-    instruction: "IMPORTANT: When presenting your findings, always include the source URLs from the sources array. Each source has a 'url' field that must be cited in your response.",
+    instruction:
+      "IMPORTANT: When presenting your findings, always include the source URLs from the sources array. Each source has a 'url' field that must be cited in your response.",
     finalAnswer
   };
 }

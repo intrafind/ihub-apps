@@ -1,7 +1,7 @@
 /**
  * Build script for Node.js Single Executable Application (SEA)
  * This uses a simpler approach to avoid postject issues
- * 
+ *
  * Requires Node.js 20.0.0 or later
  */
 
@@ -30,7 +30,7 @@ console.log(`OS: ${os.type()} ${os.release()}`);
 
 // Platform specific details
 const platformMap = {
-  win32: { suffix: 'win.bat', platform: 'windows' },  // Change to .bat for Windows
+  win32: { suffix: 'win.bat', platform: 'windows' }, // Change to .bat for Windows
   darwin: { suffix: 'macos', platform: 'macos' },
   linux: { suffix: 'linux', platform: 'linux' }
 };
@@ -367,7 +367,7 @@ console.log(`Building standalone executable for ${currentPlatform.platform}...`)
 try {
   // Create the output directory structure
   console.log('Creating output directory structure...');
-  
+
   // Recursively copy the server directory excluding node_modules and
   // package-lock.json so that any new folders are automatically included.
   const copyServerFiles = (src, dest) => {
@@ -397,33 +397,33 @@ try {
     type: 'module',
     dependencies: require('./server/package.json').dependencies
   };
-  
+
   fs.writeFileSync(
     path.join(outputDir, 'server', 'package.json'),
     JSON.stringify(serverPackageJson, null, 2)
   );
-  
+
   // Install server dependencies
   console.log('Installing server dependencies...');
   execSync('npm install --omit=dev', {
     cwd: path.join(outputDir, 'server'),
     stdio: 'inherit'
   });
-  
+
   // Copy supporting files
   console.log('Copying supporting files...');
-  
+
   // Copy config.env if it exists
   if (fs.existsSync(configEnvPath)) {
     fs.copyFileSync(configEnvPath, path.join(outputDir, 'config.env'));
   }
-  
+
   // Copy contents
   fs.cpSync(contentsDir, path.join(outputDir, 'contents'), { recursive: true });
-  
+
   // Copy examples
   fs.cpSync(examplesDir, path.join(outputDir, 'examples'), { recursive: true });
-  
+
   // Copy client public files
   fs.cpSync(clientPublicDir, path.join(outputDir, 'public'), { recursive: true });
 
@@ -431,7 +431,7 @@ try {
   if (fs.existsSync(docsBookDir)) {
     fs.cpSync(docsBookDir, path.join(outputDir, 'public', 'help'), { recursive: true });
   }
-  
+
   // Create a simple launcher shell script on Unix platforms
   if (os.platform() !== 'win32') {
     const shellLauncher = `#!/bin/bash
@@ -443,7 +443,7 @@ DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 # Use the bundled Node.js to run the server
 "\${DIR}/node" "\${DIR}/launcher.cjs" "\$@"
 `;
-    
+
     fs.writeFileSync(path.join(outputDir, outputName), shellLauncher);
     fs.chmodSync(path.join(outputDir, outputName), 0o755);
   } else {
@@ -472,13 +472,13 @@ if %ERRORLEVEL% neq 0 (
   exit /b %ERRORLEVEL%
 )
 `;
-    
+
     fs.writeFileSync(path.join(outputDir, outputName), batchLauncher);
   }
-  
+
   // Write the launcher script
   fs.writeFileSync(path.join(outputDir, 'launcher.cjs'), launcherScript);
-  
+
   // Copy Node.js binary with platform-specific name
   console.log('Copying Node.js executable...');
   if (currentPlatform.platform === 'windows') {
@@ -489,7 +489,7 @@ if %ERRORLEVEL% neq 0 (
     fs.copyFileSync(process.execPath, path.join(outputDir, 'node'));
     fs.chmodSync(path.join(outputDir, 'node'), 0o755);
   }
-  
+
   console.log('Standalone application build completed successfully.');
 } catch (err) {
   console.error('Error building standalone application:', err);

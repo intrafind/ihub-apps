@@ -22,9 +22,7 @@ const DocumentTitle = () => {
 
   // Fetch app details when we're on an app page
   useEffect(() => {
-    
     if (isAppPage && appId) {
-      
       fetchAppDetails(appId)
         .then(appData => {
           setCurrentApp(appData);
@@ -64,7 +62,7 @@ const DocumentTitle = () => {
 
     document.title = title;
   }, [uiConfig, currentLanguage, isAppPage, currentApp, isLoading]);
-  
+
   // This component doesn't render anything visible
   return null;
 };

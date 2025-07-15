@@ -26,7 +26,8 @@ const PromptsList = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
 
   // Create favorite prompts helpers
-  const { getFavorites: getFavoritePrompts, toggleFavorite: toggleFavoritePrompt } = createFavoriteItemHelpers('aihub_favorite_prompts');
+  const { getFavorites: getFavoritePrompts, toggleFavorite: toggleFavoritePrompt } =
+    createFavoriteItemHelpers('aihub_favorite_prompts');
   const [copyStatus, setCopyStatus] = useState({});
   const [searchParams] = useSearchParams();
   const { uiConfig } = useUIConfig();
@@ -115,10 +116,11 @@ const PromptsList = () => {
     // Filter by search term
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(p =>
-        p.name.toLowerCase().includes(term) ||
-        p.prompt.toLowerCase().includes(term) ||
-        (p.description && p.description.toLowerCase().includes(term))
+      filtered = filtered.filter(
+        p =>
+          p.name.toLowerCase().includes(term) ||
+          p.prompt.toLowerCase().includes(term) ||
+          (p.description && p.description.toLowerCase().includes(term))
       );
     }
 
@@ -167,12 +169,9 @@ const PromptsList = () => {
   }, [filteredPrompts, favoritePromptIds, recentPromptIds, sortMethod, sortConfig.enabled]);
 
   const totalPages = Math.ceil(sortedPrompts.length / ITEMS_PER_PAGE);
-  const pagePrompts = sortedPrompts.slice(
-    page * ITEMS_PER_PAGE,
-    (page + 1) * ITEMS_PER_PAGE
-  );
+  const pagePrompts = sortedPrompts.slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE);
 
-  const handleSearchChange = (e) => {
+  const handleSearchChange = e => {
     setSearchTerm(e.target.value);
     setPage(0);
   };
@@ -190,7 +189,7 @@ const PromptsList = () => {
     }
   };
 
-  const handleCategorySelect = (categoryId) => {
+  const handleCategorySelect = categoryId => {
     setSelectedCategory(categoryId);
     setPage(0); // Reset to first page when category changes
   };
@@ -215,9 +214,7 @@ const PromptsList = () => {
 
   return (
     <div className="py-8 flex flex-col items-center">
-      <h1 className="text-3xl font-bold mb-2">
-        {t('pages.promptsList.title', 'Prompts')}
-      </h1>
+      <h1 className="text-3xl font-bold mb-2">{t('pages.promptsList.title', 'Prompts')}</h1>
       <p className="text-gray-600 mb-6">
         {t('pages.promptsList.subtitle', 'Browse available prompts')}
       </p>
@@ -241,7 +238,10 @@ const PromptsList = () => {
             {searchTerm && (
               <button
                 type="button"
-                onClick={() => { setSearchTerm(''); setPage(0); }}
+                onClick={() => {
+                  setSearchTerm('');
+                  setPage(0);
+                }}
                 className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
                 aria-label={t('common.clear', 'Clear')}
               >
@@ -254,9 +254,14 @@ const PromptsList = () => {
               <select
                 className="h-full border rounded-lg py-2 px-3 w-full sm:w-auto"
                 value={sortMethod}
-                onChange={(e) => { setSortMethod(e.target.value); setPage(0); }}
+                onChange={e => {
+                  setSortMethod(e.target.value);
+                  setPage(0);
+                }}
               >
-                <option value="relevance">{t('pages.promptsList.sort.relevance', 'Relevance')}</option>
+                <option value="relevance">
+                  {t('pages.promptsList.sort.relevance', 'Relevance')}
+                </option>
                 <option value="nameAsc">{t('pages.promptsList.sort.nameAsc', 'Name A-Z')}</option>
                 <option value="nameDesc">{t('pages.promptsList.sort.nameDesc', 'Name Z-A')}</option>
               </select>
@@ -300,14 +305,31 @@ const PromptsList = () => {
               >
                 <div className="p-4 h-full flex flex-col">
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleToggleFavorite(e, p.id); }}
+                    onClick={e => {
+                      e.stopPropagation();
+                      handleToggleFavorite(e, p.id);
+                    }}
                     className="absolute top-3 right-3 z-10 p-1.5 bg-white bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
-                    title={favoritePromptIds.includes(p.id) ? t('pages.promptsList.unfavorite') : t('pages.promptsList.favorite')}
-                    aria-label={favoritePromptIds.includes(p.id) ? t('pages.promptsList.unfavorite') : t('pages.promptsList.favorite')}
+                    title={
+                      favoritePromptIds.includes(p.id)
+                        ? t('pages.promptsList.unfavorite')
+                        : t('pages.promptsList.favorite')
+                    }
+                    aria-label={
+                      favoritePromptIds.includes(p.id)
+                        ? t('pages.promptsList.unfavorite')
+                        : t('pages.promptsList.favorite')
+                    }
                   >
-                    <Icon name="star" className={favoritePromptIds.includes(p.id) ? 'text-yellow-500' : 'text-gray-400'} solid={favoritePromptIds.includes(p.id)} />
+                    <Icon
+                      name="star"
+                      className={
+                        favoritePromptIds.includes(p.id) ? 'text-yellow-500' : 'text-gray-400'
+                      }
+                      solid={favoritePromptIds.includes(p.id)}
+                    />
                   </button>
-                  
+
                   <div className="flex items-start space-x-3 mb-3">
                     <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
                       <Icon name={p.icon || 'clipboard'} className="w-4 h-4 text-indigo-600" />
@@ -316,44 +338,57 @@ const PromptsList = () => {
                       <h3 className="font-semibold text-gray-900 text-sm leading-5 mb-1 flex items-center flex-wrap">
                         {p.name}
                         {favoritePromptIds.includes(p.id) && (
-                          <span className="ml-1" aria-label={t('pages.promptsList.favorite')} title={t('pages.promptsList.favorite')}>
+                          <span
+                            className="ml-1"
+                            aria-label={t('pages.promptsList.favorite')}
+                            title={t('pages.promptsList.favorite')}
+                          >
                             <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
                           </span>
                         )}
                         {recentPromptIds.includes(p.id) && (
-                          <span className="ml-1" aria-label={t('pages.promptsList.recent')} title={t('pages.promptsList.recent')}>
+                          <span
+                            className="ml-1"
+                            aria-label={t('pages.promptsList.recent')}
+                            title={t('pages.promptsList.recent')}
+                          >
                             <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
                           </span>
                         )}
                         {p.appId && (
-                          <span className="ml-1 px-1.5 py-0.5 text-xs text-indigo-600 bg-indigo-50 rounded-full">{t('common.promptSearch.appSpecific', 'app')}</span>
+                          <span className="ml-1 px-1.5 py-0.5 text-xs text-indigo-600 bg-indigo-50 rounded-full">
+                            {t('common.promptSearch.appSpecific', 'app')}
+                          </span>
                         )}
                       </h3>
                     </div>
                   </div>
-                  
-                  <p className="text-xs text-gray-500 leading-4 flex-grow overflow-hidden mb-4" style={{
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical'
-                  }}>
+
+                  <p
+                    className="text-xs text-gray-500 leading-4 flex-grow overflow-hidden mb-4"
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical'
+                    }}
+                  >
                     {highlightVariables(p.description || p.prompt)}
                   </p>
-                  
+
                   <div className="flex gap-2 mt-auto justify-start">
                     <button
-                      onClick={async (e) => {
+                      onClick={async e => {
                         e.stopPropagation();
                         try {
                           await navigator.clipboard.writeText(p.prompt.replace('[content]', ''));
-                          setCopyStatus((s) => ({ ...s, [p.id]: 'success' }));
+                          setCopyStatus(s => ({ ...s, [p.id]: 'success' }));
                           recordPromptUsage(p.id);
                         } catch (err) {
                           console.error('Failed to copy prompt:', err);
-                          setCopyStatus((s) => ({ ...s, [p.id]: 'error' }));
+                          setCopyStatus(s => ({ ...s, [p.id]: 'error' }));
                         }
                         setTimeout(() => {
-                          setCopyStatus((s) => ({ ...s, [p.id]: 'idle' }));
+                          setCopyStatus(s => ({ ...s, [p.id]: 'idle' }));
                         }, 2000);
                       }}
                       className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1"
@@ -371,7 +406,10 @@ const PromptsList = () => {
                       <Link
                         to={`/apps/${p.appId}?prefill=${encodeURIComponent(p.prompt.replace('[content]', ''))}${p.variables && p.variables.length > 0 ? '&' + p.variables.map(v => `var_${v.name}=${encodeURIComponent(v.defaultValue || '')}`).join('&') : ''}`}
                         className="px-3 py-1.5 text-xs border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors flex items-center justify-center gap-1"
-                        onClick={(e) => { e.stopPropagation(); recordPromptUsage(p.id); }}
+                        onClick={e => {
+                          e.stopPropagation();
+                          recordPromptUsage(p.id);
+                        }}
                       >
                         {t('pages.promptsList.useInApp', 'Open')}
                       </Link>
@@ -415,12 +453,12 @@ const PromptsList = () => {
           prompt={selectedPrompt}
           onClose={() => setSelectedPrompt(null)}
           isFavorite={favoritePromptIds.includes(selectedPrompt.id)}
-          onToggleFavorite={(id) => {
+          onToggleFavorite={id => {
             const newStatus = toggleFavoritePrompt(id);
             if (newStatus) {
-              setFavoritePromptIds((prev) => [...prev, id]);
+              setFavoritePromptIds(prev => [...prev, id]);
             } else {
-              setFavoritePromptIds((prev) => prev.filter((pid) => pid !== id));
+              setFavoritePromptIds(prev => prev.filter(pid => pid !== id));
             }
           }}
           t={t}

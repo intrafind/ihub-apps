@@ -9,18 +9,18 @@ import { useUIConfig } from '../components/UIConfigContext';
  */
 const useAppSettings = (appId, app) => {
   const { setHeaderColor } = useUIConfig();
-  
+
   // Configuration states
   const [selectedModel, setSelectedModel] = useState(null);
-  const [selectedStyle, setSelectedStyle] = useState("normal");
-  const [selectedOutputFormat, setSelectedOutputFormat] = useState("markdown");
+  const [selectedStyle, setSelectedStyle] = useState('normal');
+  const [selectedOutputFormat, setSelectedOutputFormat] = useState('markdown');
   const [temperature, setTemperature] = useState(0.7);
   const [sendChatHistory, setSendChatHistory] = useState(true);
-  
+
   // Models and styles data
   const [models, setModels] = useState([]);
   const [styles, setStyles] = useState([]);
-  
+
   // Loading states
   const [modelsLoading, setModelsLoading] = useState(true);
   const [stylesLoading, setStylesLoading] = useState(true);
@@ -31,12 +31,9 @@ const useAppSettings = (appId, app) => {
       try {
         setModelsLoading(true);
         setStylesLoading(true);
-        
-        const [modelsData, stylesData] = await Promise.all([
-          fetchModels(),
-          fetchStyles()
-        ]);
-        
+
+        const [modelsData, stylesData] = await Promise.all([fetchModels(), fetchStyles()]);
+
         setModels(modelsData || []);
         setStyles(stylesData || []);
       } catch (error) {
@@ -59,15 +56,15 @@ const useAppSettings = (appId, app) => {
       setHeaderColor(app.color);
     }
 
-    const defaultModel = models.find((m) => m.default);
+    const defaultModel = models.find(m => m.default);
 
     // Initialize with app defaults
     const initialState = {
       selectedModel: app.preferredModel || (defaultModel ? defaultModel.id : null),
-      selectedStyle: app.preferredStyle || "normal",
+      selectedStyle: app.preferredStyle || 'normal',
       temperature: app.preferredTemperature || 0.7,
-      selectedOutputFormat: app.preferredOutputFormat || "markdown",
-      sendChatHistory: true,
+      selectedOutputFormat: app.preferredOutputFormat || 'markdown',
+      sendChatHistory: true
     };
 
     // Set initial states
@@ -80,14 +77,11 @@ const useAppSettings = (appId, app) => {
     // Load saved settings and override defaults if available
     const savedSettings = loadAppSettings(appId);
     if (savedSettings) {
-      if (savedSettings.selectedModel)
-        setSelectedModel(savedSettings.selectedModel);
-      if (savedSettings.selectedStyle)
-        setSelectedStyle(savedSettings.selectedStyle);
+      if (savedSettings.selectedModel) setSelectedModel(savedSettings.selectedModel);
+      if (savedSettings.selectedStyle) setSelectedStyle(savedSettings.selectedStyle);
       if (savedSettings.selectedOutputFormat)
         setSelectedOutputFormat(savedSettings.selectedOutputFormat);
-      if (savedSettings.temperature)
-        setTemperature(savedSettings.temperature);
+      if (savedSettings.temperature) setTemperature(savedSettings.temperature);
       if (savedSettings.sendChatHistory !== undefined)
         setSendChatHistory(savedSettings.sendChatHistory);
     }
@@ -101,7 +95,7 @@ const useAppSettings = (appId, app) => {
         selectedStyle,
         selectedOutputFormat,
         temperature,
-        sendChatHistory,
+        sendChatHistory
       });
     }
   }, [
@@ -111,7 +105,7 @@ const useAppSettings = (appId, app) => {
     selectedStyle,
     selectedOutputFormat,
     temperature,
-    sendChatHistory,
+    sendChatHistory
   ]);
 
   // Settings object for easy passing to components
@@ -120,7 +114,7 @@ const useAppSettings = (appId, app) => {
     selectedStyle,
     selectedOutputFormat,
     temperature,
-    sendChatHistory,
+    sendChatHistory
   };
 
   // Setters object for easy passing to components
@@ -129,27 +123,27 @@ const useAppSettings = (appId, app) => {
     setSelectedStyle,
     setSelectedOutputFormat,
     setTemperature,
-    setSendChatHistory,
+    setSendChatHistory
   };
 
   return {
     // Settings state
     ...settings,
-    
+
     // Setters
     ...setters,
-    
+
     // Data
     models,
     styles,
-    
+
     // Loading states
     modelsLoading,
     stylesLoading,
-    
+
     // Convenience objects
     settings,
-    setters,
+    setters
   };
 };
 

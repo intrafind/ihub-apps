@@ -7,7 +7,7 @@ import TurndownService from 'turndown';
 marked.setOptions({
   breaks: true, // Convert line breaks to <br>
   gfm: true, // Enable GitHub Flavored Markdown
-  sanitize: false, // Allow HTML (ReactQuill will handle sanitization)
+  sanitize: false // Allow HTML (ReactQuill will handle sanitization)
 });
 
 const turndownService = new TurndownService();
@@ -17,7 +17,7 @@ const turndownService = new TurndownService();
  * @param {string} markdown - The markdown text to convert
  * @returns {string} HTML string
  */
-export const markdownToHtml = (markdown) => {
+export const markdownToHtml = markdown => {
   if (!markdown || typeof markdown !== 'string') {
     return '';
   }
@@ -35,7 +35,7 @@ export const markdownToHtml = (markdown) => {
  * @param {string} html - The HTML text to convert
  * @returns {string} Markdown string
  */
-export const htmlToMarkdown = (html) => {
+export const htmlToMarkdown = html => {
   if (!html || typeof html !== 'string') {
     return '';
   }
@@ -43,7 +43,7 @@ export const htmlToMarkdown = (html) => {
   return turndownService.turndown(html);
 };
 
-export const isMarkdown = (text) => {
+export const isMarkdown = text => {
   if (!text || typeof text !== 'string') {
     return false;
   }
@@ -58,7 +58,7 @@ export const isMarkdown = (text) => {
     /^\s*[-*+]\s+/, // Unordered lists
     /^\s*\d+\.\s+/, // Ordered lists
     /^\s*>\s+/, // Blockquotes
-    /\[.*?\]\(.*?\)/, // Links
+    /\[.*?\]\(.*?\)/ // Links
   ];
 
   return markdownPatterns.some(pattern => pattern.test(text));

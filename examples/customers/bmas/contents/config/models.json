@@ -1,5 +1,5 @@
 [
-    {
+  {
     "id": "local-vllm-llama-3.1-8b",
     "modelId": "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
     "name": "LLama 3.1 8b",
@@ -35,4 +35,4 @@
     "provider": "openai",
     "tokenLimit": 8192
   }
-] 
+]

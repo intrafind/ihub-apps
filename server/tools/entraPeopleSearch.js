@@ -58,7 +58,10 @@ class GraphApiToolAxios {
         console.log(`TOOL: Resource not found at endpoint: ${endpoint}`);
         return null;
       }
-      console.error(`❌ Error calling Graph API endpoint ${endpoint}:`, error.response?.data || error.message);
+      console.error(
+        `❌ Error calling Graph API endpoint ${endpoint}:`,
+        error.response?.data || error.message
+      );
       return null;
     }
   }
@@ -93,7 +96,9 @@ class GraphApiToolAxios {
     console.log(`TOOL: Getting groups for user ID: ${userId}`);
     const endpoint = `/users/${userId}/memberOf?$select=id,displayName,description,resourceProvisioningOptions`;
     const result = await this._makeGraphRequest(endpoint);
-    const teams = result?.value.filter(group => group.resourceProvisioningOptions?.includes('Team'));
+    const teams = result?.value.filter(group =>
+      group.resourceProvisioningOptions?.includes('Team')
+    );
     return teams || [];
   }
 

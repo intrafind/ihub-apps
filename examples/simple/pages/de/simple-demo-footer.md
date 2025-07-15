@@ -11,6 +11,7 @@ Dies ist eine einfache Demo-Footer-Seite, die Folgendes enthalten könnte:
 ## Kontaktinformationen
 
 Für Fragen, Support oder Feedback:
+
 - E-Mail: support@ai-hub-example.com
 - Twitter: @AIHubExample
 - GitHub: github.com/ai-hub-example

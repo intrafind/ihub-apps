@@ -22,9 +22,7 @@ const OpenAIAdapter = {
       // Handle image data in messages
       if (!message.imageData) {
         const finalContent =
-          base.tool_calls && (content === undefined || content === '')
-            ? null
-            : content;
+          base.tool_calls && (content === undefined || content === '') ? null : content;
         return { ...base, content: finalContent };
       }
 
@@ -32,12 +30,12 @@ const OpenAIAdapter = {
       return {
         ...base,
         content: [
-          ...(content ? [{ type: "text", text: content }] : []),
+          ...(content ? [{ type: 'text', text: content }] : []),
           {
-            type: "image_url",
+            type: 'image_url',
             image_url: {
               url: message.imageData.base64,
-              detail: "high"
+              detail: 'high'
             }
           }
         ]
@@ -51,9 +49,19 @@ const OpenAIAdapter = {
    * Create a completion request for OpenAI
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true, tools = null, toolChoice = undefined, responseFormat = null, responseSchema = null } = options;
+    const {
+      temperature = 0.7,
+      stream = true,
+      tools = null,
+      toolChoice = undefined,
+      responseFormat = null,
+      responseSchema = null
+    } = options;
 
-    console.log('Original messages:', JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData }))));
+    console.log(
+      'Original messages:',
+      JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData })))
+    );
 
     const body = {
       model: model.modelId,
@@ -68,7 +76,7 @@ const OpenAIAdapter = {
     if (responseSchema) {
       // Deep clone incoming schema and enforce additionalProperties:false on all objects
       const schemaClone = JSON.parse(JSON.stringify(responseSchema));
-      const enforceNoExtras = (node) => {
+      const enforceNoExtras = node => {
         console.log('Enforcing no extras on schema node:', node);
         if (node && node.type === 'object') {
           node.additionalProperties = false;
@@ -91,7 +99,10 @@ const OpenAIAdapter = {
           strict: true
         }
       };
-      console.log('Using response schema for structured output:', JSON.stringify(body.response_format, null, 2));
+      console.log(
+        'Using response schema for structured output:',
+        JSON.stringify(body.response_format, null, 2)
+      );
     } else if (responseFormat === 'json') {
       body.response_format = { type: 'json_object' };
     }
@@ -102,7 +113,7 @@ const OpenAIAdapter = {
       url: model.url,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`
       },
       body
     };

@@ -41,7 +41,7 @@
     "name": "Gemini",
     "description": "Google's versatile model optimized for text and code tasks",
     "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent",
-    "provider": "google", 
+    "provider": "google",
     "tokenLimit": 32768
   },
   {
@@ -53,4 +53,4 @@
     "provider": "openai",
     "tokenLimit": 8192
   }
-] 
+]

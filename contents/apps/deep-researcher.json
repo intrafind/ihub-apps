@@ -19,13 +19,7 @@
   "preferredStyle": "detailed",
   "preferredTemperature": 1,
   "sendChatHistory": false,
-  "tools": [
-    "researchPlanner",
-    "deepResearch",
-    "queryRewriter",
-    "evaluator",
-    "braveSearch"
-  ],
+  "tools": ["researchPlanner", "deepResearch", "queryRewriter", "evaluator", "braveSearch"],
   "settings": {
     "enabled": true,
     "model": {
@@ -76,13 +70,7 @@
     "enabled": false,
     "resizeImages": true,
     "maxFileSizeMB": 10,
-    "supportedFormats": [
-      "image/jpeg",
-      "image/jpg",
-      "image/png",
-      "image/gif",
-      "image/webp"
-    ]
+    "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
   },
   "fileUpload": {
     "maxFileSizeMB": 5,
@@ -97,8 +85,6 @@
       "application/javascript",
       "text/xml"
     ],
-    "supportedPdfFormats": [
-      "application/pdf"
-    ]
+    "supportedPdfFormats": ["application/pdf"]
   }
 }

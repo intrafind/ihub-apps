@@ -23,11 +23,13 @@ The platform now includes several web-related tools:
 **Purpose**: Search the web using Brave Search API for up-to-date information.
 
 **Parameters**:
+
 - `query` (string, required): Search query
 
 **Returns**: List of search results with titles, URLs, descriptions, and language information.
 
 **Example Usage**:
+
 ```javascript
 {
   "query": "latest AI developments 2024"
@@ -39,6 +41,7 @@ The platform now includes several web-related tools:
 **Purpose**: Search the web using the Tavily API for up-to-date information.
 
 **Parameters**:
+
 - `query` (string, required): Search query
 - `search_depth` (string, optional): `"basic"` or `"advanced"` (default: `"basic"`)
 - `max_results` (integer, optional): Number of results to return (default: `5`)
@@ -46,27 +49,32 @@ The platform now includes several web-related tools:
 **Returns**: List of search results with titles, URLs and brief content snippets.
 
 **Example Usage**:
+
 ```javascript
 {
   "query": "latest AI developments 2024"
 }
 ```
+
 ### 3. Web Content Extractor (`webContentExtractor`)
 
 **Purpose**: Extract clean, readable content from any webpage URL, automatically removing headers, footers, navigation, ads, and other non-content elements.
 
 **Parameters**:
+
 - `url` (string, required): The URL of the webpage to extract content from
 - `maxLength` (integer, optional): Maximum length of extracted content in characters (default: 5000)
 - `ignoreSSL` (boolean, optional, admin only): Ignore invalid HTTPS certificates. If omitted, the value configured in `tools.json` is used.
 
-**Returns**: 
+**Returns**:
+
 - Clean text content
 - Page metadata (title, description, author)
 - Word count and extraction timestamp
 - If an error occurs, an exception is thrown with a `code` property for translation
 
 **Example Usage**:
+
 ```javascript
 {
   "url": "https://example.com/article",
@@ -75,6 +83,7 @@ The platform now includes several web-related tools:
 ```
 
 **Features**:
+
 - Removes ads, navigation menus, headers, footers
 - Extracts main article content intelligently
 - Handles various webpage structures
@@ -90,18 +99,21 @@ The platform now includes several web-related tools:
 **Purpose**: Performs web search and automatically extracts full content from the top results. Perfect for comprehensive information gathering and "chat with web" functionality.
 
 **Parameters**:
+
 - `query` (string, required): Search query
 - `extractContent` (boolean, optional): Whether to extract full content from search results (default: true)
 - `maxResults` (integer, optional): Maximum number of search results to process (default: 3)
 - `contentMaxLength` (integer, optional): Maximum length of extracted content per page (default: 3000)
 
 **Returns**:
+
 - Original search results
 - Extracted content from each result
 - Success/failure statistics
 - Summary of the operation
 
 **Example Usage**:
+
 ```javascript
 {
   "query": "artificial intelligence news 2024",
@@ -116,6 +128,7 @@ The platform now includes several web-related tools:
 **Purpose**: Capture a screenshot or PDF of any webpage using the Playwright browser automation library. If a PDF is captured, the text is extracted and returned.
 
 **Parameters**:
+
 - `url` (string, required): Page URL to capture
 - `format` (string, optional): `"png"` or `"pdf"` (default: `"png"`)
 - `fullPage` (boolean, optional): Capture the full page height (default: `true`)
@@ -123,6 +136,7 @@ The platform now includes several web-related tools:
 **Returns**: Attachment information with a download URL and extracted text for PDFs.
 
 **Example Usage**:
+
 ```javascript
 {
   "url": "https://example.com",
@@ -135,6 +149,7 @@ The platform now includes several web-related tools:
 **Purpose**: Capture screenshots or PDFs using Selenium and Chrome DevTools.
 
 **Parameters**:
+
 - `url` (string, required): Page URL to capture
 - `format` (string, optional): `"png"` or `"pdf"` (default: `"png"`)
 - `fullPage` (boolean, optional): Capture the full page height (default: `true`)
@@ -142,17 +157,20 @@ The platform now includes several web-related tools:
 **Returns**: Attachment information with a download URL and extracted text for PDFs.
 
 **Example Usage**:
+
 ```javascript
 {
   "url": "https://example.com",
   "format": "png"
 }
 ```
+
 ### 7. Answer Evaluator (`evaluator`)
 
 **Purpose**: Check a draft answer for definitiveness, freshness and completeness.
 
 **Parameters**:
+
 - `question` (string, required): Original user question
 - `answer` (string, required): Draft answer to evaluate
 - `model` (string, optional): Model ID used for the evaluation (default `gemini-1.5-flash`)
@@ -160,6 +178,7 @@ The platform now includes several web-related tools:
 **Returns**: Array `evaluation` with one entry per check containing `type`, `pass`, and `think` fields.
 
 **Example Usage**:
+
 ```javascript
 {
   "question": "What are the latest AI trends?",
@@ -184,6 +203,7 @@ The platform now includes several web-related tools:
 **Purpose**: Generate optimized variations of a user search query.
 
 **Parameters**:
+
 - `query` (string, required): The original search query
 - `think` (string, optional): Additional motivation or notes
 - `context` (string, optional): Optional contextual text
@@ -191,6 +211,7 @@ The platform now includes several web-related tools:
 **Returns**: An array of rewritten queries.
 
 **Example Usage**:
+
 ```javascript
 {
   "query": "best renewable energy sources"
@@ -272,6 +293,7 @@ The "Chat with Web" app has been updated to use the enhanced web search function
 **Purpose**: Decompose a research topic into distinct tasks for a team of researchers.
 
 **Parameters**:
+
 - `question` (string, required): Research topic to analyze
 - `teamSize` (integer, optional): Number of tasks to create (default: 3)
 - `soundBites` (string, optional): Additional context or quotes
@@ -279,6 +301,7 @@ The "Chat with Web" app has been updated to use the enhanced web search function
 **Returns**: JSON containing the `subproblems` array and internal reasoning in `think`.
 
 **Example Usage**:
+
 ```json
 {
   "question": "Impacts of AI on urban transportation",
@@ -286,7 +309,6 @@ The "Chat with Web" app has been updated to use the enhanced web search function
   "soundBites": "self-driving cars, public transit optimization"
 }
 ```
-
 
 ## Technical Implementation
 
@@ -326,6 +348,7 @@ node test-web-tools.js
 ```
 
 This will test:
+
 - Basic content extraction
 - Error handling
 - Different webpage structures
@@ -354,7 +377,7 @@ This will test:
    - Some websites may block automated requests
    - Try with a different URL to test functionality
 
-3. **"Request timeout"**
+4. **"Request timeout"**
    - The webpage is taking too long to load
    - Consider increasing timeout or trying a different URL
 

@@ -8,7 +8,7 @@ import { sendAppChatMessage } from '../api/api';
 /**
  * High level hook combining chat message management with streaming
  * communication for both chat and canvas pages.
- * 
+ *
  * @param {Object} options - Configuration options
  * @param {string} options.appId - The app ID
  * @param {string} options.chatId - The chat session ID
@@ -37,13 +37,13 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     editMessage,
     addSystemMessage,
     clearMessages,
-    getMessagesForApi,
+    getMessagesForApi
   } = useChatMessages(chatId); // Now this will properly react to chatId changes
 
   const cleanupEventSourceRef = useRef();
 
   const handleEvent = useCallback(
-    async (event) => {
+    async event => {
       const { type, fullContent, data } = event;
       switch (type) {
         case 'connected':
@@ -75,7 +75,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         case 'done':
           if (lastMessageIdRef.current) {
             updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
-              finishReason: data?.finishReason,
+              finishReason: data?.finishReason
             });
             if (onMessageComplete) {
               onMessageComplete(fullContent, lastUserMessageRef.current);
@@ -97,14 +97,22 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           console.log('🔍 Unknown event type:', type, data);
       }
     },
-    [pendingMessageDataRef, sendAppChatMessage, setMessageError, updateAssistantMessage, onMessageComplete, addSystemMessage, t]
+    [
+      pendingMessageDataRef,
+      sendAppChatMessage,
+      setMessageError,
+      updateAssistantMessage,
+      onMessageComplete,
+      addSystemMessage,
+      t
+    ]
   );
 
   const { initEventSource, cleanupEventSource } = useEventSource({
     appId,
     chatId: chatId,
     onEvent: handleEvent,
-    onProcessingChange: setProcessing,
+    onProcessingChange: setProcessing
   });
 
   // Store cleanup function in ref for access in callbacks
@@ -130,14 +138,13 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         lastUserMessageRef.current = apiMessage.content;
 
         // Ensure we extract content properly and default to empty string if needed
-        const contentToAdd = typeof displayMessage === 'string' 
-          ? displayMessage 
-          : (displayMessage?.content || '');
-        
-        addUserMessage(contentToAdd, { 
-          ...(displayMessage?.meta || {}), 
-          imageData: apiMessage.imageData, 
-          fileData: apiMessage.fileData 
+        const contentToAdd =
+          typeof displayMessage === 'string' ? displayMessage : displayMessage?.content || '';
+
+        addUserMessage(contentToAdd, {
+          ...(displayMessage?.meta || {}),
+          imageData: apiMessage.imageData,
+          fileData: apiMessage.fileData
         });
         addAssistantMessage(exchangeId);
 
@@ -148,14 +155,14 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           variables: apiMessage.variables || {},
           messageId: exchangeId,
           imageData: apiMessage.imageData,
-          fileData: apiMessage.fileData,
+          fileData: apiMessage.fileData
         });
 
         pendingMessageDataRef.current = {
           appId,
           chatId: chatId,
           messages: messagesForAPI,
-          params,
+          params
         };
 
         initEventSource(`/api/apps/${appId}/chat/${chatId}`);
@@ -170,7 +177,16 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         setProcessing(false);
       }
     },
-    [cleanupEventSource, addUserMessage, addAssistantMessage, getMessagesForApi, initEventSource, addSystemMessage, t, appId]
+    [
+      cleanupEventSource,
+      addUserMessage,
+      addAssistantMessage,
+      getMessagesForApi,
+      initEventSource,
+      addSystemMessage,
+      t,
+      appId
+    ]
   );
 
   /**
@@ -179,8 +195,9 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
    */
   const resendMessage = useCallback(
     (messageId, editedContent) => {
-      const messageToResend = messages.find((m) => m.id === messageId);
-      if (!messageToResend) return { content: '', variables: null, imageData: null, fileData: null };
+      const messageToResend = messages.find(m => m.id === messageId);
+      if (!messageToResend)
+        return { content: '', variables: null, imageData: null, fileData: null };
 
       let contentToResend = editedContent;
       let variablesToRestore = null;
@@ -188,10 +205,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       let fileDataToRestore = null;
 
       if (messageToResend.role === 'assistant') {
-        const idx = messages.findIndex((m) => m.id === messageId);
-        const prevUser = [...messages.slice(0, idx)]
-          .reverse()
-          .find((m) => m.role === 'user');
+        const idx = messages.findIndex(m => m.id === messageId);
+        const prevUser = [...messages.slice(0, idx)].reverse().find(m => m.role === 'user');
         if (!prevUser) return { content: '', variables: null, imageData: null, fileData: null };
         contentToResend = prevUser.rawContent || prevUser.content;
         variablesToRestore = prevUser.meta?.variables || null;
@@ -222,10 +237,11 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   const cancelGeneration = useCallback(() => {
     cleanupEventSource();
     if (lastMessageIdRef.current) {
-      const currentMessage = messagesRef.current.find((m) => m.id === lastMessageIdRef.current);
+      const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
       updateAssistantMessage(
         lastMessageIdRef.current,
-        (currentMessage?.content || '') + t('message.generationCancelled', ' [Generation cancelled]'),
+        (currentMessage?.content || '') +
+          t('message.generationCancelled', ' [Generation cancelled]'),
         false
       );
     }
@@ -242,7 +258,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     editMessage,
     clearMessages,
     cancelGeneration,
-    addSystemMessage,
+    addSystemMessage
   };
 }
 

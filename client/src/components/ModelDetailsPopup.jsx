@@ -25,7 +25,11 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
       const usageResponse = await fetch('/api/admin/usage');
       if (usageResponse.ok) {
         const usageData = await usageResponse.json();
-        if (usageData.messages && usageData.messages.perModel && usageData.messages.perModel[model.id]) {
+        if (
+          usageData.messages &&
+          usageData.messages.perModel &&
+          usageData.messages.perModel[model.id]
+        ) {
           setUsage({
             messages: usageData.messages.perModel[model.id],
             tokens: usageData.tokens.perModel[model.id] || 0
@@ -49,25 +53,37 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
 
   if (!isOpen || !model) return null;
 
-  const getProviderIcon = (provider) => {
+  const getProviderIcon = provider => {
     switch (provider) {
-      case 'openai': return 'cpu-chip';
-      case 'anthropic': return 'academic-cap';
-      case 'google': return 'globe-alt';
-      case 'mistral': return 'lightning-bolt';
-      case 'local': return 'computer-desktop';
-      default: return 'server';
+      case 'openai':
+        return 'cpu-chip';
+      case 'anthropic':
+        return 'academic-cap';
+      case 'google':
+        return 'globe-alt';
+      case 'mistral':
+        return 'lightning-bolt';
+      case 'local':
+        return 'computer-desktop';
+      default:
+        return 'server';
     }
   };
 
-  const getProviderColor = (provider) => {
+  const getProviderColor = provider => {
     switch (provider) {
-      case 'openai': return '#00A67E';
-      case 'anthropic': return '#CC785C';
-      case 'google': return '#4285F4';
-      case 'mistral': return '#FF6B35';
-      case 'local': return '#6B7280';
-      default: return '#6B7280';
+      case 'openai':
+        return '#00A67E';
+      case 'anthropic':
+        return '#CC785C';
+      case 'google':
+        return '#4285F4';
+      case 'mistral':
+        return '#FF6B35';
+      case 'local':
+        return '#6B7280';
+      default:
+        return '#6B7280';
     }
   };
 
@@ -77,7 +93,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
           <div className="flex items-center space-x-3">
-            <div 
+            <div
               className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
               style={{ backgroundColor: getProviderColor(model.provider) }}
             >
@@ -117,15 +133,14 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
                   {t('admin.models.details.default', 'Default')}
                 </span>
               )}
-              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                model.enabled 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {model.enabled 
+              <span
+                className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                  model.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}
+              >
+                {model.enabled
                   ? t('admin.models.status.enabled', 'Enabled')
-                  : t('admin.models.status.disabled', 'Disabled')
-                }
+                  : t('admin.models.status.disabled', 'Disabled')}
               </span>
             </div>
           </div>
@@ -150,17 +165,13 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.models.details.provider', 'Provider')}
                 </div>
-                <div className="text-sm text-gray-900 mt-1">
-                  {model.provider}
-                </div>
+                <div className="text-sm text-gray-900 mt-1">{model.provider}</div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.models.details.modelId', 'Model ID')}
                 </div>
-                <div className="text-sm text-gray-900 mt-1">
-                  {model.modelId || 'Not specified'}
-                </div>
+                <div className="text-sm text-gray-900 mt-1">{model.modelId || 'Not specified'}</div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -183,9 +194,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                     {t('admin.models.details.concurrency', 'Concurrency')}
                   </div>
-                  <div className="text-sm text-gray-900 mt-1">
-                    {model.concurrency}
-                  </div>
+                  <div className="text-sm text-gray-900 mt-1">{model.concurrency}</div>
                 </div>
               )}
               {model.requestDelayMs && (
@@ -193,9 +202,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                     {t('admin.models.details.requestDelay', 'Request Delay')}
                   </div>
-                  <div className="text-sm text-gray-900 mt-1">
-                    {model.requestDelayMs}ms
-                  </div>
+                  <div className="text-sm text-gray-900 mt-1">{model.requestDelayMs}ms</div>
                 </div>
               )}
             </div>
@@ -211,9 +218,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
                   {t('admin.models.details.apiUrl', 'API URL')}
                 </div>
-                <div className="text-sm text-gray-900 break-all">
-                  {model.url}
-                </div>
+                <div className="text-sm text-gray-900 break-all">{model.url}</div>
               </div>
             </div>
           )}
@@ -237,9 +242,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                     {t('admin.models.details.tokens', 'Tokens')}
                   </div>
-                  <div className="text-sm text-gray-900 mt-1">
-                    {usage.tokens.toLocaleString()}
-                  </div>
+                  <div className="text-sm text-gray-900 mt-1">{usage.tokens.toLocaleString()}</div>
                 </div>
               </div>
             </div>
@@ -256,7 +259,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
                   <div key={app.id} className="bg-gray-50 rounded-lg p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <div 
+                        <div
                           className="w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold"
                           style={{ backgroundColor: app.color || '#6B7280' }}
                         >
@@ -269,11 +272,11 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
                           <div className="text-xs text-gray-500">{app.id}</div>
                         </div>
                       </div>
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        app.enabled 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          app.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}
+                      >
                         {app.enabled ? 'Enabled' : 'Disabled'}
                       </span>
                     </div>
@@ -298,7 +301,10 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
             <div className="text-center py-4">
               <Icon name="document-text" className="w-12 h-12 text-gray-400 mx-auto mb-2" />
               <p className="text-sm text-gray-500">
-                {t('admin.models.details.noApps', 'No apps are using this model as their preferred choice')}
+                {t(
+                  'admin.models.details.noApps',
+                  'No apps are using this model as their preferred choice'
+                )}
               </p>
             </div>
           )}

@@ -35,22 +35,22 @@ Each app is defined with the following essential properties:
 
 ### Property Details
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | String | Unique identifier for the app |
-| `order` | Number | Display order in the app list (optional) |
-| `name` | Object | Localized names for the app |
-| `description` | Object | Localized descriptions of app functionality |
-| `color` | String | Hex color code for app theming |
-| `icon` | String | Icon identifier for the app (see [Available Icons](#available-icons)) |
-| `system` | Object | Localized system prompts/instructions for the AI model |
-| `tokenLimit` | Number | Maximum token limit for context window |
-| `preferredModel` | String | Default AI model to use with this app. If omitted, the server falls back to the model marked as default in `models.json` |
-| `preferredOutputFormat` | String | Format for AI responses (markdown, text) |
-| `preferredStyle` | String | Style guidance for AI responses (normal, professional, creative, academic) |
-| `preferredTemperature` | Number | Temperature setting (0.0-1.0) controlling randomness |
-| `sendChatHistory` | Boolean | Whether to include chat history in API requests |
-| `outputSchema` | Object | JSON schema describing the structured response format |
+| Property                | Type    | Description                                                                                                              |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `id`                    | String  | Unique identifier for the app                                                                                            |
+| `order`                 | Number  | Display order in the app list (optional)                                                                                 |
+| `name`                  | Object  | Localized names for the app                                                                                              |
+| `description`           | Object  | Localized descriptions of app functionality                                                                              |
+| `color`                 | String  | Hex color code for app theming                                                                                           |
+| `icon`                  | String  | Icon identifier for the app (see [Available Icons](#available-icons))                                                    |
+| `system`                | Object  | Localized system prompts/instructions for the AI model                                                                   |
+| `tokenLimit`            | Number  | Maximum token limit for context window                                                                                   |
+| `preferredModel`        | String  | Default AI model to use with this app. If omitted, the server falls back to the model marked as default in `models.json` |
+| `preferredOutputFormat` | String  | Format for AI responses (markdown, text)                                                                                 |
+| `preferredStyle`        | String  | Style guidance for AI responses (normal, professional, creative, academic)                                               |
+| `preferredTemperature`  | Number  | Temperature setting (0.0-1.0) controlling randomness                                                                     |
+| `sendChatHistory`       | Boolean | Whether to include chat history in API requests                                                                          |
+| `outputSchema`          | Object  | JSON schema describing the structured response format                                                                    |
 
 ### Advanced Configuration Options
 
@@ -115,10 +115,10 @@ Administrators can override the automatically generated placeholder for each var
 
 #### Variable Types
 
-| Type | Description |
-|------|-------------|
-| `string` | Single-line text input |
-| `text` | Multi-line text input |
+| Type       | Description                      |
+| ---------- | -------------------------------- |
+| `string`   | Single-line text input           |
+| `text`     | Multi-line text input            |
 | `dropdown` | Selection from predefined values |
 
 #### Source Path
@@ -152,17 +152,17 @@ The `settings` property controls which configuration options users can adjust fo
 }
 ```
 
-| Property | Description |
-|----------|-------------|
-| `settings.enabled` | Master switch for all settings - when `false`, all settings UI is hidden |
-| `settings.model.enabled` | Enable/disable model selection option |
-| `settings.style.enabled` | Enable/disable response style selection |
-| `settings.temperature.enabled` | Enable/disable temperature adjustment |
-| `settings.outputFormat.enabled` | Enable/disable output format selection |
-| `settings.chatHistory.enabled` | Enable/disable chat history toggle |
-| `inputMode.microphone.mode` | Mode for recording (`manual` or `automatic`) |
-| `inputMode.microphone.showTranscript` | Show the live transcript while recording |
-| `inputMode.microphone.enabled` | Enable/disable microphone input for voice commands |
+| Property                              | Description                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------ |
+| `settings.enabled`                    | Master switch for all settings - when `false`, all settings UI is hidden |
+| `settings.model.enabled`              | Enable/disable model selection option                                    |
+| `settings.style.enabled`              | Enable/disable response style selection                                  |
+| `settings.temperature.enabled`        | Enable/disable temperature adjustment                                    |
+| `settings.outputFormat.enabled`       | Enable/disable output format selection                                   |
+| `settings.chatHistory.enabled`        | Enable/disable chat history toggle                                       |
+| `inputMode.microphone.mode`           | Mode for recording (`manual` or `automatic`)                             |
+| `inputMode.microphone.showTranscript` | Show the live transcript while recording                                 |
+| `inputMode.microphone.enabled`        | Enable/disable microphone input for voice commands                       |
 
 For more details, see the [Microphone Feature](microphone-feature.md) documentation.
 
@@ -172,7 +172,6 @@ When a setting is disabled (`false`), the corresponding UI element will be hidde
 
 - `imageUpload` – allow users to attach images (see [Image Upload Feature](image-upload-feature.md))
 - `fileUpload` – allow users to upload text or PDF files (see [File Upload Feature](file-upload-feature.md))
-
 
 #### Input Mode
 
@@ -191,6 +190,7 @@ Apps can configure the chat input with the `inputMode` object. The `type` contro
 ```
 
 Available types:
+
 - `single` – single line text field (default)
 - `multiline` – expandable text area
 
@@ -212,6 +212,7 @@ Apps can define custom placeholder text for the message input:
 Apps can configure a welcome message that appears above the chat input when no messages exist and no starter prompts are configured.
 
 **Simple format (legacy):**
+
 ```json
 "greeting": {
   "en": "Hello! I'm your AI assistant. How can I help you today?",
@@ -220,6 +221,7 @@ Apps can configure a welcome message that appears above the chat input when no m
 ```
 
 **Extended format with title and subtitle:**
+
 ```json
 "greeting": {
   "en": {
@@ -291,10 +293,11 @@ To enforce structured responses from the model, provide an `outputSchema` with a
 ```
 
 Structured output works with all supported adapters. When an `outputSchema` is provided the server enables the provider's JSON mode automatically. The server translates the request as follows:
-* **OpenAI**: `response_format: { type: 'json_object' }`
-* **Mistral**: `response_format: { type: 'json_schema', json_schema: { schema, name: 'response', strict: true } }`
-* **Anthropic**: adds a `json` tool with your schema and forces the model to use it
-* **Google Gemini**: `generationConfig.response_mime_type` set to `application/json` and the schema passed as `generationConfig.response_schema`
+
+- **OpenAI**: `response_format: { type: 'json_object' }`
+- **Mistral**: `response_format: { type: 'json_schema', json_schema: { schema, name: 'response', strict: true } }`
+- **Anthropic**: adds a `json` tool with your schema and forces the model to use it
+- **Google Gemini**: `generationConfig.response_mime_type` set to `application/json` and the schema passed as `generationConfig.response_schema`
 
 When `true`, users can submit the form without entering content in the main input field.
 
@@ -308,6 +311,7 @@ When `true`, users can submit the form without entering content in the main inpu
 ### Available Icons
 
 The system supports these icons:
+
 - `question-mark-circle` - Question mark in a circle
 - `information-circle` - Information icon
 - `chat-bubbles` - Chat conversation bubbles
@@ -325,8 +329,8 @@ The system supports these icons:
 
 Additional icons can be provided by placing custom SVG files in the
 `public/icons` directory (or any directory specified by the
-`VITE_ICON_BASE_URL` environment variable).  The file name should match the
-icon identifier (e.g., `my-icon.svg`).  Files in this directory override
+`VITE_ICON_BASE_URL` environment variable). The file name should match the
+icon identifier (e.g., `my-icon.svg`). Files in this directory override
 icons of the same name from the built-in set.
 
 ### Settings Configuration Examples
@@ -378,7 +382,7 @@ Here are some practical examples of how to configure the settings for different 
   "settings": {
     "enabled": true,
     "model": {
-      "enabled": false 
+      "enabled": false
     },
     "style": {
       "enabled": false
@@ -413,4 +417,3 @@ Here are some practical examples of how to configure the settings for different 
   }
 }
 ```
-

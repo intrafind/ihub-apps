@@ -6,7 +6,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
     try {
       // Try to get models from cache first
       let models = configCache.getModels();
-      
+
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }
@@ -22,10 +22,10 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       const { modelId } = req.params;
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
-      
+
       // Try to get models from cache first
       let models = configCache.getModels();
-      
+
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }

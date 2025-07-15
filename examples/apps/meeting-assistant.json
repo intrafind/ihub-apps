@@ -34,10 +34,22 @@
       "type": "string",
       "required": true,
       "predefinedValues": [
-        {"label": {"en": "Create an agenda", "de": "Eine Tagesordnung erstellen"}, "value": "Create an agenda"},
-        {"label": {"en": "Generate meeting minutes", "de": "Besprechungsprotokoll erstellen"}, "value": "Generate detailed meeting minutes"},
-        {"label": {"en": "Extract action items", "de": "Aktionspunkte extrahieren"}, "value": "Extract and format action items"},
-        {"label": {"en": "Write a follow-up email", "de": "Eine Nachfass-E-Mail schreiben"}, "value": "Write a follow-up email summarizing"}
+        {
+          "label": { "en": "Create an agenda", "de": "Eine Tagesordnung erstellen" },
+          "value": "Create an agenda"
+        },
+        {
+          "label": { "en": "Generate meeting minutes", "de": "Besprechungsprotokoll erstellen" },
+          "value": "Generate detailed meeting minutes"
+        },
+        {
+          "label": { "en": "Extract action items", "de": "Aktionspunkte extrahieren" },
+          "value": "Extract and format action items"
+        },
+        {
+          "label": { "en": "Write a follow-up email", "de": "Eine Nachfass-E-Mail schreiben" },
+          "value": "Write a follow-up email summarizing"
+        }
       ]
     },
     {
@@ -49,12 +61,12 @@
       "type": "string",
       "required": true,
       "predefinedValues": [
-        {"label": {"en": "Team", "de": "Team"}, "value": "team"},
-        {"label": {"en": "Client", "de": "Kunde"}, "value": "client"},
-        {"label": {"en": "Project", "de": "Projekt"}, "value": "project"},
-        {"label": {"en": "Board", "de": "Vorstand"}, "value": "board"},
-        {"label": {"en": "One-on-one", "de": "Eins-zu-eins"}, "value": "one-on-one"},
-        {"label": {"en": "Standup", "de": "Tägliches Standup"}, "value": "daily standup"}
+        { "label": { "en": "Team", "de": "Team" }, "value": "team" },
+        { "label": { "en": "Client", "de": "Kunde" }, "value": "client" },
+        { "label": { "en": "Project", "de": "Projekt" }, "value": "project" },
+        { "label": { "en": "Board", "de": "Vorstand" }, "value": "board" },
+        { "label": { "en": "One-on-one", "de": "Eins-zu-eins" }, "value": "one-on-one" },
+        { "label": { "en": "Standup", "de": "Tägliches Standup" }, "value": "daily standup" }
       ]
     },
     {

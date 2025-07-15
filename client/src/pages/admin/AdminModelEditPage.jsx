@@ -11,14 +11,14 @@ const AdminModelEditPage = () => {
   const navigate = useNavigate();
   const { modelId } = useParams();
   const isNewModel = modelId === 'new';
-  
+
   const [loading, setLoading] = useState(!isNewModel);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [apps, setApps] = useState([]);
   const [usage, setUsage] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     id: '',
     modelId: '',
@@ -91,7 +91,11 @@ const AdminModelEditPage = () => {
       const response = await fetch('/api/admin/usage');
       if (response.ok) {
         const usageData = await response.json();
-        if (usageData.messages && usageData.messages.perModel && usageData.messages.perModel[modelId]) {
+        if (
+          usageData.messages &&
+          usageData.messages.perModel &&
+          usageData.messages.perModel[modelId]
+        ) {
           setUsage({
             messages: usageData.messages.perModel[modelId],
             tokens: usageData.tokens.perModel[modelId] || 0
@@ -103,7 +107,7 @@ const AdminModelEditPage = () => {
     }
   };
 
-  const handleChange = (e) => {
+  const handleChange = e => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -118,13 +122,13 @@ const AdminModelEditPage = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
-    
+
     try {
       setSaving(true);
       setError(null);
-      
+
       // Validate required fields
       if (
         !formData.id ||
@@ -134,7 +138,7 @@ const AdminModelEditPage = () => {
       ) {
         throw new Error(t('admin.models.edit.requiredFields'));
       }
-      
+
       // Prepare the data to send
       const dataToSend = {
         ...formData,
@@ -142,37 +146,36 @@ const AdminModelEditPage = () => {
         concurrency: formData.concurrency ? parseInt(formData.concurrency) : undefined,
         requestDelayMs: formData.requestDelayMs ? parseInt(formData.requestDelayMs) : undefined
       };
-      
+
       // Remove empty fields
       Object.keys(dataToSend).forEach(key => {
         if (dataToSend[key] === '' || dataToSend[key] === undefined) {
           delete dataToSend[key];
         }
       });
-      
+
       const url = isNewModel ? '/api/admin/models' : `/api/admin/models/${modelId}`;
       const method = isNewModel ? 'POST' : 'PUT';
-      
+
       const response = await fetch(url, {
         method,
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(dataToSend),
+        body: JSON.stringify(dataToSend)
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save model');
       }
-      
+
       setSuccess(true);
-      
+
       // Redirect after a short delay
       setTimeout(() => {
         navigate('/admin/models');
       }, 1500);
-      
     } catch (err) {
       setError(err.message);
     } finally {
@@ -185,7 +188,7 @@ const AdminModelEditPage = () => {
     { value: 'anthropic', label: 'Anthropic' },
     { value: 'google', label: 'Google' },
     { value: 'mistral', label: 'Mistral' },
-    { value: 'local', label: 'Local' },
+    { value: 'local', label: 'Local' }
   ];
 
   if (loading) {
@@ -217,10 +220,11 @@ const AdminModelEditPage = () => {
                 {isNewModel ? t('admin.models.edit.titleNew') : t('admin.models.edit.title')}
               </h1>
               <p className="mt-1 text-sm text-gray-500">
-                {isNewModel 
-                  ? t('admin.models.edit.subtitleNew') 
-                  : t('admin.models.edit.subtitle', { name: getLocalizedContent(formData.name, currentLanguage) })
-                }
+                {isNewModel
+                  ? t('admin.models.edit.subtitleNew')
+                  : t('admin.models.edit.subtitle', {
+                      name: getLocalizedContent(formData.name, currentLanguage)
+                    })}
               </p>
             </div>
           </div>
@@ -235,7 +239,9 @@ const AdminModelEditPage = () => {
                 <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
                   <div className="md:grid md:grid-cols-3 md:gap-6">
                     <div className="md:col-span-1">
-                      <h3 className="text-lg font-medium leading-6 text-gray-900">{t('admin.models.edit.basicInfo')}</h3>
+                      <h3 className="text-lg font-medium leading-6 text-gray-900">
+                        {t('admin.models.edit.basicInfo')}
+                      </h3>
                       <p className="mt-1 text-sm text-gray-500">
                         {t('admin.models.edit.basicInfoDesc', 'Basic information about the model')}
                       </p>
@@ -256,14 +262,16 @@ const AdminModelEditPage = () => {
                             className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md disabled:bg-gray-100"
                             required
                           />
-                          <p className="mt-2 text-sm text-gray-500">{t('admin.models.hints.modelId')}</p>
+                          <p className="mt-2 text-sm text-gray-500">
+                            {t('admin.models.hints.modelId')}
+                          </p>
                         </div>
 
                         <div className="col-span-6 sm:col-span-3">
                           <DynamicLanguageEditor
                             label={t('admin.models.fields.name')}
                             value={formData.name}
-                            onChange={(value) => handleLocalizedChange('name', value)}
+                            onChange={value => handleLocalizedChange('name', value)}
                             required={true}
                           />
                         </div>
@@ -272,14 +280,17 @@ const AdminModelEditPage = () => {
                           <DynamicLanguageEditor
                             label={t('admin.models.fields.description')}
                             value={formData.description}
-                            onChange={(value) => handleLocalizedChange('description', value)}
+                            onChange={value => handleLocalizedChange('description', value)}
                             required={true}
                             type="textarea"
                           />
                         </div>
 
                         <div className="col-span-6 sm:col-span-3">
-                          <label htmlFor="provider" className="block text-sm font-medium text-gray-700">
+                          <label
+                            htmlFor="provider"
+                            className="block text-sm font-medium text-gray-700"
+                          >
                             {t('admin.models.fields.provider')} *
                           </label>
                           <select
@@ -290,7 +301,9 @@ const AdminModelEditPage = () => {
                             className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                             required
                           >
-                            <option value="">{t('admin.models.placeholders.selectProvider')}</option>
+                            <option value="">
+                              {t('admin.models.placeholders.selectProvider')}
+                            </option>
                             {providerOptions.map(option => (
                               <option key={option.value} value={option.value}>
                                 {option.label}
@@ -300,7 +313,10 @@ const AdminModelEditPage = () => {
                         </div>
 
                         <div className="col-span-6 sm:col-span-3">
-                          <label htmlFor="modelId" className="block text-sm font-medium text-gray-700">
+                          <label
+                            htmlFor="modelId"
+                            className="block text-sm font-medium text-gray-700"
+                          >
                             {t('admin.models.fields.modelId')}
                           </label>
                           <input
@@ -312,7 +328,9 @@ const AdminModelEditPage = () => {
                             placeholder={t('admin.models.placeholders.apiModelId')}
                             className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
                           />
-                          <p className="mt-2 text-sm text-gray-500">{t('admin.models.hints.apiModelId')}</p>
+                          <p className="mt-2 text-sm text-gray-500">
+                            {t('admin.models.hints.apiModelId')}
+                          </p>
                         </div>
 
                         <div className="col-span-6">
@@ -337,15 +355,23 @@ const AdminModelEditPage = () => {
                 <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
                   <div className="md:grid md:grid-cols-3 md:gap-6">
                     <div className="md:col-span-1">
-                      <h3 className="text-lg font-medium leading-6 text-gray-900">{t('admin.models.edit.configuration')}</h3>
+                      <h3 className="text-lg font-medium leading-6 text-gray-900">
+                        {t('admin.models.edit.configuration')}
+                      </h3>
                       <p className="mt-1 text-sm text-gray-500">
-                        {t('admin.models.edit.configurationDesc', 'Advanced configuration options for the model')}
+                        {t(
+                          'admin.models.edit.configurationDesc',
+                          'Advanced configuration options for the model'
+                        )}
                       </p>
                     </div>
                     <div className="mt-5 md:mt-0 md:col-span-2">
                       <div className="grid grid-cols-6 gap-6">
                         <div className="col-span-6 sm:col-span-2">
-                          <label htmlFor="tokenLimit" className="block text-sm font-medium text-gray-700">
+                          <label
+                            htmlFor="tokenLimit"
+                            className="block text-sm font-medium text-gray-700"
+                          >
                             {t('admin.models.fields.tokenLimit')}
                           </label>
                           <input
@@ -360,7 +386,10 @@ const AdminModelEditPage = () => {
                         </div>
 
                         <div className="col-span-6 sm:col-span-2">
-                          <label htmlFor="concurrency" className="block text-sm font-medium text-gray-700">
+                          <label
+                            htmlFor="concurrency"
+                            className="block text-sm font-medium text-gray-700"
+                          >
                             {t('admin.models.fields.concurrency')}
                           </label>
                           <input
@@ -375,7 +404,10 @@ const AdminModelEditPage = () => {
                         </div>
 
                         <div className="col-span-6 sm:col-span-2">
-                          <label htmlFor="requestDelayMs" className="block text-sm font-medium text-gray-700">
+                          <label
+                            htmlFor="requestDelayMs"
+                            className="block text-sm font-medium text-gray-700"
+                          >
                             {t('admin.models.fields.requestDelay')}
                           </label>
                           <input
@@ -405,7 +437,10 @@ const AdminModelEditPage = () => {
                                   />
                                 </div>
                                 <div className="ml-3 text-sm">
-                                  <label htmlFor="supportsTools" className="font-medium text-gray-700">
+                                  <label
+                                    htmlFor="supportsTools"
+                                    className="font-medium text-gray-700"
+                                  >
                                     {t('admin.models.fields.supportsTools')}
                                   </label>
                                 </div>
@@ -465,7 +500,11 @@ const AdminModelEditPage = () => {
                     disabled={saving}
                     className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                   >
-                    {saving ? t('admin.models.edit.saving') : (isNewModel ? t('admin.models.edit.createModel') : t('admin.models.edit.saveChanges'))}
+                    {saving
+                      ? t('admin.models.edit.saving')
+                      : isNewModel
+                        ? t('admin.models.edit.createModel')
+                        : t('admin.models.edit.saveChanges')}
                   </button>
                 </div>
               </form>
@@ -482,12 +521,20 @@ const AdminModelEditPage = () => {
                     {usage ? (
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-500">{t('admin.models.details.messages')}:</span>
-                          <span className="text-sm font-medium text-gray-900">{usage.messages?.toLocaleString() || 0}</span>
+                          <span className="text-sm text-gray-500">
+                            {t('admin.models.details.messages')}:
+                          </span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {usage.messages?.toLocaleString() || 0}
+                          </span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-500">{t('admin.models.details.tokens')}:</span>
-                          <span className="text-sm font-medium text-gray-900">{usage.tokens?.toLocaleString() || 0}</span>
+                          <span className="text-sm text-gray-500">
+                            {t('admin.models.details.tokens')}:
+                          </span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {usage.tokens?.toLocaleString() || 0}
+                          </span>
                         </div>
                       </div>
                     ) : (
@@ -505,9 +552,12 @@ const AdminModelEditPage = () => {
                     {apps.length > 0 ? (
                       <div className="space-y-3">
                         {apps.map(app => (
-                          <div key={app.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div
+                            key={app.id}
+                            className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                          >
                             <div className="flex items-center space-x-3">
-                              <div 
+                              <div
                                 className="w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold"
                                 style={{ backgroundColor: app.color || '#6B7280' }}
                               >
@@ -520,10 +570,16 @@ const AdminModelEditPage = () => {
                                 <div className="text-xs text-gray-500">{app.id}</div>
                               </div>
                             </div>
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              app.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            }`}>
-                              {app.enabled ? t('admin.models.status.enabled') : t('admin.models.status.disabled')}
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                app.enabled
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}
+                            >
+                              {app.enabled
+                                ? t('admin.models.status.enabled')
+                                : t('admin.models.status.disabled')}
                             </span>
                           </div>
                         ))}
@@ -568,8 +624,10 @@ const AdminModelEditPage = () => {
                 </div>
                 <div className="ml-3 w-0 flex-1 pt-0.5">
                   <p className="text-sm font-medium text-gray-900">
-                    {t('admin.models.edit.success', { 
-                      action: isNewModel ? t('admin.models.edit.successCreated') : t('admin.models.edit.successUpdated') 
+                    {t('admin.models.edit.success', {
+                      action: isNewModel
+                        ? t('admin.models.edit.successCreated')
+                        : t('admin.models.edit.successUpdated')
                     })}
                   </p>
                 </div>

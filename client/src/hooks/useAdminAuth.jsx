@@ -13,23 +13,23 @@ export function AdminAuthProvider({ children }) {
     try {
       const response = await fetch('/api/admin/auth/status');
       const data = await response.json();
-      
+
       setAuthRequired(data.authRequired);
-      
+
       if (!data.authRequired) {
         setIsAuthenticated(true);
         setIsLoading(false);
         return;
       }
-      
+
       // If auth is required, test the current token
       if (token) {
         const testResponse = await fetch('/api/admin/auth/test', {
           headers: {
-            'Authorization': `Bearer ${token}`
+            Authorization: `Bearer ${token}`
           }
         });
-        
+
         if (testResponse.ok) {
           setIsAuthenticated(true);
         } else {
@@ -44,7 +44,7 @@ export function AdminAuthProvider({ children }) {
       console.error('Error checking auth status:', error);
       setIsAuthenticated(false);
     }
-    
+
     setIsLoading(false);
   };
 
@@ -52,14 +52,14 @@ export function AdminAuthProvider({ children }) {
     checkAuthStatus();
   }, [token]);
 
-  const login = async (adminSecret) => {
+  const login = async adminSecret => {
     try {
       const response = await fetch('/api/admin/auth/test', {
         headers: {
-          'Authorization': `Bearer ${adminSecret}`
+          Authorization: `Bearer ${adminSecret}`
         }
       });
-      
+
       if (response.ok) {
         setToken(adminSecret);
         setIsAuthenticated(true);
@@ -90,11 +90,7 @@ export function AdminAuthProvider({ children }) {
     checkAuthStatus
   };
 
-  return (
-    <AdminAuthContext.Provider value={value}>
-      {children}
-    </AdminAuthContext.Provider>
-  );
+  return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
 }
 
 export function useAdminAuth() {

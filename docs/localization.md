@@ -35,4 +35,3 @@ Save this as `contents/locales/de.json`. During startup the server merges these 
 ## Fetching Translations
 
 Translations are served via the `/api/translations/:lang` endpoint. The language code must match one of the built-in locale files (e.g. `en` or `de`). Overrides are applied automatically.
-

@@ -6,10 +6,10 @@ import MistralAdapter from './mistral.js';
 
 // Adapter registry
 const adapters = {
-  'openai': OpenAIAdapter,
-  'anthropic': AnthropicAdapter,
-  'google': GoogleAdapter,
-  'mistral': MistralAdapter
+  openai: OpenAIAdapter,
+  anthropic: AnthropicAdapter,
+  google: GoogleAdapter,
+  mistral: MistralAdapter
 };
 
 /**

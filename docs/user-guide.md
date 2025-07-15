@@ -42,4 +42,4 @@ Toggle **Keep Chat History** to preserve conversations in your browser. When dis
 
 Click the book icon above the input field to open the prompts library. You can search by name or description and sort the results. Selecting **Insert** copies the prompt text into your current message so you can edit or send it immediately.
 
-*** End of File
+\*\*\* End of File

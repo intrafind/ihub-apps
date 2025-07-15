@@ -12,4 +12,5 @@
   "url": "https://api.openai.com/v1/chat/completions",
   "provider": "openai",
   "tokenLimit": 4096,
-  "supportsTools": true}
+  "supportsTools": true
+}

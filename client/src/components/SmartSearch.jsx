@@ -22,7 +22,7 @@ const SmartSearch = () => {
   const { getFavorites: getFavoriteApps } = createFavoriteItemHelpers('aihub_favorite_apps');
 
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = e => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsOpen(true);
@@ -38,7 +38,9 @@ const SmartSearch = () => {
     if (isOpen) {
       setFavoriteApps(getFavoriteApps());
       if (apps.length === 0) {
-        fetchApps().then(setApps).catch((err) => console.error('Failed to load apps', err));
+        fetchApps()
+          .then(setApps)
+          .catch(err => console.error('Failed to load apps', err));
       }
     }
   }, [isOpen]);
@@ -49,7 +51,7 @@ const SmartSearch = () => {
     descriptionText: getLocalizedContent(app.description, currentLanguage) || ''
   }));
 
-  const handleSelect = (app) => {
+  const handleSelect = app => {
     setIsOpen(false);
     navigate(`/apps/${app.id}`);
   };
@@ -60,9 +62,9 @@ const SmartSearch = () => {
       onClose={() => setIsOpen(false)}
       onSelect={handleSelect}
       items={searchItems}
-      fuseKeys={['nameText','descriptionText']}
+      fuseKeys={['nameText', 'descriptionText']}
       placeholder={t('smartSearch.placeholder', 'Search apps...')}
-      renderResult={(app) => (
+      renderResult={app => (
         <div className="flex items-start space-x-3">
           <div className="flex-shrink-0 w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
             <Icon name={app.icon || 'lightning-bolt'} className="w-3.5 h-3.5 text-indigo-600" />
@@ -83,11 +85,14 @@ const SmartSearch = () => {
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-500 leading-4 overflow-hidden" style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical'
-            }}>
+            <p
+              className="text-xs text-gray-500 leading-4 overflow-hidden"
+              style={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical'
+              }}
+            >
               {getLocalizedContent(app.description, currentLanguage) || ''}
             </p>
           </div>

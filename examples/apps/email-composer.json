@@ -1,4 +1,3 @@
-
 {
   "id": "email-composer",
   "order": 5,
@@ -40,13 +39,13 @@
       },
       "required": true,
       "predefinedValues": [
-        {"label": {"en": "Professional", "de": "Professionell"}, "value": "professional"},
-        {"label": {"en": "Follow-up", "de": "Nachverfolgung"}, "value": "follow-up"},
-        {"label": {"en": "Request", "de": "Anfrage"}, "value": "request"},
-        {"label": {"en": "Thank you", "de": "Danke"}, "value": "thank you"},
-        {"label": {"en": "Introduction", "de": "Einführung"}, "value": "introduction"},
-        {"label": {"en": "Complaint", "de": "Beschwerde"}, "value": "complaint resolution"},
-        {"label": {"en": "Application", "de": "Bewerbung"}, "value": "job application"}
+        { "label": { "en": "Professional", "de": "Professionell" }, "value": "professional" },
+        { "label": { "en": "Follow-up", "de": "Nachverfolgung" }, "value": "follow-up" },
+        { "label": { "en": "Request", "de": "Anfrage" }, "value": "request" },
+        { "label": { "en": "Thank you", "de": "Danke" }, "value": "thank you" },
+        { "label": { "en": "Introduction", "de": "Einführung" }, "value": "introduction" },
+        { "label": { "en": "Complaint", "de": "Beschwerde" }, "value": "complaint resolution" },
+        { "label": { "en": "Application", "de": "Bewerbung" }, "value": "job application" }
       ]
     },
     {
@@ -79,11 +78,20 @@
         "de": "Verwende einen professionellen Ton."
       },
       "predefinedValues": [
-        {"label": {"en": "Professional", "de": "Professionell"}, "value": "Use a professional tone."},
-        {"label": {"en": "Friendly", "de": "Freundlich"}, "value": "Use a friendly and approachable tone."},
-        {"label": {"en": "Formal", "de": "Formell"}, "value": "Use a formal tone."},
-        {"label": {"en": "Casual", "de": "Lässig"}, "value": "Use a casual tone."},
-        {"label": {"en": "Assertive", "de": "Bestimmend"}, "value": "Use an assertive and confident tone."}
+        {
+          "label": { "en": "Professional", "de": "Professionell" },
+          "value": "Use a professional tone."
+        },
+        {
+          "label": { "en": "Friendly", "de": "Freundlich" },
+          "value": "Use a friendly and approachable tone."
+        },
+        { "label": { "en": "Formal", "de": "Formell" }, "value": "Use a formal tone." },
+        { "label": { "en": "Casual", "de": "Lässig" }, "value": "Use a casual tone." },
+        {
+          "label": { "en": "Assertive", "de": "Bestimmend" },
+          "value": "Use an assertive and confident tone."
+        }
       ]
     },
     {

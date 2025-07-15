@@ -37,10 +37,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "en", 
-          "de"
-        ]
+        "required": ["en", "de"]
       },
       "description": {
         "type": "object",
@@ -52,10 +49,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "en",
-          "de"
-        ]
+        "required": ["en", "de"]
       },
       "system": {
         "type": "object",
@@ -67,10 +61,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "en",
-          "de"
-        ]
+        "required": ["en", "de"]
       },
       "sendChatHistory": {
         "type": "boolean"
@@ -85,14 +76,6 @@
         "type": "string"
       }
     },
-    "required": [
-      "id",
-      "name",
-      "description",
-      "sendChatHistory",
-      "tools",
-      "category",
-      "system"
-    ]
+    "required": ["id", "name", "description", "sendChatHistory", "tools", "category", "system"]
   }
 }

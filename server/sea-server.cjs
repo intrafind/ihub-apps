@@ -4,12 +4,12 @@
  */
 
 // Basic error handling
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', err => {
   console.error('FATAL UNCAUGHT EXCEPTION:', err);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', reason => {
   console.error('UNHANDLED PROMISE REJECTION:', reason);
 });
 

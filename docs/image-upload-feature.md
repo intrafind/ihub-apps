@@ -18,6 +18,7 @@ Enable the feature in an app by adding an `imageUpload` object with an `enabled`
 ### Configuration Options
 
 **imageUpload.resizeImages** (boolean)
+
 - When `true` (default) the uploaded image is resized to a maximum dimension of 1024 px and converted to JPEG before being sent.
 - Set to `false` to use the original image without resizing or format conversion.
 

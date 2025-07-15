@@ -1,11 +1,11 @@
-import React, { useRef, useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import { VoiceInputComponent } from "../voice";
-import Icon from "../Icon";
-import MagicPromptLoader from "../MagicPromptLoader";
-import { ImageUploader, FileUploader } from "../upload";
-import PromptSearch from "../PromptSearch";
-import { useUIConfig } from "../UIConfigContext";
+import React, { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { VoiceInputComponent } from '../voice';
+import Icon from '../Icon';
+import MagicPromptLoader from '../MagicPromptLoader';
+import { ImageUploader, FileUploader } from '../upload';
+import PromptSearch from '../PromptSearch';
+import { useUIConfig } from '../UIConfigContext';
 
 /**
  * A reusable chat input component for chat interfaces
@@ -36,7 +36,7 @@ const ChatInput = ({
   onMagicPrompt = null,
   showUndoMagicPrompt = false,
   onUndoMagicPrompt = null,
-  magicPromptLoading = false,
+  magicPromptLoading = false
 }) => {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -45,36 +45,38 @@ const ChatInput = ({
   const [internalShowImageUploader, setInternalShowImageUploader] = useState(false);
   const [internalShowFileUploader, setInternalShowFileUploader] = useState(false);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
-  const promptsListEnabled = uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
+  const promptsListEnabled =
+    uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
   const multilineMode = inputMode?.type === 'multiline' || inputMode === 'multiline';
-  const inputRows = multilineMode ? (inputMode?.rows || 2) : 1;
-  
+  const inputRows = multilineMode ? inputMode?.rows || 2 : 1;
+
   // Use external state if provided, otherwise use internal state
-  const showImageUploader = externalShowImageUploader !== undefined ? 
-    externalShowImageUploader : internalShowImageUploader;
-    
-  const showFileUploader = externalShowFileUploader !== undefined ? 
-    externalShowFileUploader : internalShowFileUploader;
-    
+  const showImageUploader =
+    externalShowImageUploader !== undefined ? externalShowImageUploader : internalShowImageUploader;
+
+  const showFileUploader =
+    externalShowFileUploader !== undefined ? externalShowFileUploader : internalShowFileUploader;
+
   // First check for direct placeholder prop, then app.messagePlaceholder, then default
-  const customPlaceholder = app?.messagePlaceholder ? 
-    (typeof app.messagePlaceholder === 'object' ? 
-      app.messagePlaceholder[i18n.language] || app.messagePlaceholder.en : 
-      app.messagePlaceholder) : null;
+  const customPlaceholder = app?.messagePlaceholder
+    ? typeof app.messagePlaceholder === 'object'
+      ? app.messagePlaceholder[i18n.language] || app.messagePlaceholder.en
+      : app.messagePlaceholder
+    : null;
 
   let defaultPlaceholder = isProcessing
-    ? t("pages.appChat.thinking")
+    ? t('pages.appChat.thinking')
     : customPlaceholder
-    ? customPlaceholder
-    : allowEmptySubmit
-    ? t("pages.appChat.optionalMessagePlaceholder", "Type here (optional)...")
-    : t("pages.appChat.messagePlaceholder", "Type here...");
-  
+      ? customPlaceholder
+      : allowEmptySubmit
+        ? t('pages.appChat.optionalMessagePlaceholder', 'Type here (optional)...')
+        : t('pages.appChat.messagePlaceholder', 'Type here...');
+
   // Store the current placeholder in a ref to ensure it persists
-  
+
   // Debug logging
   // useEffect(() => {
   //   console.log("ChatInput placeholder state:", {
@@ -110,34 +112,34 @@ const ChatInput = ({
   useEffect(() => {
     if (actualInputRef.current) {
       const textarea = actualInputRef.current;
-      
+
       const autoResize = () => {
         // Reset height to auto to get the correct scrollHeight
         textarea.style.height = 'auto';
-        
+
         // Calculate the new height based on content
         const scrollHeight = textarea.scrollHeight;
         const minHeight = inputRows * 1.5 * 16; // Convert em to px (assuming 16px base font size)
-        const maxHeight = ( multilineMode ? 12 : 3 ) * 1.5 * 16 + 24; // 12 lines + padding (1.5rem = 24px)
+        const maxHeight = (multilineMode ? 12 : 3) * 1.5 * 16 + 24; // 12 lines + padding (1.5rem = 24px)
 
         // Set the height to fit content, but respect min/max limits
         const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
         textarea.style.height = `${newHeight}px`;
       };
-      
+
       // Initial resize
       autoResize();
-      
+
       // Add event listener for input changes
       textarea.addEventListener('input', autoResize);
-      
+
       return () => {
         textarea.removeEventListener('input', autoResize);
       };
     }
   }, [value, multilineMode, inputRows]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = e => {
     e.preventDefault();
     if ((value.trim() || allowEmptySubmit) && !isProcessing) {
       onSubmit(e);
@@ -149,16 +151,16 @@ const ChatInput = ({
   };
 
   const handleClearInput = () => {
-    onChange({ target: { value: "" } });
+    onChange({ target: { value: '' } });
   };
 
-  const handleCancel = (e) => {
+  const handleCancel = e => {
     e.preventDefault(); // Prevent any form submission
-    if (onCancel && typeof onCancel === "function") {
-      console.log("Cancel button clicked, executing onCancel");
+    if (onCancel && typeof onCancel === 'function') {
+      console.log('Cancel button clicked, executing onCancel');
       onCancel();
     } else {
-      console.warn("Cancel handler is not properly defined");
+      console.warn('Cancel handler is not properly defined');
     }
   };
 
@@ -168,7 +170,7 @@ const ChatInput = ({
       onToggleImageUploader();
     } else {
       // Otherwise use the internal state
-      setInternalShowImageUploader((prev) => !prev);
+      setInternalShowImageUploader(prev => !prev);
     }
   };
 
@@ -178,12 +180,12 @@ const ChatInput = ({
       onToggleFileUploader();
     } else {
       // Otherwise use the internal state
-      setInternalShowFileUploader((prev) => !prev);
+      setInternalShowFileUploader(prev => !prev);
     }
   };
 
   // Handle key events for the textarea
-  const handleKeyDown = (e) => {
+  const handleKeyDown = e => {
     if (promptsListEnabled && !showPromptSearch && e.key === '/' && value === '') {
       e.preventDefault();
       setShowPromptSearch(true);
@@ -219,7 +221,7 @@ const ChatInput = ({
           isOpen={showPromptSearch}
           appId={app?.id}
           onClose={() => setShowPromptSearch(false)}
-          onSelect={(p) => {
+          onSelect={p => {
             onChange({ target: { value: p.prompt.replace('[content]', '') } });
             setShowPromptSearch(false);
             setTimeout(() => {
@@ -247,7 +249,10 @@ const ChatInput = ({
       )}
 
       <form onSubmit={handleSubmit} autoComplete="off" className="flex space-x-2 items-center">
-        <textarea autoComplete="off" data-lpignore="true" data-1p-ignore="true"
+        <textarea
+          autoComplete="off"
+          data-lpignore="true"
+          data-1p-ignore="true"
           type="text"
           value={value}
           onChange={onChange}
@@ -256,27 +261,27 @@ const ChatInput = ({
           className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 pr-10"
           placeholder={defaultPlaceholder}
           ref={actualInputRef}
-          style={{ 
-            resize: multilineMode ? "vertical" : "none",
+          style={{
+            resize: multilineMode ? 'vertical' : 'none',
             minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
-            maxHeight: multilineMode ? "calc(11 * 1.5em + 1.5rem)" : undefined,
-            overflowY: multilineMode ? "auto" : "hidden",
-            height: multilineMode ? "auto" : undefined
+            maxHeight: multilineMode ? 'calc(11 * 1.5em + 1.5rem)' : undefined,
+            overflowY: multilineMode ? 'auto' : 'hidden',
+            height: multilineMode ? 'auto' : undefined
           }}
-          title={multilineMode ? 
-            t("input.multilineTooltip", "Press Shift+Enter for new line, Cmd+Enter to send") : 
-            t("input.singlelineTooltip", "Press Enter to send")}
+          title={
+            multilineMode
+              ? t('input.multilineTooltip', 'Press Shift+Enter for new line, Cmd+Enter to send')
+              : t('input.singlelineTooltip', 'Press Enter to send')
+          }
         />
-        <span className="sr-only">
-          
-        </span>
+        <span className="sr-only"></span>
         <div className="flex-1 relative">
           {value && (
             <button
               type="button"
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 h-fit"
               onClick={handleClearInput}
-              title={t("common.clear", "Clear")}
+              title={t('common.clear', 'Clear')}
             >
               <Icon name="clearCircle" size="sm" />
             </button>
@@ -289,11 +294,9 @@ const ChatInput = ({
               type="button"
               onClick={toggleImageUploader}
               disabled={disabled || isProcessing}
-              className={`image-upload-button ${
-                showImageUploader ? "active" : ""
-              } h-fit`}
-              title={t("common.toggleImageUpload", "Toggle image upload")}
-              aria-label={t("common.toggleImageUpload", "Toggle image upload")}
+              className={`image-upload-button ${showImageUploader ? 'active' : ''} h-fit`}
+              title={t('common.toggleImageUpload', 'Toggle image upload')}
+              aria-label={t('common.toggleImageUpload', 'Toggle image upload')}
             >
               <Icon name="camera" size="md" />
             </button>
@@ -304,11 +307,9 @@ const ChatInput = ({
               type="button"
               onClick={toggleFileUploader}
               disabled={disabled || isProcessing}
-              className={`image-upload-button ${
-                showFileUploader ? "active" : ""
-              } h-fit`}
-              title={t("common.toggleFileUpload", "Toggle file upload")}
-              aria-label={t("common.toggleFileUpload", "Toggle file upload")}
+              className={`image-upload-button ${showFileUploader ? 'active' : ''} h-fit`}
+              title={t('common.toggleFileUpload', 'Toggle file upload')}
+              aria-label={t('common.toggleFileUpload', 'Toggle file upload')}
             >
               <Icon name="paper-clip" size="md" />
             </button>
@@ -320,14 +321,10 @@ const ChatInput = ({
               onClick={onMagicPrompt}
               disabled={disabled || isProcessing}
               className="image-upload-button h-fit"
-              title={t("common.magicPrompt", "Magic prompt")}
-              aria-label={t("common.magicPrompt", "Magic prompt")}
+              title={t('common.magicPrompt', 'Magic prompt')}
+              aria-label={t('common.magicPrompt', 'Magic prompt')}
             >
-              {magicPromptLoading ? (
-                <MagicPromptLoader />
-              ) : (
-                <Icon name="sparkles" size="md" />
-              )}
+              {magicPromptLoading ? <MagicPromptLoader /> : <Icon name="sparkles" size="md" />}
             </button>
           )}
 
@@ -337,8 +334,8 @@ const ChatInput = ({
               onClick={onUndoMagicPrompt}
               disabled={disabled || isProcessing}
               className="image-upload-button h-fit"
-              title={t("common.undo", "Undo")}
-              aria-label={t("common.undo", "Undo")}
+              title={t('common.undo', 'Undo')}
+              aria-label={t('common.undo', 'Undo')}
             >
               <Icon name="arrowLeft" size="md" />
             </button>
@@ -358,28 +355,26 @@ const ChatInput = ({
         <button
           type="button"
           onClick={isProcessing ? handleCancel : handleSubmit}
-          disabled={
-            disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
-          }
+          disabled={disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
           className={`px-4 py-3 rounded-lg font-medium flex items-center justify-center h-fit ${
             disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
               : isProcessing
-              ? "bg-red-600 text-white hover:bg-red-700"
-              : "bg-indigo-600 text-white hover:bg-indigo-700"
+                ? 'bg-red-600 text-white hover:bg-red-700'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700'
           }`}
         >
           {isProcessing ? (
             <>
               <Icon name="close" size="sm" className="mr-1" />
-              <span>{t("common.cancel")}</span>
+              <span>{t('common.cancel')}</span>
             </>
           ) : (
             <>
-              <span>{t("common.send")}</span>
+              <span>{t('common.send')}</span>
               {/* Display shortcut hint */}
               <span className="ml-1 text-xs opacity-70 hidden sm:inline">
-                {multilineMode ? "⌘↵" : "↵"}
+                {multilineMode ? '⌘↵' : '↵'}
               </span>
             </>
           )}

@@ -36,9 +36,7 @@
       "application/javascript",
       "text/xml"
     ],
-    "supportedPdfFormats": [
-      "application/pdf"
-    ]
+    "supportedPdfFormats": ["application/pdf"]
   },
   "enabled": true
 }

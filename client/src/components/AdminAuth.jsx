@@ -8,18 +8,18 @@ const AdminAuth = ({ children }) => {
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const handleLogin = async (e) => {
+  const handleLogin = async e => {
     e.preventDefault();
     setError('');
     setIsLoggingIn(true);
-    
+
     const result = await login(adminSecret);
-    
+
     if (!result.success) {
       setError(result.error);
       setAdminSecret('');
     }
-    
+
     setIsLoggingIn(false);
   };
 
@@ -81,7 +81,7 @@ const AdminAuth = ({ children }) => {
             Enter your admin secret to access the admin panel
           </p>
         </div>
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
@@ -96,7 +96,7 @@ const AdminAuth = ({ children }) => {
                 className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
                 placeholder="Admin secret"
                 value={adminSecret}
-                onChange={(e) => setAdminSecret(e.target.value)}
+                onChange={e => setAdminSecret(e.target.value)}
               />
             </div>
           </div>

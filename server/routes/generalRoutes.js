@@ -6,7 +6,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     try {
       // Try to get apps from cache first
       let apps = configCache.getApps();
-      
+
       if (!apps) {
         return res.status(500).json({ error: 'Failed to load apps configuration' });
       }
@@ -22,10 +22,10 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       const { appId } = req.params;
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
-      
+
       // Try to get apps from cache first
       let apps = configCache.getApps();
-      
+
       if (!apps) {
         return res.status(500).json({ error: 'Failed to load apps configuration' });
       }
@@ -40,5 +40,4 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
-
 }

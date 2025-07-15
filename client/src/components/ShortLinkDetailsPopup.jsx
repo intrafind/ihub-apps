@@ -1,7 +1,7 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
-import Icon from "./Icon";
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import Icon from './Icon';
 
 const ShortLinkDetailsPopup = ({ link, isOpen, onClose }) => {
   const { t } = useTranslation();
@@ -10,7 +10,7 @@ const ShortLinkDetailsPopup = ({ link, isOpen, onClose }) => {
   if (!isOpen || !link) return null;
 
   const handleTest = () => {
-    window.open(`/s/${link.code}`, "_blank");
+    window.open(`/s/${link.code}`, '_blank');
   };
 
   return (
@@ -23,9 +23,7 @@ const ShortLinkDetailsPopup = ({ link, isOpen, onClose }) => {
               <Icon name="link" className="w-6 h-6 text-indigo-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                {link.code}
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900">{link.code}</h3>
               <p className="text-sm text-gray-500">/s/{link.code}</p>
             </div>
           </div>
@@ -42,32 +40,28 @@ const ShortLinkDetailsPopup = ({ link, isOpen, onClose }) => {
           <div className="grid grid-cols-1 gap-4">
             <div className="bg-gray-50 rounded-lg p-3">
               <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                {t("admin.shortlinks.appId", "App ID")}
+                {t('admin.shortlinks.appId', 'App ID')}
               </div>
               <div className="text-sm text-gray-900 mt-1">{link.appId}</div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
               <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                {t("admin.shortlinks.userId", "User ID")}
+                {t('admin.shortlinks.userId', 'User ID')}
               </div>
-              <div className="text-sm text-gray-900 mt-1">
-                {link.userId || "-"}
-              </div>
+              <div className="text-sm text-gray-900 mt-1">{link.userId || '-'}</div>
             </div>
             {link.url && (
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  {t("admin.shortlinks.url", "Redirect URL")}
+                  {t('admin.shortlinks.url', 'Redirect URL')}
                 </div>
-                <div className="text-sm text-gray-900 break-all mt-1">
-                  {link.url}
-                </div>
+                <div className="text-sm text-gray-900 break-all mt-1">{link.url}</div>
               </div>
             )}
             {link.path && (
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  {t("admin.shortlinks.path", "Path")}
+                  {t('admin.shortlinks.path', 'Path')}
                 </div>
                 <div className="text-sm text-gray-900 mt-1">{link.path}</div>
               </div>
@@ -75,7 +69,7 @@ const ShortLinkDetailsPopup = ({ link, isOpen, onClose }) => {
             {link.params && Object.keys(link.params).length > 0 && (
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  {t("admin.shortlinks.params", "Params")}
+                  {t('admin.shortlinks.params', 'Params')}
                 </div>
                 <pre className="text-sm text-gray-900 whitespace-pre-wrap break-all mt-1">
                   {JSON.stringify(link.params, null, 2)}
@@ -84,16 +78,14 @@ const ShortLinkDetailsPopup = ({ link, isOpen, onClose }) => {
             )}
             <div className="bg-gray-50 rounded-lg p-3">
               <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                {t("admin.shortlinks.includeParams", "Include Params")}
+                {t('admin.shortlinks.includeParams', 'Include Params')}
               </div>
-              <div className="text-sm text-gray-900 mt-1">
-                {String(link.includeParams)}
-              </div>
+              <div className="text-sm text-gray-900 mt-1">{String(link.includeParams)}</div>
             </div>
             {link.expiresAt && (
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  {t("admin.shortlinks.expiresAt", "Expires")}
+                  {t('admin.shortlinks.expiresAt', 'Expires')}
                 </div>
                 <div className="text-sm text-gray-900 mt-1">
                   {new Date(link.expiresAt).toLocaleString()}
@@ -102,11 +94,9 @@ const ShortLinkDetailsPopup = ({ link, isOpen, onClose }) => {
             )}
             <div className="bg-gray-50 rounded-lg p-3">
               <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                {t("admin.shortlinks.usage", "Usage")}
+                {t('admin.shortlinks.usage', 'Usage')}
               </div>
-              <div className="text-sm text-gray-900 mt-1">
-                {link.usage || 0}
-              </div>
+              <div className="text-sm text-gray-900 mt-1">{link.usage || 0}</div>
             </div>
           </div>
         </div>
@@ -119,7 +109,7 @@ const ShortLinkDetailsPopup = ({ link, isOpen, onClose }) => {
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="arrow-right" className="w-4 h-4 mr-2" />
-              {t("admin.shortlinks.test", "Test")}
+              {t('admin.shortlinks.test', 'Test')}
             </button>
             <button
               onClick={() => {
@@ -129,14 +119,14 @@ const ShortLinkDetailsPopup = ({ link, isOpen, onClose }) => {
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="pencil" className="w-4 h-4 mr-2" />
-              {t("admin.shortlinks.edit", "Edit")}
+              {t('admin.shortlinks.edit', 'Edit')}
             </button>
           </div>
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
-            {t("common.close", "Close")}
+            {t('common.close', 'Close')}
           </button>
         </div>
       </div>

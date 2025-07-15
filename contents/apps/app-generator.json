@@ -196,9 +196,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "en"
-        ]
+        "required": ["en"]
       },
       "description": {
         "type": "object",
@@ -207,15 +205,9 @@
             "type": "string"
           }
         },
-        "required": [
-          "en"
-        ]
+        "required": ["en"]
       }
     },
-    "required": [
-      "id",
-      "name",
-      "description"
-    ]
+    "required": ["id", "name", "description"]
   }
 }

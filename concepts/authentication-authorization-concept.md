@@ -1,27 +1,30 @@
 ## Authentication and Authorization Concept
 
-
 This concept outlines a hybrid approach for adding an authentication and authorization layer to the AI Hub Apps platform, supporting both local Active Directory (AD) and OIDC with Microsoft Entra.
 
 ### Objectives
+
 - Allow anonymous and authenticated users.
 - Control access to apps and features through role‐based or group‐based permissions.
 - Map user information and group memberships from external identity providers.
 
 ### Supported Authentication Methods
+
 - **OIDC with Microsoft Entra** – primary method for receiving user identity and groups.
-- **Local Active Directory (AD)** – via Windows Integrated Authentication (WIA), using libraries such as  passport-waffle/passport-windowsauth (Node.js).
+- **Local Active Directory (AD)** – via Windows Integrated Authentication (WIA), using libraries such as passport-waffle/passport-windowsauth (Node.js).
 - **OAuth 2.0 providers** (e.g., Google, Facebook) – optional additional sign‐in options.
 - **Local accounts** for development or fallback scenarios.
 - Other identity systems (e.g., SAML or LDAP) can be integrated later if needed.
 
 ### Authorization Approach
+
 1. Users are assigned to groups in the identity provider
 2. 1 to many groups are mapped to our 1 to many groups on our side.
-3. Apps are mapped to groups. 
+3. Apps are mapped to groups.
 4. Grant anonymous users access only to specific apps via a specific group.
 
 ### Implementation Steps
+
 1. Choose an authentication library compatible with the existing stack (e.g., Passport.js for Node.js, which supports both OIDC and Windows/AD strategies).
 2. Implement OIDC login with Microsoft Entra to receive user profile and group data (using passport-azure-ad or passport-openidconnect).
 3. Implement local Active Directory authentication using Windows Integrated Authentication (e.g., passport-waffle or passport-windowsauth for Node.js, Waffle for Java).
@@ -32,6 +35,7 @@ This concept outlines a hybrid approach for adding an authentication and authori
 8. Apply authorization checks around app routes and administrative features.
 
 ### Design Notes
+
 - Support both OIDC (Microsoft Entra) and local Active Directory (AD) authentication from the start.
 - Use Passport.js (Node.js) or Waffle (Java) to enable multiple authentication strategies.
 - Store group mappings in configuration files or environment variables.
@@ -45,7 +49,7 @@ This concept outlines a hybrid approach for adding an authentication and authori
 Before starting implementation, these topics should be answered:
 
 1. **Which identity provider(s) will be used initially?**  
-   Support both OIDC via Microsoft Entra and local Active Directory (AD) via Windows Integrated Authentication. 
+   Support both OIDC via Microsoft Entra and local Active Directory (AD) via Windows Integrated Authentication.
 2. **Will anonymous access be permitted, and to which apps?**  
    Yes. Anonymous users are handled like authenticated users. They are mapped to a specific group, which specifies which apps they can use.
 3. **Which authentication library should be used with the Express server?**  
@@ -55,7 +59,7 @@ Before starting implementation, these topics should be answered:
 5. **How will failures be handled (e.g., expired tokens, AD connection issues)?**  
    Return localized error codes similar to the existing API error handling.
 6. **Do we need local accounts for development?**  
-   Not yet. 
+   Not yet.
 7. **How will the front end handle login/logout?**  
    Replace the current random session ID with real authentication tokens obtained during login. Support both login flows in the UI.
 

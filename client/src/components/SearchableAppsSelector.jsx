@@ -11,7 +11,7 @@ const SearchableAppsSelector = ({ apps, value, onChange, placeholder, currentLan
   const inputRef = useRef(null);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
+    const handleClickOutside = event => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
       }
@@ -23,13 +23,15 @@ const SearchableAppsSelector = ({ apps, value, onChange, placeholder, currentLan
 
   const filteredApps = apps.filter(app => {
     const appName = getLocalizedContent(app.name, currentLanguage);
-    return appName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           app.id.toLowerCase().includes(searchTerm.toLowerCase());
+    return (
+      appName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      app.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   });
 
   const selectedApp = apps.find(app => app.id === value);
 
-  const handleSelect = (app) => {
+  const handleSelect = app => {
     onChange(app.id);
     setIsOpen(false);
     setSearchTerm('');
@@ -88,7 +90,7 @@ const SearchableAppsSelector = ({ apps, value, onChange, placeholder, currentLan
                 ref={inputRef}
                 type="text"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={e => setSearchTerm(e.target.value)}
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder={t('admin.prompts.edit.searchApps', 'Search apps...')}
                 autoComplete="off"
@@ -102,13 +104,15 @@ const SearchableAppsSelector = ({ apps, value, onChange, placeholder, currentLan
             onClick={handleClear}
           >
             <div className="flex items-center">
-              <span className="text-sm text-gray-500">{t('admin.prompts.edit.noApp', 'No linked app')}</span>
+              <span className="text-sm text-gray-500">
+                {t('admin.prompts.edit.noApp', 'No linked app')}
+              </span>
             </div>
           </div>
 
           {/* App options */}
           {filteredApps.length > 0 ? (
-            filteredApps.map((app) => (
+            filteredApps.map(app => (
               <div
                 key={app.id}
                 className={`cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-50 ${
@@ -117,8 +121,10 @@ const SearchableAppsSelector = ({ apps, value, onChange, placeholder, currentLan
                 onClick={() => handleSelect(app)}
               >
                 <div className="flex items-center">
-                  <div className="flex-shrink-0 h-6 w-6 rounded-md flex items-center justify-center text-white text-xs font-bold mr-3"
-                       style={{ backgroundColor: app.color || '#6B7280' }}>
+                  <div
+                    className="flex-shrink-0 h-6 w-6 rounded-md flex items-center justify-center text-white text-xs font-bold mr-3"
+                    style={{ backgroundColor: app.color || '#6B7280' }}
+                  >
                     <Icon name={app.icon || 'chat-bubbles'} className="h-3 w-3" />
                   </div>
                   <span className="block truncate text-sm font-medium">

@@ -22,7 +22,7 @@ async function loadFile(relativePath, { useCache = true, parse = 'text' } = {}) 
   try {
     if (useCache && cache.has(cacheKey)) {
       const cached = cache.get(cacheKey);
-      if ((Date.now() - cached.timestamp) < CACHE_TTL) {
+      if (Date.now() - cached.timestamp < CACHE_TTL) {
         return cached.data;
       }
       cache.delete(cacheKey);

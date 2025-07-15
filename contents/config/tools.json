@@ -142,7 +142,7 @@
         },
         "chatId": { "type": "string", "description": "Chat session ID" }
       },
-    "required": ["query"]
+      "required": ["query"]
     }
   },
   {
@@ -176,7 +176,11 @@
       "properties": {
         "question": { "type": "string", "description": "Original user question" },
         "answer": { "type": "string", "description": "Draft answer to evaluate" },
-        "model": { "type": "string", "description": "Model ID for evaluation", "default": "gemini-1.5-flash" }
+        "model": {
+          "type": "string",
+          "description": "Model ID for evaluation",
+          "default": "gemini-1.5-flash"
+        }
       },
       "required": ["question", "answer"]
     }
@@ -192,7 +196,11 @@
         "query": { "type": "string", "description": "Search query to rewrite" },
         "think": { "type": "string", "description": "User motivation" },
         "context": { "type": "string", "description": "Optional context" },
-        "model": { "type": "string", "description": "Model id", "default": "gemini-2.5-flash-preview-05-20" }
+        "model": {
+          "type": "string",
+          "description": "Model id",
+          "default": "gemini-2.5-flash-preview-05-20"
+        }
       },
       "required": ["query"]
     }
@@ -209,7 +217,7 @@
         "format": { "type": "string", "enum": ["png", "pdf"], "default": "png" },
         "fullPage": { "type": "boolean", "default": true }
       },
-    "required": ["url"]
+      "required": ["url"]
     }
   },
   {
@@ -220,7 +228,11 @@
     "parameters": {
       "type": "object",
       "properties": {
-        "answers": { "type": "array", "items": { "type": "string" }, "description": "Texts to merge" }
+        "answers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Texts to merge"
+        }
       },
       "required": ["answers"]
     }

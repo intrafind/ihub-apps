@@ -49,7 +49,7 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      const models = configCache.getModels(); 
+      const models = configCache.getModels();
       if (!models) {
         const error = new Error('Failed to load models configuration');
         error.code = 'CONFIG_ERROR';
@@ -57,34 +57,30 @@ class RequestBuilder {
       }
 
       const defaultModel = models.find(m => m.default)?.id;
-      const model = models.find(
-        m => m.id === (modelId || app.preferredModel || defaultModel)
-      );
-      
+      const model = models.find(m => m.id === (modelId || app.preferredModel || defaultModel));
+
       if (!model) {
         const error = await this.errorHandler.createModelError(
-          modelId || app.preferredModel || defaultModel, 
-          'unknown', 
+          modelId || app.preferredModel || defaultModel,
+          'unknown',
           language
         );
         return { success: false, error };
       }
 
       let llmMessages = await processMessageTemplates(
-        messages, 
-        bypassAppPrompts ? null : app, 
-        style, 
-        outputFormat, 
-        language, 
+        messages,
+        bypassAppPrompts ? null : app,
+        style,
+        outputFormat,
+        language,
         app.outputSchema
       );
       llmMessages = preprocessMessagesWithFileData(llmMessages);
 
       const appTokenLimit = app.tokenLimit || 1024;
       const modelTokenLimit = model.tokenLimit || appTokenLimit;
-      const finalTokens = useMaxTokens
-        ? modelTokenLimit
-        : Math.min(appTokenLimit, modelTokenLimit);
+      const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
       const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, res, clientRes, language);
       if (!apiKeyResult.success) {
@@ -101,17 +97,17 @@ class RequestBuilder {
         responseSchema: app.outputSchema
       });
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         data: {
-          app, 
-          model, 
-          llmMessages, 
-          request, 
-          tools, 
-          apiKey: apiKeyResult.apiKey, 
-          temperature: parseFloat(temperature) || app.preferredTemperature || 0.7, 
-          maxTokens: finalTokens 
+          app,
+          model,
+          llmMessages,
+          request,
+          tools,
+          apiKey: apiKeyResult.apiKey,
+          temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
+          maxTokens: finalTokens
         }
       };
     } catch (error) {

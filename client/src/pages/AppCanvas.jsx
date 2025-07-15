@@ -38,12 +38,12 @@ const AppCanvas = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { uiConfig } = useUIConfig();
-  
+
   // App and loading states
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // Shared app settings hook
   const {
     selectedModel,
@@ -58,7 +58,7 @@ const AppCanvas = () => {
     setSelectedOutputFormat,
     setTemperature,
     setSendChatHistory,
-    modelsLoading,
+    modelsLoading
   } = useAppSettings(appId, app);
 
   // Apply settings from query parameters once data is loaded
@@ -69,15 +69,30 @@ const AppCanvas = () => {
     let changed = false;
 
     const m = searchParams.get('model');
-    if (m) { setSelectedModel(m); changed = true; }
+    if (m) {
+      setSelectedModel(m);
+      changed = true;
+    }
     const st = searchParams.get('style');
-    if (st) { setSelectedStyle(st); changed = true; }
+    if (st) {
+      setSelectedStyle(st);
+      changed = true;
+    }
     const out = searchParams.get('outfmt');
-    if (out) { setSelectedOutputFormat(out); changed = true; }
+    if (out) {
+      setSelectedOutputFormat(out);
+      changed = true;
+    }
     const tempParam = searchParams.get('temp');
-    if (tempParam) { setTemperature(parseFloat(tempParam)); changed = true; }
+    if (tempParam) {
+      setTemperature(parseFloat(tempParam));
+      changed = true;
+    }
     const hist = searchParams.get('history');
-    if (hist) { setSendChatHistory(hist === 'true'); changed = true; }
+    if (hist) {
+      setSendChatHistory(hist === 'true');
+      changed = true;
+    }
 
     searchParams.forEach((value, key) => {
       if (key.startsWith('var_')) {
@@ -88,17 +103,24 @@ const AppCanvas = () => {
 
     if (changed) {
       const newSearch = new URLSearchParams(searchParams);
-      ['model','style','outfmt','temp','history', ...Object.keys(newVars).map(v => `var_${v}`)].forEach(k => newSearch.delete(k));
+      [
+        'model',
+        'style',
+        'outfmt',
+        'temp',
+        'history',
+        ...Object.keys(newVars).map(v => `var_${v}`)
+      ].forEach(k => newSearch.delete(k));
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
     }
   }, [app, modelsLoading]);
-  
+
   // Canvas editor states
   const [selection, setSelection] = useState(null);
   const [selectedText, setSelectedText] = useState('');
   const [cursorPosition, setCursorPosition] = useState(0);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  
+
   // Canvas content management hook
   const {
     content: editorContent,
@@ -111,21 +133,21 @@ const AppCanvas = () => {
     lastSaved: contentLastSaved,
     getStorageInfo
   } = useCanvasContent(appId, null);
-  
+
   // Chat states
   const [inputValue, setInputValue] = useState('');
   const [panelSizes, setPanelSizes] = useState({ chat: 35, canvas: 65 });
   const [isDragging, setIsDragging] = useState(false);
-  
+
   // Configuration panel states
   const [showConfig, setShowConfig] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const shareEnabled = app?.features?.shortLinks !== false;
-  
+
   // Content confirmation modal state
   const [showContentModal, setShowContentModal] = useState(false);
   const [contentModalData, setContentModalData] = useState(null);
-  
+
   const quillRef = useRef(null);
   const chatId = useRef(getOrCreateChatId(appId, 'canvas'));
 
@@ -145,80 +167,97 @@ const AppCanvas = () => {
     editMessage,
     clearMessages,
     cancelGeneration,
-    addSystemMessage,
+    addSystemMessage
   } = useAppChat({ appId, chatId: chatId.current });
 
   // Handle general prompt submission - simplified to match AppChat
-  const handlePromptSubmit = useCallback(async (e, options = {}) => {
-    // If called with a string as first parameter (for edit actions), treat it as inputText
-    const inputText = typeof e === 'string' ? e : null;
-    const textToSubmit = inputText || inputValue;
-    
-    // Only call preventDefault if e is actually an event object
-    if (e && typeof e === 'object' && typeof e.preventDefault === 'function') {
-      e.preventDefault();
-    }
-    
-    if (!textToSubmit.trim()) return;
-    
-    // Prevent sending during active processing
-    if (processing) {
-      return;
-    }
-    
-    // Clear the input field if using the input value (not for edit actions)
-    if (!inputText) {
-      setInputValue('');
-    }
-    
-    // Add context about selected text and current document
-    let contextualInput = textToSubmit;
-    if (selectedText) {
-      contextualInput += `\n\nSelected text: "${selectedText}"`;
-    }
-    if (editorContent.trim()) {
-      contextualInput += `\n\nCurrent document context: ${editorContent.replace(/<[^>]*>/g, '').substring(0, 500)}...`;
-    }
-    
-    try {
-      sendChatMessage({
-        displayMessage: {
-          content: textToSubmit,
-          meta: {
-            rawContent: textToSubmit,
-            selectedText: selectedText || null,
-            hasDocumentContext: !!editorContent.trim(),
-            ...options,
-          },
-        },
-        apiMessage: {
-          content: contextualInput,
-          ...options,
-        },
-        params: {
-          modelId: selectedModel,
-          style: options?.bypassAppPrompts ? 'normal' : selectedStyle,
-          temperature,
-          outputFormat: selectedOutputFormat,
-          language: currentLanguage,
-          bypassAppPrompts: true,
-        },
-        sendChatHistory,
-      });
+  const handlePromptSubmit = useCallback(
+    async (e, options = {}) => {
+      // If called with a string as first parameter (for edit actions), treat it as inputText
+      const inputText = typeof e === 'string' ? e : null;
+      const textToSubmit = inputText || inputValue;
 
+      // Only call preventDefault if e is actually an event object
+      if (e && typeof e === 'object' && typeof e.preventDefault === 'function') {
+        e.preventDefault();
+      }
+
+      if (!textToSubmit.trim()) return;
+
+      // Prevent sending during active processing
+      if (processing) {
+        return;
+      }
+
+      // Clear the input field if using the input value (not for edit actions)
       if (!inputText) {
         setInputValue('');
       }
-    } catch (error) {
-      console.error('Error sending prompt:', error);
-      addSystemMessage(
-        `Error: ${t('error.sendMessageFailed', 'Failed to send message.')} ${
-          error.message || t('error.tryAgain', 'Please try again.')
-        }`,
-        true
-      );
-    }
-  }, [inputValue, selectedText, editorContent, sendChatMessage, addSystemMessage, appId, selectedModel, selectedStyle, temperature, selectedOutputFormat, currentLanguage, sendChatHistory, t]);
+
+      // Add context about selected text and current document
+      let contextualInput = textToSubmit;
+      if (selectedText) {
+        contextualInput += `\n\nSelected text: "${selectedText}"`;
+      }
+      if (editorContent.trim()) {
+        contextualInput += `\n\nCurrent document context: ${editorContent.replace(/<[^>]*>/g, '').substring(0, 500)}...`;
+      }
+
+      try {
+        sendChatMessage({
+          displayMessage: {
+            content: textToSubmit,
+            meta: {
+              rawContent: textToSubmit,
+              selectedText: selectedText || null,
+              hasDocumentContext: !!editorContent.trim(),
+              ...options
+            }
+          },
+          apiMessage: {
+            content: contextualInput,
+            ...options
+          },
+          params: {
+            modelId: selectedModel,
+            style: options?.bypassAppPrompts ? 'normal' : selectedStyle,
+            temperature,
+            outputFormat: selectedOutputFormat,
+            language: currentLanguage,
+            bypassAppPrompts: true
+          },
+          sendChatHistory
+        });
+
+        if (!inputText) {
+          setInputValue('');
+        }
+      } catch (error) {
+        console.error('Error sending prompt:', error);
+        addSystemMessage(
+          `Error: ${t('error.sendMessageFailed', 'Failed to send message.')} ${
+            error.message || t('error.tryAgain', 'Please try again.')
+          }`,
+          true
+        );
+      }
+    },
+    [
+      inputValue,
+      selectedText,
+      editorContent,
+      sendChatMessage,
+      addSystemMessage,
+      appId,
+      selectedModel,
+      selectedStyle,
+      temperature,
+      selectedOutputFormat,
+      currentLanguage,
+      sendChatHistory,
+      t
+    ]
+  );
 
   // Voice commands setup
   const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
@@ -228,23 +267,26 @@ const AppCanvas = () => {
       clearCanvasContent();
       chatId.current = resetChatId(appId, 'canvas');
     },
-    sendMessage: (text) => {
+    sendMessage: text => {
       handlePromptSubmit(text); // This will be treated as a string input
     },
     isProcessing: processing,
     currentText: '', // Not used in canvas mode
-    setInput: () => {}, // Not used in canvas mode
+    setInput: () => {} // Not used in canvas mode
   });
 
   // Resend message functionality for ChatInput
-  const handleResendMessage = useCallback((messageId, editedContent) => {
-    const resendData = prepareResend(messageId, editedContent);
-    const { content: text } = resendData;
-    
-    if (text || app?.allowEmptyContent) {
-      handlePromptSubmit(text || '');
-    }
-  }, [prepareResend, handlePromptSubmit, app?.allowEmptyContent]);
+  const handleResendMessage = useCallback(
+    (messageId, editedContent) => {
+      const resendData = prepareResend(messageId, editedContent);
+      const { content: text } = resendData;
+
+      if (text || app?.allowEmptyContent) {
+        handlePromptSubmit(text || '');
+      }
+    },
+    [prepareResend, handlePromptSubmit, app?.allowEmptyContent]
+  );
 
   // Initialize canvas editing after handlePromptSubmit is defined
   const { handleSelectionChange, handleEditAction } = useCanvasEditing({
@@ -264,18 +306,20 @@ const AppCanvas = () => {
     const loadApp = async () => {
       try {
         setLoading(true);
-        
+
         // Load app data
         const appData = await fetchAppDetails(appId);
-        
+
         if (!isMounted) return;
-        
+
         setApp(appData);
         setError(null);
       } catch (err) {
         console.error('Failed to load app:', err);
         if (isMounted) {
-          setError(t('error.failedToLoadApp', 'Failed to load application data. Please try again later.'));
+          setError(
+            t('error.failedToLoadApp', 'Failed to load application data. Please try again later.')
+          );
         }
       } finally {
         if (isMounted) {
@@ -285,7 +329,9 @@ const AppCanvas = () => {
     };
 
     loadApp();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [appId, t]);
 
   // Cleanup event source when component unmounts
@@ -304,22 +350,25 @@ const AppCanvas = () => {
   }, [app]);
 
   // Handle resizing panels
-  const handleMouseDown = useCallback((e) => {
+  const handleMouseDown = useCallback(e => {
     setIsDragging(true);
     e.preventDefault();
   }, []);
 
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging) return;
-    
-    const containerWidth = window.innerWidth;
-    const newChatWidth = Math.max(20, Math.min(60, (e.clientX / containerWidth) * 100));
-    
-    setPanelSizes({
-      chat: newChatWidth,
-      canvas: 100 - newChatWidth
-    });
-  }, [isDragging]);
+  const handleMouseMove = useCallback(
+    e => {
+      if (!isDragging) return;
+
+      const containerWidth = window.innerWidth;
+      const newChatWidth = Math.max(20, Math.min(60, (e.clientX / containerWidth) * 100));
+
+      setPanelSizes({
+        chat: newChatWidth,
+        canvas: 100 - newChatWidth
+      });
+    },
+    [isDragging]
+  );
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -343,70 +392,72 @@ const AppCanvas = () => {
   }, [cancelGeneration]);
 
   // Handle input change for controlled input
-  const handleInputChange = useCallback((e) => {
+  const handleInputChange = useCallback(e => {
     setInputValue(e.target.value);
   }, []);
 
   // Apply edit result to the canvas
-  const applyEditResult = useCallback(async (content, action) => {
-    if (!content || !quillRef.current) return;
-    
-    const quill = quillRef.current.getEditor();
-    
-    try {
-      switch (action) {
-        case 'continue':
-        case 'summarize':
-        case 'outline':
-          // For actions that add content, append to the end
-          const currentLength = quill.getLength();
-          quill.insertText(currentLength - 1, '\n\n' + content);
-          break;
-          
-        case 'expand':
-        case 'condense':
-        case 'paraphrase':
-        case 'clarify':
-        case 'formal':
-        case 'casual':
-        case 'professional':
-        case 'creative':
-        case 'translate':
-        case 'grammar':
-        case 'format':
-          // For text replacement actions, replace the selected text
-          if (window.pendingEdit && window.pendingEdit.selection) {
-            const { index, length } = window.pendingEdit.selection;
-            quill.deleteText(index, length);
-            quill.insertText(index, content);
-            // Clear selection after replacement
-            quill.setSelection(index + content.length, 0);
-          }
-          break;
-          
-        case 'suggest':
-          // For suggestions, just add them to the chat - don't modify the document
-          // This is handled by the chat system
-          break;
-          
-        default:
-          // Default behavior: append content
-          const endLength = quill.getLength();
-          quill.insertText(endLength - 1, '\n\n' + content);
+  const applyEditResult = useCallback(
+    async (content, action) => {
+      if (!content || !quillRef.current) return;
+
+      const quill = quillRef.current.getEditor();
+
+      try {
+        switch (action) {
+          case 'continue':
+          case 'summarize':
+          case 'outline':
+            // For actions that add content, append to the end
+            const currentLength = quill.getLength();
+            quill.insertText(currentLength - 1, '\n\n' + content);
+            break;
+
+          case 'expand':
+          case 'condense':
+          case 'paraphrase':
+          case 'clarify':
+          case 'formal':
+          case 'casual':
+          case 'professional':
+          case 'creative':
+          case 'translate':
+          case 'grammar':
+          case 'format':
+            // For text replacement actions, replace the selected text
+            if (window.pendingEdit && window.pendingEdit.selection) {
+              const { index, length } = window.pendingEdit.selection;
+              quill.deleteText(index, length);
+              quill.insertText(index, content);
+              // Clear selection after replacement
+              quill.setSelection(index + content.length, 0);
+            }
+            break;
+
+          case 'suggest':
+            // For suggestions, just add them to the chat - don't modify the document
+            // This is handled by the chat system
+            break;
+
+          default:
+            // Default behavior: append content
+            const endLength = quill.getLength();
+            quill.insertText(endLength - 1, '\n\n' + content);
+        }
+
+        // Update the editor content state
+        const updatedContent = quill.root.innerHTML;
+        setEditorContent(updatedContent);
+      } catch (error) {
+        console.error('Error applying edit result:', error);
+        addSystemMessage(
+          t('canvas.errorApplyingEdit', 'Error applying edit result. Please try again.'),
+          true
+        );
       }
-      
-      // Update the editor content state
-      const updatedContent = quill.root.innerHTML;
-      setEditorContent(updatedContent);
-      
-    } catch (error) {
-      console.error('Error applying edit result:', error);
-      addSystemMessage(
-        t('canvas.errorApplyingEdit', 'Error applying edit result. Please try again.'),
-        true
-      );
-    }
-  }, [setEditorContent, addSystemMessage, t]);
+    },
+    [setEditorContent, addSystemMessage, t]
+  );
 
   // Handle content modal actions
   const handleContentModalReplace = useCallback(() => {
@@ -439,7 +490,11 @@ const AppCanvas = () => {
   };
 
   const clearCanvas = () => {
-    if (window.confirm(t('canvas.confirmClear', 'Are you sure you want to clear the document and chat history?'))) {
+    if (
+      window.confirm(
+        t('canvas.confirmClear', 'Are you sure you want to clear the document and chat history?')
+      )
+    ) {
       clearCanvasContent();
       clearMessages();
       chatId.current = resetChatId(appId, 'canvas');
@@ -459,23 +514,26 @@ const AppCanvas = () => {
     }
   }, []);
 
-  const handleInsertAnswer = useCallback((text) => {
-    if (!quillRef.current || !text) return;
-    const quill = quillRef.current.getEditor();
-    const html = isMarkdown(text) ? markdownToHtml(text) : text;
-    const index = selection ? selection.index : cursorPosition;
-    if (selection && selection.length > 0) {
-      quill.deleteText(selection.index, selection.length);
-    }
-    quill.clipboard.dangerouslyPasteHTML(index, html);
-    quill.setSelection(index + html.length, 0);
-    setEditorContent(quill.root.innerHTML);
-    setSelection(null);
-    setSelectedText('');
-  }, [quillRef, selection, cursorPosition, setEditorContent]);
+  const handleInsertAnswer = useCallback(
+    text => {
+      if (!quillRef.current || !text) return;
+      const quill = quillRef.current.getEditor();
+      const html = isMarkdown(text) ? markdownToHtml(text) : text;
+      const index = selection ? selection.index : cursorPosition;
+      if (selection && selection.length > 0) {
+        quill.deleteText(selection.index, selection.length);
+      }
+      quill.clipboard.dangerouslyPasteHTML(index, html);
+      quill.setSelection(index + html.length, 0);
+      setEditorContent(quill.root.innerHTML);
+      setSelection(null);
+      setSelectedText('');
+    },
+    [quillRef, selection, cursorPosition, setEditorContent]
+  );
 
   // Handle voice input for canvas editor
-  const handleCanvasVoiceInput = useCallback((text) => {
+  const handleCanvasVoiceInput = useCallback(text => {
     // The text is already inserted into the editor by CanvasVoiceInput component
     // We just need to trigger a content update to ensure parent state is synchronized
     if (quillRef.current) {
@@ -517,24 +575,21 @@ const AppCanvas = () => {
     const initialContent = searchParams.get('content');
     if (initialContent) {
       // Convert markdown to HTML if needed
-      const contentToSet = isMarkdown(initialContent) 
-        ? markdownToHtml(initialContent) 
+      const contentToSet = isMarkdown(initialContent)
+        ? markdownToHtml(initialContent)
         : initialContent;
-      
+
       // Use confirmation modal if there's existing content
       const loadInitialContent = async () => {
         try {
-          const result = await setContentWithConfirmation(
-            contentToSet,
-            (modalData) => {
-              setContentModalData({
-                ...modalData,
-                title: t('canvas.confirmReplaceWithNewContentTitle', 'Content from Chat')
-              });
-              setShowContentModal(true);
-            }
-          );
-          
+          const result = await setContentWithConfirmation(contentToSet, modalData => {
+            setContentModalData({
+              ...modalData,
+              title: t('canvas.confirmReplaceWithNewContentTitle', 'Content from Chat')
+            });
+            setShowContentModal(true);
+          });
+
           console.log('Content loading result:', result);
         } catch (error) {
           console.error('Error loading initial content:', error);
@@ -545,7 +600,7 @@ const AppCanvas = () => {
           navigate(`/apps/${appId}/canvas?${newSearchParams.toString()}`, { replace: true });
         }
       };
-      
+
       loadInitialContent();
     }
   }, [searchParams, appId, navigate, setContentWithConfirmation, t]);
@@ -560,7 +615,7 @@ const AppCanvas = () => {
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg max-w-md">
           <p className="font-bold">{t('pages.appCanvas.errorTitle', 'Error')}</p>
           <p>{error}</p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="mt-3 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded"
           >
@@ -647,7 +702,9 @@ const AppCanvas = () => {
       {/* Floating Toolbox */}
       {app && !loading && (
         <FloatingToolbox
-          onAction={(action, description) => handleEditAction(action, description, selectedText, currentLanguage)}
+          onAction={(action, description) =>
+            handleEditAction(action, description, selectedText, currentLanguage)
+          }
           isProcessing={processing}
           hasSelection={!!selectedText}
           editorContent={editorContent}
@@ -673,7 +730,7 @@ const AppCanvas = () => {
             style: selectedStyle,
             outfmt: selectedOutputFormat,
             temp: temperature,
-            history: sendChatHistory,
+            history: sendChatHistory
           }}
           onClose={() => setShowShare(false)}
         />

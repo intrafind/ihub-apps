@@ -13,4 +13,5 @@
   "provider": "openai",
   "tokenLimit": 8192,
   "supportsTools": false,
-  "enabled": true}
+  "enabled": true
+}

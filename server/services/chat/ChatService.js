@@ -15,18 +15,18 @@ class ChatService {
   }
 
   async prepareChatRequest(params) {
-    const { 
-      appId, 
-      modelId, 
-      messages, 
-      temperature, 
-      style, 
-      outputFormat, 
-      language, 
-      useMaxTokens, 
-      bypassAppPrompts, 
-      res, 
-      clientRes 
+    const {
+      appId,
+      modelId,
+      messages,
+      temperature,
+      style,
+      outputFormat,
+      language,
+      useMaxTokens,
+      bypassAppPrompts,
+      res,
+      clientRes
     } = params;
 
     return await this.requestBuilder.prepareChatRequest({
@@ -60,16 +60,16 @@ class ChatService {
   }
 
   async processStreamingChat(params) {
-    const { 
-      request, 
-      chatId, 
-      clientRes, 
-      buildLogData, 
-      model, 
-      llmMessages, 
-      DEFAULT_TIMEOUT, 
-      getLocalizedError, 
-      clientLanguage 
+    const {
+      request,
+      chatId,
+      clientRes,
+      buildLogData,
+      model,
+      llmMessages,
+      DEFAULT_TIMEOUT,
+      getLocalizedError,
+      clientLanguage
     } = params;
 
     return await this.streamingHandler.executeStreamingResponse({
@@ -86,14 +86,14 @@ class ChatService {
   }
 
   async processChatWithTools(params) {
-    const { 
-      prep, 
-      clientRes, 
-      chatId, 
-      buildLogData, 
-      DEFAULT_TIMEOUT, 
-      getLocalizedError, 
-      clientLanguage 
+    const {
+      prep,
+      clientRes,
+      chatId,
+      buildLogData,
+      DEFAULT_TIMEOUT,
+      getLocalizedError,
+      clientLanguage
     } = params;
 
     return await this.toolExecutor.processChatWithTools({
@@ -108,25 +108,25 @@ class ChatService {
   }
 
   async processChat(params) {
-    const { 
-      appId, 
-      modelId, 
-      messages, 
-      temperature, 
-      style, 
-      outputFormat, 
-      language, 
-      useMaxTokens, 
-      bypassAppPrompts, 
-      res, 
-      clientRes, 
-      chatId, 
-      buildLogData, 
-      messageId, 
-      DEFAULT_TIMEOUT, 
-      getLocalizedError, 
-      clientLanguage, 
-      hasTools = false 
+    const {
+      appId,
+      modelId,
+      messages,
+      temperature,
+      style,
+      outputFormat,
+      language,
+      useMaxTokens,
+      bypassAppPrompts,
+      res,
+      clientRes,
+      chatId,
+      buildLogData,
+      messageId,
+      DEFAULT_TIMEOUT,
+      getLocalizedError,
+      clientLanguage,
+      hasTools = false
     } = params;
 
     try {
@@ -151,7 +151,16 @@ class ChatService {
         return { success: false, error: prepResult.error };
       }
 
-      const { app, model, llmMessages, request, tools, apiKey, temperature: finalTemp, maxTokens } = prepResult.data;
+      const {
+        app,
+        model,
+        llmMessages,
+        request,
+        tools,
+        apiKey,
+        temperature: finalTemp,
+        maxTokens
+      } = prepResult.data;
 
       if (!clientRes) {
         return await this.processNonStreamingChat({
@@ -190,12 +199,12 @@ class ChatService {
       });
     } catch (error) {
       console.error('Error in ChatService.processChat:', error);
-      
+
       const errorResponse = this.errorHandler.formatErrorResponse(error);
       if (res && !clientRes) {
         return res.status(500).json(errorResponse);
       }
-      
+
       return { success: false, error: errorResponse };
     }
   }

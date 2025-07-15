@@ -41,47 +41,47 @@ const i18nInstance = i18n
     },
     fallbackLng: DEFAULT_LANGUAGE,
     //debug: process.env.NODE_ENV === 'development',
-    
+
     interpolation: {
-      escapeValue: false, // React already escapes values
+      escapeValue: false // React already escapes values
     },
-    
+
     // Detection options
     detection: {
       order: ['localStorage', 'navigator'],
-      caches: ['localStorage'],
+      caches: ['localStorage']
     },
 
     react: {
-      useSuspense: true,
+      useSuspense: true
     }
   });
 
 // Helper to normalize language codes (e.g., 'en-GB' -> 'en')
-const normalizeLanguageCode = (languageCode) => {
+const normalizeLanguageCode = languageCode => {
   // Extract the base language code
   return languageCode?.split('-')[0].toLowerCase() || DEFAULT_LANGUAGE;
 };
 
 // Function to load full translations from the backend
-const loadFullTranslations = async (language) => {
+const loadFullTranslations = async language => {
   try {
     // Normalize the language code to simple format
     const normalizedLanguage = normalizeLanguageCode(language);
     console.log(`Loading full translations for language: ${normalizedLanguage} (from ${language})`);
-    
+
     const translations = await fetchTranslations(normalizedLanguage);
-    
+
     if (translations) {
       // Add the full translations, merging with core translations
       i18n.addResourceBundle(normalizedLanguage, 'translation', translations, true, true);
       console.log(`Successfully loaded translations for: ${normalizedLanguage}`);
-      
+
       // Make sure we use the normalized language code for consistency
       if (language !== normalizedLanguage) {
         i18n.addResourceBundle(language, 'translation', translations, true, true);
       }
-      
+
       // Emit an event that translations are loaded
       if (typeof i18n.emit === 'function') {
         i18n.emit('loaded', true);
@@ -100,16 +100,16 @@ const loadFullTranslations = async (language) => {
 if (typeof i18n.changeLanguage === 'function') {
   // Store original method
   const originalChangeLanguage = i18n.changeLanguage;
-  
+
   // Override with our enhanced version
-  i18n.changeLanguage = async (lng) => {
+  i18n.changeLanguage = async lng => {
     console.log(`Changing language to: ${lng}`);
     // First change the language using the original method
     const result = await originalChangeLanguage.call(i18n, lng);
-    
+
     // Then load the full translations for this language
     await loadFullTranslations(lng);
-    
+
     return result;
   };
 }
@@ -121,7 +121,7 @@ loadFullTranslations(currentLanguage);
 
 // Listen for language changes to load appropriate translations
 if (typeof i18n.on === 'function') {
-  i18n.on('languageChanged', (newLanguage) => {
+  i18n.on('languageChanged', newLanguage => {
     console.log(`Language changed to: ${newLanguage}`);
     loadFullTranslations(newLanguage);
   });

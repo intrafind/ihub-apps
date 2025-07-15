@@ -7,6 +7,7 @@ The file upload feature allows users to upload text files and PDF documents to t
 ## Supported File Types
 
 ### Text Files
+
 - `.txt` - Plain text files
 - `.md` - Markdown files
 - `.csv` - Comma-separated values
@@ -16,15 +17,17 @@ The file upload feature allows users to upload text files and PDF documents to t
 - `.js` - JavaScript files
 
 ### PDF Files
+
 - `.pdf` - PDF documents (automatically converted to markdown)
 
 ## File Size Limits
+
 - Maximum file size: 10MB
 
 ## How It Works
 
 1. **File Selection**: Users click the paper-clip icon to open the file uploader
-2. **File Processing**: 
+2. **File Processing**:
    - Text files are read directly
    - PDF files are converted to markdown using `@opendocsg/pdf2md`
 3. **Preview**: The first 200 characters of the file content are shown as a preview
@@ -34,17 +37,20 @@ The file upload feature allows users to upload text files and PDF documents to t
 ## Technical Implementation
 
 ### Frontend Components
+
 - `FileUploader.jsx` - Handles file selection and processing
 - `ChatInput.jsx` - Integrates file upload with chat input
 - `AppChat.jsx` - Manages file upload state
 
 ### Backend Processing
+
 - File content is processed in `processMessageTemplates()`
 - All AI adapters (OpenAI, Anthropic, Google) handle file content
 - Content is automatically included in AI prompts
 - Server configured with the `requestBodyLimitMB` setting in `platform.json` (default 50MB) to handle file uploads
 
 ### Configuration
+
 Enable file upload for an app by adding to the app configuration:
 
 ```json
@@ -58,7 +64,7 @@ Enable file upload for an app by adding to the app configuration:
     "maxFileSizeMB": 15,
     "supportedTextFormats": [
       "text/plain",
-      "text/markdown", 
+      "text/markdown",
       "text/csv",
       "application/json",
       "text/html",
@@ -67,9 +73,7 @@ Enable file upload for an app by adding to the app configuration:
       "application/javascript",
       "text/xml"
     ],
-    "supportedPdfFormats": [
-      "application/pdf"
-    ]
+    "supportedPdfFormats": ["application/pdf"]
   }
 }
 ```
@@ -77,15 +81,18 @@ Enable file upload for an app by adding to the app configuration:
 #### Configuration Options
 
 **settings.fileUpload.enabled** (boolean)
+
 - Enables or disables the file upload feature for the app
 - Default: `false`
 
 **fileUpload.maxFileSizeMB** (number)
+
 - Maximum file size in megabytes
 - Default: `10`
 - Range: 1-50 (limited by the `requestBodyLimitMB` setting)
 
 **fileUpload.supportedTextFormats** (array)
+
 - List of supported MIME types for text files
 - Default: `["text/plain", "text/markdown", "text/csv", "application/json", "text/html", "text/css", "text/javascript", "application/javascript"]`
 - Common values:
@@ -99,6 +106,7 @@ Enable file upload for an app by adding to the app configuration:
   - `"text/xml"` - .xml files
 
 **fileUpload.supportedPdfFormats** (array)
+
 - List of supported MIME types for PDF files
 - Default: `["application/pdf"]`
 - Typically only includes `"application/pdf"`
@@ -106,13 +114,21 @@ Enable file upload for an app by adding to the app configuration:
 #### Example Configurations
 
 **Full-featured file upload (AI Chat app):**
+
 ```json
 {
   "fileUpload": {
     "maxFileSizeMB": 15,
     "supportedTextFormats": [
-      "text/plain", "text/markdown", "text/csv", "application/json",
-      "text/html", "text/css", "text/javascript", "application/javascript", "text/xml"
+      "text/plain",
+      "text/markdown",
+      "text/csv",
+      "application/json",
+      "text/html",
+      "text/css",
+      "text/javascript",
+      "application/javascript",
+      "text/xml"
     ],
     "supportedPdfFormats": ["application/pdf"]
   }
@@ -120,6 +136,7 @@ Enable file upload for an app by adding to the app configuration:
 ```
 
 **Text-only file upload (Summarizer app):**
+
 ```json
 {
   "fileUpload": {
@@ -131,6 +148,7 @@ Enable file upload for an app by adding to the app configuration:
 ```
 
 **Minimal configuration (uses defaults):**
+
 ```json
 {
   "settings": {

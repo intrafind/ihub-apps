@@ -1,12 +1,17 @@
 import fs from 'fs/promises';
-import crypto from "crypto";
+import crypto from 'crypto';
 import path from 'path';
 import { chromium } from 'playwright';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
 
-export default async function playwrightScreenshot({ url, format = 'png', fullPage = true, chatId = 'default' }) {
+export default async function playwrightScreenshot({
+  url,
+  format = 'png',
+  fullPage = true,
+  chatId = 'default'
+}) {
   if (!url) {
     throw new Error('url parameter is required');
   }
@@ -31,16 +36,16 @@ export default async function playwrightScreenshot({ url, format = 'png', fullPa
   let text = undefined;
   if (format === 'pdf') {
     const data = await fs.readFile(filePath);
-    
+
     // Use pdfjs-dist to parse the PDF
     const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(data),
       verbosity: 0
     });
-    
+
     const pdf = await loadingTask.promise;
     let fullText = '';
-    
+
     // Extract text from all pages
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
@@ -48,7 +53,7 @@ export default async function playwrightScreenshot({ url, format = 'png', fullPa
       const pageText = textContent.items.map(item => item.str).join(' ');
       fullText += pageText + '\n';
     }
-    
+
     text = fullText.trim();
   }
 

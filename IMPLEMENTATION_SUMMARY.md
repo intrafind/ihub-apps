@@ -15,6 +15,7 @@ I've successfully implemented a comprehensive web content extraction and search 
 ### 🚀 Key Features
 
 #### Web Content Extractor
+
 - ✅ Removes ads, headers, footers, navigation menus
 - ✅ Extracts main article content intelligently
 - ✅ Handles various webpage structures
@@ -23,7 +24,8 @@ I've successfully implemented a comprehensive web content extraction and search 
 - ✅ Robust error handling and timeouts
 - ✅ Works with any HTTP/HTTPS URL
 
-#### Enhanced Web Search  
+#### Enhanced Web Search
+
 - ✅ Combines Brave search with content extraction
 - ✅ Processes multiple search results in parallel
 - ✅ Provides comprehensive success/failure statistics
@@ -34,6 +36,7 @@ I've successfully implemented a comprehensive web content extraction and search 
 ### 📁 Files Created/Modified
 
 **New Files:**
+
 - `/server/tools/webContentExtractor.js`
 - `/server/tools/enhancedWebSearch.js`
 - `/server/tools/researchPlanner.js`
@@ -42,6 +45,7 @@ I've successfully implemented a comprehensive web content extraction and search 
 - `/examples/apps/web-researcher.json`
 
 **Modified Files:**
+
 - `/server/package.json` - Added JSDOM dependency
 - `/contents/config/tools.json` - Added new tools including `researchPlanner`
 - `/contents/config/apps.json` - Updated "Chat with Web" app and integrated planner with deep researcher
@@ -49,12 +53,14 @@ I've successfully implemented a comprehensive web content extraction and search 
 ### 🎯 Enhanced Applications
 
 #### Chat with Web App (Updated)
+
 - Now uses `enhancedWebSearch` and `webContentExtractor`
 - Automatically extracts full content from search results
 - Provides more detailed and accurate answers
 - Better source citation with full content analysis
 
 #### New: Web Research Assistant (Example)
+
 - Comprehensive research tool
 - Deep content analysis capabilities
 - Multi-source verification

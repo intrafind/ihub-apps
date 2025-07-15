@@ -65,13 +65,7 @@
     "enabled": false,
     "resizeImages": true,
     "maxFileSizeMB": 10,
-    "supportedFormats": [
-      "image/jpeg",
-      "image/jpg",
-      "image/png",
-      "image/gif",
-      "image/webp"
-    ]
+    "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
   },
   "fileUpload": {
     "maxFileSizeMB": 5,
@@ -86,8 +80,6 @@
       "application/javascript",
       "text/xml"
     ],
-    "supportedPdfFormats": [
-      "application/pdf"
-    ]
+    "supportedPdfFormats": ["application/pdf"]
   }
 }

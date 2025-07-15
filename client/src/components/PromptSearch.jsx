@@ -13,7 +13,6 @@ import SearchModal from './SearchModal';
 
 const fuseRef = { current: null };
 
-
 const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -59,22 +58,24 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
       setFavoritePromptIds(getFavoritePrompts());
       setRecentPromptIds(getRecentPromptIds());
       if (prompts.length === 0) {
-        fetchPrompts().then(raw => {
-          const localized = (Array.isArray(raw) ? raw : []).map(p => ({
-            ...p,
-            name: getLocalizedContent(p.name, i18n.language),
-            prompt: getLocalizedContent(p.prompt, i18n.language),
-            description: getLocalizedContent(p.description, i18n.language)
-          }));
-          setPrompts(localized);
-        }).catch(err => console.error('Failed to load prompts', err));
+        fetchPrompts()
+          .then(raw => {
+            const localized = (Array.isArray(raw) ? raw : []).map(p => ({
+              ...p,
+              name: getLocalizedContent(p.name, i18n.language),
+              prompt: getLocalizedContent(p.prompt, i18n.language),
+              description: getLocalizedContent(p.description, i18n.language)
+            }));
+            setPrompts(localized);
+          })
+          .catch(err => console.error('Failed to load prompts', err));
       }
     }
   }, [isOpen, i18n.language]);
 
   const searchItems = prompts;
 
-  const handleSelect = (p) => {
+  const handleSelect = p => {
     recordPromptUsage(p.id);
     onSelect(p);
   };
@@ -87,9 +88,9 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
       onClose={onClose}
       onSelect={handleSelect}
       items={searchItems}
-      fuseKeys={['name','prompt','description']}
+      fuseKeys={['name', 'prompt', 'description']}
       placeholder={t('common.promptSearch.placeholder', 'Search prompts...')}
-      renderResult={(p) => (
+      renderResult={p => (
         <div className="flex items-start space-x-3">
           <div className="flex-shrink-0 w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
             <Icon name={p.icon || 'clipboard'} className="w-3.5 h-3.5 text-indigo-600" />
@@ -98,24 +99,37 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
             <div className="flex items-center flex-wrap mb-1">
               <span className="font-medium text-gray-900 text-sm mr-1">{p.name}</span>
               {favoritePromptIds.includes(p.id) && (
-                <span className="ml-1" aria-label={t('pages.promptsList.favorite')} title={t('pages.promptsList.favorite')}>
+                <span
+                  className="ml-1"
+                  aria-label={t('pages.promptsList.favorite')}
+                  title={t('pages.promptsList.favorite')}
+                >
                   <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
                 </span>
               )}
               {recentPromptIds.includes(p.id) && (
-                <span className="ml-1" aria-label={t('pages.promptsList.recent')} title={t('pages.promptsList.recent')}>
+                <span
+                  className="ml-1"
+                  aria-label={t('pages.promptsList.recent')}
+                  title={t('pages.promptsList.recent')}
+                >
                   <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
                 </span>
               )}
               {p.appId && p.appId === appId && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs text-indigo-600 bg-indigo-100 rounded-full">{t('common.promptSearch.appSpecific', 'app')}</span>
+                <span className="ml-1 px-1.5 py-0.5 text-xs text-indigo-600 bg-indigo-100 rounded-full">
+                  {t('common.promptSearch.appSpecific', 'app')}
+                </span>
               )}
             </div>
-            <p className="text-xs text-gray-500 leading-4 overflow-hidden" style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical'
-            }}>
+            <p
+              className="text-xs text-gray-500 leading-4 overflow-hidden"
+              style={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical'
+              }}
+            >
               {highlightVariables(p.description || p.prompt)}
             </p>
           </div>

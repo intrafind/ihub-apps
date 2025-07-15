@@ -23,30 +23,39 @@ class StreamingHandler {
     getLocalizedError,
     clientLanguage
   }) {
-    actionTracker.trackAction(chatId, { event: 'processing', message: 'Processing your request...' });
+    actionTracker.trackAction(chatId, {
+      event: 'processing',
+      message: 'Processing your request...'
+    });
     const controller = new AbortController();
-    
+
     if (activeRequests.has(chatId)) {
       const existingController = activeRequests.get(chatId);
       existingController.abort();
     }
     activeRequests.set(chatId, controller);
-    
+
     const baseLog = buildLogData(true);
-    const promptTokens = llmMessages.map(m => estimateTokens(m.content || '')).reduce((a,b) => a+b, 0);
-    await recordChatRequest({ 
-      userId: baseLog.userSessionId, 
-      appId: baseLog.appId, 
-      modelId: model.id, 
-      tokens: promptTokens 
+    const promptTokens = llmMessages
+      .map(m => estimateTokens(m.content || ''))
+      .reduce((a, b) => a + b, 0);
+    await recordChatRequest({
+      userId: baseLog.userSessionId,
+      appId: baseLog.appId,
+      modelId: model.id,
+      tokens: promptTokens
     });
-    
+
     let timeoutId;
     const setupTimeout = () => {
       timeoutId = setTimeout(async () => {
         if (activeRequests.has(chatId)) {
           controller.abort();
-          const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT/1000 }, clientLanguage);
+          const errorMessage = await getLocalizedError(
+            'requestTimeout',
+            { timeout: DEFAULT_TIMEOUT / 1000 },
+            clientLanguage
+          );
           actionTracker.trackError(chatId, { message: errorMessage });
           activeRequests.delete(chatId);
         }
@@ -57,7 +66,7 @@ class StreamingHandler {
     console.log(`Sending request for chat ID ${chatId} ${model.id}:`, request.body);
 
     let doneEmitted = false;
-    
+
     try {
       const llmResponse = await throttledFetch(model.id, request.url, {
         method: 'POST',
@@ -67,26 +76,49 @@ class StreamingHandler {
       });
 
       clearTimeout(timeoutId);
-      
+
       if (!llmResponse.ok) {
         const errorBody = await llmResponse.text();
-        let errorMessage = await getLocalizedError('llmApiError', { status: llmResponse.status }, clientLanguage);
-        
+        let errorMessage = await getLocalizedError(
+          'llmApiError',
+          { status: llmResponse.status },
+          clientLanguage
+        );
+
         if (llmResponse.status === 401) {
-          errorMessage = await getLocalizedError('authenticationFailed', { provider: model.provider }, clientLanguage);
+          errorMessage = await getLocalizedError(
+            'authenticationFailed',
+            { provider: model.provider },
+            clientLanguage
+          );
         } else if (llmResponse.status === 429) {
-          errorMessage = await getLocalizedError('rateLimitExceeded', { provider: model.provider }, clientLanguage);
+          errorMessage = await getLocalizedError(
+            'rateLimitExceeded',
+            { provider: model.provider },
+            clientLanguage
+          );
         } else if (llmResponse.status >= 500) {
-          errorMessage = await getLocalizedError('serviceError', { provider: model.provider }, clientLanguage);
+          errorMessage = await getLocalizedError(
+            'serviceError',
+            { provider: model.provider },
+            clientLanguage
+          );
         }
-        
-        await logInteraction('chat_error', buildLogData(true, {
-          responseType: 'error',
-          error: { message: errorMessage, code: llmResponse.status.toString(), details: errorBody }
-        }));
-        
+
+        await logInteraction(
+          'chat_error',
+          buildLogData(true, {
+            responseType: 'error',
+            error: {
+              message: errorMessage,
+              code: llmResponse.status.toString(),
+              details: errorBody
+            }
+          })
+        );
+
         actionTracker.trackError(chatId, { message: errorMessage, details: errorBody });
-        
+
         if (activeRequests.get(chatId) === controller) {
           activeRequests.delete(chatId);
         }
@@ -97,13 +129,13 @@ class StreamingHandler {
       const decoder = new TextDecoder();
       const events = [];
       const parser = createParser({
-        onEvent: (event) => {
+        onEvent: event => {
           if (event.type === 'event' || !event.type) {
             events.push(event);
           }
         }
       });
-      
+
       let fullResponse = '';
       let finishReason = null;
 
@@ -114,60 +146,75 @@ class StreamingHandler {
           break;
         }
         if (done) break;
-        
+
         const chunk = decoder.decode(value, { stream: true });
         parser.feed(chunk);
-        
+
         while (events.length > 0) {
           const evt = events.shift();
           const result = processResponseBuffer(model.provider, evt.data);
-          
+
           if (result && result.content && result.content.length > 0) {
             for (const textContent of result.content) {
               actionTracker.trackChunk(chatId, { content: textContent });
               fullResponse += textContent;
             }
           }
-          
+
           if (result && result.error) {
-            await logInteraction('chat_error', buildLogData(true, {
-              responseType: 'error',
-              error: { message: result.errorMessage || 'Error processing response', code: 'PROCESSING_ERROR' },
-              response: fullResponse
-            }));
-            actionTracker.trackError(chatId, { message: result.errorMessage || 'Error processing response' });
+            await logInteraction(
+              'chat_error',
+              buildLogData(true, {
+                responseType: 'error',
+                error: {
+                  message: result.errorMessage || 'Error processing response',
+                  code: 'PROCESSING_ERROR'
+                },
+                response: fullResponse
+              })
+            );
+            actionTracker.trackError(chatId, {
+              message: result.errorMessage || 'Error processing response'
+            });
             finishReason = 'error';
             break;
           }
-          
+
           if (result && result.finishReason) {
             finishReason = result.finishReason;
           }
-          
+
           if (result && result.complete) {
             actionTracker.trackDone(chatId, { finishReason });
             doneEmitted = true;
-            await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: fullResponse }));
+            await logInteraction(
+              'chat_response',
+              buildLogData(true, { responseType: 'success', response: fullResponse })
+            );
             const completionTokens = estimateTokens(fullResponse);
-            await recordChatResponse({ 
-              userId: baseLog.userSessionId, 
-              appId: baseLog.appId, 
-              modelId: model.id, 
-              tokens: completionTokens 
+            await recordChatResponse({
+              userId: baseLog.userSessionId,
+              appId: baseLog.appId,
+              modelId: model.id,
+              tokens: completionTokens
             });
             break;
           }
         }
-        
+
         if (finishReason === 'error' || doneEmitted) {
           break;
         }
       }
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error.name !== 'AbortError') {
-        const errorMessage = await getLocalizedError('responseStreamError', { error: error.message }, clientLanguage);
+        const errorMessage = await getLocalizedError(
+          'responseStreamError',
+          { error: error.message },
+          clientLanguage
+        );
         actionTracker.trackError(chatId, { message: errorMessage });
       }
     } finally {

@@ -42,23 +42,23 @@ const ChatMessageList = ({
   }
 
   return (
-    <div
-      ref={chatContainerRef}
-      className="flex-1 mb-4 p-4 overflow-y-auto space-y-4 rounded-lg"
-    >
-      {messages.map((message) => (
-        <div key={message.id} className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div ref={chatContainerRef} className="flex-1 mb-4 p-4 overflow-y-auto space-y-4 rounded-lg">
+      {messages.map(message => (
+        <div
+          key={message.id}
+          className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+        >
           {/* Message sender icon */}
           <div className="flex-shrink-0 mt-1">
-          {message.role === 'assistant' ? (
-            <Icon name={assistantIcon} size="2xl" className="text-blue-500" />
-          ) : message.role === 'user' ? (
-            <Icon name={userIcon} size="xl" className="text-gray-500" />
-          ) : (
-            <Icon name={errorIcon} size="2xl" className="text-yellow-500" />
-          )}
+            {message.role === 'assistant' ? (
+              <Icon name={assistantIcon} size="2xl" className="text-blue-500" />
+            ) : message.role === 'user' ? (
+              <Icon name={userIcon} size="xl" className="text-gray-500" />
+            ) : (
+              <Icon name={errorIcon} size="2xl" className="text-yellow-500" />
+            )}
           </div>
-          
+
           {/* Message content */}
           <div className={`max-w-[80%] ${message.role === 'user' ? '' : ''}`}>
             <ChatMessage

@@ -27,12 +27,12 @@ const MistralAdapter = {
       return {
         ...base,
         content: [
-          ...(content ? [{ type: "text", text: content }] : []),
+          ...(content ? [{ type: 'text', text: content }] : []),
           {
-            type: "image_url",
+            type: 'image_url',
             image_url: {
               url: message.imageData.base64,
-              detail: "high"
+              detail: 'high'
             }
           }
         ]
@@ -46,9 +46,19 @@ const MistralAdapter = {
    * Create a completion request for Mistral
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true, tools = null, toolChoice = undefined, responseFormat = null, responseSchema = null } = options;
+    const {
+      temperature = 0.7,
+      stream = true,
+      tools = null,
+      toolChoice = undefined,
+      responseFormat = null,
+      responseSchema = null
+    } = options;
 
-    console.log('Original messages:', JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData }))));
+    console.log(
+      'Original messages:',
+      JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData })))
+    );
 
     const body = {
       model: model.modelId,
@@ -79,7 +89,7 @@ const MistralAdapter = {
       url: model.url,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`
       },
       body
     };

@@ -34,7 +34,7 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
 
   // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event) => {
+    const handleClickOutside = event => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
         setSearchTerm('');
@@ -52,7 +52,7 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
     }
   }, [isDropdownOpen]);
 
-  const handleAddTool = (tool) => {
+  const handleAddTool = tool => {
     if (!selectedTools.includes(tool)) {
       onToolsChange([...selectedTools, tool]);
     }
@@ -60,16 +60,16 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
     setIsDropdownOpen(false);
   };
 
-  const handleRemoveTool = (toolToRemove) => {
+  const handleRemoveTool = toolToRemove => {
     onToolsChange(selectedTools.filter(tool => tool !== toolToRemove));
   };
 
-  const handleSearchChange = (e) => {
+  const handleSearchChange = e => {
     setSearchTerm(e.target.value);
     setIsDropdownOpen(true);
   };
 
-  const handleSearchKeyDown = (e) => {
+  const handleSearchKeyDown = e => {
     if (e.key === 'Enter' && filteredTools.length > 0) {
       handleAddTool(filteredTools[0]);
     } else if (e.key === 'Escape') {
@@ -83,7 +83,7 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
       {/* Selected Tools */}
       {selectedTools.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {selectedTools.map((tool) => (
+          {selectedTools.map(tool => (
             <span
               key={tool}
               className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800"
@@ -124,7 +124,7 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
         {isDropdownOpen && (
           <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
             {filteredTools.length > 0 ? (
-              filteredTools.map((tool) => (
+              filteredTools.map(tool => (
                 <button
                   key={tool}
                   onClick={() => handleAddTool(tool)}
@@ -135,11 +135,11 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
               ))
             ) : (
               <div className="px-3 py-2 text-sm text-gray-500">
-                {searchTerm ? (
-                  t('admin.apps.edit.noToolsFound', 'No tools found matching "{{searchTerm}}"', { searchTerm })
-                ) : (
-                  t('admin.apps.edit.allToolsSelected', 'All tools are already selected')
-                )}
+                {searchTerm
+                  ? t('admin.apps.edit.noToolsFound', 'No tools found matching "{{searchTerm}}"', {
+                      searchTerm
+                    })
+                  : t('admin.apps.edit.allToolsSelected', 'All tools are already selected')}
               </div>
             )}
           </div>
@@ -148,7 +148,10 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
 
       {/* Helper text */}
       <p className="text-sm text-gray-500">
-        {t('admin.apps.edit.toolsHelper', 'Search and select tools to add to this app. Click on selected tools to remove them.')}
+        {t(
+          'admin.apps.edit.toolsHelper',
+          'Search and select tools to add to this app. Click on selected tools to remove them.'
+        )}
       </p>
     </div>
   );

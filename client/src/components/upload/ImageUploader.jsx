@@ -10,15 +10,21 @@ import './ImageUpload.css';
 const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, config = {} }) => {
   const { t } = useTranslation();
   const MAX_FILE_SIZE_MB = config.maxFileSizeMB || 10;
-  const SUPPORTED_FORMATS = config.supportedFormats || ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  const SUPPORTED_FORMATS = config.supportedFormats || [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp'
+  ];
   const RESIZE_IMAGES = config.resizeImages !== false;
   const MAX_DIMENSION = config.maxResizeDimension || 1024;
 
-  const processImage = (file) => {
+  const processImage = file => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
-      reader.onload = (e) => {
+      reader.onload = e => {
         const img = new Image();
         img.onload = () => {
           const previewUrl = URL.createObjectURL(file);
@@ -33,7 +39,7 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
                 fileSize: file.size,
                 fileType: file.type,
                 width: img.width,
-                height: img.height,
+                height: img.height
               }
             });
           }
@@ -64,7 +70,7 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
               fileSize: file.size,
               fileType: 'image/jpeg',
               width,
-              height,
+              height
             }
           });
         };
@@ -77,7 +83,7 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
     });
   };
 
-  const getErrorMessage = (code) => {
+  const getErrorMessage = code => {
     switch (code) {
       case 'file-too-large':
         return t('errors.fileTooLarge', {
@@ -113,11 +119,7 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
           {preview ? (
             <div className="relative mt-2 mb-4">
               <div className="relative rounded-lg overflow-hidden border border-gray-300">
-                <img
-                  src={preview}
-                  alt="Preview"
-                  className="max-w-full max-h-60 mx-auto"
-                />
+                <img src={preview} alt="Preview" className="max-w-full max-h-60 mx-auto" />
                 <button
                   type="button"
                   onClick={handleClear}
@@ -147,16 +149,16 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
                 <span>{t('components.imageUploader.uploadImage', 'Upload Image')}</span>
               </button>
 
-              {error && (
-                <div className="text-red-500 text-sm mt-1">
-                  {getErrorMessage(error)}
-                </div>
-              )}
+              {error && <div className="text-red-500 text-sm mt-1">{getErrorMessage(error)}</div>}
 
               <div className="text-xs text-gray-500 mt-1 text-center">
-                {t('components.imageUploader.supportedFormats', 'Supported: JPG, PNG, GIF, WebP (max {{maxSize}}MB)', {
-                  maxSize: MAX_FILE_SIZE_MB
-                })}
+                {t(
+                  'components.imageUploader.supportedFormats',
+                  'Supported: JPG, PNG, GIF, WebP (max {{maxSize}}MB)',
+                  {
+                    maxSize: MAX_FILE_SIZE_MB
+                  }
+                )}
               </div>
             </div>
           )}

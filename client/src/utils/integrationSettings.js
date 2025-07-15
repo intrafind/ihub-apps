@@ -23,7 +23,7 @@ export const getIntegrationSettings = () => {
  * Save integration settings to localStorage
  * @param {Object} settings - The settings to save
  */
-export const saveIntegrationSettings = (settings) => {
+export const saveIntegrationSettings = settings => {
   try {
     localStorage.setItem('aiHubIntegrationSettings', JSON.stringify(settings));
   } catch (error) {
@@ -35,7 +35,7 @@ export const saveIntegrationSettings = (settings) => {
  * Update integration settings from URL parameters and save to localStorage
  * @param {URLSearchParams} searchParams - The URL search parameters
  */
-export const updateSettingsFromUrl = (searchParams) => {
+export const updateSettingsFromUrl = searchParams => {
   try {
     // Get current settings
     const settings = getIntegrationSettings();

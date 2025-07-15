@@ -7,7 +7,11 @@ const getCurrentUsername = () => {
   }
 };
 
-export function createRecentItemHelpers({ prefix, max = 5, expirationMs = 7 * 24 * 60 * 60 * 1000 }) {
+export function createRecentItemHelpers({
+  prefix,
+  max = 5,
+  expirationMs = 7 * 24 * 60 * 60 * 1000
+}) {
   const getStorageKey = () => `${prefix}${getCurrentUsername()}`;
 
   const getMap = () => {
@@ -28,7 +32,7 @@ export function createRecentItemHelpers({ prefix, max = 5, expirationMs = 7 * 24
     }
   };
 
-  const recordUsage = (id) => {
+  const recordUsage = id => {
     if (!id) return;
     try {
       const map = getMap();

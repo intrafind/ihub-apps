@@ -101,11 +101,20 @@ const iconMap = {
   copy: { outline: ClipboardIcon, solid: ClipboardIcon },
   'document-text': { outline: OutlineDocumentTextIcon, solid: SolidDocumentTextIcon },
   edit: { outline: PencilSquareIcon, solid: PencilSquareIcon },
-  'exclamation-circle': { outline: OutlineExclamationCircleIcon, solid: SolidExclamationCircleIcon },
-  'exclamation-triangle': { outline: OutlineExclamationTriangleIcon, solid: SolidExclamationTriangleIcon },
+  'exclamation-circle': {
+    outline: OutlineExclamationCircleIcon,
+    solid: SolidExclamationCircleIcon
+  },
+  'exclamation-triangle': {
+    outline: OutlineExclamationTriangleIcon,
+    solid: SolidExclamationTriangleIcon
+  },
   'face-frown': { outline: OutlineFaceFrownIcon, solid: SolidFaceFrownIcon },
   format: { outline: Bars3Icon, solid: Bars3Icon },
-  'information-circle': { outline: OutlineInformationCircleIcon, solid: SolidInformationCircleIcon },
+  'information-circle': {
+    outline: OutlineInformationCircleIcon,
+    solid: SolidInformationCircleIcon
+  },
   list: { outline: ListBulletIcon, solid: ListBulletIcon },
   menu: { outline: Bars3Icon, solid: Bars3Icon },
   'chevron-down': { outline: ChevronDownIcon, solid: SolidChevronDownIcon },
@@ -127,7 +136,7 @@ const iconMap = {
   'thumbs-down': { outline: OutlineHandThumbDownIcon, solid: SolidHandThumbDownIcon },
   'question-mark-circle': {
     outline: OutlineQuestionMarkCircleIcon,
-    solid: SolidQuestionMarkCircleIcon,
+    solid: SolidQuestionMarkCircleIcon
   },
   'chat-bubbles': { outline: ChatBubbleLeftRightIcon, solid: ChatBubbleLeftRightIcon },
   globe: { outline: GlobeAltIcon, solid: SolidGlobeAltIcon },
@@ -137,14 +146,14 @@ const iconMap = {
   share: { outline: OutlineShareIcon, solid: SolidShareIcon },
   'document-search': {
     outline: OutlineDocumentMagnifyingGlassIcon,
-    solid: SolidDocumentMagnifyingGlassIcon,
+    solid: SolidDocumentMagnifyingGlassIcon
   },
   users: { outline: OutlineUsersIcon, solid: SolidUsersIcon },
   'light-bulb': { outline: OutlineLightBulbIcon, solid: SolidLightBulbIcon },
   code: { outline: OutlineCodeBracketIcon, solid: SolidCodeBracketIcon },
   clock: { outline: ClockIcon, solid: SolidClockIcon },
   'academic-cap': { outline: OutlineAcademicCapIcon, solid: SolidAcademicCapIcon },
-  briefcase: { outline: BriefcaseIcon, solid: SolidBriefcaseIcon },
+  briefcase: { outline: BriefcaseIcon, solid: SolidBriefcaseIcon }
 };
 
 const sizeClasses = {
@@ -153,7 +162,7 @@ const sizeClasses = {
   md: 'w-5 h-5',
   lg: 'w-6 h-6',
   xl: 'w-8 h-8',
-  '2xl': 'w-12 h-12',
+  '2xl': 'w-12 h-12'
 };
 
 const iconBaseUrl = import.meta.env.VITE_ICON_BASE_URL || '/icons';

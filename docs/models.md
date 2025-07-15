@@ -20,15 +20,15 @@ Each model is defined with the following properties:
 
 ### Property Details
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | String | Unique identifier for referencing the model within the application |
-| `modelId` | String | The actual model identifier used when calling the provider's API |
-| `name` | String | Display name shown in the user interface |
-| `description` | String | Short description of the model's capabilities |
-| `url` | String | API endpoint URL for the model |
-| `provider` | String | Provider identifier (openai, anthropic, google, etc.) |
-| `tokenLimit` | Number | Maximum token capacity of the model's context window |
+| Property         | Type   | Description                                                        |
+| ---------------- | ------ | ------------------------------------------------------------------ |
+| `id`             | String | Unique identifier for referencing the model within the application |
+| `modelId`        | String | The actual model identifier used when calling the provider's API   |
+| `name`           | String | Display name shown in the user interface                           |
+| `description`    | String | Short description of the model's capabilities                      |
+| `url`            | String | API endpoint URL for the model                                     |
+| `provider`       | String | Provider identifier (openai, anthropic, google, etc.)              |
+| `tokenLimit`     | Number | Maximum token capacity of the model's context window               |
 | `requestDelayMs` | Number | Optional delay in milliseconds between API requests for this model |
 
 ### Tools
@@ -39,13 +39,13 @@ For example, the `Chat with DuckDuckGo` app in `config/apps.json` enables the `w
 
 Each entry in `config/tools.json` uses the following fields:
 
-| Field | Description |
-|-------|-------------|
-| `id` | Unique identifier referenced by apps |
-| `name` | Display name |
-| `description` | Short description of the tool |
-| `script` | The script file in `server/tools` implementing the tool |
-| `parameters` | JSON schema describing the tool input |
+| Field         | Description                                             |
+| ------------- | ------------------------------------------------------- |
+| `id`          | Unique identifier referenced by apps                    |
+| `name`        | Display name                                            |
+| `description` | Short description of the tool                           |
+| `script`      | The script file in `server/tools` implementing the tool |
+| `parameters`  | JSON schema describing the tool input                   |
 
 ### Providers
 
@@ -97,6 +97,7 @@ The AI Hub provides a flexible system for selecting which AI model an app uses. 
       "supportsTools": true
     }
     ```
+
     If a default model is set, the app's model dropdown in the user interface will pre-select this model if the app has no `preferredModel`. Only one model should be marked as the default.
 
 4.  **First Available Model**: If none of the above are set, the app will simply use the first model from the list of available models.
@@ -116,4 +117,3 @@ To add a new model:
 1. Add a new object to the models.json array
 2. Ensure the provider adapter in `server/adapters/` supports the provider
 3. Provide required credentials in your environment variables
-

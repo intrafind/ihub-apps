@@ -10,14 +10,14 @@ const useSessionManagement = () => {
   useEffect(() => {
     // Get or create a session ID
     const sessionId = getSessionId();
-    
+
     // Log application load with session ID
     const logSession = async () => {
       try {
         // Get session information for logging
         const sessionInfo = getSessionInfo();
         console.log('Application loaded with session ID:', sessionId);
-        
+
         // Send session start to server using our centralized API service
         await sendSessionStart({
           type: 'app_loaded',
@@ -28,14 +28,17 @@ const useSessionManagement = () => {
         console.error('Failed to log session start:', error);
       }
     };
-    
+
     logSession();
-    
+
     // Set up session renewal timer
-    const renewalTimer = setInterval(() => {
-      renewSession();
-    }, 60 * 60 * 1000); // Check once per hour
-    
+    const renewalTimer = setInterval(
+      () => {
+        renewSession();
+      },
+      60 * 60 * 1000
+    ); // Check once per hour
+
     return () => {
       clearInterval(renewalTimer);
     };

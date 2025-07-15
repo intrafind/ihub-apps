@@ -14,4 +14,5 @@
   "tokenLimit": 32000,
   "supportsTools": true,
   "concurrency": 1,
-  "requestDelayMs": 1000}
+  "requestDelayMs": 1000
+}

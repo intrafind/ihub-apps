@@ -7,7 +7,12 @@ import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
 import pdfParse from 'pdf-parse';
 
-export default async function seleniumScreenshot({ url, format = 'png', fullPage = true, chatId = 'default' }) {
+export default async function seleniumScreenshot({
+  url,
+  format = 'png',
+  fullPage = true,
+  chatId = 'default'
+}) {
   if (!url) {
     throw new Error('url parameter is required');
   }
@@ -31,7 +36,10 @@ export default async function seleniumScreenshot({ url, format = 'png', fullPage
     } else {
       if (fullPage) {
         const height = await driver.executeScript('return document.body.scrollHeight');
-        await driver.manage().window().setRect({ width: 1200, height: height + 100 });
+        await driver
+          .manage()
+          .window()
+          .setRect({ width: 1200, height: height + 100 });
       }
       const image = await driver.takeScreenshot();
       await fs.writeFile(filePath, image, 'base64');

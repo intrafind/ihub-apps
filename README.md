@@ -24,36 +24,36 @@ The purpose of this repository is to provide a collection of apps, which a user 
 
 The server is implemented as a Node.js application, likely using a framework like Express.js to provide a REST API gateway. Its primary responsibilities include:
 
-*   **Configuration Loading:** Reads configuration files (e.g., JSON) defining available apps, language models (LLMs), endpoints, API keys, default styles, and the disclaimer text.
-*   **API Endpoints:**
-        /api
-        /api/apps
-        /api/apps/{appId}
-        /api/apps/{appId}/chat
-        /api/apps/{appId}/chat/{chatId} #openai compatible chat completions endpoint, which supports streaming
-        /api/models
-        /api/models/{modelId}
-        /api/models/{modelId}/chat #openai compatible chat completions endpoint, which supports streaming
-        /api/disclaimer
+- **Configuration Loading:** Reads configuration files (e.g., JSON) defining available apps, language models (LLMs), endpoints, API keys, default styles, and the disclaimer text.
+- **API Endpoints:**
+  /api
+  /api/apps
+  /api/apps/{appId}
+  /api/apps/{appId}/chat
+  /api/apps/{appId}/chat/{chatId} #openai compatible chat completions endpoint, which supports streaming
+  /api/models
+  /api/models/{modelId}
+  /api/models/{modelId}/chat #openai compatible chat completions endpoint, which supports streaming
+  /api/disclaimer
+  - Provides endpoints for the frontend to fetch the list of available apps (`/api/apps`).
+  - Provides endpoints to fetch the list of available models (`/api/models`).
+  - Provides an endpoint to fetch the disclaimer text (`/api/disclaimer`).
+  - Provides the main endpoint for handling chat interactions (`/api/chat` or similar).
 
-    *   Provides endpoints for the frontend to fetch the list of available apps (`/api/apps`).
-    *   Provides endpoints to fetch the list of available models (`/api/models`).
-    *   Provides an endpoint to fetch the disclaimer text (`/api/disclaimer`).
-    *   Provides the main endpoint for handling chat interactions (`/api/chat` or similar).
-*   **LLM Interaction:**
-    *   Receives chat messages from the frontend (formatted according to OpenAI's message structure).
-    *   Identifies the target LLM based on the user's selection or app configuration.
-    *   Forwards the request, including the conversation history and system prompt, to the appropriate remote LLM API endpoint.
-    *   Manages API keys required for different LLM services.
-*   **Response Streaming:** Receives the response stream from the LLM and forwards it back to the connected frontend client using either WebSockets or Server-Sent Events (SSE) for real-time updates.
+- **LLM Interaction:**
+  - Receives chat messages from the frontend (formatted according to OpenAI's message structure).
+  - Identifies the target LLM based on the user's selection or app configuration.
+  - Forwards the request, including the conversation history and system prompt, to the appropriate remote LLM API endpoint.
+  - Manages API keys required for different LLM services.
+- **Response Streaming:** Receives the response stream from the LLM and forwards it back to the connected frontend client using either WebSockets or Server-Sent Events (SSE) for real-time updates.
 
 ## Initial Concept
 
 We want to build an application for users to get started working with AI-enabled applications. These applications are using LLMs and we want to let user use them to support their daily work.
 The application consists of a start page. When the user opens the start page, the user will be asked for a username, which is only stored in browser local storage, but also used when using our apps. We use this name to personalize the experience as well as tracking who did what. The user can decide to stay anonymous, in this case we generate a username.
 When the user returns to the web application, we will show them their last name, if available. Below the input for the username, we also show a disclaimer, which has been loaded from the backend.
-After the user has chosen a username on the start page, the web application switches to the next screen. This app overview screen shows his/her/its name and loads the apps from the backend. A maximum of 7 apps are shown. If we have more apps, we show also show a more button. The apps which are loaded from the backend, can be configured in a json file in the backend. Each app consists of a name, a description, a color, an icon, a system, a token limit, a preferred model, a preferred output format (like markdown, html, pure text, ...) and an optional prompt which can contain variables.  These variables can have a type like string, date, number or boolean. The variables can have predefined values which consists of a label as well as a text which will be used for replacing the variable in the prompt. The variables will be used to adjust the frontend and allow the user a simpler work / guidance what to fill out.
-When a user has selected an app, the chat application opens, where the user can simply chat with the llms. These apps will help the user to translate text, these apps  are specialized in generating content, these apps can be used to summarize content incl. voice of tone, writing style as well as the action for the summary like "just summarize", "extract the key facts", "highlight actions items", "list all decisions", "summarize and provide recommendations" or nothing as well as free text or just a full custom app, where the user can enter the system as well as user prompt.
+After the user has chosen a username on the start page, the web application switches to the next screen. This app overview screen shows his/her/its name and loads the apps from the backend. A maximum of 7 apps are shown. If we have more apps, we show also show a more button. The apps which are loaded from the backend, can be configured in a json file in the backend. Each app consists of a name, a description, a color, an icon, a system, a token limit, a preferred model, a preferred output format (like markdown, html, pure text, ...) and an optional prompt which can contain variables. These variables can have a type like string, date, number or boolean. The variables can have predefined values which consists of a label as well as a text which will be used for replacing the variable in the prompt. The variables will be used to adjust the frontend and allow the user a simpler work / guidance what to fill out.
+When a user has selected an app, the chat application opens, where the user can simply chat with the llms. These apps will help the user to translate text, these apps are specialized in generating content, these apps can be used to summarize content incl. voice of tone, writing style as well as the action for the summary like "just summarize", "extract the key facts", "highlight actions items", "list all decisions", "summarize and provide recommendations" or nothing as well as free text or just a full custom app, where the user can enter the system as well as user prompt.
 At the app overview page the user can also search for apps via a search box on the page. The search is done purely on the client side.
 A user can favorize apps as well as we are tracking which apps he/she/it has used before. This tracking is done in the browser and connected to the username. If the user has chosen a different name, they will not see the used apps from the last time.
 When a user has chosen the app, the client will render a chat interface as well as a panel with the information about the app and if the app contains variables with the input fields. It is also possible to expand the system prompt and the normal prompt as well as an option to edit them. A user can save the changes, but they are not written back. A hint should be shown to the user that the changes are only temporarily until the next login.
@@ -96,18 +96,20 @@ Therefore we want to build a web application which talks through a small node.js
 ### Installation
 
 1. Clone the repository:
+
    ```bash
    git clone <repository-url>
    cd ai-hub-apps
    ```
 
 2. Install dependencies:
+
    ```bash
    npm run install:all
    npx playwright install
    # Selenium tools require Chrome or Chromium in your PATH
    ```
-   
+
    This will install dependencies for both the client and server components.
 
 ### Development
@@ -119,6 +121,7 @@ npm run dev
 ```
 
 This will:
+
 - Start the Node.js server on port 3000
 - Launch the Vite development server for the client
 - Enable hot reloading for both client and server changes
@@ -148,6 +151,7 @@ npm run prod:build
 ```
 
 This creates a `dist` directory containing:
+
 - Optimized client build in `dist/public`
 - Server files in `dist/server`
 - Application content and configuration in `dist/contents`
@@ -195,7 +199,6 @@ Pre-built binaries for all platforms are available on the [GitHub Releases](http
   - `ai-hub-apps-v<version>-macos` - for macOS
   - `ai-hub-apps-v<version>-linux` - for Linux
   - `ai-hub-apps-v<version>-win.bat` - for Windows
-  
 - **Complete packages** (executable + configuration files):
   - `ai-hub-apps-v<version>-macos.tar.gz` - macOS package
   - `ai-hub-apps-v<version>-linux.tar.gz` - Linux package
@@ -209,15 +212,15 @@ For most users, downloading the complete package is recommended as it includes a
 
 The server can be configured through environment variables or by editing the `config.env` file:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Port the server listens on | `3000` |
-| `HOST` | Host interface to bind to | `0.0.0.0` |
-| `REQUEST_TIMEOUT` | LLM request timeout (ms) | `60000` |
-| `WORKERS` | Number of cluster workers | `CPU count` |
-| `OPENAI_API_KEY` | OpenAI API key | (required) |
-| `ANTHROPIC_API_KEY` | Anthropic API key | (required) |
-| `GOOGLE_API_KEY` | Google AI API key | (required) |
+| Variable            | Description                | Default     |
+| ------------------- | -------------------------- | ----------- |
+| `PORT`              | Port the server listens on | `3000`      |
+| `HOST`              | Host interface to bind to  | `0.0.0.0`   |
+| `REQUEST_TIMEOUT`   | LLM request timeout (ms)   | `60000`     |
+| `WORKERS`           | Number of cluster workers  | `CPU count` |
+| `OPENAI_API_KEY`    | OpenAI API key             | (required)  |
+| `ANTHROPIC_API_KEY` | Anthropic API key          | (required)  |
+| `GOOGLE_API_KEY`    | Google AI API key          | (required)  |
 
 The maximum JSON request body size is configured via the `requestBodyLimitMB` option in `contents/config/platform.json`.
 Outbound request concurrency can also be tuned with the `requestConcurrency` setting in the same file and overridden per model or tool. Values below `1` or an omitted setting result in unlimited concurrency.
@@ -226,11 +229,11 @@ Outbound request concurrency can also be tuned with the `requestConcurrency` set
 
 For HTTPS support, set these environment variables or define them in `config.env`:
 
-| Variable | Description |
-|----------|-------------|
-| `SSL_KEY` | Path to SSL private key |
-| `SSL_CERT` | Path to SSL certificate |
-| `SSL_CA` | Path to CA certificate (optional) |
+| Variable   | Description                       |
+| ---------- | --------------------------------- |
+| `SSL_KEY`  | Path to SSL private key           |
+| `SSL_CERT` | Path to SSL certificate           |
+| `SSL_CA`   | Path to CA certificate (optional) |
 
 Example of running with custom configuration:
 
@@ -297,6 +300,7 @@ This file defines all available applications in the AI Hub. Each app has the fol
 ```
 
 Variable types can be:
+
 - `string`: Text input
 - `text`: Multi-line text input
 - `date`: Date picker
@@ -422,6 +426,7 @@ Client-side translations are shared with the server and stored in `shared/i18n/{
 Custom pages can be added through the `ui.json` configuration in the `pages` section:
 
 1. Add a new entry to the `pages` object:
+
    ```json
    "pages": {
      "page-id": {
@@ -440,6 +445,7 @@ Custom pages can be added through the `ui.json` configuration in the `pages` sec
 2. The content field supports Markdown, which will be rendered by the application.
 
 3. To link to the page from the header, add an entry to the `header.links` array:
+
    ```json
    "header": {
      "links": [
@@ -477,7 +483,7 @@ Custom pages are rendered using the `MarkdownPage` component and are accessible 
 - New features should include appropriate translations
 - API endpoints should follow the established pattern
 - Server-side code should maintain the modular adapter pattern for LLM providers
+
 ## FAQ
 
 A default FAQ page is provided in [contents/pages/en/faq.md](contents/pages/en/faq.md) which can be customized or translated.
-

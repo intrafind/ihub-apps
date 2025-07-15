@@ -14,13 +14,27 @@ function createError(message, code) {
  * Extract clean, readable content from a web page
  * Removes headers, footers, navigation, ads, and other non-content elements
  */
-export default async function webContentExtractor({ url, uri, link, maxLength = 5000, ignoreSSL = false, chatId }) {
+export default async function webContentExtractor({
+  url,
+  uri,
+  link,
+  maxLength = 5000,
+  ignoreSSL = false,
+  chatId
+}) {
   console.log(`Starting content extraction from: ${url || uri || link}`);
-  actionTracker.trackToolCallStart(chatId, { toolName: 'webContentExtractor', toolInput: { url: url || uri || link } });
-  actionTracker.trackToolCallProgress(chatId, { toolName: 'webContentExtractor', status: 'loading', message: 'Fetching content' });
+  actionTracker.trackToolCallStart(chatId, {
+    toolName: 'webContentExtractor',
+    toolInput: { url: url || uri || link }
+  });
+  actionTracker.trackToolCallProgress(chatId, {
+    toolName: 'webContentExtractor',
+    status: 'loading',
+    message: 'Fetching content'
+  });
   // Accept various URL parameter names for flexibility
   const targetUrl = url || uri || link;
-  
+
   if (!targetUrl) {
     throw createError('url parameter is required (use "url", "uri", or "link")', 'MISSING_URL');
   }
@@ -41,20 +55,22 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-    const dispatcher = ignoreSSL && validUrl.protocol === 'https:'
-      ? new https.Agent({ rejectUnauthorized: false })
-      : undefined;
+    const dispatcher =
+      ignoreSSL && validUrl.protocol === 'https:'
+        ? new https.Agent({ rejectUnauthorized: false })
+        : undefined;
     if (ignoreSSL && validUrl.protocol === 'https:') {
       console.warn(`Ignoring SSL certificate errors for ${targetUrl}`);
     }
 
     const response = await throttledFetch('webContentExtractor', targetUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
         'Accept-Encoding': 'gzip, deflate',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
         'Upgrade-Insecure-Requests': '1'
       },
       signal: controller.signal,
@@ -62,8 +78,11 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     });
 
     console.log(`Extracting content from webpage: ${targetUrl}`);
-    actionTracker.trackToolCallProgress(chatId, { toolName: 'webContentExtractor', status: 'parsing' });
-    
+    actionTracker.trackToolCallProgress(chatId, {
+      toolName: 'webContentExtractor',
+      status: 'parsing'
+    });
+
     clearTimeout(timeoutId);
 
     if (!response.ok) {
@@ -71,9 +90,15 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
         throw createError('Page could not be found (HTTP 404)', 'PAGE_NOT_FOUND');
       }
       if (response.status === 401 || response.status === 403) {
-        throw createError(`Authentication required to access this page (HTTP ${response.status})`, 'AUTH_REQUIRED');
+        throw createError(
+          `Authentication required to access this page (HTTP ${response.status})`,
+          'AUTH_REQUIRED'
+        );
       }
-      throw createError(`Failed to fetch webpage: ${response.status} ${response.statusText}`, 'FETCH_ERROR');
+      throw createError(
+        `Failed to fetch webpage: ${response.status} ${response.statusText}`,
+        'FETCH_ERROR'
+      );
     }
 
     console.log(`Extracting content from webpage: ${targetUrl}`);
@@ -82,37 +107,41 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/pdf')) {
       console.log(`Extracting content from PDF: ${targetUrl}`);
-      actionTracker.trackToolCallProgress(chatId, { toolName: 'webContentExtractor', status: 'extracting', type: 'pdf' });
-      
+      actionTracker.trackToolCallProgress(chatId, {
+        toolName: 'webContentExtractor',
+        status: 'extracting',
+        type: 'pdf'
+      });
+
       try {
         const arrayBuffer = await response.arrayBuffer();
         console.log(`PDF size: ${arrayBuffer.byteLength} bytes`);
-        
+
         // Use pdfjs-dist to parse the PDF
         const loadingTask = pdfjs.getDocument({
           data: new Uint8Array(arrayBuffer),
           verbosity: 0 // Suppress console output
         });
-        
+
         const pdf = await loadingTask.promise;
         console.log(`PDF loaded successfully, ${pdf.numPages} pages`);
-        
+
         let fullText = '';
         const maxPagesToProcess = Math.min(pdf.numPages, 10); // Limit to first 10 pages for performance
-        
+
         // Extract text from each page
         for (let pageNum = 1; pageNum <= maxPagesToProcess; pageNum++) {
           const page = await pdf.getPage(pageNum);
           const textContent = await page.getTextContent();
           const pageText = textContent.items.map(item => item.str).join(' ');
           fullText += pageText + '\n';
-          
+
           // Stop if we have enough content
           if (fullText.length > maxLength * 2) break;
         }
-        
+
         console.log(`PDF text extraction successful, ${fullText.length} characters extracted`);
-        
+
         const textContent = fullText.substring(0, maxLength);
         const output = {
           url: targetUrl,
@@ -123,7 +152,10 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
           wordCount: textContent.trim().split(/\s+/).length,
           extractedAt: new Date().toISOString()
         };
-        actionTracker.trackToolCallEnd(chatId, { toolName: 'webContentExtractor', toolOutput: { type: 'pdf' } });
+        actionTracker.trackToolCallEnd(chatId, {
+          toolName: 'webContentExtractor',
+          toolOutput: { type: 'pdf' }
+        });
         return output;
       } catch (pdfError) {
         console.error(`PDF parsing error: ${pdfError.message}`);
@@ -133,7 +165,11 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     }
 
     let html = await response.text();
-    actionTracker.trackToolCallProgress(chatId, { toolName: 'webContentExtractor', status: 'extracting', type: 'html' });
+    actionTracker.trackToolCallProgress(chatId, {
+      toolName: 'webContentExtractor',
+      status: 'extracting',
+      type: 'html'
+    });
     // Pre-emptively remove style tags to prevent CSS parsing errors from JSDOM
     html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
 
@@ -142,15 +178,43 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
 
     // Remove unwanted elements
     const unwantedSelectors = [
-      'script', 'style', 'noscript', 'iframe', 'embed', 'object',
-      'header', 'footer', 'nav', 'aside', 'menu',
-      '.advertisement', '.ad', '.ads', '.sidebar', '.popup',
-      '.cookie-banner', '.newsletter', '.social-share',
-      '.related-articles', '.comments', '.pagination',
-      '[role="banner"]', '[role="navigation"]', '[role="complementary"]',
-      '.header', '.footer', '.nav', '.navbar', '.menu', '.sidebar',
-      '.ad-container', '.advertisement-container', '.sponsored',
-      '.cookie-notice', '.gdpr-banner', '.privacy-notice'
+      'script',
+      'style',
+      'noscript',
+      'iframe',
+      'embed',
+      'object',
+      'header',
+      'footer',
+      'nav',
+      'aside',
+      'menu',
+      '.advertisement',
+      '.ad',
+      '.ads',
+      '.sidebar',
+      '.popup',
+      '.cookie-banner',
+      '.newsletter',
+      '.social-share',
+      '.related-articles',
+      '.comments',
+      '.pagination',
+      '[role="banner"]',
+      '[role="navigation"]',
+      '[role="complementary"]',
+      '.header',
+      '.footer',
+      '.nav',
+      '.navbar',
+      '.menu',
+      '.sidebar',
+      '.ad-container',
+      '.advertisement-container',
+      '.sponsored',
+      '.cookie-notice',
+      '.gdpr-banner',
+      '.privacy-notice'
     ];
 
     unwantedSelectors.forEach(selector => {
@@ -161,10 +225,19 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     // Try to find the main content area
     let contentElement = null;
     const contentSelectors = [
-      'main', 'article', '[role="main"]',
-      '.content', '.main-content', '.article-content', '.post-content',
-      '.entry-content', '.page-content', '.body-content',
-      '#content', '#main-content', '#article-content'
+      'main',
+      'article',
+      '[role="main"]',
+      '.content',
+      '.main-content',
+      '.article-content',
+      '.post-content',
+      '.entry-content',
+      '.page-content',
+      '.body-content',
+      '#content',
+      '#main-content',
+      '#article-content'
     ];
 
     for (const selector of contentSelectors) {
@@ -175,15 +248,26 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
     // If no main content area found, use body but filter more aggressively
     if (!contentElement) {
       contentElement = document.body;
-      
+
       // Remove more elements that are typically not main content
       const additionalUnwanted = [
-        '.breadcrumb', '.breadcrumbs', '.tags', '.categories',
-        '.meta', '.metadata', '.author-info', '.date',
-        '.share-buttons', '.social-buttons', '.widget',
-        '.promo', '.promotion', '.banner', '.alert'
+        '.breadcrumb',
+        '.breadcrumbs',
+        '.tags',
+        '.categories',
+        '.meta',
+        '.metadata',
+        '.author-info',
+        '.date',
+        '.share-buttons',
+        '.social-buttons',
+        '.widget',
+        '.promo',
+        '.promotion',
+        '.banner',
+        '.alert'
       ];
-      
+
       additionalUnwanted.forEach(selector => {
         const elements = contentElement.querySelectorAll(selector);
         elements.forEach(el => el.remove());
@@ -196,7 +280,7 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
 
     // Extract text content
     let textContent = contentElement.textContent || '';
-    
+
     // Clean up the text
     textContent = textContent
       .replace(/\s+/g, ' ') // Replace multiple whitespace with single space
@@ -217,8 +301,10 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
 
     // Extract some metadata
     const title = document.querySelector('title')?.textContent?.trim() || '';
-    const description = document.querySelector('meta[name="description"]')?.getAttribute('content')?.trim() || '';
-    const author = document.querySelector('meta[name="author"]')?.getAttribute('content')?.trim() || '';
+    const description =
+      document.querySelector('meta[name="description"]')?.getAttribute('content')?.trim() || '';
+    const author =
+      document.querySelector('meta[name="author"]')?.getAttribute('content')?.trim() || '';
 
     const output = {
       url: targetUrl,
@@ -229,16 +315,24 @@ export default async function webContentExtractor({ url, uri, link, maxLength = 
       wordCount: textContent.split(/\s+/).length,
       extractedAt: new Date().toISOString()
     };
-    actionTracker.trackToolCallEnd(chatId, { toolName: 'webContentExtractor', toolOutput: { type: 'html' } });
+    actionTracker.trackToolCallEnd(chatId, {
+      toolName: 'webContentExtractor',
+      toolOutput: { type: 'html' }
+    });
     return output;
-
   } catch (error) {
     if (error.name === 'AbortError') {
     }
     if (/certificate|SSL/i.test(error.message) && !ignoreSSL) {
-      throw createError(`TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates.`, 'TLS_ERROR');
+      throw createError(
+        `TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates.`,
+        'TLS_ERROR'
+      );
     }
-    throw createError(`Failed to extract content from webpage: ${error.message}`, 'EXTRACTION_FAILED');
+    throw createError(
+      `Failed to extract content from webpage: ${error.message}`,
+      'EXTRACTION_FAILED'
+    );
   }
 }
 

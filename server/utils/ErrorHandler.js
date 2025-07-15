@@ -35,7 +35,7 @@ class ToolError extends ChatError {
 
 class RequestTimeoutError extends ChatError {
   constructor(timeout, code = 'REQUEST_TIMEOUT') {
-    super(`Request timed out after ${timeout/1000} seconds`, code);
+    super(`Request timed out after ${timeout / 1000} seconds`, code);
     this.timeout = timeout;
   }
 }
@@ -57,13 +57,13 @@ class ErrorHandler {
   async getLocalizedError(errorKey, params = {}, language) {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || this.defaultLanguage;
     const lang = language || defaultLang;
-    
+
     try {
       let translations = configCache.getLocalizations(lang);
-      
+
       const hasServer = translations?.serverErrors && translations.serverErrors[errorKey];
       const hasTool = translations?.toolErrors && translations.toolErrors[errorKey];
-      
+
       if (!translations || (!hasServer && !hasTool)) {
         if (lang !== defaultLang) {
           let enTranslations = configCache.getLocalizations(defaultLang);
@@ -75,18 +75,18 @@ class ErrorHandler {
           const enTool = enTranslations?.toolErrors?.[errorKey];
           if (enServer || enTool) {
             let message = enServer || enTool;
-            Object.entries(params).forEach(([k,v]) => { 
-              message = message.replace(`{${k}}`, v); 
+            Object.entries(params).forEach(([k, v]) => {
+              message = message.replace(`{${k}}`, v);
             });
             return message;
           }
         }
         return `Error: ${errorKey}`;
       }
-      
+
       let message = translations.serverErrors?.[errorKey] || translations.toolErrors?.[errorKey];
-      Object.entries(params).forEach(([k,v]) => { 
-        message = message.replace(`{${k}}`, v); 
+      Object.entries(params).forEach(([k, v]) => {
+        message = message.replace(`{${k}}`, v);
       });
       return message;
     } catch (error) {
@@ -106,12 +106,20 @@ class ErrorHandler {
   }
 
   async createToolError(toolId, errorMessage, language, details = null) {
-    const message = await this.getLocalizedError('toolExecutionFailed', { toolId, error: errorMessage }, language);
+    const message = await this.getLocalizedError(
+      'toolExecutionFailed',
+      { toolId, error: errorMessage },
+      language
+    );
     return new ToolError(message, toolId, 'TOOL_EXECUTION_ERROR', details);
   }
 
   async createRequestTimeoutError(timeout, language) {
-    const message = await this.getLocalizedError('requestTimeout', { timeout: timeout/1000 }, language);
+    const message = await this.getLocalizedError(
+      'requestTimeout',
+      { timeout: timeout / 1000 },
+      language
+    );
     return new RequestTimeoutError(timeout, 'REQUEST_TIMEOUT');
   }
 
@@ -124,7 +132,7 @@ class ErrorHandler {
     } else if (status >= 500) {
       errorKey = 'serviceError';
     }
-    
+
     const message = await this.getLocalizedError(errorKey, { status, provider }, language);
     return new LLMApiError(message, status, provider, errorKey.toUpperCase(), details);
   }
@@ -161,11 +169,4 @@ class ErrorHandler {
 }
 
 export default ErrorHandler;
-export { 
-  ChatError, 
-  ApiKeyError, 
-  ModelError, 
-  ToolError, 
-  RequestTimeoutError, 
-  LLMApiError 
-};
+export { ChatError, ApiKeyError, ModelError, ToolError, RequestTimeoutError, LLMApiError };

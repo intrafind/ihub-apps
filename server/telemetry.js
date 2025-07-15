@@ -5,7 +5,11 @@ import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-node';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import apiPkg from '@opentelemetry/api';
 const { diag, DiagConsoleLogger, DiagLogLevel, logs } = apiPkg;
-import { LoggerProvider, ConsoleLogRecordExporter, SimpleLogRecordProcessor } from '@opentelemetry/sdk-logs';
+import {
+  LoggerProvider,
+  ConsoleLogRecordExporter,
+  SimpleLogRecordProcessor
+} from '@opentelemetry/sdk-logs';
 import resourcesPkg from '@opentelemetry/resources';
 const { Resource } = resourcesPkg;
 
@@ -38,9 +42,11 @@ export async function initTelemetry(config = {}) {
 
   diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
-  const metricReader = config.metrics ? new PeriodicExportingMetricReader({
-    exporter: new PrometheusExporter({ port: config.port || 9464 })
-  }) : undefined;
+  const metricReader = config.metrics
+    ? new PeriodicExportingMetricReader({
+        exporter: new PrometheusExporter({ port: config.port || 9464 })
+      })
+    : undefined;
 
   sdk = new NodeSDK({
     resource: new Resource({ 'service.name': 'ai-hub-apps-server' }),
@@ -52,14 +58,21 @@ export async function initTelemetry(config = {}) {
   await sdk.start();
 
   if (config.metrics?.enabled === true) {
-    tokenUsageCounter = sdk.getMeterProvider().getMeter('ai-hub-apps').createCounter('token_usage_total', {
-      description: 'Total number of tokens processed'
-    });
+    tokenUsageCounter = sdk
+      .getMeterProvider()
+      .getMeter('ai-hub-apps')
+      .createCounter('token_usage_total', {
+        description: 'Total number of tokens processed'
+      });
   }
 
   if (config.logs?.enabled === true) {
-    const loggerProvider = new LoggerProvider({ resource: new Resource({ 'service.name': 'ai-hub-apps-server' }) });
-    loggerProvider.addLogRecordProcessor(new SimpleLogRecordProcessor(new ConsoleLogRecordExporter()));
+    const loggerProvider = new LoggerProvider({
+      resource: new Resource({ 'service.name': 'ai-hub-apps-server' })
+    });
+    loggerProvider.addLogRecordProcessor(
+      new SimpleLogRecordProcessor(new ConsoleLogRecordExporter())
+    );
     loggerProvider.register();
     logger = logs.getLogger('ai-hub-apps');
     interceptConsole();

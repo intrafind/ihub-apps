@@ -12,4 +12,5 @@
   "url": "http://hal9000:8897/v1/chat/completions",
   "provider": "local",
   "tokenLimit": 8192,
-  "supportsTools": false}
+  "supportsTools": false
+}

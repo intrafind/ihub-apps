@@ -11,7 +11,7 @@ const AppDetailsPopup = ({ app, isOpen, onClose }) => {
 
   if (!isOpen || !app) return null;
 
-  const getLocalizedValue = (content) => {
+  const getLocalizedValue = content => {
     return getLocalizedContent(content, currentLanguage);
   };
 
@@ -21,16 +21,14 @@ const AppDetailsPopup = ({ app, isOpen, onClose }) => {
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
           <div className="flex items-center space-x-3">
-            <div 
+            <div
               className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
               style={{ backgroundColor: app.color || '#6B7280' }}
             >
               <Icon name={app.icon || 'chat-bubbles'} className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                {getLocalizedValue(app.name)}
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900">{getLocalizedValue(app.name)}</h3>
               <p className="text-sm text-gray-500">{app.id}</p>
             </div>
           </div>
@@ -49,15 +47,14 @@ const AppDetailsPopup = ({ app, isOpen, onClose }) => {
             <span className="text-sm font-medium text-gray-700">
               {t('admin.apps.details.status', 'Status')}
             </span>
-            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-              app.enabled 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-red-100 text-red-800'
-            }`}>
-              {app.enabled 
+            <span
+              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                app.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}
+            >
+              {app.enabled
                 ? t('admin.apps.status.enabled', 'Enabled')
-                : t('admin.apps.status.disabled', 'Disabled')
-              }
+                : t('admin.apps.status.disabled', 'Disabled')}
             </span>
           </div>
 
@@ -95,17 +92,13 @@ const AppDetailsPopup = ({ app, isOpen, onClose }) => {
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.apps.details.model', 'Model')}
                 </div>
-                <div className="text-sm text-gray-900 mt-1">
-                  {app.preferredModel || 'Default'}
-                </div>
+                <div className="text-sm text-gray-900 mt-1">{app.preferredModel || 'Default'}</div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.apps.details.tokenLimit', 'Token Limit')}
                 </div>
-                <div className="text-sm text-gray-900 mt-1">
-                  {app.tokenLimit || 'Default'}
-                </div>
+                <div className="text-sm text-gray-900 mt-1">{app.tokenLimit || 'Default'}</div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -119,9 +112,7 @@ const AppDetailsPopup = ({ app, isOpen, onClose }) => {
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.apps.details.order', 'Order')}
                 </div>
-                <div className="text-sm text-gray-900 mt-1">
-                  {app.order || 'Not set'}
-                </div>
+                <div className="text-sm text-gray-900 mt-1">{app.order || 'Not set'}</div>
               </div>
             </div>
           </div>
@@ -140,9 +131,7 @@ const AppDetailsPopup = ({ app, isOpen, onClose }) => {
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
                           {variable.name}
                         </span>
-                        <span className="text-xs text-gray-500">
-                          {variable.type}
-                        </span>
+                        <span className="text-xs text-gray-500">{variable.type}</span>
                         {variable.required && (
                           <span className="text-xs text-red-500">required</span>
                         )}

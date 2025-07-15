@@ -8,6 +8,6 @@ export function getRootDir() {
 
   const isPackaged = process.pkg !== undefined || config.APP_ROOT_DIR !== undefined;
   return isPackaged
-    ? (config.APP_ROOT_DIR || path.dirname(process.execPath))
+    ? config.APP_ROOT_DIR || path.dirname(process.execPath)
     : path.join(__dirname, '..');
 }

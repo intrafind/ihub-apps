@@ -14,31 +14,36 @@ The script is intentionally designed to be cross-platform compatible, but **requ
 3.  **Run the Script:** Execute the script from your terminal, providing the name of the primary index you want to analyze. You can also specify the host and port if they are not the default `localhost:9200`.
 
     **Basic Usage (Linux, macOS, Windows with Git Bash/WSL):**
+
     ```sh
     ./gather_opensearch_stats.sh <your-index-name>
     ```
 
     **Example:**
+
     ```sh
     ./gather_opensearch_stats.sh my_index
     ```
 
     **Specifying Host and Port:**
+
     ```sh
     ./gather_opensearch_stats.sh <your-index-name> <host> <port>
     ```
 
     **Example:**
+
     ```sh
     ./gather_opensearch_stats.sh my_index opensearch.mycompany.com 9200
     ```
+
 4.  **Find the Output:** The script will create a single markdown file in the current directory, named `my_index_dump_YYYYMMDD_HHMMSS.md`, containing all the gathered statistics.
 
 ---
 
 ## Script to Download
 
-```sh
+````sh
 #!/usr/bin/env bash
 #
 # Description:
@@ -163,4 +168,4 @@ gather_stat "CAT: Plugins" "${BASE_URL}/_cat/plugins?v" false
 
 echo "✅ Done. All stats have been written to: $OUTPUT_FILE"
 
-```
+````

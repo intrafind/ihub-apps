@@ -1,27 +1,28 @@
-import React, { useEffect } from "react";
-import VoiceFeedback from "./VoiceFeedback";
-import useVoiceRecognition from "../../hooks/useVoiceRecognition";
-import VoiceInputButton from "./VoiceInputButton";
+import React, { useEffect } from 'react';
+import VoiceFeedback from './VoiceFeedback';
+import useVoiceRecognition from '../../hooks/useVoiceRecognition';
+import VoiceInputButton from './VoiceInputButton';
 
-const VoiceInputComponent = ({ app, onSpeechResult, inputRef, disabled = false, onCommand = null }) => {
-  const {
-    isListening,
-    transcript,
-    toggleListening,
-    stopListening,
-    microphoneMode,
-  } = useVoiceRecognition({ app, inputRef, onSpeechResult, onCommand, disabled });
+const VoiceInputComponent = ({
+  app,
+  onSpeechResult,
+  inputRef,
+  disabled = false,
+  onCommand = null
+}) => {
+  const { isListening, transcript, toggleListening, stopListening, microphoneMode } =
+    useVoiceRecognition({ app, inputRef, onSpeechResult, onCommand, disabled });
 
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "m") {
+    const handleKeyDown = e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
         e.preventDefault();
         toggleListening();
       }
     };
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [toggleListening]);
 
@@ -37,7 +38,7 @@ const VoiceInputComponent = ({ app, onSpeechResult, inputRef, disabled = false, 
         transcript={
           app?.inputMode?.microphone?.showTranscript || app?.microphone?.showTranscript
             ? transcript
-            : ""
+            : ''
         }
         mode={microphoneMode}
       />

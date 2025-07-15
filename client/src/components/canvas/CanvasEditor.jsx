@@ -21,23 +21,34 @@ const CanvasEditor = ({
   const { t } = useTranslation();
 
   // Quill editor configuration
-  const quillModules = useMemo(() => ({
-    toolbar: {
-      container: '#quill-toolbar'
-    },
-    history: {
-      delay: 2000,
-      maxStack: 500,
-      userOnly: true
-    },
-    clipboard: {
-      matchVisual: false,
-    }
-  }), []);
+  const quillModules = useMemo(
+    () => ({
+      toolbar: {
+        container: '#quill-toolbar'
+      },
+      history: {
+        delay: 2000,
+        maxStack: 500,
+        userOnly: true
+      },
+      clipboard: {
+        matchVisual: false
+      }
+    }),
+    []
+  );
 
   const quillFormats = [
-    'header', 'bold', 'italic', 'underline', 'strike',
-    'list', 'bullet', 'blockquote', 'code-block', 'link'
+    'header',
+    'bold',
+    'italic',
+    'underline',
+    'strike',
+    'list',
+    'bullet',
+    'blockquote',
+    'code-block',
+    'link'
   ];
 
   // Custom clipboard handlers for cut/copy/paste
@@ -62,7 +73,7 @@ const CanvasEditor = ({
       if (cut) quill.deleteText(sel.index, sel.length, 'user');
     };
 
-    const handlePaste = (e) => {
+    const handlePaste = e => {
       e.preventDefault();
       const htmlData = e.clipboardData.getData('text/html');
       const mdData = e.clipboardData.getData('text/markdown');
@@ -84,8 +95,8 @@ const CanvasEditor = ({
     };
 
     const root = quill.root;
-    const copyHandler = (e) => handleCopyCut(e, false);
-    const cutHandler = (e) => handleCopyCut(e, true);
+    const copyHandler = e => handleCopyCut(e, false);
+    const cutHandler = e => handleCopyCut(e, true);
     root.addEventListener('copy', copyHandler);
     root.addEventListener('cut', cutHandler);
     root.addEventListener('paste', handlePaste);
@@ -98,7 +109,7 @@ const CanvasEditor = ({
   }, [editorRef]);
 
   return (
-    <div 
+    <div
       className="flex flex-col bg-white border border-gray-300 relative h-full min-h-0 rounded-lg overflow-hidden"
       style={{ width: `${width}%` }}
     >
@@ -131,7 +142,10 @@ const CanvasEditor = ({
             onChangeSelection={onSelectionChange}
             modules={quillModules}
             formats={quillFormats}
-            placeholder={t('canvas.placeholder', 'Start typing or use the AI assistant to create your document...')}
+            placeholder={t(
+              'canvas.placeholder',
+              'Start typing or use the AI assistant to create your document...'
+            )}
             style={{ height: '100%' }}
             className="modern-canvas-editor"
           />

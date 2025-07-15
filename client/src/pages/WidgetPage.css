@@ -9,7 +9,10 @@
 }
 
 /* Force full height to all elements */
-html, body, #root, .widget-page {
+html,
+body,
+#root,
+.widget-page {
   height: 100% !important;
   margin: 0;
   padding: 0;
@@ -83,7 +86,7 @@ html, body, #root, .widget-page {
   background-color: var(--primary-color, rgb(0, 53, 87));
   color: white;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  position: relative !important; 
+  position: relative !important;
 }
 
 .widget-page .chat-widget-header h3 {
@@ -98,12 +101,12 @@ html, body, #root, .widget-page {
     height: 100vh;
     height: -webkit-fill-available;
   }
-  
+
   .widget-page .chat-widget-panel {
     height: 100vh;
     height: -webkit-fill-available;
   }
-  
+
   .widget-page .chat-widget-messages {
     height: calc(100vh - 130px) !important;
     height: calc(-webkit-fill-available - 130px) !important;

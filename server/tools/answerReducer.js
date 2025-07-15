@@ -40,11 +40,15 @@ No attribution to individual sources (present as unified piece)
 
 Do not add your own commentary or analysis
 Do not change technical terms, names, or specific details`,
-    user: `Here are the answers to merge:\n${answers.map((a,i)=>`<answer-${i+1}>\n${a}\n</answer-${i+1}>`).join('\n\n')}\n\nYour output should read as a coherent, high-quality article that appears to be written by a single author, while actually being a careful curation of the best sentences from all input sources.`
+    user: `Here are the answers to merge:\n${answers.map((a, i) => `<answer-${i + 1}>\n${a}\n</answer-${i + 1}>`).join('\n\n')}\n\nYour output should read as a coherent, high-quality article that appears to be written by a single author, while actually being a careful curation of the best sentences from all input sources.`
   };
 }
 
-export default async function answerReducer({ answers, model = 'gemini-1.5-flash', temperature = 0.3 }) {
+export default async function answerReducer({
+  answers,
+  model = 'gemini-1.5-flash',
+  temperature = 0.3
+}) {
   if (!Array.isArray(answers) || answers.length === 0) {
     throw new Error('answers must be a non-empty array');
   }

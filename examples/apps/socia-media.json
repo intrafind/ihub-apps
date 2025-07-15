@@ -38,9 +38,9 @@
         "de": "3"
       },
       "predefinedValues": [
-        {"label": {"en": "1 post", "de": "1 Beitrag"}, "value": "1"},
-        {"label": {"en": "3 posts", "de": "3 Beiträge"}, "value": "3"},
-        {"label": {"en": "5 posts", "de": "5 Beiträge"}, "value": "5"}
+        { "label": { "en": "1 post", "de": "1 Beitrag" }, "value": "1" },
+        { "label": { "en": "3 posts", "de": "3 Beiträge" }, "value": "3" },
+        { "label": { "en": "5 posts", "de": "5 Beiträge" }, "value": "5" }
       ]
     },
     {
@@ -52,12 +52,27 @@
       "type": "string",
       "required": true,
       "predefinedValues": [
-        {"label": {"en": "Text posts", "de": "Textbeiträge"}, "value": "text posts"},
-        {"label": {"en": "Caption ideas", "de": "Bildunterschriften-Ideen"}, "value": "caption ideas"},
-        {"label": {"en": "Promotional posts", "de": "Werbebeiträge"}, "value": "promotional posts"},
-        {"label": {"en": "Educational posts", "de": "Bildungsbeiträge"}, "value": "educational posts"},
-        {"label": {"en": "Engagement questions", "de": "Engagement-Fragen"}, "value": "engagement questions"},
-        {"label": {"en": "Trending topic posts", "de": "Beiträge zu aktuellen Themen"}, "value": "posts related to trending topics"}
+        { "label": { "en": "Text posts", "de": "Textbeiträge" }, "value": "text posts" },
+        {
+          "label": { "en": "Caption ideas", "de": "Bildunterschriften-Ideen" },
+          "value": "caption ideas"
+        },
+        {
+          "label": { "en": "Promotional posts", "de": "Werbebeiträge" },
+          "value": "promotional posts"
+        },
+        {
+          "label": { "en": "Educational posts", "de": "Bildungsbeiträge" },
+          "value": "educational posts"
+        },
+        {
+          "label": { "en": "Engagement questions", "de": "Engagement-Fragen" },
+          "value": "engagement questions"
+        },
+        {
+          "label": { "en": "Trending topic posts", "de": "Beiträge zu aktuellen Themen" },
+          "value": "posts related to trending topics"
+        }
       ]
     },
     {
@@ -69,11 +84,11 @@
       "type": "string",
       "required": true,
       "predefinedValues": [
-        {"label": {"en": "LinkedIn", "de": "LinkedIn"}, "value": "LinkedIn"},
-        {"label": {"en": "Twitter/X", "de": "Twitter/X"}, "value": "Twitter"},
-        {"label": {"en": "Instagram", "de": "Instagram"}, "value": "Instagram"},
-        {"label": {"en": "Facebook", "de": "Facebook"}, "value": "Facebook"},
-        {"label": {"en": "TikTok", "de": "TikTok"}, "value": "TikTok"}
+        { "label": { "en": "LinkedIn", "de": "LinkedIn" }, "value": "LinkedIn" },
+        { "label": { "en": "Twitter/X", "de": "Twitter/X" }, "value": "Twitter" },
+        { "label": { "en": "Instagram", "de": "Instagram" }, "value": "Instagram" },
+        { "label": { "en": "Facebook", "de": "Facebook" }, "value": "Facebook" },
+        { "label": { "en": "TikTok", "de": "TikTok" }, "value": "TikTok" }
       ]
     },
     {
@@ -97,11 +112,23 @@
         "de": "Verwende einen ansprechenden und gesprächigen Ton."
       },
       "predefinedValues": [
-        {"label": {"en": "Professional", "de": "Professionell"}, "value": "Use a professional and authoritative tone."},
-        {"label": {"en": "Casual", "de": "Lässig"}, "value": "Use a casual and friendly tone."},
-        {"label": {"en": "Humorous", "de": "Humorvoll"}, "value": "Use a humorous and lighthearted tone."},
-        {"label": {"en": "Inspirational", "de": "Inspirierend"}, "value": "Use an inspirational and motivational tone."},
-        {"label": {"en": "Educational", "de": "Bildend"}, "value": "Use an educational and informative tone."}
+        {
+          "label": { "en": "Professional", "de": "Professionell" },
+          "value": "Use a professional and authoritative tone."
+        },
+        { "label": { "en": "Casual", "de": "Lässig" }, "value": "Use a casual and friendly tone." },
+        {
+          "label": { "en": "Humorous", "de": "Humorvoll" },
+          "value": "Use a humorous and lighthearted tone."
+        },
+        {
+          "label": { "en": "Inspirational", "de": "Inspirierend" },
+          "value": "Use an inspirational and motivational tone."
+        },
+        {
+          "label": { "en": "Educational", "de": "Bildend" },
+          "value": "Use an educational and informative tone."
+        }
       ]
     },
     {

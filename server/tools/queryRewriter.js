@@ -220,7 +220,11 @@ export default async function queryRewriter({
     const json = completion.slice(jsonStart);
     const parsed = JSON.parse(json);
     if (Array.isArray(parsed.queries)) {
-      actionTracker.trackToolCallProgress(chatId, { toolName: 'queryRewriter', status: 'parsed', queries: parsed.queries });
+      actionTracker.trackToolCallProgress(chatId, {
+        toolName: 'queryRewriter',
+        status: 'parsed',
+        queries: parsed.queries
+      });
       actionTracker.trackToolCallEnd(chatId, { toolName: 'queryRewriter', toolOutput: parsed });
       return parsed;
     }
@@ -228,8 +232,15 @@ export default async function queryRewriter({
     // ignore parse errors
   }
 
-  const lines = completion.split('\n').map(l => l.trim()).filter(Boolean);
-  actionTracker.trackToolCallProgress(chatId, { toolName: 'queryRewriter', status: 'parsed', queries: lines.map(q => ({ q })) });
+  const lines = completion
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean);
+  actionTracker.trackToolCallProgress(chatId, {
+    toolName: 'queryRewriter',
+    status: 'parsed',
+    queries: lines.map(q => ({ q }))
+  });
   const output = { queries: lines.map(q => ({ q })) };
   actionTracker.trackToolCallEnd(chatId, { toolName: 'queryRewriter', toolOutput: output });
   return output;

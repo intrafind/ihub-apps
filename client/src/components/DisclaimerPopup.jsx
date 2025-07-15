@@ -11,7 +11,7 @@ const DisclaimerPopup = ({ disclaimer, currentLanguage }) => {
   useEffect(() => {
     // Check if user has already seen the disclaimer
     const hasAcknowledgedDisclaimer = localStorage.getItem(DISCLAIMER_STORAGE_KEY);
-    
+
     if (!hasAcknowledgedDisclaimer && disclaimer) {
       setIsVisible(true);
     }
@@ -28,11 +28,14 @@ const DisclaimerPopup = ({ disclaimer, currentLanguage }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full p-6 mx-4">
-        <h2 className="text-xl font-bold mb-4">{getLocalizedContent(disclaimer.title, currentLanguage) || t('disclaimer.title', 'Disclaimer')}</h2>
-        
+        <h2 className="text-xl font-bold mb-4">
+          {getLocalizedContent(disclaimer.title, currentLanguage) ||
+            t('disclaimer.title', 'Disclaimer')}
+        </h2>
+
         <div className="max-h-96 overflow-y-auto mb-4 text-gray-700">
           <p>{getLocalizedContent(disclaimer.text, currentLanguage)}</p>
-          
+
           {disclaimer.version && disclaimer.updated && (
             <p className="mt-4 text-sm text-gray-500">
               {t('disclaimer.versionInfo', 'Version {{version}}, Last Updated: {{date}}', {
@@ -42,7 +45,7 @@ const DisclaimerPopup = ({ disclaimer, currentLanguage }) => {
             </p>
           )}
         </div>
-        
+
         <div className="flex justify-end">
           <button
             onClick={handleAccept}

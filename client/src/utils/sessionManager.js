@@ -37,11 +37,11 @@ export const getSessionId = () => {
   // Generate a new session ID
   const sessionId = generateSessionId();
   const expiry = now + SESSION_TIMEOUT;
-  
+
   // Store the session ID and its expiry time
   sessionStorage.setItem(SESSION_ID_KEY, sessionId);
   sessionStorage.setItem(SESSION_EXPIRY_KEY, expiry.toString());
-  
+
   console.log('Created new session ID:', sessionId);
   return sessionId;
 };
@@ -53,7 +53,7 @@ export const getSessionId = () => {
 export const renewSession = () => {
   const sessionId = getSessionId(); // This will create a new session if needed
   const expiry = Date.now() + SESSION_TIMEOUT;
-  
+
   sessionStorage.setItem(SESSION_EXPIRY_KEY, expiry.toString());
   return sessionId;
 };
@@ -67,7 +67,7 @@ export const getSessionRemainingTime = () => {
   if (!expiryTime) {
     return 0;
   }
-  
+
   const now = Date.now();
   const expiry = parseInt(expiryTime);
   return Math.max(0, expiry - now);
@@ -90,12 +90,12 @@ export const shouldRenewSession = () => {
 export const getSessionInfo = () => {
   const sessionId = getSessionId();
   const expiryTime = sessionStorage.getItem(SESSION_EXPIRY_KEY);
-  
+
   return {
     sessionId,
     expiresAt: expiryTime ? parseInt(expiryTime) : null,
     createdAt: sessionId.split('-')[1], // Extract timestamp from session ID
     userAgent: navigator.userAgent,
-    language: navigator.language,
+    language: navigator.language
   };
 };

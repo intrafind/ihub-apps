@@ -29,7 +29,7 @@ const ChatHeader = ({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  
+
   // Default icon if none provided
   const defaultIcon = <Icon name="chat" className="text-white" />;
 
@@ -59,7 +59,7 @@ const ChatHeader = ({
             aria-label="Back to apps list"
           >
             <Icon name="arrowLeft" size="sm" />
-          </button>          
+          </button>
           <div
             className="w-10 h-10 rounded-full flex items-center justify-center mr-3"
             style={{ backgroundColor: color }}
@@ -68,13 +68,11 @@ const ChatHeader = ({
           </div>
           <div className="relative">
             <h1 className="text-2xl font-bold leading-tight flex items-center">
-              {typeof title === 'object'
-                ? getLocalizedContent(title, currentLanguage)
-                : title}
+              {typeof title === 'object' ? getLocalizedContent(title, currentLanguage) : title}
               {isMobile && description && (
                 <button
                   className="ml-1 text-gray-500"
-                  onClick={() => setShowDescription((prev) => !prev)}
+                  onClick={() => setShowDescription(prev => !prev)}
                   onMouseEnter={() => setShowDescription(true)}
                   onMouseLeave={() => setShowDescription(false)}
                   aria-label="App info"
@@ -114,12 +112,14 @@ const ChatHeader = ({
               title={t('pages.appCanvas.backToChat', 'Back to Chat')}
             >
               <Icon name="chat" size="sm" className="sm:mr-1" />
-              <span className="hidden sm:inline">{t('pages.appCanvas.backToChat', 'Back to Chat')}</span>
+              <span className="hidden sm:inline">
+                {t('pages.appCanvas.backToChat', 'Back to Chat')}
+              </span>
             </button>
           )}
-        {showCanvasButton && (
-          <button
-            onClick={onToggleCanvas}
+          {showCanvasButton && (
+            <button
+              onClick={onToggleCanvas}
               className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1 rounded flex items-center"
               title={t('pages.appChat.canvasMode', 'Canvas Mode')}
             >
@@ -147,7 +147,9 @@ const ChatHeader = ({
               title={t('pages.appChat.parameters')}
             >
               <Icon name="sliders" size="sm" className="sm:mr-1" />
-              <span className="hidden sm:inline">{t('pages.appChat.parameters', 'Parameters')}</span>
+              <span className="hidden sm:inline">
+                {t('pages.appChat.parameters', 'Parameters')}
+              </span>
             </button>
           )}
           {showConfigButton && (

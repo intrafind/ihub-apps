@@ -6,37 +6,46 @@ import TurndownService from 'turndown';
 const ExportMenu = ({ content, onClose }) => {
   const { t } = useTranslation();
   const turndownService = new TurndownService();
-  
+
   const handleCopyText = () => {
     // Convert HTML to plain text
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content;
     const plainText = tempDiv.textContent || tempDiv.innerText || '';
-    navigator.clipboard.writeText(plainText).then(() => {
-      console.log('✅ Text copied to clipboard');
-      // You could add a toast notification here
-    }).catch(err => {
-      console.error('Failed to copy text:', err);
-    });
+    navigator.clipboard
+      .writeText(plainText)
+      .then(() => {
+        console.log('✅ Text copied to clipboard');
+        // You could add a toast notification here
+      })
+      .catch(err => {
+        console.error('Failed to copy text:', err);
+      });
     onClose();
   };
 
   const handleCopyMarkdown = () => {
     const markdown = turndownService.turndown(content);
-    navigator.clipboard.writeText(markdown).then(() => {
-      console.log('✅ Markdown copied to clipboard');
-    }).catch(err => {
-      console.error('Failed to copy markdown:', err);
-    });
+    navigator.clipboard
+      .writeText(markdown)
+      .then(() => {
+        console.log('✅ Markdown copied to clipboard');
+      })
+      .catch(err => {
+        console.error('Failed to copy markdown:', err);
+      });
     onClose();
   };
 
   const handleCopyHTML = () => {
-    navigator.clipboard.writeText(content).then(() => {
-      console.log('✅ HTML copied to clipboard');
-    }).catch(err => {
-      console.error('Failed to copy HTML:', err);
-    });
+    navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        console.log('✅ HTML copied to clipboard');
+      })
+      .catch(err => {
+        console.error('Failed to copy HTML:', err);
+      });
     onClose();
   };
 
@@ -94,9 +103,9 @@ const ExportMenu = ({ content, onClose }) => {
           <Icon name="code" size="sm" />
           {t('canvas.export.copyHTML', 'as HTML')}
         </button>
-        
+
         <hr className="my-2" />
-        
+
         <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
           {t('canvas.export.downloadOptions', 'Download Options')}
         </div>

@@ -25,16 +25,16 @@ const MarkdownPage = () => {
     const loadPageContent = async () => {
       try {
         setLoading(true);
-        
+
         // Use the API service to fetch page content
         const pageData = await fetchPageContent(pageId, { language: currentLanguage });
-        
+
         setPageTitle(pageData.title || '');
         setMarkdownContent(pageData.content || '');
         setError(null);
       } catch (err) {
         console.error('Error fetching page:', err);
-        
+
         // Use the enhanced error info from the API service
         if (err.status === 404) {
           setError('Page not found');
@@ -57,7 +57,7 @@ const MarkdownPage = () => {
     return (
       <div className="text-center py-12">
         <div className="text-red-500 mb-4">{error}</div>
-        <button 
+        <button
           className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
           onClick={() => navigate('/')}
         >
@@ -66,7 +66,7 @@ const MarkdownPage = () => {
       </div>
     );
   }
-  
+
   // Parse the markdown content using marked
   const parsedContent = marked(markdownContent || '');
 
@@ -74,8 +74,7 @@ const MarkdownPage = () => {
     <div className="container mx-auto py-8 px-4 max-w-4xl">
       <MarkdownRenderer />
       <div className="prose prose-sm sm:prose lg:prose-lg mx-auto">
-        <div className="markdown-content" 
-             dangerouslySetInnerHTML={{ __html: parsedContent }}></div>
+        <div className="markdown-content" dangerouslySetInnerHTML={{ __html: parsedContent }}></div>
       </div>
     </div>
   );

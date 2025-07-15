@@ -17,10 +17,10 @@ export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_T
       if (!input) {
         return res.status(400).json({ error: 'Missing input' });
       }
-      
+
       // Try to get models from cache first
       let models = configCache.getModels();
-      
+
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }
@@ -41,14 +41,24 @@ export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_T
       const request = createCompletionRequest(model, messages, apiKey, { stream: false });
       let timeoutId;
       const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT/1000} seconds`)), DEFAULT_TIMEOUT);
+        timeoutId = setTimeout(
+          () => reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT / 1000} seconds`)),
+          DEFAULT_TIMEOUT
+        );
       });
-      const responsePromise = throttledFetch(model.id, request.url, { method: 'POST', headers: request.headers, body: JSON.stringify(request.body) });
+      const responsePromise = throttledFetch(model.id, request.url, {
+        method: 'POST',
+        headers: request.headers,
+        body: JSON.stringify(request.body)
+      });
       const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
       clearTimeout(timeoutId);
       if (!llmResponse.ok) {
         const errorBody = await llmResponse.text();
-        return res.status(llmResponse.status).json({ error: `LLM API request failed with status ${llmResponse.status}`, details: errorBody });
+        return res.status(llmResponse.status).json({
+          error: `LLM API request failed with status ${llmResponse.status}`,
+          details: errorBody
+        });
       }
       const responseData = await llmResponse.json();
       let newPrompt = '';
@@ -56,17 +66,29 @@ export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_T
         newPrompt = responseData.choices?.[0]?.message?.content?.trim() || '';
       } else if (model.provider === 'google') {
         const parts = responseData.candidates?.[0]?.content?.parts || [];
-        newPrompt = parts.map(p => p.text || '').join('').trim();
+        newPrompt = parts
+          .map(p => p.text || '')
+          .join('')
+          .trim();
       } else if (model.provider === 'anthropic') {
         const content = responseData.content;
         if (Array.isArray(content)) {
-          newPrompt = content.map(c => (typeof c === 'string' ? c : c.text || '')).join('').trim();
+          newPrompt = content
+            .map(c => (typeof c === 'string' ? c : c.text || ''))
+            .join('')
+            .trim();
         }
       }
       const inputTokens = responseData.usage?.prompt_tokens ?? estimateTokens(input);
       const outputTokens = responseData.usage?.completion_tokens ?? estimateTokens(newPrompt);
       const userSessionId = req.headers['x-session-id'];
-      await recordMagicPrompt({ userId: userSessionId, appId, modelId: model.id, inputTokens, outputTokens });
+      await recordMagicPrompt({
+        userId: userSessionId,
+        appId,
+        modelId: model.id,
+        inputTokens,
+        outputTokens
+      });
       return res.json({ prompt: newPrompt });
     } catch (error) {
       console.error('Error generating magic prompt:', error);

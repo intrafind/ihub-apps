@@ -2,7 +2,13 @@ import { actionTracker } from '../actionTracker.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
 
-export default async function tavilySearch({ query, q, search_depth = 'basic', max_results = 5, chatId }) {
+export default async function tavilySearch({
+  query,
+  q,
+  search_depth = 'basic',
+  max_results = 5,
+  chatId
+}) {
   const searchQuery = query || q;
   if (!searchQuery) {
     throw new Error('query parameter is required (use "query" or "q")');

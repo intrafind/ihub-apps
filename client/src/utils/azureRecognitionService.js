@@ -1,27 +1,27 @@
-import * as speechSdk from "microsoft-cognitiveservices-speech-sdk";
+import * as speechSdk from 'microsoft-cognitiveservices-speech-sdk';
 
 // const postfix = '?language=de-DE';
-const postfix = "";
+const postfix = '';
 const subscriptionId = import.meta.env.VITE_AZURE_SUBSCRIPTION_ID;
 
 class AzureSpeechRecognition {
   recognition;
-  lang = "de-DE";
-  host = "";
+  lang = 'de-DE';
+  host = '';
 
   constructor() {}
 
   start() {
     this.#triggerOnStart();
 
-    this.recognition.recognizeOnceAsync((result) => {
+    this.recognition.recognizeOnceAsync(result => {
       switch (result.reason) {
         case speechSdk.ResultReason.RecognizedSpeech:
           this.#triggerOnResult(result);
           this.#triggerOnEnd();
           break;
         case speechSdk.ResultReason.NoMatch:
-          this.#triggerOnError({ error: "no-speech" });
+          this.#triggerOnError({ error: 'no-speech' });
 
           break;
         case speechSdk.ResultReason.Canceled:
@@ -33,14 +33,14 @@ class AzureSpeechRecognition {
               case speechSdk.CancellationErrorCode.ServiceError:
               case speechSdk.CancellationErrorCode.TooManyRequests:
               case speechSdk.CancellationErrorCode.AuthenticationFailure:
-                this.#triggerOnError({ error: "not-allowed" });
+                this.#triggerOnError({ error: 'not-allowed' });
                 break;
               case speechSdk.CancellationErrorCode.ServiceTimeout:
               case speechSdk.CancellationErrorCode.ConnectionFailure:
-                this.#triggerOnError({ error: "network" });
+                this.#triggerOnError({ error: 'network' });
                 break;
               default:
-                this.#triggerOnError({ error: "" });
+                this.#triggerOnError({ error: '' });
             }
           }
           break;
@@ -49,24 +49,17 @@ class AzureSpeechRecognition {
     });
   }
 
-
   initRecognizer() {
     try {
       const hostURL = new URL(
         `${this.host}/speech/recognition/interactive/cognitiveservices/v1${postfix}`
       );
-      const speechConfig = speechSdk.SpeechConfig.fromHost(
-        hostURL,
-        subscriptionId
-      );
+      const speechConfig = speechSdk.SpeechConfig.fromHost(hostURL, subscriptionId);
       const audioConfig = speechSdk.AudioConfig.fromDefaultMicrophoneInput();
 
       // No German recognition like this
-      speechConfig.speechRecognitionLanguage = this.lang ?? "de-DE";
-      const recognizer = new speechSdk.SpeechRecognizer(
-        speechConfig,
-        audioConfig
-      );
+      speechConfig.speechRecognitionLanguage = this.lang ?? 'de-DE';
+      const recognizer = new speechSdk.SpeechRecognizer(speechConfig, audioConfig);
       this.recognition = recognizer;
     } catch (e) {
       if (!host) {
@@ -80,8 +73,8 @@ class AzureSpeechRecognition {
 
   // PRIVATE METHODS
   #triggerOnResult(result) {
-    console.log("Triggered onresult...");
-    if ("onresult" in this) {
+    console.log('Triggered onresult...');
+    if ('onresult' in this) {
       this.onresult(result);
       return;
     }
@@ -89,8 +82,8 @@ class AzureSpeechRecognition {
   }
 
   #triggerOnStart() {
-    console.log("Triggered onstart...");
-    if ("onstart" in this) {
+    console.log('Triggered onstart...');
+    if ('onstart' in this) {
       this.onstart();
       return;
     }
@@ -98,8 +91,8 @@ class AzureSpeechRecognition {
   }
 
   #triggerOnError(err) {
-    console.log("Triggered onerror...");
-    if ("onerror" in this) {
+    console.log('Triggered onerror...');
+    if ('onerror' in this) {
       this.onerror(err);
       return;
     }
@@ -107,8 +100,8 @@ class AzureSpeechRecognition {
   }
 
   #triggerOnEnd() {
-    console.log("Triggered onend...");
-    if ("onend" in this) {
+    console.log('Triggered onend...');
+    if ('onend' in this) {
       this.onend();
       return;
     }

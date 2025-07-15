@@ -5,7 +5,11 @@ export function setDefaultLanguage(lang) {
   }
 }
 
-export function getLocalizedContent(content, language = DEFAULT_LANGUAGE, fallbackLanguage = DEFAULT_LANGUAGE) {
+export function getLocalizedContent(
+  content,
+  language = DEFAULT_LANGUAGE,
+  fallbackLanguage = DEFAULT_LANGUAGE
+) {
   if (content === null || content === undefined) return '';
   if (typeof content === 'string') return content;
   if (typeof content === 'object') {
@@ -14,7 +18,8 @@ export function getLocalizedContent(content, language = DEFAULT_LANGUAGE, fallba
       if (content[fallbackLanguage]) return content[fallbackLanguage];
       const available = Object.keys(content);
       if (available.length > 0) {
-        if (language !== DEFAULT_LANGUAGE) console.warn(`Missing translation for language: ${language}`);
+        if (language !== DEFAULT_LANGUAGE)
+          console.warn(`Missing translation for language: ${language}`);
         return content[available[0]];
       }
       return '';

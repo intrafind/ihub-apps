@@ -20,7 +20,7 @@ class NonStreamingHandler {
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = setTimeout(() => {
-        reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT/1000} seconds`));
+        reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT / 1000} seconds`));
       }, DEFAULT_TIMEOUT);
     });
 
@@ -30,7 +30,7 @@ class NonStreamingHandler {
         headers: request.headers,
         body: JSON.stringify(request.body)
       });
-      
+
       const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
       clearTimeout(timeoutId);
 
@@ -43,9 +43,9 @@ class NonStreamingHandler {
             code: llmResponse.status.toString()
           }
         });
-        
+
         await logInteraction('chat_error', errorLog);
-        
+
         return res.status(llmResponse.status).json({
           error: `LLM API request failed with status ${llmResponse.status}`,
           details: errorBody
@@ -58,42 +58,45 @@ class NonStreamingHandler {
       const promptTokens = responseData.usage?.prompt_tokens || 0;
       const completionTokens = responseData.usage?.completion_tokens || 0;
       const baseLog = buildLogData(false);
-      
-      await recordChatRequest({ 
-        userId: baseLog.userSessionId, 
-        appId: baseLog.appId, 
-        modelId: model.id, 
-        tokens: promptTokens 
+
+      await recordChatRequest({
+        userId: baseLog.userSessionId,
+        appId: baseLog.appId,
+        modelId: model.id,
+        tokens: promptTokens
       });
 
       let aiResponse = '';
       if (responseData.choices && responseData.choices.length > 0) {
         aiResponse = responseData.choices[0].message?.content || '';
       }
-      
+
       const responseLog = buildLogData(false, {
         responseType: 'success',
         response: aiResponse.substring(0, 1000)
       });
-      
+
       await logInteraction('chat_response', responseLog);
-      await recordChatResponse({ 
-        userId: baseLog.userSessionId, 
-        appId: baseLog.appId, 
-        modelId: model.id, 
-        tokens: completionTokens 
+      await recordChatResponse({
+        userId: baseLog.userSessionId,
+        appId: baseLog.appId,
+        modelId: model.id,
+        tokens: completionTokens
       });
 
       return res.json(responseData);
     } catch (fetchError) {
       clearTimeout(timeoutId);
       const errorDetails = getErrorDetails(fetchError, model);
-      
-      await logInteraction('chat_error', buildLogData(false, {
-        responseType: 'error',
-        error: { message: errorDetails.message, code: errorDetails.code }
-      }));
-      
+
+      await logInteraction(
+        'chat_error',
+        buildLogData(false, {
+          responseType: 'error',
+          error: { message: errorDetails.message, code: errorDetails.code }
+        })
+      );
+
       return res.status(500).json({
         error: errorDetails.message,
         code: errorDetails.code,

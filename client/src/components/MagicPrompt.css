@@ -21,7 +21,8 @@
 }
 
 @keyframes magicPromptFlash {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.3;
   }
   50% {

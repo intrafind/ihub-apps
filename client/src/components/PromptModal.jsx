@@ -47,7 +47,7 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
           {highlightVariables(prompt.description || prompt.prompt)}
         </p>
         <pre className="bg-gray-100 p-3 rounded whitespace-pre-wrap break-words mb-4">
-{prompt.prompt}
+          {prompt.prompt}
         </pre>
         <div className="flex flex-wrap justify-end gap-2">
           <button
@@ -73,10 +73,16 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
             </Link>
           )}
           <button
-            onClick={() => { onToggleFavorite(prompt.id); }}
+            onClick={() => {
+              onToggleFavorite(prompt.id);
+            }}
             className="px-3 py-1 text-sm border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50 flex items-center"
           >
-            <Icon name="star" className={isFavorite ? 'text-yellow-500' : 'text-gray-600'} solid={isFavorite} />
+            <Icon
+              name="star"
+              className={isFavorite ? 'text-yellow-500' : 'text-gray-600'}
+              solid={isFavorite}
+            />
           </button>
           <button
             onClick={handleShare}

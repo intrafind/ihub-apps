@@ -11,7 +11,7 @@ const GoogleAdapter = {
     // Extract system message for separate handling
     let systemInstruction = '';
     const geminiContents = [];
-    
+
     // First pass - extract system messages and handle image data
     for (const message of messages) {
       if (message.role === 'system') {
@@ -39,7 +39,11 @@ const GoogleAdapter = {
         });
       } else {
         // Handle assistant messages with tool calls
-        if (message.role === 'assistant' && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+        if (
+          message.role === 'assistant' &&
+          Array.isArray(message.tool_calls) &&
+          message.tool_calls.length > 0
+        ) {
           const parts = [];
           if (message.content) {
             parts.push({ text: message.content });
@@ -65,19 +69,19 @@ const GoogleAdapter = {
 
         // Convert OpenAI roles to Gemini roles
         const geminiRole = message.role === 'assistant' ? 'model' : 'user';
-        
+
         const textContent = message.content;
-        
+
         // Check if this message contains image data
         if (message.imageData && message.imageData.base64) {
           // For image messages, we need to create a parts array with both text and image
           const parts = [];
-          
+
           // Add text part if content exists (possibly including file content)
           if (textContent) {
             parts.push({ text: textContent });
           }
-          
+
           // Add image part
           parts.push({
             inlineData: {
@@ -85,7 +89,7 @@ const GoogleAdapter = {
               data: message.imageData.base64.replace(/^data:image\/[a-z]+;base64,/, '') // Remove data URL prefix if present
             }
           });
-          
+
           geminiContents.push({ role: geminiRole, parts });
         } else {
           // Regular text message (possibly including file content)
@@ -96,12 +100,20 @@ const GoogleAdapter = {
         }
       }
     }
-    
+
     // Debug logs to trace message transformation
-    console.log('Original messages:', JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData }))));
-    console.log('Transformed Gemini contents:', JSON.stringify(geminiContents.map(c => ({ role: c.role, partTypes: c.parts.map(p => Object.keys(p)[0]) }))));
+    console.log(
+      'Original messages:',
+      JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData })))
+    );
+    console.log(
+      'Transformed Gemini contents:',
+      JSON.stringify(
+        geminiContents.map(c => ({ role: c.role, partTypes: c.parts.map(p => Object.keys(p)[0]) }))
+      )
+    );
     console.log('System instruction:', systemInstruction);
-    
+
     // Return both regular messages and the system instruction
     return {
       contents: geminiContents,
@@ -113,18 +125,24 @@ const GoogleAdapter = {
    * Create a completion request for Gemini
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true, tools = null, responseFormat = null, responseSchema = null } = options;
-    
+    const {
+      temperature = 0.7,
+      stream = true,
+      tools = null,
+      responseFormat = null,
+      responseSchema = null
+    } = options;
+
     // Format messages and extract system instruction
     const { contents, systemInstruction } = this.formatMessages(messages);
-    
+
     // Build Gemini API URL with API key
     let url;
     if (stream) {
       // For streaming requests, use the streamGenerateContent endpoint with alt=sse
       // Ensure the URL ends with streamGenerateContent for streaming
-      const baseUrl = model.url.includes(':streamGenerateContent') 
-        ? model.url 
+      const baseUrl = model.url.includes(':streamGenerateContent')
+        ? model.url
         : model.url.replace(':generateContent', ':streamGenerateContent');
       url = `${baseUrl}?alt=sse&key=${apiKey}`;
     } else {
@@ -132,7 +150,7 @@ const GoogleAdapter = {
       const nonStreamingUrl = model.url.replace(':streamGenerateContent', ':generateContent');
       url = `${nonStreamingUrl}?key=${apiKey}`;
     }
-    
+
     // Build request body
     const requestBody = {
       contents,
@@ -151,7 +169,7 @@ const GoogleAdapter = {
         requestBody.generationConfig.response_schema = responseSchema;
       }
     }
-    
+
     // Add system instruction if present
     if (systemInstruction) {
       requestBody.systemInstruction = { parts: [{ text: systemInstruction }] };
@@ -189,7 +207,11 @@ const GoogleAdapter = {
 
         // Handle full response object (non-streaming) - detect by presence of finishReason at the top level
         // OR if the response contains all expected fields for a complete response
-        if (parsed.candidates && parsed.candidates[0]?.finishReason && parsed.candidates[0]?.content?.parts?.[0]) {
+        if (
+          parsed.candidates &&
+          parsed.candidates[0]?.finishReason &&
+          parsed.candidates[0]?.content?.parts?.[0]
+        ) {
           // This is a complete non-streaming response
           const part = parsed.candidates[0].content.parts[0];
           if (part.text) {
@@ -242,8 +264,6 @@ const GoogleAdapter = {
           }
         }
 
-        
-
         // TODO we should make use of the candidate metadata
         // if (parsed.candidates && parsed.candidates[0]?.safetyRatings) {
         //   result.thinking.push({ type: 'safety', info: parsed.candidates[0].safetyRatings });
@@ -281,15 +301,19 @@ const GoogleAdapter = {
       } catch (jsonError) {
         console.error('Failed to parse Google response as JSON:', jsonError.message);
         console.error('Raw response data that failed to parse:', data);
-        
+
         // Check if this is an error response from Google API
         if (data.includes('callbacks') && data.includes('function')) {
-          console.error('Google API returned a callbacks-related error. This suggests an issue with the request format.');
+          console.error(
+            'Google API returned a callbacks-related error. This suggests an issue with the request format.'
+          );
           result.error = true;
-          result.errorMessage = data.includes('`callbacks`') ? data : 'Google API error related to callbacks parameter';
+          result.errorMessage = data.includes('`callbacks`')
+            ? data
+            : 'Google API error related to callbacks parameter';
           return result;
         }
-        
+
         // Fallback to regex if JSON parsing fails
         const textMatches = data.match(/"text":\s*"([^"]*)"/g);
         if (textMatches) {
@@ -305,7 +329,10 @@ const GoogleAdapter = {
         } else if (data.includes('"finishReason": "MAX_TOKENS"')) {
           result.finishReason = 'length';
           result.complete = true;
-        } else if (data.includes('"finishReason": "SAFETY"') || data.includes('"finishReason": "RECITATION"')) {
+        } else if (
+          data.includes('"finishReason": "SAFETY"') ||
+          data.includes('"finishReason": "RECITATION"')
+        ) {
           result.finishReason = 'content_filter';
           result.complete = true;
         }

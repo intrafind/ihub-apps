@@ -12,11 +12,11 @@ const AnthropicAdapter = {
     // Anthropic expects system messages as a separate parameter
     const systemMessage = messages.find(msg => msg.role === 'system');
     const filteredMessages = messages.filter(msg => msg.role !== 'system');
-    
+
     // Process messages to handle image data
     const processedMessages = filteredMessages.map(msg => {
       const content = msg.content;
-      
+
       // If the message doesn't have image data, return a clean message with text content (possibly including file content)
       if (!msg.imageData) {
         return {
@@ -24,43 +24,51 @@ const AnthropicAdapter = {
           content: content
         };
       }
-      
+
       // For messages with images, convert to Anthropic's format with content array
       const contentArray = [];
-      
+
       // Add text content if it exists (possibly including file content)
       if (content && content.trim()) {
         contentArray.push({
-          type: "text",
+          type: 'text',
           text: content
         });
       }
-      
+
       // Add image content
       contentArray.push({
-        type: "image",
+        type: 'image',
         source: {
-          type: "base64",
-          media_type: msg.imageData.fileType || "image/jpeg",
+          type: 'base64',
+          media_type: msg.imageData.fileType || 'image/jpeg',
           data: msg.imageData.base64.replace(/^data:image\/[a-z]+;base64,/, '') // Remove data URL prefix if present
         }
       });
-      
+
       // Return the message with content array instead of content string
       return {
         role: msg.role,
         content: contentArray
       };
     });
-    
+
     // Debug logs
-    console.log('Original messages:', JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData }))));
-    console.log('Processed Anthropic messages:', JSON.stringify(processedMessages.map(m => ({ 
-      role: m.role, 
-      contentType: Array.isArray(m.content) ? 'array' : 'string',
-      contentItems: Array.isArray(m.content) ? m.content.map(c => c.type) : null
-    }))));
-    
+    console.log(
+      'Original messages:',
+      JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData })))
+    );
+    console.log(
+      'Processed Anthropic messages:',
+      JSON.stringify(
+        processedMessages.map(m => ({
+          role: m.role,
+          contentType: Array.isArray(m.content) ? 'array' : 'string',
+          contentItems: Array.isArray(m.content) ? m.content.map(c => c.type) : null
+        }))
+      )
+    );
+
     return {
       messages: processedMessages,
       systemPrompt: systemMessage?.content || ''
@@ -71,15 +79,22 @@ const AnthropicAdapter = {
    * Create a completion request for Anthropic
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature = 0.7, stream = true, maxTokens = 1024, tools = null, responseFormat = null, responseSchema = null } = options;
-    
+    const {
+      temperature = 0.7,
+      stream = true,
+      maxTokens = 1024,
+      tools = null,
+      responseFormat = null,
+      responseSchema = null
+    } = options;
+
     // Format messages and extract system prompt
     const { messages: formattedMessages, systemPrompt } = this.formatMessages(messages);
-    
+
     // Note: We don't throw an error here for missing API keys
     // Instead we let the server's verifyApiKey function handle this consistently
     // This ensures proper localization of error messages
-    
+
     const requestBody = {
       model: model.modelId,
       messages: formattedMessages,
@@ -107,14 +122,14 @@ const AnthropicAdapter = {
     // } else if (responseFormat && responseFormat === 'json') {
     //   requestBody.response_format = 'json';
     // }
-    
+
     // Only add system parameter if we have a system message
     if (systemPrompt) {
       requestBody.system = systemPrompt;
     }
 
     console.log('Anthropic request body:', requestBody);
-    
+
     return {
       url: model.url,
       headers: {
@@ -159,35 +174,39 @@ const AnthropicAdapter = {
           result.content.push(parsed.delta.content);
         }
         if (parsed.delta.stop_reason) {
-          result.finishReason = parsed.delta.stop_reason === 'tool_use' ? 'tool_calls' : parsed.delta.stop_reason;
+          result.finishReason =
+            parsed.delta.stop_reason === 'tool_use' ? 'tool_calls' : parsed.delta.stop_reason;
         }
       }
 
       // Tool streaming events
       if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'tool_use') {
-        result.tool_calls.push({ 
-          index: parsed.index, 
-          id: parsed.content_block.id, 
+        result.tool_calls.push({
+          index: parsed.index,
+          id: parsed.content_block.id,
           type: 'function',
-          function: { 
-            name: parsed.content_block.name, 
-            arguments: '' 
-          } 
+          function: {
+            name: parsed.content_block.name,
+            arguments: ''
+          }
         });
-      } else if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'input_json_delta') {
+      } else if (
+        parsed.type === 'content_block_delta' &&
+        parsed.delta?.type === 'input_json_delta'
+      ) {
         // Accumulate arguments for the tool call at this index
         const existingToolCall = result.tool_calls.find(tc => tc.index === parsed.index);
         if (existingToolCall) {
           existingToolCall.function.arguments += parsed.delta.partial_json || '';
         } else {
           // Fallback: create new tool call if not found
-          result.tool_calls.push({ 
-            index: parsed.index, 
+          result.tool_calls.push({
+            index: parsed.index,
             type: 'function',
-            function: { 
-              name: '', 
-              arguments: parsed.delta.partial_json || '' 
-            } 
+            function: {
+              name: '',
+              arguments: parsed.delta.partial_json || ''
+            }
           });
         }
       }
@@ -196,7 +215,8 @@ const AnthropicAdapter = {
         result.complete = true;
         // Don't override finishReason if it was already set to 'tool_calls' from earlier events
         if (!result.finishReason || result.finishReason !== 'tool_calls') {
-          result.finishReason = parsed.stop_reason === 'tool_use' ? 'tool_calls' : (parsed.stop_reason || 'stop');
+          result.finishReason =
+            parsed.stop_reason === 'tool_use' ? 'tool_calls' : parsed.stop_reason || 'stop';
         }
       }
     } catch (parseError) {

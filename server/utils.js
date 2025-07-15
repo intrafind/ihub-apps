@@ -1,6 +1,6 @@
-import { loadJson } from "./configLoader.js";
-import config from "./config.js";
-import { createCompletionRequest, processResponseBuffer } from "./adapters/index.js";
+import { loadJson } from './configLoader.js';
+import config from './config.js';
+import { createCompletionRequest, processResponseBuffer } from './adapters/index.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -17,22 +17,22 @@ export async function getApiKeyForModel(modelId) {
   try {
     // Try to get models from cache first
     let models = configCache.getModels();
-    
+
     if (!models) {
       console.error('Failed to load models configuration');
       return null;
     }
-    
+
     // Find the model by ID
     const model = models.find(m => m.id === modelId);
     if (!model) {
       console.error(`Model not found: ${modelId}`);
       return null;
     }
-    
+
     // Get the provider for this model
     const provider = model.provider;
-    
+
     // Check for provider-specific API keys
     switch (provider) {
       case 'openai':
@@ -53,13 +53,13 @@ export async function getApiKeyForModel(modelId) {
         if (genericKey) {
           return genericKey;
         }
-        
+
         // Check for a default API key as last resort
         if (config.DEFAULT_API_KEY) {
           console.log(`Using DEFAULT_API_KEY for provider: ${provider}`);
           return config.DEFAULT_API_KEY;
         }
-        
+
         console.error(`No API key found for provider: ${provider}`);
         return null;
     }
@@ -68,7 +68,6 @@ export async function getApiKeyForModel(modelId) {
     return null;
   }
 }
-
 
 /**
  * Get detailed error information from fetch errors
@@ -86,47 +85,54 @@ export function getErrorDetails(error, model) {
     isTimeout: false,
     recommendation: ''
   };
-  
+
   // Check if it's a connection error
-  if (error.code === 'ECONNREFUSED' || 
-      (error.cause && error.cause.code === 'ECONNREFUSED') ||
-      error.message.includes('ECONNREFUSED')) {
+  if (
+    error.code === 'ECONNREFUSED' ||
+    (error.cause && error.cause.code === 'ECONNREFUSED') ||
+    error.message.includes('ECONNREFUSED')
+  ) {
     errorDetails.isConnectionError = true;
     errorDetails.code = 'ECONNREFUSED';
-    
+
     // Create user-friendly messages based on the model provider
     if (model?.provider === 'local') {
       errorDetails.message = `Could not connect to local model server (${model.id}). Is the local model server running?`;
-      errorDetails.recommendation = 'Please ensure your local model server is running and properly configured.';
+      errorDetails.recommendation =
+        'Please ensure your local model server is running and properly configured.';
     } else {
       errorDetails.message = `Connection refused while trying to access ${model?.provider || 'unknown'} API for model ${model?.id || 'unknown'}.`;
       errorDetails.recommendation = 'Please check your network connection and firewall settings.';
     }
   }
-  
+
   // Check if it's a timeout error
-  if (error.code === 'ETIMEDOUT' || 
-      (error.cause && error.cause.code === 'ETIMEDOUT') ||
-      error.message.includes('timed out') ||
-      error.message.includes('timeout')) {
+  if (
+    error.code === 'ETIMEDOUT' ||
+    (error.cause && error.cause.code === 'ETIMEDOUT') ||
+    error.message.includes('timed out') ||
+    error.message.includes('timeout')
+  ) {
     errorDetails.isTimeout = true;
     errorDetails.code = 'ETIMEDOUT';
     errorDetails.message = `Request to ${model?.provider || 'unknown'} API timed out for model ${model?.id || 'unknown'}.`;
-    errorDetails.recommendation = 'The service might be experiencing high load. Please try again later.';
+    errorDetails.recommendation =
+      'The service might be experiencing high load. Please try again later.';
   }
-  
+
   // Additional provider-specific error handling
   if (model?.provider === 'local' && errorDetails.isConnectionError) {
     errorDetails.message = `Could not connect to local model server for ${model.id}. Make sure the server is running on the configured address and port.`;
-    errorDetails.recommendation = `If you wanted to use a cloud model instead, you can modify your app's configuration to use a different model.`;
+    errorDetails.recommendation =
+      "If you wanted to use a cloud model instead, you can modify your app's configuration to use a different model.";
   }
-  
+
   return errorDetails;
 }
 
 /**
  * Logs user interactions with the AI Hub Apps
- * 
+ *
  * @param {Object} data - The interaction data to log
  * @param {string} data.appId - The ID of the app being used
  * @param {string} data.modelId - The ID of the model being used
@@ -144,14 +150,14 @@ export function getErrorDetails(error, model) {
 export async function logInteraction(interactionType, data) {
   try {
     const timestamp = new Date().toISOString();
-    
+
     // Determine the log entry type based on data provided
     let logType = interactionType || 'unknown'; // Use the provided interactionType or default to 'interaction'
-    
+
     // CRITICAL CHANGE: For feedback logs, use the exact messageId that was provided
     // This ensures the feedback log has the same interactionId as the request/response logs
     let interactionId;
-    
+
     if (logType === 'feedback' && data.messageId) {
       // For feedback, use the exact messageId that was provided without modification
       interactionId = data.messageId;
@@ -162,7 +168,7 @@ export async function logInteraction(interactionType, data) {
       // If no messageId provided, generate a new one
       interactionId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     }
-    
+
     // Build the log entry with standard fields
     const logEntry = {
       type: logType,
@@ -171,28 +177,29 @@ export async function logInteraction(interactionType, data) {
       appId: data.appId || 'direct',
       modelId: data.modelId,
       sessionId: data.sessionId, // This is the chatId
-      userSessionId: data.userSessionId, // This is the browser session ID
+      userSessionId: data.userSessionId // This is the browser session ID
     };
-    
+
     // Extract the user's query (last user message) if messages exist
     if (data.messages && Array.isArray(data.messages)) {
       const userMessages = data.messages.filter(m => m.role === 'user');
-      const userQuery = userMessages.length > 0 ? userMessages[userMessages.length - 1].content : '';
-      
+      const userQuery =
+        userMessages.length > 0 ? userMessages[userMessages.length - 1].content : '';
+
       logEntry.query = userQuery;
       logEntry.messageCount = data.messages.length;
     }
-    
+
     // Add options if provided
     if (data.options) {
       logEntry.options = data.options;
     }
-    
+
     // Add response if provided
     if (data.response) {
       logEntry.response = data.response.substring(0, 1000); // Store response content, truncated if needed
     }
-    
+
     // Add error if provided
     if (data.error) {
       logEntry.responseType = 'error'; // Mark this explicitly as an error response
@@ -201,31 +208,39 @@ export async function logInteraction(interactionType, data) {
         code: data.error.code
       };
     }
-    
+
     // Add feedback if provided
     if (data.feedback) {
       logEntry.feedback = data.feedback;
     }
-    
+
     // For debugging purposes, log to console with appropriate type prefix
     if (logType === 'feedback') {
-      console.log(`[FEEDBACK] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} | Rating: ${data.feedback?.rating || 'unknown'}`);
+      console.log(
+        `[FEEDBACK] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} | Rating: ${data.feedback?.rating || 'unknown'}`
+      );
     } else if (logType === 'chat_response') {
-      console.log(`[CHAT_RESPONSE] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId}`);
+      console.log(
+        `[CHAT_RESPONSE] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId}`
+      );
     } else if (logType === 'chat_request') {
-      const queryPreview = logEntry.query ? `| Query: ${logEntry.query.substring(0, 50)}${logEntry.query.length > 50 ? '...' : ''}` : '';
-      console.log(`[CHAT_REQUEST] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${queryPreview}`);
+      const queryPreview = logEntry.query
+        ? `| Query: ${logEntry.query.substring(0, 50)}${logEntry.query.length > 50 ? '...' : ''}`
+        : '';
+      console.log(
+        `[CHAT_REQUEST] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${queryPreview}`
+      );
     } else {
-      console.log(`[INTERACTION] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId}`);
+      console.log(
+        `[INTERACTION] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId}`
+      );
     }
-    
+
     // Write to log file
     await appendToLogFile(logEntry);
 
-    
     // Return the interaction ID so it can be used to link requests, responses, and feedback
     return interactionId;
-    
   } catch (error) {
     // Don't let logging errors affect the main application flow
     console.error('Error logging interaction:', error);
@@ -235,7 +250,7 @@ export async function logInteraction(interactionType, data) {
 
 /**
  * Append log entry to the log file
- * 
+ *
  * @param {Object} logEntry - The log entry to append
  * @returns {Promise<void>}
  */
@@ -243,7 +258,7 @@ async function appendToLogFile(logEntry) {
   try {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    
+
     // Create logs directory if it doesn't exist
     const logsDir = path.join(__dirname, '../logs');
     try {
@@ -251,17 +266,13 @@ async function appendToLogFile(logEntry) {
     } catch (err) {
       if (err.code !== 'EEXIST') throw err;
     }
-    
+
     // Create log file path with today's date
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const logFilePath = path.join(logsDir, `interactions-${today}.log`);
-    
+
     // Append log entry to file
-    await fs.appendFile(
-      logFilePath, 
-      JSON.stringify(logEntry) + '\n',
-      'utf8'
-    );
+    await fs.appendFile(logFilePath, JSON.stringify(logEntry) + '\n', 'utf8');
   } catch (error) {
     console.error('Error writing to log file:', error);
   }
@@ -269,7 +280,7 @@ async function appendToLogFile(logEntry) {
 
 /**
  * Create a session tracker for chat sessions
- * 
+ *
  * @param {string} chatId - The chat/session ID
  * @param {Object} info - Additional session info
  * @returns {string} The session ID
@@ -278,9 +289,11 @@ export function trackSession(chatId, info = {}) {
   try {
     // Log chat session start, including both chatId and userSessionId if available
     const userSessionId = info.userSessionId || 'unknown';
-    
-    console.log(`[CHAT STARTED] Chat ID: ${chatId} | User Session: ${userSessionId} | App: ${info.appId || 'unknown'}`);
-    
+
+    console.log(
+      `[CHAT STARTED] Chat ID: ${chatId} | User Session: ${userSessionId} | App: ${info.appId || 'unknown'}`
+    );
+
     // Store the chat session info in a log file
     appendToLogFile({
       type: 'chat_started',
@@ -292,7 +305,7 @@ export function trackSession(chatId, info = {}) {
     }).catch(error => {
       console.error('Error logging chat session start:', error);
     });
-    
+
     return chatId;
   } catch (error) {
     console.error('Error tracking chat session:', error);
@@ -302,7 +315,7 @@ export function trackSession(chatId, info = {}) {
 
 /**
  * Logs a new user session when it begins
- * 
+ *
  * @param {string} chatId - The chat/session ID
  * @param {string} appId - The app being used
  * @param {Object} metadata - Additional metadata about the session
@@ -311,7 +324,7 @@ export function trackSession(chatId, info = {}) {
 export async function logNewSession(chatId, appId, metadata = {}) {
   try {
     const timestamp = new Date().toISOString();
-    
+
     // Build the log entry
     const logEntry = {
       type: 'session_start',
@@ -320,12 +333,12 @@ export async function logNewSession(chatId, appId, metadata = {}) {
       appId: appId || 'unknown',
       userAgent: metadata.userAgent || 'unknown',
       ipAddress: metadata.ipAddress || 'unknown',
-      language: metadata.language || (configCache.getPlatform()?.defaultLanguage || 'en'),
+      language: metadata.language || configCache.getPlatform()?.defaultLanguage || 'en',
       referrer: metadata.referrer || 'unknown'
     };
-    
+
     console.log(`[NEW SESSION] ${timestamp} | Session ID: ${chatId} | App: ${appId}`);
-    
+
     // Write to log file
     await appendToLogFile(logEntry);
   } catch (error) {
@@ -358,10 +371,17 @@ export async function simpleCompletion(
 ) {
   const resolvedModelId = modelId || model;
 
-  console.log('Starting simple completion...', { messages: JSON.stringify(messages, null, 2), modelId: resolvedModelId, temperature });
+  console.log('Starting simple completion...', {
+    messages: JSON.stringify(messages, null, 2),
+    modelId: resolvedModelId,
+    temperature
+  });
   // Try to get models from cache first
   let models = configCache.getModels();
-  console.log('Available models:', models.map(m => m.id));
+  console.log(
+    'Available models:',
+    models.map(m => m.id)
+  );
 
   const modelConfig = models.find(m => m.id === resolvedModelId);
   console.log('Using model:', modelConfig);
@@ -374,9 +394,7 @@ export async function simpleCompletion(
     throw new Error(`API key for ${modelConfig.provider} not found in environment variables.`);
   }
 
-  const msgArray = Array.isArray(messages)
-    ? messages
-    : [{ role: 'user', content: messages }];
+  const msgArray = Array.isArray(messages) ? messages : [{ role: 'user', content: messages }];
 
   const request = createCompletionRequest(modelConfig, msgArray, apiKey, {
     temperature,
@@ -401,7 +419,7 @@ export async function simpleCompletion(
 
   // Use the adapter to parse the response
   const parsed = processResponseBuffer(modelConfig.provider, JSON.stringify(responseData));
-  
+
   // Return both content and usage data
   return {
     content: parsed.content.join(''),

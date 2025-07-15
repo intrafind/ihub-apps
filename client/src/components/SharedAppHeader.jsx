@@ -17,7 +17,7 @@ const SharedAppHeader = ({
   onClearChat,
   onClearCanvas,
   currentLanguage,
-  
+
   // Settings props
   models,
   styles,
@@ -31,11 +31,11 @@ const SharedAppHeader = ({
   onOutputFormatChange,
   onSendChatHistoryChange,
   onTemperatureChange,
-  
+
   // Config panel state
   showConfig,
   onToggleConfig,
-  
+
   // Chat-specific props
   onToggleParameters,
   showParameters,
@@ -61,17 +61,12 @@ const SharedAppHeader = ({
   };
 
   // Determine if we should show the clear button
-  const showClearButton = mode === 'canvas' 
-    ? (messages.length > 0 || editorContent.trim())
-    : messages.length > 0;
+  const showClearButton =
+    mode === 'canvas' ? messages.length > 0 || editorContent.trim() : messages.length > 0;
 
   // App icon based on mode
   const appIcon = (
-    <Icon 
-      name={mode === 'canvas' ? 'edit' : 'chat'} 
-      size="lg" 
-      className="text-white" 
-    />
+    <Icon name={mode === 'canvas' ? 'edit' : 'chat'} size="lg" className="text-white" />
   );
 
   return (
@@ -102,9 +97,11 @@ const SharedAppHeader = ({
 
       {/* Configuration Panel */}
       {showConfig && (
-        <div className={`flex-shrink-0 bg-white p-4 rounded-lg mb-4 shadow-sm border border-gray-200 ${
-          mode === 'canvas' ? 'canvas-config-panel' : 'bg-gray-100'
-        }`}>
+        <div
+          className={`flex-shrink-0 bg-white p-4 rounded-lg mb-4 shadow-sm border border-gray-200 ${
+            mode === 'canvas' ? 'canvas-config-panel' : 'bg-gray-100'
+          }`}
+        >
           <AppConfigForm
             app={app}
             models={models}

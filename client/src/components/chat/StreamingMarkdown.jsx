@@ -29,7 +29,7 @@ const StreamingMarkdown = ({ content }) => {
         const parsedContent = marked(content);
         setHtmlContent(parsedContent);
         contentLengthRef.current = content.length;
-        
+
         // Force a complete re-render by updating the key
         setRenderKey(prevKey => prevKey + 1);
       } catch (error) {
@@ -37,7 +37,6 @@ const StreamingMarkdown = ({ content }) => {
       }
     }
   }, [content]);
-
 
   return (
     <>

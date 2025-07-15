@@ -25,9 +25,15 @@
 
 /* Animation for chat bubble typing */
 @keyframes blink {
-  0% { opacity: 0.2; }
-  20% { opacity: 1; }
-  100% { opacity: 0.2; }
+  0% {
+    opacity: 0.2;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.2;
+  }
 }
 
 .animate-pulse {
@@ -85,7 +91,8 @@
 }
 
 .markdown-content .code-block-toolbar {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
@@ -223,7 +230,9 @@ div .markdown-content .code-block-toolbar > div,
   @apply p-4 border border-gray-300 rounded-lg mb-4;
 }
 
-.rendered-html-content input, .rendered-html-content select, .rendered-html-content textarea {
+.rendered-html-content input,
+.rendered-html-content select,
+.rendered-html-content textarea {
   @apply border border-gray-300 rounded px-3 py-2 mb-2 w-full;
 }
 
@@ -269,13 +278,13 @@ div .markdown-content .code-block-toolbar > div,
     background: white;
     z-index: 10;
   }
-  
+
   /* Ensure that the chat container doesn't grow beyond viewport */
   .flex-1.overflow-y-auto {
     flex: 1 1 0%;
     min-height: 0;
   }
-  
+
   /* Fix for when the parameters panel is open */
   .md:hidden.mb-4.p-4.bg-gray-50.rounded-lg + div .flex-1.overflow-y-auto {
     max-height: calc(100vh - 400px);

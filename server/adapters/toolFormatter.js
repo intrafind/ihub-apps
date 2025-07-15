@@ -22,11 +22,13 @@ export function formatToolsForAnthropic(tools = []) {
 }
 
 export function formatToolsForGoogle(tools = []) {
-  return [{
-    functionDeclarations: tools.map(t => ({
-      name: normalizeName(t.id || t.name),
-      description: t.description || '',
-      parameters: t.parameters || { type: 'object', properties: {} }
-    }))
-  }];
+  return [
+    {
+      functionDeclarations: tools.map(t => ({
+        name: normalizeName(t.id || t.name),
+        description: t.description || '',
+        parameters: t.parameters || { type: 'object', properties: {} }
+      }))
+    }
+  ];
 }

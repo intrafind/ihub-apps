@@ -41,4 +41,3 @@ export const resetChatId = (appId, prefix = 'chat') => {
     return `${prefix}-${uuidv4()}`;
   }
 };
-

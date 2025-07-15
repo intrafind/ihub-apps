@@ -5,7 +5,7 @@ import { randomBytes } from 'crypto';
 /**
  * Atomically write data to a file using a temporary file and rename
  * This prevents data corruption from partial writes
- * 
+ *
  * @param {string} filePath - The target file path
  * @param {string} data - The data to write
  * @param {string} encoding - File encoding (default: 'utf8')
@@ -15,11 +15,11 @@ export async function atomicWriteFile(filePath, data, encoding = 'utf8') {
   const dir = dirname(filePath);
   const tempSuffix = randomBytes(8).toString('hex');
   const tempPath = join(dir, `.tmp_${tempSuffix}`);
-  
+
   try {
     // Write to temporary file first
     await fs.writeFile(tempPath, data, encoding);
-    
+
     // Atomically rename temp file to target file
     await fs.rename(tempPath, filePath);
   } catch (error) {
@@ -35,7 +35,7 @@ export async function atomicWriteFile(filePath, data, encoding = 'utf8') {
 
 /**
  * Atomically write JSON data to a file with pretty formatting
- * 
+ *
  * @param {string} filePath - The target file path
  * @param {any} data - The data to serialize as JSON
  * @returns {Promise<void>}

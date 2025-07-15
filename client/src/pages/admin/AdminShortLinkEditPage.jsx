@@ -1,27 +1,27 @@
-import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
-import AdminNavigation from "../../components/AdminNavigation";
-import AdminAuth from "../../components/AdminAuth";
-import { makeAdminApiCall } from "../../api/adminApi";
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import AdminNavigation from '../../components/AdminNavigation';
+import AdminAuth from '../../components/AdminAuth';
+import { makeAdminApiCall } from '../../api/adminApi';
 
 const AdminShortLinkEditPage = () => {
   const { code } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const isNew = code === "new";
+  const isNew = code === 'new';
 
   const [link, setLink] = useState({
-    code: "",
-    appId: "",
-    userId: "",
-    path: "",
-    url: "",
+    code: '',
+    appId: '',
+    userId: '',
+    path: '',
+    url: '',
     includeParams: false,
     params: {},
-    expiresAt: "",
+    expiresAt: ''
   });
-  const [paramsText, setParamsText] = useState("{}");
+  const [paramsText, setParamsText] = useState('{}');
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -35,7 +35,7 @@ const AdminShortLinkEditPage = () => {
           setLink({
             ...data,
             params: data.params || {},
-            expiresAt: data.expiresAt || "",
+            expiresAt: data.expiresAt || ''
           });
           setParamsText(JSON.stringify(data.params || {}, null, 2));
         } catch (e) {
@@ -48,35 +48,33 @@ const AdminShortLinkEditPage = () => {
   }, [code, isNew]);
 
   const handleChange = (field, value) => {
-    setLink((l) => ({ ...l, [field]: value }));
+    setLink(l => ({ ...l, [field]: value }));
   };
 
-  const handleSave = async (e) => {
+  const handleSave = async e => {
     e.preventDefault();
     let parsedParams = {};
     if (paramsText.trim()) {
       try {
         parsedParams = JSON.parse(paramsText);
       } catch (err) {
-        setError(t("admin.shortlinks.invalidParams", "Invalid params JSON"));
+        setError(t('admin.shortlinks.invalidParams', 'Invalid params JSON'));
         return;
       }
     }
     setSaving(true);
     try {
-      const method = isNew ? "POST" : "PUT";
-      const url = isNew ? "/api/shortlinks" : `/api/shortlinks/${code}`;
+      const method = isNew ? 'POST' : 'PUT';
+      const url = isNew ? '/api/shortlinks' : `/api/shortlinks/${code}`;
       await makeAdminApiCall(url, {
         method,
         body: JSON.stringify({
           ...link,
           params: parsedParams,
-          expiresAt: link.expiresAt
-            ? new Date(link.expiresAt).toISOString()
-            : null,
-        }),
+          expiresAt: link.expiresAt ? new Date(link.expiresAt).toISOString() : null
+        })
       });
-      navigate("/admin/shortlinks");
+      navigate('/admin/shortlinks');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -99,64 +97,64 @@ const AdminShortLinkEditPage = () => {
         <div className="max-w-2xl mx-auto p-6 space-y-6">
           <h1 className="text-2xl font-semibold text-gray-900">
             {isNew
-              ? t("admin.shortlinks.new", "Create Short Link")
-              : t("admin.shortlinks.edit", "Edit Short Link")}
+              ? t('admin.shortlinks.new', 'Create Short Link')
+              : t('admin.shortlinks.edit', 'Edit Short Link')}
           </h1>
           {error && <div className="text-red-600">{error}</div>}
           <form onSubmit={handleSave} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                {t("admin.shortlinks.code", "Code")}
+                {t('admin.shortlinks.code', 'Code')}
               </label>
               <input
                 type="text"
                 value={link.code}
-                onChange={(e) => handleChange("code", e.target.value)}
+                onChange={e => handleChange('code', e.target.value)}
                 disabled={!isNew}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                {t("admin.shortlinks.appId", "App ID")}
+                {t('admin.shortlinks.appId', 'App ID')}
               </label>
               <input
                 type="text"
                 value={link.appId}
-                onChange={(e) => handleChange("appId", e.target.value)}
+                onChange={e => handleChange('appId', e.target.value)}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                {t("admin.shortlinks.userId", "User ID")}
+                {t('admin.shortlinks.userId', 'User ID')}
               </label>
               <input
                 type="text"
                 value={link.userId}
-                onChange={(e) => handleChange("userId", e.target.value)}
+                onChange={e => handleChange('userId', e.target.value)}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                {t("admin.shortlinks.path", "Path")}
+                {t('admin.shortlinks.path', 'Path')}
               </label>
               <input
                 type="text"
-                value={link.path || ""}
-                onChange={(e) => handleChange("path", e.target.value)}
+                value={link.path || ''}
+                onChange={e => handleChange('path', e.target.value)}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                {t("admin.shortlinks.url", "Redirect URL")}
+                {t('admin.shortlinks.url', 'Redirect URL')}
               </label>
               <input
                 type="text"
-                value={link.url || ""}
-                onChange={(e) => handleChange("url", e.target.value)}
+                value={link.url || ''}
+                onChange={e => handleChange('url', e.target.value)}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
               />
             </div>
@@ -164,53 +162,49 @@ const AdminShortLinkEditPage = () => {
               <input
                 type="checkbox"
                 checked={link.includeParams}
-                onChange={(e) =>
-                  handleChange("includeParams", e.target.checked)
-                }
+                onChange={e => handleChange('includeParams', e.target.checked)}
                 className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
               />
               <label className="ml-2 block text-sm text-gray-700">
-                {t("admin.shortlinks.includeParams", "Include Params")}
+                {t('admin.shortlinks.includeParams', 'Include Params')}
               </label>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                {t("admin.shortlinks.expiresAt", "Expires At")}
+                {t('admin.shortlinks.expiresAt', 'Expires At')}
               </label>
               <input
                 type="datetime-local"
-                value={link.expiresAt ? link.expiresAt.substring(0, 16) : ""}
-                onChange={(e) => handleChange("expiresAt", e.target.value)}
+                value={link.expiresAt ? link.expiresAt.substring(0, 16) : ''}
+                onChange={e => handleChange('expiresAt', e.target.value)}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                {t("admin.shortlinks.params", "Params (JSON)")}
+                {t('admin.shortlinks.params', 'Params (JSON)')}
               </label>
               <textarea
                 rows="4"
                 value={paramsText}
-                onChange={(e) => setParamsText(e.target.value)}
+                onChange={e => setParamsText(e.target.value)}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm font-mono"
               />
             </div>
             <div className="flex justify-end space-x-4">
               <button
                 type="button"
-                onClick={() => navigate("/admin/shortlinks")}
+                onClick={() => navigate('/admin/shortlinks')}
                 className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
               >
-                {t("common.cancel", "Cancel")}
+                {t('common.cancel', 'Cancel')}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
               >
-                {saving
-                  ? t("common.saving", "Saving...")
-                  : t("common.save", "Save")}
+                {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
               </button>
             </div>
           </form>

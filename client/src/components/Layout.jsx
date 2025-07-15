@@ -51,15 +51,12 @@ const Layout = () => {
     <div className="flex flex-col min-h-screen h-full w-full">
       {/* Disclaimer Popup - Only render if enabled (defaults to true) */}
       {uiConfig?.disclaimer && uiConfig.disclaimer.enabled !== false && (
-        <DisclaimerPopup
-          disclaimer={uiConfig.disclaimer}
-          currentLanguage={currentLanguage}
-        />
+        <DisclaimerPopup disclaimer={uiConfig.disclaimer} currentLanguage={currentLanguage} />
       )}
 
       {/* Global smart search overlay */}
       <SmartSearch />
-      
+
       {showHeader && (
         <header className="text-white sticky top-0 z-10" style={headerColorStyle}>
           <div className="relative flex items-stretch h-16">
@@ -80,23 +77,27 @@ const Layout = () => {
                 />
               </div>
             )}
-            
+
             <div className="container mx-auto px-4 flex justify-between items-center">
               <div className="flex items-center h-full">
                 {/* Add padding-left if logo exists to prevent overlap */}
                 <Link
                   to="/"
                   onClick={resetHeaderColor}
-                  className={`text-2xl font-bold flex items-center py-4`}
+                  className={'text-2xl font-bold flex items-center py-4'}
                 >
-                  {uiConfig?.header?.title ? getLocalizedContent(uiConfig.header.title, currentLanguage) : 'AI Hub Apps'}
+                  {uiConfig?.header?.title
+                    ? getLocalizedContent(uiConfig.header.title, currentLanguage)
+                    : 'AI Hub Apps'}
                 </Link>
               </div>
 
               <nav className="hidden md:flex items-center space-x-6">
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
-                    .filter(link => !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false))
+                    .filter(
+                      link => !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false)
+                    )
                     .map((link, index) => (
                       <Link
                         key={index}
@@ -112,11 +113,9 @@ const Layout = () => {
               </nav>
 
               <div className="flex items-center space-x-4">
-                {uiConfig?.header?.languageSelector?.enabled !== false && (
-                  <LanguageSelector />
-                )}
-                <button 
-                  className="md:hidden text-white" 
+                {uiConfig?.header?.languageSelector?.enabled !== false && <LanguageSelector />}
+                <button
+                  className="md:hidden text-white"
                   onClick={toggleMobileMenu}
                   aria-label="Toggle menu"
                 >
@@ -132,7 +131,9 @@ const Layout = () => {
               <nav className="container mx-auto px-4 py-3 flex flex-col">
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
-                    .filter(link => !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false))
+                    .filter(
+                      link => !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false)
+                    )
                     .map((link, index) => (
                       <Link
                         key={index}
@@ -161,28 +162,37 @@ const Layout = () => {
       </main>
 
       {/* Footer - Only render if enabled (defaults to true) */}
-      {(uiConfig?.footer?.enabled !== false) && showFooter && (
+      {uiConfig?.footer?.enabled !== false && showFooter && (
         <footer className="bg-gray-800 text-white py-4">
           <div className="container mx-auto px-4">
             <div className="flex flex-col md:flex-row justify-between items-center">
               <div className="mb-4 md:mb-0">
-                <p>{uiConfig?.footer?.text ? getLocalizedContent(uiConfig.footer.text, currentLanguage) : t('footer.copyright')}</p>
+                <p>
+                  {uiConfig?.footer?.text
+                    ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
+                    : t('footer.copyright')}
+                </p>
               </div>
               {/* Only show footer links when NOT on an app page */}
               {!isAppPage && (
                 <div className="flex flex-wrap justify-center gap-4 md:gap-6">
-                  {uiConfig?.footer?.links && uiConfig.footer.links.map((link, index) => (
-                    <Link
-                      key={index}
-                      to={link.url}
-                      onClick={resetHeaderColor}
-                      className="hover:text-gray-300"
-                      target={link.url.startsWith('http') || link.url.startsWith('mailto:') ? '_blank' : undefined}
-                      rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                    >
-                      {getLocalizedContent(link.name, currentLanguage)}
-                    </Link>
-                  ))}
+                  {uiConfig?.footer?.links &&
+                    uiConfig.footer.links.map((link, index) => (
+                      <Link
+                        key={index}
+                        to={link.url}
+                        onClick={resetHeaderColor}
+                        className="hover:text-gray-300"
+                        target={
+                          link.url.startsWith('http') || link.url.startsWith('mailto:')
+                            ? '_blank'
+                            : undefined
+                        }
+                        rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                      >
+                        {getLocalizedContent(link.name, currentLanguage)}
+                      </Link>
+                    ))}
                 </div>
               )}
             </div>

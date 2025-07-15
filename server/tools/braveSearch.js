@@ -5,7 +5,7 @@ import { throttledFetch } from '../requestThrottler.js';
 export default async function braveSearch({ query, q, chatId }) {
   // Accept both 'query' and 'q' parameters for flexibility
   const searchQuery = query || q;
-  
+
   if (!searchQuery) {
     throw new Error('query parameter is required (use "query" or "q")');
   }
@@ -15,12 +15,16 @@ export default async function braveSearch({ query, q, chatId }) {
   }
   const endpoint = config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
   actionTracker.trackAction(chatId, { action: 'search', query: searchQuery });
-  const res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(searchQuery)}`, {
-    headers: {
-      'X-Subscription-Token': apiKey,
-      'Accept': 'application/json'
+  const res = await throttledFetch(
+    'braveSearch',
+    `${endpoint}?q=${encodeURIComponent(searchQuery)}`,
+    {
+      headers: {
+        'X-Subscription-Token': apiKey,
+        Accept: 'application/json'
+      }
     }
-  });
+  );
   if (!res.ok) {
     throw new Error(`Brave search failed with status ${res.status}`);
   }
@@ -28,7 +32,12 @@ export default async function braveSearch({ query, q, chatId }) {
   const results = [];
   if (data.web && Array.isArray(data.web.results)) {
     for (const item of data.web.results) {
-      results.push({ title: item.title, url: item.url, description: item.description, language: item.language });
+      results.push({
+        title: item.title,
+        url: item.url,
+        description: item.description,
+        language: item.language
+      });
     }
   }
   return { results };
@@ -37,20 +46,20 @@ export default async function braveSearch({ query, q, chatId }) {
 // CLI interface for direct execution
 if (import.meta.url === `file://${process.argv[1]}`) {
   const searchQuery = process.argv.slice(2).join(' ');
-  
+
   if (!searchQuery) {
     console.error('Usage: node braveSearch.js <search term>');
     console.error('Example: node braveSearch.js "JavaScript tutorials"');
     process.exit(1);
   }
-  
+
   console.log(`Searching for: "${searchQuery}"`);
-  
+
   try {
     const result = await braveSearch({ query: searchQuery });
     console.log('\nSearch Results:');
     console.log('===============');
-    
+
     if (result.results.length === 0) {
       console.log('No results found.');
     } else {

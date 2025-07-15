@@ -12,18 +12,26 @@ The UI configuration contains the following top-level sections:
     "en": "AI Hub Apps",
     "de": "KI-Hub Apps"
   },
-  "header": { /* Header configuration */ },
-  "footer": { 
-    "enabled": true,
-    /* Footer configuration */ 
+  "header": {
+    /* Header configuration */
+  },
+  "footer": {
+    "enabled": true
+    /* Footer configuration */
   },
   "disclaimer": {
-    "enabled": true,
+    "enabled": true
     /* Disclaimer text */
   },
-  "icons": { /* Icon overrides */ },
-  "appsList": { /* Apps list configuration */ },
-  "pages": { /* Static page content */ }
+  "icons": {
+    /* Icon overrides */
+  },
+  "appsList": {
+    /* Apps list configuration */
+  },
+  "pages": {
+    /* Static page content */
+  }
 }
 ```
 
@@ -77,15 +85,15 @@ The `header` section controls the appearance and content of the application head
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `defaultColor` | String | Background color for the header |
-| `logo.url` | String | Path to the logo image |
-| `logo.alt` | Object | Localized alt text for the logo |
-| `logo.containerStyle` | Object | Optional inline style for the logo container |
-| `logo.imageStyle` | Object | Optional inline style for the logo image |
-| `links` | Array | Navigation links for the header |
-| `languageSelector.enabled` | Boolean | Show the language selector (default: true) |
+| Property                   | Type    | Description                                  |
+| -------------------------- | ------- | -------------------------------------------- |
+| `defaultColor`             | String  | Background color for the header              |
+| `logo.url`                 | String  | Path to the logo image                       |
+| `logo.alt`                 | Object  | Localized alt text for the logo              |
+| `logo.containerStyle`      | Object  | Optional inline style for the logo container |
+| `logo.imageStyle`          | Object  | Optional inline style for the logo image     |
+| `links`                    | Array   | Navigation links for the header              |
+| `languageSelector.enabled` | Boolean | Show the language selector (default: true)   |
 
 ### Footer Configuration
 
@@ -111,11 +119,11 @@ The `footer` section controls the appearance and content of the application foot
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
+| Property  | Type    | Description                                   |
+| --------- | ------- | --------------------------------------------- |
 | `enabled` | Boolean | Whether to display the footer (default: true) |
-| `text` | Object | Localized copyright text for the footer |
-| `links` | Array | Navigation links for the footer |
+| `text`    | Object  | Localized copyright text for the footer       |
+| `links`   | Array   | Navigation links for the footer               |
 
 Setting `enabled` to `false` will completely remove the footer from all pages.
 
@@ -135,15 +143,14 @@ The `disclaimer` section defines the legal disclaimer shown to users:
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
+| Property  | Type    | Description                                       |
+| --------- | ------- | ------------------------------------------------- |
 | `enabled` | Boolean | Whether to display the disclaimer (default: true) |
-| `text` | Object | Localized disclaimer text |
-| `version` | String | Version of the disclaimer |
-| `updated` | String | Date the disclaimer was last updated |
+| `text`    | Object  | Localized disclaimer text                         |
+| `version` | String  | Version of the disclaimer                         |
+| `updated` | String  | Date the disclaimer was last updated              |
 
 Setting `enabled` to `false` will completely remove the disclaimer from the application.
-
 
 ### Icons Configuration
 
@@ -156,10 +163,10 @@ The `icons` section allows overriding which icon is used for certain UI elements
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
+| Property           | Type   | Description                                     |
+| ------------------ | ------ | ----------------------------------------------- |
 | `assistantMessage` | String | Icon identifier for messages from the assistant |
-| `userMessage` | String | Icon identifier for user messages |
+| `userMessage`      | String | Icon identifier for user messages               |
 
 ### Apps List Configuration
 
@@ -190,15 +197,15 @@ The `appsList` section controls the behavior and appearance of the apps list/hom
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `title` | Object | Localized title for the apps list page (overrides the translation value) |
-| `subtitle` | Object | Localized subtitle for the apps list page (overrides the translation value) |
-| `search.enabled` | Boolean | Enable or disable the search functionality (default: true) |
-| `search.placeholder` | Object | Localized placeholder text for the search input |
-| `search.width` | String | CSS width classes for the search container (using Tailwind format) |
-| `sort.enabled` | Boolean | Enable or disable client-side sorting (default: true) |
-| `sort.default` | String | Default sorting mode: `relevance`, `nameAsc`, or `nameDesc` |
+| Property             | Type    | Description                                                                 |
+| -------------------- | ------- | --------------------------------------------------------------------------- |
+| `title`              | Object  | Localized title for the apps list page (overrides the translation value)    |
+| `subtitle`           | Object  | Localized subtitle for the apps list page (overrides the translation value) |
+| `search.enabled`     | Boolean | Enable or disable the search functionality (default: true)                  |
+| `search.placeholder` | Object  | Localized placeholder text for the search input                             |
+| `search.width`       | String  | CSS width classes for the search container (using Tailwind format)          |
+| `sort.enabled`       | Boolean | Enable or disable client-side sorting (default: true)                       |
+| `sort.default`       | String  | Default sorting mode: `relevance`, `nameAsc`, or `nameDesc`                 |
 
 Setting `search.enabled` to `false` will completely remove the search functionality from the apps list page.
 
@@ -215,10 +222,10 @@ The `promptsList` section controls sorting behavior of the prompts library:
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `sort.enabled` | Boolean | Enable or disable client-side sorting (default: true) |
-| `sort.default` | String | Default sorting mode: `relevance`, `nameAsc`, or `nameDesc` |
+| Property       | Type    | Description                                                 |
+| -------------- | ------- | ----------------------------------------------------------- |
+| `sort.enabled` | Boolean | Enable or disable client-side sorting (default: true)       |
+| `sort.default` | String  | Default sorting mode: `relevance`, `nameAsc`, or `nameDesc` |
 
 ### Static Pages
 
@@ -241,10 +248,10 @@ The `pages` section contains content for static pages that can be accessed throu
 ```
 
 Each page has:
+
 - A localized `title`
 - Localized `content` in Markdown format
 
 ### URL Routing
 
 Static pages can be accessed through URL routes using the pattern `/page/{pageId}`, where `{pageId}` corresponds to the key in the `pages` object (e.g., `/page/privacy` for the privacy policy).
-

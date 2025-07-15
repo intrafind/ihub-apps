@@ -21,11 +21,11 @@ class Cache {
     this.persistenceKey = options.persistenceKey || 'ai_hub_cache';
     this.storageType = options.storageType || 'session'; // 'session' or 'local'
     this.saveTimeout = null;
-    
+
     // Start cleanup interval (every 5 minutes)
     this.cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
   }
-  
+
   /**
    * Get a value from the cache
    * @param {string} key - The cache key
@@ -36,29 +36,33 @@ class Cache {
       this.stats.misses++;
       return null;
     }
-    
+
     const cachedItem = this.store.get(key);
-    
+
     // Check if item has expired
     if (cachedItem.expiry && cachedItem.expiry < Date.now()) {
       this.delete(key);
       this.stats.misses++;
       return null;
     }
-    
+
     // Update last accessed time and hit count
     cachedItem.lastAccessed = Date.now();
     cachedItem.hits++;
     this.stats.hits++;
-    
+
     // Support both old format (direct value) and new format (with data/etag)
-    if (cachedItem.value && typeof cachedItem.value === 'object' && cachedItem.value.data !== undefined) {
+    if (
+      cachedItem.value &&
+      typeof cachedItem.value === 'object' &&
+      cachedItem.value.data !== undefined
+    ) {
       return cachedItem.value; // Return the whole object with data/etag
     }
-    
+
     return cachedItem.value;
   }
-  
+
   /**
    * Store a value in the cache with optional TTL
    * @param {string} key - The cache key
@@ -70,9 +74,9 @@ class Cache {
     if (this.store.size >= this.maxSize && !this.store.has(key)) {
       this.evictLeastRecent();
     }
-    
+
     const expiry = ttl ? Date.now() + ttl : null;
-    
+
     this.store.set(key, {
       value,
       expiry,
@@ -80,7 +84,7 @@ class Cache {
       lastAccessed: Date.now(),
       hits: 0
     });
-    
+
     this.stats.sets++;
 
     // Save to persistent storage if enabled
@@ -90,7 +94,7 @@ class Cache {
 
     return value;
   }
-  
+
   /**
    * Remove an item from the cache
    * @param {string} key - The cache key to delete
@@ -107,7 +111,7 @@ class Cache {
     }
     return result;
   }
-  
+
   /**
    * Clear the entire cache
    */
@@ -116,21 +120,21 @@ class Cache {
     this.store.clear();
     this.stats.deletes += size;
   }
-  
+
   /**
    * Clean up expired cache items
    */
   cleanup() {
     const now = Date.now();
     let count = 0;
-    
+
     for (const [key, item] of this.store.entries()) {
       if (item.expiry && item.expiry < now) {
         this.store.delete(key);
         count++;
       }
     }
-    
+
     if (count > 0) {
       this.stats.cleanups++;
       this.stats.deletes += count;
@@ -140,20 +144,20 @@ class Cache {
         this.debouncedSaveToStorage();
       }
     }
-    
+
     return count;
   }
-  
+
   /**
    * Evict least recently used items when cache is full
    * @private
    */
   evictLeastRecent() {
     if (this.store.size === 0) return;
-    
+
     let oldest = null;
     let oldestKey = null;
-    
+
     // Find the least recently accessed item
     for (const [key, item] of this.store.entries()) {
       if (oldest === null || item.lastAccessed < oldest) {
@@ -161,21 +165,20 @@ class Cache {
         oldestKey = key;
       }
     }
-    
+
     // Remove the oldest item
     if (oldestKey) {
       this.delete(oldestKey);
     }
   }
-  
-  
+
   /**
    * Get the number of items in the cache
    */
   get size() {
     return this.store.size;
   }
-  
+
   /**
    * Save cache to storage
    * @private
@@ -189,7 +192,7 @@ class Cache {
     clearTimeout(this.saveTimeout);
     this.saveTimeout = setTimeout(() => this.saveToStorage(), 500);
   }
-  
+
   /**
    * Load cache from storage
    * @private
@@ -197,15 +200,14 @@ class Cache {
   loadFromStorage() {
     // Persistence disabled - no-op
   }
-  
 }
 
 // Default TTL values (in milliseconds)
 export const DEFAULT_CACHE_TTL = {
-  SHORT: 60 * 1000,               // 1 minute
-  MEDIUM: 5 * 60 * 1000,          // 5 minutes
-  LONG: 30 * 60 * 1000,           // 30 minutes
-  VERY_LONG: 24 * 60 * 60 * 1000  // 24 hours
+  SHORT: 60 * 1000, // 1 minute
+  MEDIUM: 5 * 60 * 1000, // 5 minutes
+  LONG: 30 * 60 * 1000, // 30 minutes
+  VERY_LONG: 24 * 60 * 60 * 1000 // 24 hours
 };
 
 // Cache key definitions for consistency
@@ -229,13 +231,13 @@ export const buildCacheKey = (baseKey, params = {}) => {
   if (!params || Object.keys(params).length === 0) {
     return baseKey;
   }
-  
+
   const paramsStr = Object.entries(params)
     .filter(([, value]) => value !== null && value !== undefined)
     .map(([key, value]) => `${key}=${value}`)
     .sort()
     .join('&');
-  
+
   return paramsStr ? `${baseKey}?${paramsStr}` : baseKey;
 };
 

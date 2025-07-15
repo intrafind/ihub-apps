@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run on push or pull_request events
     if: github.event_name == 'push' || github.event_name == 'pull_request'
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -60,7 +60,7 @@ jobs:
         run: |
           # Create production build
           npm run prod:build
-          
+
           # Verify the build was successful
           if [ -d "dist" ] && [ -d "dist/public" ] && [ -d "dist/server" ] && [ -d "dist/contents" ]; then
             echo "✅ Build successful!"
@@ -147,7 +147,7 @@ jobs:
         run: |
           # Check Windows binary architecture
           node -e "console.log('Windows build: Node.js architecture is ' + process.arch)"
-          
+
           # Create a simple diagnostic script for Windows
           echo '@echo off
           echo Windows Diagnostic Information:
@@ -159,7 +159,7 @@ jobs:
           echo Number of Processors: %NUMBER_OF_PROCESSORS%
           pause
           ' > dist-bin/windows-check.bat
-          
+
           chmod +x dist-bin/windows-check.bat
         shell: bash
 
@@ -222,7 +222,7 @@ jobs:
           gh --version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:

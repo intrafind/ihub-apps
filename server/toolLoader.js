@@ -51,7 +51,6 @@ export async function loadTools() {
   return all;
 }
 
-
 /**
  * Get tools applicable to a specific app
  * @param {Object} app - app configuration object

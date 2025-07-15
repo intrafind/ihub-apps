@@ -9,7 +9,7 @@ const AdminNavigation = () => {
   const location = useLocation();
   const { platformConfig } = usePlatformConfig();
   const pageConfig = platformConfig?.admin?.pages || {};
-  const isEnabled = (key) => pageConfig[key] !== false;
+  const isEnabled = key => pageConfig[key] !== false;
 
   const navItems = [
     {
@@ -46,7 +46,7 @@ const AdminNavigation = () => {
       href: '/admin/shortlinks',
       icon: 'link',
       current: location.pathname.startsWith('/admin/shortlinks')
-    },    
+    },
     {
       key: 'usage',
       name: t('admin.nav.usage', 'Usage Reports'),
@@ -60,29 +60,32 @@ const AdminNavigation = () => {
       href: '/admin/system',
       icon: 'cog',
       current: location.pathname === '/admin/system'
-    },
+    }
   ];
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex space-x-8">
-          {navItems.filter(item => isEnabled(item.key)).map((item) => (
-            <Link
-              key={item.name}
-              to={item.href}
-              className={`
+          {navItems
+            .filter(item => isEnabled(item.key))
+            .map(item => (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={`
                 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
-                ${item.current
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ${
+                  item.current
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }
               `}
-            >
-              <Icon name={item.icon} className="w-4 h-4 mr-2" />
-              {item.name}
-            </Link>
-          ))}
+              >
+                <Icon name={item.icon} className="w-4 h-4 mr-2" />
+                {item.name}
+              </Link>
+            ))}
         </div>
       </div>
     </nav>

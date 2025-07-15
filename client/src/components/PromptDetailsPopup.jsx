@@ -11,7 +11,7 @@ const PromptDetailsPopup = ({ prompt, isOpen, onClose }) => {
 
   if (!isOpen || !prompt) return null;
 
-  const getLocalizedValue = (content) => {
+  const getLocalizedValue = content => {
     return getLocalizedContent(content, currentLanguage);
   };
 
@@ -46,15 +46,14 @@ const PromptDetailsPopup = ({ prompt, isOpen, onClose }) => {
             <span className="text-sm font-medium text-gray-700">
               {t('admin.prompts.details.status', 'Status')}
             </span>
-            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-              prompt.enabled !== false
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-red-100 text-red-800'
-            }`}>
+            <span
+              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                prompt.enabled !== false ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}
+            >
               {prompt.enabled !== false
                 ? t('admin.prompts.status.enabled', 'Enabled')
-                : t('admin.prompts.status.disabled', 'Disabled')
-              }
+                : t('admin.prompts.status.disabled', 'Disabled')}
             </span>
           </div>
 
@@ -100,9 +99,7 @@ const PromptDetailsPopup = ({ prompt, isOpen, onClose }) => {
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.prompts.details.linkedApp', 'Linked App')}
                 </div>
-                <div className="text-sm text-gray-900 mt-1">
-                  {prompt.appId || 'None'}
-                </div>
+                <div className="text-sm text-gray-900 mt-1">{prompt.appId || 'None'}</div>
               </div>
             </div>
           </div>
@@ -121,9 +118,7 @@ const PromptDetailsPopup = ({ prompt, isOpen, onClose }) => {
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
                           {variable.name}
                         </span>
-                        <span className="text-xs text-gray-500">
-                          {variable.type}
-                        </span>
+                        <span className="text-xs text-gray-500">{variable.type}</span>
                         {variable.required && (
                           <span className="text-xs text-red-500">required</span>
                         )}
@@ -150,7 +145,10 @@ const PromptDetailsPopup = ({ prompt, isOpen, onClose }) => {
             </h4>
             <div className="flex flex-wrap gap-2">
               {Object.keys(prompt.name || {}).map(lang => (
-                <span key={lang} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <span
+                  key={lang}
+                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                >
                   {lang.toUpperCase()}
                 </span>
               ))}

@@ -13,7 +13,7 @@ const NotFound = () => {
       <p className="text-gray-600 mb-8 text-center max-w-md">
         The page you are looking for might have been removed or is temporarily unavailable.
       </p>
-      <Link 
+      <Link
         to="/"
         className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
       >
@@ -23,4 +23,4 @@ const NotFound = () => {
   );
 };
 
-export default NotFound; 
+export default NotFound;

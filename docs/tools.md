@@ -6,12 +6,12 @@ For example, the `Chat with DuckDuckGo` app in `config/apps.json` enables the `w
 
 Each entry in `config/tools.json` uses the following fields:
 
-| Field | Description |
-|-------|-------------|
-| `id` | Unique identifier referenced by apps |
-| `name` | Display name |
-| `description` | Short description of the tool |
-| `script` | The script file in `server/tools` implementing the tool |
-| `parameters` | JSON schema describing the tool input |
+| Field         | Description                                             |
+| ------------- | ------------------------------------------------------- |
+| `id`          | Unique identifier referenced by apps                    |
+| `name`        | Display name                                            |
+| `description` | Short description of the tool                           |
+| `script`      | The script file in `server/tools` implementing the tool |
+| `parameters`  | JSON schema describing the tool input                   |
 
 > **Note**: Tool support is experimental and subject to change.

@@ -153,7 +153,13 @@ export async function recordFeedback({ userId, appId, modelId, rating }) {
   scheduleSave();
 }
 
-export async function recordMagicPrompt({ userId, appId, modelId, inputTokens = 0, outputTokens = 0 }) {
+export async function recordMagicPrompt({
+  userId,
+  appId,
+  modelId,
+  inputTokens = 0,
+  outputTokens = 0
+}) {
   if (!trackingEnabled) return;
   const data = await loadUsage();
   data.magicPrompt.total += 1;

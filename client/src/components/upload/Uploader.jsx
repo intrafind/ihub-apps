@@ -11,7 +11,7 @@ const Uploader = ({
   data = null,
   onSelect,
   onProcessFile,
-  children,
+  children
 }) => {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState(null);
@@ -28,7 +28,7 @@ const Uploader = ({
     }
   }, [data, preview]);
 
-  const handleFileChange = async (e) => {
+  const handleFileChange = async e => {
     const file = e.target.files[0];
     setError(null);
     if (!file) return;
@@ -94,8 +94,8 @@ const Uploader = ({
       onChange: handleFileChange,
       accept: accept.join(','),
       disabled: disabled || isProcessing,
-      className: 'hidden',
-    },
+      className: 'hidden'
+    }
   });
 };
 

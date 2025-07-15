@@ -10,14 +10,14 @@
 - App Collections / Bundles curated by teams?
 - Tab-based / Category-based navigation?
 - workflow mode -> instead of having the variables as input in the ui, we could define "workflow" to ask the user about, collect them until the final prompt is ready to send
-- variable "form-based" only app -> user fills out the form, the form is submitted and the answer is generated -> start over / edit 
-- admin 
+- variable "form-based" only app -> user fills out the form, the form is submitted and the answer is generated -> start over / edit
+- admin
 - test mcp tool support
 - when you chose a prompt with placeholder, they are removed and the pointer is positioned at this place
 - convert variable based app to dialog based conversation
 - introduce categories for better filtering
 - invoke an app with parameters from the outside
-- invoke an app with a document, a set of documents or even a whole search result 
+- invoke an app with a document, a set of documents or even a whole search result
 - be able to invoke a minimized version from within the ifinder
 - share the authentication from the ifinder login with our app via a short lived token or similar?
 - invoke the prompt database via the canvas floating toolbar
@@ -26,8 +26,8 @@
 - improve chat input design
 - let a prompt return quick actions, so the user doesn't has to type if it is an OR or YES/NO question
 
-
 Done
+
 - Image Upload
 - Microphone
 - Logo
@@ -47,8 +47,3 @@ Done
 - upload a document?
 - convert a pdf to image to talk to it?
 - count token usage for analytics, but also to limit them per user (per session or whatever) -> only counting done
-
-
-
-
-

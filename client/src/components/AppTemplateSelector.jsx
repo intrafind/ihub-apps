@@ -29,14 +29,18 @@ const AppTemplateSelector = ({ onSelect, onClose }) => {
   };
 
   const filteredApps = apps.filter(app => {
-    const matchesSearch = 
-      getLocalizedContent(app.name, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getLocalizedContent(app.description, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch =
+      getLocalizedContent(app.name, currentLanguage)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      getLocalizedContent(app.description, currentLanguage)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
       app.id.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
 
-  const handleSelectApp = (app) => {
+  const handleSelectApp = app => {
     onSelect(app);
     onClose();
   };
@@ -57,13 +61,13 @@ const AppTemplateSelector = ({ onSelect, onClose }) => {
                 {t('admin.apps.template.title', 'Choose App Template')}
               </h3>
               <p className="mt-1 text-sm text-gray-600">
-                {t('admin.apps.template.description', 'Start with an existing app as a template, or create from scratch')}
+                {t(
+                  'admin.apps.template.description',
+                  'Start with an existing app as a template, or create from scratch'
+                )}
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <Icon name="x" className="h-6 w-6" />
             </button>
           </div>
@@ -78,7 +82,7 @@ const AppTemplateSelector = ({ onSelect, onClose }) => {
                 type="text"
                 placeholder={t('admin.apps.template.searchPlaceholder', 'Search apps...')}
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={e => setSearchTerm(e.target.value)}
                 className="block w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
@@ -98,7 +102,10 @@ const AppTemplateSelector = ({ onSelect, onClose }) => {
                   {t('admin.apps.template.createFromScratch', 'Create from Scratch')}
                 </div>
                 <div className="text-sm text-gray-500">
-                  {t('admin.apps.template.createFromScratchDescription', 'Start with a blank app configuration')}
+                  {t(
+                    'admin.apps.template.createFromScratchDescription',
+                    'Start with a blank app configuration'
+                  )}
                 </div>
               </div>
             </button>
@@ -128,13 +135,13 @@ const AppTemplateSelector = ({ onSelect, onClose }) => {
           {!loading && !error && (
             <div className="max-h-96 overflow-y-auto">
               <div className="space-y-2">
-                {filteredApps.map((app) => (
+                {filteredApps.map(app => (
                   <button
                     key={app.id}
                     onClick={() => handleSelectApp(app)}
                     className="w-full flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 text-left transition-colors"
                   >
-                    <div 
+                    <div
                       className="flex items-center justify-center w-10 h-10 rounded-lg text-white font-bold mr-4"
                       style={{ backgroundColor: app.color || '#6B7280' }}
                     >

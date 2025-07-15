@@ -44,7 +44,8 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
       magicPrompt: {
         enabled: false,
         model: 'gpt-4',
-        prompt: 'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
+        prompt:
+          'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
       }
     },
     settings: {
@@ -72,13 +73,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
       enabled: false,
       resizeImages: true,
       maxFileSizeMB: 10,
-      supportedFormats: [
-        'image/jpeg',
-        'image/jpg', 
-        'image/png',
-        'image/gif',
-        'image/webp'
-      ]
+      supportedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
     },
     fileUpload: {
       maxFileSizeMB: 5,
@@ -93,9 +88,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
         'application/javascript',
         'text/xml'
       ],
-      supportedPdfFormats: [
-        'application/pdf'
-      ]
+      supportedPdfFormats: ['application/pdf']
     },
     // Creation method flags
     useAI: false,
@@ -112,7 +105,10 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     {
       id: 'method',
       title: t('admin.apps.wizard.method.title', 'Creation Method'),
-      description: t('admin.apps.wizard.method.description', 'How would you like to create your app?'),
+      description: t(
+        'admin.apps.wizard.method.description',
+        'How would you like to create your app?'
+      ),
       component: CreationMethodStep
     },
     {
@@ -125,7 +121,10 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     {
       id: 'basic-info',
       title: t('admin.apps.wizard.basic.title', 'Basic Information'),
-      description: t('admin.apps.wizard.basic.description', 'Configure name, description, and appearance'),
+      description: t(
+        'admin.apps.wizard.basic.description',
+        'Configure name, description, and appearance'
+      ),
       component: BasicInfoStep
     },
     {
@@ -181,7 +180,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
   const validateCurrentStep = () => {
     const currentStepData = getVisibleSteps()[currentStep];
     const missingFields = [];
-    
+
     switch (currentStepData.id) {
       case 'method':
         if (!appData.useAI && !appData.useTemplate && !appData.useManual) {
@@ -215,26 +214,34 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
       case 'review':
         // Final validation
         if (!appData.id || !appData.id.trim()) missingFields.push('id');
-        if (!appData.name || !Object.values(appData.name).some(v => v && v.trim())) missingFields.push('name');
-        if (!appData.description || !Object.values(appData.description).some(v => v && v.trim())) missingFields.push('description');
-        if (!appData.system || !Object.values(appData.system).some(v => v && v.trim())) missingFields.push('system');
+        if (!appData.name || !Object.values(appData.name).some(v => v && v.trim()))
+          missingFields.push('name');
+        if (!appData.description || !Object.values(appData.description).some(v => v && v.trim()))
+          missingFields.push('description');
+        if (!appData.system || !Object.values(appData.system).some(v => v && v.trim()))
+          missingFields.push('system');
         break;
     }
-    
+
     return missingFields;
   };
 
   const handleNext = async () => {
     const visibleSteps = getVisibleSteps();
-    
+
     if (currentStep < visibleSteps.length - 1) {
       // Validate current step before proceeding
       const missingFields = validateCurrentStep();
       if (missingFields.length > 0) {
-        setError(t('admin.apps.wizard.error.missingFields', 'Please fill in all required fields before proceeding.'));
+        setError(
+          t(
+            'admin.apps.wizard.error.missingFields',
+            'Please fill in all required fields before proceeding.'
+          )
+        );
         return;
       }
-      
+
       setError(null);
       setCurrentStep(currentStep + 1);
     } else {
@@ -267,7 +274,10 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
       const requiredFields = {
         id: t('admin.apps.wizard.error.idRequired', 'App ID is required'),
         name: t('admin.apps.wizard.error.nameRequired', 'App name is required'),
-        description: t('admin.apps.wizard.error.descriptionRequired', 'App description is required'),
+        description: t(
+          'admin.apps.wizard.error.descriptionRequired',
+          'App description is required'
+        ),
         color: t('admin.apps.wizard.error.colorRequired', 'App color is required'),
         icon: t('admin.apps.wizard.error.iconRequired', 'App icon is required'),
         system: t('admin.apps.wizard.error.systemRequired', 'System instructions are required'),
@@ -292,7 +302,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
 
       // Clean up the app data - remove empty strings for optional fields
       const cleanedAppData = { ...appData };
-      
+
       // Remove empty multilingual fields
       ['messagePlaceholder', 'prompt'].forEach(field => {
         if (cleanedAppData[field]) {
@@ -321,7 +331,9 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
         navigate('/admin/apps');
       } else {
         const errorData = await response.json();
-        setError(errorData.error || t('admin.apps.wizard.error.createFailed', 'Failed to create app'));
+        setError(
+          errorData.error || t('admin.apps.wizard.error.createFailed', 'Failed to create app')
+        );
       }
     } catch (err) {
       setError(err.message);
@@ -330,10 +342,10 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     }
   };
 
-  const updateAppData = (updates) => {
+  const updateAppData = updates => {
     setAppData(prev => {
       const newData = { ...prev, ...updates };
-      
+
       // Track overridden fields for inheritance
       if (templateApp) {
         const overriddenFields = [];
@@ -344,12 +356,12 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
         });
         newData.overriddenFields = [...(prev.overriddenFields || []), ...overriddenFields];
       }
-      
+
       return newData;
     });
   };
 
-  const revertToParent = (fieldName) => {
+  const revertToParent = fieldName => {
     if (templateApp && templateApp[fieldName] !== undefined) {
       setAppData(prev => ({
         ...prev,
@@ -378,14 +390,9 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
                   </span>
                 )}
               </h3>
-              <p className="mt-1 text-sm text-gray-600">
-                {currentStepData.description}
-              </p>
+              <p className="mt-1 text-sm text-gray-600">{currentStepData.description}</p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <Icon name="x" className="h-6 w-6" />
             </button>
           </div>
@@ -396,9 +403,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
               {visibleSteps.map((step, index) => (
                 <div
                   key={step.id}
-                  className={`flex items-center ${
-                    index < visibleSteps.length - 1 ? 'flex-1' : ''
-                  }`}
+                  className={`flex items-center ${index < visibleSteps.length - 1 ? 'flex-1' : ''}`}
                 >
                   <button
                     onClick={() => index <= currentStep && setCurrentStep(index)}
@@ -406,11 +411,9 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
                       index === currentStep
                         ? 'bg-indigo-600 border-indigo-600 text-white'
                         : index < currentStep
-                        ? 'bg-green-600 border-green-600 text-white hover:bg-green-700'
-                        : 'border-gray-300 text-gray-400'
-                    } ${
-                      index <= currentStep ? 'cursor-pointer' : 'cursor-not-allowed'
-                    }`}
+                          ? 'bg-green-600 border-green-600 text-white hover:bg-green-700'
+                          : 'border-gray-300 text-gray-400'
+                    } ${index <= currentStep ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                     disabled={index > currentStep}
                   >
                     {index < currentStep ? (
@@ -433,10 +436,8 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
 
           {/* Current step content */}
           <div className="flex-1 overflow-y-auto">
-            <h4 className="text-lg font-medium text-gray-900 mb-4">
-              {currentStepData.title}
-            </h4>
-            
+            <h4 className="text-lg font-medium text-gray-900 mb-4">{currentStepData.title}</h4>
+
             {error && (
               <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-4">
                 <div className="flex">
@@ -467,7 +468,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
             >
               {t('admin.apps.wizard.back', 'Back')}
             </button>
-            
+
             <div className="flex space-x-2">
               {/* Show Finish App button from step 3 onwards */}
               {currentStep >= 2 && currentStep < visibleSteps.length - 1 && (
@@ -478,7 +479,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
                   {t('admin.apps.wizard.finish', 'Finish App')}
                 </button>
               )}
-              
+
               <button
                 onClick={handleNext}
                 disabled={loading}
@@ -504,10 +505,16 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
 };
 
 // Step 1: Creation Method
-const CreationMethodStep = ({ appData, updateAppData, templateApp, validateCurrentStep, error }) => {
+const CreationMethodStep = ({
+  appData,
+  updateAppData,
+  templateApp,
+  validateCurrentStep,
+  error
+}) => {
   const { t } = useTranslation();
   const [fieldErrors, setFieldErrors] = useState({});
-  
+
   // Check for validation errors
   React.useEffect(() => {
     if (error && error.includes('required fields')) {
@@ -520,7 +527,7 @@ const CreationMethodStep = ({ appData, updateAppData, templateApp, validateCurre
     }
   }, [error, validateCurrentStep]);
 
-  const handleMethodChange = (method) => {
+  const handleMethodChange = method => {
     if (method === 'ai') {
       updateAppData({ useAI: true, useTemplate: false, useManual: false });
     } else if (method === 'template') {
@@ -528,19 +535,19 @@ const CreationMethodStep = ({ appData, updateAppData, templateApp, validateCurre
     } else if (method === 'manual') {
       updateAppData({ useAI: false, useTemplate: false, useManual: true });
     }
-    
+
     // Clear field error when user makes selection
     if (fieldErrors.creationMethod) {
       setFieldErrors(prev => ({ ...prev, creationMethod: false }));
     }
   };
-  
+
   return (
     <div className="space-y-6">
       <div className="text-sm text-gray-600 mb-4">
         {t('admin.apps.wizard.method.instruction', 'Choose how you want to create your app:')}
       </div>
-      
+
       {fieldErrors.creationMethod && (
         <div className="bg-red-50 border border-red-200 rounded-md p-4">
           <div className="flex">
@@ -553,9 +560,11 @@ const CreationMethodStep = ({ appData, updateAppData, templateApp, validateCurre
           </div>
         </div>
       )}
-      
+
       <div className="space-y-4">
-        <label className={`relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${fieldErrors.creationMethod ? 'border-red-300' : ''}`}>
+        <label
+          className={`relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${fieldErrors.creationMethod ? 'border-red-300' : ''}`}
+        >
           <input
             type="radio"
             name="creationMethod"
@@ -572,12 +581,17 @@ const CreationMethodStep = ({ appData, updateAppData, templateApp, validateCurre
               </span>
             </div>
             <p className="text-sm text-gray-500 mt-1">
-              {t('admin.apps.wizard.method.aiDescription', 'Describe what your app should do, and AI will generate the configuration for you.')}
+              {t(
+                'admin.apps.wizard.method.aiDescription',
+                'Describe what your app should do, and AI will generate the configuration for you.'
+              )}
             </p>
           </div>
         </label>
 
-        <label className={`relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${fieldErrors.creationMethod ? 'border-red-300' : ''}`}>
+        <label
+          className={`relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${fieldErrors.creationMethod ? 'border-red-300' : ''}`}
+        >
           <input
             type="radio"
             name="creationMethod"
@@ -594,13 +608,18 @@ const CreationMethodStep = ({ appData, updateAppData, templateApp, validateCurre
               </span>
             </div>
             <p className="text-sm text-gray-500 mt-1">
-              {t('admin.apps.wizard.method.manualDescription', 'Configure your app step by step with full control over all settings.')}
+              {t(
+                'admin.apps.wizard.method.manualDescription',
+                'Configure your app step by step with full control over all settings.'
+              )}
             </p>
           </div>
         </label>
 
         {templateApp && (
-          <label className={`relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${fieldErrors.creationMethod ? 'border-red-300' : ''}`}>
+          <label
+            className={`relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 ${fieldErrors.creationMethod ? 'border-red-300' : ''}`}
+          >
             <input
               type="radio"
               name="creationMethod"
@@ -617,7 +636,11 @@ const CreationMethodStep = ({ appData, updateAppData, templateApp, validateCurre
                 </span>
               </div>
               <p className="text-sm text-gray-500 mt-1">
-                {t('admin.apps.wizard.method.templateDescription', 'Start with the configuration from "{templateName}" and customize it.', { templateName: templateApp.name.en })}
+                {t(
+                  'admin.apps.wizard.method.templateDescription',
+                  'Start with the configuration from "{templateName}" and customize it.',
+                  { templateName: templateApp.name.en }
+                )}
               </p>
             </div>
           </label>
@@ -642,7 +665,9 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
     const loadAppGeneratorPrompt = async () => {
       try {
         setLoadingPrompt(true);
-        const response = await makeAdminApiCall(`/api/admin/prompts/app-generator?lang=${selectedLanguage}`);
+        const response = await makeAdminApiCall(
+          `/api/admin/prompts/app-generator?lang=${selectedLanguage}`
+        );
         if (response.ok) {
           const data = await response.json();
           setAppGeneratorPrompt(data);
@@ -650,7 +675,9 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
           console.error('Failed to load app generator prompt');
           // Fallback to default language if the selected language fails
           if (selectedLanguage !== DEFAULT_LANGUAGE) {
-            const fallbackResponse = await makeAdminApiCall(`/api/admin/prompts/app-generator?lang=${DEFAULT_LANGUAGE}`);
+            const fallbackResponse = await makeAdminApiCall(
+              `/api/admin/prompts/app-generator?lang=${DEFAULT_LANGUAGE}`
+            );
             if (fallbackResponse.ok) {
               const fallbackData = await fallbackResponse.json();
               setAppGeneratorPrompt(fallbackData);
@@ -672,7 +699,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
 
     try {
       setGenerating(true);
-      
+
       // Use OpenAI completion directly for app generation
       const response = await makeAdminApiCall('/api/completions', {
         method: 'POST',
@@ -713,54 +740,71 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
           }
 
           if (configJson) {
-            
             // Convert to multilingual format and merge with existing app data
             const multilingualConfig = {
               // Keep existing app data structure
               ...appData,
-              
+
               // Apply generated config
               id: configJson.id || appData.id,
-              name: typeof configJson.name === 'string' ? { [selectedLanguage]: configJson.name } : configJson.name,
-              description: typeof configJson.description === 'string' ? { [selectedLanguage]: configJson.description } : configJson.description,
-              system: typeof configJson.system === 'string' ? { [selectedLanguage]: configJson.system } : configJson.system,
+              name:
+                typeof configJson.name === 'string'
+                  ? { [selectedLanguage]: configJson.name }
+                  : configJson.name,
+              description:
+                typeof configJson.description === 'string'
+                  ? { [selectedLanguage]: configJson.description }
+                  : configJson.description,
+              system:
+                typeof configJson.system === 'string'
+                  ? { [selectedLanguage]: configJson.system }
+                  : configJson.system,
               category: configJson.category || appData.category,
               color: configJson.color || appData.color,
               icon: configJson.icon || appData.icon,
               variables: configJson.variables || appData.variables,
               tools: configJson.tools || appData.tools,
-              
+
               // Mark as AI generated
               aiGenerated: true,
               aiPrompt: prompt,
               useAI: true
             };
-            
+
             console.log('Generated config:', configJson);
             console.log('Multilingual config:', multilingualConfig);
-            
+
             updateAppData(multilingualConfig);
           } else {
             console.error('No valid JSON found in generated config');
-            setError(t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration'));
+            setError(
+              t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration')
+            );
           }
         } catch (e) {
           console.error('Failed to parse generated config:', e);
-          setError(t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration'));
+          setError(
+            t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration')
+          );
         }
       } else {
         // Enhanced error handling - try to get the error message from the response
         try {
           const errorData = await response.json();
-          const errorMessage = errorData.error || errorData.message || 'Failed to generate app configuration';
+          const errorMessage =
+            errorData.error || errorData.message || 'Failed to generate app configuration';
           setError(errorMessage);
         } catch (parseError) {
-          setError(t('admin.apps.wizard.ai.error.generate', 'Failed to generate app configuration'));
+          setError(
+            t('admin.apps.wizard.ai.error.generate', 'Failed to generate app configuration')
+          );
         }
       }
     } catch (error) {
       console.error('Failed to generate app:', error);
-      setError(t('admin.apps.wizard.ai.error.network', 'Network error occurred while generating app'));
+      setError(
+        t('admin.apps.wizard.ai.error.network', 'Network error occurred while generating app')
+      );
     } finally {
       setGenerating(false);
     }
@@ -774,7 +818,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
         </label>
         <select
           value={selectedLanguage}
-          onChange={(e) => setSelectedLanguage(e.target.value)}
+          onChange={e => setSelectedLanguage(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="en">English</option>
@@ -788,10 +832,13 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
         </label>
         <textarea
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={e => setPrompt(e.target.value)}
           rows={4}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          placeholder={t('admin.apps.wizard.ai.promptPlaceholder', 'Example: Create a meeting summarizer app that takes meeting notes and extracts key points, action items, and decisions...')}
+          placeholder={t(
+            'admin.apps.wizard.ai.promptPlaceholder',
+            'Example: Create a meeting summarizer app that takes meeting notes and extracts key points, action items, and decisions...'
+          )}
           disabled={loadingPrompt}
         />
         {loadingPrompt && (
@@ -836,7 +883,10 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
             <Icon name="check-circle" className="h-5 w-5 text-green-400" />
             <div className="ml-3">
               <p className="text-sm text-green-800">
-                {t('admin.apps.wizard.ai.success', 'App configuration generated successfully! You can review and modify it in the next steps.')}
+                {t(
+                  'admin.apps.wizard.ai.success',
+                  'App configuration generated successfully! You can review and modify it in the next steps.'
+                )}
               </p>
             </div>
           </div>
@@ -847,24 +897,31 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
 };
 
 // Step 3: Basic Information
-const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, validateCurrentStep, error }) => {
+const BasicInfoStep = ({
+  appData,
+  updateAppData,
+  templateApp,
+  revertToParent,
+  validateCurrentStep,
+  error
+}) => {
   const { t, i18n } = useTranslation();
   const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
   const [fieldErrors, setFieldErrors] = useState({});
-  
-  const isOverridden = (field) => {
+
+  const isOverridden = field => {
     return templateApp && appData.overriddenFields?.includes(field);
   };
 
   const updateMultilingualField = (field, value) => {
     const currentValue = appData[field] || {};
-    updateAppData({ 
-      [field]: { 
-        ...currentValue, 
-        [selectedLanguage]: value 
-      } 
+    updateAppData({
+      [field]: {
+        ...currentValue,
+        [selectedLanguage]: value
+      }
     });
-    
+
     // Clear field error when user starts typing
     if (fieldErrors[field]) {
       setFieldErrors(prev => ({ ...prev, [field]: false }));
@@ -873,14 +930,14 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, va
 
   const updateField = (field, value) => {
     updateAppData({ [field]: value });
-    
+
     // Clear field error when user starts typing
     if (fieldErrors[field]) {
       setFieldErrors(prev => ({ ...prev, [field]: false }));
     }
   };
 
-  const getMultilingualValue = (field) => {
+  const getMultilingualValue = field => {
     const currentValue = appData[field] || {};
     return currentValue[selectedLanguage] || '';
   };
@@ -897,8 +954,9 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, va
     }
   }, [error, validateCurrentStep]);
 
-  const getFieldClassName = (field) => {
-    const baseClass = "mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  const getFieldClassName = field => {
+    const baseClass =
+      'mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500';
     if (fieldErrors[field]) {
       return `${baseClass} border-red-300 focus:border-red-500`;
     }
@@ -914,7 +972,7 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, va
         </label>
         <select
           value={selectedLanguage}
-          onChange={(e) => setSelectedLanguage(e.target.value)}
+          onChange={e => setSelectedLanguage(e.target.value)}
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="en">English</option>
@@ -947,7 +1005,7 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, va
         <input
           type="text"
           value={appData.id}
-          onChange={(e) => updateField('id', e.target.value)}
+          onChange={e => updateField('id', e.target.value)}
           className={getFieldClassName('id')}
           placeholder={t('admin.apps.wizard.basic.appIdPlaceholder', 'e.g., my-awesome-app')}
           required
@@ -976,7 +1034,7 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, va
         <input
           type="text"
           value={getMultilingualValue('name')}
-          onChange={(e) => updateMultilingualField('name', e.target.value)}
+          onChange={e => updateMultilingualField('name', e.target.value)}
           className={getFieldClassName('name')}
           placeholder={t('admin.apps.wizard.basic.namePlaceholder', 'Enter app name')}
           required
@@ -991,7 +1049,8 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, va
       <div>
         <div className="flex items-center justify-between">
           <label className="block text-sm font-medium text-gray-700">
-            {t('admin.apps.wizard.basic.description', 'Description')} <span className="text-red-500">*</span>
+            {t('admin.apps.wizard.basic.description', 'Description')}{' '}
+            <span className="text-red-500">*</span>
           </label>
           {isOverridden('description') && (
             <button
@@ -1004,7 +1063,7 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, va
         </div>
         <textarea
           value={getMultilingualValue('description')}
-          onChange={(e) => updateMultilingualField('description', e.target.value)}
+          onChange={e => updateMultilingualField('description', e.target.value)}
           rows={3}
           className={getFieldClassName('description')}
           placeholder={t('admin.apps.wizard.basic.descriptionPlaceholder', 'Enter app description')}
@@ -1035,7 +1094,7 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, va
           <input
             type="color"
             value={appData.color}
-            onChange={(e) => updateField('color', e.target.value)}
+            onChange={e => updateField('color', e.target.value)}
             className="mt-1 block w-full h-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
@@ -1057,7 +1116,7 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, va
           <input
             type="text"
             value={appData.icon}
-            onChange={(e) => updateField('icon', e.target.value)}
+            onChange={e => updateField('icon', e.target.value)}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             placeholder={t('admin.apps.wizard.basic.iconPlaceholder', 'e.g., chat-bubbles')}
           />
@@ -1068,31 +1127,38 @@ const BasicInfoStep = ({ appData, updateAppData, templateApp, revertToParent, va
 };
 
 // Step 4: System Prompt
-const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent, validateCurrentStep, error }) => {
+const SystemPromptStep = ({
+  appData,
+  updateAppData,
+  templateApp,
+  revertToParent,
+  validateCurrentStep,
+  error
+}) => {
   const { t, i18n } = useTranslation();
   const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
   const [fieldErrors, setFieldErrors] = useState({});
-  
-  const isOverridden = (field) => {
+
+  const isOverridden = field => {
     return templateApp && appData.overriddenFields?.includes(field);
   };
 
   const updateMultilingualField = (field, value) => {
     const currentValue = appData[field] || {};
-    updateAppData({ 
-      [field]: { 
-        ...currentValue, 
-        [selectedLanguage]: value 
-      } 
+    updateAppData({
+      [field]: {
+        ...currentValue,
+        [selectedLanguage]: value
+      }
     });
-    
+
     // Clear field error when user starts typing
     if (fieldErrors[field]) {
       setFieldErrors(prev => ({ ...prev, [field]: false }));
     }
   };
 
-  const getMultilingualValue = (field) => {
+  const getMultilingualValue = field => {
     const currentValue = appData[field] || {};
     return currentValue[selectedLanguage] || '';
   };
@@ -1109,8 +1175,9 @@ const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent,
     }
   }, [error, validateCurrentStep]);
 
-  const getFieldClassName = (field) => {
-    const baseClass = "mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  const getFieldClassName = field => {
+    const baseClass =
+      'mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500';
     if (fieldErrors[field]) {
       return `${baseClass} border-red-300 focus:border-red-500`;
     }
@@ -1126,7 +1193,7 @@ const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent,
         </label>
         <select
           value={selectedLanguage}
-          onChange={(e) => setSelectedLanguage(e.target.value)}
+          onChange={e => setSelectedLanguage(e.target.value)}
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="en">English</option>
@@ -1145,7 +1212,8 @@ const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent,
       <div>
         <div className="flex items-center justify-between">
           <label className="block text-sm font-medium text-gray-700">
-            {t('admin.apps.wizard.system.prompt', 'System Instructions')} <span className="text-red-500">*</span>
+            {t('admin.apps.wizard.system.prompt', 'System Instructions')}{' '}
+            <span className="text-red-500">*</span>
           </label>
           {isOverridden('system') && (
             <button
@@ -1158,10 +1226,13 @@ const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent,
         </div>
         <textarea
           value={getMultilingualValue('system')}
-          onChange={(e) => updateMultilingualField('system', e.target.value)}
+          onChange={e => updateMultilingualField('system', e.target.value)}
           rows={6}
           className={getFieldClassName('system')}
-          placeholder={t('admin.apps.wizard.system.promptPlaceholder', 'Enter system instructions that define how the AI should behave...')}
+          placeholder={t(
+            'admin.apps.wizard.system.promptPlaceholder',
+            'Enter system instructions that define how the AI should behave...'
+          )}
           required
         />
         {fieldErrors.system && (
@@ -1188,9 +1259,12 @@ const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent,
         <input
           type="text"
           value={getMultilingualValue('messagePlaceholder')}
-          onChange={(e) => updateMultilingualField('messagePlaceholder', e.target.value)}
+          onChange={e => updateMultilingualField('messagePlaceholder', e.target.value)}
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          placeholder={t('admin.apps.wizard.system.messagePlaceholderPlaceholder', 'Enter your message here...')}
+          placeholder={t(
+            'admin.apps.wizard.system.messagePlaceholderPlaceholder',
+            'Enter your message here...'
+          )}
         />
       </div>
 
@@ -1201,7 +1275,7 @@ const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent,
           </label>
           <select
             value={appData.preferredModel}
-            onChange={(e) => updateAppData({ preferredModel: e.target.value })}
+            onChange={e => updateAppData({ preferredModel: e.target.value })}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           >
             <option value="gpt-4">GPT-4</option>
@@ -1221,7 +1295,7 @@ const SystemPromptStep = ({ appData, updateAppData, templateApp, revertToParent,
             max="2"
             step="0.1"
             value={appData.preferredTemperature}
-            onChange={(e) => updateAppData({ preferredTemperature: parseFloat(e.target.value) })}
+            onChange={e => updateAppData({ preferredTemperature: parseFloat(e.target.value) })}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
@@ -1246,7 +1320,7 @@ const VariablesStep = ({ appData, updateAppData }) => {
     updateAppData({ variables: [...(appData.variables || []), newVariable] });
   };
 
-  const removeVariable = (index) => {
+  const removeVariable = index => {
     const newVariables = appData.variables.filter((_, i) => i !== index);
     updateAppData({ variables: newVariables });
   };
@@ -1260,7 +1334,10 @@ const VariablesStep = ({ appData, updateAppData }) => {
   return (
     <div className="space-y-6">
       <div className="text-sm text-gray-600">
-        {t('admin.apps.wizard.variables.instruction', 'Variables allow users to customize the app behavior. They can be used in the prompt template with {{variableName}} syntax.')}
+        {t(
+          'admin.apps.wizard.variables.instruction',
+          'Variables allow users to customize the app behavior. They can be used in the prompt template with {{variableName}} syntax.'
+        )}
       </div>
 
       <div className="space-y-4">
@@ -1268,7 +1345,9 @@ const VariablesStep = ({ appData, updateAppData }) => {
           <div key={index} className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <h5 className="text-sm font-medium text-gray-900">
-                {t('admin.apps.wizard.variables.variable', 'Variable {{index}}', { index: index + 1 })}
+                {t('admin.apps.wizard.variables.variable', 'Variable {{index}}', {
+                  index: index + 1
+                })}
               </h5>
               <button
                 onClick={() => removeVariable(index)}
@@ -1277,7 +1356,7 @@ const VariablesStep = ({ appData, updateAppData }) => {
                 <Icon name="trash" className="h-4 w-4" />
               </button>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1286,19 +1365,22 @@ const VariablesStep = ({ appData, updateAppData }) => {
                 <input
                   type="text"
                   value={variable.name}
-                  onChange={(e) => updateVariable(index, 'name', e.target.value)}
+                  onChange={e => updateVariable(index, 'name', e.target.value)}
                   className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder={t('admin.apps.wizard.variables.namePlaceholder', 'e.g., targetLanguage')}
+                  placeholder={t(
+                    'admin.apps.wizard.variables.namePlaceholder',
+                    'e.g., targetLanguage'
+                  )}
                 />
               </div>
-              
+
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   {t('admin.apps.wizard.variables.type', 'Type')}
                 </label>
                 <select
                   value={variable.type}
-                  onChange={(e) => updateVariable(index, 'type', e.target.value)}
+                  onChange={e => updateVariable(index, 'type', e.target.value)}
                   className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="string">String</option>
@@ -1308,7 +1390,7 @@ const VariablesStep = ({ appData, updateAppData }) => {
                 </select>
               </div>
             </div>
-            
+
             <div className="mt-3">
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 {t('admin.apps.wizard.variables.label', 'Label')}
@@ -1316,17 +1398,22 @@ const VariablesStep = ({ appData, updateAppData }) => {
               <input
                 type="text"
                 value={variable.label.en}
-                onChange={(e) => updateVariable(index, 'label', { ...variable.label, en: e.target.value })}
+                onChange={e =>
+                  updateVariable(index, 'label', { ...variable.label, en: e.target.value })
+                }
                 className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder={t('admin.apps.wizard.variables.labelPlaceholder', 'e.g., Target Language')}
+                placeholder={t(
+                  'admin.apps.wizard.variables.labelPlaceholder',
+                  'e.g., Target Language'
+                )}
               />
             </div>
-            
+
             <div className="mt-3 flex items-center">
               <input
                 type="checkbox"
                 checked={variable.required}
-                onChange={(e) => updateVariable(index, 'required', e.target.checked)}
+                onChange={e => updateVariable(index, 'required', e.target.checked)}
                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
               />
               <label className="ml-2 block text-sm text-gray-900">
@@ -1370,10 +1457,10 @@ const ToolsStep = ({ appData, updateAppData }) => {
     loadTools();
   }, []);
 
-  const toggleTool = (toolId) => {
+  const toggleTool = toolId => {
     const currentTools = appData.tools || [];
     const isSelected = currentTools.includes(toolId);
-    
+
     if (isSelected) {
       updateAppData({ tools: currentTools.filter(id => id !== toolId) });
     } else {
@@ -1381,15 +1468,19 @@ const ToolsStep = ({ appData, updateAppData }) => {
     }
   };
 
-  const filteredTools = availableTools.filter(tool =>
-    tool.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tool.description.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredTools = availableTools.filter(
+    tool =>
+      tool.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tool.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="space-y-6">
       <div className="text-sm text-gray-600">
-        {t('admin.apps.wizard.tools.instruction', 'Select the tools that will be available to your app. Tools extend the capabilities of the AI assistant.')}
+        {t(
+          'admin.apps.wizard.tools.instruction',
+          'Select the tools that will be available to your app. Tools extend the capabilities of the AI assistant.'
+        )}
       </div>
 
       {/* Search input */}
@@ -1401,7 +1492,7 @@ const ToolsStep = ({ appData, updateAppData }) => {
           type="text"
           placeholder={t('admin.apps.wizard.tools.searchPlaceholder', 'Search tools...')}
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={e => setSearchTerm(e.target.value)}
           className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           autoComplete="off"
         />
@@ -1417,8 +1508,11 @@ const ToolsStep = ({ appData, updateAppData }) => {
       </div>
 
       <div className="space-y-3 max-h-96 overflow-y-auto">
-        {filteredTools.map((tool) => (
-          <label key={tool.id} className="flex items-start p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+        {filteredTools.map(tool => (
+          <label
+            key={tool.id}
+            className="flex items-start p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+          >
             <input
               type="checkbox"
               checked={appData.tools?.includes(tool.id) || false}
@@ -1426,12 +1520,8 @@ const ToolsStep = ({ appData, updateAppData }) => {
               className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
             />
             <div className="ml-3 flex-1">
-              <div className="text-sm font-medium text-gray-900">
-                {tool.name}
-              </div>
-              <div className="text-sm text-gray-500">
-                {tool.description}
-              </div>
+              <div className="text-sm font-medium text-gray-900">{tool.name}</div>
+              <div className="text-sm text-gray-500">{tool.description}</div>
             </div>
           </label>
         ))}
@@ -1469,7 +1559,7 @@ const AdvancedSettingsStep = ({ appData, updateAppData }) => {
           <input
             type="checkbox"
             checked={appData.allowEmptyContent}
-            onChange={(e) => updateAppData({ allowEmptyContent: e.target.checked })}
+            onChange={e => updateAppData({ allowEmptyContent: e.target.checked })}
             className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
           />
           <label className="ml-2 block text-sm text-gray-900">
@@ -1481,7 +1571,7 @@ const AdvancedSettingsStep = ({ appData, updateAppData }) => {
           <input
             type="checkbox"
             checked={appData.sendChatHistory}
-            onChange={(e) => updateAppData({ sendChatHistory: e.target.checked })}
+            onChange={e => updateAppData({ sendChatHistory: e.target.checked })}
             className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
           />
           <label className="ml-2 block text-sm text-gray-900">
@@ -1493,7 +1583,9 @@ const AdvancedSettingsStep = ({ appData, updateAppData }) => {
           <input
             type="checkbox"
             checked={appData.imageUpload?.enabled}
-            onChange={(e) => updateAppData({ imageUpload: { ...appData.imageUpload, enabled: e.target.checked } })}
+            onChange={e =>
+              updateAppData({ imageUpload: { ...appData.imageUpload, enabled: e.target.checked } })
+            }
             className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
           />
           <label className="ml-2 block text-sm text-gray-900">
@@ -1507,7 +1599,7 @@ const AdvancedSettingsStep = ({ appData, updateAppData }) => {
           </label>
           <select
             value={appData.category || ''}
-            onChange={(e) => updateAppData({ category: e.target.value })}
+            onChange={e => updateAppData({ category: e.target.value })}
             className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           >
             <option value="">Select category...</option>
@@ -1526,7 +1618,7 @@ const AdvancedSettingsStep = ({ appData, updateAppData }) => {
           <input
             type="number"
             value={appData.order || 0}
-            onChange={(e) => updateAppData({ order: parseInt(e.target.value) || 0 })}
+            onChange={e => updateAppData({ order: parseInt(e.target.value) || 0 })}
             className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
@@ -1542,13 +1634,16 @@ const ReviewStep = ({ appData, templateApp }) => {
   return (
     <div className="space-y-6">
       <div className="text-sm text-gray-600">
-        {t('admin.apps.wizard.review.instruction', 'Review your app configuration before creating it.')}
+        {t(
+          'admin.apps.wizard.review.instruction',
+          'Review your app configuration before creating it.'
+        )}
       </div>
 
       <div className="bg-gray-50 rounded-lg p-4">
         <div className="space-y-3">
           <div className="flex items-center">
-            <div 
+            <div
               className="h-8 w-8 rounded-full flex items-center justify-center text-white font-bold mr-3"
               style={{ backgroundColor: appData.color }}
             >
@@ -1580,12 +1675,16 @@ const ReviewStep = ({ appData, templateApp }) => {
               <div className="flex items-center">
                 <Icon name="information-circle" className="h-4 w-4 text-blue-400 mr-2" />
                 <span className="text-sm text-blue-800">
-                  {t('admin.apps.wizard.review.basedOn', 'Based on template: {templateName}', { templateName: templateApp.name.en })}
+                  {t('admin.apps.wizard.review.basedOn', 'Based on template: {templateName}', {
+                    templateName: templateApp.name.en
+                  })}
                 </span>
               </div>
               {appData.overriddenFields?.length > 0 && (
                 <div className="mt-2 text-xs text-blue-700">
-                  {t('admin.apps.wizard.review.overridden', 'Overridden fields: {fields}', { fields: appData.overriddenFields.join(', ') })}
+                  {t('admin.apps.wizard.review.overridden', 'Overridden fields: {fields}', {
+                    fields: appData.overriddenFields.join(', ')
+                  })}
                 </div>
               )}
             </div>
@@ -1598,7 +1697,10 @@ const ReviewStep = ({ appData, templateApp }) => {
           <Icon name="exclamation-triangle" className="h-5 w-5 text-yellow-400" />
           <div className="ml-3">
             <p className="text-sm text-yellow-800">
-              {t('admin.apps.wizard.review.warning', 'Once created, you can edit the app configuration but cannot change its ID. Make sure the ID is unique and descriptive.')}
+              {t(
+                'admin.apps.wizard.review.warning',
+                'Once created, you can edit the app configuration but cannot change its ID. Make sure the ID is unique and descriptive.'
+              )}
             </p>
           </div>
         </div>

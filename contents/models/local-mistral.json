@@ -12,4 +12,5 @@
   "url": "http://bg-bau.dev.intrafind.io:8080/v1/chat/completions",
   "provider": "local",
   "tokenLimit": 32768,
-  "supportsTools": false}
+  "supportsTools": false
+}

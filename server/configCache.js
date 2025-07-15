@@ -27,10 +27,10 @@ function expandToolFunctions(tools = []) {
 
 /**
  * Configuration Cache Service
- * 
+ *
  * This service provides memory-based caching for frequently accessed configuration files
  * to eliminate the performance bottleneck of reading from disk on every API request.
- * 
+ *
  * Features:
  * - Preloads critical configuration files at startup
  * - Provides synchronous access to cached data
@@ -43,10 +43,10 @@ class ConfigCache {
     this.cache = new Map();
     this.refreshTimers = new Map();
     this.isInitialized = false;
-    
+
     // Cache TTL in milliseconds (default: 5 minutes for production, shorter for development)
     this.cacheTTL = process.env.NODE_ENV === 'production' ? 5 * 60 * 1000 : 60 * 1000;
-    
+
     // List of critical configuration files to preload
     this.criticalConfigs = [
       'config/models.json',
@@ -68,8 +68,8 @@ class ConfigCache {
    */
   async initialize() {
     console.log('🚀 Initializing configuration cache...');
-    
-    const loadPromises = this.criticalConfigs.map(async (configPath) => {
+
+    const loadPromises = this.criticalConfigs.map(async configPath => {
       try {
         // Special handling for apps.json - load from both sources
         if (configPath === 'config/apps.json') {
@@ -77,47 +77,46 @@ class ConfigCache {
           const enabledApps = await loadAllApps(false);
           this.setCacheEntry(configPath, enabledApps);
           console.log(`✓ Cached: ${configPath} (${enabledApps.length} enabled apps)`);
-          
+
           // Also load and cache all apps (including disabled)
           const allApps = await loadAllApps(true);
           this.setCacheEntry('config/apps-all.json', allApps);
           console.log(`✓ Cached: config/apps-all.json (${allApps.length} total apps)`);
           return;
         }
-        
+
         // Special handling for models.json - load from both sources
         if (configPath === 'config/models.json') {
           // Load enabled models only
           const enabledModels = await loadAllModels(false);
           this.setCacheEntry(configPath, enabledModels);
           console.log(`✓ Cached: ${configPath} (${enabledModels.length} enabled models)`);
-          
+
           // Also load and cache all models (including disabled)
           const allModels = await loadAllModels(true);
           this.setCacheEntry('config/models-all.json', allModels);
           console.log(`✓ Cached: config/models-all.json (${allModels.length} total models)`);
           return;
         }
-        
+
         // Special handling for prompts.json - load from both sources
         if (configPath === 'config/prompts.json') {
           // Load enabled prompts only
           const enabledPrompts = await loadAllPrompts(false);
           this.setCacheEntry(configPath, enabledPrompts);
           console.log(`✓ Cached: ${configPath} (${enabledPrompts.length} enabled prompts)`);
-          
+
           // Also load and cache all prompts (including disabled)
           const allPrompts = await loadAllPrompts(true);
           this.setCacheEntry('config/prompts-all.json', allPrompts);
           console.log(`✓ Cached: config/prompts-all.json (${allPrompts.length} total prompts)`);
           return;
         }
-        
+
         const data = await loadJson(configPath);
         if (data !== null) {
           // Expand tool functions into individual entries
-          const finalData =
-            configPath === 'config/tools.json' ? expandToolFunctions(data) : data;
+          const finalData = configPath === 'config/tools.json' ? expandToolFunctions(data) : data;
           this.setCacheEntry(configPath, finalData);
           console.log(`✓ Cached: ${configPath}`);
         } else {
@@ -128,7 +127,7 @@ class ConfigCache {
       }
     });
 
-    const localePromises = this.defaultLocales.map((lang) => this.loadAndCacheLocale(lang));
+    const localePromises = this.defaultLocales.map(lang => this.loadAndCacheLocale(lang));
 
     await Promise.all([...loadPromises, ...localePromises]);
     this.isInitialized = true;
@@ -184,7 +183,7 @@ class ConfigCache {
     const refreshTimer = setTimeout(() => {
       this.refreshCacheEntry(key);
     }, this.cacheTTL);
-    
+
     this.refreshTimers.set(key, refreshTimer);
   }
 
@@ -198,24 +197,24 @@ class ConfigCache {
         // Refresh enabled apps cache
         const enabledApps = await loadAllApps(false);
         this.setCacheEntry(key, enabledApps);
-        
+
         // Also refresh all apps cache
         const allApps = await loadAllApps(true);
         this.setCacheEntry('config/apps-all.json', allApps);
         return;
       }
-      
+
       // Special handling for apps-all.json
       if (key === 'config/apps-all.json') {
         const allApps = await loadAllApps(true);
         this.setCacheEntry(key, allApps);
-        
+
         // Also refresh enabled apps cache
         const enabledApps = await loadAllApps(false);
         this.setCacheEntry('config/apps.json', enabledApps);
         return;
       }
-      
+
       if (key.startsWith('locales/')) {
         const lang = key.split('/')[1].replace('.json', '');
         await this.loadAndCacheLocale(lang);
@@ -224,8 +223,7 @@ class ConfigCache {
 
       const data = await loadJson(key, { useCache: false });
       if (data !== null) {
-        const finalData =
-          key === 'config/tools.json' ? expandToolFunctions(data) : data;
+        const finalData = key === 'config/tools.json' ? expandToolFunctions(data) : data;
         this.setCacheEntry(key, finalData);
       }
     } catch (error) {
@@ -246,8 +244,9 @@ class ConfigCache {
 
     // Check if entry is still valid (extra safety check)
     const age = Date.now() - entry.timestamp;
-    if (age > this.cacheTTL * 2) { // Allow 2x TTL grace period
-      console.warn(`Cache entry for ${configPath} is stale (${Math.round(age/1000)}s old)`);
+    if (age > this.cacheTTL * 2) {
+      // Allow 2x TTL grace period
+      console.warn(`Cache entry for ${configPath} is stale (${Math.round(age / 1000)}s old)`);
     }
 
     return entry.data;
@@ -275,12 +274,12 @@ class ConfigCache {
     // Fallback to file loading
     console.warn(`Cache miss for ${configPath}, loading from file`);
     const data = await loadJson(configPath);
-    
+
     // Cache the result for future use
     if (data !== null) {
       this.setCacheEntry(configPath, data);
     }
-    
+
     return data;
   }
 
@@ -356,7 +355,7 @@ class ConfigCache {
     const cacheKey = includeDisabled ? 'config/prompts-all.json' : 'config/prompts.json';
     const data = this.get(cacheKey);
     const etag = this.getETag(cacheKey);
-    
+
     if (data === null && includeDisabled) {
       // Data not in cache - return empty array as fallback
       console.warn('Prompts cache not initialized for ETag - returning empty array');
@@ -365,7 +364,7 @@ class ConfigCache {
         etag: null
       };
     }
-    
+
     return {
       data,
       etag
@@ -400,7 +399,7 @@ class ConfigCache {
         console.warn(`⚠️  Failed to load builtin locale for ${language}`);
         return;
       }
-      const overrides = await loadJson(`locales/${language}.json`) || {};
+      const overrides = (await loadJson(`locales/${language}.json`)) || {};
       const merged = this.mergeLocaleData(base, overrides);
       this.setCacheEntry(`locales/${language}.json`, merged);
       console.log(`✓ Cached locale: ${language}`);
@@ -415,17 +414,19 @@ class ConfigCache {
    */
   async refreshModelsCache() {
     console.log('🔄 Refreshing models cache...');
-    
+
     try {
       // Refresh enabled models cache
       const enabledModels = await loadAllModels(false);
       this.setCacheEntry('config/models.json', enabledModels);
-      
+
       // Refresh all models cache
       const allModels = await loadAllModels(true);
       this.setCacheEntry('config/models-all.json', allModels);
-      
-      console.log(`✅ Models cache refreshed: ${enabledModels.length} enabled, ${allModels.length} total`);
+
+      console.log(
+        `✅ Models cache refreshed: ${enabledModels.length} enabled, ${allModels.length} total`
+      );
     } catch (error) {
       console.error('❌ Error refreshing models cache:', error.message);
     }
@@ -437,17 +438,19 @@ class ConfigCache {
    */
   async refreshAppsCache() {
     console.log('🔄 Refreshing apps cache...');
-    
+
     try {
       // Refresh enabled apps cache
       const enabledApps = await loadAllApps(false);
       this.setCacheEntry('config/apps.json', enabledApps);
-      
+
       // Refresh all apps cache
       const allApps = await loadAllApps(true);
       this.setCacheEntry('config/apps-all.json', allApps);
-      
-      console.log(`✅ Apps cache refreshed: ${enabledApps.length} enabled, ${allApps.length} total`);
+
+      console.log(
+        `✅ Apps cache refreshed: ${enabledApps.length} enabled, ${allApps.length} total`
+      );
     } catch (error) {
       console.error('❌ Error refreshing apps cache:', error.message);
     }
@@ -459,17 +462,19 @@ class ConfigCache {
    */
   async refreshPromptsCache() {
     console.log('🔄 Refreshing prompts cache...');
-    
+
     try {
       // Refresh enabled prompts cache
       const enabledPrompts = await loadAllPrompts(false);
       this.setCacheEntry('config/prompts.json', enabledPrompts);
-      
+
       // Refresh all prompts cache
       const allPrompts = await loadAllPrompts(true);
       this.setCacheEntry('config/prompts-all.json', allPrompts);
-      
-      console.log(`✅ Prompts cache refreshed: ${enabledPrompts.length} enabled, ${allPrompts.length} total`);
+
+      console.log(
+        `✅ Prompts cache refreshed: ${enabledPrompts.length} enabled, ${allPrompts.length} total`
+      );
     } catch (error) {
       console.error('❌ Error refreshing prompts cache:', error.message);
     }
@@ -480,8 +485,8 @@ class ConfigCache {
    */
   async refreshAll() {
     console.log('🔄 Refreshing all cached configurations...');
-    
-    const refreshPromises = Array.from(this.cache.keys()).map(async (configPath) => {
+
+    const refreshPromises = Array.from(this.cache.keys()).map(async configPath => {
       await this.refreshCacheEntry(configPath);
     });
 
@@ -497,7 +502,7 @@ class ConfigCache {
     for (const timer of this.refreshTimers.values()) {
       clearTimeout(timer);
     }
-    
+
     this.refreshTimers.clear();
     this.cache.clear();
     this.isInitialized = false;

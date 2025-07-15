@@ -1,8 +1,8 @@
-import React, { useEffect } from "react";
-import { UIConfigProvider } from "./UIConfigContext";
-import { PlatformConfigProvider } from "./PlatformConfigContext";
-import ErrorBoundaryFallback from "./ErrorBoundary";
-import { initializeForceRefresh } from "../utils/forceRefresh";
+import React, { useEffect } from 'react';
+import { UIConfigProvider } from './UIConfigContext';
+import { PlatformConfigProvider } from './PlatformConfigContext';
+import ErrorBoundaryFallback from './ErrorBoundary';
+import { initializeForceRefresh } from '../utils/forceRefresh';
 
 /**
  * Consolidates all application-level providers in a single component
@@ -22,7 +22,7 @@ const AppProviders = ({ children }) => {
         // Continue with normal app startup even if force refresh fails
       }
     };
-    
+
     checkForceRefresh();
   }, []);
 

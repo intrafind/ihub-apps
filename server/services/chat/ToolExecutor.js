@@ -16,72 +16,87 @@ class ToolExecutor {
   }
 
   async executeToolCall(toolCall, tools, chatId, buildLogData) {
-    const toolId = tools.find(t => normalizeName(t.id) === toolCall.function.name)?.id || toolCall.function.name;
+    const toolId =
+      tools.find(t => normalizeName(t.id) === toolCall.function.name)?.id || toolCall.function.name;
     let args = {};
-    
+
     try {
       let finalArgs = toolCall.function.arguments.replace(/}{/g, ',');
       try {
         args = JSON.parse(finalArgs);
-      } catch(e) {
+      } catch (e) {
         if (!finalArgs.startsWith('{')) finalArgs = '{' + finalArgs;
         if (!finalArgs.endsWith('}')) finalArgs = finalArgs + '}';
         try {
           args = JSON.parse(finalArgs);
         } catch (e2) {
-          console.error("Failed to parse tool arguments even after correction:", toolCall.function.arguments, e2);
+          console.error(
+            'Failed to parse tool arguments even after correction:',
+            toolCall.function.arguments,
+            e2
+          );
           args = {};
         }
       }
     } catch (e) {
-      console.error("Failed to parse tool arguments:", toolCall.function.arguments, e);
+      console.error('Failed to parse tool arguments:', toolCall.function.arguments, e);
     }
-    
+
     actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
-    
+
     try {
       const result = await runTool(toolId, { ...args, chatId });
       actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: result });
-      
-      await logInteraction('tool_usage', buildLogData(true, {
-        toolId,
-        toolInput: args,
-        toolOutput: result
-      }));
-      
+
+      await logInteraction(
+        'tool_usage',
+        buildLogData(true, {
+          toolId,
+          toolInput: args,
+          toolOutput: result
+        })
+      );
+
       return {
         success: true,
-        message: { 
-          role: 'tool', 
-          tool_call_id: toolCall.id, 
-          name: toolCall.function.name, 
-          content: JSON.stringify(result) 
+        message: {
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          name: toolCall.function.name,
+          content: JSON.stringify(result)
         }
       };
     } catch (toolError) {
       console.error(`Tool execution failed for ${toolId}:`, toolError);
-      
+
       const errorResult = {
         error: true,
         message: `Tool execution failed: ${toolError.message || 'Unknown error'}`,
         toolId,
         details: toolError.stack || toolError.toString()
       };
-      
-      actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: errorResult, error: true });
-      
-      await logInteraction('tool_error', buildLogData(true, {
-        toolId,
-        toolInput: args,
-        error: errorResult
-      }));
-      
+
+      actionTracker.trackToolCallEnd(chatId, {
+        toolName: toolId,
+        toolOutput: errorResult,
+        error: true
+      });
+
+      await logInteraction(
+        'tool_error',
+        buildLogData(true, {
+          toolId,
+          toolInput: args,
+          error: errorResult
+        })
+      );
+
       return {
         success: false,
-        message: { 
-          role: 'tool', 
-          tool_call_id: toolCall.id, 
-          name: toolCall.function.name, 
+        message: {
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          name: toolCall.function.name,
           content: JSON.stringify(errorResult)
         }
       };
@@ -97,9 +112,19 @@ class ToolExecutor {
     getLocalizedError,
     clientLanguage
   }) {
-    const { request, model, llmMessages, tools, apiKey, temperature, maxTokens, responseFormat, responseSchema } = prep;
+    const {
+      request,
+      model,
+      llmMessages,
+      tools,
+      apiKey,
+      temperature,
+      maxTokens,
+      responseFormat,
+      responseSchema
+    } = prep;
     const controller = new AbortController();
-    
+
     if (activeRequests.has(chatId)) {
       const existingController = activeRequests.get(chatId);
       existingController.abort();
@@ -111,7 +136,11 @@ class ToolExecutor {
       timeoutId = setTimeout(async () => {
         if (activeRequests.has(chatId)) {
           controller.abort();
-          const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT / 1000 }, clientLanguage);
+          const errorMessage = await getLocalizedError(
+            'requestTimeout',
+            { timeout: DEFAULT_TIMEOUT / 1000 },
+            clientLanguage
+          );
           actionTracker.trackError(chatId, { message: errorMessage });
           if (activeRequests.get(chatId) === controller) {
             activeRequests.delete(chatId);
@@ -133,16 +162,16 @@ class ToolExecutor {
 
       if (!llmResponse.ok) {
         const errorBody = await llmResponse.text();
-        throw Object.assign(new Error(`LLM API request failed with status ${llmResponse.status}`), { 
-          code: llmResponse.status.toString(), 
-          details: errorBody 
+        throw Object.assign(new Error(`LLM API request failed with status ${llmResponse.status}`), {
+          code: llmResponse.status.toString(),
+          details: errorBody
         });
       }
 
       const reader = llmResponse.body.getReader();
       const decoder = new TextDecoder();
       const events = [];
-      const parser = createParser({ onEvent: (e) => events.push(e) });
+      const parser = createParser({ onEvent: e => events.push(e) });
 
       let assistantContent = '';
       const collectedToolCalls = [];
@@ -164,8 +193,8 @@ class ToolExecutor {
           const result = processResponseBuffer(model.provider, evt.data);
 
           if (result.error) {
-            throw Object.assign(new Error(result.errorMessage || 'Error processing response'), { 
-              code: 'PROCESSING_ERROR' 
+            throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
+              code: 'PROCESSING_ERROR'
             });
           }
 
@@ -180,10 +209,10 @@ class ToolExecutor {
           console.log(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
           if (result.tool_calls?.length > 0) {
             result.tool_calls.forEach(call => {
-              const existingCall = collectedToolCalls.find(c => 
-                (call.id && c.id === call.id) || (!call.id && c.index === call.index)
+              const existingCall = collectedToolCalls.find(
+                c => (call.id && c.id === call.id) || (!call.id && c.index === call.index)
               );
-              
+
               if (existingCall) {
                 if (call.function?.arguments) {
                   existingCall.function.arguments += call.function.arguments;
@@ -207,7 +236,10 @@ class ToolExecutor {
             finishReason = result.finishReason;
           }
 
-          console.log(`Completed processing for chat ID ${chatId} - done? ${done}:`, JSON.stringify({ finishReason, collectedToolCalls }, null, 2));
+          console.log(
+            `Completed processing for chat ID ${chatId} - done? ${done}:`,
+            JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
+          );
           if (result.complete) {
             done = true;
             break;
@@ -216,18 +248,30 @@ class ToolExecutor {
       }
 
       if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
-        console.log(`No tool calls to process for chat ID ${chatId}:`, JSON.stringify({ finishReason, collectedToolCalls }, null, 2));
+        console.log(
+          `No tool calls to process for chat ID ${chatId}:`,
+          JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
+        );
         clearTimeout(timeoutId);
         actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
-        await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
+        await logInteraction(
+          'chat_response',
+          buildLogData(true, {
+            responseType: 'success',
+            response: assistantContent.substring(0, 1000)
+          })
+        );
         if (activeRequests.get(chatId) === controller) {
           activeRequests.delete(chatId);
         }
         return;
       }
-      
+
       const toolNames = collectedToolCalls.map(c => c.function.name).join(', ');
-      actionTracker.trackAction(chatId, { action: 'processing', message: `Using tool(s): ${toolNames}...` });
+      actionTracker.trackAction(chatId, {
+        action: 'processing',
+        message: `Using tool(s): ${toolNames}...`
+      });
 
       const assistantMessage = { role: 'assistant', tool_calls: collectedToolCalls };
       assistantMessage.content = assistantContent || null;
@@ -260,21 +304,20 @@ class ToolExecutor {
         getLocalizedError,
         clientLanguage
       });
-
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error.name !== 'AbortError') {
         const errorDetails = getErrorDetails(error, model);
         let localizedMessage = errorDetails.message;
-        
+
         if (error.code) {
           const translated = await getLocalizedError(error.code, {}, clientLanguage);
           if (translated && !translated.startsWith('Error:')) {
             localizedMessage = translated;
           }
         }
-        
+
         const errMsg = {
           message: localizedMessage,
           code: error.code || errorDetails.code,
@@ -283,7 +326,7 @@ class ToolExecutor {
 
         actionTracker.trackError(chatId, { ...errMsg });
       }
-      
+
       if (activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);
       }

@@ -27,7 +27,7 @@ const CanvasChatPanel = ({
   const { t } = useTranslation();
 
   return (
-    <div 
+    <div
       className="canvas-chat-panel bg-white border border-gray-300 flex flex-col h-full min-h-0 rounded-lg overflow-hidden"
       style={{ width: `${width}%` }}
     >
@@ -83,9 +83,10 @@ const CanvasChatPanel = ({
           showImageUploader={false}
           showFileUploader={false}
           inputRef={inputRef}
-          placeholder={selectedText ?
-            t('canvas.promptWithSelection', 'What would you like to do with the selected text?') :
-            t('canvas.promptPlaceholder', 'Ask the AI to help with your document...')
+          placeholder={
+            selectedText
+              ? t('canvas.promptWithSelection', 'What would you like to do with the selected text?')
+              : t('canvas.promptPlaceholder', 'Ask the AI to help with your document...')
           }
           allowEmptySubmit={false}
           appId={appId}

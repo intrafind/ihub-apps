@@ -1,4 +1,3 @@
-
 {
   "id": "hr-assistant",
   "name": {
@@ -35,13 +34,34 @@
       "type": "string",
       "required": true,
       "predefinedValues": [
-        {"label": {"en": "Job Description (LinkedIn)", "de": "Stellenbeschreibung (LinkedIn)"}, "value": "professional job description formatted for LinkedIn"},
-        {"label": {"en": "Job Description (General)", "de": "Stellenbeschreibung (Allgemein)"}, "value": "detailed job description"},
-        {"label": {"en": "Interview Questions", "de": "Interviewfragen"}, "value": "set of structured interview questions"},
-        {"label": {"en": "Performance Review Template", "de": "Leistungsbewertungsvorlage"}, "value": "performance review template"},
-        {"label": {"en": "Offer Letter", "de": "Angebotsschreiben"}, "value": "formal job offer letter"},
-        {"label": {"en": "Onboarding Checklist", "de": "Onboarding-Checkliste"}, "value": "new employee onboarding checklist"},
-        {"label": {"en": "Rejection Email", "de": "Ablehnungsschreiben"}, "value": "polite rejection email"}
+        {
+          "label": { "en": "Job Description (LinkedIn)", "de": "Stellenbeschreibung (LinkedIn)" },
+          "value": "professional job description formatted for LinkedIn"
+        },
+        {
+          "label": { "en": "Job Description (General)", "de": "Stellenbeschreibung (Allgemein)" },
+          "value": "detailed job description"
+        },
+        {
+          "label": { "en": "Interview Questions", "de": "Interviewfragen" },
+          "value": "set of structured interview questions"
+        },
+        {
+          "label": { "en": "Performance Review Template", "de": "Leistungsbewertungsvorlage" },
+          "value": "performance review template"
+        },
+        {
+          "label": { "en": "Offer Letter", "de": "Angebotsschreiben" },
+          "value": "formal job offer letter"
+        },
+        {
+          "label": { "en": "Onboarding Checklist", "de": "Onboarding-Checkliste" },
+          "value": "new employee onboarding checklist"
+        },
+        {
+          "label": { "en": "Rejection Email", "de": "Ablehnungsschreiben" },
+          "value": "polite rejection email"
+        }
       ]
     },
     {
@@ -73,11 +93,11 @@
       },
       "type": "string",
       "predefinedValues": [
-        {"label": {"en": "Entry Level", "de": "Einsteiger"}, "value": "entry level"},
-        {"label": {"en": "Mid Level", "de": "Mittleres Level"}, "value": "mid level"},
-        {"label": {"en": "Senior", "de": "Senior"}, "value": "senior level"},
-        {"label": {"en": "Manager", "de": "Manager"}, "value": "management level"},
-        {"label": {"en": "Executive", "de": "Führungskraft"}, "value": "executive level"}
+        { "label": { "en": "Entry Level", "de": "Einsteiger" }, "value": "entry level" },
+        { "label": { "en": "Mid Level", "de": "Mittleres Level" }, "value": "mid level" },
+        { "label": { "en": "Senior", "de": "Senior" }, "value": "senior level" },
+        { "label": { "en": "Manager", "de": "Manager" }, "value": "management level" },
+        { "label": { "en": "Executive", "de": "Führungskraft" }, "value": "executive level" }
       ]
     },
     {
@@ -88,12 +108,12 @@
       },
       "type": "string",
       "predefinedValues": [
-        {"label": {"en": "Full-time", "de": "Vollzeit"}, "value": "full-time"},
-        {"label": {"en": "Part-time", "de": "Teilzeit"}, "value": "part-time"},
-        {"label": {"en": "Contract", "de": "Vertrag"}, "value": "contract"},
-        {"label": {"en": "Temporary", "de": "Temporär"}, "value": "temporary"},
-        {"label": {"en": "Internship", "de": "Praktikum"}, "value": "internship"},
-        {"label": {"en": "Remote", "de": "Fernarbeit"}, "value": "remote"}
+        { "label": { "en": "Full-time", "de": "Vollzeit" }, "value": "full-time" },
+        { "label": { "en": "Part-time", "de": "Teilzeit" }, "value": "part-time" },
+        { "label": { "en": "Contract", "de": "Vertrag" }, "value": "contract" },
+        { "label": { "en": "Temporary", "de": "Temporär" }, "value": "temporary" },
+        { "label": { "en": "Internship", "de": "Praktikum" }, "value": "internship" },
+        { "label": { "en": "Remote", "de": "Fernarbeit" }, "value": "remote" }
       ]
     },
     {

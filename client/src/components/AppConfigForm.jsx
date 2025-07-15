@@ -2,32 +2,34 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../utils/localizeContent';
 
-const AppConfigForm = ({ 
-  app, 
-  models, 
-  styles, 
-  selectedModel, 
-  selectedStyle, 
+const AppConfigForm = ({
+  app,
+  models,
+  styles,
+  selectedModel,
+  selectedStyle,
   selectedOutputFormat,
   sendChatHistory,
   temperature,
-  onModelChange, 
+  onModelChange,
   onStyleChange,
   onOutputFormatChange,
-  onSendChatHistoryChange, 
+  onSendChatHistoryChange,
   onTemperatureChange,
-  currentLanguage 
+  currentLanguage
 }) => {
   const { t } = useTranslation();
-  
-  // Filter models if app has allowedModels specified
-  const availableModels = app?.allowedModels && app.allowedModels.length > 0
-    ? models.filter(model => app.allowedModels.includes(model.id))
-    : models;
 
-  const filteredModels = app?.tools && app.tools.length > 0
-    ? availableModels.filter(model => model.supportsTools)
-    : availableModels;
+  // Filter models if app has allowedModels specified
+  const availableModels =
+    app?.allowedModels && app.allowedModels.length > 0
+      ? models.filter(model => app.allowedModels.includes(model.id))
+      : models;
+
+  const filteredModels =
+    app?.tools && app.tools.length > 0
+      ? availableModels.filter(model => model.supportsTools)
+      : availableModels;
 
   // Available output formats
   const outputFormats = [
@@ -52,17 +54,17 @@ const AppConfigForm = ({
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {/* Model Selection */}
-      {(app?.settings?.model?.enabled !== false) && (
+      {app?.settings?.model?.enabled !== false && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {t('appConfig.model', 'Model')}
           </label>
           <select
             value={selectedModel}
-            onChange={(e) => onModelChange(e.target.value)}
+            onChange={e => onModelChange(e.target.value)}
             className="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
           >
-            {filteredModels.map((model) => {
+            {filteredModels.map(model => {
               const name = getLocalizedContent(model.name, currentLanguage);
               const desc = getLocalizedContent(model.description, currentLanguage);
               return (
@@ -75,16 +77,16 @@ const AppConfigForm = ({
           </select>
         </div>
       )}
-      
+
       {/* Style Selection */}
-      {(app?.settings?.style?.enabled !== false) && (
+      {app?.settings?.style?.enabled !== false && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {t('responseStyles.title', 'Response Style')}
           </label>
           <select
             value={selectedStyle}
-            onChange={(e) => onStyleChange(e.target.value)}
+            onChange={e => onStyleChange(e.target.value)}
             className="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
           >
             {Object.entries(styles).map(([id, description]) => (
@@ -95,9 +97,9 @@ const AppConfigForm = ({
           </select>
         </div>
       )}
-      
+
       {/* Temperature */}
-      {(app?.settings?.temperature?.enabled !== false) && (
+      {app?.settings?.temperature?.enabled !== false && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {t('models.temperature')}: {temperature}
@@ -108,7 +110,7 @@ const AppConfigForm = ({
             max="1"
             step="0.1"
             value={temperature}
-            onChange={(e) => onTemperatureChange(parseFloat(e.target.value))}
+            onChange={e => onTemperatureChange(parseFloat(e.target.value))}
             className="w-full"
           />
           <div className="flex justify-between text-xs text-gray-500">
@@ -119,17 +121,17 @@ const AppConfigForm = ({
       )}
 
       {/* Output Format */}
-      {(app?.settings?.outputFormat?.enabled !== false) && (
+      {app?.settings?.outputFormat?.enabled !== false && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {t('models.outputFormat', 'Output Format')}
           </label>
           <select
             value={selectedOutputFormat}
-            onChange={(e) => onOutputFormatChange(e.target.value)}
+            onChange={e => onOutputFormatChange(e.target.value)}
             className="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
           >
-            {outputFormats.map((format) => (
+            {outputFormats.map(format => (
               <option key={format.id} value={format.id}>
                 {format.name}
               </option>
@@ -139,13 +141,13 @@ const AppConfigForm = ({
       )}
 
       {/* Chat History Toggle */}
-      {(app?.settings?.chatHistory?.enabled !== false) && (
+      {app?.settings?.chatHistory?.enabled !== false && (
         <div className="flex items-center">
           <label className="flex items-center text-sm font-medium text-gray-700 cursor-pointer">
             <input
               type="checkbox"
               checked={sendChatHistory}
-              onChange={(e) => onSendChatHistoryChange(e.target.checked)}
+              onChange={e => onSendChatHistoryChange(e.target.checked)}
               className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
             />
             {t('appConfig.includeChatHistory', 'Include chat history in requests')}

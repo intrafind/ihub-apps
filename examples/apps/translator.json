@@ -1,4 +1,3 @@
-
 {
   "id": "translator",
   "order": 3,
@@ -48,12 +47,12 @@
       },
       "required": true,
       "predefinedValues": [
-        {"label": {"en": "English", "de": "Englisch"}, "value": "English"},
-        {"label": {"en": "Spanish", "de": "Spanisch"}, "value": "Spanish"},
-        {"label": {"en": "French", "de": "Französisch"}, "value": "French"},
-        {"label": {"en": "German", "de": "Deutsch"}, "value": "German"},
-        {"label": {"en": "Chinese", "de": "Chinesisch"}, "value": "Chinese"},
-        {"label": {"en": "Japanese", "de": "Japanisch"}, "value": "Japanese"}
+        { "label": { "en": "English", "de": "Englisch" }, "value": "English" },
+        { "label": { "en": "Spanish", "de": "Spanisch" }, "value": "Spanish" },
+        { "label": { "en": "French", "de": "Französisch" }, "value": "French" },
+        { "label": { "en": "German", "de": "Deutsch" }, "value": "German" },
+        { "label": { "en": "Chinese", "de": "Chinesisch" }, "value": "Chinese" },
+        { "label": { "en": "Japanese", "de": "Japanisch" }, "value": "Japanese" }
       ]
     }
   ]

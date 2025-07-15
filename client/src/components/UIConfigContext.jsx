@@ -18,7 +18,7 @@ export const UIConfigProvider = ({ children }) => {
   const [uiConfig, setUiConfig] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // Header color state (moved from HeaderColorContext)
   const [headerColor, setHeaderColor] = useState(FALLBACK_COLOR);
   const [defaultHeaderColor, setDefaultHeaderColor] = useState(FALLBACK_COLOR);
@@ -59,14 +59,16 @@ export const UIConfigProvider = ({ children }) => {
   };
 
   return (
-    <UIConfigContext.Provider value={{ 
-      uiConfig, 
-      isLoading, 
-      error, 
-      headerColor, 
-      setHeaderColor, 
-      resetHeaderColor 
-    }}>
+    <UIConfigContext.Provider
+      value={{
+        uiConfig,
+        isLoading,
+        error,
+        headerColor,
+        setHeaderColor,
+        resetHeaderColor
+      }}
+    >
       {children}
     </UIConfigContext.Provider>
   );

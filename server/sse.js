@@ -19,5 +19,3 @@ actionTracker.on('fire-sse', step => {
     }
   }
 });
-
-

@@ -5,7 +5,7 @@
  * @param {string} storageKey - The localStorage key to use for storing favorites
  * @returns {Object} Object containing getFavorites, isFavorite, and toggleFavorite methods
  */
-export const createFavoriteItemHelpers = (storageKey) => {
+export const createFavoriteItemHelpers = storageKey => {
   /**
    * Get the list of favorite item IDs from localStorage
    * @returns {string[]} Array of favorited item IDs
@@ -25,7 +25,7 @@ export const createFavoriteItemHelpers = (storageKey) => {
    * @param {string} itemId - The ID of the item to check
    * @returns {boolean} Whether the item is favorited
    */
-  const isFavorite = (itemId) => {
+  const isFavorite = itemId => {
     const favorites = getFavorites();
     return favorites.includes(itemId);
   };
@@ -35,11 +35,11 @@ export const createFavoriteItemHelpers = (storageKey) => {
    * @param {string} itemId - The ID of the item to toggle
    * @returns {boolean} The new favorite status
    */
-  const toggleFavorite = (itemId) => {
+  const toggleFavorite = itemId => {
     try {
       const favorites = getFavorites();
       const isCurrentlyFavorite = favorites.includes(itemId);
-      
+
       let newFavorites;
       if (isCurrentlyFavorite) {
         // Remove from favorites
@@ -48,7 +48,7 @@ export const createFavoriteItemHelpers = (storageKey) => {
         // Add to favorites
         newFavorites = [...favorites, itemId];
       }
-      
+
       localStorage.setItem(storageKey, JSON.stringify(newFavorites));
       return !isCurrentlyFavorite; // Return the new status
     } catch (error) {

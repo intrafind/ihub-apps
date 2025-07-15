@@ -24,31 +24,40 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
   const SUPPORTED_PDF_FORMATS = config.supportedPdfFormats || ['application/pdf'];
   const ALL_SUPPORTED_FORMATS = [...SUPPORTED_TEXT_FORMATS, ...SUPPORTED_PDF_FORMATS];
 
-  const getFileTypeDisplay = (mimeType) => {
+  const getFileTypeDisplay = mimeType => {
     switch (mimeType) {
-      case 'text/plain': return 'TXT';
-      case 'text/markdown': return 'MD';
-      case 'text/csv': return 'CSV';
-      case 'application/json': return 'JSON';
-      case 'text/html': return 'HTML';
-      case 'text/css': return 'CSS';
+      case 'text/plain':
+        return 'TXT';
+      case 'text/markdown':
+        return 'MD';
+      case 'text/csv':
+        return 'CSV';
+      case 'application/json':
+        return 'JSON';
+      case 'text/html':
+        return 'HTML';
+      case 'text/css':
+        return 'CSS';
       case 'text/javascript':
-      case 'application/javascript': return 'JS';
-      case 'application/pdf': return 'PDF';
-      default: return 'FILE';
+      case 'application/javascript':
+        return 'JS';
+      case 'application/pdf':
+        return 'PDF';
+      default:
+        return 'FILE';
     }
   };
 
-  const readTextFile = (file) => {
+  const readTextFile = file => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
+      reader.onload = e => resolve(e.target.result);
       reader.onerror = () => reject(new Error('read-error'));
       reader.readAsText(file);
     });
   };
 
-  const processFile = async (file) => {
+  const processFile = async file => {
     let content = '';
     let processedContent = '';
 
@@ -68,14 +77,14 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
       preview: {
         fileName: file.name,
         fileType: getFileTypeDisplay(file.type),
-        content: previewContent,
+        content: previewContent
       },
       data: {
         content: processedContent,
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,
-        displayType: getFileTypeDisplay(file.type),
+        displayType: getFileTypeDisplay(file.type)
       }
     };
   };
@@ -83,23 +92,32 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
   const formatList = (() => {
     const textFormats = SUPPORTED_TEXT_FORMATS.map(format => {
       switch (format) {
-        case 'text/plain': return 'TXT';
-        case 'text/markdown': return 'MD';
-        case 'text/csv': return 'CSV';
-        case 'application/json': return 'JSON';
-        case 'text/html': return 'HTML';
-        case 'text/css': return 'CSS';
+        case 'text/plain':
+          return 'TXT';
+        case 'text/markdown':
+          return 'MD';
+        case 'text/csv':
+          return 'CSV';
+        case 'application/json':
+          return 'JSON';
+        case 'text/html':
+          return 'HTML';
+        case 'text/css':
+          return 'CSS';
         case 'text/javascript':
-        case 'application/javascript': return 'JS';
-        case 'text/xml': return 'XML';
-        default: return format;
+        case 'application/javascript':
+          return 'JS';
+        case 'text/xml':
+          return 'XML';
+        default:
+          return format;
       }
     });
-    const pdfFormats = SUPPORTED_PDF_FORMATS.map(f => f === 'application/pdf' ? 'PDF' : f);
+    const pdfFormats = SUPPORTED_PDF_FORMATS.map(f => (f === 'application/pdf' ? 'PDF' : f));
     return [...new Set([...textFormats, ...pdfFormats])].join(', ');
   })();
 
-  const getErrorMessage = (code) => {
+  const getErrorMessage = code => {
     switch (code) {
       case 'file-too-large':
         return t('errors.fileTooLarge', {
@@ -139,9 +157,7 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
                     <div className="font-medium text-sm text-gray-900 truncate">
                       {preview.fileName}
                     </div>
-                    <div className="text-xs text-gray-500 mb-2">
-                      {preview.fileType} file
-                    </div>
+                    <div className="text-xs text-gray-500 mb-2">{preview.fileType} file</div>
                     <div className="text-xs text-gray-700 bg-white p-2 rounded border max-h-20 overflow-y-auto">
                       {preview.content}
                     </div>
@@ -187,17 +203,17 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
                 )}
               </button>
 
-              {error && (
-                <div className="text-red-500 text-sm mt-1">
-                  {getErrorMessage(error)}
-                </div>
-              )}
+              {error && <div className="text-red-500 text-sm mt-1">{getErrorMessage(error)}</div>}
 
               <div className="text-xs text-gray-500 mt-1 text-center">
-                {t('components.fileUploader.supportedFormats', 'Supported: {{formats}} (max {{maxSize}}MB)', {
-                  formats: formatList,
-                  maxSize: MAX_FILE_SIZE_MB
-                })}
+                {t(
+                  'components.fileUploader.supportedFormats',
+                  'Supported: {{formats}} (max {{maxSize}}MB)',
+                  {
+                    formats: formatList,
+                    maxSize: MAX_FILE_SIZE_MB
+                  }
+                )}
               </div>
             </div>
           )}

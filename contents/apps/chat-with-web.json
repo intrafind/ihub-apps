@@ -21,10 +21,7 @@
   "preferredStyle": "normal",
   "preferredTemperature": 0.7,
   "sendChatHistory": true,
-  "tools": [
-    "enhancedWebSearch",
-    "webContentExtractor"
-  ],
+  "tools": ["enhancedWebSearch", "webContentExtractor"],
   "settings": {
     "enabled": true,
     "model": {
