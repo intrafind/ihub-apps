@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getLocalizedContent } from '../utils/localizeContent';
-import Icon from '../components/Icon';
-import ModelDetailsPopup from '../components/ModelDetailsPopup';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
-import { makeAdminApiCall } from '../api/adminApi';
+import { getLocalizedContent } from '../../utils/localizeContent';
+import Icon from '../../components/Icon';
+import ModelDetailsPopup from '../../components/ModelDetailsPopup';
+import AdminAuth from '../../components/AdminAuth';
+import AdminNavigation from '../../components/AdminNavigation';
+import { makeAdminApiCall } from '../../api/adminApi';
 
 const AdminModelsPage = () => {
   const { t, i18n } = useTranslation();

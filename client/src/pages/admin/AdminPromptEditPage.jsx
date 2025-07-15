@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import Icon from '../components/Icon';
-import AdminNavigation from '../components/AdminNavigation';
-import DynamicLanguageEditor from '../components/DynamicLanguageEditor';
-import SearchableAppsSelector from '../components/SearchableAppsSelector';
-import { getLocalizedContent } from '../utils/localizeContent';
-import { fetchAdminPrompts, createPrompt, updatePrompt, clearApiCache, fetchAdminApps } from '../api/api';
+import Icon from '../../components/Icon';
+import AdminNavigation from '../../components/AdminNavigation';
+import DynamicLanguageEditor from '../../components/DynamicLanguageEditor';
+import SearchableAppsSelector from '../../components/SearchableAppsSelector';
+import { getLocalizedContent } from '../../utils/localizeContent';
+import { fetchAdminPrompts, createPrompt, updatePrompt, clearApiCache, fetchAdminApps } from '../../api/api';
 
 const AdminPromptEditPage = () => {
   const { t, i18n } = useTranslation();

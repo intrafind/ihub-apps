@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getLocalizedContent, DEFAULT_LANGUAGE } from '../utils/localizeContent';
-import Icon from '../components/Icon';
-import DynamicLanguageEditor from '../components/DynamicLanguageEditor';
+import { getLocalizedContent, DEFAULT_LANGUAGE } from '../../utils/localizeContent';
+import Icon from '../../components/Icon';
+import DynamicLanguageEditor from '../../components/DynamicLanguageEditor';
 
 const AdminModelEditPage = () => {
   const { t, i18n } = useTranslation();

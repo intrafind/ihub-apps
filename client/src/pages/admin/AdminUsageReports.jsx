@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { fetchAdminUsageData } from '../api/adminApi';
+import { fetchAdminUsageData } from '../../api/adminApi';
 import { useTranslation } from 'react-i18next';
-import LoadingSpinner from '../components/LoadingSpinner';
-import Icon from '../components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import Icon from '../../components/Icon';
+import AdminAuth from '../../components/AdminAuth';
+import AdminNavigation from '../../components/AdminNavigation';
 
 const StatCard = ({ title, value, icon, color, change, changeType }) => (
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
