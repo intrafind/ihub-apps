@@ -24,5 +24,81 @@
     "local-vllm",
     "gemini-1.5-flash"
   ],
-  "enabled": true
+  "enabled": false,
+  "tools": [],
+  "greeting": {
+    "en": {
+      "title": "👋 Hello!",
+      "subtitle": "How can I help you today?"
+    }
+  },
+  "allowEmptyContent": false,
+  "sendChatHistory": true,
+  "features": {
+    "magicPrompt": {
+      "enabled": false,
+      "model": "gpt-4",
+      "prompt": "You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}"
+    }
+  },
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": true
+    },
+    "outputFormat": {
+      "enabled": true
+    },
+    "chatHistory": {
+      "enabled": true
+    },
+    "style": {
+      "enabled": true
+    },
+    "speechRecognition": {
+      "service": "default",
+      "host": ""
+    }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "imageUpload": {
+    "enabled": false,
+    "resizeImages": true,
+    "maxFileSizeMB": 10,
+    "supportedFormats": [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/gif",
+      "image/webp"
+    ]
+  },
+  "fileUpload": {
+    "maxFileSizeMB": 5,
+    "supportedTextFormats": [
+      "text/plain",
+      "text/markdown",
+      "text/csv",
+      "application/json",
+      "text/html",
+      "text/css",
+      "text/javascript",
+      "application/javascript",
+      "text/xml"
+    ],
+    "supportedPdfFormats": [
+      "application/pdf"
+    ]
+  }
 }

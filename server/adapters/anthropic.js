@@ -164,15 +164,40 @@ const AnthropicAdapter = {
       }
 
       // Tool streaming events
-      if (parsed.type === 'content_block_start' && parsed.content_block?.name) {
-        result.tool_calls.push({ index: parsed.index, id: parsed.content_block.id, function: { name: parsed.content_block.name, arguments: '' } });
-      } else if (parsed.type === 'input_json_delta' && parsed.delta) {
-        result.tool_calls.push({ index: parsed.index, function: { arguments: JSON.stringify(parsed.delta) } });
+      if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'tool_use') {
+        result.tool_calls.push({ 
+          index: parsed.index, 
+          id: parsed.content_block.id, 
+          type: 'function',
+          function: { 
+            name: parsed.content_block.name, 
+            arguments: '' 
+          } 
+        });
+      } else if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'input_json_delta') {
+        // Accumulate arguments for the tool call at this index
+        const existingToolCall = result.tool_calls.find(tc => tc.index === parsed.index);
+        if (existingToolCall) {
+          existingToolCall.function.arguments += parsed.delta.partial_json || '';
+        } else {
+          // Fallback: create new tool call if not found
+          result.tool_calls.push({ 
+            index: parsed.index, 
+            type: 'function',
+            function: { 
+              name: '', 
+              arguments: parsed.delta.partial_json || '' 
+            } 
+          });
+        }
       }
 
       if (parsed.type === 'message_stop') {
         result.complete = true;
-        result.finishReason = parsed.stop_reason === 'tool_use' ? 'tool_calls' : (parsed.stop_reason || 'stop');
+        // Don't override finishReason if it was already set to 'tool_calls' from earlier events
+        if (!result.finishReason || result.finishReason !== 'tool_calls') {
+          result.finishReason = parsed.stop_reason === 'tool_use' ? 'tool_calls' : (parsed.stop_reason || 'stop');
+        }
       }
     } catch (parseError) {
       console.error('Error parsing Claude response chunk:', parseError);

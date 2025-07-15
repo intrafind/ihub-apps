@@ -185,16 +185,30 @@ export async function executeStreamingResponse({
   // TODO localize
   actionTracker.trackAction(chatId, { event: 'processing', message: 'Processing your request...' });
   const controller = new AbortController();
+  
+  // Race condition fix: Check if chatId already exists before setting
+  if (activeRequests.has(chatId)) {
+    const existingController = activeRequests.get(chatId);
+    existingController.abort();
+  }
   activeRequests.set(chatId, controller);
+  
   const baseLog = buildLogData(true);
   const promptTokens = llmMessages.map(m => estimateTokens(m.content || '')).reduce((a,b) => a+b, 0);
   await recordChatRequest({ userId: baseLog.userSessionId, appId: baseLog.appId, modelId: model.id, tokens: promptTokens });
-  const timeoutId = setTimeout(async () => {
-    controller.abort();
-    const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT/1000 }, clientLanguage);
-    actionTracker.trackError(chatId, { message: errorMessage });
-    activeRequests.delete(chatId);
-  }, DEFAULT_TIMEOUT);
+  
+  let timeoutId;
+  const setupTimeout = () => {
+    timeoutId = setTimeout(async () => {
+      if (activeRequests.has(chatId)) {
+        controller.abort();
+        const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT/1000 }, clientLanguage);
+        actionTracker.trackError(chatId, { message: errorMessage });
+        activeRequests.delete(chatId);
+      }
+    }, DEFAULT_TIMEOUT);
+  };
+  setupTimeout();
 
   console.log(`Sending request for chat ID ${chatId} ${model.id}:`, request.body);
 
@@ -220,7 +234,10 @@ export async function executeStreamingResponse({
         error: { message: errorMessage, code: llmResponse.status.toString(), details: errorBody }
       }));
       actionTracker.trackError(chatId, { message: errorMessage, details: errorBody });
-      activeRequests.delete(chatId);
+      // Safe cleanup: only delete if this controller is still the active one
+      if (activeRequests.get(chatId) === controller) {
+        activeRequests.delete(chatId);
+      }
       return;
     }
 
@@ -291,10 +308,15 @@ export async function executeStreamingResponse({
         finishReason = 'error';
       }
     } finally {
+      // Ensure cleanup happens in all cases to prevent memory leaks
+      clearTimeout(timeoutId);
       if (!doneEmitted) {
         actionTracker.trackDone(chatId, { finishReason: finishReason || 'connection_closed' });
       }
-      activeRequests.delete(chatId);
+      // Safe cleanup: only delete if this controller is still the active one
+      if (activeRequests.get(chatId) === controller) {
+        activeRequests.delete(chatId);
+      }
     }
   }).catch(async (error) => {
     console.error('Error occurred while processing chat:', error);
@@ -314,7 +336,10 @@ export async function executeStreamingResponse({
       };
       actionTracker.trackError(chatId, errorMessage);
     }
-    activeRequests.delete(chatId);
+    // Safe cleanup: only delete if this controller is still the active one
+    if (activeRequests.get(chatId) === controller) {
+      activeRequests.delete(chatId);
+    }
   });
 }
 
@@ -330,15 +355,29 @@ export function processChatWithTools({
 }) {
   const { request, model, llmMessages, tools, apiKey, temperature, maxTokens, responseFormat, responseSchema } = prep;
   const controller = new AbortController();
+  
+  // Race condition fix: Check if chatId already exists before setting
+  if (activeRequests.has(chatId)) {
+    const existingController = activeRequests.get(chatId);
+    existingController.abort();
+  }
   activeRequests.set(chatId, controller);
 
-
-  const timeoutId = setTimeout(async () => {
-    controller.abort();
-    const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT / 1000 }, clientLanguage);
-    actionTracker.trackError(chatId, { message: errorMessage });
-    activeRequests.delete(chatId);
-  }, DEFAULT_TIMEOUT);
+  let timeoutId;
+  const setupTimeout = () => {
+    timeoutId = setTimeout(async () => {
+      if (activeRequests.has(chatId)) {
+        controller.abort();
+        const errorMessage = await getLocalizedError('requestTimeout', { timeout: DEFAULT_TIMEOUT / 1000 }, clientLanguage);
+        actionTracker.trackError(chatId, { message: errorMessage });
+        // Safe cleanup: only delete if this controller is still the active one
+        if (activeRequests.get(chatId) === controller) {
+          activeRequests.delete(chatId);
+        }
+      }
+    }, DEFAULT_TIMEOUT);
+  };
+  setupTimeout();
 
   throttledFetch(model.id, request.url, {
     method: 'POST',
@@ -427,9 +466,13 @@ export function processChatWithTools({
 
     if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
       console.log(`No tool calls to process for chat ID ${chatId}:`, JSON.stringify({ finishReason, collectedToolCalls }, null, 2));
+      clearTimeout(timeoutId);
       actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
       await logInteraction('chat_response', buildLogData(true, { responseType: 'success', response: assistantContent.substring(0, 1000) }));
-      activeRequests.delete(chatId);
+      // Safe cleanup: only delete if this controller is still the active one
+      if (activeRequests.get(chatId) === controller) {
+        activeRequests.delete(chatId);
+      }
       return;
     }
     
@@ -443,6 +486,8 @@ export function processChatWithTools({
     for (const call of collectedToolCalls) {
       const toolId = tools.find(t => normalizeName(t.id) === call.function.name)?.id || call.function.name;
       let args = {};
+      let result = null;
+      
       try {
         let finalArgs = call.function.arguments.replace(/}{/g, ',');
         try {
@@ -462,16 +507,45 @@ export function processChatWithTools({
       }
       
       actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
-      const result = await runTool(toolId, { ...args, chatId });
-      actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: result });
-
-      await logInteraction('tool_usage', buildLogData(true, {
-        toolId,
-        toolInput: args,
-        toolOutput: result
-      }));
-
-      llmMessages.push({ role: 'tool', tool_call_id: call.id, name: call.function.name, content: JSON.stringify(result) });
+      
+      try {
+        // Comprehensive error handling for tool execution
+        result = await runTool(toolId, { ...args, chatId });
+        actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: result });
+        
+        await logInteraction('tool_usage', buildLogData(true, {
+          toolId,
+          toolInput: args,
+          toolOutput: result
+        }));
+        
+        llmMessages.push({ role: 'tool', tool_call_id: call.id, name: call.function.name, content: JSON.stringify(result) });
+      } catch (toolError) {
+        console.error(`Tool execution failed for ${toolId}:`, toolError);
+        
+        const errorResult = {
+          error: true,
+          message: `Tool execution failed: ${toolError.message || 'Unknown error'}`,
+          toolId,
+          details: toolError.stack || toolError.toString()
+        };
+        
+        actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: errorResult, error: true });
+        
+        await logInteraction('tool_error', buildLogData(true, {
+          toolId,
+          toolInput: args,
+          error: errorResult
+        }));
+        
+        // Still add the error result to messages so the conversation can continue
+        llmMessages.push({ 
+          role: 'tool', 
+          tool_call_id: call.id, 
+          name: call.function.name, 
+          content: JSON.stringify(errorResult)
+        });
+      }
     }
 
     const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
@@ -500,7 +574,9 @@ export function processChatWithTools({
 
   })
   .catch(async (error) => {
+    // Ensure timeout is always cleared
     clearTimeout(timeoutId);
+    
     if (error.name !== 'AbortError') {
       const errorDetails = getErrorDetails(error, model);
       let localizedMessage = errorDetails.message;
@@ -517,6 +593,10 @@ export function processChatWithTools({
 
       actionTracker.trackError(chatId, { ...errMsg });
     }
-    activeRequests.delete(chatId);
+    
+    // Safe cleanup: only delete if this controller is still the active one
+    if (activeRequests.get(chatId) === controller) {
+      activeRequests.delete(chatId);
+    }
   });
 }

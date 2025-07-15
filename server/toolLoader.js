@@ -72,6 +72,7 @@ export async function getToolsForApp(app) {
  * @param {object} params - Parameters passed to the tool
  */
 export async function runTool(toolId, params = {}) {
+  console.log(`Running tool: ${toolId} with params:`, JSON.stringify(params, null, 2));
   if (!/^[A-Za-z0-9_.-]+$/.test(toolId)) {
     throw new Error('Invalid tool id');
   }
