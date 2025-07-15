@@ -5,16 +5,12 @@ import { clients, activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
 import { throttledFetch } from '../../requestThrottler.js';
 
-import {
-  prepareChatRequest,
-  executeStreamingResponse,
-  executeNonStreamingResponse,
-  processChatWithTools
-} from '../../services/chatService.js';
+import ChatService from '../../services/chat/ChatService.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 
 export default function registerSessionRoutes(app, { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }) {
+  const chatService = new ChatService();
   app.get('/api/models/:modelId/chat/test', validate(chatTestSchema), async (req, res) => {
     try {
       const { modelId } = req.params;
@@ -144,46 +140,51 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
     
     // Handle requests with tools
     if (prep.tools && prep.tools.length > 0) {
-      const toolsParams = {
-        prep,
-        buildLogData,
-        messageId,
-        DEFAULT_TIMEOUT,
-        getLocalizedError,
-        clientLanguage
-      };
-      
       if (streaming) {
         console.log(`Processing chat with tools for chat ID: ${chatId}`);
-        processChatWithTools({ ...toolsParams, clientRes, chatId });
-        return;
+        return await chatService.processChatWithTools({ 
+          prep, 
+          clientRes, 
+          chatId, 
+          buildLogData, 
+          DEFAULT_TIMEOUT, 
+          getLocalizedError, 
+          clientLanguage 
+        });
       } else {
-        return processChatWithTools({ ...toolsParams, res });
+        return await chatService.processChatWithTools({ 
+          prep, 
+          res, 
+          buildLogData, 
+          DEFAULT_TIMEOUT, 
+          getLocalizedError, 
+          clientLanguage 
+        });
       }
     }
     
     // Handle standard requests without tools
-    const executionParams = {
-      request: prep.request,
-      buildLogData,
-      model: prep.model,
-      llmMessages: prep.llmMessages,
-      DEFAULT_TIMEOUT
-    };
-    
     if (streaming) {
-      return await executeStreamingResponse({ 
-        ...executionParams, 
+      return await chatService.processStreamingChat({ 
+        request: prep.request, 
         chatId, 
         clientRes, 
+        buildLogData, 
+        model: prep.model, 
+        llmMessages: prep.llmMessages, 
+        DEFAULT_TIMEOUT, 
         getLocalizedError, 
         clientLanguage 
       });
     } else {
-      return executeNonStreamingResponse({ 
-        ...executionParams, 
+      return await chatService.processNonStreamingChat({ 
+        request: prep.request, 
         res, 
-        messageId 
+        buildLogData, 
+        messageId, 
+        model: prep.model, 
+        llmMessages: prep.llmMessages, 
+        DEFAULT_TIMEOUT 
       });
     }
   }
@@ -226,7 +227,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
       actionTracker.trackSessionStart(chatId, { sessionId: chatId, timestamp: new Date().toISOString() });
       if (!clients.has(chatId)) {
         console.log(`No active SSE connection for chat ID: ${chatId}. Creating response without streaming.`);
-        const prep = await prepareChatRequest({
+        const prep = await chatService.prepareChatRequest({
           appId,
           modelId,
           messages,
@@ -236,18 +237,16 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
           language: clientLanguage,
           useMaxTokens,
           bypassAppPrompts,
-          verifyApiKey,
-          processMessageTemplates,
           res
         });
-        if (prep.error) {
-          const errMsg = await getLocalizedError(prep.error, {}, clientLanguage);
-          return res.status(prep.error === 'appNotFound' || prep.error === 'modelNotFound' ? 404 : 500).json({ error: errMsg });
+        if (!prep.success) {
+          const errMsg = await getLocalizedError(prep.error.code || 'internalError', {}, clientLanguage);
+          return res.status(prep.error.code === 'APP_NOT_FOUND' || prep.error.code === 'MODEL_NOT_FOUND' ? 404 : 500).json({ error: errMsg });
         }
-        ({ model, llmMessages } = prep);
+        ({ model, llmMessages } = prep.data);
 
         return processChatRequest({
-          prep,
+          prep: prep.data,
           buildLogData,
           messageId,
           streaming: false,
@@ -261,7 +260,7 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
       } else {
         const clientRes = clients.get(chatId).response;
         clients.set(chatId, { ...clients.get(chatId), lastActivity: new Date() });
-        const prep = await prepareChatRequest({
+        const prep = await chatService.prepareChatRequest({
           appId,
           modelId,
           messages,
@@ -271,20 +270,18 @@ export default function registerSessionRoutes(app, { verifyApiKey, processMessag
           language: clientLanguage,
           useMaxTokens,
           bypassAppPrompts,
-          verifyApiKey,
-          processMessageTemplates,
           clientRes
         });
-        if (prep.error) {
-          const errMsg = await getLocalizedError(prep.error, {}, clientLanguage);
+        if (!prep.success) {
+          const errMsg = await getLocalizedError(prep.error.code || 'internalError', {}, clientLanguage);
           actionTracker.trackError(chatId, { message: errMsg });
           return res.json({ status: 'error', message: errMsg });
         }
-        model = prep.model;
-        llmMessages = prep.llmMessages;
+        model = prep.data.model;
+        llmMessages = prep.data.llmMessages;
 
         await processChatRequest({
-          prep,
+          prep: prep.data,
           buildLogData,
           messageId,
           streaming: true,

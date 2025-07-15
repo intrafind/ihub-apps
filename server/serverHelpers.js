@@ -6,6 +6,8 @@ import { sendSSE, clients, activeRequests } from './sse.js';
 import { getLocalizedContent } from '../shared/localize.js';
 import config from './config.js';
 import configCache from './configCache.js';
+import ErrorHandler from './utils/ErrorHandler.js';
+import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.
@@ -42,75 +44,21 @@ export function setupMiddleware(app, platformConfig = {}) {
 }
 
 
+const errorHandler = new ErrorHandler();
+
 export async function getLocalizedError(errorKey, params = {}, language) {
-  const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-  const lang = language || defaultLang;
-  try {
-    // Try to get translations from cache first
-    let translations = configCache.getLocalizations(lang);
-    
-    const hasServer = translations?.serverErrors && translations.serverErrors[errorKey];
-    const hasTool = translations?.toolErrors && translations.toolErrors[errorKey];
-    if (!translations || (!hasServer && !hasTool)) {
-      if (lang !== defaultLang) {
-        // Try default translations from cache first
-        let enTranslations = configCache.getLocalizations(defaultLang);
-        if (!enTranslations) {
-          await configCache.loadAndCacheLocale(defaultLang);
-          enTranslations = configCache.getLocalizations(defaultLang);
-        }
-        const enServer = enTranslations?.serverErrors?.[errorKey];
-        const enTool = enTranslations?.toolErrors?.[errorKey];
-        if (enServer || enTool) {
-          let message = enServer || enTool;
-          Object.entries(params).forEach(([k,v]) => { message = message.replace(`{${k}}`, v); });
-          return message;
-        }
-      }
-      return `Error: ${errorKey}`;
-    }
-    let message = translations.serverErrors?.[errorKey] || translations.toolErrors?.[errorKey];
-    Object.entries(params).forEach(([k,v]) => { message = message.replace(`{${k}}`, v); });
-    return message;
-  } catch (error) {
-    console.error(`Error getting localized error message for ${errorKey}:`, error);
-    return `Error: ${errorKey}`;
-  }
+  return await errorHandler.getLocalizedError(errorKey, params, language);
 }
 
+const apiKeyVerifier = new ApiKeyVerifier();
+
 export function validateApiKeys() {
-  const providers = ['openai', 'anthropic', 'google', 'mistral'];
-  const missing = [];
-  for (const provider of providers) {
-    const envVar = `${provider.toUpperCase()}_API_KEY`;
-    if (!config[envVar]) missing.push(provider);
-  }
-  if (missing.length > 0) {
-    console.warn(`⚠️ WARNING: Missing API keys for providers: ${missing.join(', ')}`);
-    console.warn('Some models may not work. Please check your .env file configuration.');
-  } else {
-    console.log('✓ All provider API keys are configured');
-  }
+  return apiKeyVerifier.validateApiKeys();
 }
 
 export async function verifyApiKey(model, res, clientRes = null, language) {
-  const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-  const lang = language || defaultLang;
-  try {
-    const apiKey = await getApiKeyForModel(model.id);
-    if (!apiKey) {
-      console.error(`API key not found for model: ${model.id} (${model.provider}). Please set ${model.provider.toUpperCase()}_API_KEY in your environment.`);
-      const localizedErrorMessage = await getLocalizedError('apiKeyNotFound', { provider: model.provider }, lang);
-      if (clientRes) sendSSE(clientRes, 'error', { message: localizedErrorMessage });
-      return false;
-    }
-    return apiKey;
-  } catch (error) {
-    console.error(`Error getting API key for model ${model.id}:`, error);
-    const localizedErrorMessage = await getLocalizedError('internalError', {}, lang);
-    if (clientRes) sendSSE(clientRes, 'error', { message: localizedErrorMessage });
-    return false;
-  }
+  const result = await apiKeyVerifier.verifyApiKey(model, res, clientRes, language);
+  return result.success ? result.apiKey : false;
 }
 
 export async function processMessageTemplates(messages, app, style = null, outputFormat = null, language, outputSchema = null) {
