@@ -13,7 +13,7 @@ export default function registerDataRoutes(app) {
       if (!styles) {
         return res.status(500).json({ error: 'Failed to load styles configuration' });
       }
-      res.json(styles);
+      res.json(styles.data);
     } catch (error) {
       console.error('Error fetching styles:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -23,7 +23,7 @@ export default function registerDataRoutes(app) {
   app.get('/api/prompts', async (req, res) => {
     try {
       // Get prompts with ETag from cache
-      const { data: prompts, etag } = configCache.getPromptsWithETag();
+      const { data: prompts, etag } = configCache.getPrompts();
 
       if (!prompts) {
         return res.status(500).json({ error: 'Failed to load prompts configuration' });
@@ -109,7 +109,8 @@ export default function registerDataRoutes(app) {
       if (!uiConfig) {
         return res.status(500).json({ error: 'Failed to load UI configuration' });
       }
-      res.json(uiConfig);
+      res.setHeader('ETag', uiConfig.etag);
+      res.json(uiConfig.data);
     } catch (error) {
       console.error('Error fetching UI configuration:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -143,7 +144,7 @@ export default function registerDataRoutes(app) {
 
       // Add version and computed salt to platform response
       const enhancedPlatform = {
-        ...platform,
+        ...platform.data,
         version: appVersion,
         computedRefreshSalt: computedSalt
       };

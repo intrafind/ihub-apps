@@ -190,7 +190,8 @@ export default function registerAdminRoutes(app) {
   // Apps management endpoints
   app.get('/api/admin/apps', adminAuth, async (req, res) => {
     try {
-      const apps = configCache.getApps(true);
+      const { data: apps, etag: appsEtag } = configCache.getApps(true);
+      res.setHeader('ETag', appsEtag);
       res.json(apps);
     } catch (error) {
       console.error('Error fetching all apps:', error);
@@ -201,8 +202,9 @@ export default function registerAdminRoutes(app) {
   // Get apps suitable for inheritance (templates)
   app.get('/api/admin/apps/templates', adminAuth, async (req, res) => {
     try {
-      const apps = configCache.getApps(true);
+      const { data: apps, etag: appsEtag } = configCache.getApps(true);
       const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
+      res.setHeader('ETag', appsEtag);
       res.json(templates);
     } catch (error) {
       console.error('Error fetching template apps:', error);
@@ -214,7 +216,7 @@ export default function registerAdminRoutes(app) {
   app.get('/api/admin/apps/:appId/inheritance', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
-      const apps = configCache.getApps(true);
+      const { data: apps, etag: appsEtag } = configCache.getApps(true);
       const app = apps.find(a => a.id === appId);
 
       if (!app) {
@@ -245,7 +247,7 @@ export default function registerAdminRoutes(app) {
   app.get('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
-      const apps = configCache.getApps(true);
+      const { data: apps, etag: appsEtag } = configCache.getApps(true);
       const app = apps.find(a => a.id === appId);
 
       if (!app) {
@@ -326,7 +328,7 @@ export default function registerAdminRoutes(app) {
   app.post('/api/admin/apps/:appId/toggle', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
-      const apps = configCache.getApps(true);
+      const { data: apps, etag: appsEtag } = configCache.getApps(true);
       const app = apps.find(a => a.id === appId);
 
       if (!app) {
@@ -384,7 +386,8 @@ export default function registerAdminRoutes(app) {
   // Models management endpoints
   app.get('/api/admin/models', adminAuth, async (req, res) => {
     try {
-      const models = configCache.getModels(true);
+      const { data: models, etag: modelsEtag } = configCache.getModels(true);
+      res.setHeader('ETag', modelsEtag);
       res.json(models);
     } catch (error) {
       console.error('Error fetching all models:', error);
@@ -395,13 +398,14 @@ export default function registerAdminRoutes(app) {
   app.get('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
-      const models = configCache.getModels(true);
+      const { data: models, etag: modelsEtag } = configCache.getModels(true);
       const model = models.find(m => m.id === modelId);
 
       if (!model) {
         return res.status(404).json({ error: 'Model not found' });
       }
 
+      res.setHeader('ETag', modelsEtag);
       res.json(model);
     } catch (error) {
       console.error('Error fetching model:', error);
@@ -516,7 +520,7 @@ export default function registerAdminRoutes(app) {
   app.post('/api/admin/models/:modelId/toggle', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
-      const models = configCache.getModels(true);
+      const { data: models, etag: modelsEtag } = configCache.getModels(true);
       const model = models.find(m => m.id === modelId);
 
       if (!model) {
@@ -567,7 +571,7 @@ export default function registerAdminRoutes(app) {
   app.delete('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
-      const models = configCache.getModels(true);
+      const { data: models, etag: modelsEtag } = configCache.getModels(true);
       const model = models.find(m => m.id === modelId);
 
       if (!model) {
@@ -615,7 +619,7 @@ export default function registerAdminRoutes(app) {
   app.post('/api/admin/models/:modelId/test', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
-      const models = configCache.getModels(true);
+      const { data: models, etag: modelsEtag } = configCache.getModels(true);
       const model = models.find(m => m.id === modelId);
 
       if (!model) {
@@ -708,7 +712,7 @@ export default function registerAdminRoutes(app) {
   app.get('/api/admin/prompts', adminAuth, async (req, res) => {
     try {
       // Get prompts with ETag from cache
-      const { data: prompts, etag } = configCache.getPromptsWithETag(true);
+      const { data: prompts, etag } = configCache.getPrompts(true);
 
       if (!prompts) {
         return res.status(500).json({ error: 'Failed to load prompts configuration' });
@@ -978,7 +982,7 @@ export default function registerAdminRoutes(app) {
       const { lang = defaultLanguage } = req.query;
 
       // Get prompts from cache
-      const { data: prompts } = configCache.getPromptsWithETag();
+      const { data: prompts } = configCache.getPrompts(true);
 
       if (!prompts) {
         return res.status(500).json({ error: 'Failed to load prompts configuration' });

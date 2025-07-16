@@ -180,23 +180,27 @@ class ConfigCache {
       // Special handling for apps.json - load from both sources
       if (key === 'config/apps.json') {
         // Refresh enabled apps cache
-        const enabledApps = await loadAllApps(false);
-        this.setCacheEntry(key, enabledApps);
+        const apps = await loadAllApps(true);
+        this.setCacheEntry(key, apps);
 
-        // Also refresh all apps cache
-        const allApps = await loadAllApps(true);
-        this.setCacheEntry('config/apps-all.json', allApps);
         return;
       }
 
-      // Special handling for apps-all.json
-      if (key === 'config/apps-all.json') {
-        const allApps = await loadAllApps(true);
-        this.setCacheEntry(key, allApps);
+      // Special handling for models.json - load from both sources
+      if (key === 'config/models.json') {
+        // Refresh enabled models cache
+        const models = await loadAllModels(true);
+        this.setCacheEntry(key, models);
 
-        // Also refresh enabled apps cache
-        const enabledApps = await loadAllApps(false);
-        this.setCacheEntry('config/apps.json', enabledApps);
+        return;
+      }
+
+      // Special handling for prompts.json - load from both sources
+      if (key === 'config/prompts.json') {
+        // Refresh enabled prompts cache
+        const prompts = await loadAllPrompts(true);
+        this.setCacheEntry(key, prompts);
+
         return;
       }
 
@@ -224,7 +228,10 @@ class ConfigCache {
   get(configPath) {
     const entry = this.cache.get(configPath);
     if (!entry) {
-      return null;
+      return {
+        data: null,
+        etag: null
+      };
     }
 
     // Check if entry is still valid (extra safety check)
@@ -234,15 +241,7 @@ class ConfigCache {
       console.warn(`Cache entry for ${configPath} is stale (${Math.round(age / 1000)}s old)`);
     }
 
-    return entry.data;
-  }
-
-  /**
-   * Get ETag for a cache entry
-   */
-  getETag(configPath) {
-    const entry = this.cache.get(configPath);
-    return entry ? entry.etag : null;
+    return entry;
   }
 
   /**
@@ -274,7 +273,7 @@ class ConfigCache {
   getModels(includeDisabled = false) {
     // After cache simplification, all models (including disabled) are now stored in config/models.json
     const models = this.get('config/models.json');
-    if (models === null) {
+    if (models === null || !models.data) {
       console.warn('Models cache not initialized - returning empty array');
       return [];
     }
@@ -284,7 +283,10 @@ class ConfigCache {
     }
 
     // Filter to only enabled models
-    return models.filter(model => model.enabled !== false);
+    return {
+      data: models.data.filter(model => model.enabled !== false),
+      etag: models.etag
+    };
   }
 
   /**
@@ -293,7 +295,7 @@ class ConfigCache {
   getApps(includeDisabled = false) {
     // After cache simplification, all apps (including disabled) are now stored in config/apps.json
     const apps = this.get('config/apps.json');
-    if (apps === null) {
+    if (apps === null || !apps.data) {
       console.warn('Apps cache not initialized - returning empty array');
       return [];
     }
@@ -303,14 +305,32 @@ class ConfigCache {
     }
 
     // Filter to only enabled apps
-    return apps.filter(app => app.enabled !== false);
+    return {
+      data: apps.data.filter(app => app.enabled !== false),
+      etag: apps.etag
+    };
   }
 
   /**
    * Get tools configuration
    */
-  getTools() {
-    return this.get('config/tools.json');
+  getTools(includeDisabled = false) {
+    // After cache simplification, all tools (including disabled) are now stored in config/tools.json
+    const tools = this.get('config/tools.json');
+    if (tools === null || !tools.data) {
+      console.warn('Tools cache not initialized - returning empty array');
+      return [];
+    }
+
+    if (includeDisabled) {
+      return tools;
+    }
+
+    // Filter to only enabled tools
+    return {
+      data: tools.data.filter(tool => tool.enabled !== false),
+      etag: tools.etag
+    };
   }
 
   /**
@@ -324,9 +344,10 @@ class ConfigCache {
    * Get prompts configuration
    */
   getPrompts(includeDisabled = false) {
-    // After cache simplification, all prompts (including disabled) are now stored in config/prompts.json
-    const prompts = this.get('config/prompts.json');
-    if (prompts === null) {
+    const cacheKey = 'config/prompts.json';
+    const prompts = this.get(cacheKey);
+
+    if (prompts === null || !prompts.data) {
       console.warn('Prompts cache not initialized - returning empty array');
       return [];
     }
@@ -336,34 +357,9 @@ class ConfigCache {
     }
 
     // Filter to only enabled prompts
-    return prompts.filter(prompt => prompt.enabled !== false);
-  }
-
-  /**
-   * Get prompts with ETag information
-   */
-  getPromptsWithETag(includeDisabled = false) {
-    // After cache simplification, all prompts are stored in config/prompts.json
-    const cacheKey = 'config/prompts.json';
-    const allPrompts = this.get(cacheKey);
-    const etag = this.getETag(cacheKey);
-
-    if (allPrompts === null) {
-      console.warn('Prompts cache not initialized for ETag - returning empty array');
-      return {
-        data: [],
-        etag: null
-      };
-    }
-
-    // Filter based on includeDisabled parameter
-    const data = includeDisabled
-      ? allPrompts
-      : allPrompts.filter(prompt => prompt.enabled !== false);
-
     return {
-      data,
-      etag
+      data: prompts.data.filter(prompt => prompt.enabled !== false),
+      etag: prompts.etag
     };
   }
 
@@ -413,16 +409,10 @@ class ConfigCache {
 
     try {
       // Refresh enabled models cache
-      const enabledModels = await loadAllModels(false);
-      this.setCacheEntry('config/models.json', enabledModels);
+      const models = await loadAllModels(true);
+      this.setCacheEntry('config/models.json', models);
 
-      // Refresh all models cache
-      const allModels = await loadAllModels(true);
-      this.setCacheEntry('config/models-all.json', allModels);
-
-      console.log(
-        `✅ Models cache refreshed: ${enabledModels.length} enabled, ${allModels.length} total`
-      );
+      console.log(`✅ Models cache refreshed: ${models.length} enabled, ${models.length} total`);
     } catch (error) {
       console.error('❌ Error refreshing models cache:', error.message);
     }
@@ -437,16 +427,10 @@ class ConfigCache {
 
     try {
       // Refresh enabled apps cache
-      const enabledApps = await loadAllApps(false);
-      this.setCacheEntry('config/apps.json', enabledApps);
+      const apps = await loadAllApps(true);
+      this.setCacheEntry('config/apps.json', apps);
 
-      // Refresh all apps cache
-      const allApps = await loadAllApps(true);
-      this.setCacheEntry('config/apps-all.json', allApps);
-
-      console.log(
-        `✅ Apps cache refreshed: ${enabledApps.length} enabled, ${allApps.length} total`
-      );
+      console.log(`✅ Apps cache refreshed: ${apps.length} enabled, ${apps.length} total`);
     } catch (error) {
       console.error('❌ Error refreshing apps cache:', error.message);
     }
@@ -461,16 +445,10 @@ class ConfigCache {
 
     try {
       // Refresh enabled prompts cache
-      const enabledPrompts = await loadAllPrompts(false);
-      this.setCacheEntry('config/prompts.json', enabledPrompts);
+      const prompts = await loadAllPrompts(true);
+      this.setCacheEntry('config/prompts.json', prompts);
 
-      // Refresh all prompts cache
-      const allPrompts = await loadAllPrompts(true);
-      this.setCacheEntry('config/prompts-all.json', allPrompts);
-
-      console.log(
-        `✅ Prompts cache refreshed: ${enabledPrompts.length} enabled, ${allPrompts.length} total`
-      );
+      console.log(`✅ Prompts cache refreshed: ${prompts.length} enabled, ${prompts.length} total`);
     } catch (error) {
       console.error('❌ Error refreshing prompts cache:', error.message);
     }
