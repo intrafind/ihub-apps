@@ -69,5 +69,11 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "lint-staged": {
+    "*.{js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ]
   }
 }
