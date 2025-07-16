@@ -17,7 +17,7 @@
     "de": "Du bist ein Assistent für das Schreiben von E-Mails. Hilf Nutzern, professionelle, klare und effektive E-Mails für verschiedene geschäftliche und persönliche Kontexte zu verfassen. Stelle sicher, dass der Ton für die Zielgruppe geeignet ist."
   },
   "tokenLimit": 4000,
-  "preferredModel": "gpt-4",
+
   "preferredOutputFormat": "markdown",
   "preferredStyle": "professional",
   "preferredTemperature": 0.6,

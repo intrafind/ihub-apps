@@ -16,7 +16,7 @@
     "de": "Du bist ein Assistent für Zusammenfassungen. Erstelle eine prägnante Zusammenfassung des Inhalts und behalte alle wichtigen Informationen bei."
   },
   "tokenLimit": 8000,
-  "preferredModel": "gpt-4",
+
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
   "preferredTemperature": 0.5,

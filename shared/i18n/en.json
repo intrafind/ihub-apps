@@ -154,7 +154,9 @@
     "format": "Format",
     "tone": "Tone",
     "length": "Length",
-    "enter": "Enter"
+    "enter": "Enter",
+    "enterLabel": "Enter {{label}}",
+    "selectLabel": "Please select {{label}}"
   },
   "settings": {
     "title": "Settings",
@@ -472,7 +474,8 @@
       },
       "details": {
         "messages": "Messages",
-        "tokens": "Tokens"
+        "tokens": "Tokens",
+        "editModel": "Edit Model Details"
       }
     }
   }

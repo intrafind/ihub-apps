@@ -17,8 +17,8 @@ function normalizeLimit(value) {
 
 function getConcurrency(id = 'default') {
   const platform = configCache.getPlatform() || {};
-  const models = configCache.getModels() || [];
-  const tools = configCache.getTools() || [];
+  const { data: models = [] } = configCache.getModels() || {};
+  const { data: tools = [] } = configCache.getTools() || {};
   const model = models.find(m => m.id === id);
   if (model && typeof model.concurrency === 'number') return normalizeLimit(model.concurrency);
   const tool = tools.find(t => t.id === id);
@@ -29,8 +29,8 @@ function getConcurrency(id = 'default') {
 
 function getDelay(id = 'default') {
   const platform = configCache.getPlatform() || {};
-  const models = configCache.getModels() || [];
-  const tools = configCache.getTools() || [];
+  const { data: models = [] } = configCache.getModels() || {};
+  const { data: tools = [] } = configCache.getTools() || {};
   const model = models.find(m => m.id === id);
   if (model && typeof model.requestDelayMs === 'number') return model.requestDelayMs;
   const tool = tools.find(t => t.id === id);

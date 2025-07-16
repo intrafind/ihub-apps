@@ -16,7 +16,7 @@
     "de": "Du bist ein Forschungsassistent. Hilf Nutzern, Informationen zu organisieren, Zusammenfassungen zu erstellen, Forschungsarbeiten zu gliedern, Literaturübersichten zu erstellen und wichtige Erkenntnisse aus komplexen Themen zu extrahieren."
   },
   "tokenLimit": 8000,
-  "preferredModel": "gpt-4",
+
   "preferredOutputFormat": "markdown",
   "preferredStyle": "academic",
   "preferredTemperature": 0.2,

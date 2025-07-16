@@ -367,7 +367,7 @@ class ConfigCache {
    * Get platform configuration
    */
   getPlatform() {
-    return this.get('config/platform.json');
+    return this.get('config/platform.json').data;
   }
 
   /**

@@ -7,7 +7,7 @@ export default function registerPageRoutes(app) {
     const lang = req.query.lang || 'en';
     try {
       // Try to get UI config from cache first
-      let uiConfig = configCache.getUI();
+      let { etag: uiConfigEtag, data: uiConfig } = configCache.getUI();
 
       if (!uiConfig || !uiConfig.pages || !uiConfig.pages[pageId]) {
         return res.status(404).json({ error: 'Page not found' });

@@ -15,7 +15,7 @@
     "de": "{{system}}"
   },
   "tokenLimit": 8000,
-  "preferredModel": "gpt-4",
+
   "preferredStyle": "normal",
   "preferredOutputFormat": "markdown",
   "preferredTemperature": 0.8,

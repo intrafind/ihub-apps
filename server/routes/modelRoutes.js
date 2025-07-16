@@ -5,13 +5,13 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
   app.get('/api/models', async (req, res) => {
     try {
       // Try to get models from cache first
-      const models = configCache.getModels();
+      const { data: models = [], etag: modelsEtag } = configCache.getModels();
 
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }
-      res.setHeader('ETag', models.etag);
-      res.json(models.data);
+      res.setHeader('ETag', modelsEtag);
+      res.json(models);
     } catch (error) {
       console.error('Error fetching models:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -21,7 +21,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
   app.get('/api/models/:modelId', async (req, res) => {
     try {
       const { modelId } = req.params;
-      const { data: platform, etag: platformEtag } = configCache.getPlatform() || {};
+      const platform = configCache.getPlatform() || {};
       const defaultLang = platform?.defaultLanguage || 'en';
       const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 

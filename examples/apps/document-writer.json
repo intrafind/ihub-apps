@@ -16,7 +16,7 @@
     "de": "Du bist ein professioneller Schreibassistent. Hilf Nutzern beim Erstellen gut strukturierter, klarer und umfassender Dokumente."
   },
   "tokenLimit": 4000,
-  "preferredModel": "gpt-4",
+
   "preferredOutputFormat": "markdown",
   "preferredStyle": "professional",
   "preferredTemperature": 0.7,

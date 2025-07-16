@@ -148,7 +148,9 @@
     "format": "Format",
     "tone": "Tonfall",
     "length": "Länge",
-    "enter": "Eingeben"
+    "enter": "Eingeben",
+    "enterLabel": "{{label}} eingeben",
+    "selectLabel": "Bitte wähle {{label}} aus"
   },
   "settings": {
     "title": "Einstellungen",
@@ -355,7 +357,8 @@
       },
       "details": {
         "messages": "Nachrichten",
-        "tokens": "Token"
+        "tokens": "Token",
+        "editModel": "Modelldetails bearbeiten"
       }
     }
   }

@@ -8,12 +8,12 @@ export default function registerDataRoutes(app) {
   app.get('/api/styles', async (req, res) => {
     try {
       // Try to get styles from cache first
-      let styles = configCache.getStyles();
+      let { data: styles = [] } = configCache.getStyles();
 
       if (!styles) {
         return res.status(500).json({ error: 'Failed to load styles configuration' });
       }
-      res.json(styles.data);
+      res.json(styles);
     } catch (error) {
       console.error('Error fetching styles:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -104,13 +104,13 @@ export default function registerDataRoutes(app) {
   app.get('/api/configs/ui', async (req, res) => {
     try {
       // Try to get UI config from cache first
-      let uiConfig = configCache.getUI();
+      let { data: uiConfig = {}, etag: uiConfigEtag } = configCache.getUI();
 
       if (!uiConfig) {
         return res.status(500).json({ error: 'Failed to load UI configuration' });
       }
-      res.setHeader('ETag', uiConfig.etag);
-      res.json(uiConfig.data);
+      res.setHeader('ETag', uiConfigEtag);
+      res.json(uiConfig);
     } catch (error) {
       console.error('Error fetching UI configuration:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -144,7 +144,7 @@ export default function registerDataRoutes(app) {
 
       // Add version and computed salt to platform response
       const enhancedPlatform = {
-        ...platform.data,
+        ...platform,
         version: appVersion,
         computedRefreshSalt: computedSalt
       };

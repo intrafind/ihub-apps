@@ -56,7 +56,7 @@ const InputVariables = ({ variables, setVariables, localizedVariables, className
               className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
               placeholder={
                 variable.localizedPlaceholder ||
-                t('variables.enterLabel', { label: variable.localizedLabel.toLowerCase() })
+                t('variables.enterLabel', { label: variable.localizedLabel })
               }
               required={variable.required}
             />
@@ -76,7 +76,7 @@ const InputVariables = ({ variables, setVariables, localizedVariables, className
               className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
               placeholder={
                 variable.localizedPlaceholder ||
-                t('variables.enterLabel', { label: variable.localizedLabel.toLowerCase() })
+                t('variables.enterLabel', { label: variable.localizedLabel })
               }
               required={variable.required}
             />

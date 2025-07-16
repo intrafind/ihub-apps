@@ -21,7 +21,7 @@
     "de": "Bereit, Ihren Inhalt zusammenzufassen! Fügen Sie Ihren Text ein und wählen Sie eine Aktion."
   },
   "tokenLimit": 8000,
-  "preferredModel": "gpt-4",
+
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
   "preferredTemperature": 0.5,

@@ -19,7 +19,7 @@ export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_T
       }
 
       // Try to get models from cache first
-      let models = configCache.getModels();
+      let { data: models = [] } = configCache.getModels();
 
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });

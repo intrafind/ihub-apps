@@ -1,6 +1,6 @@
 import { getUsage } from '../usageTracker.js';
 import configCache from '../configCache.js';
-import { writeFileSync, readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { atomicWriteJSON } from '../utils/atomicWrite.js';
 import { join } from 'path';
@@ -371,7 +371,7 @@ export default function registerAdminRoutes(app) {
       }
 
       // Delete the file
-      require('fs').unlinkSync(appFilePath);
+      await fs.unlink(appFilePath);
 
       // Refresh the apps cache
       await configCache.refreshAppsCache();
@@ -603,7 +603,7 @@ export default function registerAdminRoutes(app) {
       }
 
       // Delete the file
-      require('fs').unlinkSync(modelFilePath);
+      await fs.unlink(modelFilePath);
 
       // Refresh the models cache
       await configCache.refreshModelsCache();
@@ -739,7 +739,7 @@ export default function registerAdminRoutes(app) {
   app.get('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
-      const prompts = configCache.getPrompts(true);
+      const { data: prompts } = configCache.getPrompts(true);
       const prompt = prompts.find(p => p.id === promptId);
 
       if (!prompt) {
@@ -820,7 +820,7 @@ export default function registerAdminRoutes(app) {
   app.post('/api/admin/prompts/:promptId/toggle', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
-      const prompts = configCache.getPrompts(true);
+      const { data: prompts } = configCache.getPrompts(true);
       const prompt = prompts.find(p => p.id === promptId);
 
       if (!prompt) {
@@ -863,7 +863,7 @@ export default function registerAdminRoutes(app) {
       }
 
       // Delete the file
-      require('fs').unlinkSync(promptFilePath);
+      await fs.unlink(promptFilePath);
 
       // Refresh the prompts cache
       await configCache.refreshPromptsCache();
@@ -893,7 +893,7 @@ export default function registerAdminRoutes(app) {
       }
 
       // Get models from cache
-      let models = configCache.getModels();
+      let { data: models = [] } = configCache.getModels();
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }
@@ -982,7 +982,7 @@ export default function registerAdminRoutes(app) {
       const { lang = defaultLanguage } = req.query;
 
       // Get prompts from cache
-      const { data: prompts } = configCache.getPrompts(true);
+      const { data: prompts, etag } = configCache.getPrompts(true);
 
       if (!prompts) {
         return res.status(500).json({ error: 'Failed to load prompts configuration' });

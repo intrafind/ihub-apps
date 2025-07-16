@@ -5,13 +5,13 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
   app.get('/api/apps', async (req, res) => {
     try {
       // Try to get apps from cache first
-      const apps = configCache.getApps();
+      let { data: apps = [], etag: appsEtag } = configCache.getApps();
 
       if (!apps) {
         return res.status(500).json({ error: 'Failed to load apps configuration' });
       }
-      res.setHeader('ETag', apps.etag);
-      res.json(apps.data);
+      res.setHeader('ETag', appsEtag);
+      res.json(apps);
     } catch (error) {
       console.error('Error fetching apps:', error);
       res.status(500).json({ error: 'Internal server error' });

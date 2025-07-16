@@ -16,7 +16,7 @@ import configCache from './configCache.js';
 export async function getApiKeyForModel(modelId) {
   try {
     // Try to get models from cache first
-    let models = configCache.getModels();
+    let { data: models = [] } = configCache.getModels();
 
     if (!models) {
       console.error('Failed to load models configuration');
@@ -377,7 +377,7 @@ export async function simpleCompletion(
     temperature
   });
   // Try to get models from cache first
-  let models = configCache.getModels();
+  let { data: models = [] } = configCache.getModels();
   console.log(
     'Available models:',
     models.map(m => m.id)

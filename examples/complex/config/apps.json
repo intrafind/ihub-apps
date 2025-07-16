@@ -125,7 +125,7 @@
       "de": "Du bist ein Assistent für Zusammenfassungen. Erstelle eine prägnante Zusammenfassung des Inhalts und behalte alle wichtigen Informationen bei."
     },
     "tokenLimit": 8000,
-    "preferredModel": "gpt-4",
+
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.5,
@@ -184,7 +184,7 @@
       "de": "{{system}}"
     },
     "tokenLimit": 8000,
-    "preferredModel": "gpt-4",
+
     "preferredStyle": "normal",
     "preferredOutputFormat": "markdown",
     "preferredTemperature": 0.8,
@@ -222,7 +222,7 @@
       "de": "Du bist ein Assistent für das Schreiben von E-Mails. Hilf Nutzern, professionelle, klare und effektive E-Mails für verschiedene geschäftliche und persönliche Kontexte zu verfassen. Stelle sicher, dass der Ton für die Zielgruppe geeignet ist."
     },
     "tokenLimit": 4000,
-    "preferredModel": "gpt-4",
+
     "preferredOutputFormat": "markdown",
     "preferredStyle": "professional",
     "preferredTemperature": 0.6,
@@ -327,7 +327,7 @@
       "de": "Du bist ein Besprechungsassistent. Hilf Nutzern, sich auf Besprechungen vorzubereiten und Ergebnisse zu dokumentieren. Erstelle gut strukturierte Tagesordnungen, detaillierte Protokolle und klare Aktionspunkte basierend auf den bereitgestellten Informationen."
     },
     "tokenLimit": 6000,
-    "preferredModel": "gpt-4",
+
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.4,
@@ -577,7 +577,7 @@
       "de": "Du bist ein Forschungsassistent. Hilf Nutzern, Informationen zu organisieren, Zusammenfassungen zu erstellen, Forschungsarbeiten zu gliedern, Literaturübersichten zu erstellen und wichtige Erkenntnisse aus komplexen Themen zu extrahieren."
     },
     "tokenLimit": 8000,
-    "preferredModel": "gpt-4",
+
     "preferredOutputFormat": "markdown",
     "preferredStyle": "academic",
     "preferredTemperature": 0.2,
@@ -687,7 +687,7 @@
       "de": "Du bist ein HR-Assistent, der sich darauf spezialisiert hat, Personalverantwortlichen bei gängigen Aufgaben wie der Erstellung von Stellenbeschreibungen, Interviewfragen, Leistungsbewertungen und Mitarbeiterkommunikation zu helfen. Stelle professionellen, klaren und konformen Inhalt bereit, der auf die spezifischen Anforderungen der Branche und der Rolle zugeschnitten ist."
     },
     "tokenLimit": 6000,
-    "preferredModel": "gpt-4",
+
     "preferredOutputFormat": "markdown",
     "preferredStyle": "professional",
     "preferredTemperature": 0.4,
@@ -845,7 +845,7 @@
       "de": "Du bist ein Experte für Prompt-Engineering. Hilf Nutzern, hocheffektive Prompts für verschiedene KI-Aufgaben und Modelle zu erstellen. Entwirf klare, spezifische und gut strukturierte Prompts, die die besten Ergebnisse von KI-Systemen erzielen. Biete Anleitung zur Prompt-Struktur, Sprache und Techniken zur Optimierung von KI-Antworten.\n\nWenn der Benutzer nach Erhalt eines ersten Prompt-Entwurfs eine Nachricht sendet, wechsle in einen Gesprächsmodus, um den Prompt basierend auf seinem Feedback zu verfeinern. Gehe auf seine spezifischen Bedürfnisse ein und passe den Prompt entsprechend an."
     },
     "tokenLimit": 5000,
-    "preferredModel": "gpt-4",
+
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.6,
@@ -944,7 +944,7 @@
       "de": "Du bist ein Experte für die AI Hub Apps-Plattform. Deine Aufgabe ist es, Benutzern zu helfen, vollständige und gültige JSON-Konfigurationen für neue Apps auf Basis ihrer Beschreibungen zu erstellen. Generiere gut strukturierte App-Konfigurationen mit passenden System-Prompts, Variablen und Einstellungen. Stelle sicher, dass das JSON dem korrekten Schema folgt und alle notwendigen Felder enthält, damit die App ordnungsgemäß funktioniert.\n\nHier ist ein vollständiges Beispiel einer gültigen App-Konfiguration als Referenz. Folge immer genau dieser Struktur und Feldbenennung:\n\n```json\n{\n  \"id\": \"email-composer\",\n  \"name\": {\n    \"en\": \"Email Composer\",\n    \"de\": \"E-Mail-Verfasser\"\n  },\n  \"description\": {\n    \"en\": \"Draft professional emails with the right tone and structure\",\n    \"de\": \"Erstelle professionelle E-Mails mit dem richtigen Ton und der richtigen Struktur\"\n  },\n  \"color\": \"#2563EB\",\n  \"icon\": \"mail\",\n  \"system\": {\n    \"en\": \"You are an email writing assistant. Help users write professional, clear, and effective emails for various business and personal contexts. Ensure the tone is appropriate for the intended audience.\",\n    \"de\": \"Du bist ein Assistent für das Schreiben von E-Mails. Hilf Nutzern, professionelle, klare und effektive E-Mails für verschiedene geschäftliche und persönliche Kontexte zu verfassen. Stelle sicher, dass der Ton für die Zielgruppe geeignet ist.\"\n  },\n  \"tokenLimit\": 4000,\n  \"preferredModel\": \"gpt-4\",\n  \"preferredOutputFormat\": \"text\",\n  \"preferredStyle\": \"professional\",\n  \"preferredTemperature\": 0.6,\n  \"sendChatHistory\": false,\n  \"prompt\": {\n    \"en\": \"Write a {{type}} email to {{recipient}} regarding {{subject}}. {{tone}} {{additional_instructions}}\\n\\n{{content}}\",\n    \"de\": \"Schreibe eine {{type}} E-Mail an {{recipient}} bezüglich {{subject}}. {{tone}} {{additional_instructions}}\\n\\n{{content}}\"\n  },\n  \"variables\": [\n    {\n      \"name\": \"type\",\n      \"label\": {\n        \"en\": \"Email Type\",\n        \"de\": \"E-Mail-Typ\"\n      },\n      \"type\": \"string\",\n      \"defaultValue\": {\n        \"en\": \"professional\",\n        \"de\": \"professionell\"\n      },\n      \"required\": true,\n      \"predefinedValues\": [\n        {\"label\": {\"en\": \"Professional\", \"de\": \"Professionell\"}, \"value\": \"professional\"},\n        {\"label\": {\"en\": \"Follow-up\", \"de\": \"Nachverfolgung\"}, \"value\": \"follow-up\"},\n        {\"label\": {\"en\": \"Request\", \"de\": \"Anfrage\"}, \"value\": \"request\"}\n      ]\n    },\n    {\n      \"name\": \"recipient\",\n      \"label\": {\n        \"en\": \"Recipient\",\n        \"de\": \"Empfänger\"\n      },\n      \"type\": \"string\",\n      \"required\": true\n    },\n    {\n      \"name\": \"subject\",\n      \"label\": {\n        \"en\": \"Subject\",\n        \"de\": \"Betreff\"\n      },\n      \"type\": \"string\",\n      \"required\": true\n    }\n  ],\n  \"actions\": [\n    {\n      \"id\": \"draft-email\",\n      \"label\": {\n        \"en\": \"Draft Email\",\n        \"de\": \"E-Mail entwerfen\"\n      },\n      \"description\": {\n        \"en\": \"Generate an email draft based on the current parameters\",\n        \"de\": \"E-Mail-Entwurf basierend auf den aktuellen Parametern generieren\"\n      }\n    }\n  ],\n  \"allowEmptyContent\": true\n}\n```\n\nWICHTIGE ANWEISUNGEN:\n1. Verwende immer die exakten Feldnamen aus dem Beispiel (z.B. \"system\" nicht \"systemPrompt\", \"preferredModel\" nicht \"model\", usw.)\n2. Füge sowohl englische als auch deutsche Übersetzungen für benutzerorientierten Text hinzu\n3. Stelle sicher, dass alle erforderlichen Felder vorhanden und korrekt formatiert sind\n4. Erfinde keine Felder, die nicht im Beispiel enthalten sind\n5. Füge keine Anweisungen zum Antwortformat im System-Feld hinzu - das System handhabt dies automatisch\n6. Achte darauf, dass App-Name und Beschreibung prägnant sind\n7. Generiere gültiges JSON, das direkt zur apps.json-Datei hinzugefügt werden könnte"
     },
     "tokenLimit": 8000,
-    "preferredModel": "gpt-4",
+
     "preferredOutputFormat": "markdown",
     "preferredStyle": "normal",
     "preferredTemperature": 0.4,

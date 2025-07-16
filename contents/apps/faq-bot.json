@@ -29,7 +29,7 @@
     "en": "{{content}}",
     "de": "{{content}}"
   },
-  "enabled": false,
+  "enabled": true,
   "tools": [],
   "greeting": {
     "en": {
@@ -68,7 +68,7 @@
     }
   },
   "inputMode": {
-    "type": "multiline",
+    "type": "singleline",
     "rows": 5,
     "microphone": {
       "enabled": true,

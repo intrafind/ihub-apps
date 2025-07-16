@@ -20,7 +20,7 @@ export default function registerSessionRoutes(
       const messages = [{ role: 'user', content: 'Say hello!' }];
 
       // Try to get models from cache first
-      let models = configCache.getModels();
+      let { data: models = [] } = configCache.getModels();
 
       if (!models) {
         return res.status(500).json({ error: 'Failed to load models configuration' });

@@ -15,7 +15,7 @@
     "de": "Du bist ein Besprechungsassistent. Hilf Nutzern, sich auf Besprechungen vorzubereiten und Ergebnisse zu dokumentieren. Erstelle gut strukturierte Tagesordnungen, detaillierte Protokolle und klare Aktionspunkte basierend auf den bereitgestellten Informationen."
   },
   "tokenLimit": 6000,
-  "preferredModel": "gpt-4",
+
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
   "preferredTemperature": 0.4,
