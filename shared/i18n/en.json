@@ -419,6 +419,61 @@
           "createFailed": "Failed to create app"
         }
       }
+    },
+    "models": {
+      "edit": {
+        "title": "Edit Model",
+        "titleNew": "Create New Model",
+        "subtitle": "Manage model configuration for {{name}}",
+        "subtitleNew": "Create a new AI model configuration",
+        "backToModels": "Back to Models",
+        "basicInfo": "Basic Information",
+        "basicInfoDesc": "Basic information about the model",
+        "configuration": "Configuration",
+        "configurationDesc": "Advanced configuration options for the model",
+        "requiredFields": "Please fill in all required fields",
+        "saving": "Saving...",
+        "createModel": "Create Model",
+        "saveChanges": "Save Changes",
+        "usageStats": "Usage Statistics",
+        "noUsageData": "No usage data available",
+        "appsUsingModel": "Apps Using This Model",
+        "noApps": "No apps are currently using this model",
+        "success": "Model {{action}} successfully!",
+        "successCreated": "created",
+        "successUpdated": "updated"
+      },
+      "fields": {
+        "id": "Model ID",
+        "name": "Name",
+        "description": "Description",
+        "provider": "Provider",
+        "modelId": "API Model ID",
+        "url": "API URL",
+        "tokenLimit": "Token Limit",
+        "concurrency": "Concurrency",
+        "requestDelay": "Request Delay (ms)",
+        "supportsTools": "Supports Tools",
+        "enabled": "Enabled",
+        "defaultModel": "Default Model"
+      },
+      "placeholders": {
+        "selectProvider": "Select a provider",
+        "apiModelId": "e.g., gpt-4, claude-3-sonnet",
+        "apiUrl": "e.g., https://api.openai.com/v1/chat/completions"
+      },
+      "hints": {
+        "modelId": "Unique identifier for this model configuration",
+        "apiModelId": "The model ID used in API calls to the provider"
+      },
+      "status": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "details": {
+        "messages": "Messages",
+        "tokens": "Tokens"
+      }
     }
   }
 }

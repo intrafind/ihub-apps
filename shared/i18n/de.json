@@ -302,6 +302,61 @@
           }
         }
       }
+    },
+    "models": {
+      "edit": {
+        "title": "Modell bearbeiten",
+        "titleNew": "Neues Modell erstellen",
+        "subtitle": "Modellkonfiguration für {{name}} verwalten",
+        "subtitleNew": "Eine neue KI-Modellkonfiguration erstellen",
+        "backToModels": "Zurück zu Modellen",
+        "basicInfo": "Grundlegende Informationen",
+        "basicInfoDesc": "Grundlegende Informationen über das Modell",
+        "configuration": "Konfiguration",
+        "configurationDesc": "Erweiterte Konfigurationsoptionen für das Modell",
+        "requiredFields": "Bitte füllen Sie alle erforderlichen Felder aus",
+        "saving": "Speichern...",
+        "createModel": "Modell erstellen",
+        "saveChanges": "Änderungen speichern",
+        "usageStats": "Nutzungsstatistiken",
+        "noUsageData": "Keine Nutzungsdaten verfügbar",
+        "appsUsingModel": "Apps, die dieses Modell verwenden",
+        "noApps": "Derzeit verwenden keine Apps dieses Modell",
+        "success": "Modell erfolgreich {{action}}!",
+        "successCreated": "erstellt",
+        "successUpdated": "aktualisiert"
+      },
+      "fields": {
+        "id": "Modell-ID",
+        "name": "Name",
+        "description": "Beschreibung",
+        "provider": "Anbieter",
+        "modelId": "API-Modell-ID",
+        "url": "API-URL",
+        "tokenLimit": "Token-Limit",
+        "concurrency": "Gleichzeitigkeit",
+        "requestDelay": "Anfrageverzögerung (ms)",
+        "supportsTools": "Unterstützt Werkzeuge",
+        "enabled": "Aktiviert",
+        "defaultModel": "Standardmodell"
+      },
+      "placeholders": {
+        "selectProvider": "Anbieter auswählen",
+        "apiModelId": "z.B. gpt-4, claude-3-sonnet",
+        "apiUrl": "z.B. https://api.openai.com/v1/chat/completions"
+      },
+      "hints": {
+        "modelId": "Eindeutige Kennung für diese Modellkonfiguration",
+        "apiModelId": "Die in API-Aufrufen an den Anbieter verwendete Modell-ID"
+      },
+      "status": {
+        "enabled": "Aktiviert",
+        "disabled": "Deaktiviert"
+      },
+      "details": {
+        "messages": "Nachrichten",
+        "tokens": "Token"
+      }
     }
   }
 }
