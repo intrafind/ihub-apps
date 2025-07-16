@@ -73,10 +73,10 @@ class ConfigCache {
       try {
         // Special handling for apps.json - load from both sources
         if (configPath === 'config/apps.json') {
-          // Load enabled apps only
-          const enabledApps = await loadAllApps(true);
-          this.setCacheEntry(configPath, enabledApps);
-          console.log(`✓ Cached: ${configPath} (${enabledApps.length} enabled apps)`);
+          // Load all apps (including disabled) for admin access
+          const allApps = await loadAllApps(true);
+          this.setCacheEntry(configPath, allApps);
+          console.log(`✓ Cached: ${configPath} (${allApps.length} total apps)`);
           return;
         }
 
@@ -91,10 +91,10 @@ class ConfigCache {
 
         // Special handling for prompts.json - load from both sources
         if (configPath === 'config/prompts.json') {
-          // Load enabled prompts only
-          const enabledPrompts = await loadAllPrompts(true);
-          this.setCacheEntry(configPath, enabledPrompts);
-          console.log(`✓ Cached: ${configPath} (${enabledPrompts.length} enabled prompts)`);
+          // Load all prompts (including disabled) for admin access
+          const allPrompts = await loadAllPrompts(true);
+          this.setCacheEntry(configPath, allPrompts);
+          console.log(`✓ Cached: ${configPath} (${allPrompts.length} total prompts)`);
           return;
         }
 
@@ -272,34 +272,38 @@ class ConfigCache {
    * Get models configuration (most frequently accessed)
    */
   getModels(includeDisabled = false) {
-    if (includeDisabled) {
-      // Check cache for all models (including disabled)
-      const cachedAllModels = this.get('config/models-all.json');
-      if (cachedAllModels !== null) {
-        return cachedAllModels;
-      }
-      // Data not in cache - return empty array as fallback
+    // After cache simplification, all models (including disabled) are now stored in config/models.json
+    const models = this.get('config/models.json');
+    if (models === null) {
       console.warn('Models cache not initialized - returning empty array');
       return [];
     }
-    return this.get('config/models.json');
+
+    if (includeDisabled) {
+      return models;
+    }
+
+    // Filter to only enabled models
+    return models.filter(model => model.enabled !== false);
   }
 
   /**
    * Get apps configuration
    */
   getApps(includeDisabled = false) {
-    if (includeDisabled) {
-      // Check cache for all apps (including disabled)
-      const cachedAllApps = this.get('config/apps-all.json');
-      if (cachedAllApps !== null) {
-        return cachedAllApps;
-      }
-      // Data not in cache - return empty array as fallback
+    // After cache simplification, all apps (including disabled) are now stored in config/apps.json
+    const apps = this.get('config/apps.json');
+    if (apps === null) {
       console.warn('Apps cache not initialized - returning empty array');
       return [];
     }
-    return this.get('config/apps.json');
+
+    if (includeDisabled) {
+      return apps;
+    }
+
+    // Filter to only enabled apps
+    return apps.filter(app => app.enabled !== false);
   }
 
   /**
@@ -320,35 +324,42 @@ class ConfigCache {
    * Get prompts configuration
    */
   getPrompts(includeDisabled = false) {
-    if (includeDisabled) {
-      // Check cache for all prompts (including disabled)
-      const cachedAllPrompts = this.get('config/prompts-all.json');
-      if (cachedAllPrompts !== null) {
-        return cachedAllPrompts;
-      }
-      // Data not in cache - return empty array as fallback
+    // After cache simplification, all prompts (including disabled) are now stored in config/prompts.json
+    const prompts = this.get('config/prompts.json');
+    if (prompts === null) {
       console.warn('Prompts cache not initialized - returning empty array');
       return [];
     }
-    return this.get('config/prompts.json');
+
+    if (includeDisabled) {
+      return prompts;
+    }
+
+    // Filter to only enabled prompts
+    return prompts.filter(prompt => prompt.enabled !== false);
   }
 
   /**
    * Get prompts with ETag information
    */
   getPromptsWithETag(includeDisabled = false) {
-    const cacheKey = includeDisabled ? 'config/prompts-all.json' : 'config/prompts.json';
-    const data = this.get(cacheKey);
+    // After cache simplification, all prompts are stored in config/prompts.json
+    const cacheKey = 'config/prompts.json';
+    const allPrompts = this.get(cacheKey);
     const etag = this.getETag(cacheKey);
 
-    if (data === null && includeDisabled) {
-      // Data not in cache - return empty array as fallback
+    if (allPrompts === null) {
       console.warn('Prompts cache not initialized for ETag - returning empty array');
       return {
         data: [],
         etag: null
       };
     }
+
+    // Filter based on includeDisabled parameter
+    const data = includeDisabled
+      ? allPrompts
+      : allPrompts.filter(prompt => prompt.enabled !== false);
 
     return {
       data,
