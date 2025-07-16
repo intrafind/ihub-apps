@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import LoadingSpinner from '../components/LoadingSpinner';
+import LoadingSpinner from '../shared/components/LoadingSpinner';
 import { marked } from 'marked';
 import { fetchPageContent } from '../api/api';
-import MarkdownRenderer, { configureMarked } from '../components/MarkdownRenderer';
+import MarkdownRenderer, { configureMarked } from '../shared/components/MarkdownRenderer';
 
 const MarkdownPage = () => {
   const { t, i18n } = useTranslation();

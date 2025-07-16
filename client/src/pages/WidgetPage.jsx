@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useUIConfig } from '../components/UIConfigContext';
-import ChatWidget from '../components/widget/ChatWidget';
+import { useUIConfig } from '../shared/contexts/UIConfigContext';
+import ChatWidget from '../features/widget/components/ChatWidget';
 import '../App.css';
 import './WidgetPage.css';
-import '../components/widget/ChatWidget.css';
+import '../features/widget/components/ChatWidget.css';
 
 /**
  * Standalone Widget Page that will be loaded in an iframe

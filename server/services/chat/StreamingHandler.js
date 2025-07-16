@@ -66,6 +66,7 @@ class StreamingHandler {
     console.log(`Sending request for chat ID ${chatId} ${model.id}:`, request.body);
 
     let doneEmitted = false;
+    let finishReason = null;
 
     try {
       const llmResponse = await throttledFetch(model.id, request.url, {
@@ -137,7 +138,6 @@ class StreamingHandler {
       });
 
       let fullResponse = '';
-      let finishReason = null;
 
       while (true) {
         const { done, value } = await reader.read();

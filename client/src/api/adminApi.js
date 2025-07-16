@@ -53,13 +53,37 @@ export const fetchAdminApps = async () => {
 };
 
 export const fetchAdminModels = async () => {
-  const response = await makeAdminApiCall('/api/admin/models');
-  return response.json();
+  try {
+    const response = await makeAdminApiCall('/api/admin/models');
+    const data = await response.json();
+
+    // Debug logging
+    console.log('Admin models API response:', data);
+    console.log('Is array:', Array.isArray(data));
+
+    // Ensure we return an array
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error in fetchAdminModels:', error);
+    throw error;
+  }
 };
 
 export const fetchAdminPrompts = async () => {
-  const response = await makeAdminApiCall('/api/admin/prompts');
-  return response.json();
+  try {
+    const response = await makeAdminApiCall('/api/admin/prompts');
+    const data = await response.json();
+
+    // Debug logging
+    console.log('Admin prompts API response:', data);
+    console.log('Is array:', Array.isArray(data));
+
+    // Ensure we return an array
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error in fetchAdminPrompts:', error);
+    throw error;
+  }
 };
 
 export const fetchAdminAppTemplates = async () => {
@@ -69,5 +93,21 @@ export const fetchAdminAppTemplates = async () => {
 
 export const fetchAppInheritance = async appId => {
   const response = await makeAdminApiCall(`/api/admin/apps/${appId}/inheritance`);
+  return response.json();
+};
+
+export const createPrompt = async promptData => {
+  const response = await makeAdminApiCall('/api/admin/prompts', {
+    method: 'POST',
+    body: JSON.stringify(promptData)
+  });
+  return response.json();
+};
+
+export const updatePrompt = async (promptId, promptData) => {
+  const response = await makeAdminApiCall(`/api/admin/prompts/${promptId}`, {
+    method: 'PUT',
+    body: JSON.stringify(promptData)
+  });
   return response.json();
 };

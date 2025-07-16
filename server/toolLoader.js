@@ -8,7 +8,7 @@ import { throttledFetch } from './requestThrottler.js';
  */
 export async function loadConfiguredTools() {
   // Try to get tools from cache first
-  let tools = configCache.getTools();
+  const { data: tools, etag: toolsEtag } = configCache.getTools();
   if (!tools) {
     console.warn('Tools could not be loaded');
   }

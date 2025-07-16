@@ -7,7 +7,8 @@ export default function registerToolRoutes(app) {
   app.get('/api/tools', async (req, res) => {
     try {
       const tools = await loadTools();
-      res.json(tools);
+      res.setHeader('ETag', tools.etag);
+      res.json(tools.data);
     } catch (error) {
       console.error('Error fetching tools:', error);
       res.status(500).json({ error: 'Internal server error' });
