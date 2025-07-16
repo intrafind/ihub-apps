@@ -1,14 +1,13 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
+import QuickActions from '../components/QuickActions';
+import AdminSectionCard from '../components/AdminSectionCard';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 const AdminHome = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { platformConfig } = usePlatformConfig();
   const pageConfig = platformConfig?.admin?.pages || {};
   const isEnabled = key => pageConfig[key] !== false;
@@ -114,81 +113,14 @@ const AdminHome = () => {
 
         {/* Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-12 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">
-              {t('admin.home.quickActions', 'Quick Actions')}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {isEnabled('apps') && (
-                <button
-                  onClick={() => navigate('/admin/apps/new')}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                  <Icon name="plus" className="h-4 w-4 mr-2" />
-                  {t('admin.home.addNewApp', 'Add New App')}
-                </button>
-              )}
-
-              {isEnabled('models') && (
-                <button
-                  onClick={() => navigate('/admin/models/new')}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                >
-                  <Icon name="plus" className="h-4 w-4 mr-2" />
-                  {t('admin.home.addNewModel', 'Add New Model')}
-                </button>
-              )}
-
-              {isEnabled('prompts') && (
-                <button
-                  onClick={() => navigate('/admin/prompts/new')}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  <Icon name="plus" className="h-4 w-4 mr-2" />
-                  {t('admin.home.addNewPrompt', 'Add New Prompt')}
-                </button>
-              )}
-              <Link
-                to="/"
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <Icon name="home" className="h-4 w-4 mr-2" />
-                {t('admin.home.backToApps', 'Back to Apps')}
-              </Link>
-            </div>
-          </div>
+          <QuickActions isEnabled={isEnabled} />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {adminSections
               .filter(s => isEnabled(s.key))
               .map((section, index) => (
-                <Link
-                  key={index}
-                  to={section.href}
-                  className="group relative bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-gray-300 transition-all duration-200 overflow-hidden"
-                >
-                  <div className="p-6">
-                    <div className="flex items-center mb-4">
-                      <div className={`p-3 rounded-lg ${section.color} flex-shrink-0`}>
-                        <Icon name={section.icon} className="h-6 w-6 text-white" />
-                      </div>
-                      <div className="ml-4">
-                        <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600">
-                          {section.title}
-                        </h3>
-                      </div>
-                    </div>
-                    <p className="text-gray-600 text-sm leading-relaxed">{section.description}</p>
-                  </div>
-
-                  {/* Hover effect arrow */}
-                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    <Icon name="arrow-right" className="h-5 w-5 text-gray-400" />
-                  </div>
-                </Link>
+                <AdminSectionCard key={index} section={section} />
               ))}
           </div>
-
-          {/* Quick Actions */}
         </div>
       </div>
     </AdminAuth>

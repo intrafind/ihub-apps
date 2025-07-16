@@ -74,7 +74,7 @@ const PromptDetailsPopup = ({ prompt, isOpen, onClose }) => {
             <h4 className="text-sm font-medium text-gray-700 mb-2">
               {t('admin.prompts.details.promptContent', 'Prompt Content')}
             </h4>
-            <div className="bg-gray-50 rounded-lg p-3">
+            <div className="bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto">
               <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
                 {getLocalizedValue(prompt.prompt)}
               </p>

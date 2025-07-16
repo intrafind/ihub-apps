@@ -24,7 +24,7 @@ import AdminModelsPage from './features/admin/pages/AdminModelsPage';
 import AdminPromptsPage from './features/admin/pages/AdminPromptsPage';
 import AdminPromptEditPage from './features/admin/pages/AdminPromptEditPage';
 import AppProviders from './features/apps/components/AppProviders';
-import { withErrorBoundary } from './shared/components/ErrorBoundary';
+import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
 import { useUIConfig } from './shared/contexts/UIConfigContext';
 import { usePlatformConfig } from './shared/contexts/PlatformConfigContext';
@@ -32,24 +32,24 @@ import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
 import { configureMarked } from './shared/components/MarkdownRenderer';
 
-// Apply error boundary to individual routes that might fail
-const SafeAppsList = withErrorBoundary(AppsList);
-const SafeAppChat = withErrorBoundary(AppChat);
-const SafeAppCanvas = withErrorBoundary(AppCanvas);
-const SafeMarkdownPage = withErrorBoundary(MarkdownPage);
-const SafeWidgetPage = withErrorBoundary(WidgetPage);
-const SafeAdminHome = withErrorBoundary(AdminHome);
-const SafeAdminUsage = withErrorBoundary(AdminUsageReports);
-const SafeAdminSystem = withErrorBoundary(AdminSystemPage);
-const SafeAdminApps = withErrorBoundary(AdminAppsPage);
-const SafeAdminAppEdit = withErrorBoundary(AdminAppEditPage);
-const SafeAdminShortLinks = withErrorBoundary(AdminShortLinks);
-const SafeAdminShortLinkEdit = withErrorBoundary(AdminShortLinkEditPage);
-const SafeAdminModels = withErrorBoundary(AdminModelsPage);
-const SafeAdminModelEdit = withErrorBoundary(AdminModelEditPage);
-const SafeAdminPrompts = withErrorBoundary(AdminPromptsPage);
-const SafeAdminPromptEdit = withErrorBoundary(AdminPromptEditPage);
-const SafePromptsList = withErrorBoundary(PromptsList);
+// Create safe versions of components that need error boundaries
+const SafeAppsList = withSafeRoute(AppsList);
+const SafeAppChat = withSafeRoute(AppChat);
+const SafeAppCanvas = withSafeRoute(AppCanvas);
+const SafeMarkdownPage = withSafeRoute(MarkdownPage);
+const SafeWidgetPage = withSafeRoute(WidgetPage);
+const SafeAdminHome = withSafeRoute(AdminHome);
+const SafeAdminUsage = withSafeRoute(AdminUsageReports);
+const SafeAdminSystem = withSafeRoute(AdminSystemPage);
+const SafeAdminApps = withSafeRoute(AdminAppsPage);
+const SafeAdminAppEdit = withSafeRoute(AdminAppEditPage);
+const SafeAdminShortLinks = withSafeRoute(AdminShortLinks);
+const SafeAdminShortLinkEdit = withSafeRoute(AdminShortLinkEditPage);
+const SafeAdminModels = withSafeRoute(AdminModelsPage);
+const SafeAdminModelEdit = withSafeRoute(AdminModelEditPage);
+const SafeAdminPrompts = withSafeRoute(AdminPromptsPage);
+const SafeAdminPromptEdit = withSafeRoute(AdminPromptEditPage);
+const SafePromptsList = withSafeRoute(PromptsList);
 
 function App() {
   // Use the custom hook for session management

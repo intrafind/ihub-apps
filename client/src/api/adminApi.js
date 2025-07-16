@@ -95,3 +95,19 @@ export const fetchAppInheritance = async appId => {
   const response = await makeAdminApiCall(`/api/admin/apps/${appId}/inheritance`);
   return response.json();
 };
+
+export const createPrompt = async promptData => {
+  const response = await makeAdminApiCall('/api/admin/prompts', {
+    method: 'POST',
+    body: JSON.stringify(promptData)
+  });
+  return response.json();
+};
+
+export const updatePrompt = async (promptId, promptData) => {
+  const response = await makeAdminApiCall(`/api/admin/prompts/${promptId}`, {
+    method: 'PUT',
+    body: JSON.stringify(promptData)
+  });
+  return response.json();
+};

@@ -17,7 +17,8 @@
     "lastUpdated": "2025-07-08T17:00:38.743Z"
   },
   "admin": {
-    "secret": "platform-secret-123",
+    "secret": "$2b$10$HBpqJ/asLOTZ01Fjnvz4euDvkaOVcfk2TTwaQd6lyh94evW9nSNzW",
+    "encrypted": true,
     "pages": {
       "home": true,
       "usage": true,
