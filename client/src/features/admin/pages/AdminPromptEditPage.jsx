@@ -10,9 +10,9 @@ import {
   fetchAdminPrompts,
   createPrompt,
   updatePrompt,
-  clearApiCache,
   fetchAdminApps
-} from '../../../api/api';
+} from '../../../api/adminApi';
+import { clearApiCache } from '../../../api/api';
 
 const AdminPromptEditPage = () => {
   const { t, i18n } = useTranslation();
