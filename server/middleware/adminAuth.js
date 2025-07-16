@@ -1,8 +1,10 @@
 import configCache from '../configCache.js';
+import bcrypt from 'bcrypt';
 
 /**
  * Admin authentication middleware
  * Checks for admin secret in platform config and validates Bearer token
+ * Supports both encrypted (bcrypt) and plain text passwords
  */
 export function adminAuth(req, res, next) {
   try {
@@ -30,7 +32,9 @@ export function adminAuth(req, res, next) {
     const token = authHeader.slice(7); // Remove 'Bearer ' prefix
 
     // Verify token matches admin secret
-    if (token !== adminSecret) {
+    const isValidToken = verifyAdminToken(token, adminSecret, platform?.admin?.encrypted);
+
+    if (!isValidToken) {
       return res.status(403).json({
         error: 'Invalid admin credentials',
         message: 'Invalid admin secret'
@@ -46,6 +50,33 @@ export function adminAuth(req, res, next) {
       message: 'Internal server error during authentication'
     });
   }
+}
+
+/**
+ * Verify admin token against stored secret
+ * @param {string} token - Token from request
+ * @param {string} adminSecret - Stored admin secret
+ * @param {boolean} isEncrypted - Whether the stored secret is encrypted
+ * @returns {boolean} - Whether the token is valid
+ */
+function verifyAdminToken(token, adminSecret, isEncrypted = false) {
+  if (isEncrypted) {
+    // For encrypted passwords, compare bcrypt hash
+    return bcrypt.compareSync(token, adminSecret);
+  } else {
+    // For plain text passwords, direct comparison
+    return token === adminSecret;
+  }
+}
+
+/**
+ * Hash a password using bcrypt
+ * @param {string} password - Plain text password
+ * @returns {string} - Hashed password
+ */
+export function hashPassword(password) {
+  const saltRounds = 10;
+  return bcrypt.hashSync(password, saltRounds);
 }
 
 /**
