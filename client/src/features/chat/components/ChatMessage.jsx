@@ -116,8 +116,20 @@ const ChatMessage = ({
         data = plain;
     }
 
-    navigator.clipboard
-      .writeText(data)
+    const hasClipboardWrite = navigator.clipboard && navigator.clipboard.write;
+    let copyPromise;
+
+    if (format === 'html' && hasClipboardWrite) {
+      const item = new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plain], { type: 'text/plain' })
+      });
+      copyPromise = navigator.clipboard.write([item]);
+    } else {
+      copyPromise = navigator.clipboard.writeText(data);
+    }
+
+    copyPromise
       .then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
