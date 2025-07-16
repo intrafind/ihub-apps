@@ -38,8 +38,21 @@ const ExportMenu = ({ content, onClose }) => {
   };
 
   const handleCopyHTML = () => {
-    navigator.clipboard
-      .writeText(content)
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    const plain = tempDiv.textContent || tempDiv.innerText || '';
+    const hasClipboardWrite = navigator.clipboard && navigator.clipboard.write;
+
+    const item = new ClipboardItem({
+      'text/html': new Blob([content], { type: 'text/html' }),
+      'text/plain': new Blob([plain], { type: 'text/plain' })
+    });
+
+    const copyPromise = hasClipboardWrite
+      ? navigator.clipboard.write([item])
+      : navigator.clipboard.writeText(content);
+
+    copyPromise
       .then(() => {
         console.log('✅ HTML copied to clipboard');
       })
