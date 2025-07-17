@@ -1,6 +1,6 @@
 import { getUsage } from '../usageTracker.js';
 import configCache from '../configCache.js';
-import { readFileSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { atomicWriteJSON } from '../utils/atomicWrite.js';
 import { toggleEnabled } from '../utils/toggleEnabled.js';
@@ -307,10 +307,13 @@ export default function registerAdminRoutes(app) {
       const appFilePath = join(rootDir, 'contents', 'apps', `${newApp.id}.json`);
 
       try {
-        readFileSync(appFilePath, 'utf8');
+        await fs.readFile(appFilePath, 'utf8');
         return res.status(400).json({ error: 'App with this ID already exists' });
       } catch (err) {
         // File doesn't exist, which is what we want
+        if (err.code !== 'ENOENT') {
+          throw err;
+        }
       }
 
       // Save the app to individual file
@@ -357,8 +360,13 @@ export default function registerAdminRoutes(app) {
       const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
 
       // Check if file exists
-      if (!readFileSync(appFilePath, 'utf8')) {
-        return res.status(404).json({ error: 'App not found' });
+      try {
+        await fs.readFile(appFilePath, 'utf8');
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          return res.status(404).json({ error: 'App not found' });
+        }
+        throw err;
       }
 
       // Delete the file
@@ -475,10 +483,13 @@ export default function registerAdminRoutes(app) {
       const modelFilePath = join(rootDir, 'contents', 'models', `${newModel.id}.json`);
 
       try {
-        readFileSync(modelFilePath, 'utf8');
+        await fs.readFile(modelFilePath, 'utf8');
         return res.status(400).json({ error: 'Model with this ID already exists' });
       } catch (err) {
         // File doesn't exist, which is what we want
+        if (err.code !== 'ENOENT') {
+          throw err;
+        }
       }
 
       // Handle default model logic - only one model can be default
@@ -778,10 +789,13 @@ export default function registerAdminRoutes(app) {
       const promptFilePath = join(rootDir, 'contents', 'prompts', `${newPrompt.id}.json`);
 
       try {
-        readFileSync(promptFilePath, 'utf8');
+        await fs.readFile(promptFilePath, 'utf8');
         return res.status(400).json({ error: 'Prompt with this ID already exists' });
       } catch (err) {
         // File doesn't exist, which is what we want
+        if (err.code !== 'ENOENT') {
+          throw err;
+        }
       }
 
       // Save the prompt to individual file
