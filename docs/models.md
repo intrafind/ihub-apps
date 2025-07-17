@@ -98,7 +98,7 @@ The AI Hub provides a flexible system for selecting which AI model an app uses. 
     }
     ```
 
-    If a default model is set, the app's model dropdown in the user interface will pre-select this model if the app has no `preferredModel`. Only one model should be marked as the default.
+    If a default model is set, the app's model dropdown in the user interface will pre-select this model if the app has no `preferredModel`. If an app's preferred model cannot be found, the default model is used instead. Only one model should be marked as the default.
 
 4.  **First Available Model**: If none of the above are set, the app will simply use the first model from the list of available models.
 
