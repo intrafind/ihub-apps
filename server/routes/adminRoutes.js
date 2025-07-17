@@ -7,8 +7,11 @@ import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
 import { getLocalizedContent } from '../../shared/localize.js';
 import { adminAuth, isAdminAuthRequired, hashPassword } from '../middleware/adminAuth.js';
+import express from 'express';
 
 export default function registerAdminRoutes(app) {
+  const router = express.Router();
+  app.use(router);
   // Admin authentication status endpoint (no auth required to check if auth is needed)
   app.get('/api/admin/auth/status', async(req, res) => {
     try {
@@ -104,7 +107,7 @@ export default function registerAdminRoutes(app) {
     }
   });
   // Support both POST and GET for cache refresh
-  app.post('/api/admin/cache/_refresh', adminAuth, async(req, res) => {
+  const refreshCacheHandler = async(req, res) => {
     try {
       await configCache.refreshAll();
       res.json({ message: 'Configuration cache refreshed successfully' });
@@ -112,15 +115,14 @@ export default function registerAdminRoutes(app) {
       console.error('Error refreshing cache:', e);
       res.status(500).json({ error: 'Failed to refresh cache' });
     }
-  });
-
-  app.get('/api/admin/cache/_refresh', adminAuth, (req, res, next) => {
-    req.method = 'POST';
-    app._router.handle(req, res, next);
-  });
+  };
+  router
+    .route('/api/admin/cache/_refresh')
+    .post(adminAuth, refreshCacheHandler)
+    .get(adminAuth, refreshCacheHandler);
 
   // Support both POST and GET for cache clear
-  app.post('/api/admin/cache/_clear', adminAuth, async(req, res) => {
+  const clearCacheHandler = async(req, res) => {
     try {
       configCache.clear();
       // Immediately reinitialize the cache so subsequent API calls work
@@ -131,15 +133,15 @@ export default function registerAdminRoutes(app) {
       console.error('Error clearing cache:', e);
       res.status(500).json({ error: 'Failed to clear cache' });
     }
-  });
+  };
 
-  app.get('/api/admin/cache/_clear', adminAuth, (req, res, next) => {
-    req.method = 'POST';
-    app._router.handle(req, res, next);
-  });
+  router
+    .route('/api/admin/cache/_clear')
+    .post(adminAuth, clearCacheHandler)
+    .get(adminAuth, clearCacheHandler);
 
   // Force refresh endpoint - triggers client reload by updating refresh salt
-  app.post('/api/admin/client/_refresh', adminAuth, async(req, res) => {
+  const forceClientRefreshHandler = async(req, res) => {
     try {
       const rootDir = getRootDir();
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
@@ -180,12 +182,12 @@ export default function registerAdminRoutes(app) {
       console.error('Error triggering force refresh:', error);
       res.status(500).json({ error: 'Failed to trigger force refresh' });
     }
-  });
+  };
 
-  app.get('/api/admin/client/_refresh', adminAuth, (req, res, next) => {
-    req.method = 'POST';
-    app._router.handle(req, res, next);
-  });
+  router
+    .route('/api/admin/client/_refresh')
+    .post(adminAuth, forceClientRefreshHandler)
+    .get(adminAuth, forceClientRefreshHandler);
 
   // Apps management endpoints
   app.get('/api/admin/apps', adminAuth, async(req, res) => {
