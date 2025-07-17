@@ -9,7 +9,7 @@ import {
 } from '../shortLinkManager.js';
 
 export default function registerShortLinkRoutes(app) {
-  app.post('/api/shortlinks', async(req, res) => {
+  app.post('/api/shortlinks', async (req, res) => {
     try {
       const { code, appId, userId, path, params, url, includeParams, expiresAt } = req.body;
       if (!url && !appId && !path) {
@@ -35,7 +35,7 @@ export default function registerShortLinkRoutes(app) {
     }
   });
 
-  app.get('/api/shortlinks', async(req, res) => {
+  app.get('/api/shortlinks', async (req, res) => {
     try {
       const { appId, userId } = req.query;
       const links = await searchLinks({ appId, userId });
@@ -46,7 +46,7 @@ export default function registerShortLinkRoutes(app) {
     }
   });
 
-  app.get('/api/shortlinks/:code', async(req, res) => {
+  app.get('/api/shortlinks/:code', async (req, res) => {
     try {
       const link = await getLink(req.params.code);
       if (!link) return res.status(404).json({ error: 'Not found' });
@@ -57,7 +57,7 @@ export default function registerShortLinkRoutes(app) {
     }
   });
 
-  app.put('/api/shortlinks/:code', async(req, res) => {
+  app.put('/api/shortlinks/:code', async (req, res) => {
     try {
       const link = await updateLink(req.params.code, req.body);
       if (!link) return res.status(404).json({ error: 'Not found' });
@@ -68,7 +68,7 @@ export default function registerShortLinkRoutes(app) {
     }
   });
 
-  app.delete('/api/shortlinks/:code', async(req, res) => {
+  app.delete('/api/shortlinks/:code', async (req, res) => {
     try {
       const ok = await deleteLink(req.params.code);
       if (!ok) return res.status(404).json({ error: 'Not found' });
@@ -79,7 +79,7 @@ export default function registerShortLinkRoutes(app) {
     }
   });
 
-  app.get('/s/:code', async(req, res) => {
+  app.get('/s/:code', async (req, res) => {
     try {
       const link = await recordUsage(req.params.code);
       if (!link) return res.status(404).send('Not found');

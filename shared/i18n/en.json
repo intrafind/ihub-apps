@@ -43,7 +43,14 @@
     "expiresAt": "Expires At",
     "codeTaken": "Code taken",
     "codeAvailable": "Code available",
-    "codeTooShort": "Code must be at least 5 characters"
+    "codeTooShort": "Code must be at least 5 characters",
+    "notAvailable": "N/A",
+    "notSet": "Not set",
+    "notSpecified": "Not specified",
+    "none": "None",
+    "yes": "Yes",
+    "no": "No",
+    "required": "required"
   },
   "pages": {
     "home": {
@@ -188,7 +195,10 @@
     "temperature": "Temperature",
     "temperatureDescription": "Controls randomness: Lower values are more deterministic, higher values are more creative.",
     "systemPrompt": "System Prompt",
-    "systemPromptDescription": "Instructions for the AI at the beginning of the conversation."
+    "systemPromptDescription": "Instructions for the AI at the beginning of the conversation.",
+    "markdown": "Markdown",
+    "plainText": "Plain Text",
+    "json": "JSON"
   },
   "chatMessage": {
     "user": "You",

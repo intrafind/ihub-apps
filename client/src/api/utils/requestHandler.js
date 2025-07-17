@@ -7,7 +7,7 @@ const pendingRequests = new Map();
 // Handle API responses with in-memory caching and optional ETag support
 // Cache entries live only for the lifetime of the page. Data is kept in memory
 // and not persisted to sessionStorage.
-export const handleApiResponse = async(
+export const handleApiResponse = async (
   apiCall,
   cacheKey = null,
   ttl = DEFAULT_CACHE_TTL.MEDIUM,
@@ -36,7 +36,7 @@ export const handleApiResponse = async(
     }
 
     // Create a promise for the API call
-    const requestPromise = (async() => {
+    const requestPromise = (async () => {
       try {
         // Make the API call
         const response = await apiCall();

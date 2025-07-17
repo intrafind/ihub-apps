@@ -70,7 +70,7 @@ const PromptsList = () => {
   }, [sortConfig]);
 
   useEffect(() => {
-    (async() => {
+    (async () => {
       try {
         const raw = await fetchPrompts();
         const localized = (Array.isArray(raw) ? raw : []).map(p => ({

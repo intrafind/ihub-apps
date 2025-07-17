@@ -1,8 +1,9 @@
 import { getUsage } from '../usageTracker.js';
 import configCache from '../configCache.js';
-import { readFileSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { atomicWriteJSON } from '../utils/atomicWrite.js';
+import { toggleEnabled } from '../utils/toggleEnabled.js';
 import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
 import { getLocalizedContent } from '../../shared/localize.js';
@@ -13,7 +14,7 @@ export default function registerAdminRoutes(app) {
   const router = express.Router();
   app.use(router);
   // Admin authentication status endpoint (no auth required to check if auth is needed)
-  app.get('/api/admin/auth/status', async(req, res) => {
+  app.get('/api/admin/auth/status', async (req, res) => {
     try {
       const authRequired = isAdminAuthRequired();
       res.json({
@@ -27,7 +28,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Admin authentication test endpoint
-  app.get('/api/admin/auth/test', adminAuth, async(req, res) => {
+  app.get('/api/admin/auth/test', adminAuth, async (req, res) => {
     try {
       res.json({
         message: 'Admin authentication successful',
@@ -40,7 +41,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Admin password change endpoint
-  app.post('/api/admin/auth/change-password', adminAuth, async(req, res) => {
+  app.post('/api/admin/auth/change-password', adminAuth, async (req, res) => {
     try {
       const { newPassword } = req.body;
 
@@ -86,7 +87,7 @@ export default function registerAdminRoutes(app) {
       res.status(500).json({ error: 'Failed to change admin password' });
     }
   });
-  app.get('/api/admin/usage', adminAuth, async(req, res) => {
+  app.get('/api/admin/usage', adminAuth, async (req, res) => {
     try {
       const data = await getUsage();
       res.json(data);
@@ -97,7 +98,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Configuration cache management endpoints
-  app.get('/api/admin/cache/stats', adminAuth, async(req, res) => {
+  app.get('/api/admin/cache/stats', adminAuth, async (req, res) => {
     try {
       const stats = configCache.getStats();
       res.json(stats);
@@ -107,7 +108,7 @@ export default function registerAdminRoutes(app) {
     }
   });
   // Support both POST and GET for cache refresh
-  const refreshCacheHandler = async(req, res) => {
+ const refreshCacheHandler = async(req, res) => {
     try {
       await configCache.refreshAll();
       res.json({ message: 'Configuration cache refreshed successfully' });
@@ -190,7 +191,7 @@ export default function registerAdminRoutes(app) {
     .get(adminAuth, forceClientRefreshHandler);
 
   // Apps management endpoints
-  app.get('/api/admin/apps', adminAuth, async(req, res) => {
+  app.get('/api/admin/apps', adminAuth, async (req, res) => {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps(true);
       res.setHeader('ETag', appsEtag);
@@ -202,7 +203,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Get apps suitable for inheritance (templates)
-  app.get('/api/admin/apps/templates', adminAuth, async(req, res) => {
+  app.get('/api/admin/apps/templates', adminAuth, async (req, res) => {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps(true);
       const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
@@ -215,7 +216,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Get inheritance tree for an app
-  app.get('/api/admin/apps/:appId/inheritance', adminAuth, async(req, res) => {
+  app.get('/api/admin/apps/:appId/inheritance', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const { data: apps, etag: appsEtag } = configCache.getApps(true);
@@ -246,7 +247,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/apps/:appId', adminAuth, async(req, res) => {
+  app.get('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const { data: apps, etag: appsEtag } = configCache.getApps(true);
@@ -263,7 +264,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.put('/api/admin/apps/:appId', adminAuth, async(req, res) => {
+  app.put('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const updatedApp = req.body;
@@ -294,7 +295,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/apps', adminAuth, async(req, res) => {
+  app.post('/api/admin/apps', adminAuth, async (req, res) => {
     try {
       const newApp = req.body;
 
@@ -308,10 +309,13 @@ export default function registerAdminRoutes(app) {
       const appFilePath = join(rootDir, 'contents', 'apps', `${newApp.id}.json`);
 
       try {
-        readFileSync(appFilePath, 'utf8');
+        await fs.readFile(appFilePath, 'utf8');
         return res.status(400).json({ error: 'App with this ID already exists' });
       } catch (err) {
         // File doesn't exist, which is what we want
+        if (err.code !== 'ENOENT') {
+          throw err;
+        }
       }
 
       // Save the app to individual file
@@ -327,33 +331,23 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/apps/:appId/toggle', adminAuth, async(req, res) => {
+  app.post('/api/admin/apps/:appId/toggle', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
-      const { data: apps, etag: appsEtag } = configCache.getApps(true);
-      const app = apps.find(a => a.id === appId);
+      const result = await toggleEnabled(
+        'contents/apps',
+        appId,
+        () => configCache.refreshAppsCache()
+      );
 
-      if (!app) {
+      if (result.notFound) {
         return res.status(404).json({ error: 'App not found' });
       }
 
-      // Toggle the enabled state
-      const newEnabledState = !app.enabled;
-      app.enabled = newEnabledState;
-
-      // Save the app to individual file
-      const rootDir = getRootDir();
-      const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
-
-      await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
-
-      // Refresh the apps cache
-      await configCache.refreshAppsCache();
-
       res.json({
-        message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-        app: app,
-        enabled: newEnabledState
+        message: `App ${result.enabled ? 'enabled' : 'disabled'} successfully`,
+        app: result.data,
+        enabled: result.enabled
       });
     } catch (error) {
       console.error('Error toggling app:', error);
@@ -361,15 +355,20 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/apps/:appId', adminAuth, async(req, res) => {
+  app.delete('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const rootDir = getRootDir();
       const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
 
       // Check if file exists
-      if (!readFileSync(appFilePath, 'utf8')) {
-        return res.status(404).json({ error: 'App not found' });
+      try {
+        await fs.readFile(appFilePath, 'utf8');
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          return res.status(404).json({ error: 'App not found' });
+        }
+        throw err;
       }
 
       // Delete the file
@@ -386,7 +385,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Models management endpoints
-  app.get('/api/admin/models', adminAuth, async(req, res) => {
+  app.get('/api/admin/models', adminAuth, async (req, res) => {
     try {
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
       res.setHeader('ETag', modelsEtag);
@@ -397,7 +396,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/models/:modelId', adminAuth, async(req, res) => {
+  app.get('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
@@ -415,7 +414,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.put('/api/admin/models/:modelId', adminAuth, async(req, res) => {
+  app.put('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const updatedModel = req.body;
@@ -466,7 +465,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models', adminAuth, async(req, res) => {
+  app.post('/api/admin/models', adminAuth, async (req, res) => {
     try {
       const newModel = req.body;
 
@@ -486,10 +485,13 @@ export default function registerAdminRoutes(app) {
       const modelFilePath = join(rootDir, 'contents', 'models', `${newModel.id}.json`);
 
       try {
-        readFileSync(modelFilePath, 'utf8');
+        await fs.readFile(modelFilePath, 'utf8');
         return res.status(400).json({ error: 'Model with this ID already exists' });
       } catch (err) {
         // File doesn't exist, which is what we want
+        if (err.code !== 'ENOENT') {
+          throw err;
+        }
       }
 
       // Handle default model logic - only one model can be default
@@ -519,26 +521,20 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models/:modelId/toggle', adminAuth, async(req, res) => {
+  app.post('/api/admin/models/:modelId/toggle', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
-      const { data: models, etag: modelsEtag } = configCache.getModels(true);
-      const model = models.find(m => m.id === modelId);
+      const result = await toggleEnabled('contents/models', modelId, null);
 
-      if (!model) {
+      if (result.notFound) {
         return res.status(404).json({ error: 'Model not found' });
       }
 
-      // Toggle the enabled state
-      const newEnabledState = !model.enabled;
-      model.enabled = newEnabledState;
-
-      // If disabling the default model, we need to set another as default
-      if (!newEnabledState && model.default === true) {
+      const { data: models } = configCache.getModels(true);
+      if (!result.enabled && result.data.default === true) {
         const enabledModels = models.filter(m => m.id !== modelId && m.enabled === true);
         if (enabledModels.length > 0) {
           enabledModels[0].default = true;
-          // Save the new default model
           const newDefaultPath = join(
             getRootDir(),
             'contents',
@@ -547,22 +543,17 @@ export default function registerAdminRoutes(app) {
           );
           await fs.writeFile(newDefaultPath, JSON.stringify(enabledModels[0], null, 2));
         }
-        model.default = false;
+        result.data.default = false;
+        const modelPath = join(getRootDir(), 'contents', 'models', `${modelId}.json`);
+        await fs.writeFile(modelPath, JSON.stringify(result.data, null, 2));
       }
 
-      // Save the model to individual file
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-
-      await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
-
-      // Refresh the models cache
       await configCache.refreshModelsCache();
 
       res.json({
-        message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-        model: model,
-        enabled: newEnabledState
+        message: `Model ${result.enabled ? 'enabled' : 'disabled'} successfully`,
+        model: result.data,
+        enabled: result.enabled
       });
     } catch (error) {
       console.error('Error toggling model:', error);
@@ -570,7 +561,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/models/:modelId', adminAuth, async(req, res) => {
+  app.delete('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
@@ -618,7 +609,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Model testing endpoint
-  app.post('/api/admin/models/:modelId/test', adminAuth, async(req, res) => {
+  app.post('/api/admin/models/:modelId/test', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
@@ -711,7 +702,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Prompts management endpoints
-  app.get('/api/admin/prompts', adminAuth, async(req, res) => {
+  app.get('/api/admin/prompts', adminAuth, async (req, res) => {
     try {
       // Get prompts with ETag from cache
       const { data: prompts, etag } = configCache.getPrompts(true);
@@ -738,7 +729,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/api/admin/prompts/:promptId', adminAuth, async(req, res) => {
+  app.get('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const { data: prompts } = configCache.getPrompts(true);
@@ -755,7 +746,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.put('/api/admin/prompts/:promptId', adminAuth, async(req, res) => {
+  app.put('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const updatedPrompt = req.body;
@@ -786,7 +777,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/prompts', adminAuth, async(req, res) => {
+  app.post('/api/admin/prompts', adminAuth, async (req, res) => {
     try {
       const newPrompt = req.body;
 
@@ -800,10 +791,13 @@ export default function registerAdminRoutes(app) {
       const promptFilePath = join(rootDir, 'contents', 'prompts', `${newPrompt.id}.json`);
 
       try {
-        readFileSync(promptFilePath, 'utf8');
+        await fs.readFile(promptFilePath, 'utf8');
         return res.status(400).json({ error: 'Prompt with this ID already exists' });
       } catch (err) {
         // File doesn't exist, which is what we want
+        if (err.code !== 'ENOENT') {
+          throw err;
+        }
       }
 
       // Save the prompt to individual file
@@ -819,33 +813,23 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/api/admin/prompts/:promptId/toggle', adminAuth, async(req, res) => {
+  app.post('/api/admin/prompts/:promptId/toggle', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
-      const { data: prompts } = configCache.getPrompts(true);
-      const prompt = prompts.find(p => p.id === promptId);
+      const result = await toggleEnabled(
+        'contents/prompts',
+        promptId,
+        () => configCache.refreshPromptsCache()
+      );
 
-      if (!prompt) {
+      if (result.notFound) {
         return res.status(404).json({ error: 'Prompt not found' });
       }
 
-      // Toggle the enabled state
-      const newEnabledState = !prompt.enabled;
-      prompt.enabled = newEnabledState;
-
-      // Save the prompt to individual file
-      const rootDir = getRootDir();
-      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-
-      await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
-
-      // Refresh the prompts cache
-      await configCache.refreshPromptsCache();
-
       res.json({
-        message: `Prompt ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-        prompt: prompt,
-        enabled: newEnabledState
+        message: `Prompt ${result.enabled ? 'enabled' : 'disabled'} successfully`,
+        prompt: result.data,
+        enabled: result.enabled
       });
     } catch (error) {
       console.error('Error toggling prompt:', error);
@@ -853,7 +837,7 @@ export default function registerAdminRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/prompts/:promptId', adminAuth, async(req, res) => {
+  app.delete('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const rootDir = getRootDir();
@@ -878,7 +862,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // OpenAI-compatible completions endpoint for app generation
-  app.post('/api/completions', adminAuth, async(req, res) => {
+  app.post('/api/completions', adminAuth, async (req, res) => {
     try {
       const {
         model,
@@ -976,7 +960,7 @@ export default function registerAdminRoutes(app) {
   });
 
   // Get app-generator prompt configuration
-  app.get('/api/admin/prompts/app-generator', adminAuth, async(req, res) => {
+  app.get('/api/admin/prompts/app-generator', adminAuth, async (req, res) => {
     try {
       // Get default language from platform configuration
       const platformConfig = configCache.getPlatform();

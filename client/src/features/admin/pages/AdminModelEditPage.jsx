@@ -47,7 +47,7 @@ const AdminModelEditPage = () => {
     loadUsageData();
   }, [modelId]);
 
-  const loadModel = async() => {
+  const loadModel = async () => {
     try {
       setLoading(true);
       const response = await makeAdminApiCall(`/api/admin/models/${modelId}`);
@@ -88,7 +88,7 @@ const AdminModelEditPage = () => {
     }
   };
 
-  const loadAppsUsingModel = async() => {
+  const loadAppsUsingModel = async () => {
     try {
       const response = await makeAdminApiCall('/api/admin/apps');
       const allApps = await response.json();
@@ -99,7 +99,7 @@ const AdminModelEditPage = () => {
     }
   };
 
-  const loadUsageData = async() => {
+  const loadUsageData = async () => {
     try {
       const response = await makeAdminApiCall('/api/admin/usage');
       const usageData = await response.json();
@@ -231,8 +231,8 @@ const AdminModelEditPage = () => {
                   {isNewModel
                     ? t('admin.models.edit.subtitleNew')
                     : t('admin.models.edit.subtitle', {
-                      name: getLocalizedContent(formData.name, currentLanguage)
-                    })}
+                        name: getLocalizedContent(formData.name, currentLanguage)
+                      })}
                 </p>
               </div>
             </div>

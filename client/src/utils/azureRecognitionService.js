@@ -16,34 +16,34 @@ class AzureSpeechRecognition {
 
     this.recognition.recognizeOnceAsync(result => {
       switch (result.reason) {
-      case speechSdk.ResultReason.RecognizedSpeech:
-        this.#triggerOnResult(result);
-        this.#triggerOnEnd();
-        break;
-      case speechSdk.ResultReason.NoMatch:
-        this.#triggerOnError({ error: 'no-speech' });
+        case speechSdk.ResultReason.RecognizedSpeech:
+          this.#triggerOnResult(result);
+          this.#triggerOnEnd();
+          break;
+        case speechSdk.ResultReason.NoMatch:
+          this.#triggerOnError({ error: 'no-speech' });
 
-        break;
-      case speechSdk.ResultReason.Canceled:
-        const cancellation = speechSdk.CancellationDetails.fromResult(result);
+          break;
+        case speechSdk.ResultReason.Canceled:
+          const cancellation = speechSdk.CancellationDetails.fromResult(result);
 
-        if (cancellation.reason == speechSdk.CancellationReason.Error) {
-          switch (cancellation.ErrorCode) {
-          case speechSdk.CancellationErrorCode.Forbidden:
-          case speechSdk.CancellationErrorCode.ServiceError:
-          case speechSdk.CancellationErrorCode.TooManyRequests:
-          case speechSdk.CancellationErrorCode.AuthenticationFailure:
-            this.#triggerOnError({ error: 'not-allowed' });
-            break;
-          case speechSdk.CancellationErrorCode.ServiceTimeout:
-          case speechSdk.CancellationErrorCode.ConnectionFailure:
-            this.#triggerOnError({ error: 'network' });
-            break;
-          default:
-            this.#triggerOnError({ error: '' });
+          if (cancellation.reason == speechSdk.CancellationReason.Error) {
+            switch (cancellation.ErrorCode) {
+              case speechSdk.CancellationErrorCode.Forbidden:
+              case speechSdk.CancellationErrorCode.ServiceError:
+              case speechSdk.CancellationErrorCode.TooManyRequests:
+              case speechSdk.CancellationErrorCode.AuthenticationFailure:
+                this.#triggerOnError({ error: 'not-allowed' });
+                break;
+              case speechSdk.CancellationErrorCode.ServiceTimeout:
+              case speechSdk.CancellationErrorCode.ConnectionFailure:
+                this.#triggerOnError({ error: 'network' });
+                break;
+              default:
+                this.#triggerOnError({ error: '' });
+            }
           }
-        }
-        break;
+          break;
       }
       this.recognition.close();
     });
@@ -63,7 +63,7 @@ class AzureSpeechRecognition {
       this.recognition = recognizer;
     } catch (e) {
       if (!host) {
-        console.error('Failed to construct URL since \'host\' is not defined');
+        console.error("Failed to construct URL since 'host' is not defined");
         return;
       }
 
@@ -78,7 +78,7 @@ class AzureSpeechRecognition {
       this.onresult(result);
       return;
     }
-    console.log('\'onresult\' is not defined');
+    console.log("'onresult' is not defined");
   }
 
   #triggerOnStart() {
@@ -87,7 +87,7 @@ class AzureSpeechRecognition {
       this.onstart();
       return;
     }
-    console.log('\'onstart\' is not defined');
+    console.log("'onstart' is not defined");
   }
 
   #triggerOnError(err) {
@@ -96,7 +96,7 @@ class AzureSpeechRecognition {
       this.onerror(err);
       return;
     }
-    console.log('\'onerror\' is not defined');
+    console.log("'onerror' is not defined");
   }
 
   #triggerOnEnd() {
@@ -105,7 +105,7 @@ class AzureSpeechRecognition {
       this.onend();
       return;
     }
-    console.log('\'onend\' is not defined');
+    console.log("'onend' is not defined");
   }
 
   // GETTER SETTER

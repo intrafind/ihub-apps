@@ -27,7 +27,7 @@ const AdminPromptsPage = () => {
     loadUIConfig();
   }, []);
 
-  const loadUIConfig = async() => {
+  const loadUIConfig = async () => {
     try {
       const response = await fetch('/api/configs/ui');
       if (response.ok) {
@@ -39,7 +39,7 @@ const AdminPromptsPage = () => {
     }
   };
 
-  const loadPrompts = async() => {
+  const loadPrompts = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -333,15 +333,17 @@ const AdminPromptsPage = () => {
                                   cat => cat.id === prompt.category
                                 )?.name
                                   ? getLocalizedContent(
-                                    uiConfig.promptsList.categories.list.find(
-                                      cat => cat.id === prompt.category
-                                    ).name,
-                                    currentLanguage
-                                  )
+                                      uiConfig.promptsList.categories.list.find(
+                                        cat => cat.id === prompt.category
+                                      ).name,
+                                      currentLanguage
+                                    )
                                   : prompt.category}
                               </span>
                             ) : (
-                              <span className="text-gray-400 text-sm">N/A</span>
+                              <span className="text-gray-400 text-sm">
+                                {t('common.notAvailable', 'N/A')}
+                              </span>
                             )}
                           </td>
                           <td className="px-6 py-4">

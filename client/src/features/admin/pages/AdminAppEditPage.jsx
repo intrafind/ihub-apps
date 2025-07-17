@@ -23,7 +23,7 @@ const AdminAppEditPage = () => {
 
   useEffect(() => {
     // Load available models and UI config
-    const loadModels = async() => {
+    const loadModels = async () => {
       try {
         const response = await fetch('/api/models');
         if (response.ok) {
@@ -35,7 +35,7 @@ const AdminAppEditPage = () => {
       }
     };
 
-    const loadUIConfig = async() => {
+    const loadUIConfig = async () => {
       try {
         const response = await fetch('/api/configs/ui');
         if (response.ok) {
@@ -139,7 +139,7 @@ const AdminAppEditPage = () => {
     }
   }, [appId]);
 
-  const loadApp = async() => {
+  const loadApp = async () => {
     try {
       setLoading(true);
       const response = await makeAdminApiCall(`/api/admin/apps/${appId}`);
@@ -302,11 +302,11 @@ const AdminAppEditPage = () => {
       variables: prev.variables.map((variable, i) =>
         i === variableIndex
           ? {
-            ...variable,
-            predefinedValues: variable.predefinedValues.map((predefinedValue, j) =>
-              j === valueIndex ? { ...predefinedValue, [field]: value } : predefinedValue
-            )
-          }
+              ...variable,
+              predefinedValues: variable.predefinedValues.map((predefinedValue, j) =>
+                j === valueIndex ? { ...predefinedValue, [field]: value } : predefinedValue
+              )
+            }
           : variable
       )
     }));
@@ -318,15 +318,15 @@ const AdminAppEditPage = () => {
       variables: prev.variables.map((variable, i) =>
         i === variableIndex
           ? {
-            ...variable,
-            predefinedValues: [
-              ...(variable.predefinedValues || []),
-              {
-                label: { en: '' },
-                value: ''
-              }
-            ]
-          }
+              ...variable,
+              predefinedValues: [
+                ...(variable.predefinedValues || []),
+                {
+                  label: { en: '' },
+                  value: ''
+                }
+              ]
+            }
           : variable
       )
     }));
@@ -338,9 +338,9 @@ const AdminAppEditPage = () => {
       variables: prev.variables.map((variable, i) =>
         i === variableIndex
           ? {
-            ...variable,
-            predefinedValues: variable.predefinedValues.filter((_, j) => j !== valueIndex)
-          }
+              ...variable,
+              predefinedValues: variable.predefinedValues.filter((_, j) => j !== valueIndex)
+            }
           : variable
       )
     }));
@@ -637,9 +637,9 @@ const AdminAppEditPage = () => {
                       onChange={e => handleInputChange('preferredOutputFormat', e.target.value)}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     >
-                      <option value="markdown">Markdown</option>
-                      <option value="text">Plain Text</option>
-                      <option value="json">JSON</option>
+                      <option value="markdown">{t('appConfig.markdown', 'Markdown')}</option>
+                      <option value="text">{t('appConfig.plainText', 'Plain Text')}</option>
+                      <option value="json">{t('appConfig.json', 'JSON')}</option>
                     </select>
                   </div>
 

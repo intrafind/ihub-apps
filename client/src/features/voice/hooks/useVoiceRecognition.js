@@ -90,7 +90,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
     }
   };
 
-  const startListening = async() => {
+  const startListening = async () => {
     if (disabled) return;
 
     try {
@@ -120,13 +120,13 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       let recognition;
 
       switch (app?.settings?.speechRecognition?.service) {
-      case 'azure':
-        recognition = new AzureSpeechRecognition();
-        recognition.host = app?.settings?.speechRecognition?.host;
-        break;
-      case 'default':
-      default:
-        recognition = new SpeechRecognition();
+        case 'azure':
+          recognition = new AzureSpeechRecognition();
+          recognition.host = app?.settings?.speechRecognition?.host;
+          break;
+        case 'default':
+        default:
+          recognition = new SpeechRecognition();
       }
 
       recognition.continuous = microphoneMode === 'manual';
@@ -234,29 +234,29 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       recognition.onerror = event => {
         let errorMsg = '';
         switch (event.error) {
-        case 'no-speech':
-          errorMsg = t('voiceInput.error.noSpeech', 'No speech detected. Please try again.');
-          break;
-        case 'audio-capture':
-          errorMsg = t(
-            'voiceInput.error.noMicrophone',
-            'No microphone found. Please check your device settings.'
-          );
-          break;
-        case 'not-allowed':
-          errorMsg = t(
-            'voiceInput.error.permissionDenied',
-            'Please allow microphone access and try again.'
-          );
-          break;
-        case 'network':
-          errorMsg = t(
-            'voiceInput.error.network',
-            'Network error. Please check your connection.'
-          );
-          break;
-        default:
-          errorMsg = t('voiceInput.error.general', 'Voice input error. Please try again.');
+          case 'no-speech':
+            errorMsg = t('voiceInput.error.noSpeech', 'No speech detected. Please try again.');
+            break;
+          case 'audio-capture':
+            errorMsg = t(
+              'voiceInput.error.noMicrophone',
+              'No microphone found. Please check your device settings.'
+            );
+            break;
+          case 'not-allowed':
+            errorMsg = t(
+              'voiceInput.error.permissionDenied',
+              'Please allow microphone access and try again.'
+            );
+            break;
+          case 'network':
+            errorMsg = t(
+              'voiceInput.error.network',
+              'Network error. Please check your connection.'
+            );
+            break;
+          default:
+            errorMsg = t('voiceInput.error.general', 'Voice input error. Please try again.');
         }
         showError(errorMsg);
       };
