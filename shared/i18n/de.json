@@ -45,7 +45,14 @@
     "expiresAt": "Ablaufdatum",
     "codeTaken": "Code vergeben",
     "codeAvailable": "Code verfügbar",
-    "codeTooShort": "Code zu kurz"
+    "codeTooShort": "Code zu kurz",
+    "notAvailable": "k.A.",
+    "notSet": "Nicht festgelegt",
+    "notSpecified": "Nicht angegeben",
+    "none": "Keine",
+    "yes": "Ja",
+    "no": "Nein",
+    "required": "erforderlich"
   },
   "pages": {
     "home": {
@@ -182,7 +189,10 @@
     "temperature": "Temperatur",
     "temperatureDescription": "Steuert die Zufälligkeit: Niedrigere Werte sind deterministischer, höhere Werte sind kreativer.",
     "systemPrompt": "System-Prompt",
-    "systemPromptDescription": "Anweisungen für die KI zu Beginn des Gesprächs."
+    "systemPromptDescription": "Anweisungen für die KI zu Beginn des Gesprächs.",
+    "markdown": "Markdown",
+    "plainText": "Klartext",
+    "json": "JSON"
   },
   "chatMessage": {
     "user": "Du",

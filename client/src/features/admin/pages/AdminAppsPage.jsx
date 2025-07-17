@@ -422,7 +422,9 @@ const AdminAppsPage = () => {
                                 : app.category}
                             </span>
                           ) : (
-                            <span className="text-gray-400 text-sm">N/A</span>
+                            <span className="text-gray-400 text-sm">
+                              {t('common.notAvailable', 'N/A')}
+                            </span>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -439,10 +441,10 @@ const AdminAppsPage = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {app.order ?? 'N/A'}
+                          {app.order ?? t('common.notAvailable', 'N/A')}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {app.preferredModel || 'N/A'}
+                          {app.preferredModel || t('common.notAvailable', 'N/A')}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex justify-end space-x-2">

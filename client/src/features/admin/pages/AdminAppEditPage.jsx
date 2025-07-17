@@ -637,9 +637,9 @@ const AdminAppEditPage = () => {
                       onChange={e => handleInputChange('preferredOutputFormat', e.target.value)}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     >
-                      <option value="markdown">Markdown</option>
-                      <option value="text">Plain Text</option>
-                      <option value="json">JSON</option>
+                      <option value="markdown">{t('appConfig.markdown', 'Markdown')}</option>
+                      <option value="text">{t('appConfig.plainText', 'Plain Text')}</option>
+                      <option value="json">{t('appConfig.json', 'JSON')}</option>
                     </select>
                   </div>
 
