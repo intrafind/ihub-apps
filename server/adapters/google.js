@@ -11,95 +11,104 @@ const GoogleAdapter = {
     // Extract system message for separate handling
     let systemInstruction = '';
     const geminiContents = [];
+    let currentToolResponses = [];
+
+    const pushToolResponses = () => {
+      if (currentToolResponses.length > 0) {
+        geminiContents.push({
+          role: 'user',
+          parts: currentToolResponses
+        });
+        currentToolResponses = [];
+      }
+    };
 
     // First pass - extract system messages and handle image data
     for (const message of messages) {
-      if (message.role === 'system') {
-        // Collect system messages - ideally there should be only one
-        systemInstruction += (systemInstruction ? '\n\n' : '') + message.content;
-      } else if (message.role === 'tool') {
-        // Convert tool outputs to Gemini functionResponse format
+      if (message.role === 'tool') {
         let responseObj;
         try {
           responseObj = JSON.parse(message.content);
         } catch {
           responseObj = message.content;
         }
-
-        geminiContents.push({
-          role: 'user',
-          parts: [
-            {
-              functionResponse: {
-                name: normalizeName(message.name || message.tool_call_id || 'tool'),
-                response: responseObj
-              }
-            }
-          ]
+        currentToolResponses.push({
+          functionResponse: {
+            name: normalizeName(message.name || message.tool_call_id || 'tool'),
+            response: responseObj
+          }
         });
       } else {
-        // Handle assistant messages with tool calls
-        if (
-          message.role === 'assistant' &&
-          Array.isArray(message.tool_calls) &&
-          message.tool_calls.length > 0
-        ) {
-          const parts = [];
-          if (message.content) {
-            parts.push({ text: message.content });
-          }
-          for (const call of message.tool_calls) {
-            let argsObj;
-            try {
-              argsObj = JSON.parse(call.function.arguments || '{}');
-            } catch {
-              argsObj = {};
+        pushToolResponses();
+
+        if (message.role === 'system') {
+          // Collect system messages - ideally there should be only one
+          systemInstruction += (systemInstruction ? '\n\n' : '') + message.content;
+        } else {
+          // Handle assistant messages with tool calls
+          if (
+            message.role === 'assistant' &&
+            Array.isArray(message.tool_calls) &&
+            message.tool_calls.length > 0
+          ) {
+            const parts = [];
+            if (message.content) {
+              parts.push({ text: message.content });
             }
+            for (const call of message.tool_calls) {
+              let argsObj;
+              try {
+                argsObj = JSON.parse(call.function.arguments || '{}');
+              } catch {
+                argsObj = {};
+              }
+              parts.push({
+                functionCall: {
+                  name: normalizeName(call.function.name),
+                  args: argsObj
+                }
+              });
+            }
+
+            geminiContents.push({ role: 'model', parts });
+            continue;
+          }
+
+          // Convert OpenAI roles to Gemini roles
+          const geminiRole = message.role === 'assistant' ? 'model' : 'user';
+
+          const textContent = message.content;
+
+          // Check if this message contains image data
+          if (message.imageData && message.imageData.base64) {
+            // For image messages, we need to create a parts array with both text and image
+            const parts = [];
+
+            // Add text part if content exists (possibly including file content)
+            if (textContent) {
+              parts.push({ text: textContent });
+            }
+
+            // Add image part
             parts.push({
-              functionCall: {
-                name: normalizeName(call.function.name),
-                args: argsObj
+              inlineData: {
+                mimeType: message.imageData.fileType || 'image/jpeg',
+                data: message.imageData.base64.replace(/^data:image\/[a-z]+;base64,/, '') // Remove data URL prefix if present
               }
             });
+
+            geminiContents.push({ role: geminiRole, parts });
+          } else {
+            // Regular text message (possibly including file content)
+            geminiContents.push({
+              role: geminiRole,
+              parts: [{ text: textContent }]
+            });
           }
-
-          geminiContents.push({ role: 'model', parts });
-          continue;
-        }
-
-        // Convert OpenAI roles to Gemini roles
-        const geminiRole = message.role === 'assistant' ? 'model' : 'user';
-
-        const textContent = message.content;
-
-        // Check if this message contains image data
-        if (message.imageData && message.imageData.base64) {
-          // For image messages, we need to create a parts array with both text and image
-          const parts = [];
-
-          // Add text part if content exists (possibly including file content)
-          if (textContent) {
-            parts.push({ text: textContent });
-          }
-
-          // Add image part
-          parts.push({
-            inlineData: {
-              mimeType: message.imageData.fileType || 'image/jpeg',
-              data: message.imageData.base64.replace(/^data:image\/[a-z]+;base64,/, '') // Remove data URL prefix if present
-            }
-          });
-
-          geminiContents.push({ role: geminiRole, parts });
-        } else {
-          // Regular text message (possibly including file content)
-          geminiContents.push({
-            role: geminiRole,
-            parts: [{ text: textContent }]
-          });
         }
       }
     }
+    pushToolResponses();
 
     // Debug logs to trace message transformation
     console.log(

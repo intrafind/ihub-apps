@@ -13,45 +13,75 @@ const AnthropicAdapter = {
     const systemMessage = messages.find(msg => msg.role === 'system');
     const filteredMessages = messages.filter(msg => msg.role !== 'system');
 
-    // Process messages to handle image data
-    const processedMessages = filteredMessages.map(msg => {
-      const content = msg.content;
-
-      // If the message doesn't have image data, return a clean message with text content (possibly including file content)
-      if (!msg.imageData) {
-        return {
-          role: msg.role,
-          content: content
-        };
-      }
-
-      // For messages with images, convert to Anthropic's format with content array
-      const contentArray = [];
-
-      // Add text content if it exists (possibly including file content)
-      if (content && content.trim()) {
+    const processedMessages = [];
+    for (const msg of filteredMessages) {
+      if (msg.role === 'tool') {
+        let toolContent;
+        try {
+          toolContent = JSON.parse(msg.content);
+        } catch {
+          toolContent = msg.content;
+        }
+        processedMessages.push({
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: msg.tool_call_id,
+              content: toolContent
+            }
+          ]
+        });
+      } else if (msg.role === 'assistant' && msg.tool_calls) {
+        const content = [];
+        if (msg.content) {
+          content.push({ type: 'text', text: msg.content });
+        }
+        for (const toolCall of msg.tool_calls) {
+          let args = {};
+          try {
+            args = JSON.parse(toolCall.function.arguments);
+          } catch (e) {
+            // ignore if already an object
+            if (typeof toolCall.function.arguments === 'object') {
+              args = toolCall.function.arguments;
+            }
+          }
+          content.push({
+            type: 'tool_use',
+            id: toolCall.id,
+            name: toolCall.function.name,
+            input: args
+          });
+        }
+        processedMessages.push({ role: 'assistant', content });
+      } else if (msg.imageData) {
+        const contentArray = [];
+        if (msg.content && msg.content.trim()) {
+          contentArray.push({
+            type: 'text',
+            text: msg.content
+          });
+        }
         contentArray.push({
-          type: 'text',
-          text: content
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: msg.imageData.fileType || 'image/jpeg',
+            data: msg.imageData.base64.replace(/^data:image\/[a-z]+;base64,/, '')
+          }
+        });
+        processedMessages.push({
+          role: msg.role,
+          content: contentArray
+        });
+      } else {
+        processedMessages.push({
+          role: msg.role,
+          content: msg.content
         });
       }
-
-      // Add image content
-      contentArray.push({
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: msg.imageData.fileType || 'image/jpeg',
-          data: msg.imageData.base64.replace(/^data:image\/[a-z]+;base64,/, '') // Remove data URL prefix if present
-        }
-      });
-
-      // Return the message with content array instead of content string
-      return {
-        role: msg.role,
-        content: contentArray
-      };
-    });
+    }
 
     // Debug logs
     console.log(
@@ -195,21 +225,13 @@ const AnthropicAdapter = {
         parsed.type === 'content_block_delta' &&
         parsed.delta?.type === 'input_json_delta'
       ) {
-        // Accumulate arguments for the tool call at this index
-        const existingToolCall = result.tool_calls.find(tc => tc.index === parsed.index);
-        if (existingToolCall) {
-          existingToolCall.function.arguments += parsed.delta.partial_json || '';
-        } else {
-          // Fallback: create new tool call if not found
-          result.tool_calls.push({
-            index: parsed.index,
-            type: 'function',
-            function: {
-              name: '',
-              arguments: parsed.delta.partial_json || ''
-            }
-          });
-        }
+        // Pass partial tool call chunks to ToolExecutor for merging
+        result.tool_calls.push({
+          index: parsed.index,
+          function: {
+            arguments: parsed.delta.partial_json || ''
+          }
+        });
       }
 
       if (parsed.type === 'message_stop') {

@@ -173,8 +173,6 @@ const MistralAdapter = {
             if (tc.id) normalized.id = tc.id;
             if (tc.function) {
               normalized.function = { ...tc.function };
-            } else if (tc.delta && tc.delta.function) {
-              normalized.function = { ...tc.delta.function };
             }
             result.tool_calls.push(normalized);
           }

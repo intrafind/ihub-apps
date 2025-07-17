@@ -209,22 +209,38 @@ class ToolExecutor {
           console.log(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
           if (result.tool_calls?.length > 0) {
             result.tool_calls.forEach(call => {
-              const existingCall = collectedToolCalls.find(
-                c => (call.id && c.id === call.id) || (!call.id && c.index === call.index)
-              );
+              let existingCall = collectedToolCalls.find(c => c.index === call.index);
 
               if (existingCall) {
-                if (call.function?.arguments) {
-                  existingCall.function.arguments += call.function.arguments;
+                // Merge properties into the existing tool call
+                if (call.id) {
+                  existingCall.id = (existingCall.id || '') + call.id;
                 }
-              } else if ((call.id || call.index !== undefined) && call.function?.name) {
+                if (call.type) {
+                  existingCall.type = call.type;
+                }
+                if (call.function) {
+                  if (!existingCall.function) {
+                    existingCall.function = { name: '', arguments: '' };
+                  }
+                  if (call.function.name) {
+                    existingCall.function.name =
+                      (existingCall.function.name || '') + call.function.name;
+                  }
+                  if (call.function.arguments) {
+                    existingCall.function.arguments =
+                      (existingCall.function.arguments || '') + call.function.arguments;
+                  }
+                }
+              } else if (call.index !== undefined) {
+                // Create a new tool call if it doesn't exist
                 collectedToolCalls.push({
                   index: call.index,
-                  id: call.id,
+                  id: call.id || '',
                   type: call.type || 'function',
                   function: {
-                    name: call.function.name,
-                    arguments: call.function.arguments || ''
+                    name: call.function?.name || '',
+                    arguments: call.function?.arguments || ''
                   }
                 });
               }
