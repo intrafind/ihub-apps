@@ -55,7 +55,7 @@ This document provides guidelines for Gemini models working on the AI Hub Apps p
     ```bash
     # Run linting and formatting before any testing
     npm run lint:fix
-    npm run format
+    npm run format:fix
     ```
 
 2.  **Client-Server Interaction**: Test both client and server components after changes.
@@ -66,6 +66,9 @@ This document provides guidelines for Gemini models working on the AI Hub Apps p
     ```bash
     # MANDATORY: Run linting first
     npm run lint:fix
+
+    # MANDATORY: Run formatting second
+    npm run format:fix
 
     # Test server startup with timeout to catch errors quickly
     timeout 10s node server/server.js || echo "Server startup check completed"
