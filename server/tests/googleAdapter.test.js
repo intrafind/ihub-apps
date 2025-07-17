@@ -14,6 +14,6 @@ const req = GoogleAdapter.createCompletionRequest(model, messages, 'key', {
   responseSchema: schema
 });
 
-assert.strictEqual(req.body.generationConfig.response_mime_type, 'application/json');
+assert.strictEqual(req.body.generationConfig.responseMimeType, 'application/json');
 assert.deepStrictEqual(req.body.generationConfig.response_schema, schema);
 console.log('Google adapter structured output test passed');
