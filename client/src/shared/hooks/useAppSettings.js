@@ -82,10 +82,7 @@ const useAppSettings = (appId, app) => {
     // Load saved settings and override defaults if available
     const savedSettings = loadAppSettings(appId);
     if (savedSettings) {
-      if (
-        savedSettings.selectedModel &&
-        models.some(m => m.id === savedSettings.selectedModel)
-      )
+      if (savedSettings.selectedModel && models.some(m => m.id === savedSettings.selectedModel))
         setSelectedModel(savedSettings.selectedModel);
       if (savedSettings.selectedStyle) setSelectedStyle(savedSettings.selectedStyle);
       if (savedSettings.selectedOutputFormat)

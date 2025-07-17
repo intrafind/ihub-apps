@@ -132,6 +132,7 @@ const AnthropicAdapter = {
 
     return {
       url: model.url,
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey || '', // Provide empty string to avoid undefined

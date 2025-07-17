@@ -179,6 +179,7 @@ const GoogleAdapter = {
 
     return {
       url,
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },

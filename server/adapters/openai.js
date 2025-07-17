@@ -111,6 +111,7 @@ const OpenAIAdapter = {
 
     return {
       url: model.url,
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`
