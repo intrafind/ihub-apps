@@ -3,6 +3,7 @@ import configCache from '../configCache.js';
 import { readFileSync, existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { atomicWriteJSON } from '../utils/atomicWrite.js';
+import { toggleEnabled } from '../utils/toggleEnabled.js';
 import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
 import { getLocalizedContent } from '../../shared/localize.js';
@@ -328,30 +329,20 @@ export default function registerAdminRoutes(app) {
   app.post('/api/admin/apps/:appId/toggle', adminAuth, async(req, res) => {
     try {
       const { appId } = req.params;
-      const { data: apps, etag: appsEtag } = configCache.getApps(true);
-      const app = apps.find(a => a.id === appId);
+      const result = await toggleEnabled(
+        'contents/apps',
+        appId,
+        () => configCache.refreshAppsCache()
+      );
 
-      if (!app) {
+      if (result.notFound) {
         return res.status(404).json({ error: 'App not found' });
       }
 
-      // Toggle the enabled state
-      const newEnabledState = !app.enabled;
-      app.enabled = newEnabledState;
-
-      // Save the app to individual file
-      const rootDir = getRootDir();
-      const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
-
-      await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
-
-      // Refresh the apps cache
-      await configCache.refreshAppsCache();
-
       res.json({
-        message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-        app: app,
-        enabled: newEnabledState
+        message: `App ${result.enabled ? 'enabled' : 'disabled'} successfully`,
+        app: result.data,
+        enabled: result.enabled
       });
     } catch (error) {
       console.error('Error toggling app:', error);
@@ -520,23 +511,17 @@ export default function registerAdminRoutes(app) {
   app.post('/api/admin/models/:modelId/toggle', adminAuth, async(req, res) => {
     try {
       const { modelId } = req.params;
-      const { data: models, etag: modelsEtag } = configCache.getModels(true);
-      const model = models.find(m => m.id === modelId);
+      const result = await toggleEnabled('contents/models', modelId, null);
 
-      if (!model) {
+      if (result.notFound) {
         return res.status(404).json({ error: 'Model not found' });
       }
 
-      // Toggle the enabled state
-      const newEnabledState = !model.enabled;
-      model.enabled = newEnabledState;
-
-      // If disabling the default model, we need to set another as default
-      if (!newEnabledState && model.default === true) {
+      const { data: models } = configCache.getModels(true);
+      if (!result.enabled && result.data.default === true) {
         const enabledModels = models.filter(m => m.id !== modelId && m.enabled === true);
         if (enabledModels.length > 0) {
           enabledModels[0].default = true;
-          // Save the new default model
           const newDefaultPath = join(
             getRootDir(),
             'contents',
@@ -545,22 +530,17 @@ export default function registerAdminRoutes(app) {
           );
           await fs.writeFile(newDefaultPath, JSON.stringify(enabledModels[0], null, 2));
         }
-        model.default = false;
+        result.data.default = false;
+        const modelPath = join(getRootDir(), 'contents', 'models', `${modelId}.json`);
+        await fs.writeFile(modelPath, JSON.stringify(result.data, null, 2));
       }
 
-      // Save the model to individual file
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-
-      await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
-
-      // Refresh the models cache
       await configCache.refreshModelsCache();
 
       res.json({
-        message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-        model: model,
-        enabled: newEnabledState
+        message: `Model ${result.enabled ? 'enabled' : 'disabled'} successfully`,
+        model: result.data,
+        enabled: result.enabled
       });
     } catch (error) {
       console.error('Error toggling model:', error);
@@ -820,30 +800,20 @@ export default function registerAdminRoutes(app) {
   app.post('/api/admin/prompts/:promptId/toggle', adminAuth, async(req, res) => {
     try {
       const { promptId } = req.params;
-      const { data: prompts } = configCache.getPrompts(true);
-      const prompt = prompts.find(p => p.id === promptId);
+      const result = await toggleEnabled(
+        'contents/prompts',
+        promptId,
+        () => configCache.refreshPromptsCache()
+      );
 
-      if (!prompt) {
+      if (result.notFound) {
         return res.status(404).json({ error: 'Prompt not found' });
       }
 
-      // Toggle the enabled state
-      const newEnabledState = !prompt.enabled;
-      prompt.enabled = newEnabledState;
-
-      // Save the prompt to individual file
-      const rootDir = getRootDir();
-      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-
-      await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
-
-      // Refresh the prompts cache
-      await configCache.refreshPromptsCache();
-
       res.json({
-        message: `Prompt ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-        prompt: prompt,
-        enabled: newEnabledState
+        message: `Prompt ${result.enabled ? 'enabled' : 'disabled'} successfully`,
+        prompt: result.data,
+        enabled: result.enabled
       });
     } catch (error) {
       console.error('Error toggling prompt:', error);
