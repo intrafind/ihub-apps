@@ -52,7 +52,7 @@ npm run lint:fix
 npm run format
 
 # Check if files are properly formatted
-npm run format:check
+npm run format:fix
 ```
 
 **Automated Systems:**
@@ -77,7 +77,7 @@ Start the development environment which runs both client and server:
 
 ```bash
 # Start development with linting check
-npm run lint:fix && npm run dev
+npm run lint:fix && npm run format:fix && npm run dev
 ```
 
 The server listens on port `3000` by default and the Vite dev server handles the frontend with hot reloading.
@@ -108,8 +108,11 @@ This repository does not contain automated tests yet.
 After any code changes, especially to server architecture, imports, or dependencies, always test that the server starts correctly:
 
 ```bash
-# ALWAYS run linting first, then test server startup
+# ALWAYS run linting first, then formatting
 npm run lint:fix
+
+# ALWAYS run formatting, then test server startup
+npm run format:fix
 
 # Test server startup with timeout to catch errors quickly
 timeout 10s node server/server.js || echo "Server startup check completed"
@@ -130,6 +133,7 @@ timeout 15s npm run dev || echo "Development environment startup check completed
 Common issues to watch for:
 
 - Linting violations (run `npm run lint:fix` first)
+- Formaating violations (run `npm run format:fix` first)
 - Import path mismatches (e.g., `import from './utils.js'` when function is in `./usageTracker.js`)
 - Variable scope issues (e.g., variables declared in wrong scope)
 - Missing module exports
