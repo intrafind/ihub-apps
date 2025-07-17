@@ -1,4 +1,4 @@
-# Repository Guide for Codex
+# Repository Guide for Copilot
 
 This document gives informations and instructions for working with the **ai-hub-apps** repository. **ai-hub-apps** is a platform which hosts ai-enabled apps. ai-enabled apps allow the user to communicate with the ai, but without the need to know how to prompt. The goal is to allow companies to customize it without the need of coding.
 
@@ -35,10 +35,49 @@ Always store them in the concepts folder `concepts` and format them `{year}-{mon
 
 ## Development
 
+### Code Quality and Linting
+
+**CRITICAL**: The project uses automated linting and formatting. Always ensure code quality before making changes:
+
+**Available Commands:**
+
+```bash
+# Check all files for linting issues
+npm run lint
+
+# Auto-fix linting issues where possible (ALWAYS run before committing)
+npm run lint:fix
+
+# Format all files with Prettier
+npm run format
+
+# Check if files are properly formatted
+npm run format:fix
+```
+
+**Automated Systems:**
+
+- **Pre-commit hooks**: Husky automatically runs `lint-staged` on commit
+- **CI/CD**: GitHub Actions runs linting checks on all PRs and pushes
+- **ESLint 9.x**: Modern flat config format (`eslint.config.js`)
+- **Prettier**: Consistent code formatting (`.prettierrc`)
+
+**Required Workflow:**
+
+1. **Before coding**: Run `npm run lint:fix` to fix existing issues
+2. **During coding**: Use your IDE's ESLint/Prettier integration
+3. **Before committing**: Pre-commit hooks will automatically run
+4. **If hook fails**: Fix issues and commit again
+
+**IMPORTANT**: Pre-commit hooks will prevent commits with linting errors. Always run `npm run lint:fix` before committing.
+
+### Development Environment
+
 Start the development environment which runs both client and server:
 
 ```bash
-npm run dev
+# Start development with linting check
+npm run lint:fix && npm run format:fix && npm run dev
 ```
 
 The server listens on port `3000` by default and the Vite dev server handles the frontend with hot reloading.
@@ -64,6 +103,43 @@ A standalone binary can be created with `./build.sh --binary` if Node.js 20+ is 
 
 This repository does not contain automated tests yet.
 
+### Manual Server Startup Testing
+
+After any code changes, especially to server architecture, imports, or dependencies, always test that the server starts correctly:
+
+```bash
+# ALWAYS run linting first, then formatting
+npm run lint:fix
+
+# ALWAYS run formatting, then test server startup
+npm run format:fix
+
+# Test server startup with timeout to catch errors quickly
+timeout 10s node server/server.js || echo "Server startup check completed"
+
+# Test full development environment
+timeout 15s npm run dev || echo "Development environment startup check completed"
+```
+
+**Critical**: This testing must be done after every build or significant refactoring to ensure:
+
+- No linting errors that could break functionality
+- No import/export errors
+- No missing dependencies
+- Server starts without runtime errors
+- All modules load correctly
+- Code follows established style guidelines
+
+Common issues to watch for:
+
+- Linting violations (run `npm run lint:fix` first)
+- Formaating violations (run `npm run format:fix` first)
+- Import path mismatches (e.g., `import from './utils.js'` when function is in `./usageTracker.js`)
+- Variable scope issues (e.g., variables declared in wrong scope)
+- Missing module exports
+- Syntax errors
+- Formatting inconsistencies
+
 ## Guidelines
 
 Follow the instructions in [LLM_GUIDELINES.md](LLM_GUIDELINES.md):
@@ -83,7 +159,5 @@ Always consult the documentation in `docs/` for additional details about configu
 - Update the relevant translation files when adding or modifying keys:
   - Built-in translations: `shared/i18n/{lang}.json`
   - Override keys: `contents/locales/{lang}.json`
-- Never assume English is the default. Respect the `defaultLanguage` defined in
-  `contents/config/platform.json`.
-
-Always create a new branch from master before you start changes, open a pull request in draft mode, and when complete, you assign it to the one, who gave you the task.
+- Never assume English is the default. The default language is configured in the
+  backend's `platform.json` file.
