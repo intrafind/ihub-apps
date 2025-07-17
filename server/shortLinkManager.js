@@ -44,7 +44,7 @@ async function saveLinks() {
 
 function scheduleSave() {
   if (saveTimer) return;
-  saveTimer = setTimeout(async () => {
+  saveTimer = setTimeout(async() => {
     saveTimer = null;
     try {
       await saveLinks();

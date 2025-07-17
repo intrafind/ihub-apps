@@ -27,7 +27,7 @@ const useAppSettings = (appId, app) => {
 
   // Load models and styles
   useEffect(() => {
-    const loadModelsAndStyles = async () => {
+    const loadModelsAndStyles = async() => {
       try {
         setModelsLoading(true);
         setStylesLoading(true);

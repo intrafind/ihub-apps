@@ -137,8 +137,8 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
               <div className="px-3 py-2 text-sm text-gray-500">
                 {searchTerm
                   ? t('admin.apps.edit.noToolsFound', 'No tools found matching "{{searchTerm}}"', {
-                      searchTerm
-                    })
+                    searchTerm
+                  })
                   : t('admin.apps.edit.allToolsSelected', 'All tools are already selected')}
               </div>
             )}

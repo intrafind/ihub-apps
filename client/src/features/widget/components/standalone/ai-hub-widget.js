@@ -6,7 +6,7 @@
  */
 
 // Global namespace for widget
-window.aiHubWidget = (function () {
+window.aiHubWidget = (function() {
   // Private variables
   let container = null;
   let toggleButton = null;
@@ -262,18 +262,18 @@ window.aiHubWidget = (function () {
   // Public API
   return {
     init: init,
-    open: function () {
+    open: function() {
       if (!isInitialized) {
         init();
       }
       open();
     },
-    close: function () {
+    close: function() {
       if (isInitialized) {
         close();
       }
     },
-    toggle: function () {
+    toggle: function() {
       if (!isInitialized) {
         init();
       }

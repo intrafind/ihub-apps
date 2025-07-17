@@ -22,7 +22,7 @@ const MarkdownPage = () => {
   }, []);
 
   useEffect(() => {
-    const loadPageContent = async () => {
+    const loadPageContent = async() => {
       try {
         setLoading(true);
 

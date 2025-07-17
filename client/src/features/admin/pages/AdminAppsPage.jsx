@@ -32,7 +32,7 @@ const AdminAppsPage = () => {
     loadUIConfig();
   }, []);
 
-  const loadUIConfig = async () => {
+  const loadUIConfig = async() => {
     try {
       const response = await fetch('/api/configs/ui');
       if (response.ok) {
@@ -44,7 +44,7 @@ const AdminAppsPage = () => {
     }
   };
 
-  const loadApps = async () => {
+  const loadApps = async() => {
     try {
       setLoading(true);
       const data = await fetchAdminApps();
@@ -414,11 +414,11 @@ const AdminAppsPage = () => {
                                 cat => cat.id === app.category
                               )?.name
                                 ? getLocalizedContent(
-                                    uiConfig.appsList.categories.list.find(
-                                      cat => cat.id === app.category
-                                    ).name,
-                                    currentLanguage
-                                  )
+                                  uiConfig.appsList.categories.list.find(
+                                    cat => cat.id === app.category
+                                  ).name,
+                                  currentLanguage
+                                )
                                 : app.category}
                             </span>
                           ) : (

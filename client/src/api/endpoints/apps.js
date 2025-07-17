@@ -2,7 +2,7 @@ import { apiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
 
 // Apps
-export const fetchApps = async (options = {}) => {
+export const fetchApps = async(options = {}) => {
   const { language = null } = options;
 
   return handleApiResponse(
@@ -12,7 +12,7 @@ export const fetchApps = async (options = {}) => {
   );
 };
 
-export const fetchAppDetails = async (appId, options = {}) => {
+export const fetchAppDetails = async(appId, options = {}) => {
   const { language = null } = options;
 
   return handleApiResponse(
@@ -22,7 +22,7 @@ export const fetchAppDetails = async (appId, options = {}) => {
   );
 };
 
-export const sendAppChatMessage = async (appId, chatId, messages, options = {}) => {
+export const sendAppChatMessage = async(appId, chatId, messages, options = {}) => {
   if (!appId || !chatId || !messages) {
     throw new Error('Missing required parameters');
   }
@@ -39,7 +39,7 @@ export const sendAppChatMessage = async (appId, chatId, messages, options = {}) 
   );
 };
 
-export const stopAppChatStream = async (appId, chatId) => {
+export const stopAppChatStream = async(appId, chatId) => {
   return handleApiResponse(
     () => apiClient.post(`/apps/${appId}/chat/${chatId}/stop`),
     null, // No caching
@@ -48,7 +48,7 @@ export const stopAppChatStream = async (appId, chatId) => {
   );
 };
 
-export const checkAppChatStatus = async (appId, chatId) => {
+export const checkAppChatStatus = async(appId, chatId) => {
   return handleApiResponse(
     () => apiClient.get(`/apps/${appId}/chat/${chatId}/status`),
     null, // Don't cache status checks

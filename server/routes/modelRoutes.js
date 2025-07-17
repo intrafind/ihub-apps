@@ -2,7 +2,7 @@ import { loadJson } from '../configLoader.js';
 import configCache from '../configCache.js';
 
 export default function registerModelRoutes(app, { getLocalizedError }) {
-  app.get('/api/models', async (req, res) => {
+  app.get('/api/models', async(req, res) => {
     try {
       // Try to get models from cache first
       const { data: models = [], etag: modelsEtag } = configCache.getModels();
@@ -18,7 +18,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
     }
   });
 
-  app.get('/api/models/:modelId', async (req, res) => {
+  app.get('/api/models/:modelId', async(req, res) => {
     try {
       const { modelId } = req.params;
       const platform = configCache.getPlatform() || {};

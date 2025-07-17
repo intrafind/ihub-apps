@@ -182,51 +182,51 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     const missingFields = [];
 
     switch (currentStepData.id) {
-      case 'method':
-        if (!appData.useAI && !appData.useTemplate && !appData.useManual) {
-          missingFields.push('creationMethod');
-        }
-        break;
-      case 'ai-generation':
-        // AI generation is optional, no validation needed
-        break;
-      case 'basic-info':
-        if (!appData.id || !appData.id.trim()) {
-          missingFields.push('id');
-        }
-        if (!appData.name || !Object.values(appData.name).some(v => v && v.trim())) {
-          missingFields.push('name');
-        }
-        if (!appData.description || !Object.values(appData.description).some(v => v && v.trim())) {
-          missingFields.push('description');
-        }
-        break;
-      case 'system-prompt':
-        if (!appData.system || !Object.values(appData.system).some(v => v && v.trim())) {
-          missingFields.push('system');
-        }
-        break;
+    case 'method':
+      if (!appData.useAI && !appData.useTemplate && !appData.useManual) {
+        missingFields.push('creationMethod');
+      }
+      break;
+    case 'ai-generation':
+      // AI generation is optional, no validation needed
+      break;
+    case 'basic-info':
+      if (!appData.id || !appData.id.trim()) {
+        missingFields.push('id');
+      }
+      if (!appData.name || !Object.values(appData.name).some(v => v && v.trim())) {
+        missingFields.push('name');
+      }
+      if (!appData.description || !Object.values(appData.description).some(v => v && v.trim())) {
+        missingFields.push('description');
+      }
+      break;
+    case 'system-prompt':
+      if (!appData.system || !Object.values(appData.system).some(v => v && v.trim())) {
+        missingFields.push('system');
+      }
+      break;
       // Variables and tools are optional
-      case 'variables':
-      case 'tools':
-      case 'advanced':
-        break;
-      case 'review':
-        // Final validation
-        if (!appData.id || !appData.id.trim()) missingFields.push('id');
-        if (!appData.name || !Object.values(appData.name).some(v => v && v.trim()))
-          missingFields.push('name');
-        if (!appData.description || !Object.values(appData.description).some(v => v && v.trim()))
-          missingFields.push('description');
-        if (!appData.system || !Object.values(appData.system).some(v => v && v.trim()))
-          missingFields.push('system');
-        break;
+    case 'variables':
+    case 'tools':
+    case 'advanced':
+      break;
+    case 'review':
+      // Final validation
+      if (!appData.id || !appData.id.trim()) missingFields.push('id');
+      if (!appData.name || !Object.values(appData.name).some(v => v && v.trim()))
+        missingFields.push('name');
+      if (!appData.description || !Object.values(appData.description).some(v => v && v.trim()))
+        missingFields.push('description');
+      if (!appData.system || !Object.values(appData.system).some(v => v && v.trim()))
+        missingFields.push('system');
+      break;
     }
 
     return missingFields;
   };
 
-  const handleNext = async () => {
+  const handleNext = async() => {
     const visibleSteps = getVisibleSteps();
 
     if (currentStep < visibleSteps.length - 1) {
@@ -265,7 +265,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     }
   };
 
-  const handleCreateApp = async () => {
+  const handleCreateApp = async() => {
     try {
       setLoading(true);
       setError(null);
@@ -662,7 +662,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
 
   // Load the app generator prompt from configuration
   useEffect(() => {
-    const loadAppGeneratorPrompt = async () => {
+    const loadAppGeneratorPrompt = async() => {
       try {
         setLoadingPrompt(true);
         const response = await makeAdminApiCall(
@@ -694,7 +694,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
     loadAppGeneratorPrompt();
   }, [selectedLanguage]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = async() => {
     if (!prompt.trim()) return;
 
     try {
@@ -1443,7 +1443,7 @@ const ToolsStep = ({ appData, updateAppData }) => {
 
   useEffect(() => {
     // Load available tools
-    const loadTools = async () => {
+    const loadTools = async() => {
       try {
         const response = await fetch('/api/tools');
         if (response.ok) {

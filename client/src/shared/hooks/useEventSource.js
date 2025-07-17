@@ -11,7 +11,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 10000, onEvent, onPro
   const heartbeatIntervalRef = useRef(null);
   const fullContentRef = useRef('');
 
-  const cleanupEventSource = useCallback(async () => {
+  const cleanupEventSource = useCallback(async() => {
     if (eventSourceRef.current) {
       const ev = eventSourceRef.current;
       eventSourceRef.current = null;
@@ -63,7 +63,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 10000, onEvent, onPro
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
     }
-    heartbeatIntervalRef.current = setInterval(async () => {
+    heartbeatIntervalRef.current = setInterval(async() => {
       if (!eventSourceRef.current || !appId || !chatId) return;
       try {
         const status = await checkAppChatStatus(appId, chatId);

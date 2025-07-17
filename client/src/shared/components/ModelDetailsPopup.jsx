@@ -18,7 +18,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
     }
   }, [isOpen, model]);
 
-  const loadModelData = async () => {
+  const loadModelData = async() => {
     setLoading(true);
     try {
       // Load usage data
@@ -55,35 +55,35 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
 
   const getProviderIcon = provider => {
     switch (provider) {
-      case 'openai':
-        return 'cpu-chip';
-      case 'anthropic':
-        return 'academic-cap';
-      case 'google':
-        return 'globe-alt';
-      case 'mistral':
-        return 'lightning-bolt';
-      case 'local':
-        return 'computer-desktop';
-      default:
-        return 'server';
+    case 'openai':
+      return 'cpu-chip';
+    case 'anthropic':
+      return 'academic-cap';
+    case 'google':
+      return 'globe-alt';
+    case 'mistral':
+      return 'lightning-bolt';
+    case 'local':
+      return 'computer-desktop';
+    default:
+      return 'server';
     }
   };
 
   const getProviderColor = provider => {
     switch (provider) {
-      case 'openai':
-        return '#00A67E';
-      case 'anthropic':
-        return '#CC785C';
-      case 'google':
-        return '#4285F4';
-      case 'mistral':
-        return '#FF6B35';
-      case 'local':
-        return '#6B7280';
-      default:
-        return '#6B7280';
+    case 'openai':
+      return '#00A67E';
+    case 'anthropic':
+      return '#CC785C';
+    case 'google':
+      return '#4285F4';
+    case 'mistral':
+      return '#FF6B35';
+    case 'local':
+      return '#6B7280';
+    default:
+      return '#6B7280';
     }
   };
 
