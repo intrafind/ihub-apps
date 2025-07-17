@@ -92,27 +92,33 @@ const AppDetailsPopup = ({ app, isOpen, onClose }) => {
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.apps.details.model', 'Model')}
                 </div>
-                <div className="text-sm text-gray-900 mt-1">{app.preferredModel || 'Default'}</div>
+                <div className="text-sm text-gray-900 mt-1">
+                  {app.preferredModel || t('common.default', 'Default')}
+                </div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.apps.details.tokenLimit', 'Token Limit')}
                 </div>
-                <div className="text-sm text-gray-900 mt-1">{app.tokenLimit || 'Default'}</div>
+                <div className="text-sm text-gray-900 mt-1">
+                  {app.tokenLimit || t('common.default', 'Default')}
+                </div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.apps.details.temperature', 'Temperature')}
                 </div>
                 <div className="text-sm text-gray-900 mt-1">
-                  {app.preferredTemperature || 'Default'}
+                  {app.preferredTemperature || t('common.default', 'Default')}
                 </div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.apps.details.order', 'Order')}
                 </div>
-                <div className="text-sm text-gray-900 mt-1">{app.order || 'Not set'}</div>
+                <div className="text-sm text-gray-900 mt-1">
+                  {app.order || t('common.notSet', 'Not set')}
+                </div>
               </div>
             </div>
           </div>
@@ -133,7 +139,9 @@ const AppDetailsPopup = ({ app, isOpen, onClose }) => {
                         </span>
                         <span className="text-xs text-gray-500">{variable.type}</span>
                         {variable.required && (
-                          <span className="text-xs text-red-500">required</span>
+                          <span className="text-xs text-red-500">
+                            {t('common.required', 'required')}
+                          </span>
                         )}
                       </div>
                     </div>

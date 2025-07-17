@@ -341,7 +341,9 @@ const AdminPromptsPage = () => {
                                   : prompt.category}
                               </span>
                             ) : (
-                              <span className="text-gray-400 text-sm">N/A</span>
+                              <span className="text-gray-400 text-sm">
+                                {t('common.notAvailable', 'N/A')}
+                              </span>
                             )}
                           </td>
                           <td className="px-6 py-4">

@@ -103,14 +103,16 @@ const PromptDetailsPopup = ({ prompt, isOpen, onClose }) => {
                   {t('admin.prompts.details.order', 'Order')}
                 </div>
                 <div className="text-sm text-gray-900 mt-1">
-                  {prompt.order !== undefined ? prompt.order : 'Not set'}
+                  {prompt.order !== undefined ? prompt.order : t('common.notSet', 'Not set')}
                 </div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.prompts.details.linkedApp', 'Linked App')}
                 </div>
-                <div className="text-sm text-gray-900 mt-1">{prompt.appId || 'None'}</div>
+                <div className="text-sm text-gray-900 mt-1">
+                  {prompt.appId || t('common.none', 'None')}
+                </div>
               </div>
             </div>
           </div>
@@ -131,7 +133,9 @@ const PromptDetailsPopup = ({ prompt, isOpen, onClose }) => {
                         </span>
                         <span className="text-xs text-gray-500">{variable.type}</span>
                         {variable.required && (
-                          <span className="text-xs text-red-500">required</span>
+                          <span className="text-xs text-red-500">
+                            {t('common.required', 'required')}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -140,7 +144,7 @@ const PromptDetailsPopup = ({ prompt, isOpen, onClose }) => {
                     </div>
                     {variable.defaultValue && (
                       <div className="text-xs text-gray-500 mt-1">
-                        Default: {variable.defaultValue}
+                        {t('common.default', 'Default')}: {variable.defaultValue}
                       </div>
                     )}
                   </div>
