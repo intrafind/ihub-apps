@@ -4,12 +4,12 @@ import { DEFAULT_CACHE_TTL } from '../../utils/cache';
 import cache from '../../utils/cache';
 
 // Admin usage data
-export const fetchUsageData = async() => {
+export const fetchUsageData = async () => {
   return handleApiResponse(() => apiClient.get('/admin/usage'), null, null, false);
 };
 
 // Admin API functions
-export const fetchAdminPrompts = async(options = {}) => {
+export const fetchAdminPrompts = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : 'admin_prompts';
 
@@ -38,7 +38,7 @@ export const createPrompt = async promptData => {
   return handleApiResponse(() => apiClient.post('/admin/prompts', promptData), null, null, false);
 };
 
-export const updatePrompt = async(promptId, promptData) => {
+export const updatePrompt = async (promptId, promptData) => {
   return handleApiResponse(
     () => apiClient.put(`/admin/prompts/${promptId}`, promptData),
     null,
@@ -60,7 +60,7 @@ export const togglePrompt = async promptId => {
   );
 };
 
-export const fetchAdminApps = async(options = {}) => {
+export const fetchAdminApps = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : 'admin_apps';
 

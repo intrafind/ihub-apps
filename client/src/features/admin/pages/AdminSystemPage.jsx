@@ -16,7 +16,7 @@ const AdminSystemPage = () => {
     confirmPassword: ''
   });
 
-  const handleForceRefresh = async() => {
+  const handleForceRefresh = async () => {
     setForceRefreshLoading(true);
     setForceRefreshMessage('');
 
@@ -210,10 +210,10 @@ const AdminSystemPage = () => {
                     inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium 
                     rounded-md shadow-sm text-white 
                     ${
-    forceRefreshLoading
-      ? 'bg-gray-400 cursor-not-allowed'
-      : 'bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500'
-    }
+                      forceRefreshLoading
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500'
+                    }
                   `}
                   >
                     {forceRefreshLoading ? (
@@ -396,10 +396,10 @@ const AdminSystemPage = () => {
                         inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium 
                         rounded-md shadow-sm text-white 
                         ${
-    passwordChangeLoading
-      ? 'bg-gray-400 cursor-not-allowed'
-      : 'bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500'
-    }
+                          passwordChangeLoading
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500'
+                        }
                       `}
                     >
                       {passwordChangeLoading ? (

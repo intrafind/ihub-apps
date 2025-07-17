@@ -57,33 +57,33 @@ function useVoiceCommands({
 
       // Handle built-in commands
       switch (command) {
-      case 'clearChat':
-        // Clear the chat after confirming with the user
-        if (messages.length > 0) {
-          const shouldClear = onConfirmClear
-            ? onConfirmClear()
-            : window.confirm('Are you sure you want to clear the entire chat history?');
+        case 'clearChat':
+          // Clear the chat after confirming with the user
+          if (messages.length > 0) {
+            const shouldClear = onConfirmClear
+              ? onConfirmClear()
+              : window.confirm('Are you sure you want to clear the entire chat history?');
 
-          if (shouldClear) {
-            clearChat();
+            if (shouldClear) {
+              clearChat();
+            }
           }
-        }
-        break;
+          break;
 
-      case 'sendMessage':
-        // Use the currentVoiceTextRef to get the latest voice text
-        const messageToSend = currentVoiceTextRef.current || currentText;
-        console.log('Executing send message command with text:', messageToSend);
+        case 'sendMessage':
+          // Use the currentVoiceTextRef to get the latest voice text
+          const messageToSend = currentVoiceTextRef.current || currentText;
+          console.log('Executing send message command with text:', messageToSend);
 
-        if (messageToSend.trim() && !isProcessing) {
-          sendMessage(messageToSend);
-        } else {
-          console.log('No text to send or processing in progress');
-        }
-        break;
+          if (messageToSend.trim() && !isProcessing) {
+            sendMessage(messageToSend);
+          } else {
+            console.log('No text to send or processing in progress');
+          }
+          break;
 
-      default:
-        console.log('Unknown command:', command);
+        default:
+          console.log('Unknown command:', command);
       }
     },
     [messages, clearChat, sendMessage, isProcessing, currentText, onConfirmClear, customCommands]

@@ -139,7 +139,7 @@ const AppsList = () => {
     // Store mounted state to prevent state updates after unmount
     let isMounted = true;
 
-    const loadApps = async() => {
+    const loadApps = async () => {
       try {
         setLoading(true);
 

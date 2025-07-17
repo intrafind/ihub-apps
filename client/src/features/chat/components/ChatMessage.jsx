@@ -106,14 +106,14 @@ const ChatMessage = ({
 
     let data;
     switch (format) {
-    case 'html':
-      data = html;
-      break;
-    case 'markdown':
-      data = markdown;
-      break;
-    default:
-      data = plain;
+      case 'html':
+        data = html;
+        break;
+      case 'markdown':
+        data = markdown;
+        break;
+      default:
+        data = plain;
     }
 
     const hasClipboardWrite = navigator.clipboard && navigator.clipboard.write;

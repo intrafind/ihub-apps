@@ -172,7 +172,7 @@ const AppCanvas = () => {
 
   // Handle general prompt submission - simplified to match AppChat
   const handlePromptSubmit = useCallback(
-    async(e, options = {}) => {
+    async (e, options = {}) => {
       // If called with a string as first parameter (for edit actions), treat it as inputText
       const inputText = typeof e === 'string' ? e : null;
       const textToSubmit = inputText || inputValue;
@@ -303,7 +303,7 @@ const AppCanvas = () => {
   useEffect(() => {
     let isMounted = true;
 
-    const loadApp = async() => {
+    const loadApp = async () => {
       try {
         setLoading(true);
 
@@ -398,51 +398,51 @@ const AppCanvas = () => {
 
   // Apply edit result to the canvas
   const applyEditResult = useCallback(
-    async(content, action) => {
+    async (content, action) => {
       if (!content || !quillRef.current) return;
 
       const quill = quillRef.current.getEditor();
 
       try {
         switch (action) {
-        case 'continue':
-        case 'summarize':
-        case 'outline':
-          // For actions that add content, append to the end
-          const currentLength = quill.getLength();
-          quill.insertText(currentLength - 1, '\n\n' + content);
-          break;
+          case 'continue':
+          case 'summarize':
+          case 'outline':
+            // For actions that add content, append to the end
+            const currentLength = quill.getLength();
+            quill.insertText(currentLength - 1, '\n\n' + content);
+            break;
 
-        case 'expand':
-        case 'condense':
-        case 'paraphrase':
-        case 'clarify':
-        case 'formal':
-        case 'casual':
-        case 'professional':
-        case 'creative':
-        case 'translate':
-        case 'grammar':
-        case 'format':
-          // For text replacement actions, replace the selected text
-          if (window.pendingEdit && window.pendingEdit.selection) {
-            const { index, length } = window.pendingEdit.selection;
-            quill.deleteText(index, length);
-            quill.insertText(index, content);
-            // Clear selection after replacement
-            quill.setSelection(index + content.length, 0);
-          }
-          break;
+          case 'expand':
+          case 'condense':
+          case 'paraphrase':
+          case 'clarify':
+          case 'formal':
+          case 'casual':
+          case 'professional':
+          case 'creative':
+          case 'translate':
+          case 'grammar':
+          case 'format':
+            // For text replacement actions, replace the selected text
+            if (window.pendingEdit && window.pendingEdit.selection) {
+              const { index, length } = window.pendingEdit.selection;
+              quill.deleteText(index, length);
+              quill.insertText(index, content);
+              // Clear selection after replacement
+              quill.setSelection(index + content.length, 0);
+            }
+            break;
 
-        case 'suggest':
-          // For suggestions, just add them to the chat - don't modify the document
-          // This is handled by the chat system
-          break;
+          case 'suggest':
+            // For suggestions, just add them to the chat - don't modify the document
+            // This is handled by the chat system
+            break;
 
-        default:
-          // Default behavior: append content
-          const endLength = quill.getLength();
-          quill.insertText(endLength - 1, '\n\n' + content);
+          default:
+            // Default behavior: append content
+            const endLength = quill.getLength();
+            quill.insertText(endLength - 1, '\n\n' + content);
         }
 
         // Update the editor content state
@@ -580,7 +580,7 @@ const AppCanvas = () => {
         : initialContent;
 
       // Use confirmation modal if there's existing content
-      const loadInitialContent = async() => {
+      const loadInitialContent = async () => {
         try {
           const result = await setContentWithConfirmation(contentToSet, modalData => {
             setContentModalData({

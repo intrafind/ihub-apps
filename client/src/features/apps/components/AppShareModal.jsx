@@ -63,7 +63,7 @@ const AppShareModal = ({ appId, path, params, onClose }) => {
     }
   }, [code]);
 
-  const handleCreate = async() => {
+  const handleCreate = async () => {
     setCreating(true);
     try {
       const data = await createShortLink({
@@ -83,7 +83,7 @@ const AppShareModal = ({ appId, path, params, onClose }) => {
     }
   };
 
-  const handleCopy = async() => {
+  const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(createdUrl);
       setCopied(true);

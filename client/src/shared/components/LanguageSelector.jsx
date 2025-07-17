@@ -56,9 +56,9 @@ const LanguageSelector = () => {
     return languages.length
       ? languages
       : [
-        { code: 'en', name: 'English' },
-        { code: 'de', name: 'Deutsch' }
-      ];
+          { code: 'en', name: 'English' },
+          { code: 'de', name: 'Deutsch' }
+        ];
   }, [uiConfig, t]);
 
   if (isLoading) {

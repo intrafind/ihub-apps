@@ -12,7 +12,7 @@ const apiClient = axios.create({
   },
   timeout: API_REQUEST_TIMEOUT,
   // Configure axios to not treat 304 as an error
-  validateStatus: function(status) {
+  validateStatus: function (status) {
     return (status >= 200 && status < 300) || status === 304;
   }
 });

@@ -2,7 +2,7 @@ import { loadJson, loadText } from '../configLoader.js';
 import configCache from '../configCache.js';
 
 export default function registerPageRoutes(app) {
-  app.get('/api/pages/:pageId', async(req, res) => {
+  app.get('/api/pages/:pageId', async (req, res) => {
     const { pageId } = req.params;
     const lang = req.query.lang || 'en';
     try {

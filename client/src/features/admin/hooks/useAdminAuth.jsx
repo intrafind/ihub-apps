@@ -9,7 +9,7 @@ export function AdminAuthProvider({ children }) {
   const [token, setToken] = useState(localStorage.getItem('adminToken') || '');
 
   // Check authentication status
-  const checkAuthStatus = async() => {
+  const checkAuthStatus = async () => {
     try {
       const response = await fetch('/api/admin/auth/status');
       const data = await response.json();
