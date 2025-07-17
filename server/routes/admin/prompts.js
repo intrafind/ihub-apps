@@ -6,7 +6,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 
 export default function registerAdminPromptsRoutes(app) {
-  app.get('/api/admin/prompts', adminAuth, async(req, res) => {
+  app.get('/api/admin/prompts', adminAuth, async (req, res) => {
     try {
       const { data: prompts, etag } = configCache.getPrompts(true);
       if (!prompts) {
@@ -26,7 +26,7 @@ export default function registerAdminPromptsRoutes(app) {
     }
   });
 
-  app.get('/api/admin/prompts/:promptId', adminAuth, async(req, res) => {
+  app.get('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const { data: prompts } = configCache.getPrompts(true);
@@ -41,7 +41,7 @@ export default function registerAdminPromptsRoutes(app) {
     }
   });
 
-  app.put('/api/admin/prompts/:promptId', adminAuth, async(req, res) => {
+  app.put('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const updatedPrompt = req.body;
@@ -62,7 +62,7 @@ export default function registerAdminPromptsRoutes(app) {
     }
   });
 
-  app.post('/api/admin/prompts', adminAuth, async(req, res) => {
+  app.post('/api/admin/prompts', adminAuth, async (req, res) => {
     try {
       const newPrompt = req.body;
       if (!newPrompt.id || !newPrompt.name || !newPrompt.prompt) {
@@ -85,7 +85,7 @@ export default function registerAdminPromptsRoutes(app) {
     }
   });
 
-  app.post('/api/admin/prompts/:promptId/toggle', adminAuth, async(req, res) => {
+  app.post('/api/admin/prompts/:promptId/toggle', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const { data: prompts } = configCache.getPrompts(true);
@@ -110,7 +110,7 @@ export default function registerAdminPromptsRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/prompts/:promptId', adminAuth, async(req, res) => {
+  app.delete('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const rootDir = getRootDir();
@@ -127,9 +127,16 @@ export default function registerAdminPromptsRoutes(app) {
     }
   });
 
-  app.post('/api/completions', adminAuth, async(req, res) => {
+  app.post('/api/completions', adminAuth, async (req, res) => {
     try {
-      const { model, messages, temperature = 0.7, maxTokens = 8192, responseFormat = null, responseSchema = null } = req.body;
+      const {
+        model,
+        messages,
+        temperature = 0.7,
+        maxTokens = 8192,
+        responseFormat = null,
+        responseSchema = null
+      } = req.body;
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
         return res.status(400).json({ error: 'Missing required field: messages' });
       }
@@ -140,7 +147,9 @@ export default function registerAdminPromptsRoutes(app) {
       const defaultModel = models.find(m => m.default)?.id;
       const modelId = model || defaultModel;
       if (!modelId) {
-        return res.status(400).json({ error: 'No model specified and no default model configured' });
+        return res
+          .status(400)
+          .json({ error: 'No model specified and no default model configured' });
       }
       const modelConfig = models.find(m => m.id === modelId);
       if (!modelConfig) {
@@ -185,7 +194,7 @@ export default function registerAdminPromptsRoutes(app) {
     }
   });
 
-  app.get('/api/admin/prompts/app-generator', adminAuth, async(req, res) => {
+  app.get('/api/admin/prompts/app-generator', adminAuth, async (req, res) => {
     try {
       const platformConfig = configCache.getPlatform();
       const defaultLanguage = platformConfig?.defaultLanguage || 'en';
@@ -198,7 +207,8 @@ export default function registerAdminPromptsRoutes(app) {
       if (!appGeneratorPrompt) {
         return res.status(404).json({ error: 'App-generator prompt not found' });
       }
-      const promptText = appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
+      const promptText =
+        appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
       res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
     } catch (error) {
       console.error('Error fetching app-generator prompt:', error);

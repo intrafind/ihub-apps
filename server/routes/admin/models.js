@@ -7,7 +7,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 
 export default function registerAdminModelsRoutes(app) {
-  app.get('/api/admin/models', adminAuth, async(req, res) => {
+  app.get('/api/admin/models', adminAuth, async (req, res) => {
     try {
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
       res.setHeader('ETag', modelsEtag);
@@ -18,7 +18,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.get('/api/admin/models/:modelId', adminAuth, async(req, res) => {
+  app.get('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
@@ -34,7 +34,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.put('/api/admin/models/:modelId', adminAuth, async(req, res) => {
+  app.put('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const updatedModel = req.body;
@@ -71,7 +71,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models', adminAuth, async(req, res) => {
+  app.post('/api/admin/models', adminAuth, async (req, res) => {
     try {
       const newModel = req.body;
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
@@ -110,7 +110,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models/:modelId/toggle', adminAuth, async(req, res) => {
+  app.post('/api/admin/models/:modelId/toggle', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const { data: models } = configCache.getModels(true);
@@ -124,7 +124,12 @@ export default function registerAdminModelsRoutes(app) {
         const enabledModels = models.filter(m => m.id !== modelId && m.enabled === true);
         if (enabledModels.length > 0) {
           enabledModels[0].default = true;
-          const newDefaultPath = join(getRootDir(), 'contents', 'models', `${enabledModels[0].id}.json`);
+          const newDefaultPath = join(
+            getRootDir(),
+            'contents',
+            'models',
+            `${enabledModels[0].id}.json`
+          );
           await fs.writeFile(newDefaultPath, JSON.stringify(enabledModels[0], null, 2));
         }
         model.default = false;
@@ -144,7 +149,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/models/:modelId', adminAuth, async(req, res) => {
+  app.delete('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const { data: models } = configCache.getModels(true);
@@ -156,7 +161,12 @@ export default function registerAdminModelsRoutes(app) {
         const otherModels = models.filter(m => m.id !== modelId && m.enabled === true);
         if (otherModels.length > 0) {
           otherModels[0].default = true;
-          const newDefaultPath = join(getRootDir(), 'contents', 'models', `${otherModels[0].id}.json`);
+          const newDefaultPath = join(
+            getRootDir(),
+            'contents',
+            'models',
+            `${otherModels[0].id}.json`
+          );
           await fs.writeFile(newDefaultPath, JSON.stringify(otherModels[0], null, 2));
         }
       }
@@ -174,7 +184,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models/:modelId/test', adminAuth, async(req, res) => {
+  app.post('/api/admin/models/:modelId/test', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const { data: models } = configCache.getModels(true);

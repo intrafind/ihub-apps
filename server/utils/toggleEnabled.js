@@ -32,4 +32,3 @@ export async function toggleEnabled(resourcePath, id, cacheRefreshFn) {
 
   return { data, enabled: data.enabled };
 }
-
