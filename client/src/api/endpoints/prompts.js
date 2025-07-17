@@ -4,7 +4,7 @@ import { CACHE_KEYS, DEFAULT_CACHE_TTL } from '../../utils/cache';
 import cache from '../../utils/cache';
 
 // Prompts
-export const fetchPrompts = async (options = {}) => {
+export const fetchPrompts = async(options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : CACHE_KEYS.PROMPTS;
 
@@ -29,7 +29,7 @@ export const fetchPrompts = async (options = {}) => {
   );
 };
 
-export const generateMagicPrompt = async (input, options = {}) => {
+export const generateMagicPrompt = async(input, options = {}) => {
   return handleApiResponse(
     () => apiClient.post('/magic-prompt', { input, ...options }),
     null,

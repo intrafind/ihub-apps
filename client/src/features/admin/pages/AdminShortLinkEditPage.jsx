@@ -28,7 +28,7 @@ const AdminShortLinkEditPage = () => {
 
   useEffect(() => {
     if (!isNew) {
-      (async () => {
+      (async() => {
         try {
           const res = await makeAdminApiCall(`/api/shortlinks/${code}`);
           const data = await res.json();

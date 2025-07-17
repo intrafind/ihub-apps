@@ -7,7 +7,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 
 export default function registerAdminModelsRoutes(app) {
-  app.get('/api/admin/models', adminAuth, async (req, res) => {
+  app.get('/api/admin/models', adminAuth, async(req, res) => {
     try {
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
       res.setHeader('ETag', modelsEtag);
@@ -18,7 +18,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.get('/api/admin/models/:modelId', adminAuth, async (req, res) => {
+  app.get('/api/admin/models/:modelId', adminAuth, async(req, res) => {
     try {
       const { modelId } = req.params;
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
@@ -34,7 +34,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.put('/api/admin/models/:modelId', adminAuth, async (req, res) => {
+  app.put('/api/admin/models/:modelId', adminAuth, async(req, res) => {
     try {
       const { modelId } = req.params;
       const updatedModel = req.body;
@@ -71,7 +71,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models', adminAuth, async (req, res) => {
+  app.post('/api/admin/models', adminAuth, async(req, res) => {
     try {
       const newModel = req.body;
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
@@ -110,7 +110,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models/:modelId/toggle', adminAuth, async (req, res) => {
+  app.post('/api/admin/models/:modelId/toggle', adminAuth, async(req, res) => {
     try {
       const { modelId } = req.params;
       const { data: models } = configCache.getModels(true);
@@ -149,7 +149,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/models/:modelId', adminAuth, async (req, res) => {
+  app.delete('/api/admin/models/:modelId', adminAuth, async(req, res) => {
     try {
       const { modelId } = req.params;
       const { data: models } = configCache.getModels(true);
@@ -184,7 +184,7 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
-  app.post('/api/admin/models/:modelId/test', adminAuth, async (req, res) => {
+  app.post('/api/admin/models/:modelId/test', adminAuth, async(req, res) => {
     try {
       const { modelId } = req.params;
       const { data: models } = configCache.getModels(true);

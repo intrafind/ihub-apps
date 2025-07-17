@@ -76,10 +76,10 @@ const AdminNavigation = () => {
                 className={`
                 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
                 ${
-                  item.current
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }
+              item.current
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }
               `}
               >
                 <Icon name={item.icon} className="w-4 h-4 mr-2" />

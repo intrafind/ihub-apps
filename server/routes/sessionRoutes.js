@@ -3,7 +3,7 @@ import validate from '../validators/validate.js';
 import { startSessionSchema } from '../validators/index.js';
 
 export default function registerSessionRoutes(app) {
-  app.post('/api/session/start', validate(startSessionSchema), async (req, res) => {
+  app.post('/api/session/start', validate(startSessionSchema), async(req, res) => {
     try {
       const { sessionId, type, metadata } = req.body;
       if (!sessionId) {

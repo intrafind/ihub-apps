@@ -46,55 +46,55 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     async event => {
       const { type, fullContent, data } = event;
       switch (type) {
-        case 'connected':
-          if (pendingMessageDataRef.current) {
-            try {
-              const { appId, chatId, messages, params } = pendingMessageDataRef.current;
-              await sendAppChatMessage(appId, chatId, messages, params);
-              pendingMessageDataRef.current = null;
-            } catch (error) {
-              if (lastMessageIdRef.current) {
-                setMessageError(
-                  lastMessageIdRef.current,
-                  t(
-                    'error.failedToGenerateResponse',
-                    'Error: Failed to generate response. Please try again or select a different model.'
-                  )
-                );
-              }
-              cleanupEventSourceRef.current?.();
-              setProcessing(false);
+      case 'connected':
+        if (pendingMessageDataRef.current) {
+          try {
+            const { appId, chatId, messages, params } = pendingMessageDataRef.current;
+            await sendAppChatMessage(appId, chatId, messages, params);
+            pendingMessageDataRef.current = null;
+          } catch (error) {
+            if (lastMessageIdRef.current) {
+              setMessageError(
+                lastMessageIdRef.current,
+                t(
+                  'error.failedToGenerateResponse',
+                  'Error: Failed to generate response. Please try again or select a different model.'
+                )
+              );
             }
+            cleanupEventSourceRef.current?.();
+            setProcessing(false);
           }
-          break;
-        case 'chunk':
-          if (lastMessageIdRef.current) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true);
+        }
+        break;
+      case 'chunk':
+        if (lastMessageIdRef.current) {
+          updateAssistantMessage(lastMessageIdRef.current, fullContent, true);
+        }
+        break;
+      case 'done':
+        if (lastMessageIdRef.current) {
+          updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
+            finishReason: data?.finishReason
+          });
+          if (onMessageComplete) {
+            onMessageComplete(fullContent, lastUserMessageRef.current);
           }
-          break;
-        case 'done':
-          if (lastMessageIdRef.current) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
-              finishReason: data?.finishReason
-            });
-            if (onMessageComplete) {
-              onMessageComplete(fullContent, lastUserMessageRef.current);
-            }
-          }
-          setProcessing(false);
-          break;
-        case 'error':
-          if (lastMessageIdRef.current) {
-            setMessageError(lastMessageIdRef.current, data?.message || 'Error');
-          }
-          setProcessing(false);
-          break;
-        default:
-          // TODO Implement proper handling of unknown messages as well as display them in the frontend
-          // if (data?.message) {
-          //   addSystemMessage('🔍 ' + data.message, false);
-          // }
-          console.log('🔍 Unknown event type:', type, data);
+        }
+        setProcessing(false);
+        break;
+      case 'error':
+        if (lastMessageIdRef.current) {
+          setMessageError(lastMessageIdRef.current, data?.message || 'Error');
+        }
+        setProcessing(false);
+        break;
+      default:
+        // TODO Implement proper handling of unknown messages as well as display them in the frontend
+        // if (data?.message) {
+        //   addSystemMessage('🔍 ' + data.message, false);
+        // }
+        console.log('🔍 Unknown event type:', type, data);
       }
     },
     [

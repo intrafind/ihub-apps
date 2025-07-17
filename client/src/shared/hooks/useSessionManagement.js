@@ -12,7 +12,7 @@ const useSessionManagement = () => {
     const sessionId = getSessionId();
 
     // Log application load with session ID
-    const logSession = async () => {
+    const logSession = async() => {
       try {
         // Get session information for logging
         const sessionInfo = getSessionInfo();

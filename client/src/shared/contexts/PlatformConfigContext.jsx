@@ -13,7 +13,7 @@ export const PlatformConfigProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const loadConfig = async () => {
+    const loadConfig = async() => {
       try {
         setIsLoading(true);
         const data = await fetchPlatformConfig();

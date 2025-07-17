@@ -7,7 +7,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 
 export default function registerAdminAppsRoutes(app) {
-  app.get('/api/admin/apps', adminAuth, async (req, res) => {
+  app.get('/api/admin/apps', adminAuth, async(req, res) => {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps(true);
       res.setHeader('ETag', appsEtag);
@@ -18,7 +18,7 @@ export default function registerAdminAppsRoutes(app) {
     }
   });
 
-  app.get('/api/admin/apps/templates', adminAuth, async (req, res) => {
+  app.get('/api/admin/apps/templates', adminAuth, async(req, res) => {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps(true);
       const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
@@ -30,7 +30,7 @@ export default function registerAdminAppsRoutes(app) {
     }
   });
 
-  app.get('/api/admin/apps/:appId/inheritance', adminAuth, async (req, res) => {
+  app.get('/api/admin/apps/:appId/inheritance', adminAuth, async(req, res) => {
     try {
       const { appId } = req.params;
       const { data: apps } = configCache.getApps(true);
@@ -57,7 +57,7 @@ export default function registerAdminAppsRoutes(app) {
     }
   });
 
-  app.get('/api/admin/apps/:appId', adminAuth, async (req, res) => {
+  app.get('/api/admin/apps/:appId', adminAuth, async(req, res) => {
     try {
       const { appId } = req.params;
       const { data: apps } = configCache.getApps(true);
@@ -74,7 +74,7 @@ export default function registerAdminAppsRoutes(app) {
     }
   });
 
-  app.put('/api/admin/apps/:appId', adminAuth, async (req, res) => {
+  app.put('/api/admin/apps/:appId', adminAuth, async(req, res) => {
     try {
       const { appId } = req.params;
       const updatedApp = req.body;
@@ -97,7 +97,7 @@ export default function registerAdminAppsRoutes(app) {
     }
   });
 
-  app.post('/api/admin/apps', adminAuth, async (req, res) => {
+  app.post('/api/admin/apps', adminAuth, async(req, res) => {
     try {
       const newApp = req.body;
       if (!newApp.id || !newApp.name || !newApp.description) {
@@ -120,7 +120,7 @@ export default function registerAdminAppsRoutes(app) {
     }
   });
 
-  app.post('/api/admin/apps/:appId/toggle', adminAuth, async (req, res) => {
+  app.post('/api/admin/apps/:appId/toggle', adminAuth, async(req, res) => {
     try {
       const { appId } = req.params;
       const { data: apps } = configCache.getApps(true);
@@ -145,7 +145,7 @@ export default function registerAdminAppsRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/apps/:appId', adminAuth, async (req, res) => {
+  app.delete('/api/admin/apps/:appId', adminAuth, async(req, res) => {
     try {
       const { appId } = req.params;
       const rootDir = getRootDir();

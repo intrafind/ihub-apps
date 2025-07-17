@@ -183,7 +183,7 @@ const AdminUsageReports = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
-  const load = async () => {
+  const load = async() => {
     try {
       setLoading(true);
       const data = await fetchAdminUsageData();

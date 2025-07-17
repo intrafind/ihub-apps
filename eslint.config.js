@@ -38,7 +38,7 @@ export default [
       'comma-dangle': ['error', 'never'],
       'object-curly-spacing': ['error', 'always'],
       'array-bracket-spacing': ['error', 'never'],
-      'space-before-function-paren': ['error', 'always'],
+      'space-before-function-paren': ['error', 'never'],
       'keyword-spacing': 'error',
       'space-infix-ops': 'error',
       'no-trailing-spaces': 'error'

@@ -20,7 +20,7 @@ const AdminShortLinks = () => {
   const [sortField, setSortField] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
 
-  const loadLinks = async () => {
+  const loadLinks = async() => {
     try {
       setLoading(true);
       const params = new URLSearchParams();

@@ -35,33 +35,33 @@ export async function getApiKeyForModel(modelId) {
 
     // Check for provider-specific API keys
     switch (provider) {
-      case 'openai':
-        return config.OPENAI_API_KEY;
-      case 'anthropic':
-        return config.ANTHROPIC_API_KEY;
-      case 'mistral':
-        return config.MISTRAL_API_KEY;
-      case 'google':
-        return config.GOOGLE_API_KEY;
-      case 'local':
-        // For local models, check if there's a specific LOCAL_API_KEY or return a default empty string
-        // This allows local models to work without authentication in many cases
-        return config.LOCAL_API_KEY || '';
-      default:
-        // Try to find a generic API key based on provider name (e.g., COHERE_API_KEY for provider 'cohere')
-        const genericKey = config[`${provider.toUpperCase()}_API_KEY`];
-        if (genericKey) {
-          return genericKey;
-        }
+    case 'openai':
+      return config.OPENAI_API_KEY;
+    case 'anthropic':
+      return config.ANTHROPIC_API_KEY;
+    case 'mistral':
+      return config.MISTRAL_API_KEY;
+    case 'google':
+      return config.GOOGLE_API_KEY;
+    case 'local':
+      // For local models, check if there's a specific LOCAL_API_KEY or return a default empty string
+      // This allows local models to work without authentication in many cases
+      return config.LOCAL_API_KEY || '';
+    default:
+      // Try to find a generic API key based on provider name (e.g., COHERE_API_KEY for provider 'cohere')
+      const genericKey = config[`${provider.toUpperCase()}_API_KEY`];
+      if (genericKey) {
+        return genericKey;
+      }
 
-        // Check for a default API key as last resort
-        if (config.DEFAULT_API_KEY) {
-          console.log(`Using DEFAULT_API_KEY for provider: ${provider}`);
-          return config.DEFAULT_API_KEY;
-        }
+      // Check for a default API key as last resort
+      if (config.DEFAULT_API_KEY) {
+        console.log(`Using DEFAULT_API_KEY for provider: ${provider}`);
+        return config.DEFAULT_API_KEY;
+      }
 
-        console.error(`No API key found for provider: ${provider}`);
-        return null;
+      console.error(`No API key found for provider: ${provider}`);
+      return null;
     }
   } catch (error) {
     console.error('Error getting API key for model:', error);
@@ -124,7 +124,7 @@ export function getErrorDetails(error, model) {
   if (model?.provider === 'local' && errorDetails.isConnectionError) {
     errorDetails.message = `Could not connect to local model server for ${model.id}. Make sure the server is running on the configured address and port.`;
     errorDetails.recommendation =
-      "If you wanted to use a cloud model instead, you can modify your app's configuration to use a different model.";
+      'If you wanted to use a cloud model instead, you can modify your app\'s configuration to use a different model.';
   }
 
   return errorDetails;

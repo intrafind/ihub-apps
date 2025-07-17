@@ -85,22 +85,22 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
 
   const getErrorMessage = code => {
     switch (code) {
-      case 'file-too-large':
-        return t('errors.fileTooLarge', {
-          maxSize: MAX_FILE_SIZE_MB,
-          defaultValue: `File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
-        });
-      case 'unsupported-format':
-        return t('errors.unsupportedFormat', {
-          formats: SUPPORTED_FORMATS.map(f => f.replace('image/', '.')).join(', '),
-          defaultValue: `Unsupported file format. Please use: ${SUPPORTED_FORMATS.map(f => f.replace('image/', '.')).join(', ')}`
-        });
-      case 'invalid-image':
-        return t('errors.invalidImage', 'Invalid image file');
-      case 'read-error':
-        return t('errors.readError', 'Error reading file');
-      default:
-        return t('errors.fileProcessingError', 'Error processing file. Please try again.');
+    case 'file-too-large':
+      return t('errors.fileTooLarge', {
+        maxSize: MAX_FILE_SIZE_MB,
+        defaultValue: `File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
+      });
+    case 'unsupported-format':
+      return t('errors.unsupportedFormat', {
+        formats: SUPPORTED_FORMATS.map(f => f.replace('image/', '.')).join(', '),
+        defaultValue: `Unsupported file format. Please use: ${SUPPORTED_FORMATS.map(f => f.replace('image/', '.')).join(', ')}`
+      });
+    case 'invalid-image':
+      return t('errors.invalidImage', 'Invalid image file');
+    case 'read-error':
+      return t('errors.readError', 'Error reading file');
+    default:
+      return t('errors.fileProcessingError', 'Error processing file. Please try again.');
     }
   };
 

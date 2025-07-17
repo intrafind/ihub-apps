@@ -7,7 +7,7 @@ import { getUsage } from '../../usageTracker.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 
 export default function registerAdminCacheRoutes(app) {
-  app.get('/api/admin/usage', adminAuth, async (req, res) => {
+  app.get('/api/admin/usage', adminAuth, async(req, res) => {
     try {
       const data = await getUsage();
       res.json(data);
@@ -17,7 +17,7 @@ export default function registerAdminCacheRoutes(app) {
     }
   });
 
-  app.get('/api/admin/cache/stats', adminAuth, async (req, res) => {
+  app.get('/api/admin/cache/stats', adminAuth, async(req, res) => {
     try {
       const stats = configCache.getStats();
       res.json(stats);
@@ -27,7 +27,7 @@ export default function registerAdminCacheRoutes(app) {
     }
   });
 
-  app.post('/api/admin/cache/_refresh', adminAuth, async (req, res) => {
+  app.post('/api/admin/cache/_refresh', adminAuth, async(req, res) => {
     try {
       await configCache.refreshAll();
       res.json({ message: 'Configuration cache refreshed successfully' });
@@ -42,7 +42,7 @@ export default function registerAdminCacheRoutes(app) {
     app._router.handle(req, res, next);
   });
 
-  app.post('/api/admin/cache/_clear', adminAuth, async (req, res) => {
+  app.post('/api/admin/cache/_clear', adminAuth, async(req, res) => {
     try {
       configCache.clear();
       await configCache.initialize();
@@ -58,7 +58,7 @@ export default function registerAdminCacheRoutes(app) {
     app._router.handle(req, res, next);
   });
 
-  app.post('/api/admin/client/_refresh', adminAuth, async (req, res) => {
+  app.post('/api/admin/client/_refresh', adminAuth, async(req, res) => {
     try {
       const rootDir = getRootDir();
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');

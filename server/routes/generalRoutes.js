@@ -2,7 +2,7 @@ import { loadJson } from '../configLoader.js';
 import configCache from '../configCache.js';
 
 export default function registerGeneralRoutes(app, { getLocalizedError }) {
-  app.get('/api/apps', async (req, res) => {
+  app.get('/api/apps', async(req, res) => {
     try {
       // Try to get apps from cache first
       let { data: apps = [], etag: appsEtag } = configCache.getApps();
@@ -18,7 +18,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     }
   });
 
-  app.get('/api/apps/:appId', async (req, res) => {
+  app.get('/api/apps/:appId', async(req, res) => {
     try {
       const { appId } = req.params;
       const { data: platform, etag: platformEtag } = configCache.getPlatform() || {};

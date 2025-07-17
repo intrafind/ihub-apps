@@ -148,7 +148,7 @@ const getFileExtension = language => {
 export const configureMarked = () => {
   const renderer = new marked.Renderer();
   const originalCodeRenderer = renderer.code;
-  renderer.code = function (code, language, isEscaped) {
+  renderer.code = function(code, language, isEscaped) {
     const codeBlockId = `code-block-${Math.random().toString(36).substring(2, 15)}`;
     const originalHtml = originalCodeRenderer.call(this, code, language, isEscaped);
     const enhancedHtml = originalHtml.replace(
@@ -203,7 +203,7 @@ export const configureMarked = () => {
 
   // Customize link rendering to open external links in a new tab
   const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
-  renderer.link = function (href, title, text) {
+  renderer.link = function(href, title, text) {
     // console.log('Link renderer called:', { href: JSON.stringify(href), title, text });
 
     // Extract the actual URL and title from href - handle both string and object cases
@@ -270,7 +270,7 @@ export const configureMarked = () => {
     smartLists: true,
     smartypants: false,
     xhtml: false,
-    highlight: function (code, lang) {
+    highlight: function(code, lang) {
       if (lang && window.hljs && window.hljs.getLanguage(lang)) {
         try {
           return window.hljs.highlight(code, { language: lang }).value;

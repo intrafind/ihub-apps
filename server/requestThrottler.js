@@ -52,7 +52,7 @@ export function throttledFetch(id, url, options = {}) {
   const queue = queues.get(id);
 
   return new Promise((resolve, reject) => {
-    const execute = async () => {
+    const execute = async() => {
       actives.set(id, actives.get(id) + 1);
       try {
         const delay = getDelay(id);

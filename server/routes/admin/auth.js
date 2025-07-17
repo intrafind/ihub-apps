@@ -6,7 +6,7 @@ import configCache from '../../configCache.js';
 import { adminAuth, isAdminAuthRequired, hashPassword } from '../../middleware/adminAuth.js';
 
 export default function registerAdminAuthRoutes(app) {
-  app.get('/api/admin/auth/status', async (req, res) => {
+  app.get('/api/admin/auth/status', async(req, res) => {
     try {
       const authRequired = isAdminAuthRequired();
       res.json({
@@ -19,7 +19,7 @@ export default function registerAdminAuthRoutes(app) {
     }
   });
 
-  app.get('/api/admin/auth/test', adminAuth, async (req, res) => {
+  app.get('/api/admin/auth/test', adminAuth, async(req, res) => {
     try {
       res.json({ message: 'Admin authentication successful', authenticated: true });
     } catch (error) {
@@ -28,7 +28,7 @@ export default function registerAdminAuthRoutes(app) {
     }
   });
 
-  app.post('/api/admin/auth/change-password', adminAuth, async (req, res) => {
+  app.post('/api/admin/auth/change-password', adminAuth, async(req, res) => {
     try {
       const { newPassword } = req.body;
       if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 1) {

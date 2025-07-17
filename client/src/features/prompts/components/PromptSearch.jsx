@@ -33,7 +33,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
 
   useEffect(() => {
     if (!isOpen) return;
-    (async () => {
+    (async() => {
       try {
         const raw = await fetchPrompts();
         const localized = (Array.isArray(raw) ? raw : []).map(p => ({

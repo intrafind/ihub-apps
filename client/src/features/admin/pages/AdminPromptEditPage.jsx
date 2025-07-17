@@ -50,7 +50,7 @@ const AdminPromptEditPage = () => {
     }
   }, [promptId]);
 
-  const loadApps = async () => {
+  const loadApps = async() => {
     try {
       const data = await fetchAdminApps();
       setApps(data);
@@ -59,7 +59,7 @@ const AdminPromptEditPage = () => {
     }
   };
 
-  const loadUIConfig = async () => {
+  const loadUIConfig = async() => {
     try {
       const response = await fetch('/api/configs/ui');
       if (response.ok) {
@@ -71,7 +71,7 @@ const AdminPromptEditPage = () => {
     }
   };
 
-  const loadPrompt = async () => {
+  const loadPrompt = async() => {
     try {
       setLoading(true);
       const data = await fetchAdminPrompts();

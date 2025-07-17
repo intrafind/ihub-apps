@@ -17,7 +17,7 @@ const DISCLAIMER_KEY = 'ai-hub-disclaimer-acknowledged';
  * Checks if a force refresh is needed by comparing the current salt with the stored salt
  * @returns {Promise<boolean>} True if force refresh is needed, false otherwise
  */
-export const checkForceRefresh = async () => {
+export const checkForceRefresh = async() => {
   try {
     console.log('🔍 Checking for force refresh...');
 
@@ -59,7 +59,7 @@ export const checkForceRefresh = async () => {
 /**
  * Performs a force refresh by clearing all caches and reloading the page
  */
-export const performForceRefresh = async () => {
+export const performForceRefresh = async() => {
   try {
     console.log('🔄 Performing force refresh...');
 
@@ -104,7 +104,7 @@ export const performForceRefresh = async () => {
  * Initializes the force refresh check and performs refresh if needed
  * This should be called early in the application startup
  */
-export const initializeForceRefresh = async () => {
+export const initializeForceRefresh = async() => {
   const needsRefresh = await checkForceRefresh();
 
   if (needsRefresh) {

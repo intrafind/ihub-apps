@@ -12,7 +12,7 @@ const AdminHome = () => {
   const pageConfig = platformConfig?.admin?.pages || {};
   const isEnabled = key => pageConfig[key] !== false;
 
-  const handleCacheRefresh = async () => {
+  const handleCacheRefresh = async() => {
     try {
       await makeAdminApiCall('/api/admin/cache/_refresh', { method: 'POST' });
       alert(t('admin.home.cacheRefreshSuccess', 'Cache refreshed successfully'));
@@ -25,7 +25,7 @@ const AdminHome = () => {
     }
   };
 
-  const handleCacheClear = async () => {
+  const handleCacheClear = async() => {
     if (confirm(t('admin.home.clearCacheConfirm', 'Are you sure you want to clear the cache?'))) {
       try {
         await makeAdminApiCall('/api/admin/cache/_clear', { method: 'POST' });

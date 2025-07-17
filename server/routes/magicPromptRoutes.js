@@ -9,7 +9,7 @@ import { throttledFetch } from '../requestThrottler.js';
 
 // BIG FAT TODO reuse methods like simpleCompletion and extract the adapter specifics
 export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT }) {
-  app.post('/api/magic-prompt', validate(magicPromptSchema), async (req, res) => {
+  app.post('/api/magic-prompt', validate(magicPromptSchema), async(req, res) => {
     try {
       const { input, prompt, modelId, appId = 'direct' } = req.body;
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';

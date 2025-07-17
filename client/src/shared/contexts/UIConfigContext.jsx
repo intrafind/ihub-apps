@@ -25,7 +25,7 @@ export const UIConfigProvider = ({ children }) => {
 
   // Fetch UI config
   useEffect(() => {
-    const fetchUiConfig = async () => {
+    const fetchUiConfig = async() => {
       try {
         setIsLoading(true);
         // Using the exported fetchUIConfig function that uses apiClient

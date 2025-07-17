@@ -18,7 +18,7 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const handleShare = async () => {
+  const handleShare = async() => {
     const url = `${window.location.origin}/prompts?id=${encodeURIComponent(prompt.id)}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -30,7 +30,7 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
     setTimeout(() => setShareStatus('idle'), 2000);
   };
 
-  const handleCopy = async () => {
+  const handleCopy = async() => {
     try {
       await navigator.clipboard.writeText(prompt.prompt.replace('[content]', ''));
       setCopyStatus('success');

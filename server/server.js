@@ -202,7 +202,7 @@ if (cluster.isPrimary && workerCount > 1) {
     console.log(`Open ${protocol}://${HOST}:${PORT} in your browser to use AI Hub Apps`);
   });
 
-  const handleShutdownSignal = async () => {
+  const handleShutdownSignal = async() => {
     await shutdownTelemetry();
     process.exit(0);
   };

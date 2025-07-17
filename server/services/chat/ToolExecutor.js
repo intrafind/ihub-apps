@@ -133,7 +133,7 @@ class ToolExecutor {
 
     let timeoutId;
     const setupTimeout = () => {
-      timeoutId = setTimeout(async () => {
+      timeoutId = setTimeout(async() => {
         if (activeRequests.has(chatId)) {
           controller.abort();
           const errorMessage = await getLocalizedError(
