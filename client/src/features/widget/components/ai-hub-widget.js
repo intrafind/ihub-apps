@@ -5,7 +5,7 @@
  * This script allows embedding the AI Hub Apps Chat widget in any website
  */
 
-(function() {
+(function () {
   // Configuration with default values
   let config = {
     appId: null,
@@ -28,7 +28,7 @@
   // Create global aiHubWidget object
   window.aiHubWidget = {
     // Initialize widget with configuration
-    init: function(userConfig) {
+    init: function (userConfig) {
       // Merge user config with defaults
       if (userConfig) {
         config = { ...config, ...userConfig };
@@ -47,7 +47,7 @@
     },
 
     // Open the widget
-    open: function() {
+    open: function () {
       const iframe = document.getElementById('ai-hub-chat-widget-iframe');
       if (iframe) {
         debug('Sending open command to widget');
@@ -58,7 +58,7 @@
     },
 
     // Close the widget
-    close: function() {
+    close: function () {
       const iframe = document.getElementById('ai-hub-chat-widget-iframe');
       if (iframe) {
         debug('Sending close command to widget');
@@ -69,7 +69,7 @@
     },
 
     // For debugging
-    setDebug: function(enabled) {
+    setDebug: function (enabled) {
       isDebugMode = enabled;
     }
   };

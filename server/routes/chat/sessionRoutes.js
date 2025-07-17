@@ -14,7 +14,7 @@ export default function registerSessionRoutes(
   { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }
 ) {
   const chatService = new ChatService();
-  app.get('/api/models/:modelId/chat/test', validate(chatTestSchema), async(req, res) => {
+  app.get('/api/models/:modelId/chat/test', validate(chatTestSchema), async (req, res) => {
     try {
       const { modelId } = req.params;
       const messages = [{ role: 'user', content: 'Say hello!' }];
@@ -95,7 +95,7 @@ export default function registerSessionRoutes(
     }
   });
 
-  app.get('/api/apps/:appId/chat/:chatId', validate(chatConnectSchema), async(req, res) => {
+  app.get('/api/apps/:appId/chat/:chatId', validate(chatConnectSchema), async (req, res) => {
     try {
       const { appId, chatId } = req.params;
       res.setHeader('Content-Type', 'text/event-stream');
@@ -203,7 +203,7 @@ export default function registerSessionRoutes(
     }
   }
 
-  app.post('/api/apps/:appId/chat/:chatId', validate(chatPostSchema), async(req, res) => {
+  app.post('/api/apps/:appId/chat/:chatId', validate(chatPostSchema), async (req, res) => {
     try {
       const { appId, chatId } = req.params;
       const {

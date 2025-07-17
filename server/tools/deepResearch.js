@@ -170,7 +170,7 @@ export default async function deepResearch({
     sources: aggregated,
     sourceSummary: `Found ${aggregated.length} sources for query "${query}":\n\n${sourceSummary}`,
     instruction:
-      'IMPORTANT: When presenting your findings, always include the source URLs from the sources array. Each source has a \'url\' field that must be cited in your response.',
+      "IMPORTANT: When presenting your findings, always include the source URLs from the sources array. Each source has a 'url' field that must be cited in your response.",
     finalAnswer
   };
 }

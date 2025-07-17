@@ -29,19 +29,11 @@ export default [
     },
     rules: {
       'no-unused-vars': 'warn',
-      'no-console': 'off',
-      indent: ['error', 2],
-      quotes: ['error', 'single'],
-      semi: ['error', 'always'],
-      'no-multiple-empty-lines': ['error', { max: 1 }],
-      'eol-last': 'error',
-      'comma-dangle': ['error', 'never'],
-      'object-curly-spacing': ['error', 'always'],
-      'array-bracket-spacing': ['error', 'never'],
-      'space-before-function-paren': ['error', 'never'],
-      'keyword-spacing': 'error',
-      'space-infix-ops': 'error',
-      'no-trailing-spaces': 'error'
+      'no-console': 'off'
+      // Removed all formatting rules that conflict with Prettier
+      // Prettier handles: indent, quotes, semi, no-multiple-empty-lines, eol-last,
+      // comma-dangle, object-curly-spacing, array-bracket-spacing, space-before-function-paren,
+      // keyword-spacing, space-infix-ops, no-trailing-spaces
     }
   },
   {

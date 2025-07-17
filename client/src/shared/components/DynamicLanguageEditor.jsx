@@ -19,11 +19,11 @@ const DynamicLanguageEditor = ({
   // If fieldType is provided, we're working with nested objects
   const currentValue = fieldType
     ? Object.keys(value).reduce((acc, lang) => {
-      if (value[lang] && typeof value[lang] === 'object' && value[lang][fieldType]) {
-        acc[lang] = value[lang][fieldType];
-      }
-      return acc;
-    }, {})
+        if (value[lang] && typeof value[lang] === 'object' && value[lang][fieldType]) {
+          acc[lang] = value[lang][fieldType];
+        }
+        return acc;
+      }, {})
     : value;
 
   const languages = Object.keys(currentValue);

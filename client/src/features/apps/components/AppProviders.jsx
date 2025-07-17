@@ -14,7 +14,7 @@ import { initializeForceRefresh } from '../../../utils/forceRefresh';
 const AppProviders = ({ children }) => {
   // Initialize force refresh check early in the application startup
   useEffect(() => {
-    const checkForceRefresh = async() => {
+    const checkForceRefresh = async () => {
       try {
         await initializeForceRefresh();
       } catch (error) {

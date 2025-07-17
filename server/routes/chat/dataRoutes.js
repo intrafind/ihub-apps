@@ -5,7 +5,7 @@ import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 
 export default function registerDataRoutes(app) {
-  app.get('/api/styles', async(req, res) => {
+  app.get('/api/styles', async (req, res) => {
     try {
       // Try to get styles from cache first
       let { data: styles = [] } = configCache.getStyles();
@@ -20,7 +20,7 @@ export default function registerDataRoutes(app) {
     }
   });
 
-  app.get('/api/prompts', async(req, res) => {
+  app.get('/api/prompts', async (req, res) => {
     try {
       // Get prompts with ETag from cache
       const { data: prompts, etag } = configCache.getPrompts();
@@ -47,7 +47,7 @@ export default function registerDataRoutes(app) {
     }
   });
 
-  app.get('/api/translations/:lang', async(req, res) => {
+  app.get('/api/translations/:lang', async (req, res) => {
     try {
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       let { lang } = req.params;
@@ -101,7 +101,7 @@ export default function registerDataRoutes(app) {
     }
   });
 
-  app.get('/api/configs/ui', async(req, res) => {
+  app.get('/api/configs/ui', async (req, res) => {
     try {
       // Try to get UI config from cache first
       let { data: uiConfig = {}, etag: uiConfigEtag } = configCache.getUI();
@@ -117,7 +117,7 @@ export default function registerDataRoutes(app) {
     }
   });
 
-  app.get('/api/configs/platform', async(req, res) => {
+  app.get('/api/configs/platform', async (req, res) => {
     try {
       let platform = configCache.getPlatform();
       if (!platform) {

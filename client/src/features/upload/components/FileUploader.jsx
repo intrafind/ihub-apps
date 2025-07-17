@@ -26,25 +26,25 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
 
   const getFileTypeDisplay = mimeType => {
     switch (mimeType) {
-    case 'text/plain':
-      return 'TXT';
-    case 'text/markdown':
-      return 'MD';
-    case 'text/csv':
-      return 'CSV';
-    case 'application/json':
-      return 'JSON';
-    case 'text/html':
-      return 'HTML';
-    case 'text/css':
-      return 'CSS';
-    case 'text/javascript':
-    case 'application/javascript':
-      return 'JS';
-    case 'application/pdf':
-      return 'PDF';
-    default:
-      return 'FILE';
+      case 'text/plain':
+        return 'TXT';
+      case 'text/markdown':
+        return 'MD';
+      case 'text/csv':
+        return 'CSV';
+      case 'application/json':
+        return 'JSON';
+      case 'text/html':
+        return 'HTML';
+      case 'text/css':
+        return 'CSS';
+      case 'text/javascript':
+      case 'application/javascript':
+        return 'JS';
+      case 'application/pdf':
+        return 'PDF';
+      default:
+        return 'FILE';
     }
   };
 
@@ -92,25 +92,25 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
   const formatList = (() => {
     const textFormats = SUPPORTED_TEXT_FORMATS.map(format => {
       switch (format) {
-      case 'text/plain':
-        return 'TXT';
-      case 'text/markdown':
-        return 'MD';
-      case 'text/csv':
-        return 'CSV';
-      case 'application/json':
-        return 'JSON';
-      case 'text/html':
-        return 'HTML';
-      case 'text/css':
-        return 'CSS';
-      case 'text/javascript':
-      case 'application/javascript':
-        return 'JS';
-      case 'text/xml':
-        return 'XML';
-      default:
-        return format;
+        case 'text/plain':
+          return 'TXT';
+        case 'text/markdown':
+          return 'MD';
+        case 'text/csv':
+          return 'CSV';
+        case 'application/json':
+          return 'JSON';
+        case 'text/html':
+          return 'HTML';
+        case 'text/css':
+          return 'CSS';
+        case 'text/javascript':
+        case 'application/javascript':
+          return 'JS';
+        case 'text/xml':
+          return 'XML';
+        default:
+          return format;
       }
     });
     const pdfFormats = SUPPORTED_PDF_FORMATS.map(f => (f === 'application/pdf' ? 'PDF' : f));
@@ -119,20 +119,20 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
 
   const getErrorMessage = code => {
     switch (code) {
-    case 'file-too-large':
-      return t('errors.fileTooLarge', {
-        maxSize: MAX_FILE_SIZE_MB,
-        defaultValue: `File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
-      });
-    case 'unsupported-format':
-      return t('errors.unsupportedFileFormat', {
-        formats: formatList,
-        defaultValue: `Unsupported file format. Please use: ${formatList}`
-      });
-    case 'read-error':
-      return t('errors.readError', 'Error reading file');
-    default:
-      return t('errors.fileProcessingError', 'Error processing file. Please try again.');
+      case 'file-too-large':
+        return t('errors.fileTooLarge', {
+          maxSize: MAX_FILE_SIZE_MB,
+          defaultValue: `File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
+        });
+      case 'unsupported-format':
+        return t('errors.unsupportedFileFormat', {
+          formats: formatList,
+          defaultValue: `Unsupported file format. Please use: ${formatList}`
+        });
+      case 'read-error':
+        return t('errors.readError', 'Error reading file');
+      default:
+        return t('errors.fileProcessingError', 'Error processing file. Please try again.');
     }
   };
 

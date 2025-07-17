@@ -3,7 +3,7 @@ import { handleApiResponse } from '../utils/requestHandler';
 import { CACHE_KEYS, DEFAULT_CACHE_TTL, buildCacheKey } from '../../utils/cache';
 
 // Styles
-export const fetchStyles = async(options = {}) => {
+export const fetchStyles = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : CACHE_KEYS.STYLES;
 
@@ -21,7 +21,7 @@ export const sendMessageFeedback = async feedbackData => {
 };
 
 // Translations
-export const fetchTranslations = async(language, options = {}) => {
+export const fetchTranslations = async (language, options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.TRANSLATIONS, { language });
 
@@ -33,7 +33,7 @@ export const fetchTranslations = async(language, options = {}) => {
 };
 
 // Pages
-export const fetchPageContent = async(pageId, options = {}) => {
+export const fetchPageContent = async (pageId, options = {}) => {
   const { skipCache = false, language = null } = options;
   const cacheKey = skipCache
     ? null
