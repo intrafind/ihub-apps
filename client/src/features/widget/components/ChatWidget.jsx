@@ -443,15 +443,15 @@ const ChatWidget = ({
         style={
           isIframe
             ? {
-              position: 'relative',
-              height: '100vh',
-              width: '100%',
-              maxHeight: 'none',
-              bottom: 'auto',
-              right: 'auto',
-              boxShadow: 'none',
-              borderRadius: '0'
-            }
+                position: 'relative',
+                height: '100vh',
+                width: '100%',
+                maxHeight: 'none',
+                bottom: 'auto',
+                right: 'auto',
+                boxShadow: 'none',
+                borderRadius: '0'
+              }
             : {}
         }
       >
@@ -473,10 +473,10 @@ const ChatWidget = ({
           style={
             isIframe
               ? {
-                height: 'calc(100vh - 130px)',
-                minHeight: '0',
-                overflowY: 'auto'
-              }
+                  height: 'calc(100vh - 130px)',
+                  minHeight: '0',
+                  overflowY: 'auto'
+                }
               : {}
           }
         >
@@ -516,12 +516,12 @@ const ChatWidget = ({
           style={
             isIframe
               ? {
-                position: 'absolute',
-                bottom: '0',
-                left: '0',
-                right: '0',
-                background: 'white'
-              }
+                  position: 'absolute',
+                  bottom: '0',
+                  left: '0',
+                  right: '0',
+                  background: 'white'
+                }
               : {}
           }
         >

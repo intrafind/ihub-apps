@@ -1,5 +1,5 @@
 // Utility function to make authenticated API calls to admin endpoints
-export const makeAdminApiCall = async(url, options = {}) => {
+export const makeAdminApiCall = async (url, options = {}) => {
   const token = localStorage.getItem('adminToken');
 
   const headers = {
@@ -37,22 +37,22 @@ export const makeAdminApiCall = async(url, options = {}) => {
 };
 
 // Specific admin API functions
-export const fetchAdminUsageData = async() => {
+export const fetchAdminUsageData = async () => {
   const response = await makeAdminApiCall('/api/admin/usage');
   return response.json();
 };
 
-export const fetchAdminCacheStats = async() => {
+export const fetchAdminCacheStats = async () => {
   const response = await makeAdminApiCall('/api/admin/cache/stats');
   return response.json();
 };
 
-export const fetchAdminApps = async() => {
+export const fetchAdminApps = async () => {
   const response = await makeAdminApiCall('/api/admin/apps');
   return response.json();
 };
 
-export const fetchAdminModels = async() => {
+export const fetchAdminModels = async () => {
   try {
     const response = await makeAdminApiCall('/api/admin/models');
     const data = await response.json();
@@ -69,7 +69,7 @@ export const fetchAdminModels = async() => {
   }
 };
 
-export const fetchAdminPrompts = async() => {
+export const fetchAdminPrompts = async () => {
   try {
     const response = await makeAdminApiCall('/api/admin/prompts');
     const data = await response.json();
@@ -86,7 +86,7 @@ export const fetchAdminPrompts = async() => {
   }
 };
 
-export const fetchAdminAppTemplates = async() => {
+export const fetchAdminAppTemplates = async () => {
   const response = await makeAdminApiCall('/api/admin/apps/templates');
   return response.json();
 };
@@ -104,7 +104,7 @@ export const createPrompt = async promptData => {
   return response.json();
 };
 
-export const updatePrompt = async(promptId, promptData) => {
+export const updatePrompt = async (promptId, promptData) => {
   const response = await makeAdminApiCall(`/api/admin/prompts/${promptId}`, {
     method: 'PUT',
     body: JSON.stringify(promptData)

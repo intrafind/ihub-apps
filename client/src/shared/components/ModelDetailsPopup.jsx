@@ -18,7 +18,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
     }
   }, [isOpen, model]);
 
-  const loadModelData = async() => {
+  const loadModelData = async () => {
     setLoading(true);
     try {
       // Load usage data
@@ -55,35 +55,35 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
 
   const getProviderIcon = provider => {
     switch (provider) {
-    case 'openai':
-      return 'cpu-chip';
-    case 'anthropic':
-      return 'academic-cap';
-    case 'google':
-      return 'globe-alt';
-    case 'mistral':
-      return 'lightning-bolt';
-    case 'local':
-      return 'computer-desktop';
-    default:
-      return 'server';
+      case 'openai':
+        return 'cpu-chip';
+      case 'anthropic':
+        return 'academic-cap';
+      case 'google':
+        return 'globe-alt';
+      case 'mistral':
+        return 'lightning-bolt';
+      case 'local':
+        return 'computer-desktop';
+      default:
+        return 'server';
     }
   };
 
   const getProviderColor = provider => {
     switch (provider) {
-    case 'openai':
-      return '#00A67E';
-    case 'anthropic':
-      return '#CC785C';
-    case 'google':
-      return '#4285F4';
-    case 'mistral':
-      return '#FF6B35';
-    case 'local':
-      return '#6B7280';
-    default:
-      return '#6B7280';
+      case 'openai':
+        return '#00A67E';
+      case 'anthropic':
+        return '#CC785C';
+      case 'google':
+        return '#4285F4';
+      case 'mistral':
+        return '#FF6B35';
+      case 'local':
+        return '#6B7280';
+      default:
+        return '#6B7280';
     }
   };
 
@@ -171,14 +171,18 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.models.details.modelId', 'Model ID')}
                 </div>
-                <div className="text-sm text-gray-900 mt-1">{model.modelId || 'Not specified'}</div>
+                <div className="text-sm text-gray-900 mt-1">
+                  {model.modelId || t('common.notSpecified', 'Not specified')}
+                </div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {t('admin.models.details.tokenLimit', 'Token Limit')}
                 </div>
                 <div className="text-sm text-gray-900 mt-1">
-                  {model.tokenLimit ? model.tokenLimit.toLocaleString() : 'Not set'}
+                  {model.tokenLimit
+                    ? model.tokenLimit.toLocaleString()
+                    : t('common.notSet', 'Not set')}
                 </div>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
@@ -186,7 +190,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
                   {t('admin.models.details.supportsTools', 'Supports Tools')}
                 </div>
                 <div className="text-sm text-gray-900 mt-1">
-                  {model.supportsTools ? 'Yes' : 'No'}
+                  {model.supportsTools ? t('common.yes', 'Yes') : t('common.no', 'No')}
                 </div>
               </div>
               {model.concurrency && (

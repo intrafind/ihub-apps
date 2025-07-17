@@ -16,7 +16,7 @@ const AppTemplateSelector = ({ onSelect, onClose }) => {
     loadApps();
   }, []);
 
-  const loadApps = async() => {
+  const loadApps = async () => {
     try {
       setLoading(true);
       const templates = await fetchAdminAppTemplates();

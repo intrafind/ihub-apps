@@ -374,7 +374,7 @@ const AppChat = () => {
     // Store mounted state to prevent state updates after unmount
     let isMounted = true;
 
-    const loadData = async() => {
+    const loadData = async () => {
       try {
         setLoading(true);
 
@@ -507,7 +507,7 @@ const AppChat = () => {
     setShowFileUploader(prev => !prev);
   };
 
-  const handleMagicPrompt = async() => {
+  const handleMagicPrompt = async () => {
     if (!input.trim()) return;
     try {
       setMagicLoading(true);
@@ -789,9 +789,9 @@ const AppChat = () => {
       localizedPlaceholder: getLocalizedContent(variable.placeholder, currentLanguage),
       predefinedValues: variable.predefinedValues
         ? variable.predefinedValues.map(option => ({
-          ...option,
-          localizedLabel: getLocalizedContent(option.label, currentLanguage) || option.value
-        }))
+            ...option,
+            localizedLabel: getLocalizedContent(option.label, currentLanguage) || option.value
+          }))
         : undefined
     }));
   }, [app?.variables, currentLanguage]);

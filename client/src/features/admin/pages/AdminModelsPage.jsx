@@ -26,7 +26,7 @@ const AdminModelsPage = () => {
     loadModels();
   }, []);
 
-  const loadModels = async() => {
+  const loadModels = async () => {
     try {
       setLoading(true);
       setError(null);

@@ -44,8 +44,8 @@ export async function initTelemetry(config = {}) {
 
   const metricReader = config.metrics
     ? new PeriodicExportingMetricReader({
-      exporter: new PrometheusExporter({ port: config.port || 9464 })
-    })
+        exporter: new PrometheusExporter({ port: config.port || 9464 })
+      })
     : undefined;
 
   sdk = new NodeSDK({
