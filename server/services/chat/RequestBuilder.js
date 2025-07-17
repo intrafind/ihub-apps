@@ -57,11 +57,15 @@ class RequestBuilder {
       }
 
       const defaultModel = models.find(m => m.default)?.id;
-      const model = models.find(m => m.id === (modelId || app.preferredModel || defaultModel));
+      let resolvedModelId = modelId || app.preferredModel || defaultModel;
+      if (!models.some(m => m.id === resolvedModelId)) {
+        resolvedModelId = defaultModel;
+      }
+      const model = models.find(m => m.id === resolvedModelId);
 
       if (!model) {
         const error = await this.errorHandler.createModelError(
-          modelId || app.preferredModel || defaultModel,
+          resolvedModelId,
           'unknown',
           language
         );

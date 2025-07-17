@@ -58,9 +58,14 @@ const useAppSettings = (appId, app) => {
 
     const defaultModel = models.find(m => m.default);
 
+    let initialModel = app.preferredModel;
+    if (!models.some(m => m.id === initialModel)) {
+      initialModel = defaultModel ? defaultModel.id : models[0]?.id || null;
+    }
+
     // Initialize with app defaults
     const initialState = {
-      selectedModel: app.preferredModel || (defaultModel ? defaultModel.id : null),
+      selectedModel: initialModel,
       selectedStyle: app.preferredStyle || 'normal',
       temperature: app.preferredTemperature || 0.7,
       selectedOutputFormat: app.preferredOutputFormat || 'markdown',
@@ -77,7 +82,11 @@ const useAppSettings = (appId, app) => {
     // Load saved settings and override defaults if available
     const savedSettings = loadAppSettings(appId);
     if (savedSettings) {
-      if (savedSettings.selectedModel) setSelectedModel(savedSettings.selectedModel);
+      if (
+        savedSettings.selectedModel &&
+        models.some(m => m.id === savedSettings.selectedModel)
+      )
+        setSelectedModel(savedSettings.selectedModel);
       if (savedSettings.selectedStyle) setSelectedStyle(savedSettings.selectedStyle);
       if (savedSettings.selectedOutputFormat)
         setSelectedOutputFormat(savedSettings.selectedOutputFormat);
