@@ -16,12 +16,19 @@ const AnthropicAdapter = {
     const processedMessages = [];
     for (const msg of filteredMessages) {
       if (msg.role === 'tool') {
+        // let toolContent;
+        // try {
+        //   toolContent = JSON.parse(msg.content);
+        // } catch {
+        //   toolContent = msg.content;
+        // }
         processedMessages.push({
           role: 'user',
           content: [
             {
               type: 'tool_result',
               tool_use_id: msg.tool_call_id,
+              //content: toolContent
               content: msg.content, // Pass the content directly as a string
               is_error: msg.is_error || false
             }
