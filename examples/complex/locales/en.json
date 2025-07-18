@@ -60,7 +60,7 @@
       "regenerate": "Regenerate response",
       "clear": "Clear chat",
       "confirmClear": "Are you sure you want to clear the chat?",
-      "shareConversation": "Share conversation",
+      "shareConversation": "Share app",
       "export": {
         "conversation": "Export conversation",
         "toJSON": "as JSON",

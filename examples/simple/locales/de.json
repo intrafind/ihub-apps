@@ -60,7 +60,7 @@
       "regenerate": "Antwort neu generieren",
       "clear": "Chat löschen",
       "confirmClear": "Möchtest du den Chat wirklich löschen?",
-      "shareConversation": "Unterhaltung teilen",
+      "shareConversation": "App teilen",
       "export": {
         "conversation": "Unterhaltung exportieren",
         "toJSON": "als JSON",
