@@ -41,6 +41,7 @@
     "magicPrompt": "Magischer Prompt",
     "undo": "Rückgängig",
     "share": "Teilen",
+    "menu": "Menü",
     "shortCode": "Kurzcode",
     "includeSettings": "Einstellungen und Variablen einschließen",
     "expiresAt": "Ablaufdatum",
@@ -113,7 +114,14 @@
       "regenerate": "Antwort neu generieren",
       "clear": "Chat löschen",
       "confirmClear": "Möchtest du den Chat wirklich löschen?",
-      "shareConversation": "Unterhaltung teilen",
+      "shareConversation": "App teilen",
+      "export": {
+        "conversation": "Unterhaltung exportieren",
+        "toJSON": "als JSON",
+        "toJSONL": "als JSONL",
+        "toMarkdown": "als Markdown",
+        "toHTML": "als HTML"
+      },
       "copyToClipboard": "In die Zwischenablage kopieren",
       "copied": "In die Zwischenablage kopiert!",
       "showThoughts": "Denkanalyse anzeigen",

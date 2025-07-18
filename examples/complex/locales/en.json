@@ -29,7 +29,8 @@
     "creative": "Creative",
     "select": "Select",
     "favorite": "Favorite",
-    "unfavorite": "Unfavorite"
+    "unfavorite": "Unfavorite",
+    "menu": "Menu"
   },
   "pages": {
     "home": {
@@ -59,7 +60,14 @@
       "regenerate": "Regenerate response",
       "clear": "Clear chat",
       "confirmClear": "Are you sure you want to clear the chat?",
-      "shareConversation": "Share conversation",
+      "shareConversation": "Share app",
+      "export": {
+        "conversation": "Export conversation",
+        "toJSON": "as JSON",
+        "toJSONL": "as JSONL",
+        "toMarkdown": "as Markdown",
+        "toHTML": "as HTML"
+      },
       "copyToClipboard": "Copy to clipboard",
       "copied": "Copied to clipboard!",
       "configureApp": "Configure",

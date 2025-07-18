@@ -832,6 +832,7 @@ const AppChat = () => {
         appId={appId}
         mode="chat"
         messages={messages}
+        variables={variables}
         onClearChat={clearChat}
         currentLanguage={currentLanguage}
         models={models}
