@@ -110,6 +110,40 @@ export default function registerAdminPromptsRoutes(app) {
     }
   });
 
+  app.post('/api/admin/prompts/:promptIds/_toggle', adminAuth, async (req, res) => {
+    try {
+      const { promptIds } = req.params;
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'Missing enabled flag' });
+      }
+
+      const { data: prompts } = configCache.getPrompts(true);
+      const ids = promptIds === '*' ? prompts.map(p => p.id) : promptIds.split(',');
+      const rootDir = getRootDir();
+
+      for (const id of ids) {
+        const prompt = prompts.find(p => p.id === id);
+        if (!prompt) continue;
+        if (prompt.enabled !== enabled) {
+          prompt.enabled = enabled;
+          const promptFilePath = join(rootDir, 'contents', 'prompts', `${id}.json`);
+          await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
+        }
+      }
+
+      await configCache.refreshPromptsCache();
+      res.json({
+        message: `Prompts ${enabled ? 'enabled' : 'disabled'} successfully`,
+        enabled,
+        ids
+      });
+    } catch (error) {
+      console.error('Error toggling prompts:', error);
+      res.status(500).json({ error: 'Failed to toggle prompts' });
+    }
+  });
+
   app.delete('/api/admin/prompts/:promptId', adminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;

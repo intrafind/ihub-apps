@@ -8,7 +8,7 @@ import AppTemplateSelector from '../../apps/components/AppTemplateSelector';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
-import { fetchAdminApps, makeAdminApiCall } from '../../../api/adminApi';
+import { fetchAdminApps, makeAdminApiCall, toggleApps } from '../../../api/adminApi';
 
 const AdminAppsPage = () => {
   const { t, i18n } = useTranslation();
@@ -68,6 +68,24 @@ const AdminAppsPage = () => {
       setApps(prevApps =>
         prevApps.map(app => (app.id === appId ? { ...app, enabled: result.enabled } : app))
       );
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const enableAllApps = async () => {
+    try {
+      await toggleApps('*', true);
+      setApps(prev => prev.map(app => ({ ...app, enabled: true })));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const disableAllApps = async () => {
+    try {
+      await toggleApps('*', false);
+      setApps(prev => prev.map(app => ({ ...app, enabled: false })));
     } catch (err) {
       setError(err.message);
     }
@@ -200,14 +218,30 @@ const AdminAppsPage = () => {
             </p>
           </div>
           <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-              onClick={handleCreateApp}
-            >
-              <Icon name="plus" className="h-4 w-4 mr-2" />
-              {t('admin.apps.createApp', 'Create App')}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                onClick={handleCreateApp}
+              >
+                <Icon name="plus" className="h-4 w-4 mr-2" />
+                {t('admin.apps.createApp', 'Create App')}
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                onClick={enableAllApps}
+              >
+                {t('admin.common.enableAll', 'Enable All')}
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                onClick={disableAllApps}
+              >
+                {t('admin.common.disableAll', 'Disable All')}
+              </button>
+            </div>
           </div>
         </div>
 

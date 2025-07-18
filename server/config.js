@@ -30,7 +30,13 @@ const env = cleanEnv(
     MISTRAL_API_KEY: str({ optional: true }),
     GOOGLE_API_KEY: str({ optional: true }),
     LOCAL_API_KEY: str({ optional: true }),
-    DEFAULT_API_KEY: str({ optional: true })
+    DEFAULT_API_KEY: str({ optional: true }),
+    AUTH_MODE: str({ default: 'proxy', optional: true }),
+    PROXY_AUTH_ENABLED: str({ optional: true }),
+    PROXY_AUTH_USER_HEADER: str({ optional: true }),
+    PROXY_AUTH_GROUPS_HEADER: str({ optional: true }),
+    PROXY_AUTH_JWKS: str({ optional: true }),
+    PROXY_AUTH_JWT_HEADER: str({ optional: true })
   },
   {
     reporter: () => {}, // Disable envalid's default reporter that shows missing variables
@@ -60,7 +66,13 @@ const config = Object.freeze({
   MISTRAL_API_KEY: env.MISTRAL_API_KEY,
   GOOGLE_API_KEY: env.GOOGLE_API_KEY,
   LOCAL_API_KEY: env.LOCAL_API_KEY,
-  DEFAULT_API_KEY: env.DEFAULT_API_KEY
+  DEFAULT_API_KEY: env.DEFAULT_API_KEY,
+  AUTH_MODE: env.AUTH_MODE,
+  PROXY_AUTH_ENABLED: env.PROXY_AUTH_ENABLED,
+  PROXY_AUTH_USER_HEADER: env.PROXY_AUTH_USER_HEADER,
+  PROXY_AUTH_GROUPS_HEADER: env.PROXY_AUTH_GROUPS_HEADER,
+  PROXY_AUTH_JWKS: env.PROXY_AUTH_JWKS,
+  PROXY_AUTH_JWT_HEADER: env.PROXY_AUTH_JWT_HEADER
 });
 
 export default config;

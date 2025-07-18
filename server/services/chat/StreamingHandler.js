@@ -191,6 +191,7 @@ class StreamingHandler {
               'chat_response',
               buildLogData(true, { responseType: 'success', response: fullResponse })
             );
+            
             const completionTokens = estimateTokens(fullResponse);
             await recordChatResponse({
               userId: baseLog.userSessionId,

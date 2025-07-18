@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import AdminAuth from '../components/AdminAuth';
+import AdminNavigation from '../components/AdminNavigation';
 import QuickActions from '../components/QuickActions';
 import AdminSectionCard from '../components/AdminSectionCard';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -96,6 +97,7 @@ const AdminHome = () => {
 
   return (
     <AdminAuth>
+      <AdminNavigation />
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
         <div className="bg-white shadow-sm border-b border-gray-200">

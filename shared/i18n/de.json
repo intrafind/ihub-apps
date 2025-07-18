@@ -14,6 +14,7 @@
   "common": {
     "send": "Senden",
     "cancel": "Abbrechen",
+    "close": "Schließen",
     "save": "Speichern",
     "delete": "Löschen",
     "edit": "Bearbeiten",
@@ -303,6 +304,10 @@
   },
   "admin": {
     "translateField": "Übersetzen",
+    "common": {
+      "enableAll": "Alle aktivieren",
+      "disableAll": "Alle deaktivieren"
+    },    
     "apps": {
       "wizard": {
         "ai": {
@@ -370,7 +375,32 @@
         "messages": "Nachrichten",
         "tokens": "Token",
         "editModel": "Modelldetails bearbeiten"
+      },
+      "table": {
+        "status": "Status"
+      },
+      "actions": {
+        "clone": "Klonen",
+        "delete": "Löschen"
       }
+    },
+    "prompts": {
+      "clone": "Klonen",
+      "delete": "Löschen",
+      "edit": "Bearbeiten"
+    },
+    "pages": {
+      "title": "Seitenverwaltung",
+      "subtitle": "Statische Seiten der Anwendung verwalten",
+      "create": "Seite erstellen",
+      "actions": "Aktionen",
+      "fields": {
+        "id": "Seiten-ID",
+        "title": "Titel",
+        "content": "Inhalt",
+        "idRequired": "ID ist erforderlich"
+      },
+      "confirmDelete": "Möchten Sie diese Seite wirklich löschen?"
     }
   }
 }

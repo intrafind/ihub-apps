@@ -14,6 +14,7 @@
   "common": {
     "send": "Send",
     "cancel": "Cancel",
+    "close": "Close",
     "save": "Save",
     "delete": "Delete",
     "edit": "Edit",
@@ -309,6 +310,10 @@
   },
   "admin": {
     "translateField": "Translate",
+    "common": {
+      "enableAll": "Enable All",
+      "disableAll": "Disable All"
+    },
     "apps": {
       "createApp": "Create App",
       "actions": {
@@ -487,7 +492,32 @@
         "messages": "Messages",
         "tokens": "Tokens",
         "editModel": "Edit Model Details"
+      },
+      "table": {
+        "status": "Status"
+      },
+      "actions": {
+        "clone": "Clone",
+        "delete": "Delete"
       }
+    },
+    "prompts": {
+      "clone": "Clone",
+      "delete": "Delete",
+      "edit": "Edit"
+    },
+    "pages": {
+      "title": "Pages Administration",
+      "subtitle": "Manage static pages displayed in the application",
+      "create": "Create Page",
+      "actions": "Actions",
+      "fields": {
+        "id": "Page ID",
+        "title": "Title",
+        "content": "Content",
+        "idRequired": "ID is required"
+      },
+      "confirmDelete": "Are you sure you want to delete this page?"
     }
   }
 }

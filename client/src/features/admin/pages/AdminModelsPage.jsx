@@ -6,7 +6,7 @@ import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { makeAdminApiCall, toggleModels } from '../../../api/adminApi';
 
 const AdminModelsPage = () => {
   const { t, i18n } = useTranslation();
@@ -71,6 +71,24 @@ const AdminModelsPage = () => {
     }
   };
 
+  const enableAllModels = async () => {
+    try {
+      await toggleModels('*', true);
+      setModels(prev => prev.map(m => ({ ...m, enabled: true })));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const disableAllModels = async () => {
+    try {
+      await toggleModels('*', false);
+      setModels(prev => prev.map(m => ({ ...m, enabled: false, default: false })));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const testModel = async modelId => {
     try {
       setTestingModel(modelId);
@@ -97,6 +115,22 @@ const AdminModelsPage = () => {
   const handleModelClick = model => {
     setSelectedModel(model);
     setShowModelDetails(true);
+  };
+
+  const handleCloneModel = model => {
+    navigate('/admin/models/new', { state: { templateModel: model } });
+  };
+
+  const handleDeleteModel = async modelId => {
+    if (!confirm(t('admin.models.deleteConfirm', 'Delete this model?'))) {
+      return;
+    }
+    try {
+      await makeAdminApiCall(`/api/admin/models/${modelId}`, { method: 'DELETE' });
+      setModels(prev => prev.filter(m => m.id !== modelId));
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const filteredModels = models.filter(model => {
@@ -163,13 +197,29 @@ const AdminModelsPage = () => {
               </p>
             </div>
             <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-              <button
-                onClick={() => navigate('/admin/models/new')}
-                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-              >
-                <Icon name="plus" className="h-4 w-4 mr-2" />
-                {t('admin.models.addNew', 'Add New Model')}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => navigate('/admin/models/new')}
+                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                >
+                  <Icon name="plus" className="h-4 w-4 mr-2" />
+                  {t('admin.models.addNew', 'Add New Model')}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  onClick={enableAllModels}
+                >
+                  {t('admin.common.enableAll', 'Enable All')}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  onClick={disableAllModels}
+                >
+                  {t('admin.common.disableAll', 'Disable All')}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -228,7 +278,7 @@ const AdminModelsPage = () => {
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                         >
-                          {t('admin.models.status', 'Status')}
+                          {t('admin.models.table.status', 'Status')}
                         </th>
                         <th scope="col" className="relative px-6 py-3">
                           <span className="sr-only">{t('admin.models.actions', 'Actions')}</span>
@@ -313,9 +363,29 @@ const AdminModelsPage = () => {
                                   navigate(`/admin/models/${model.id}`);
                                 }}
                                 className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
-                                title={t('admin.models.edit', 'Edit')}
+                                title={t('common.edit', 'Edit')}
                               >
                                 <Icon name="pencil" className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleCloneModel(model);
+                                }}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                                title={t('admin.models.clone', 'Clone')}
+                              >
+                                <Icon name="copy" className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleDeleteModel(model.id);
+                                }}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                                title={t('admin.models.delete', 'Delete')}
+                              >
+                                <Icon name="trash" className="h-4 w-4" />
                               </button>
                             </div>
                           </td>

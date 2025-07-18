@@ -86,19 +86,11 @@ class ChatService {
   }
 
   async processChatWithTools(params) {
-    const {
-      prep,
-      clientRes,
-      chatId,
-      buildLogData,
-      DEFAULT_TIMEOUT,
-      getLocalizedError,
-      clientLanguage
-    } = params;
+    const { prep, chatId, buildLogData, DEFAULT_TIMEOUT, getLocalizedError, clientLanguage } =
+      params;
 
     return await this.toolExecutor.processChatWithTools({
       prep,
-      clientRes,
       chatId,
       buildLogData,
       DEFAULT_TIMEOUT,
@@ -177,7 +169,6 @@ class ChatService {
       if (hasTools && tools && tools.length > 0) {
         return await this.processChatWithTools({
           prep: prepResult.data,
-          clientRes,
           chatId,
           buildLogData,
           DEFAULT_TIMEOUT,

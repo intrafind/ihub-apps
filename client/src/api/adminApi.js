@@ -118,4 +118,64 @@ export const translateText = async ({ text, from, to }) => {
     body: JSON.stringify({ text, from, to })
   });
   return response.json();
+};    
+
+export const toggleApps = async (ids, enabled) => {
+  const idParam = Array.isArray(ids) ? ids.join(',') : ids;
+  const response = await makeAdminApiCall(`/api/admin/apps/${idParam}/_toggle`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled })
+  });
+  return response.json();
+};    
+
+export const fetchAdminPages = async () => {
+  const response = await makeAdminApiCall('/api/admin/pages');
+  return response.json();
+};
+
+export const fetchAdminPage = async pageId => {
+  const response = await makeAdminApiCall(`/api/admin/pages/${pageId}`);
+  return response.json();
+};
+
+export const createPage = async pageData => {
+  const response = await makeAdminApiCall('/api/admin/pages', {
+    method: 'POST',
+    body: JSON.stringify(pageData)
+  });
+  return response.json();
+};
+
+export const toggleModels = async (ids, enabled) => {
+  const idParam = Array.isArray(ids) ? ids.join(',') : ids;
+  const response = await makeAdminApiCall(`/api/admin/models/${idParam}/_toggle`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled })
+  });
+  return response.json();
+};
+
+export const updatePage = async (pageId, pageData) => {
+  const response = await makeAdminApiCall(`/api/admin/pages/${pageId}`, {
+    method: 'PUT',
+    body: JSON.stringify(pageData)
+  });
+  return response.json();
+};
+
+export const togglePrompts = async (ids, enabled) => {
+  const idParam = Array.isArray(ids) ? ids.join(',') : ids;
+  const response = await makeAdminApiCall(`/api/admin/prompts/${idParam}/_toggle`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled })
+  });
+  return response.json();
+};
+
+export const deletePage = async pageId => {
+  const response = await makeAdminApiCall(`/api/admin/pages/${pageId}`, {
+    method: 'DELETE'
+  });
+  return response.json();
 };
