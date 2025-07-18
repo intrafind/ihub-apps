@@ -350,7 +350,7 @@ const QuillToolbar = ({
                 title={t('canvas.export.title', 'Export Document')}
                 type="button"
               >
-                <span>⬇</span>
+                <Icon name="download" size="sm" />
                 <span>{t('canvas.export.export', 'Export')}</span>
               </button>
               {showExportMenu && (
