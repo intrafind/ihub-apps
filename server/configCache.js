@@ -179,28 +179,37 @@ class ConfigCache {
     try {
       // Special handling for apps.json - load from both sources
       if (key === 'config/apps.json') {
-        // Refresh enabled apps cache
-        const apps = await loadAllApps(true);
-        this.setCacheEntry(key, apps);
-
+        const apps = await loadAllApps(true, false);
+        const newEtag = this.generateETag(apps);
+        const existing = this.cache.get(key);
+        if (!existing || existing.etag !== newEtag) {
+          this.setCacheEntry(key, apps);
+          console.log(`✓ Cached: config/apps.json (${apps.length} total apps)`);
+        }
         return;
       }
 
       // Special handling for models.json - load from both sources
       if (key === 'config/models.json') {
-        // Refresh enabled models cache
-        const models = await loadAllModels(true);
-        this.setCacheEntry(key, models);
-
+        const models = await loadAllModels(true, false);
+        const newEtag = this.generateETag(models);
+        const existing = this.cache.get(key);
+        if (!existing || existing.etag !== newEtag) {
+          this.setCacheEntry(key, models);
+          console.log(`✓ Cached: config/models.json (${models.length} total models)`);
+        }
         return;
       }
 
       // Special handling for prompts.json - load from both sources
       if (key === 'config/prompts.json') {
-        // Refresh enabled prompts cache
-        const prompts = await loadAllPrompts(true);
-        this.setCacheEntry(key, prompts);
-
+        const prompts = await loadAllPrompts(true, false);
+        const newEtag = this.generateETag(prompts);
+        const existing = this.cache.get(key);
+        if (!existing || existing.etag !== newEtag) {
+          this.setCacheEntry(key, prompts);
+          console.log(`✓ Cached: config/prompts.json (${prompts.length} total prompts)`);
+        }
         return;
       }
 
