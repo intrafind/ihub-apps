@@ -14,6 +14,7 @@
   "common": {
     "send": "Send",
     "cancel": "Cancel",
+    "close": "Close",
     "save": "Save",
     "delete": "Delete",
     "edit": "Edit",
