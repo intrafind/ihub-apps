@@ -167,11 +167,9 @@ const OpenAIAdapter = {
             if (tc.id) normalized.id = tc.id;
             if (tc.function) {
               normalized.function = { ...tc.function };
-            } else if (tc.delta && tc.delta.function) {
-              normalized.function = { ...tc.delta.function };
             }
-            if (tc.type || (tc.delta && tc.delta.type)) {
-              normalized.type = tc.type || tc.delta.type;
+            if (tc.type) {
+              normalized.type = tc.type;
             } else {
               normalized.type = 'function';
             }

@@ -35,12 +35,14 @@ function validateModelConfig(model, source) {
  * Load models from individual files in contents/models/
  * @returns {Array} Array of model objects
  */
-export async function loadModelsFromFiles() {
+export async function loadModelsFromFiles(verbose = true) {
   const rootDir = getRootDir();
   const modelsDir = join(rootDir, 'contents', 'models');
 
   if (!existsSync(modelsDir)) {
-    console.log('📁 Models directory not found, skipping individual model files');
+    if (verbose) {
+      console.log('📁 Models directory not found, skipping individual model files');
+    }
     return [];
   }
 
@@ -48,7 +50,9 @@ export async function loadModelsFromFiles() {
   const dirContents = await fs.readdir(modelsDir);
   const files = dirContents.filter(file => file.endsWith('.json'));
 
-  console.log(`🤖 Loading ${files.length} individual model files...`);
+  if (verbose) {
+    console.log(`🤖 Loading ${files.length} individual model files...`);
+  }
 
   for (const file of files) {
     try {
@@ -63,7 +67,9 @@ export async function loadModelsFromFiles() {
 
       validateModelConfig(model, filePath);
       models.push(model);
-      console.log(`✅ Loaded ${model.id} (${model.enabled ? 'enabled' : 'disabled'})`);
+      if (verbose) {
+        console.log(`✅ Loaded ${model.id} (${model.enabled ? 'enabled' : 'disabled'})`);
+      }
     } catch (error) {
       console.error(`❌ Error loading model from ${file}:`, error.message);
     }
@@ -76,12 +82,14 @@ export async function loadModelsFromFiles() {
  * Load models from legacy models.json file
  * @returns {Array} Array of model objects
  */
-export async function loadModelsFromLegacyFile() {
+export async function loadModelsFromLegacyFile(verbose = true) {
   const rootDir = getRootDir();
   const legacyModelsPath = join(rootDir, 'contents', 'config', 'models.json');
 
   if (!existsSync(legacyModelsPath)) {
-    console.log('📄 Legacy models.json not found, skipping');
+    if (verbose) {
+      console.log('📄 Legacy models.json not found, skipping');
+    }
     return [];
   }
 
@@ -89,7 +97,9 @@ export async function loadModelsFromLegacyFile() {
     const fileContent = await fs.readFile(legacyModelsPath, 'utf8');
     const models = JSON.parse(fileContent);
 
-    console.log(`📄 Loading ${models.length} models from legacy models.json...`);
+    if (verbose) {
+      console.log(`📄 Loading ${models.length} models from legacy models.json...`);
+    }
 
     // Add enabled field if it doesn't exist (defaults to true)
     models.forEach((model, idx) => {
@@ -138,9 +148,9 @@ function ensureOneDefaultModel(models) {
  * @param {boolean} includeDisabled - Whether to include disabled models
  * @returns {Array} Array of model objects
  */
-export async function loadAllModels(includeDisabled = false) {
-  const individualModels = await loadModelsFromFiles();
-  const legacyModels = await loadModelsFromLegacyFile();
+export async function loadAllModels(includeDisabled = false, verbose = true) {
+  const individualModels = await loadModelsFromFiles(verbose);
+  const legacyModels = await loadModelsFromLegacyFile(verbose);
 
   // Create a map to track models by ID
   const modelsMap = new Map();
@@ -162,9 +172,11 @@ export async function loadAllModels(includeDisabled = false) {
   // Ensure exactly one default model
   const processedModels = ensureOneDefaultModel(filteredModels);
 
-  console.log(
-    `🤖 Total models loaded: ${allModels.length}, Enabled: ${processedModels.filter(m => m.enabled).length}, Disabled: ${allModels.length - processedModels.filter(m => m.enabled).length}, Include Disabled: ${includeDisabled}`
-  );
+  if (verbose) {
+    console.log(
+      `🤖 Total models loaded: ${allModels.length}, Enabled: ${processedModels.filter(m => m.enabled).length}, Disabled: ${allModels.length - processedModels.filter(m => m.enabled).length}, Include Disabled: ${includeDisabled}`
+    );
+  }
 
   return processedModels;
 }

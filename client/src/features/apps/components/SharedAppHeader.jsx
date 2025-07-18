@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ChatHeader from '../../chat/components/ChatHeader';
 import AppConfigForm from './AppConfigForm';
 import Icon from '../../../shared/components/Icon';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Shared app header component for both chat and canvas modes
@@ -43,6 +44,7 @@ const SharedAppHeader = ({
   showShareButton = false
 }) => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const handleToggleCanvas = () => {
     if (mode === 'chat') {
@@ -59,6 +61,18 @@ const SharedAppHeader = ({
       onClearChat?.();
     }
   };
+
+  // Close settings panel with ESC when open
+  useEffect(() => {
+    if (!showConfig) return;
+    const handleKeyDown = e => {
+      if (e.key === 'Escape') {
+        onToggleConfig();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showConfig, onToggleConfig]);
 
   // Determine if we should show the clear button
   const showClearButton =
@@ -102,6 +116,15 @@ const SharedAppHeader = ({
             mode === 'canvas' ? 'canvas-config-panel' : 'bg-gray-100'
           }`}
         >
+          <div className="flex justify-end">
+            <button
+              onClick={onToggleConfig}
+              className="text-gray-500 hover:text-gray-700 p-1 mb-2"
+              aria-label={t('common.close', 'Close')}
+            >
+              <Icon name="close" size="lg" className="text-current" />
+            </button>
+          </div>
           <AppConfigForm
             app={app}
             models={models}
