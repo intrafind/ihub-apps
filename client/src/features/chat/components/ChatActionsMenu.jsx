@@ -38,8 +38,9 @@ const ChatActionsMenu = ({
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
+        className="bg-gray-200 hover:bg-gray-300 text-gray-800 p-2 rounded-full flex items-center justify-center h-10 w-10"
         title={t('common.menu', 'Menu')}
+        aria-label={t('common.menu', 'Menu')}
       >
         <Icon name="menu" size="sm" />
       </button>
