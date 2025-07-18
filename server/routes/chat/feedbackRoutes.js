@@ -1,6 +1,7 @@
 import configCache from '../../configCache.js';
 import { logInteraction } from '../../utils.js';
 import { recordFeedback } from '../../usageTracker.js';
+import { storeFeedback } from '../../feedbackStorage.js';
 import validate from '../../validators/validate.js';
 import { feedbackSchema } from '../../validators/index.js';
 
@@ -29,6 +30,7 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           contentSnippet: messageContent ? messageContent.substring(0, 300) : ''
         }
       });
+      storeFeedback({ messageId, rating, comment: feedback || '' });
       await recordFeedback({
         userId: userSessionId,
         appId,
