@@ -43,6 +43,7 @@ class ConfigCache {
     this.cache = new Map();
     this.refreshTimers = new Map();
     this.isInitialized = false;
+    this.localeLoadingLocks = new Map();
 
     // Cache TTL in milliseconds (default: 5 minutes for production, shorter for development)
     this.cacheTTL = process.env.NODE_ENV === 'production' ? 5 * 60 * 1000 : 60 * 1000;
@@ -114,9 +115,30 @@ class ConfigCache {
 
     const localePromises = this.defaultLocales.map(lang => this.loadAndCacheLocale(lang));
 
-    await Promise.all([...loadPromises, ...localePromises]);
-    this.isInitialized = true;
-    console.log(`✅ Configuration cache initialized with ${this.cache.size} files`);
+    try {
+      await Promise.all([...loadPromises, ...localePromises]);
+
+      // Validate that all default locales were loaded successfully
+      const failedLocales = [];
+      for (const lang of this.defaultLocales) {
+        const locale = this.getLocalizations(lang);
+        if (!locale) {
+          failedLocales.push(lang);
+        }
+      }
+
+      if (failedLocales.length > 0) {
+        console.error(`❌ Failed to load default locales: ${failedLocales.join(', ')}`);
+        // Don't fail startup, but log the issue
+      }
+
+      this.isInitialized = true;
+      console.log(`✅ Configuration cache initialized with ${this.cache.size} files`);
+    } catch (error) {
+      console.error('❌ Error during cache initialization:', error);
+      this.isInitialized = true; // Still mark as initialized to avoid blocking
+      console.log(`⚠️  Configuration cache initialized with errors`);
+    }
   }
 
   /**
@@ -394,18 +416,52 @@ class ConfigCache {
   }
 
   async loadAndCacheLocale(language) {
+    const lockKey = `locale-${language}`;
+
+    // Check if this locale is already being loaded
+    if (this.localeLoadingLocks.has(lockKey)) {
+      console.log(`⏳ Locale ${language} already being loaded, waiting...`);
+      return await this.localeLoadingLocks.get(lockKey);
+    }
+
+    // Create a promise to lock this locale loading
+    const loadPromise = this._loadAndCacheLocaleInternal(language);
+    this.localeLoadingLocks.set(lockKey, loadPromise);
+
     try {
+      const result = await loadPromise;
+      return result;
+    } finally {
+      // Always clean up the lock
+      this.localeLoadingLocks.delete(lockKey);
+    }
+  }
+
+  async _loadAndCacheLocaleInternal(language) {
+    try {
+      console.log(`🔄 Loading locale: ${language}`);
+
       const base = await loadBuiltinLocaleJson(`${language}.json`);
       if (!base) {
         console.warn(`⚠️  Failed to load builtin locale for ${language}`);
-        return;
+        return null;
       }
+
       const overrides = (await loadJson(`locales/${language}.json`)) || {};
       const merged = this.mergeLocaleData(base, overrides);
       this.setCacheEntry(`locales/${language}.json`, merged);
-      console.log(`✓ Cached locale: ${language}`);
+
+      const overrideInfo =
+        Object.keys(overrides).length > 0 ? ` with ${Object.keys(overrides).length} overrides` : '';
+
+      console.log(
+        `✓ Cached locale: ${language} (${Object.keys(merged).length} keys${overrideInfo})`
+      );
+      return merged;
     } catch (error) {
       console.error(`❌ Error caching locale ${language}:`, error.message);
+      console.error(error.stack);
+      return null;
     }
   }
 

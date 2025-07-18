@@ -38,6 +38,10 @@ async function loadFile(relativePath, { useCache = true, parse = 'text' } = {}) 
 
     return result;
   } catch (error) {
+    // For locale files, ENOENT is expected when no overrides exist
+    if (error.code === 'ENOENT' && relativePath.includes('locales/')) {
+      return null; // Silent fail for missing locale override files
+    }
     console.error(`Error loading ${parse === 'json' ? 'JSON' : 'text'} ${relativePath}:`, error);
     return null;
   }

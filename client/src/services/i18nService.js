@@ -10,6 +10,7 @@ class I18nService {
     this.translationCache = new Map();
     this.pendingTranslations = new Map();
     this.platformConfig = null;
+    this.languageChangeInProgress = false;
 
     // Initialize synchronously with minimal setup
     this.initializeSync();
@@ -45,9 +46,11 @@ class I18nService {
           }
         });
 
-      // Set up language change listener
+      // Set up language change listener with race condition protection
       i18n.on('languageChanged', newLanguage => {
-        this.loadFullTranslations(newLanguage);
+        if (!this.languageChangeInProgress) {
+          this.loadFullTranslations(newLanguage);
+        }
       });
 
       this.isInitialized = true;
@@ -119,8 +122,8 @@ class I18nService {
         return;
       }
 
-      // Load translations from API
-      const translationPromise = this.fetchAndCacheTranslations(normalizedLanguage);
+      // Load translations from API with retry logic
+      const translationPromise = this.fetchAndCacheTranslationsWithRetry(normalizedLanguage);
       this.pendingTranslations.set(normalizedLanguage, translationPromise);
 
       const translations = await translationPromise;
@@ -162,6 +165,38 @@ class I18nService {
     return null;
   }
 
+  async fetchAndCacheTranslationsWithRetry(language, maxRetries = 3) {
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const translations = await fetchTranslations(language);
+        if (translations) {
+          this.translationCache.set(language, translations);
+          return translations;
+        }
+      } catch (error) {
+        lastError = error;
+        console.warn(
+          `Failed to fetch translations for ${language} (attempt ${attempt}/${maxRetries}):`,
+          error
+        );
+
+        if (attempt < maxRetries) {
+          // Exponential backoff: wait 100ms, 200ms, 400ms
+          const delay = 100 * Math.pow(2, attempt - 1);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    console.error(
+      `Failed to fetch translations for ${language} after ${maxRetries} attempts:`,
+      lastError
+    );
+    return null;
+  }
+
   addTranslationsToI18n(language, translations) {
     i18n.addResourceBundle(language, 'translation', translations, true, true);
   }
@@ -169,11 +204,23 @@ class I18nService {
   async changeLanguage(language) {
     console.log(`Changing language to: ${language}`);
 
-    // Change language and load translations
-    await i18n.changeLanguage(language);
-    await this.loadFullTranslations(language);
+    // Prevent concurrent language changes
+    if (this.languageChangeInProgress) {
+      console.warn('Language change already in progress, skipping');
+      return this.getCurrentLanguage();
+    }
 
-    return language;
+    try {
+      this.languageChangeInProgress = true;
+
+      // Change language and load translations
+      await i18n.changeLanguage(language);
+      await this.loadFullTranslations(language);
+
+      return language;
+    } finally {
+      this.languageChangeInProgress = false;
+    }
   }
 
   getCurrentLanguage() {

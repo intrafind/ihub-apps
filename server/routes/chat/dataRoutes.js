@@ -48,56 +48,125 @@ export default function registerDataRoutes(app) {
   });
 
   app.get('/api/translations/:lang', async (req, res) => {
+    const originalLang = req.params.lang;
+    let requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
     try {
+      console.log(`[${requestId}] Translation request for language: ${originalLang}`);
+
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       let { lang } = req.params;
+
+      // Validate language parameter
       if (!/^[a-zA-Z0-9-]{1,10}$/.test(lang)) {
-        console.warn(`Suspicious language parameter received: ${lang}`);
+        console.warn(`[${requestId}] Suspicious language parameter received: ${lang}`);
         lang = defaultLang;
       }
+
+      // Language normalization and fallback logic
       const supportedLanguages = ['en', 'de'];
       const baseLanguage = lang.split('-')[0].toLowerCase();
+
       if (!supportedLanguages.includes(lang) && supportedLanguages.includes(baseLanguage)) {
-        console.log(`Language '${lang}' not directly supported, falling back to '${baseLanguage}'`);
+        console.log(
+          `[${requestId}] Language '${lang}' not directly supported, falling back to '${baseLanguage}'`
+        );
         lang = baseLanguage;
       }
+
       if (!supportedLanguages.includes(lang)) {
         console.log(
-          `Language '${lang}' not supported, falling back to default language '${defaultLang}'`
+          `[${requestId}] Language '${lang}' not supported, falling back to default language '${defaultLang}'`
         );
         lang = defaultLang;
       }
+
       // Try to get translations from cache first
       let translations = configCache.getLocalizations(lang);
 
       if (!translations) {
-        console.error(`Failed to load translations for language: ${lang}`);
+        console.warn(
+          `[${requestId}] Translations not in cache for language: ${lang}, attempting to load...`
+        );
+
+        // Try to load and cache the locale
+        try {
+          await configCache.loadAndCacheLocale(lang);
+          translations = configCache.getLocalizations(lang);
+        } catch (loadError) {
+          console.error(`[${requestId}] Failed to load locale for ${lang}:`, loadError);
+        }
+      }
+
+      if (!translations) {
+        console.error(`[${requestId}] Failed to load translations for language: ${lang}`);
+
         if (lang !== defaultLang) {
+          console.log(`[${requestId}] Attempting fallback to default language: ${defaultLang}`);
           // Try to get default translations from cache first
           let enTranslations = configCache.getLocalizations(defaultLang);
 
+          if (!enTranslations) {
+            // Try to load default language if not in cache
+            try {
+              await configCache.loadAndCacheLocale(defaultLang);
+              enTranslations = configCache.getLocalizations(defaultLang);
+            } catch (fallbackLoadError) {
+              console.error(
+                `[${requestId}] Failed to load fallback locale for ${defaultLang}:`,
+                fallbackLoadError
+              );
+            }
+          }
+
           if (enTranslations) {
+            console.log(`[${requestId}] Returning fallback translations for ${defaultLang}`);
             return res.json(enTranslations);
           }
         }
-        return res.status(500).json({ error: `Failed to load translations for language: ${lang}` });
+
+        return res.status(500).json({
+          error: `Failed to load translations for language: ${lang}`,
+          requestId: requestId
+        });
       }
+
+      console.log(`[${requestId}] Successfully returning translations for language: ${lang}`);
       res.json(translations);
     } catch (error) {
-      console.error(`Error fetching translations for language ${req.params.lang}:`, error);
+      console.error(
+        `[${requestId}] Error fetching translations for language ${originalLang}:`,
+        error
+      );
+      console.error(`[${requestId}] Stack trace:`, error.stack);
+
       try {
         // Try to get default translations from cache first as fallback
-        let enTranslations = configCache.getLocalizations(
-          configCache.getPlatform()?.defaultLanguage || 'en'
-        );
+        const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+        let enTranslations = configCache.getLocalizations(defaultLang);
+
+        if (!enTranslations) {
+          // Try to load default language if not in cache
+          try {
+            await configCache.loadAndCacheLocale(defaultLang);
+            enTranslations = configCache.getLocalizations(defaultLang);
+          } catch (fallbackLoadError) {
+            console.error(`[${requestId}] Failed to load fallback locale:`, fallbackLoadError);
+          }
+        }
 
         if (enTranslations) {
+          console.log(`[${requestId}] Returning emergency fallback translations`);
           return res.json(enTranslations);
         }
       } catch (fallbackError) {
-        console.error('Failed to load fallback translations:', fallbackError);
+        console.error(`[${requestId}] Failed to load fallback translations:`, fallbackError);
       }
-      res.status(500).json({ error: 'Internal server error' });
+
+      res.status(500).json({
+        error: 'Internal server error',
+        requestId: requestId
+      });
     }
   });
 
