@@ -130,7 +130,7 @@ const ChatHeader = ({
               <span className="hidden sm:inline">{t('pages.appChat.canvas', 'Canvas')}</span>
             </button>
           )}
-          {showParametersButton && isMobile && (
+          {showParametersButton && !isMobile && (
             <button
               onClick={onToggleParameters}
               className={`text-gray-800 px-3 py-1 rounded flex items-center ${
@@ -156,6 +156,9 @@ const ChatHeader = ({
             exportSettings={exportSettings}
             onToggleCanvas={onToggleCanvas}
             showCanvasButton={showCanvasButton}
+            onToggleParameters={onToggleParameters}
+            showParametersButton={showParametersButton && isMobile}
+            parametersVisible={parametersVisible}
           />
         </div>
       </div>

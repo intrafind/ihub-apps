@@ -114,11 +114,13 @@
       "clear": "Clear chat",
       "confirmClear": "Are you sure you want to clear the chat?",
       "shareConversation": "Share conversation",
-      "exportConversation": "Export conversation",
-      "exportJSON": "as JSON",
-      "exportJSONL": "as JSONL",
-      "exportMarkdown": "as Markdown",
-      "exportHTML": "as HTML",
+      "export": {
+        "conversation": "Export conversation",
+        "toJSON": "as JSON",
+        "toJSONL": "as JSONL",
+        "toMarkdown": "as Markdown",
+        "toHTML": "as HTML"
+      },
       "copyToClipboard": "Copy to clipboard",
       "copied": "Copied to clipboard!",
       "showThoughts": "Show reasoning",

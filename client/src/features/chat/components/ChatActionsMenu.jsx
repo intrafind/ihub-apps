@@ -10,9 +10,12 @@ const ChatActionsMenu = ({
   showShareButton = false,
   showConfigButton = true,
   showClearButton = true,
+  showParametersButton = false,
+  parametersVisible = false,
   messages = [],
   exportSettings = {},
   onToggleCanvas,
+  onToggleParameters,
   showCanvasButton = false
 }) => {
   const { t } = useTranslation();
@@ -75,6 +78,20 @@ const ChatActionsMenu = ({
               <Icon name="trash" size="sm" /> {t('pages.appChat.clear')}
             </button>
           )}
+          {showParametersButton && (
+            <button
+              onClick={() => {
+                onToggleParameters?.();
+                setOpen(false);
+              }}
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap ${
+                parametersVisible ? 'bg-gray-100' : ''
+              }`}
+              aria-pressed={parametersVisible}
+            >
+              <Icon name="sliders" size="sm" /> {t('pages.appChat.parameters')}
+            </button>
+          )}
           {showShareButton && (
             <button
               onClick={() => {
@@ -92,7 +109,7 @@ const ChatActionsMenu = ({
               className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="download" size="sm" />
-              {t('pages.appChat.exportConversation', 'Export conversation')}
+              {t('pages.appChat.export.conversation', 'Export conversation')}
             </button>
             {showExport && (
               <ExportConversationMenu

@@ -83,25 +83,25 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose }) => {
         onClick={() => handleExport('json')}
         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
       >
-        <Icon name="code" size="sm" /> {t('pages.appChat.exportJSON', 'as JSON')}
+        <Icon name="code" size="sm" /> {t('pages.appChat.export.toJSON', 'as JSON')}
       </button>
       <button
         onClick={() => handleExport('jsonl')}
         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
       >
-        <Icon name="code" size="sm" /> {t('pages.appChat.exportJSONL', 'as JSONL')}
+        <Icon name="code" size="sm" /> {t('pages.appChat.export.toJSONL', 'as JSONL')}
       </button>
       <button
         onClick={() => handleExport('markdown')}
         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
       >
-        <Icon name="code" size="sm" /> {t('pages.appChat.exportMarkdown', 'as Markdown')}
+        <Icon name="code" size="sm" /> {t('pages.appChat.export.toMarkdown', 'as Markdown')}
       </button>
       <button
         onClick={() => handleExport('html')}
         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
       >
-        <Icon name="code" size="sm" /> {t('pages.appChat.exportHTML', 'as HTML')}
+        <Icon name="code" size="sm" /> {t('pages.appChat.export.toHTML', 'as HTML')}
       </button>
     </div>
   );
