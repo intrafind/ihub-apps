@@ -43,7 +43,7 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg max-w-lg w-full p-6 animate-fade-in mx-4">
+      <div className="bg-white rounded-lg shadow-lg max-w-lg w-full p-6 animate-fade-in mx-4 max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-start mb-4">
           <h2 className="text-xl font-semibold flex items-center">
             <Icon name={prompt.icon || 'clipboard'} className="w-6 h-6 mr-2" />
@@ -56,7 +56,7 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
         <p className="text-gray-700 mb-4 whitespace-pre-line">
           {highlightVariables(prompt.description || prompt.prompt)}
         </p>
-        <pre className="bg-gray-100 p-3 rounded whitespace-pre-wrap break-words mb-4">
+        <pre className="bg-gray-100 p-3 rounded whitespace-pre-wrap break-words mb-4 overflow-y-auto flex-grow">
           {prompt.prompt}
         </pre>
         <div className="flex flex-wrap justify-end gap-2">
