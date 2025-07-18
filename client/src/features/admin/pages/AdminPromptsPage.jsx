@@ -115,6 +115,10 @@ const AdminPromptsPage = () => {
     }
   };
 
+  const handleClonePrompt = prompt => {
+    navigate('/admin/prompts/new', { state: { templatePrompt: prompt } });
+  };
+
   const handlePromptClick = prompt => {
     setSelectedPrompt(prompt);
     setShowPromptDetails(true);
@@ -434,6 +438,16 @@ const AdminPromptsPage = () => {
                                   name={prompt.enabled !== false ? 'eye-slash' : 'eye'}
                                   className="h-4 w-4"
                                 />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleClonePrompt(prompt);
+                                }}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                                title={t('admin.prompts.clone', 'Clone')}
+                              >
+                                <Icon name="copy" className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={e => {

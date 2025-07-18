@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminNavigation from '../components/AdminNavigation';
@@ -18,6 +18,7 @@ const AdminPromptEditPage = () => {
   const { t, i18n } = useTranslation();
   const { promptId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isNewPrompt = promptId === 'new';
   const currentLanguage = i18n.language;
 
@@ -39,6 +40,18 @@ const AdminPromptEditPage = () => {
   const [error, setError] = useState(null);
   const [apps, setApps] = useState([]);
   const [uiConfig, setUiConfig] = useState(null);
+
+  useEffect(() => {
+    if (isNewPrompt && location.state?.templatePrompt) {
+      const tpl = location.state.templatePrompt;
+      setPrompt(prev => ({
+        ...prev,
+        ...tpl,
+        id: '',
+        enabled: tpl.enabled !== false
+      }));
+    }
+  }, [isNewPrompt, location.state]);
 
   useEffect(() => {
     // Load apps for the appId dropdown and UI config

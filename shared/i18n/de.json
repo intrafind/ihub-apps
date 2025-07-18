@@ -373,7 +373,19 @@
         "messages": "Nachrichten",
         "tokens": "Token",
         "editModel": "Modelldetails bearbeiten"
+      },
+      "table": {
+        "status": "Status"
+      },
+      "actions": {
+        "clone": "Klonen",
+        "delete": "Löschen"
       }
+    },
+    "prompts": {
+      "clone": "Klonen",
+      "delete": "Löschen",
+      "edit": "Bearbeiten"
     }
   }
 }
