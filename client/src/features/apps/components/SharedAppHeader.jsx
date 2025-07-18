@@ -112,19 +112,17 @@ const SharedAppHeader = ({
       {/* Configuration Panel */}
       {showConfig && (
         <div
-          className={`flex-shrink-0 bg-white p-4 rounded-lg mb-4 shadow-sm border border-gray-200 ${
+          className={`relative flex-shrink-0 bg-white p-4 rounded-lg mb-4 shadow-sm border border-gray-200 ${
             mode === 'canvas' ? 'canvas-config-panel' : 'bg-gray-100'
           }`}
         >
-          <div className="flex justify-end">
-            <button
-              onClick={onToggleConfig}
-              className="text-gray-500 hover:text-gray-700 p-1 mb-2"
-              aria-label={t('common.close', 'Close')}
-            >
-              <Icon name="close" size="lg" className="text-current" />
-            </button>
-          </div>
+          <button
+            onClick={onToggleConfig}
+            className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 p-1"
+            aria-label={t('common.close', 'Close')}
+          >
+            <Icon name="close" size="lg" className="text-current" />
+          </button>
           <AppConfigForm
             app={app}
             models={models}
