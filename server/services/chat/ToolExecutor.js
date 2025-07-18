@@ -373,7 +373,7 @@ class ToolExecutor {
 
     while (iteration < maxIterations) {
       iteration++;
-      
+
       const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
         temperature,
         maxTokens,
@@ -384,7 +384,7 @@ class ToolExecutor {
       });
 
       const controller = new AbortController();
-      
+
       if (activeRequests.has(chatId)) {
         const existingController = activeRequests.get(chatId);
         existingController.abort();
@@ -418,10 +418,13 @@ class ToolExecutor {
 
         if (!llmResponse.ok) {
           const errorBody = await llmResponse.text();
-          throw Object.assign(new Error(`LLM API request failed with status ${llmResponse.status}`), {
-            code: llmResponse.status.toString(),
-            details: errorBody
-          });
+          throw Object.assign(
+            new Error(`LLM API request failed with status ${llmResponse.status}`),
+            {
+              code: llmResponse.status.toString(),
+              details: errorBody
+            }
+          );
         }
 
         const reader = llmResponse.body.getReader();
@@ -533,10 +536,9 @@ class ToolExecutor {
 
         console.log(`--- Tool execution iteration ${iteration} complete ---`);
         // Continue the loop for the next iteration
-
       } catch (error) {
         clearTimeout(timeoutId);
-        
+
         if (error.name !== 'AbortError') {
           const errorDetails = getErrorDetails(error, model);
           let localizedMessage = errorDetails.message;

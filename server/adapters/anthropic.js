@@ -151,11 +151,11 @@ const AnthropicAdapter = {
       // const toolInstruction =
       //   "If you need to use a tool to answer, please do so. After using the tools, provide a final answer to the user's question.";
       // if (systemPrompt) {
-        //   if (!systemPrompt.includes(toolInstruction)) {
-          //     systemPrompt += `\n\n${toolInstruction}`;
-          //   }
-          // } else {
-            // systemPrompt = toolInstruction;
+      //   if (!systemPrompt.includes(toolInstruction)) {
+      //     systemPrompt += `\n\n${toolInstruction}`;
+      //   }
+      // } else {
+      // systemPrompt = toolInstruction;
       // }
     }
 
