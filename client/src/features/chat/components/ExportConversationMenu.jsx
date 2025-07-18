@@ -78,7 +78,7 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose }) => {
   };
 
   return (
-    <div className="absolute left-full top-0 ml-2 bg-white border border-gray-200 rounded shadow-lg z-20">
+    <div className="absolute right-full top-0 mr-2 bg-white border border-gray-200 rounded shadow-lg z-20">
       <button
         onClick={() => handleExport('json')}
         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
