@@ -309,6 +309,7 @@
     "format": "Format"
   },
   "admin": {
+    "translateField": "Translate",
     "common": {
       "enableAll": "Enable All",
       "disableAll": "Disable All"

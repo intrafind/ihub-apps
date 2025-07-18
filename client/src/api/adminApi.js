@@ -112,6 +112,14 @@ export const updatePrompt = async (promptId, promptData) => {
   return response.json();
 };
 
+export const translateText = async ({ text, from, to }) => {
+  const response = await makeAdminApiCall('/api/admin/translate', {
+    method: 'POST',
+    body: JSON.stringify({ text, from, to })
+  });
+  return response.json();
+};    
+
 export const toggleApps = async (ids, enabled) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
   const response = await makeAdminApiCall(`/api/admin/apps/${idParam}/_toggle`, {
