@@ -29,7 +29,8 @@
     "creative": "Kreativ",
     "select": "Auswählen",
     "favorite": "Favorisieren",
-    "unfavorite": "Defavorisieren"
+    "unfavorite": "Defavorisieren",
+    "menu": "Menü"
   },
   "pages": {
     "home": {
@@ -60,6 +61,11 @@
       "clear": "Chat löschen",
       "confirmClear": "Möchtest du den Chat wirklich löschen?",
       "shareConversation": "Unterhaltung teilen",
+      "exportConversation": "Unterhaltung exportieren",
+      "exportJSON": "als JSON",
+      "exportJSONL": "als JSONL",
+      "exportMarkdown": "als Markdown",
+      "exportHTML": "als HTML",
       "copyToClipboard": "In die Zwischenablage kopieren",
       "copied": "In die Zwischenablage kopiert!",
       "configureApp": "Konfigurieren",

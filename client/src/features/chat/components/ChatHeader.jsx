@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import { useNavigate } from 'react-router-dom';
+import ChatActionsMenu from './ChatActionsMenu';
 
 /**
  * A reusable header component for chat interfaces
@@ -25,7 +26,9 @@ const ChatHeader = ({
   onToggleCanvas,
   onShare,
   currentLanguage,
-  isMobile = false
+  isMobile = false,
+  messages = [],
+  exportSettings = {}
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -127,16 +130,6 @@ const ChatHeader = ({
               <span className="hidden sm:inline">{t('pages.appChat.canvas', 'Canvas')}</span>
             </button>
           )}
-          {showClearButton && (
-            <button
-              onClick={onClearChat}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
-              title={t('pages.appChat.clearChat')}
-            >
-              <Icon name="trash" size="sm" className="sm:mr-1" />
-              <span className="hidden sm:inline">{t('pages.appChat.clear')}</span>
-            </button>
-          )}
           {showParametersButton && isMobile && (
             <button
               onClick={onToggleParameters}
@@ -152,26 +145,18 @@ const ChatHeader = ({
               </span>
             </button>
           )}
-          {showConfigButton && (
-            <button
-              onClick={onToggleConfig}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
-              title={t('settings.title')}
-            >
-              <Icon name="settings" size="sm" className="sm:mr-1" />
-              <span className="hidden sm:inline">{t('settings.title')}</span>
-            </button>
-          )}
-          {showShareButton && (
-            <button
-              onClick={onShare}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
-              title={t('common.share')}
-            >
-              <Icon name="share" size="sm" className="sm:mr-1" />
-              <span className="hidden sm:inline">{t('common.share')}</span>
-            </button>
-          )}
+          <ChatActionsMenu
+            onClearChat={onClearChat}
+            onToggleConfig={onToggleConfig}
+            onShare={onShare}
+            showShareButton={showShareButton}
+            showConfigButton={showConfigButton}
+            showClearButton={showClearButton}
+            messages={messages}
+            exportSettings={exportSettings}
+            onToggleCanvas={onToggleCanvas}
+            showCanvasButton={showCanvasButton}
+          />
         </div>
       </div>
     </div>

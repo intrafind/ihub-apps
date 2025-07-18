@@ -14,6 +14,7 @@ const SharedAppHeader = ({
   mode = 'chat', // 'chat' or 'canvas'
   messages = [],
   editorContent = '',
+  variables = {},
   onClearChat,
   onClearCanvas,
   currentLanguage,
@@ -69,6 +70,14 @@ const SharedAppHeader = ({
     <Icon name={mode === 'canvas' ? 'edit' : 'chat'} size="lg" className="text-white" />
   );
 
+  const exportSettings = {
+    model: selectedModel,
+    style: selectedStyle,
+    outputFormat: selectedOutputFormat,
+    temperature,
+    variables
+  };
+
   return (
     <>
       {/* Header */}
@@ -92,6 +101,8 @@ const SharedAppHeader = ({
           parametersVisible={showParameters}
           onShare={onShare}
           showShareButton={showShareButton}
+          messages={messages}
+          exportSettings={exportSettings}
         />
       </div>
 
