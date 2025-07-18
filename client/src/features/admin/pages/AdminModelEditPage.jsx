@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent, DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -13,6 +13,7 @@ const AdminModelEditPage = () => {
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const { modelId } = useParams();
+  const location = useLocation();
   const isNewModel = modelId === 'new';
 
   const [loading, setLoading] = useState(!isNewModel);
@@ -46,6 +47,19 @@ const AdminModelEditPage = () => {
     loadAppsUsingModel();
     loadUsageData();
   }, [modelId]);
+
+  useEffect(() => {
+    if (isNewModel && location.state?.templateModel) {
+      const tpl = location.state.templateModel;
+      setFormData(prev => ({
+        ...prev,
+        ...tpl,
+        id: '',
+        enabled: tpl.enabled !== undefined ? tpl.enabled : true,
+        default: false
+      }));
+    }
+  }, [isNewModel, location.state]);
 
   const loadModel = async () => {
     try {

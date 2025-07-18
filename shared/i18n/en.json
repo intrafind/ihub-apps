@@ -309,6 +309,10 @@
     "format": "Format"
   },
   "admin": {
+    "common": {
+      "enableAll": "Enable All",
+      "disableAll": "Disable All"
+    },
     "apps": {
       "createApp": "Create App",
       "actions": {
@@ -487,7 +491,19 @@
         "messages": "Messages",
         "tokens": "Tokens",
         "editModel": "Edit Model Details"
+      },
+      "table": {
+        "status": "Status"
+      },
+      "actions": {
+        "clone": "Clone",
+        "delete": "Delete"
       }
+    },
+    "prompts": {
+      "clone": "Clone",
+      "delete": "Delete",
+      "edit": "Edit"
     },
     "pages": {
       "title": "Pages Administration",

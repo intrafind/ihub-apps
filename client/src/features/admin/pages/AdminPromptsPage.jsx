@@ -6,7 +6,7 @@ import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import PromptDetailsPopup from '../../prompts/components/PromptDetailsPopup';
-import { fetchAdminPrompts, makeAdminApiCall } from '../../../api/adminApi';
+import { fetchAdminPrompts, makeAdminApiCall, togglePrompts } from '../../../api/adminApi';
 
 const AdminPromptsPage = () => {
   const { t, i18n } = useTranslation();
@@ -76,6 +76,24 @@ const AdminPromptsPage = () => {
     }
   };
 
+  const enableAllPrompts = async () => {
+    try {
+      await togglePrompts('*', true);
+      await loadPrompts();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const disableAllPrompts = async () => {
+    try {
+      await togglePrompts('*', false);
+      await loadPrompts();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleDeletePrompt = async promptId => {
     if (
       !confirm(t('admin.prompts.deleteConfirm', 'Are you sure you want to delete this prompt?'))
@@ -95,6 +113,10 @@ const AdminPromptsPage = () => {
       console.error('Error deleting prompt:', err);
       alert(`Error: ${err.message}`);
     }
+  };
+
+  const handleClonePrompt = prompt => {
+    navigate('/admin/prompts/new', { state: { templatePrompt: prompt } });
   };
 
   const handlePromptClick = prompt => {
@@ -189,13 +211,29 @@ const AdminPromptsPage = () => {
               </p>
             </div>
             <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-              <button
-                onClick={() => navigate('/admin/prompts/new')}
-                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-              >
-                <Icon name="plus" className="h-4 w-4 mr-2" />
-                {t('admin.prompts.createNew', 'Create New Prompt')}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => navigate('/admin/prompts/new')}
+                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                >
+                  <Icon name="plus" className="h-4 w-4 mr-2" />
+                  {t('admin.prompts.createNew', 'Create New Prompt')}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  onClick={enableAllPrompts}
+                >
+                  {t('admin.common.enableAll', 'Enable All')}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  onClick={disableAllPrompts}
+                >
+                  {t('admin.common.disableAll', 'Disable All')}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -400,6 +438,16 @@ const AdminPromptsPage = () => {
                                   name={prompt.enabled !== false ? 'eye-slash' : 'eye'}
                                   className="h-4 w-4"
                                 />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleClonePrompt(prompt);
+                                }}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                                title={t('admin.prompts.clone', 'Clone')}
+                              >
+                                <Icon name="copy" className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={e => {

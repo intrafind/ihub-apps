@@ -145,6 +145,40 @@ export default function registerAdminAppsRoutes(app) {
     }
   });
 
+  app.post('/api/admin/apps/:appIds/_toggle', adminAuth, async (req, res) => {
+    try {
+      const { appIds } = req.params;
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'Missing enabled flag' });
+      }
+
+      const { data: apps } = configCache.getApps(true);
+      const ids = appIds === '*' ? apps.map(a => a.id) : appIds.split(',');
+      const rootDir = getRootDir();
+
+      for (const id of ids) {
+        const app = apps.find(a => a.id === id);
+        if (!app) continue;
+        if (app.enabled !== enabled) {
+          app.enabled = enabled;
+          const appFilePath = join(rootDir, 'contents', 'apps', `${id}.json`);
+          await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
+        }
+      }
+
+      await configCache.refreshAppsCache();
+      res.json({
+        message: `Apps ${enabled ? 'enabled' : 'disabled'} successfully`,
+        enabled,
+        ids
+      });
+    } catch (error) {
+      console.error('Error toggling apps:', error);
+      res.status(500).json({ error: 'Failed to toggle apps' });
+    }
+  });
+
   app.delete('/api/admin/apps/:appId', adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;

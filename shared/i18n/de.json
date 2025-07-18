@@ -303,6 +303,10 @@
     "format": "Formatieren"
   },
   "admin": {
+    "common": {
+      "enableAll": "Alle aktivieren",
+      "disableAll": "Alle deaktivieren"
+    },
     "apps": {
       "wizard": {
         "ai": {
@@ -370,7 +374,19 @@
         "messages": "Nachrichten",
         "tokens": "Token",
         "editModel": "Modelldetails bearbeiten"
+      },
+      "table": {
+        "status": "Status"
+      },
+      "actions": {
+        "clone": "Klonen",
+        "delete": "Löschen"
       }
+    },
+    "prompts": {
+      "clone": "Klonen",
+      "delete": "Löschen",
+      "edit": "Bearbeiten"
     },
     "pages": {
       "title": "Seitenverwaltung",
