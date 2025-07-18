@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
+import { translateText } from '../../api/adminApi';
 
 const DynamicLanguageEditor = ({
   label,
@@ -257,6 +258,19 @@ const DynamicLanguageEditor = ({
     }
   };
 
+  const handleTranslate = async lang => {
+    const sourceLang = languages.find(l => l !== lang && currentValue[l]);
+    if (!sourceLang) return;
+    const text = fieldType ? value[sourceLang]?.[fieldType] || '' : value[sourceLang] || '';
+    if (!text) return;
+    try {
+      const result = await translateText({ text, from: sourceLang, to: lang });
+      handleLanguageChange(lang, result.translation);
+    } catch (err) {
+      console.error('Translation failed', err);
+    }
+  };
+
   const availableLanguages = commonLanguages.filter(lang => !languages.includes(lang));
 
   return (
@@ -339,14 +353,24 @@ const DynamicLanguageEditor = ({
                 />
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => handleRemoveLanguage(lang)}
-              className="flex-shrink-0 mt-2 p-1 text-red-500 hover:text-red-700"
-              disabled={lang === 'en'} // Don't allow removing English
-            >
-              <Icon name="x" className="w-4 h-4" />
-            </button>
+            <div className="flex items-center space-x-1 mt-2">
+              <button
+                type="button"
+                onClick={() => handleTranslate(lang)}
+                className="p-1 text-indigo-500 hover:text-indigo-700"
+                title={t('admin.translateField', 'Translate')}
+              >
+                <Icon name="globe" className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRemoveLanguage(lang)}
+                className="p-1 text-red-500 hover:text-red-700"
+                disabled={lang === 'en'}
+              >
+                <Icon name="x" className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         ))}
       </div>

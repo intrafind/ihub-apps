@@ -308,6 +308,7 @@
     "format": "Format"
   },
   "admin": {
+    "translateField": "Translate",
     "apps": {
       "createApp": "Create App",
       "actions": {
