@@ -1,6 +1,7 @@
 import { processResponseBuffer } from '../../adapters/index.js';
 import { logInteraction } from '../../utils.js';
 import { estimateTokens, recordChatRequest, recordChatResponse } from '../../usageTracker.js';
+import { recordResponseMeta } from '../../feedbackStorage.js';
 import { activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createParser } from 'eventsource-parser';
@@ -191,6 +192,17 @@ class StreamingHandler {
               'chat_response',
               buildLogData(true, { responseType: 'success', response: fullResponse })
             );
+
+            const userPrompt =
+              [...llmMessages].reverse().find(m => m.role === 'user')?.content || '';
+            recordResponseMeta({
+              messageId: baseLog.messageId,
+              appId: baseLog.appId,
+              modelId: model.id,
+              settings: baseLog.options,
+              prompt: userPrompt,
+              answer: fullResponse
+            });
             const completionTokens = estimateTokens(fullResponse);
             await recordChatResponse({
               userId: baseLog.userSessionId,
