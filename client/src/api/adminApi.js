@@ -111,3 +111,30 @@ export const updatePrompt = async (promptId, promptData) => {
   });
   return response.json();
 };
+
+export const toggleApps = async (ids, enabled) => {
+  const idParam = Array.isArray(ids) ? ids.join(',') : ids;
+  const response = await makeAdminApiCall(`/api/admin/apps/${idParam}/_toggle`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled })
+  });
+  return response.json();
+};
+
+export const toggleModels = async (ids, enabled) => {
+  const idParam = Array.isArray(ids) ? ids.join(',') : ids;
+  const response = await makeAdminApiCall(`/api/admin/models/${idParam}/_toggle`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled })
+  });
+  return response.json();
+};
+
+export const togglePrompts = async (ids, enabled) => {
+  const idParam = Array.isArray(ids) ? ids.join(',') : ids;
+  const response = await makeAdminApiCall(`/api/admin/prompts/${idParam}/_toggle`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled })
+  });
+  return response.json();
+};

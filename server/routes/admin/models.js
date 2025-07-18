@@ -149,6 +149,49 @@ export default function registerAdminModelsRoutes(app) {
     }
   });
 
+  app.post('/api/admin/models/:modelIds/_toggle', adminAuth, async (req, res) => {
+    try {
+      const { modelIds } = req.params;
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'Missing enabled flag' });
+      }
+
+      const { data: models } = configCache.getModels(true);
+      const ids = modelIds === '*' ? models.map(m => m.id) : modelIds.split(',');
+      const rootDir = getRootDir();
+
+      for (const id of ids) {
+        const model = models.find(m => m.id === id);
+        if (!model) continue;
+        model.enabled = enabled;
+        if (!enabled) {
+          model.default = false;
+        }
+        const modelFilePath = join(rootDir, 'contents', 'models', `${id}.json`);
+        await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
+      }
+
+      // ensure at least one enabled model has default=true
+      const enabledModels = models.filter(m => m.enabled);
+      if (enabledModels.length > 0 && !enabledModels.some(m => m.default)) {
+        enabledModels[0].default = true;
+        const defaultPath = join(rootDir, 'contents', 'models', `${enabledModels[0].id}.json`);
+        await fs.writeFile(defaultPath, JSON.stringify(enabledModels[0], null, 2));
+      }
+
+      await configCache.refreshModelsCache();
+      res.json({
+        message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
+        enabled,
+        ids
+      });
+    } catch (error) {
+      console.error('Error toggling models:', error);
+      res.status(500).json({ error: 'Failed to toggle models' });
+    }
+  });
+
   app.delete('/api/admin/models/:modelId', adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;

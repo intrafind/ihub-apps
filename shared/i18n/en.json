@@ -308,6 +308,10 @@
     "format": "Format"
   },
   "admin": {
+    "common": {
+      "enableAll": "Enable All",
+      "disableAll": "Disable All"
+    },
     "apps": {
       "createApp": "Create App",
       "actions": {

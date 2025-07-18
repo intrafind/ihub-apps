@@ -6,7 +6,7 @@ import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { makeAdminApiCall, toggleModels } from '../../../api/adminApi';
 
 const AdminModelsPage = () => {
   const { t, i18n } = useTranslation();
@@ -66,6 +66,24 @@ const AdminModelsPage = () => {
           model.id === modelId ? { ...model, enabled: result.enabled } : model
         )
       );
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const enableAllModels = async () => {
+    try {
+      await toggleModels('*', true);
+      setModels(prev => prev.map(m => ({ ...m, enabled: true })));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const disableAllModels = async () => {
+    try {
+      await toggleModels('*', false);
+      setModels(prev => prev.map(m => ({ ...m, enabled: false, default: false })));
     } catch (err) {
       setError(err.message);
     }
@@ -170,6 +188,22 @@ const AdminModelsPage = () => {
                 <Icon name="plus" className="h-4 w-4 mr-2" />
                 {t('admin.models.addNew', 'Add New Model')}
               </button>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  onClick={enableAllModels}
+                >
+                  {t('admin.common.enableAll', 'Enable All')}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  onClick={disableAllModels}
+                >
+                  {t('admin.common.disableAll', 'Disable All')}
+                </button>
+              </div>
             </div>
           </div>
 

@@ -6,7 +6,7 @@ import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import PromptDetailsPopup from '../../prompts/components/PromptDetailsPopup';
-import { fetchAdminPrompts, makeAdminApiCall } from '../../../api/adminApi';
+import { fetchAdminPrompts, makeAdminApiCall, togglePrompts } from '../../../api/adminApi';
 
 const AdminPromptsPage = () => {
   const { t, i18n } = useTranslation();
@@ -70,6 +70,24 @@ const AdminPromptsPage = () => {
         method: 'POST'
       });
 
+      await loadPrompts();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const enableAllPrompts = async () => {
+    try {
+      await togglePrompts('*', true);
+      await loadPrompts();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const disableAllPrompts = async () => {
+    try {
+      await togglePrompts('*', false);
       await loadPrompts();
     } catch (err) {
       setError(err.message);
@@ -196,6 +214,22 @@ const AdminPromptsPage = () => {
                 <Icon name="plus" className="h-4 w-4 mr-2" />
                 {t('admin.prompts.createNew', 'Create New Prompt')}
               </button>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  onClick={enableAllPrompts}
+                >
+                  {t('admin.common.enableAll', 'Enable All')}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  onClick={disableAllPrompts}
+                >
+                  {t('admin.common.disableAll', 'Disable All')}
+                </button>
+              </div>
             </div>
           </div>
 
