@@ -41,6 +41,13 @@ const AdminNavigation = () => {
       current: location.pathname.startsWith('/admin/prompts')
     },
     {
+      key: 'pages',
+      name: t('admin.nav.pages', 'Pages'),
+      href: '/admin/pages',
+      icon: 'document',
+      current: location.pathname.startsWith('/admin/pages')
+    },
+    {
       key: 'shortlinks',
       name: t('admin.nav.shortlinks', 'Short Links'),
       href: '/admin/shortlinks',

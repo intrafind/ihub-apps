@@ -487,6 +487,19 @@
         "tokens": "Tokens",
         "editModel": "Edit Model Details"
       }
+    },
+    "pages": {
+      "title": "Pages Administration",
+      "subtitle": "Manage static pages displayed in the application",
+      "create": "Create Page",
+      "actions": "Actions",
+      "fields": {
+        "id": "Page ID",
+        "title": "Title",
+        "content": "Content",
+        "idRequired": "ID is required"
+      },
+      "confirmDelete": "Are you sure you want to delete this page?"
     }
   }
 }

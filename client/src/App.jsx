@@ -23,6 +23,8 @@ import AdminModelEditPage from './features/admin/pages/AdminModelEditPage';
 import AdminModelsPage from './features/admin/pages/AdminModelsPage';
 import AdminPromptsPage from './features/admin/pages/AdminPromptsPage';
 import AdminPromptEditPage from './features/admin/pages/AdminPromptEditPage';
+import AdminPagesPage from './features/admin/pages/AdminPagesPage';
+import AdminPageEditPage from './features/admin/pages/AdminPageEditPage';
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
@@ -49,6 +51,8 @@ const SafeAdminModels = withSafeRoute(AdminModelsPage);
 const SafeAdminModelEdit = withSafeRoute(AdminModelEditPage);
 const SafeAdminPrompts = withSafeRoute(AdminPromptsPage);
 const SafeAdminPromptEdit = withSafeRoute(AdminPromptEditPage);
+const SafeAdminPages = withSafeRoute(AdminPagesPage);
+const SafeAdminPageEdit = withSafeRoute(AdminPageEditPage);
 const SafePromptsList = withSafeRoute(PromptsList);
 
 function App() {
@@ -103,6 +107,10 @@ function App() {
               )}
               {showAdminPage('models') && (
                 <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
+              )}
+              {showAdminPage('pages') && <Route path="admin/pages" element={<SafeAdminPages />} />}
+              {showAdminPage('pages') && (
+                <Route path="admin/pages/:pageId" element={<SafeAdminPageEdit />} />
               )}
               {showAdminPage('prompts') && (
                 <Route path="admin/prompts" element={<SafeAdminPrompts />} />
