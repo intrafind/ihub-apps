@@ -112,15 +112,17 @@ const AdminPagesPage = () => {
                         <td className="px-3 py-2 whitespace-nowrap text-right text-sm font-medium space-x-2">
                           <button
                             onClick={() => navigate(`/admin/pages/${page.id}`)}
-                            className="text-indigo-600 hover:text-indigo-900"
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                            title={t('common.edit', 'Edit')}
                           >
-                            {t('common.edit', 'Edit')}
+                            <Icon name="pencil" className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(page.id)}
-                            className="text-red-600 hover:text-red-900"
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                            title={t('common.delete', 'Delete')}
                           >
-                            {t('common.delete', 'Delete')}
+                            <Icon name="trash" className="h-4 w-4" />
                           </button>
                         </td>
                       </tr>
