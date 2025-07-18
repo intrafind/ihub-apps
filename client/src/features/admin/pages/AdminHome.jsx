@@ -13,41 +13,13 @@ const AdminHome = () => {
   const pageConfig = platformConfig?.admin?.pages || {};
   const isEnabled = key => pageConfig[key] !== false;
 
-  const handleCacheRefresh = async () => {
-    try {
-      await makeAdminApiCall('/api/admin/cache/_refresh', { method: 'POST' });
-      alert(t('admin.home.cacheRefreshSuccess', 'Cache refreshed successfully'));
-    } catch (error) {
-      alert(
-        t('admin.home.cacheRefreshError', 'Error refreshing cache: {{message}}', {
-          message: error.message
-        })
-      );
-    }
-  };
-
-  const handleCacheClear = async () => {
-    if (confirm(t('admin.home.clearCacheConfirm', 'Are you sure you want to clear the cache?'))) {
-      try {
-        await makeAdminApiCall('/api/admin/cache/_clear', { method: 'POST' });
-        alert(t('admin.home.cacheClearSuccess', 'Cache cleared successfully'));
-      } catch (error) {
-        alert(
-          t('admin.home.cacheClearError', 'Error clearing cache: {{message}}', {
-            message: error.message
-          })
-        );
-      }
-    }
-  };
-
   const adminSections = [
     {
       key: 'apps',
       title: t('admin.nav.apps', 'Apps Management'),
       description: t('admin.home.sections.appsDesc', 'Create, edit, and manage applications'),
       href: '/admin/apps',
-      icon: 'collection',
+      //icon: 'collection',
       color: 'bg-green-500'
     },
     {
@@ -55,7 +27,7 @@ const AdminHome = () => {
       title: t('admin.nav.models', 'Models Management'),
       description: t('admin.home.sections.modelsDesc', 'Configure and manage AI models'),
       href: '/admin/models',
-      icon: 'cpu-chip',
+      //icon: 'cpu-chip',
       color: 'bg-purple-500'
     },
     {
@@ -63,7 +35,7 @@ const AdminHome = () => {
       title: t('admin.nav.prompts', 'Prompts Management'),
       description: t('admin.home.sections.promptsDesc', 'Create and manage prompt templates'),
       href: '/admin/prompts',
-      icon: 'clipboard-document-list',
+      //icon: 'clipboard-document-list',
       color: 'bg-indigo-500'
     },
     {
@@ -71,7 +43,7 @@ const AdminHome = () => {
       title: t('admin.nav.shortlinks', 'Short Links'),
       description: t('admin.home.sections.shortlinksDesc', 'Manage application short links'),
       href: '/admin/shortlinks',
-      icon: 'link',
+      //icon: 'link',
       color: 'bg-teal-500'
     },
     {
@@ -82,7 +54,7 @@ const AdminHome = () => {
         'View application usage statistics and analytics'
       ),
       href: '/admin/usage',
-      icon: 'chart-bar',
+      //icon: 'chart-bar',
       color: 'bg-blue-500'
     },
     {
@@ -90,7 +62,7 @@ const AdminHome = () => {
       title: t('admin.nav.system', 'System Administration'),
       description: t('admin.home.sections.systemDesc', 'System settings and maintenance tools'),
       href: '/admin/system',
-      icon: 'none',
+      //icon: 'none',
       color: 'bg-orange-500'
     }
   ];

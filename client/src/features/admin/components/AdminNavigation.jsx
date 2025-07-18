@@ -16,56 +16,56 @@ const AdminNavigation = () => {
       key: 'home',
       name: t('admin.nav.home', 'Home'),
       href: '/admin',
-      icon: 'home',
+      // icon: 'home',
       current: location.pathname === '/admin'
     },
     {
       key: 'apps',
       name: t('admin.nav.apps', 'Apps'),
       href: '/admin/apps',
-      icon: 'collection',
+      // icon: 'collection',
       current: location.pathname.startsWith('/admin/apps')
     },
     {
       key: 'models',
       name: t('admin.nav.models', 'Models'),
       href: '/admin/models',
-      icon: 'cpu-chip',
+      // icon: 'cpu-chip',
       current: location.pathname.startsWith('/admin/models')
     },
     {
       key: 'prompts',
       name: t('admin.nav.prompts', 'Prompts'),
       href: '/admin/prompts',
-      icon: 'clipboard-document-list',
+      // icon: 'clipboard-document-list',
       current: location.pathname.startsWith('/admin/prompts')
     },
     {
       key: 'pages',
       name: t('admin.nav.pages', 'Pages'),
       href: '/admin/pages',
-      icon: 'document',
+      // icon: 'document',
       current: location.pathname.startsWith('/admin/pages')
     },
     {
       key: 'shortlinks',
       name: t('admin.nav.shortlinks', 'Short Links'),
       href: '/admin/shortlinks',
-      icon: 'link',
+      // icon: 'link',
       current: location.pathname.startsWith('/admin/shortlinks')
     },
     {
       key: 'usage',
       name: t('admin.nav.usage', 'Usage Reports'),
       href: '/admin/usage',
-      icon: 'chart-bar',
+      // icon: 'chart-bar',
       current: location.pathname === '/admin/usage'
     },
     {
       key: 'system',
       name: t('admin.nav.system', 'System'),
       href: '/admin/system',
-      icon: 'cog',
+      // icon: 'cog',
       current: location.pathname === '/admin/system'
     }
   ];
