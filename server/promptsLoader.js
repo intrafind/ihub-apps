@@ -21,12 +21,14 @@ import { getRootDir } from './pathUtils.js';
  * Load prompts from individual files in contents/prompts/
  * @returns {Array} Array of prompt objects
  */
-export async function loadPromptsFromFiles() {
+export async function loadPromptsFromFiles(verbose = true) {
   const rootDir = getRootDir();
   const promptsDir = join(rootDir, 'contents', 'prompts');
 
   if (!existsSync(promptsDir)) {
-    console.log('📁 Prompts directory not found, skipping individual prompt files');
+    if (verbose) {
+      console.log('📁 Prompts directory not found, skipping individual prompt files');
+    }
     return [];
   }
 
@@ -34,7 +36,9 @@ export async function loadPromptsFromFiles() {
   const dirContents = await fs.readdir(promptsDir);
   const files = dirContents.filter(file => file.endsWith('.json'));
 
-  console.log(`💬 Loading ${files.length} individual prompt files...`);
+  if (verbose) {
+    console.log(`💬 Loading ${files.length} individual prompt files...`);
+  }
 
   for (const file of files) {
     try {
@@ -61,17 +65,21 @@ export async function loadPromptsFromFiles() {
  * Load prompts from legacy prompts.json file
  * @returns {Array} Array of prompt objects
  */
-export async function loadPromptsFromLegacyFile() {
+export async function loadPromptsFromLegacyFile(verbose = true) {
   const rootDir = getRootDir();
   const promptsFile = join(rootDir, 'contents', 'config', 'prompts.json');
 
   if (!existsSync(promptsFile)) {
-    console.log('📄 Legacy prompts.json not found');
+    if (verbose) {
+      console.log('📄 Legacy prompts.json not found');
+    }
     return [];
   }
 
   try {
-    console.log('📄 Loading legacy prompts.json...');
+    if (verbose) {
+      console.log('📄 Loading legacy prompts.json...');
+    }
     const content = await fs.readFile(promptsFile, 'utf8');
     const prompts = JSON.parse(content);
 
@@ -92,9 +100,9 @@ export async function loadPromptsFromLegacyFile() {
  * @param {boolean} includeDisabled Include disabled prompts
  * @returns {Array} Array of prompt objects
  */
-export async function loadAllPrompts(includeDisabled = false) {
-  const individualPrompts = await loadPromptsFromFiles();
-  const legacyPrompts = await loadPromptsFromLegacyFile();
+export async function loadAllPrompts(includeDisabled = false, verbose = true) {
+  const individualPrompts = await loadPromptsFromFiles(verbose);
+  const legacyPrompts = await loadPromptsFromLegacyFile(verbose);
 
   // Combine prompts, giving priority to individual files
   const allPrompts = [...individualPrompts];
@@ -128,8 +136,10 @@ export async function loadAllPrompts(includeDisabled = false) {
     return aName.localeCompare(bName);
   });
 
-  console.log(
-    `💬 Loaded ${filteredPrompts.length} prompts (${includeDisabled ? 'including' : 'excluding'} disabled)`
-  );
+  if (verbose) {
+    console.log(
+      `💬 Loaded ${filteredPrompts.length} prompts (${includeDisabled ? 'including' : 'excluding'} disabled)`
+    );
+  }
   return filteredPrompts;
 }
