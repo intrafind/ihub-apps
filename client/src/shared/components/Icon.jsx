@@ -4,6 +4,7 @@ import {
   ArrowRightIcon,
   ArrowUturnLeftIcon,
   ArrowUturnRightIcon,
+  ArrowDownTrayIcon,
   CameraIcon,
   ChatBubbleLeftRightIcon,
   CheckIcon as OutlineCheckIcon,
@@ -55,6 +56,7 @@ import {
   Bars3Icon,
   FaceFrownIcon as OutlineFaceFrownIcon
 } from '@heroicons/react/24/outline';
+
 import {
   CameraIcon as SolidCameraIcon,
   CheckIcon as SolidCheckIcon,
@@ -168,7 +170,8 @@ const iconMap = {
   code: { outline: OutlineCodeBracketIcon, solid: SolidCodeBracketIcon },
   clock: { outline: ClockIcon, solid: SolidClockIcon },
   'academic-cap': { outline: OutlineAcademicCapIcon, solid: SolidAcademicCapIcon },
-  briefcase: { outline: BriefcaseIcon, solid: SolidBriefcaseIcon }
+  briefcase: { outline: BriefcaseIcon, solid: SolidBriefcaseIcon },
+  download: { outline: ArrowDownTrayIcon, solid: ArrowDownTrayIcon }
 };
 
 const sizeClasses = {

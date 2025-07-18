@@ -7,10 +7,12 @@
   },
   "description": {
     "en": "Advanced model with strong reasoning and knowledge capabilities",
-    "de": "Fortschrittliches Modell mit starken Argumentations- und Wissensf\u00e4higkeiten"
+    "de": "Fortschrittliches Modell mit starken Argumentations- und Wissensfähigkeiten"
   },
   "url": "http://hal9000:8897/v1/chat/completions",
   "provider": "local",
   "tokenLimit": 8192,
-  "supportsTools": false
+  "supportsTools": false,
+  "enabled": true,
+  "default": false
 }

@@ -7,10 +7,12 @@
   },
   "description": {
     "en": "Anthropic's most capable model with exceptional reasoning abilities",
-    "de": "Anthropics leistungsf\u00e4higstes Modell mit au\u00dfergew\u00f6hnlichen Argumentationsf\u00e4higkeiten"
+    "de": "Anthropics leistungsfähigstes Modell mit außergewöhnlichen Argumentationsfähigkeiten"
   },
   "url": "https://api.anthropic.com/v1/messages",
   "provider": "anthropic",
   "tokenLimit": 200000,
-  "supportsTools": true
+  "supportsTools": true,
+  "enabled": true,
+  "default": false
 }

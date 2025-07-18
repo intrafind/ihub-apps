@@ -41,7 +41,15 @@ function scheduleFlush() {
   }, SAVE_INTERVAL_MS);
 }
 
-export function storeFeedback({ messageId, appId, chatId, modelId, rating, comment = '', contentSnippet = '' }) {
+export function storeFeedback({
+  messageId,
+  appId,
+  chatId,
+  modelId,
+  rating,
+  comment = '',
+  contentSnippet = ''
+}) {
   if (!trackingEnabled || !messageId) return;
   const entry = {
     timestamp: new Date().toISOString(),

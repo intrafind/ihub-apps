@@ -100,7 +100,7 @@ const ChatActionsMenu = ({
               }}
               className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
             >
-              <Icon name="share" size="sm" /> {t('pages.appChat.shareConversation')}
+              <Icon name="share" size="sm" /> {t('pages.appChat.share', 'Share')}
             </button>
           )}
           <div className="relative">
@@ -109,7 +109,7 @@ const ChatActionsMenu = ({
               className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="download" size="sm" />
-              {t('pages.appChat.export.conversation', 'Export conversation')}
+              {t('pages.appChat.export.conversation', 'Export')}
             </button>
             {showExport && (
               <ExportConversationMenu

@@ -114,9 +114,9 @@
       "regenerate": "Regenerate response",
       "clear": "Clear chat",
       "confirmClear": "Are you sure you want to clear the chat?",
-      "shareConversation": "Share app",
+      "share": "Share app",
       "export": {
-        "conversation": "Export conversation",
+        "conversation": "Export",
         "toJSON": "as JSON",
         "toJSONL": "as JSONL",
         "toMarkdown": "as Markdown",

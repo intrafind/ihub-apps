@@ -7,10 +7,12 @@
   },
   "description": {
     "en": "Balanced performance and value for enterprise and everyday tasks",
-    "de": "Ausgewogene Leistung und Wert f\u00fcr Unternehmens- und Alltagsaufgaben"
+    "de": "Ausgewogene Leistung und Wert für Unternehmens- und Alltagsaufgaben"
   },
   "url": "https://api.anthropic.com/v1/messages",
   "provider": "anthropic",
   "tokenLimit": 64000,
-  "supportsTools": true
+  "supportsTools": true,
+  "enabled": true,
+  "default": false
 }
