@@ -44,8 +44,19 @@ class ToolExecutor {
 
     actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
 
+    // --- DEBUG LOGGING START ---
+    console.log(`--- Executing Tool: ${toolId} ---`);
+    console.log('Arguments:', JSON.stringify(args, null, 2));
+    console.log('---------------------------------');
+    // --- DEBUG LOGGING END ---
+
     try {
       const result = await runTool(toolId, { ...args, chatId });
+      // --- DEBUG LOGGING START ---
+      console.log(`--- Tool Result: ${toolId} ---`);
+      console.log(JSON.stringify(result, null, 2));
+      console.log('-----------------------------');
+      // --- DEBUG LOGGING END ---
       actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: result });
 
       await logInteraction(
@@ -213,30 +224,18 @@ class ToolExecutor {
 
               if (existingCall) {
                 // Merge properties into the existing tool call
-                if (call.id) {
-                  existingCall.id = (existingCall.id || '') + call.id;
-                }
-                if (call.type) {
-                  existingCall.type = call.type;
-                }
+                if (call.id) existingCall.id = call.id;
+                if (call.type) existingCall.type = call.type;
                 if (call.function) {
-                  if (!existingCall.function) {
-                    existingCall.function = { name: '', arguments: '' };
-                  }
-                  if (call.function.name) {
-                    existingCall.function.name =
-                      (existingCall.function.name || '') + call.function.name;
-                  }
-                  if (call.function.arguments) {
-                    existingCall.function.arguments =
-                      (existingCall.function.arguments || '') + call.function.arguments;
-                  }
+                  if (call.function.name) existingCall.function.name = call.function.name;
+                  if (call.function.arguments)
+                    existingCall.function.arguments += call.function.arguments;
                 }
               } else if (call.index !== undefined) {
                 // Create a new tool call if it doesn't exist
                 collectedToolCalls.push({
                   index: call.index,
-                  id: call.id || '',
+                  id: call.id || null,
                   type: call.type || 'function',
                   function: {
                     name: call.function?.name || '',
@@ -262,6 +261,12 @@ class ToolExecutor {
           }
         }
       }
+
+      // --- DEBUG LOGGING START ---
+      console.log('--- Collected Tool Calls from Stream ---');
+      console.log(JSON.stringify(collectedToolCalls, null, 2));
+      console.log('------------------------------------');
+      // --- DEBUG LOGGING END ---
 
       if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
         console.log(
@@ -297,6 +302,12 @@ class ToolExecutor {
         const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData);
         llmMessages.push(toolResult.message);
       }
+
+      // --- DEBUG LOGGING START ---
+      console.log('--- Messages for Follow-up LLM Call ---');
+      console.log(JSON.stringify(llmMessages, null, 2));
+      console.log('---------------------------------------');
+      // --- DEBUG LOGGING END ---
 
       const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
         temperature,

@@ -103,6 +103,19 @@ export default async function enhancedWebSearch({
         : 'Content extraction was disabled.'
     }`;
 
+    // Generate a clean, text-based summary for the LLM
+    // let llmOutput = `${summary}\n\n`;
+    // extractedContent.forEach(item => {
+    //   llmOutput += `Source: ${item.title}\n`;
+    //   llmOutput += `URL: ${item.url}\n`;
+    //   if (item.contentExtracted && item.extractedContent?.content) {
+    //     llmOutput += `Content:\n${item.extractedContent.content}\n\n`;
+    //   } else {
+    //     llmOutput += `Content could not be extracted. Snippet: ${item.description}\n\n`;
+    //   }
+    // });
+
+    // return llmOutput;
     return {
       query: searchQuery,
       searchResults: searchResults.results,

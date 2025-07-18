@@ -16,19 +16,14 @@ const AnthropicAdapter = {
     const processedMessages = [];
     for (const msg of filteredMessages) {
       if (msg.role === 'tool') {
-        let toolContent;
-        try {
-          toolContent = JSON.parse(msg.content);
-        } catch {
-          toolContent = msg.content;
-        }
         processedMessages.push({
           role: 'user',
           content: [
             {
               type: 'tool_result',
               tool_use_id: msg.tool_call_id,
-              content: toolContent
+              content: msg.content, // Pass the content directly as a string
+              is_error: msg.is_error || false
             }
           ]
         });
@@ -119,7 +114,7 @@ const AnthropicAdapter = {
     } = options;
 
     // Format messages and extract system prompt
-    const { messages: formattedMessages, systemPrompt } = this.formatMessages(messages);
+    let { messages: formattedMessages, systemPrompt } = this.formatMessages(messages);
 
     // Note: We don't throw an error here for missing API keys
     // Instead we let the server's verifyApiKey function handle this consistently
@@ -145,6 +140,16 @@ const AnthropicAdapter = {
 
     if (finalTools.length > 0) {
       requestBody.tools = formatToolsForAnthropic(finalTools);
+      // // Anthropic-specific instruction to encourage tool use, especially in multi-turn scenarios.
+      // const toolInstruction =
+      //   "If you need to use a tool to answer, please do so. After using the tools, provide a final answer to the user's question.";
+      // if (systemPrompt) {
+        //   if (!systemPrompt.includes(toolInstruction)) {
+          //     systemPrompt += `\n\n${toolInstruction}`;
+          //   }
+          // } else {
+            // systemPrompt = toolInstruction;
+      // }
     }
 
     // if (responseSchema) {
@@ -188,6 +193,9 @@ const AnthropicAdapter = {
     if (!data) return result;
     try {
       const parsed = JSON.parse(data);
+      console.log('--- Anthropic Raw Chunk ---');
+      console.log(JSON.stringify(parsed, null, 2));
+      console.log('--------------------------');
 
       // Handle full response object (non-streaming)
       if (parsed.content && Array.isArray(parsed.content) && parsed.content[0]?.text) {
@@ -236,11 +244,9 @@ const AnthropicAdapter = {
 
       if (parsed.type === 'message_stop') {
         result.complete = true;
-        // Don't override finishReason if it was already set to 'tool_calls' from earlier events
-        if (!result.finishReason || result.finishReason !== 'tool_calls') {
-          result.finishReason =
-            parsed.stop_reason === 'tool_use' ? 'tool_calls' : parsed.stop_reason || 'stop';
-        }
+        // The finishReason is provided in the 'message_delta' event, not here.
+        // By not setting a finishReason, we avoid overwriting the correct 'tool_calls' reason
+        // that was already processed by the ToolExecutor.
       }
     } catch (parseError) {
       console.error('Error parsing Claude response chunk:', parseError);
