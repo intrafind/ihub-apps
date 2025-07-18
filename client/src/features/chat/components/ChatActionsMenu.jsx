@@ -41,7 +41,7 @@ const ChatActionsMenu = ({
         className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded flex items-center"
         title={t('common.menu', 'Menu')}
       >
-        <Icon name="dots-vertical" size="sm" />
+        <Icon name="menu" size="sm" />
       </button>
       {open && (
         <div className="absolute right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-20 min-w-40">
