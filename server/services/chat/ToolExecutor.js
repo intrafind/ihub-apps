@@ -116,7 +116,6 @@ class ToolExecutor {
 
   async processChatWithTools({
     prep,
-    clientRes,
     chatId,
     buildLogData,
     DEFAULT_TIMEOUT,
@@ -309,24 +308,18 @@ class ToolExecutor {
       console.log('---------------------------------------');
       // --- DEBUG LOGGING END ---
 
-      const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
-        temperature,
-        maxTokens,
-        stream: true,
-        tools,
-        responseFormat: responseFormat,
-        responseSchema: responseSchema
-      });
-
-      clearTimeout(timeoutId);
-
-      this.streamingHandler.executeStreamingResponse({
-        request: followRequest,
-        chatId,
-        clientRes,
-        buildLogData,
+      // Recursively continue with tool execution until we get a final response
+      await this.continueWithToolExecution({
         model,
         llmMessages,
+        apiKey,
+        temperature,
+        maxTokens,
+        tools,
+        responseFormat,
+        responseSchema,
+        chatId,
+        buildLogData,
         DEFAULT_TIMEOUT,
         getLocalizedError,
         clientLanguage
@@ -358,6 +351,222 @@ class ToolExecutor {
         activeRequests.delete(chatId);
       }
     }
+  }
+
+  async continueWithToolExecution({
+    model,
+    llmMessages,
+    apiKey,
+    temperature,
+    maxTokens,
+    tools,
+    responseFormat,
+    responseSchema,
+    chatId,
+    buildLogData,
+    DEFAULT_TIMEOUT,
+    getLocalizedError,
+    clientLanguage
+  }) {
+    const maxIterations = 10; // Prevent infinite loops
+    let iteration = 0;
+
+    while (iteration < maxIterations) {
+      iteration++;
+      
+      const followRequest = createCompletionRequest(model, llmMessages, apiKey, {
+        temperature,
+        maxTokens,
+        stream: true,
+        tools,
+        responseFormat: responseFormat,
+        responseSchema: responseSchema
+      });
+
+      const controller = new AbortController();
+      
+      if (activeRequests.has(chatId)) {
+        const existingController = activeRequests.get(chatId);
+        existingController.abort();
+      }
+      activeRequests.set(chatId, controller);
+
+      let timeoutId = setTimeout(async () => {
+        if (activeRequests.has(chatId)) {
+          controller.abort();
+          const errorMessage = await getLocalizedError(
+            'requestTimeout',
+            { timeout: DEFAULT_TIMEOUT / 1000 },
+            clientLanguage
+          );
+          actionTracker.trackError(chatId, { message: errorMessage });
+          if (activeRequests.get(chatId) === controller) {
+            activeRequests.delete(chatId);
+          }
+        }
+      }, DEFAULT_TIMEOUT);
+
+      try {
+        const llmResponse = await throttledFetch(model.id, followRequest.url, {
+          method: 'POST',
+          headers: followRequest.headers,
+          body: JSON.stringify(followRequest.body),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!llmResponse.ok) {
+          const errorBody = await llmResponse.text();
+          throw Object.assign(new Error(`LLM API request failed with status ${llmResponse.status}`), {
+            code: llmResponse.status.toString(),
+            details: errorBody
+          });
+        }
+
+        const reader = llmResponse.body.getReader();
+        const decoder = new TextDecoder();
+        const events = [];
+        const parser = createParser({ onEvent: e => events.push(e) });
+
+        let assistantContent = '';
+        const collectedToolCalls = [];
+        let finishReason = null;
+        let done = false;
+
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          if (readerDone || !activeRequests.has(chatId)) {
+            if (!activeRequests.has(chatId)) reader.cancel();
+            break;
+          }
+
+          const chunk = decoder.decode(value, { stream: true });
+          parser.feed(chunk);
+
+          while (events.length > 0) {
+            const evt = events.shift();
+            const result = processResponseBuffer(model.provider, evt.data);
+
+            if (result.error) {
+              throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
+                code: 'PROCESSING_ERROR'
+              });
+            }
+
+            if (result.content?.length > 0) {
+              for (const text of result.content) {
+                assistantContent += text;
+                actionTracker.trackChunk(chatId, { content: text });
+              }
+            }
+
+            if (result.tool_calls?.length > 0) {
+              result.tool_calls.forEach(call => {
+                let existingCall = collectedToolCalls.find(c => c.index === call.index);
+
+                if (existingCall) {
+                  if (call.id) existingCall.id = call.id;
+                  if (call.type) existingCall.type = call.type;
+                  if (call.function) {
+                    if (call.function.name) existingCall.function.name = call.function.name;
+                    if (call.function.arguments)
+                      existingCall.function.arguments += call.function.arguments;
+                  }
+                } else if (call.index !== undefined) {
+                  collectedToolCalls.push({
+                    index: call.index,
+                    id: call.id || null,
+                    type: call.type || 'function',
+                    function: {
+                      name: call.function?.name || '',
+                      arguments: call.function?.arguments || ''
+                    }
+                  });
+                }
+              });
+            }
+
+            if (result.finishReason) {
+              finishReason = result.finishReason;
+            }
+
+            if (result.complete) {
+              done = true;
+              break;
+            }
+          }
+        }
+
+        // If no tool calls, this is the final response - stream it back to client
+        if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+          clearTimeout(timeoutId);
+          actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
+          await logInteraction(
+            'chat_response',
+            buildLogData(true, {
+              responseType: 'success',
+              response: assistantContent.substring(0, 1000)
+            })
+          );
+          if (activeRequests.get(chatId) === controller) {
+            activeRequests.delete(chatId);
+          }
+          return; // Exit the loop, we have the final response
+        }
+
+        // Process tool calls and continue the loop
+        const toolNames = collectedToolCalls.map(c => c.function.name).join(', ');
+        actionTracker.trackAction(chatId, {
+          action: 'processing',
+          message: `Using tool(s): ${toolNames}...`
+        });
+
+        const assistantMessage = { role: 'assistant', tool_calls: collectedToolCalls };
+        assistantMessage.content = assistantContent || null;
+        llmMessages.push(assistantMessage);
+
+        for (const call of collectedToolCalls) {
+          const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData);
+          llmMessages.push(toolResult.message);
+        }
+
+        console.log(`--- Tool execution iteration ${iteration} complete ---`);
+        // Continue the loop for the next iteration
+
+      } catch (error) {
+        clearTimeout(timeoutId);
+        
+        if (error.name !== 'AbortError') {
+          const errorDetails = getErrorDetails(error, model);
+          let localizedMessage = errorDetails.message;
+
+          if (error.code) {
+            const translated = await getLocalizedError(error.code, {}, clientLanguage);
+            if (translated && !translated.startsWith('Error:')) {
+              localizedMessage = translated;
+            }
+          }
+
+          const errMsg = {
+            message: localizedMessage,
+            code: error.code || errorDetails.code,
+            details: error.details || error.message
+          };
+
+          actionTracker.trackError(chatId, { ...errMsg });
+        }
+
+        if (activeRequests.get(chatId) === controller) {
+          activeRequests.delete(chatId);
+        }
+        throw error; // Re-throw to let the calling method handle it
+      }
+    }
+
+    // If we hit the max iterations, log a warning but don't error
+    console.warn(`Max tool execution iterations (${maxIterations}) reached for chat ${chatId}`);
+    actionTracker.trackDone(chatId, { finishReason: 'max_iterations' });
   }
 }
 

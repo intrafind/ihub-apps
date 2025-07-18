@@ -170,7 +170,7 @@ const AnthropicAdapter = {
       requestBody.system = systemPrompt;
     }
 
-    console.log('Anthropic request body:', requestBody);
+    console.log('Anthropic request body:', JSON.stringify(requestBody, null, 2));
 
     return {
       url: model.url,

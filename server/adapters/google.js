@@ -35,7 +35,7 @@ const GoogleAdapter = {
         currentToolResponses.push({
           functionResponse: {
             name: normalizeName(message.name || message.tool_call_id || 'tool'),
-            response: responseObj
+            response: { result: responseObj }
           }
         });
       } else {
