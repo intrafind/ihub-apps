@@ -9,7 +9,6 @@ const dataFile = path.join(getRootDir(), contentsDir, 'data', 'feedback.jsonl');
 const SAVE_INTERVAL_MS = 10000;
 
 let trackingEnabled = true;
-const pending = new Map();
 let queue = [];
 let saveTimer = null;
 
@@ -42,27 +41,19 @@ function scheduleFlush() {
   }, SAVE_INTERVAL_MS);
 }
 
-export function recordResponseMeta({ messageId, appId, modelId, settings, prompt, answer }) {
+export function storeFeedback({ messageId, appId, chatId, modelId, rating, comment = '', contentSnippet = '' }) {
   if (!trackingEnabled || !messageId) return;
-  pending.set(messageId, {
+  const entry = {
     timestamp: new Date().toISOString(),
     messageId,
     appId,
+    chatId,
     modelId,
-    settings,
-    prompt,
-    answer
-  });
-}
-
-export function storeFeedback({ messageId, rating, comment = '' }) {
-  if (!trackingEnabled || !messageId) return;
-  const meta = pending.get(messageId);
-  const entry = meta
-    ? { ...meta, rating, comment }
-    : { timestamp: new Date().toISOString(), messageId, rating, comment };
+    rating,
+    comment,
+    contentSnippet
+  };
   queue.push(entry);
-  pending.delete(messageId);
   scheduleFlush();
 }
 

@@ -1,6 +1,5 @@
 import { getErrorDetails, logInteraction } from '../../utils.js';
 import { recordChatRequest, recordChatResponse } from '../../usageTracker.js';
-import { recordResponseMeta } from '../../feedbackStorage.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 
@@ -71,17 +70,6 @@ class NonStreamingHandler {
       if (responseData.choices && responseData.choices.length > 0) {
         aiResponse = responseData.choices[0].message?.content || '';
       }
-
-      const userPrompt = [...llmMessages].reverse().find(m => m.role === 'user')?.content || '';
-
-      recordResponseMeta({
-        messageId,
-        appId: baseLog.appId,
-        modelId: model.id,
-        settings: baseLog.options,
-        prompt: userPrompt,
-        answer: aiResponse
-      });
 
       const responseLog = buildLogData(false, {
         responseType: 'success',

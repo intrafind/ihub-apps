@@ -30,7 +30,7 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           contentSnippet: messageContent ? messageContent.substring(0, 300) : ''
         }
       });
-      storeFeedback({ messageId, rating, comment: feedback || '' });
+      storeFeedback({ messageId, appId, chatId, modelId, rating, comment: feedback || '', contentSnippet: messageContent ? messageContent.substring(0, 300) : '' });
       await recordFeedback({
         userId: userSessionId,
         appId,
