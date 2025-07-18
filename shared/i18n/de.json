@@ -370,6 +370,19 @@
         "tokens": "Token",
         "editModel": "Modelldetails bearbeiten"
       }
+    },
+    "pages": {
+      "title": "Seitenverwaltung",
+      "subtitle": "Statische Seiten der Anwendung verwalten",
+      "create": "Seite erstellen",
+      "actions": "Aktionen",
+      "fields": {
+        "id": "Seiten-ID",
+        "title": "Titel",
+        "content": "Inhalt",
+        "idRequired": "ID ist erforderlich"
+      },
+      "confirmDelete": "Möchten Sie diese Seite wirklich löschen?"
     }
   }
 }
