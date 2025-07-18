@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import { proxyAuth } from './middleware/proxyAuth.js';
 import { loadJson, loadText } from './configLoader.js';
 import { getApiKeyForModel } from './utils.js';
 import { sendSSE, clients, activeRequests } from './sse.js';
@@ -41,6 +42,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(checkContentLength(limit));
   app.use(express.json({ limit: `${limitMb}mb` }));
   app.use(express.urlencoded({ limit: `${limitMb}mb`, extended: true }));
+  app.use(proxyAuth);
 }
 
 const errorHandler = new ErrorHandler();

@@ -37,6 +37,28 @@ The server reads settings from the environment or a `.env` file such as `config.
 The concurrency of outbound requests is configured via `requestConcurrency` in `contents/config/platform.json` and can be overridden per model or tool. If this value is omitted or below `1`, requests are not throttled.
 The delay between requests can be adjusted with `requestDelayMs` in the same configuration files. A value of `0` disables the delay.
 
+### Example: Enabling Proxy Authentication
+
+Add a `proxyAuth` section to `platform.json`:
+
+```json
+{
+  "proxyAuth": {
+    "enabled": true,
+    "userHeader": "X-Forwarded-User",
+    "groupsHeader": "X-Forwarded-Groups",
+    "jwtProviders": [
+      {
+        "header": "Authorization",
+        "issuer": "https://login.example.com/",
+        "audience": "ai-hub-apps",
+        "jwkUrl": "https://login.example.com/.well-known/jwks.json"
+      }
+    ]
+  }
+}
+```
+
 ## SSL Configuration
 
 To enable HTTPS you must provide certificate files via environment variables:

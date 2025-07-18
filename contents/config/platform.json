@@ -29,5 +29,11 @@
       "shortlinks": true,
       "pages": true
     }
+  },
+  "proxyAuth": {
+    "enabled": false,
+    "userHeader": "X-Forwarded-User",
+    "groupsHeader": "X-Forwarded-Groups",
+    "jwtProviders": []
   }
 }
