@@ -33,7 +33,8 @@
   "auth": {
     "mode": "proxy",
     "allowAnonymous": true,
-    "anonymousGroup": "anonymous"
+    "anonymousGroup": "anonymous",
+    "authenticatedGroup": "authenticated"
   },
   "proxyAuth": {
     "enabled": false,
@@ -64,6 +65,49 @@
   },
   "oidcAuth": {
     "enabled": false,
-    "providers": []
+    "providers": [
+      {
+        "name": "google",
+        "displayName": "Google",
+        "clientId": "${GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET}",
+        "authorizationURL": "https://accounts.google.com/o/oauth2/v2/auth",
+        "tokenURL": "https://www.googleapis.com/oauth2/v4/token",
+        "userInfoURL": "https://www.googleapis.com/oauth2/v2/userinfo",
+        "scope": ["openid", "profile", "email"],
+        "callbackURL": "/api/auth/oidc/google/callback",
+        "groupsAttribute": "groups",
+        "defaultGroups": ["google-users"],
+        "pkce": true
+      },
+      {
+        "name": "microsoft",
+        "displayName": "Microsoft",
+        "clientId": "${MICROSOFT_CLIENT_ID}",
+        "clientSecret": "${MICROSOFT_CLIENT_SECRET}",
+        "authorizationURL": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+        "tokenURL": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        "userInfoURL": "https://graph.microsoft.com/v1.0/me",
+        "scope": ["openid", "profile", "email", "User.Read"],
+        "callbackURL": "/api/auth/oidc/microsoft/callback",
+        "groupsAttribute": "groups",
+        "defaultGroups": ["microsoft-users"],
+        "pkce": true
+      },
+      {
+        "name": "auth0",
+        "displayName": "Auth0",
+        "clientId": "${AUTH0_CLIENT_ID}",
+        "clientSecret": "${AUTH0_CLIENT_SECRET}",
+        "authorizationURL": "https://${AUTH0_DOMAIN}/authorize",
+        "tokenURL": "https://${AUTH0_DOMAIN}/oauth/token",
+        "userInfoURL": "https://${AUTH0_DOMAIN}/userinfo",
+        "scope": ["openid", "profile", "email"],
+        "callbackURL": "/api/auth/oidc/auth0/callback",
+        "groupsAttribute": "groups",
+        "defaultGroups": ["auth0-users"],
+        "pkce": true
+      }
+    ]
   }
 }

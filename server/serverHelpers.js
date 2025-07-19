@@ -1,7 +1,9 @@
 import cors from 'cors';
 import express from 'express';
+import session from 'express-session';
 import { proxyAuth } from './middleware/proxyAuth.js';
 import localAuthMiddleware from './middleware/localAuth.js';
+import { initializePassport, configureOidcProviders } from './middleware/oidcAuth.js';
 import { loadJson, loadText } from './configLoader.js';
 import { getApiKeyForModel } from './utils.js';
 import { sendSSE, clients, activeRequests } from './sse.js';
@@ -46,6 +48,27 @@ export function setupMiddleware(app, platformConfig = {}) {
   
   // Set platform config on app for middleware access
   app.set('platform', platformConfig);
+  
+  // Session middleware for OIDC (only needed if OIDC is enabled)
+  const oidcConfig = platformConfig.oidcAuth || {};
+  if (oidcConfig.enabled) {
+    app.use(session({
+      secret: config.JWT_SECRET || 'fallback-session-secret',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 10 * 60 * 1000 // 10 minutes for OIDC flow
+      }
+    }));
+  }
+  
+  // Initialize Passport for OIDC authentication
+  initializePassport(app);
+  
+  // Configure OIDC providers based on platform configuration
+  configureOidcProviders();
   
   // Authentication middleware (order matters: proxy auth first, then local auth)
   app.use(proxyAuth);

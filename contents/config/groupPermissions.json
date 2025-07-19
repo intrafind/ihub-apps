@@ -34,6 +34,34 @@
       "models": ["*"],
       "adminAccess": false,
       "description": "Full access for anonymous users (default configuration)"
+    },
+    "authenticated": {
+      "apps": ["chat", "translator", "summarizer", "email-composer", "file-analysis"],
+      "prompts": ["general", "writing"],
+      "models": ["gpt-3.5-turbo", "gpt-4", "claude-3-sonnet", "gemini-pro"],
+      "adminAccess": false,
+      "description": "Base permissions for all authenticated users"
+    },
+    "google-users": {
+      "apps": ["chat", "translator"],
+      "prompts": ["general"],
+      "models": ["gpt-3.5-turbo", "gemini-pro"],
+      "adminAccess": false,
+      "description": "Default permissions for Google authenticated users"
+    },
+    "microsoft-users": {
+      "apps": ["chat", "translator", "email-composer"],
+      "prompts": ["general", "writing"],
+      "models": ["gpt-4", "claude-3-sonnet"],
+      "adminAccess": false,
+      "description": "Default permissions for Microsoft authenticated users"
+    },
+    "auth0-users": {
+      "apps": ["chat", "translator", "summarizer"],
+      "prompts": ["general"],
+      "models": ["gpt-3.5-turbo", "claude-3-sonnet"],
+      "adminAccess": false,
+      "description": "Default permissions for Auth0 authenticated users"
     }
   },
   "resourceDefaults": {

@@ -14,7 +14,7 @@ AI Hub Apps supports multiple authentication modes and is **fully functional wit
 ### **Optional Authentication Modes**
 - **Proxy Mode**: Authentication handled by reverse proxy or external service
 - **Local Mode**: Built-in username/password authentication  
-- **OIDC Mode**: OpenID Connect authentication (future implementation)
+- **OIDC Mode**: OpenID Connect authentication with external providers
 
 The system is designed to be stateless and flexible, supporting both authenticated and anonymous access based on your needs.
 
@@ -142,6 +142,7 @@ You can override configuration using environment variables:
 AUTH_MODE=proxy|local|oidc
 AUTH_ALLOW_ANONYMOUS=true|false
 AUTH_ANONYMOUS_GROUP=anonymous
+AUTH_AUTHENTICATED_GROUP=authenticated
 
 # Proxy authentication
 PROXY_AUTH_ENABLED=true|false
@@ -188,6 +189,59 @@ Configure group-based permissions in `contents/config/groupPermissions.json`:
     }
   }
 }
+```
+
+### Group Assignment
+
+AI Hub Apps provides automatic group assignment for all authenticated users:
+
+#### Automatic Groups
+
+- **Authenticated Group**: All logged-in users automatically receive the `authenticated` group (configurable via `authenticatedGroup` in platform.json)
+- **Provider Groups**: OIDC users can receive provider-specific default groups
+- **Anonymous Group**: Non-authenticated users receive the `anonymous` group
+
+#### Configuration
+
+Set the authenticated group in `contents/config/platform.json`:
+
+```json
+{
+  "auth": {
+    "authenticatedGroup": "authenticated",
+    "anonymousGroup": "anonymous"
+  }
+}
+```
+
+#### Multi-Group Permission Aggregation
+
+Users can belong to multiple groups simultaneously, and the system automatically aggregates permissions from **all** their groups using Set union logic. This means users see the combined permissions from every group they belong to.
+
+**Example**: A user with groups `["authenticated", "microsoft-users", "hr"]` gets access to:
+- Apps from all three groups combined
+- Models from all three groups combined  
+- Prompts from all three groups combined
+- Admin access if any group grants it
+
+**Benefits**:
+- **Flexible Access**: Users get broader access through multiple group memberships
+- **No Conflicts**: Set aggregation ensures no duplicate permissions
+- **Additive Permissions**: More groups = more access (never less)
+
+**Testing Multi-Group Aggregation**:
+```javascript
+// Single group: limited access
+const singleGroup = getPermissionsForUser(['google-users']);
+// Result: 2 apps, 2 models
+
+// Multiple groups: expanded access  
+const multiGroup = getPermissionsForUser(['authenticated', 'google-users']);
+// Result: 5 apps, 4 models (union of both groups)
+
+// Complex multiple groups: maximum access
+const complexGroups = getPermissionsForUser(['authenticated', 'microsoft-users', 'hr']);
+// Result: 7 apps, 4 models, 3 prompt types (union of all groups)
 ```
 
 ### Group Mapping
@@ -282,9 +336,32 @@ The system uses an enhanced bcrypt hashing method that incorporates the user ID:
 - Username: `admin`, Password: `password123` (admin group)
 - Username: `user`, Password: `password123` (user group)
 
-### 3. OIDC Mode (Future)
+### 3. OIDC Mode
 
-OpenID Connect authentication with external providers.
+OpenID Connect authentication with external providers like Google, Microsoft, Auth0, and others.
+
+**Configuration:**
+```json
+{
+  "auth": { "mode": "oidc" },
+  "oidcAuth": { 
+    "enabled": true,
+    "providers": [
+      {
+        "name": "google",
+        "displayName": "Google",
+        "clientId": "${GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET}",
+        "authorizationURL": "https://accounts.google.com/o/oauth2/v2/auth",
+        "tokenURL": "https://www.googleapis.com/oauth2/v4/token",
+        "userInfoURL": "https://www.googleapis.com/oauth2/v2/userinfo"
+      }
+    ]
+  }
+}
+```
+
+**See [OIDC Authentication Guide](./oidc-authentication.md) for complete configuration instructions.**
 
 ## API Endpoints
 

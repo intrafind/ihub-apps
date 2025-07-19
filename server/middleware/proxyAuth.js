@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import jwkToPem from 'jwk-to-pem';
 import config from '../config.js';
 import configCache from '../configCache.js';
+import { enhanceUserGroups } from '../utils/authorization.js';
 
 const jwksCache = new Map();
 
@@ -105,11 +106,19 @@ export async function proxyAuth(req, res, next) {
     else mapped.add(m);
   }
 
-  req.user = {
+  let user = {
     id: userId,
     name: req.headers['x-forwarded-name'],
     email: req.headers['x-forwarded-email'],
-    groups: Array.from(mapped)
+    groups: Array.from(mapped),
+    authenticated: true,
+    authMethod: 'proxy'
   };
+
+  // Enhance user with authenticated group
+  const authConfig = platform.auth || {};
+  user = enhanceUserGroups(user, authConfig);
+
+  req.user = user;
   next();
 }

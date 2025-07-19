@@ -3,7 +3,8 @@ import bcrypt from 'bcrypt';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { enhanceUserWithPermissions } from '../utils/authorization.js';
+import { enhanceUserWithPermissions, enhanceUserGroups } from '../utils/authorization.js';
+import configCache from '../configCache.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -196,8 +197,8 @@ export async function loginUser(username, password, localAuthConfig) {
   const sessionTimeoutSeconds = (localAuthConfig.sessionTimeoutMinutes || 480) * 60;
   const token = createToken(user, jwtSecret, sessionTimeoutSeconds);
   
-  // Return user data (without sensitive information)
-  const userResponse = {
+  // Create user response object (without sensitive information)
+  let userResponse = {
     id: user.id,
     name: user.name,
     email: user.email,
@@ -205,6 +206,12 @@ export async function loginUser(username, password, localAuthConfig) {
     authenticated: true,
     authMethod: 'local'
   };
+
+  // Enhance user with authenticated group
+  const platform = configCache.getPlatform() || {};
+  const authConfig = platform.auth || {};
+  
+  userResponse = enhanceUserGroups(userResponse, authConfig);
   
   return {
     user: userResponse,

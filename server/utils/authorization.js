@@ -263,3 +263,86 @@ export function canUserAccessResource(user, resourceType, resourceId) {
   
   return allowedResources.has('*') || allowedResources.has(resourceId);
 }
+
+/**
+ * Add authenticated group to user groups
+ * @param {string[]} userGroups - Current user groups
+ * @param {Object} authConfig - Authentication configuration
+ * @returns {string[]} User groups with authenticated group added
+ */
+export function addAuthenticatedGroup(userGroups, authConfig) {
+  if (!Array.isArray(userGroups)) {
+    userGroups = [];
+  }
+  
+  const authenticatedGroup = authConfig?.authenticatedGroup || 'authenticated';
+  
+  // Add authenticated group if not already present
+  if (!userGroups.includes(authenticatedGroup)) {
+    userGroups.push(authenticatedGroup);
+  }
+  
+  return userGroups;
+}
+
+/**
+ * Add provider-specific default groups to user groups
+ * @param {string[]} userGroups - Current user groups
+ * @param {string} providerName - Name of the authentication provider
+ * @param {Object} providerConfig - Provider configuration
+ * @returns {string[]} User groups with provider groups added
+ */
+export function addProviderGroups(userGroups, providerName, providerConfig) {
+  if (!Array.isArray(userGroups)) {
+    userGroups = [];
+  }
+  
+  // Add provider-specific default groups
+  if (providerConfig?.defaultGroups && Array.isArray(providerConfig.defaultGroups)) {
+    for (const group of providerConfig.defaultGroups) {
+      if (!userGroups.includes(group)) {
+        userGroups.push(group);
+      }
+    }
+  }
+  
+  return userGroups;
+}
+
+/**
+ * Enhance user groups with authentication and provider-specific groups
+ * @param {Object} user - User object
+ * @param {Object} authConfig - Authentication configuration
+ * @param {Object} providerConfig - Provider configuration (optional)
+ * @returns {Object} User object with enhanced groups
+ */
+export function enhanceUserGroups(user, authConfig, providerConfig = null) {
+  if (!user || user.id === 'anonymous') {
+    return user; // Don't modify anonymous users
+  }
+  
+  // Start with existing groups or empty array
+  let groups = Array.isArray(user.groups) ? [...user.groups] : [];
+  
+  // Add authenticated group to all logged-in users
+  groups = addAuthenticatedGroup(groups, authConfig);
+  
+  // Add provider-specific groups if provider config is provided
+  if (providerConfig && user.provider) {
+    groups = addProviderGroups(groups, user.provider, providerConfig);
+  }
+  
+  // Update user groups
+  user.groups = groups;
+  
+  return user;
+}
+
+/**
+ * Get authenticated group name from configuration
+ * @param {Object} authConfig - Authentication configuration
+ * @returns {string} Authenticated group name
+ */
+export function getAuthenticatedGroup(authConfig) {
+  return authConfig?.authenticatedGroup || 'authenticated';
+}

@@ -1,5 +1,10 @@
 import { loginUser, createUser } from '../middleware/localAuth.js';
 import { createAuthorizationMiddleware } from '../utils/authorization.js';
+import { 
+  getConfiguredProviders, 
+  createOidcAuthHandler, 
+  createOidcCallbackHandler 
+} from '../middleware/oidcAuth.js';
 
 export default function registerAuthRoutes(app) {
   
@@ -146,14 +151,42 @@ export default function registerAuthRoutes(app) {
         },
         oidc: {
           enabled: oidcAuthConfig.enabled ?? false,
-          providers: oidcAuthConfig.providers?.map(p => ({
-            name: p.name,
-            displayName: p.displayName
-          })) || []
+          providers: getConfiguredProviders()
         }
       }
     };
     
     res.json(status);
+  });
+
+  /**
+   * OIDC provider authentication routes
+   */
+  app.get('/api/auth/oidc/providers', (req, res) => {
+    const providers = getConfiguredProviders();
+    res.json({
+      success: true,
+      providers
+    });
+  });
+
+  /**
+   * OIDC authentication initiation
+   * GET /api/auth/oidc/:provider
+   */
+  app.get('/api/auth/oidc/:provider', (req, res, next) => {
+    const providerName = req.params.provider;
+    const handler = createOidcAuthHandler(providerName);
+    handler(req, res, next);
+  });
+
+  /**
+   * OIDC authentication callback
+   * GET /api/auth/oidc/:provider/callback
+   */
+  app.get('/api/auth/oidc/:provider/callback', (req, res, next) => {
+    const providerName = req.params.provider;
+    const handler = createOidcCallbackHandler(providerName);
+    handler(req, res, next);
   });
 }
