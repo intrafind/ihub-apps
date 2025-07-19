@@ -25,6 +25,8 @@ import AdminPromptsPage from './features/admin/pages/AdminPromptsPage';
 import AdminPromptEditPage from './features/admin/pages/AdminPromptEditPage';
 import AdminPagesPage from './features/admin/pages/AdminPagesPage';
 import AdminPageEditPage from './features/admin/pages/AdminPageEditPage';
+import AdminAuthPage from './features/admin/pages/AdminAuthPage';
+import AdminUsersPage from './features/admin/pages/AdminUsersPage';
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
@@ -53,6 +55,8 @@ const SafeAdminPrompts = withSafeRoute(AdminPromptsPage);
 const SafeAdminPromptEdit = withSafeRoute(AdminPromptEditPage);
 const SafeAdminPages = withSafeRoute(AdminPagesPage);
 const SafeAdminPageEdit = withSafeRoute(AdminPageEditPage);
+const SafeAdminAuth = withSafeRoute(AdminAuthPage);
+const SafeAdminUsers = withSafeRoute(AdminUsersPage);
 const SafePromptsList = withSafeRoute(PromptsList);
 
 function App() {
@@ -117,6 +121,12 @@ function App() {
               )}
               {showAdminPage('prompts') && (
                 <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
+              )}
+              {showAdminPage('auth') && (
+                <Route path="admin/auth" element={<SafeAdminAuth />} />
+              )}
+              {showAdminPage('users') && (
+                <Route path="admin/users" element={<SafeAdminUsers />} />
               )}
               <Route path="unauthorized" element={<Unauthorized />} />
               <Route path="forbidden" element={<Forbidden />} />

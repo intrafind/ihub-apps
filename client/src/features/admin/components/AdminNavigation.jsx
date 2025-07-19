@@ -62,6 +62,20 @@ const AdminNavigation = () => {
       current: location.pathname === '/admin/usage'
     },
     {
+      key: 'auth',
+      name: t('admin.nav.auth', 'Authentication'),
+      href: '/admin/auth',
+      icon: 'shield-check',
+      current: location.pathname.startsWith('/admin/auth')
+    },
+    {
+      key: 'users',
+      name: t('admin.nav.users', 'Users'),
+      href: '/admin/users',
+      icon: 'users',
+      current: location.pathname.startsWith('/admin/users')
+    },
+    {
       key: 'system',
       name: t('admin.nav.system', 'System'),
       href: '/admin/system',

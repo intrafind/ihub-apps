@@ -54,7 +54,7 @@ function verifyToken(token, secret) {
  * @param {string} userId - User ID to use as salt
  * @returns {Promise<string>} Hashed password
  */
-async function hashPasswordWithUserId(password, userId) {
+export async function hashPasswordWithUserId(password, userId) {
   // Create a deterministic salt from user ID
   const saltInput = `${userId}_salt_${password}`;
   const salt = await bcrypt.genSalt(12);
