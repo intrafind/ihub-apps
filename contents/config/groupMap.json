@@ -1,4 +1,18 @@
 {
   "Admins": ["admin"],
-  "Users": ["user"]
+  "IT-Admin": ["admin"],
+  "IT-Admins": ["admin"],
+  "Platform-Admin": ["admin"],
+  "Platform-Admins": ["admin"],
+  "Users": ["user"],
+  "Employees": ["user"],
+  "Staff": ["user"],
+  "HR-Team": ["hr"],
+  "HR": ["hr"],
+  "Human-Resources": ["hr"],
+  "Contractors": ["contractors"],
+  "External": ["contractors"],
+  "Guests": ["contractors"],
+  "anonymous": ["anonymous"],
+  "public": ["anonymous"]
 }

@@ -1,0 +1,38 @@
+{
+  "users": {
+    "user_demo_admin": {
+      "id": "user_demo_admin",
+      "username": "admin",
+      "email": "admin@example.com",
+      "name": "Demo Administrator",
+      "groups": [
+        "admin"
+      ],
+      "active": true,
+      "passwordHash": "$2b$12$CNq/zTdIoQm34eFbjlMXYO0hBvHaXZNd8p2gYAT5FKISGDbQ8ipHm",
+      "createdAt": "2025-07-19T00:00:00.000Z",
+      "updatedAt": "2025-07-19T00:00:00.000Z"
+    },
+    "user_demo_user": {
+      "id": "user_demo_user",
+      "username": "user",
+      "email": "user@example.com",
+      "name": "Demo User",
+      "groups": [
+        "user"
+      ],
+      "active": true,
+      "passwordHash": "$2b$12$vIxSlOJ3nGH/nv2treLpLeBjimsCuHI3JlztLIc2Yv41VtZKCBhJG",
+      "createdAt": "2025-07-19T00:00:00.000Z",
+      "updatedAt": "2025-07-19T00:00:00.000Z"
+    }
+  },
+  "metadata": {
+    "version": "2.0.0",
+    "description": "Local user database for AI Hub Apps - Updated with user-specific password hashing",
+    "defaultPassword": "password123",
+    "note": "Passwords are now hashed with user ID for unique hashes. Demo users still use 'password123'.",
+    "lastUpdated": "2025-07-19T13:48:26.500Z",
+    "passwordHashingMethod": "bcrypt + userId salt"
+  }
+}

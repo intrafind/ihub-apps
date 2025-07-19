@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express from 'express';
 import { proxyAuth } from './middleware/proxyAuth.js';
+import localAuthMiddleware from './middleware/localAuth.js';
 import { loadJson, loadText } from './configLoader.js';
 import { getApiKeyForModel } from './utils.js';
 import { sendSSE, clients, activeRequests } from './sse.js';
@@ -42,7 +43,13 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(checkContentLength(limit));
   app.use(express.json({ limit: `${limitMb}mb` }));
   app.use(express.urlencoded({ limit: `${limitMb}mb`, extended: true }));
+  
+  // Set platform config on app for middleware access
+  app.set('platform', platformConfig);
+  
+  // Authentication middleware (order matters: proxy auth first, then local auth)
   app.use(proxyAuth);
+  app.use(localAuthMiddleware);
 }
 
 const errorHandler = new ErrorHandler();

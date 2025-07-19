@@ -30,10 +30,40 @@
       "pages": true
     }
   },
+  "auth": {
+    "mode": "proxy",
+    "allowAnonymous": true,
+    "anonymousGroup": "anonymous"
+  },
   "proxyAuth": {
     "enabled": false,
     "userHeader": "X-Forwarded-User",
     "groupsHeader": "X-Forwarded-Groups",
-    "jwtProviders": []
+    "anonymousGroup": "anonymous",
+    "jwtProviders": [
+      {
+        "name": "example-provider",
+        "header": "Authorization",
+        "issuer": "https://example.com",
+        "audience": "ai-hub-apps",
+        "jwkUrl": "https://example.com/.well-known/jwks.json"
+      }
+    ]
+  },
+  "authorization": {
+    "adminGroups": ["admin", "IT-Admin", "Platform-Admin"],
+    "userGroups": ["user", "users"],
+    "anonymousAccess": true,
+    "defaultGroup": "anonymous"
+  },
+  "localAuth": {
+    "enabled": false,
+    "usersFile": "contents/config/users.json",
+    "sessionTimeoutMinutes": 480,
+    "jwtSecret": "${JWT_SECRET}"
+  },
+  "oidcAuth": {
+    "enabled": false,
+    "providers": []
   }
 }
