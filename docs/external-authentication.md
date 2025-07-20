@@ -294,7 +294,7 @@ Authentication is handled by a reverse proxy (nginx, Apache, OAuth2 Proxy, etc.)
 ```json
 {
   "auth": { "mode": "proxy" },
-  "proxyAuth": { 
+  "proxyAuth": {
     "enabled": true,
     "userHeader": "X-Forwarded-User",
     "groupsHeader": "X-Forwarded-Groups",
@@ -314,6 +314,7 @@ Authentication is handled by a reverse proxy (nginx, Apache, OAuth2 Proxy, etc.)
 **Authentication Methods:**
 
 #### **Header-Based Authentication (Traditional)**
+
 - `X-Forwarded-User`: User identifier (email or username)
 - `X-Forwarded-Groups`: Comma-separated list of groups
 - `X-Forwarded-Name`: User's display name (optional)
@@ -332,11 +333,13 @@ location / {
 ```
 
 #### **Pure JWT Authentication (New)**
+
 Supports authentication using **only JWT tokens** without requiring any headers:
 
 - `Authorization: Bearer <jwt-token>`: JWT token containing all user information
 
 **JWT Token Claims:**
+
 ```json
 {
   "sub": "user123",
@@ -352,12 +355,14 @@ Supports authentication using **only JWT tokens** without requiring any headers:
 ```
 
 **User Extraction Priority:**
+
 1. **User ID**: `preferred_username` → `upn` → `email` → `sub`
 2. **Name**: JWT `name` → `given_name + family_name` → header `X-Forwarded-Name` → user ID
 3. **Email**: JWT `email` → header `X-Forwarded-Email`
 4. **Groups**: JWT `groups` array + header `X-Forwarded-Groups` (combined)
 
 #### **Hybrid Mode**
+
 Combines both methods - headers provide base authentication, JWT provides enhanced user data:
 
 ```bash

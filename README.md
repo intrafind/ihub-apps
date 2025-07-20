@@ -285,12 +285,12 @@ AI Hub Apps includes a comprehensive authentication system supporting multiple a
 
 The system supports four authentication modes with **dual authentication capability**:
 
-| Mode          | Description                  | Use Case                            |
-| ------------- | ---------------------------- | ----------------------------------- |
-| **Anonymous** | No authentication required   | Public demos, open access           |
-| **Local**     | Built-in username/password   | Development, small teams            |
-| **OIDC**      | OpenID Connect integration   | Enterprise SSO, Google, Microsoft   |
-| **Proxy**     | Reverse proxy + Pure JWT     | nginx, OAuth2 Proxy, corporate auth |
+| Mode          | Description                | Use Case                            |
+| ------------- | -------------------------- | ----------------------------------- |
+| **Anonymous** | No authentication required | Public demos, open access           |
+| **Local**     | Built-in username/password | Development, small teams            |
+| **OIDC**      | OpenID Connect integration | Enterprise SSO, Google, Microsoft   |
+| **Proxy**     | Reverse proxy + Pure JWT   | nginx, OAuth2 Proxy, corporate auth |
 
 **NEW**: Multiple authentication methods can be enabled simultaneously! Users can authenticate via local login, OIDC providers, or JWT tokens based on their preference and your configuration.
 
@@ -334,14 +334,16 @@ export JWT_SECRET=your-secure-secret
 ```json
 {
   "auth": { "mode": "proxy" },
-  "proxyAuth": { 
+  "proxyAuth": {
     "enabled": true,
-    "jwtProviders": [{
-      "name": "your-provider",
-      "issuer": "https://your-provider.com",
-      "audience": "ai-hub-apps",
-      "jwkUrl": "https://your-provider.com/.well-known/jwks.json"
-    }]
+    "jwtProviders": [
+      {
+        "name": "your-provider",
+        "issuer": "https://your-provider.com",
+        "audience": "ai-hub-apps",
+        "jwkUrl": "https://your-provider.com/.well-known/jwks.json"
+      }
+    ]
   }
 }
 ```

@@ -92,7 +92,7 @@ export async function proxyAuth(req, res, next) {
       // Allow tokens from any enabled auth method, regardless of primary auth mode
       const localAuthConfig = platform.localAuth || {};
       const oidcAuthConfig = platform.oidcAuth || {};
-      
+
       let authMethodEnabled = false;
       if (tokenPayload.authMode === 'local' && localAuthConfig.enabled) {
         authMethodEnabled = true;
@@ -102,11 +102,9 @@ export async function proxyAuth(req, res, next) {
         // Legacy tokens without authMode - allow if any auth method is enabled
         authMethodEnabled = true;
       }
-      
+
       if (!authMethodEnabled) {
-        console.warn(
-          `🔐 Token rejected: ${tokenPayload.authMode} authentication is disabled`
-        );
+        console.warn(`🔐 Token rejected: ${tokenPayload.authMode} authentication is disabled`);
         tokenPayload = null; // Invalidate token from disabled auth method
         continue;
       }
@@ -159,15 +157,15 @@ export async function proxyAuth(req, res, next) {
 
   let user = {
     id: userId,
-    name: req.headers['x-forwarded-name'] || 
-          (tokenPayload && (tokenPayload.name || 
-            (tokenPayload.given_name && tokenPayload.family_name 
-              ? `${tokenPayload.given_name} ${tokenPayload.family_name}`.trim()
-              : tokenPayload.given_name || tokenPayload.family_name))) || 
-          userId,
-    email: req.headers['x-forwarded-email'] || 
-           (tokenPayload && tokenPayload.email) || 
-           null,
+    name:
+      req.headers['x-forwarded-name'] ||
+      (tokenPayload &&
+        (tokenPayload.name ||
+          (tokenPayload.given_name && tokenPayload.family_name
+            ? `${tokenPayload.given_name} ${tokenPayload.family_name}`.trim()
+            : tokenPayload.given_name || tokenPayload.family_name))) ||
+      userId,
+    email: req.headers['x-forwarded-email'] || (tokenPayload && tokenPayload.email) || null,
     groups: Array.from(mapped),
     authenticated: true,
     authMethod: 'proxy'

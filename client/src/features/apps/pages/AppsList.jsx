@@ -70,22 +70,22 @@ const AppsList = () => {
   // Only display categories that contain at least one app, with smart hiding logic
   const availableCategories = useMemo(() => {
     if (!categoriesConfig.enabled) return [];
-    
+
     // If only one app exists, don't show categories
     if (apps.length <= 1) return [];
-    
+
     const usedCategories = new Set(apps.map(app => app.category || 'utility'));
     const filteredCategories = categoriesConfig.list.filter(category => {
       if (category.id === 'all') return categoriesConfig.showAll;
       return usedCategories.has(category.id);
     });
-    
+
     // Count specific categories (excluding 'all')
     const specificCategories = filteredCategories.filter(cat => cat.id !== 'all');
-    
+
     // If we only have 'all' and one specific category, don't show categories
     if (specificCategories.length <= 1) return [];
-    
+
     return filteredCategories;
   }, [categoriesConfig, apps]);
 
