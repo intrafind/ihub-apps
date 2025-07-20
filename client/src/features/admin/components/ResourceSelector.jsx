@@ -1,14 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import Icon from '../../../shared/components/Icon';
 
-const ResourceSelector = ({ 
-  label, 
-  resources, 
-  selectedResources, 
-  onSelectionChange, 
+const ResourceSelector = ({
+  label,
+  resources,
+  selectedResources,
+  onSelectionChange,
   allowWildcard = true,
-  placeholder = "Search and select...",
-  emptyMessage = "No items selected"
+  placeholder = 'Search and select...',
+  emptyMessage = 'No items selected'
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -18,7 +18,7 @@ const ResourceSelector = ({
   // Filter available resources based on search term and exclude already selected
   const filteredResources = useMemo(() => {
     if (isWildcard) return [];
-    
+
     return resources.filter(resource => {
       const name = resource.name?.en || resource.name || resource.id;
       const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -30,20 +30,22 @@ const ResourceSelector = ({
   // Get display names for selected resources
   const selectedResourcesWithNames = useMemo(() => {
     if (isWildcard) return [{ id: '*', name: 'All (*)', isWildcard: true }];
-    
+
     return selectedResources
       .map(id => {
         const resource = resources.find(r => r.id === id);
-        return resource ? {
-          id,
-          name: resource.name?.en || resource.name || resource.id,
-          isWildcard: false
-        } : null;
+        return resource
+          ? {
+              id,
+              name: resource.name?.en || resource.name || resource.id,
+              isWildcard: false
+            }
+          : null;
       })
       .filter(Boolean);
   }, [selectedResources, resources, isWildcard]);
 
-  const handleWildcardToggle = (checked) => {
+  const handleWildcardToggle = checked => {
     if (checked) {
       onSelectionChange(['*']);
     } else {
@@ -51,7 +53,7 @@ const ResourceSelector = ({
     }
   };
 
-  const handleResourceAdd = (resourceId) => {
+  const handleResourceAdd = resourceId => {
     if (!selectedResources.includes(resourceId)) {
       onSelectionChange([...selectedResources, resourceId]);
     }
@@ -59,7 +61,7 @@ const ResourceSelector = ({
     setShowDropdown(false);
   };
 
-  const handleResourceRemove = (resourceId) => {
+  const handleResourceRemove = resourceId => {
     if (resourceId === '*') {
       onSelectionChange([]);
     } else {
@@ -81,15 +83,13 @@ const ResourceSelector = ({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-gray-700">
-          {label}
-        </label>
+        <label className="block text-sm font-medium text-gray-700">{label}</label>
         {allowWildcard && (
           <div className="flex items-center">
             <input
               type="checkbox"
               checked={isWildcard}
-              onChange={(e) => handleWildcardToggle(e.target.checked)}
+              onChange={e => handleWildcardToggle(e.target.checked)}
               className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
             />
             <span className="text-sm text-gray-700">All (*)</span>
@@ -101,13 +101,11 @@ const ResourceSelector = ({
       <div className="min-h-[2rem]">
         {selectedResourcesWithNames.length > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {selectedResourcesWithNames.map((resource) => (
+            {selectedResourcesWithNames.map(resource => (
               <span
                 key={resource.id}
                 className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                  resource.isWildcard 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-blue-100 text-blue-800'
+                  resource.isWildcard ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
                 }`}
               >
                 {resource.name}
@@ -132,24 +130,20 @@ const ResourceSelector = ({
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={e => setSearchTerm(e.target.value)}
               onFocus={handleSearchFocus}
               onBlur={handleSearchBlur}
               placeholder={placeholder}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
-            <Icon 
-              name="search" 
-              size="sm" 
-              className="absolute right-3 top-2.5 text-gray-400" 
-            />
+            <Icon name="search" size="sm" className="absolute right-3 top-2.5 text-gray-400" />
           </div>
 
           {/* Dropdown */}
           {showDropdown && (
             <div className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
               {filteredResources.length > 0 ? (
-                filteredResources.map((resource) => (
+                filteredResources.map(resource => (
                   <button
                     key={resource.id}
                     onClick={() => handleResourceAdd(resource.id)}

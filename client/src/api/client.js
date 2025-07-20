@@ -58,11 +58,11 @@ apiClient.interceptors.response.use(
       if (currentToken) {
         console.log('Authentication token expired or invalid, clearing token');
         localStorage.removeItem('authToken');
-        
+
         // Dispatch custom event for auth context to handle
         window.dispatchEvent(new CustomEvent('authTokenExpired'));
       }
-      
+
       // Don't retry auth requests to avoid infinite loops
       return Promise.reject(error);
     }

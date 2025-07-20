@@ -16,7 +16,7 @@ export function AdminAuthProvider({ children }) {
       // Include authentication headers so backend can check current user
       const authToken = localStorage.getItem('authToken');
       const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
-      
+
       const response = await fetch('/api/admin/auth/status', { headers });
       const data = await response.json();
 
@@ -69,11 +69,11 @@ export function AdminAuthProvider({ children }) {
 
     // Listen for auth token changes in localStorage
     window.addEventListener('storage', handleAuthChange);
-    
+
     // Also refresh on page focus (in case auth changed in another tab)
     // But only if we're not already authenticated
     window.addEventListener('focus', handleAuthChange);
-    
+
     return () => {
       window.removeEventListener('storage', handleAuthChange);
       window.removeEventListener('focus', handleAuthChange);

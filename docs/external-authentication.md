@@ -7,13 +7,15 @@ This document explains how to configure and use the External Authentication Inte
 AI Hub Apps supports multiple authentication modes and is **fully functional without any authentication by default**:
 
 ### **Default Configuration (No Authentication Required)**
+
 - **Anonymous Access**: Users can access all apps, models, and features without logging in
 - **Zero Configuration**: Works out of the box with no setup required
 - **Full Functionality**: All features available to anonymous users by default
 
 ### **Optional Authentication Modes**
+
 - **Proxy Mode**: Authentication handled by reverse proxy or external service
-- **Local Mode**: Built-in username/password authentication  
+- **Local Mode**: Built-in username/password authentication
 - **OIDC Mode**: OpenID Connect authentication with external providers
 
 The system is designed to be stateless and flexible, supporting both authenticated and anonymous access based on your needs.
@@ -46,12 +48,14 @@ The system is designed to be stateless and flexible, supporting both authenticat
 ```
 
 ### What This Means
+
 - **No Login Required**: Users can immediately start using all apps and features
 - **Full Access**: Anonymous users have access to all apps, models, and prompts by default
 - **Zero Setup**: No configuration files to edit, no authentication providers to set up
 - **Admin Panel**: Still accessible via admin authentication (separate from user auth)
 
 ### Anonymous User Permissions
+
 By default, anonymous users get access to everything through the `anonymous` group:
 
 ```json
@@ -59,7 +63,7 @@ By default, anonymous users get access to everything through the `anonymous` gro
   "groups": {
     "anonymous": {
       "apps": ["*"],
-      "prompts": ["*"], 
+      "prompts": ["*"],
       "models": ["*"],
       "adminAccess": false
     }
@@ -83,7 +87,9 @@ By default, anonymous users get access to everything through the `anonymous` gro
 ```
 
 ### When to Enable Authentication
+
 Consider enabling authentication when you need:
+
 - **User Tracking**: Know who is using which features
 - **Access Control**: Restrict certain apps/models to specific users or groups
 - **Usage Analytics**: Track usage per user or department
@@ -164,12 +170,14 @@ OIDC_AUTH_ENABLED=true|false
 **NEW:** AI Hub Apps now includes a unified group management system accessible through the admin interface at `/admin/groups`.
 
 #### Admin Interface
+
 - **Create/Edit Groups**: Full UI for managing groups, permissions, and external mappings
 - **Permission Assignment**: Visual interface for assigning apps, models, and prompts to groups
 - **External Mappings**: Configure how external groups (from OIDC, LDAP, etc.) map to internal groups
-- **Wildcard Support**: Easy toggles for "All Apps (*)", "All Models (*)", "All Prompts (*)"
+- **Wildcard Support**: Easy toggles for "All Apps (_)", "All Models (_)", "All Prompts (\*)"
 
 #### Unified Configuration
+
 Group configuration is now stored in `contents/config/groups.json`:
 
 ```json
@@ -188,7 +196,7 @@ Group configuration is now stored in `contents/config/groups.json`:
       "mappings": ["Admins", "IT-Admin", "Platform-Admin"]
     },
     "user": {
-      "id": "user", 
+      "id": "user",
       "name": "User",
       "description": "Standard user access to common applications",
       "permissions": {
@@ -204,6 +212,7 @@ Group configuration is now stored in `contents/config/groups.json`:
 ```
 
 #### Legacy Support
+
 The system maintains backwards compatibility with existing `groupPermissions.json` and `groupMap.json` files. Use the migration script to convert to the new format:
 
 ```bash
@@ -238,23 +247,26 @@ Set the authenticated group in `contents/config/platform.json`:
 Users can belong to multiple groups simultaneously, and the system automatically aggregates permissions from **all** their groups using Set union logic. This means users see the combined permissions from every group they belong to.
 
 **Example**: A user with groups `["authenticated", "microsoft-users", "hr"]` gets access to:
+
 - Apps from all three groups combined
-- Models from all three groups combined  
+- Models from all three groups combined
 - Prompts from all three groups combined
 - Admin access if any group grants it
 
 **Benefits**:
+
 - **Flexible Access**: Users get broader access through multiple group memberships
 - **No Conflicts**: Set aggregation ensures no duplicate permissions
 - **Additive Permissions**: More groups = more access (never less)
 
 **Testing Multi-Group Aggregation**:
+
 ```javascript
 // Single group: limited access
 const singleGroup = getPermissionsForUser(['google-users']);
 // Result: 2 apps, 2 models
 
-// Multiple groups: expanded access  
+// Multiple groups: expanded access
 const multiGroup = getPermissionsForUser(['authenticated', 'google-users']);
 // Result: 5 apps, 4 models (union of both groups)
 
@@ -270,6 +282,7 @@ const complexGroups = getPermissionsForUser(['authenticated', 'microsoft-users',
 Authentication is handled by a reverse proxy (nginx, Apache, OAuth2 Proxy, etc.).
 
 **Configuration:**
+
 ```json
 {
   "auth": { "mode": "proxy" },
@@ -278,11 +291,13 @@ Authentication is handled by a reverse proxy (nginx, Apache, OAuth2 Proxy, etc.)
 ```
 
 **Headers Expected:**
+
 - `X-Forwarded-User`: User identifier (email or username)
 - `X-Forwarded-Groups`: Comma-separated list of groups
 - `Authorization`: Bearer JWT token (optional)
 
 **Example nginx configuration:**
+
 ```nginx
 location / {
     proxy_pass http://ai-hub-apps:3000;
@@ -296,10 +311,11 @@ location / {
 Built-in username/password authentication.
 
 **Configuration:**
+
 ```json
 {
   "auth": { "mode": "local" },
-  "localAuth": { 
+  "localAuth": {
     "enabled": true,
     "jwtSecret": "your-secure-secret"
   }
@@ -332,12 +348,14 @@ Users are stored in `contents/config/users.json`:
 
 **Password Security:**
 The system uses an enhanced bcrypt hashing method that incorporates the user ID:
+
 - Each password is combined with the user ID before hashing: `userId:password`
 - This ensures every password hash is unique, even if multiple users have the same password
 - Prevents rainbow table attacks and password hash copying between users
 - Uses bcrypt with 12 rounds for strong protection
 
 **Demo Users:**
+
 - Username: `admin`, Password: `password123` (admin group)
 - Username: `user`, Password: `password123` (user group)
 
@@ -346,10 +364,11 @@ The system uses an enhanced bcrypt hashing method that incorporates the user ID:
 OpenID Connect authentication with external providers like Google, Microsoft, Auth0, and others.
 
 **Configuration:**
+
 ```json
 {
   "auth": { "mode": "oidc" },
-  "oidcAuth": { 
+  "oidcAuth": {
     "enabled": true,
     "providers": [
       {
@@ -371,6 +390,7 @@ OpenID Connect authentication with external providers like Google, Microsoft, Au
 ## API Endpoints
 
 ### Authentication Status
+
 ```http
 GET /api/auth/status
 ```
@@ -378,6 +398,7 @@ GET /api/auth/status
 Returns current authentication configuration and user status.
 
 ### Local Login
+
 ```http
 POST /api/auth/login
 Content-Type: application/json
@@ -389,18 +410,21 @@ Content-Type: application/json
 ```
 
 ### Get Current User
+
 ```http
 GET /api/auth/user
 Authorization: Bearer <token>
 ```
 
 ### Logout
+
 ```http
 POST /api/auth/logout
 Authorization: Bearer <token>
 ```
 
 ### Create User (Admin Only)
+
 ```http
 POST /api/auth/users
 Authorization: Bearer <admin-token>
@@ -420,6 +444,7 @@ Content-Type: application/json
 ### Proxy Mode Testing
 
 Test with curl:
+
 ```bash
 # Test with headers
 curl -H "X-Forwarded-User: test@example.com" \\
@@ -477,11 +502,11 @@ function App() {
 
 function SomeComponent() {
   const { user, login, logout, isAuthenticated } = useAuth();
-  
+
   if (isAuthenticated) {
     return <div>Welcome {user.name}!</div>;
   }
-  
+
   return <LoginForm />;
 }
 ```
@@ -525,12 +550,12 @@ function AdminComponent() {
 
 ### Admin Secret Usage Rules
 
-| Authentication Mode | Admin Secret | Admin Access Method |
-|-------------------|-------------|-------------------|
-| **Anonymous** | ✅ **Required** | Admin secret is the only way to access admin |
-| **Local** | ❌ **Disabled** | Only authenticated users with admin groups |
-| **OIDC** | ❌ **Disabled** | Only authenticated users with admin groups |
-| **Proxy** | ❌ **Disabled** | Only authenticated users with admin groups |
+| Authentication Mode | Admin Secret    | Admin Access Method                          |
+| ------------------- | --------------- | -------------------------------------------- |
+| **Anonymous**       | ✅ **Required** | Admin secret is the only way to access admin |
+| **Local**           | ❌ **Disabled** | Only authenticated users with admin groups   |
+| **OIDC**            | ❌ **Disabled** | Only authenticated users with admin groups   |
+| **Proxy**           | ❌ **Disabled** | Only authenticated users with admin groups   |
 
 ### Security Benefits
 
@@ -542,6 +567,7 @@ function AdminComponent() {
 ### Backend Security Implementation
 
 The system automatically:
+
 - Detects the current authentication mode
 - Validates user groups against configured admin groups
 - Rejects admin secret attempts in non-anonymous modes
@@ -550,6 +576,7 @@ The system automatically:
 ### Frontend Integration
 
 The admin UI automatically:
+
 - Uses regular authentication tokens for admin users in authenticated modes
 - Falls back to admin secret authentication only in anonymous mode
 - Shows appropriate forms and error messages based on authentication context
@@ -578,6 +605,7 @@ The admin UI automatically:
 ### Debug Mode
 
 Enable debug logging:
+
 ```bash
 DEBUG=auth:* npm start
 ```
@@ -602,6 +630,7 @@ DEBUG=auth:* npm start
 ## Quick Start Scenarios
 
 ### Scenario 1: Default Setup (No Authentication)
+
 **Goal**: Get started immediately with full functionality
 
 ```bash
@@ -614,9 +643,11 @@ npm run dev
 ---
 
 ### Scenario 2: Restricted Anonymous Access
+
 **Goal**: Allow anonymous access but limit which apps/models are available
 
 1. Edit `contents/config/groupPermissions.json`:
+
 ```json
 {
   "groups": {
@@ -637,15 +668,18 @@ npm run dev
 ---
 
 ### Scenario 3: Enable Local Authentication
+
 **Goal**: Add user accounts with different permission levels
 
 1. Set environment variable:
+
 ```bash
 export LOCAL_AUTH_ENABLED=true
 export JWT_SECRET=your-secure-secret-key
 ```
 
 2. Update `contents/config/platform.json`:
+
 ```json
 {
   "auth": { "mode": "local" },
@@ -662,10 +696,12 @@ export JWT_SECRET=your-secure-secret-key
 ---
 
 ### Scenario 4: Corporate SSO Integration
+
 **Goal**: Use existing corporate authentication
 
 1. Configure reverse proxy (nginx, OAuth2 Proxy, etc.)
 2. Update `contents/config/platform.json`:
+
 ```json
 {
   "auth": { "mode": "proxy" },
@@ -680,9 +716,11 @@ export JWT_SECRET=your-secure-secret-key
 ---
 
 ### Scenario 5: Disable Anonymous Access
+
 **Goal**: Require authentication for all access
 
 1. Update `contents/config/platform.json`:
+
 ```json
 {
   "auth": { "allowAnonymous": false },
@@ -695,6 +733,7 @@ export JWT_SECRET=your-secure-secret-key
 ## Examples
 
 See `examples/authentication/` directory for:
+
 - nginx proxy configuration
 - Docker Compose setup with OAuth2 Proxy
 - Kubernetes deployment with ingress auth

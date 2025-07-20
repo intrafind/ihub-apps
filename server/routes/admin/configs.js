@@ -6,7 +6,6 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 
 export default function registerAdminConfigRoutes(app) {
-  
   /**
    * Get platform configuration for admin
    */
@@ -14,7 +13,7 @@ export default function registerAdminConfigRoutes(app) {
     try {
       const rootDir = getRootDir();
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-      
+
       let platformConfig = {};
       try {
         const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
@@ -53,7 +52,7 @@ export default function registerAdminConfigRoutes(app) {
           }
         };
       }
-      
+
       res.json(platformConfig);
     } catch (error) {
       console.error('Error getting platform configuration:', error);
@@ -67,14 +66,14 @@ export default function registerAdminConfigRoutes(app) {
   app.post('/api/admin/configs/platform', adminAuth, async (req, res) => {
     try {
       const newConfig = req.body;
-      
+
       if (!newConfig || typeof newConfig !== 'object') {
         return res.status(400).json({ error: 'Invalid configuration data' });
       }
 
       const rootDir = getRootDir();
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-      
+
       // Load existing config to preserve other fields
       let existingConfig = {};
       try {
@@ -97,13 +96,13 @@ export default function registerAdminConfigRoutes(app) {
 
       // Save to file
       await atomicWriteJSON(platformConfigPath, mergedConfig);
-      
+
       // Refresh cache
       await configCache.refreshCacheEntry('config/platform.json');
-      
+
       console.log('🔧 Platform authentication configuration updated');
-      
-      res.json({ 
+
+      res.json({
         message: 'Platform configuration updated successfully',
         config: mergedConfig
       });

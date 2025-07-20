@@ -1,6 +1,6 @@
 /**
  * Authentication Integration Tests
- * 
+ *
  * Tests real-world authentication scenarios and edge cases
  */
 
@@ -25,11 +25,11 @@ describe('Authentication Integration Tests', () => {
   beforeEach(async () => {
     // Create test app
     app = express();
-    
+
     // Create temporary test files
     const testDir = path.join(__dirname, 'temp');
     await fs.mkdir(testDir, { recursive: true });
-    
+
     testUsersFile = path.join(testDir, 'users.json');
     testPlatformFile = path.join(testDir, 'platform.json');
 
@@ -58,7 +58,7 @@ describe('Authentication Integration Tests', () => {
     // Create test users
     const testUsers = {
       users: {
-        'user_1': {
+        user_1: {
           id: 'user_1',
           username: 'testuser',
           email: 'test@example.com',
@@ -68,7 +68,7 @@ describe('Authentication Integration Tests', () => {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         },
-        'user_2': {
+        user_2: {
           id: 'user_2',
           username: 'admin',
           email: 'admin@example.com',
@@ -78,7 +78,7 @@ describe('Authentication Integration Tests', () => {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         },
-        'user_3': {
+        user_3: {
           id: 'user_3',
           username: 'inactive',
           email: 'inactive@example.com',
@@ -103,7 +103,7 @@ describe('Authentication Integration Tests', () => {
 
     // Setup middleware
     setupMiddleware(app, testPlatformConfig);
-    
+
     // Register routes
     registerAuthRoutes(app);
     registerAdminRoutes(app);
@@ -278,9 +278,7 @@ describe('Authentication Integration Tests', () => {
     });
 
     test('should handle logout properly', async () => {
-      const response = await request(app)
-        .post('/api/auth/logout')
-        .expect(200);
+      const response = await request(app).post('/api/auth/logout').expect(200);
 
       expect(response.body.message).toBeDefined();
     });
@@ -289,17 +287,17 @@ describe('Authentication Integration Tests', () => {
   describe('Rate Limiting and Security Headers', () => {
     test('should handle multiple rapid login attempts', async () => {
       // Simulate multiple rapid login attempts
-      const promises = Array(10).fill().map(() =>
-        request(app)
-          .post('/api/auth/login')
-          .send({
+      const promises = Array(10)
+        .fill()
+        .map(() =>
+          request(app).post('/api/auth/login').send({
             username: 'testuser',
             password: 'wrongpassword'
           })
-      );
+        );
 
       const responses = await Promise.all(promises);
-      
+
       // All should fail with 401
       responses.forEach(response => {
         expect(response.status).toBe(401);
@@ -307,9 +305,7 @@ describe('Authentication Integration Tests', () => {
     });
 
     test('should set security headers', async () => {
-      const response = await request(app)
-        .get('/api/auth/status')
-        .expect(200);
+      const response = await request(app).get('/api/auth/status').expect(200);
 
       // Check for CORS headers (if enabled)
       expect(response.headers['access-control-allow-origin']).toBeDefined();
@@ -331,7 +327,7 @@ describe('Authentication Integration Tests', () => {
       // Should not include sensitive fields
       expect(response.body.user.passwordHash).toBeUndefined();
       expect(response.body.user.password).toBeUndefined();
-      
+
       // Should include safe fields
       expect(response.body.user.username).toBeDefined();
       expect(response.body.user.email).toBeDefined();
@@ -380,10 +376,7 @@ describe('Authentication Integration Tests', () => {
         password: 'b'.repeat(10000)
       };
 
-      await request(app)
-        .post('/api/auth/login')
-        .send(largePayload)
-        .expect(400);
+      await request(app).post('/api/auth/login').send(largePayload).expect(400);
     });
 
     test('should not expose internal errors', async () => {
@@ -409,7 +402,7 @@ describe('Authorization Edge Cases', () => {
     // This would be tested with mock data that has circular references
     const userWithCircularGroups = {
       id: 'test',
-      groups: ['group1', 'group2'],
+      groups: ['group1', 'group2']
       // Where group1 references group2 and vice versa
     };
 
@@ -423,7 +416,9 @@ describe('Authorization Edge Cases', () => {
   test('should handle extremely large group arrays', () => {
     const userWithManyGroups = {
       id: 'test',
-      groups: Array(1000).fill().map((_, i) => `group_${i}`)
+      groups: Array(1000)
+        .fill()
+        .map((_, i) => `group_${i}`)
     };
 
     // Should handle large arrays without performance issues
@@ -435,11 +430,7 @@ describe('Authorization Edge Cases', () => {
   test('should sanitize group names', () => {
     const userWithMaliciousGroups = {
       id: 'test',
-      groups: [
-        '../../../admin',
-        '<script>alert("xss")</script>',
-        'normal-group'
-      ]
+      groups: ['../../../admin', '<script>alert("xss")</script>', 'normal-group']
     };
 
     // Should sanitize or reject malicious group names

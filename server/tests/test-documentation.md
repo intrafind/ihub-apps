@@ -7,37 +7,43 @@ This test suite validates the critical authentication and authorization security
 ### 1. Authentication Security Tests (`authentication-security.test.js`)
 
 **Anonymous Access Disabled - Complete Lockdown**
+
 - ✅ Blocks unauthenticated access to `/api/apps`
-- ✅ Blocks unauthenticated access to `/api/models` 
+- ✅ Blocks unauthenticated access to `/api/models`
 - ✅ Blocks unauthenticated access to chat endpoints
 - ✅ Blocks unauthenticated access to model test endpoints
 - ✅ Blocks unauthenticated access to tools, prompts, feedback
 - ✅ Allows access to public endpoints (auth status, platform config)
 
 **Anonymous Access Enabled - Limited Access**
+
 - ✅ Allows anonymous access but filters by permissions
 - ✅ Shows only permitted apps/models for anonymous users
 - ✅ Blocks access to restricted apps
 - ✅ Allows chat with permitted apps only
 
 **Authenticated User Access - Group-Based Permissions**
+
 - ✅ Users see apps based on their group memberships
 - ✅ Finance group gets access to finance-specific apps
 - ✅ Users blocked from apps outside their groups
 - ✅ Chat access respects group permissions
 
 **Admin Endpoint Protection**
+
 - ✅ Regular users blocked from admin endpoints
-- ✅ Anonymous users blocked from admin endpoints  
+- ✅ Anonymous users blocked from admin endpoints
 - ✅ Admin users can access admin endpoints
 
 **JWT Token Validation**
+
 - ✅ Rejects invalid JWT tokens
 - ✅ Rejects expired JWT tokens
 - ✅ Accepts valid JWT tokens
 - ✅ Handles malformed authorization headers
 
 **Authentication Bypass Prevention**
+
 - ✅ Prevents header manipulation attacks
 - ✅ Prevents query parameter bypasses
 - ✅ Prevents request body manipulation
@@ -46,26 +52,31 @@ This test suite validates the critical authentication and authorization security
 ## Running Tests
 
 ### Install Dependencies
+
 ```bash
 npm install
 ```
 
 ### Run All Authentication Tests
+
 ```bash
 npm run test:auth
 ```
 
 ### Run All Tests
+
 ```bash
 npm test
 ```
 
 ### Run Tests with Coverage
+
 ```bash
 npm run test:coverage
 ```
 
 ### Run Tests in Watch Mode
+
 ```bash
 npm run test:watch
 ```
@@ -108,7 +119,7 @@ All tests should **PASS** - any failures indicate potential security vulnerabili
 ### Key Assertions
 
 - `allowAnonymous: false` → **401 errors** for all API endpoints without auth
-- `allowAnonymous: true` → **403 errors** for unauthorized resources  
+- `allowAnonymous: true` → **403 errors** for unauthorized resources
 - Invalid tokens → **401 errors**
 - Admin endpoints → **403 errors** for non-admin users
 - Group permissions → **Filtered results** based on user groups
@@ -126,14 +137,16 @@ These tests ensure:
 ## Continuous Security Testing
 
 Run these tests:
+
 - ✅ Before every deployment
-- ✅ After any authentication/authorization changes  
+- ✅ After any authentication/authorization changes
 - ✅ As part of CI/CD pipeline
 - ✅ During security audits
 
 ## Test Maintenance
 
 When adding new API endpoints:
+
 1. Add authentication middleware (`authRequired`, `chatAuthRequired`, etc.)
 2. Add test cases to validate protection
 3. Test both anonymous-disabled and anonymous-enabled scenarios
@@ -142,7 +155,7 @@ When adding new API endpoints:
 ## Security Test Checklist
 
 - [ ] All chat endpoints protected ✅
-- [ ] All API endpoints protected ✅  
+- [ ] All API endpoints protected ✅
 - [ ] Admin endpoints restricted ✅
 - [ ] Group permissions enforced ✅
 - [ ] Token validation secure ✅

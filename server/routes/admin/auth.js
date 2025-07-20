@@ -13,7 +13,7 @@ export default function registerAdminAuthRoutes(app) {
       // Check if admin auth is required considering current user authentication
       // req.user is populated by the global auth middleware (proxyAuth, localAuth)
       const authRequired = isAdminAuthRequired(req);
-      
+
       res.json({
         authRequired,
         authenticated: !authRequired || req.headers.authorization?.startsWith('Bearer ')
@@ -60,7 +60,7 @@ export default function registerAdminAuthRoutes(app) {
   });
 
   // User Management Routes
-  
+
   /**
    * Get all users
    */
@@ -68,7 +68,7 @@ export default function registerAdminAuthRoutes(app) {
     try {
       const rootDir = getRootDir();
       const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
-      
+
       let usersData = { users: {}, metadata: {} };
       try {
         const usersFileData = await fs.readFile(usersFilePath, 'utf8');
@@ -77,7 +77,7 @@ export default function registerAdminAuthRoutes(app) {
         // File doesn't exist or is invalid, return empty users
         console.log('Users file not found or invalid, returning empty list');
       }
-      
+
       res.json(usersData);
     } catch (error) {
       console.error('Error getting users:', error);
@@ -91,7 +91,7 @@ export default function registerAdminAuthRoutes(app) {
   app.post('/api/admin/auth/users', adminAuth, async (req, res) => {
     try {
       const { username, email, name, password, groups = [], active = true } = req.body;
-      
+
       if (!username || !password) {
         return res.status(400).json({ error: 'Username and password are required' });
       }
@@ -102,7 +102,7 @@ export default function registerAdminAuthRoutes(app) {
 
       const rootDir = getRootDir();
       const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
-      
+
       // Load existing users
       let usersData = { users: {}, metadata: {} };
       try {
@@ -113,9 +113,9 @@ export default function registerAdminAuthRoutes(app) {
         usersData = {
           users: {},
           metadata: {
-            version: "2.0.0",
-            description: "Local user database for AI Hub Apps",
-            passwordHashingMethod: "bcrypt + userId salt"
+            version: '2.0.0',
+            description: 'Local user database for AI Hub Apps',
+            passwordHashingMethod: 'bcrypt + userId salt'
           }
         };
       }
@@ -129,7 +129,7 @@ export default function registerAdminAuthRoutes(app) {
       // Create new user
       const userId = `user_${uuidv4().replace(/-/g, '_')}`;
       const passwordHash = await hashPasswordWithUserId(password, userId);
-      
+
       const newUser = {
         id: userId,
         username,
@@ -147,9 +147,9 @@ export default function registerAdminAuthRoutes(app) {
 
       // Save to file
       await atomicWriteJSON(usersFilePath, usersData);
-      
+
       console.log(`👤 Created new user: ${username} (${userId})`);
-      
+
       // Return user without password hash
       const { passwordHash: _, ...userResponse } = newUser;
       res.json({ user: userResponse });
@@ -166,10 +166,10 @@ export default function registerAdminAuthRoutes(app) {
     try {
       const { userId } = req.params;
       const { email, name, password, groups, active } = req.body;
-      
+
       const rootDir = getRootDir();
       const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
-      
+
       // Load existing users
       let usersData = { users: {}, metadata: {} };
       try {
@@ -185,13 +185,13 @@ export default function registerAdminAuthRoutes(app) {
       }
 
       const user = usersData.users[userId];
-      
+
       // Update fields
       if (email !== undefined) user.email = email;
       if (name !== undefined) user.name = name;
       if (groups !== undefined) user.groups = Array.isArray(groups) ? groups : [];
       if (active !== undefined) user.active = active;
-      
+
       // Update password if provided
       if (password) {
         if (password.length < 6) {
@@ -199,15 +199,15 @@ export default function registerAdminAuthRoutes(app) {
         }
         user.passwordHash = await hashPasswordWithUserId(password, userId);
       }
-      
+
       user.updatedAt = new Date().toISOString();
       usersData.metadata.lastUpdated = new Date().toISOString();
 
       // Save to file
       await atomicWriteJSON(usersFilePath, usersData);
-      
+
       console.log(`👤 Updated user: ${user.username} (${userId})`);
-      
+
       // Return user without password hash
       const { passwordHash: _, ...userResponse } = user;
       res.json({ user: userResponse });
@@ -223,10 +223,10 @@ export default function registerAdminAuthRoutes(app) {
   app.delete('/api/admin/auth/users/:userId', adminAuth, async (req, res) => {
     try {
       const { userId } = req.params;
-      
+
       const rootDir = getRootDir();
       const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
-      
+
       // Load existing users
       let usersData = { users: {}, metadata: {} };
       try {
@@ -242,16 +242,16 @@ export default function registerAdminAuthRoutes(app) {
       }
 
       const username = usersData.users[userId].username;
-      
+
       // Remove user
       delete usersData.users[userId];
       usersData.metadata.lastUpdated = new Date().toISOString();
 
       // Save to file
       await atomicWriteJSON(usersFilePath, usersData);
-      
+
       console.log(`👤 Deleted user: ${username} (${userId})`);
-      
+
       res.json({ message: 'User deleted successfully' });
     } catch (error) {
       console.error('Error deleting user:', error);

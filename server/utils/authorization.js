@@ -15,7 +15,10 @@ export function loadGroupsConfiguration() {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     return config;
   } catch (error) {
-    console.warn('Could not load groups configuration, falling back to legacy files:', error.message);
+    console.warn(
+      'Could not load groups configuration, falling back to legacy files:',
+      error.message
+    );
     throw new Error('Groups configuration not found.', { cause: error });
   }
 }
@@ -26,7 +29,7 @@ export function loadGroupsConfiguration() {
  */
 export function loadGroupPermissions() {
   const config = loadGroupsConfiguration();
-  
+
   // Convert new format to legacy format for backwards compatibility
   const legacyFormat = { groups: {} };
   for (const [groupId, group] of Object.entries(config.groups || {})) {
@@ -38,7 +41,7 @@ export function loadGroupPermissions() {
       description: group.description || ''
     };
   }
-  
+
   return legacyFormat;
 }
 
@@ -48,7 +51,7 @@ export function loadGroupPermissions() {
  */
 export function loadGroupMapping() {
   const config = loadGroupsConfiguration();
-  
+
   // Convert new format to legacy mapping format
   const mapping = {};
   for (const [groupId, group] of Object.entries(config.groups || {})) {
@@ -61,7 +64,7 @@ export function loadGroupMapping() {
       }
     }
   }
-  
+
   return mapping;
 }
 
@@ -72,22 +75,22 @@ export function loadGroupMapping() {
  */
 export function mapExternalGroups(externalGroups) {
   if (!Array.isArray(externalGroups)) return ['anonymous'];
-  
+
   const groupMapping = loadGroupMapping();
   const internalGroups = new Set();
-  
+
   for (const externalGroup of externalGroups) {
     const mappedGroups = groupMapping[externalGroup];
     if (Array.isArray(mappedGroups)) {
       mappedGroups.forEach(group => internalGroups.add(group));
     }
   }
-  
+
   // If no groups mapped, assign default anonymous group
   if (internalGroups.size === 0) {
     internalGroups.add('anonymous');
   }
-  
+
   return Array.from(internalGroups);
 }
 
@@ -101,49 +104,49 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
   if (!groupPermissions) {
     groupPermissions = loadGroupPermissions();
   }
-  
+
   const permissions = {
     apps: new Set(),
     prompts: new Set(),
     models: new Set(),
     adminAccess: false
   };
-  
+
   if (!Array.isArray(userGroups)) {
     userGroups = ['anonymous'];
   }
-  
+
   for (const group of userGroups) {
     const groupPerms = groupPermissions.groups[group];
     if (!groupPerms) continue;
-    
+
     // Handle wildcards and specific permissions for apps
     if (groupPerms.apps?.includes('*')) {
       permissions.apps.add('*');
     } else if (Array.isArray(groupPerms.apps)) {
       groupPerms.apps.forEach(app => permissions.apps.add(app));
     }
-    
+
     // Handle wildcards and specific permissions for prompts
     if (groupPerms.prompts?.includes('*')) {
       permissions.prompts.add('*');
     } else if (Array.isArray(groupPerms.prompts)) {
       groupPerms.prompts.forEach(prompt => permissions.prompts.add(prompt));
     }
-    
+
     // Handle wildcards and specific permissions for models
     if (groupPerms.models?.includes('*')) {
       permissions.models.add('*');
     } else if (Array.isArray(groupPerms.models)) {
       groupPerms.models.forEach(model => permissions.models.add(model));
     }
-    
+
     // Admin access
     if (groupPerms.adminAccess) {
       permissions.adminAccess = true;
     }
   }
-  
+
   return permissions;
 }
 
@@ -156,12 +159,12 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
  */
 export function filterResourcesByPermissions(resources, allowedResources, resourceType = 'apps') {
   if (!Array.isArray(resources)) return [];
-  
+
   // If user has wildcard access, return all resources
   if (allowedResources.has('*')) {
     return resources;
   }
-  
+
   // Filter resources based on allowed IDs
   return resources.filter(resource => {
     const resourceId = resource.id || resource.modelId || resource.name;
@@ -179,7 +182,7 @@ export function hasAdminAccess(userGroups, authConfig) {
   if (!Array.isArray(userGroups) || !authConfig?.adminGroups) {
     return false;
   }
-  
+
   return userGroups.some(group => authConfig.adminGroups.includes(group));
 }
 
@@ -218,23 +221,23 @@ export function enhanceUserWithPermissions(user, authConfig) {
       groups: [defaultGroup]
     };
   }
-  
+
   // Ensure user has groups array
   if (!Array.isArray(user.groups)) {
     user.groups = [getDefaultAnonymousGroup(authConfig)];
   }
-  
+
   // Map external groups to internal groups if needed
   if (user.externalGroups && Array.isArray(user.externalGroups)) {
     user.groups = mapExternalGroups(user.externalGroups);
   }
-  
+
   // Get permissions for user
   user.permissions = getPermissionsForUser(user.groups);
-  
+
   // Check admin access
   user.isAdmin = hasAdminAccess(user.groups, authConfig) || user.permissions.adminAccess;
-  
+
   return user;
 }
 
@@ -245,27 +248,27 @@ export function enhanceUserWithPermissions(user, authConfig) {
  */
 export function createAuthorizationMiddleware(options = {}) {
   const { requireAuth = false, requireAdmin = false, allowedGroups = [] } = options;
-  
+
   return (req, res, next) => {
     const authConfig = req.app.get('authConfig') || {};
-    
+
     // Enhance user with permissions if not already done
     if (req.user && !req.user.permissions) {
       req.user = enhanceUserWithPermissions(req.user, authConfig);
     }
-    
+
     // Check if authentication is required
     if (requireAuth && (!req.user || req.user.id === 'anonymous')) {
       if (!isAnonymousAccessAllowed(authConfig)) {
         return res.status(401).json({ error: 'Authentication required' });
       }
     }
-    
+
     // Check admin access
     if (requireAdmin && !req.user?.isAdmin) {
       return res.status(403).json({ error: 'Admin access required' });
     }
-    
+
     // Check group-based access
     if (allowedGroups.length > 0 && req.user?.groups) {
       const hasAllowedGroup = req.user.groups.some(group => allowedGroups.includes(group));
@@ -273,7 +276,7 @@ export function createAuthorizationMiddleware(options = {}) {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
     }
-    
+
     next();
   };
 }
@@ -287,10 +290,10 @@ export function createAuthorizationMiddleware(options = {}) {
  */
 export function canUserAccessResource(user, resourceType, resourceId) {
   if (!user?.permissions) return false;
-  
+
   const allowedResources = user.permissions[resourceType];
   if (!allowedResources) return false;
-  
+
   return allowedResources.has('*') || allowedResources.has(resourceId);
 }
 
@@ -304,14 +307,14 @@ export function addAuthenticatedGroup(userGroups, authConfig) {
   if (!Array.isArray(userGroups)) {
     userGroups = [];
   }
-  
+
   const authenticatedGroup = authConfig?.authenticatedGroup || 'authenticated';
-  
+
   // Add authenticated group if not already present
   if (!userGroups.includes(authenticatedGroup)) {
     userGroups.push(authenticatedGroup);
   }
-  
+
   return userGroups;
 }
 
@@ -326,7 +329,7 @@ export function addProviderGroups(userGroups, providerName, providerConfig) {
   if (!Array.isArray(userGroups)) {
     userGroups = [];
   }
-  
+
   // Add provider-specific default groups
   if (providerConfig?.defaultGroups && Array.isArray(providerConfig.defaultGroups)) {
     for (const group of providerConfig.defaultGroups) {
@@ -335,7 +338,7 @@ export function addProviderGroups(userGroups, providerName, providerConfig) {
       }
     }
   }
-  
+
   return userGroups;
 }
 
@@ -350,21 +353,21 @@ export function enhanceUserGroups(user, authConfig, providerConfig = null) {
   if (!user || user.id === 'anonymous') {
     return user; // Don't modify anonymous users
   }
-  
+
   // Start with existing groups or empty array
   let groups = Array.isArray(user.groups) ? [...user.groups] : [];
-  
+
   // Add authenticated group to all logged-in users
   groups = addAuthenticatedGroup(groups, authConfig);
-  
+
   // Add provider-specific groups if provider config is provided
   if (providerConfig && user.provider) {
     groups = addProviderGroups(groups, user.provider, providerConfig);
   }
-  
+
   // Update user groups
   user.groups = groups;
-  
+
   return user;
 }
 

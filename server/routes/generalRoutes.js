@@ -1,5 +1,8 @@
 import configCache from '../configCache.js';
-import { filterResourcesByPermissions, enhanceUserWithPermissions } from '../utils/authorization.js';
+import {
+  filterResourcesByPermissions,
+  enhanceUserWithPermissions
+} from '../utils/authorization.js';
 import { authRequired, authOptional, appAccessRequired } from '../middleware/authRequired.js';
 import crypto from 'crypto';
 
@@ -8,10 +11,10 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     try {
       const platformConfig = req.app.get('platform') || {};
       const authConfig = platformConfig.auth || {};
-      
+
       // Check if anonymous access is allowed
       if (!authConfig.allowAnonymous && (!req.user || req.user.id === 'anonymous')) {
-        return res.status(401).json({ 
+        return res.status(401).json({
           error: 'Authentication required',
           code: 'AUTH_REQUIRED',
           message: 'You must be logged in to access this resource'
@@ -28,14 +31,14 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       // Generate user-specific ETag to prevent cache poisoning between users with different permissions
       let userSpecificEtag = appsEtag;
       let allowedApps = new Set();
-      
+
       // Force permission enhancement if not already done
       if (req.user && !req.user.permissions) {
         const platformConfig = req.app.get('platform') || {};
         const authConfig = platformConfig.auth || {};
         req.user = enhanceUserWithPermissions(req.user, authConfig);
       }
-      
+
       // Apply group-based filtering if user is authenticated
       if (req.user && req.user.permissions) {
         allowedApps = req.user.permissions.apps || new Set();
@@ -57,7 +60,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
           .update(JSON.stringify(appIds))
           .digest('hex')
           .substring(0, 8);
-        
+
         userSpecificEtag = `${appsEtag}-${contentHash}`;
       }
       // If apps.length === originalAppsCount, user sees all apps, use original ETag

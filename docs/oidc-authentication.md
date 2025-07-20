@@ -93,20 +93,20 @@ AUTH0_DOMAIN=your-domain.auth0.com
 
 Each OIDC provider requires the following configuration:
 
-| Field | Description | Required |
-|-------|-------------|----------|
-| `name` | Unique provider identifier | Yes |
-| `displayName` | Human-readable provider name | No |
-| `clientId` | OAuth2 client ID | Yes |
-| `clientSecret` | OAuth2 client secret | Yes |
-| `authorizationURL` | Provider's authorization endpoint | Yes |
-| `tokenURL` | Provider's token endpoint | Yes |
-| `userInfoURL` | Provider's user info endpoint | Yes |
-| `scope` | OAuth2 scopes to request | No (default: `["openid", "profile", "email"]`) |
-| `callbackURL` | Callback URL after authentication | No (auto-generated) |
-| `groupsAttribute` | User attribute containing group membership | No |
-| `defaultGroups` | Default groups assigned to users from this provider | No |
-| `pkce` | Enable PKCE for enhanced security | No (default: `true`) |
+| Field              | Description                                         | Required                                       |
+| ------------------ | --------------------------------------------------- | ---------------------------------------------- |
+| `name`             | Unique provider identifier                          | Yes                                            |
+| `displayName`      | Human-readable provider name                        | No                                             |
+| `clientId`         | OAuth2 client ID                                    | Yes                                            |
+| `clientSecret`     | OAuth2 client secret                                | Yes                                            |
+| `authorizationURL` | Provider's authorization endpoint                   | Yes                                            |
+| `tokenURL`         | Provider's token endpoint                           | Yes                                            |
+| `userInfoURL`      | Provider's user info endpoint                       | Yes                                            |
+| `scope`            | OAuth2 scopes to request                            | No (default: `["openid", "profile", "email"]`) |
+| `callbackURL`      | Callback URL after authentication                   | No (auto-generated)                            |
+| `groupsAttribute`  | User attribute containing group membership          | No                                             |
+| `defaultGroups`    | Default groups assigned to users from this provider | No                                             |
+| `pkce`             | Enable PKCE for enhanced security                   | No (default: `true`)                           |
 
 ## Provider Setup
 
@@ -208,6 +208,7 @@ The complete group assignment process for an OIDC user:
 4. **Add Authenticated Group**: Add the global `authenticatedGroup`
 
 **Example**: A Microsoft user with groups `["HR-Team", "Employees"]` would get:
+
 - Original: `["HR-Team", "Employees"]`
 - After mapping: `["hr", "user"]` (if mapped in groupMap.json)
 - After provider groups: `["hr", "user", "microsoft-users"]`
@@ -220,11 +221,12 @@ This ensures every OIDC user has at least the `authenticated` and provider-speci
 Users with multiple groups receive the **union of all permissions** from every group they belong to. The system uses Set aggregation to combine permissions without duplicates.
 
 **Example Permission Aggregation**:
+
 ```javascript
 // User groups: ["authenticated", "microsoft-users", "hr"]
 
 // Individual group permissions:
-// - authenticated: 5 apps, 4 models, 2 prompts  
+// - authenticated: 5 apps, 4 models, 2 prompts
 // - microsoft-users: 3 apps, 2 models, 2 prompts
 // - hr: 4 apps, 2 models, 1 prompt
 
@@ -232,6 +234,7 @@ Users with multiple groups receive the **union of all permissions** from every g
 ```
 
 **Benefits for OIDC Users**:
+
 - **Provider Groups**: Get baseline access through provider-specific groups
 - **Authenticated Group**: Get additional access through the global authenticated group
 - **Custom Groups**: Get specialized access through role-based groups
@@ -323,20 +326,17 @@ import { useAuth } from '../contexts/AuthContext';
 
 function LoginForm() {
   const { loginWithOidc, authConfig } = useAuth();
-  
-  const handleOidcLogin = (providerName) => {
+
+  const handleOidcLogin = providerName => {
     loginWithOidc(providerName);
   };
 
   const providers = authConfig?.authMethods?.oidc?.providers || [];
-  
+
   return (
     <div>
       {providers.map(provider => (
-        <button
-          key={provider.name}
-          onClick={() => handleOidcLogin(provider.name)}
-        >
+        <button key={provider.name} onClick={() => handleOidcLogin(provider.name)}>
           Sign in with {provider.displayName}
         </button>
       ))}
@@ -495,6 +495,7 @@ DEBUG=auth:* npm start
 ## Implementation Status
 
 ✅ **Complete**:
+
 - Core OIDC authentication flow
 - Multiple provider support
 - Client-side integration

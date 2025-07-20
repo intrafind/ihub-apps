@@ -69,21 +69,31 @@ const AdminNavigation = () => {
       current: location.pathname.startsWith('/admin/auth')
     },
     // Only show Users navigation if local auth is enabled (since users are only managed locally)
-    ...(platformConfig?.localAuth?.enabled ? [{
-      key: 'users',
-      name: t('admin.nav.users', 'Users'),
-      href: '/admin/users',
-      icon: 'user',
-      current: location.pathname.startsWith('/admin/users')
-    }] : []),
+    ...(platformConfig?.localAuth?.enabled
+      ? [
+          {
+            key: 'users',
+            name: t('admin.nav.users', 'Users'),
+            href: '/admin/users',
+            icon: 'user',
+            current: location.pathname.startsWith('/admin/users')
+          }
+        ]
+      : []),
     // Only show Groups navigation if authentication is enabled (not anonymous-only mode)
-    ...((platformConfig?.localAuth?.enabled || platformConfig?.oidcAuth?.enabled || platformConfig?.proxyAuth?.enabled) ? [{
-      key: 'groups',
-      name: t('admin.nav.groups', 'Groups'),
-      href: '/admin/groups',
-      icon: 'users',
-      current: location.pathname.startsWith('/admin/groups')
-    }] : []),
+    ...(platformConfig?.localAuth?.enabled ||
+    platformConfig?.oidcAuth?.enabled ||
+    platformConfig?.proxyAuth?.enabled
+      ? [
+          {
+            key: 'groups',
+            name: t('admin.nav.groups', 'Groups'),
+            href: '/admin/groups',
+            icon: 'users',
+            current: location.pathname.startsWith('/admin/groups')
+          }
+        ]
+      : []),
     {
       key: 'system',
       name: t('admin.nav.system', 'System'),

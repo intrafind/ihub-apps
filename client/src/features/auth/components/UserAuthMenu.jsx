@@ -19,7 +19,7 @@ const UserAuthMenu = () => {
 
   // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event) => {
+    const handleClickOutside = event => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
       }
@@ -37,9 +37,10 @@ const UserAuthMenu = () => {
   }
 
   // Check if any authentication methods are actually enabled
-  const hasEnabledAuthMethods = platformConfig?.localAuth?.enabled || 
-                                platformConfig?.oidcAuth?.enabled || 
-                                platformConfig?.proxyAuth?.enabled;
+  const hasEnabledAuthMethods =
+    platformConfig?.localAuth?.enabled ||
+    platformConfig?.oidcAuth?.enabled ||
+    platformConfig?.proxyAuth?.enabled;
 
   // Don't show login options when in anonymous-only mode
   // This happens when allowAnonymous is true and no auth methods are enabled
@@ -50,7 +51,10 @@ const UserAuthMenu = () => {
   // If anonymous access is not allowed and user is not authenticated, show login modal
   if (!allowAnonymous && !isAuthenticated) {
     return createPortal(
-      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full" style={{ zIndex: 2147483647 }}>
+      <div
+        className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full"
+        style={{ zIndex: 2147483647 }}
+      >
         <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
           <LoginForm />
         </div>
@@ -112,9 +116,7 @@ const UserAuthMenu = () => {
                     <p className="text-sm font-medium text-gray-900 truncate">
                       {user?.name || user?.username || 'User'}
                     </p>
-                    {user?.email && (
-                      <p className="text-sm text-gray-500 truncate">{user.email}</p>
-                    )}
+                    {user?.email && <p className="text-sm text-gray-500 truncate">{user.email}</p>}
                     {user?.groups && user.groups.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {user.groups.map((group, index) => (
@@ -179,23 +181,27 @@ const UserAuthMenu = () => {
       )}
 
       {/* Login modal */}
-      {showLoginModal && createPortal(
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full" style={{ zIndex: 2147483647 }}>
-          <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Sign In</h3>
-              <button
-                onClick={() => setShowLoginModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <Icon name="x" size="md" />
-              </button>
+      {showLoginModal &&
+        createPortal(
+          <div
+            className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full"
+            style={{ zIndex: 2147483647 }}
+          >
+            <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Sign In</h3>
+                <button
+                  onClick={() => setShowLoginModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <Icon name="x" size="md" />
+                </button>
+              </div>
+              <LoginForm onSuccess={() => setShowLoginModal(false)} />
             </div>
-            <LoginForm onSuccess={() => setShowLoginModal(false)} />
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

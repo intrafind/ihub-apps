@@ -15,7 +15,7 @@ const configuredProviders = new Map();
 export function configureOidcProviders() {
   const platform = configCache.getPlatform() || {};
   const oidcConfig = platform.oidcAuth || {};
-  
+
   if (!oidcConfig.enabled || !oidcConfig.providers?.length) {
     return;
   }
@@ -25,42 +25,51 @@ export function configureOidcProviders() {
 
   // Configure each OIDC provider
   for (const provider of oidcConfig.providers) {
-    if (!provider.name || !provider.clientId || !provider.clientSecret || 
-        !provider.authorizationURL || !provider.tokenURL || !provider.userInfoURL) {
+    if (
+      !provider.name ||
+      !provider.clientId ||
+      !provider.clientSecret ||
+      !provider.authorizationURL ||
+      !provider.tokenURL ||
+      !provider.userInfoURL
+    ) {
       console.warn(`OIDC provider ${provider.name || 'unnamed'} missing required configuration`);
       continue;
     }
 
     try {
       // Create OAuth2 strategy for this provider
-      const strategy = new OAuth2Strategy({
-        authorizationURL: provider.authorizationURL,
-        tokenURL: provider.tokenURL,
-        clientID: provider.clientId,
-        clientSecret: provider.clientSecret,
-        callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`,
-        scope: provider.scope || ['openid', 'profile', 'email'],
-        state: true,
-        pkce: provider.pkce ?? true
-      }, async (accessToken, _refreshToken, _profile, done) => {
-        try {
-          // Get user info from OIDC provider
-          const userInfo = await fetchUserInfo(provider.userInfoURL, accessToken);
-          
-          // Normalize user data
-          const user = normalizeOidcUser(userInfo, provider);
-          
-          return done(null, user);
-        } catch (error) {
-          console.error(`OIDC user info fetch error for provider ${provider.name}:`, error);
-          return done(error, null);
+      const strategy = new OAuth2Strategy(
+        {
+          authorizationURL: provider.authorizationURL,
+          tokenURL: provider.tokenURL,
+          clientID: provider.clientId,
+          clientSecret: provider.clientSecret,
+          callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`,
+          scope: provider.scope || ['openid', 'profile', 'email'],
+          state: true,
+          pkce: provider.pkce ?? true
+        },
+        async (accessToken, _refreshToken, _profile, done) => {
+          try {
+            // Get user info from OIDC provider
+            const userInfo = await fetchUserInfo(provider.userInfoURL, accessToken);
+
+            // Normalize user data
+            const user = normalizeOidcUser(userInfo, provider);
+
+            return done(null, user);
+          } catch (error) {
+            console.error(`OIDC user info fetch error for provider ${provider.name}:`, error);
+            return done(error, null);
+          }
         }
-      });
+      );
 
       // Register the strategy with a unique name
       const strategyName = `oidc-${provider.name}`;
       passport.use(strategyName, strategy);
-      
+
       configuredProviders.set(provider.name, {
         ...provider,
         strategyName
@@ -79,8 +88,8 @@ export function configureOidcProviders() {
 async function fetchUserInfo(userInfoURL, accessToken) {
   const response = await fetch(userInfoURL, {
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept': 'application/json'
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json'
     }
   });
 
@@ -98,9 +107,12 @@ function normalizeOidcUser(userInfo, provider) {
   // Handle different provider formats
   const userId = userInfo.sub || userInfo.id || userInfo.preferred_username || userInfo.email;
   const email = userInfo.email || userInfo.mail || userInfo.emailAddress;
-  const name = userInfo.name || userInfo.displayName || 
-               `${userInfo.given_name || ''} ${userInfo.family_name || ''}`.trim() ||
-               userInfo.preferred_username || email;
+  const name =
+    userInfo.name ||
+    userInfo.displayName ||
+    `${userInfo.given_name || ''} ${userInfo.family_name || ''}`.trim() ||
+    userInfo.preferred_username ||
+    email;
 
   // Extract groups from user info
   let groups = [];
@@ -109,14 +121,17 @@ function normalizeOidcUser(userInfo, provider) {
     if (Array.isArray(groupsData)) {
       groups = groupsData;
     } else if (typeof groupsData === 'string') {
-      groups = groupsData.split(',').map(g => g.trim()).filter(Boolean);
+      groups = groupsData
+        .split(',')
+        .map(g => g.trim())
+        .filter(Boolean);
     }
   }
 
   // Apply group mapping
   const groupMap = configCache.getGroupMap();
   const mappedGroups = new Set();
-  
+
   for (const group of groups) {
     const mapped = groupMap[group] || group;
     if (Array.isArray(mapped)) {
@@ -141,7 +156,7 @@ function normalizeOidcUser(userInfo, provider) {
   // Enhance user with authenticated group and provider-specific groups
   const platform = configCache.getPlatform() || {};
   const authConfig = platform.auth || {};
-  
+
   user = enhanceUserGroups(user, authConfig, provider);
 
   return user;
@@ -153,7 +168,7 @@ function normalizeOidcUser(userInfo, provider) {
 function generateJwtToken(user) {
   const platform = configCache.getPlatform() || {};
   const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret;
-  
+
   if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
     throw new Error('JWT secret not configured for OIDC authentication');
   }
@@ -186,7 +201,7 @@ function generateJwtToken(user) {
  */
 export function initializePassport(app) {
   app.use(passport.initialize());
-  
+
   // Serialize user for session (not used in stateless mode, but required by Passport)
   passport.serializeUser((user, done) => {
     done(null, user);
@@ -246,24 +261,24 @@ export function createOidcCallbackHandler(providerName) {
     passport.authenticate(provider.strategyName, { session: false }, (err, user, info) => {
       if (err) {
         console.error(`OIDC authentication error for provider ${providerName}:`, err);
-        return res.status(500).json({ 
-          error: 'Authentication failed', 
-          details: err.message 
+        return res.status(500).json({
+          error: 'Authentication failed',
+          details: err.message
         });
       }
 
       if (!user) {
         console.warn(`OIDC authentication failed for provider ${providerName}:`, info);
-        return res.status(401).json({ 
-          error: 'Authentication failed', 
-          details: info?.message || 'Unknown error' 
+        return res.status(401).json({
+          error: 'Authentication failed',
+          details: info?.message || 'Unknown error'
         });
       }
 
       try {
         // Generate JWT token
         const { token, expiresIn } = generateJwtToken(user);
-        
+
         // Get return URL
         const returnUrl = req.session?.returnUrl || '/';
         if (req.session) {
@@ -290,12 +305,11 @@ export function createOidcCallbackHandler(providerName) {
           token,
           expiresIn
         });
-
       } catch (tokenError) {
         console.error(`JWT token generation error for provider ${providerName}:`, tokenError);
-        return res.status(500).json({ 
-          error: 'Token generation failed', 
-          details: tokenError.message 
+        return res.status(500).json({
+          error: 'Token generation failed',
+          details: tokenError.message
         });
       }
     })(req, res, next);

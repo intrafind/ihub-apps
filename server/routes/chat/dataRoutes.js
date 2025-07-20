@@ -153,47 +153,64 @@ export default function registerDataRoutes(app) {
       const authConfig = {
         ...platform.auth,
         mode: process.env.AUTH_MODE || platform.auth?.mode || 'proxy',
-        allowAnonymous: process.env.AUTH_ALLOW_ANONYMOUS === 'true' 
-          ? true 
-          : process.env.AUTH_ALLOW_ANONYMOUS === 'false' 
-            ? false 
-            : platform.auth?.allowAnonymous ?? true,
-        anonymousGroup: process.env.AUTH_ANONYMOUS_GROUP || platform.auth?.anonymousGroup || 'anonymous'
+        allowAnonymous:
+          process.env.AUTH_ALLOW_ANONYMOUS === 'true'
+            ? true
+            : process.env.AUTH_ALLOW_ANONYMOUS === 'false'
+              ? false
+              : (platform.auth?.allowAnonymous ?? true),
+        anonymousGroup:
+          process.env.AUTH_ANONYMOUS_GROUP || platform.auth?.anonymousGroup || 'anonymous'
       };
 
       // Apply environment variable overrides for proxy auth
       const proxyAuthConfig = {
         ...platform.proxyAuth,
-        enabled: process.env.PROXY_AUTH_ENABLED === 'true' 
-          ? true 
-          : process.env.PROXY_AUTH_ENABLED === 'false' 
-            ? false 
-            : platform.proxyAuth?.enabled ?? false,
-        userHeader: process.env.PROXY_AUTH_USER_HEADER || platform.proxyAuth?.userHeader || 'X-Forwarded-User',
-        groupsHeader: process.env.PROXY_AUTH_GROUPS_HEADER || platform.proxyAuth?.groupsHeader || 'X-Forwarded-Groups',
-        anonymousGroup: process.env.PROXY_AUTH_ANONYMOUS_GROUP || platform.proxyAuth?.anonymousGroup || 'anonymous'
+        enabled:
+          process.env.PROXY_AUTH_ENABLED === 'true'
+            ? true
+            : process.env.PROXY_AUTH_ENABLED === 'false'
+              ? false
+              : (platform.proxyAuth?.enabled ?? false),
+        userHeader:
+          process.env.PROXY_AUTH_USER_HEADER ||
+          platform.proxyAuth?.userHeader ||
+          'X-Forwarded-User',
+        groupsHeader:
+          process.env.PROXY_AUTH_GROUPS_HEADER ||
+          platform.proxyAuth?.groupsHeader ||
+          'X-Forwarded-Groups',
+        anonymousGroup:
+          process.env.PROXY_AUTH_ANONYMOUS_GROUP ||
+          platform.proxyAuth?.anonymousGroup ||
+          'anonymous'
       };
 
       // Apply environment variable overrides for local auth
       const localAuthConfig = {
         ...platform.localAuth,
-        enabled: process.env.LOCAL_AUTH_ENABLED === 'true' 
-          ? true 
-          : process.env.LOCAL_AUTH_ENABLED === 'false' 
-            ? false 
-            : platform.localAuth?.enabled ?? false,
-        sessionTimeoutMinutes: parseInt(process.env.LOCAL_AUTH_SESSION_TIMEOUT) || platform.localAuth?.sessionTimeoutMinutes || 480,
+        enabled:
+          process.env.LOCAL_AUTH_ENABLED === 'true'
+            ? true
+            : process.env.LOCAL_AUTH_ENABLED === 'false'
+              ? false
+              : (platform.localAuth?.enabled ?? false),
+        sessionTimeoutMinutes:
+          parseInt(process.env.LOCAL_AUTH_SESSION_TIMEOUT) ||
+          platform.localAuth?.sessionTimeoutMinutes ||
+          480,
         jwtSecret: process.env.JWT_SECRET || platform.localAuth?.jwtSecret || '${JWT_SECRET}'
       };
 
       // Apply environment variable overrides for OIDC auth
       const oidcAuthConfig = {
         ...platform.oidcAuth,
-        enabled: process.env.OIDC_AUTH_ENABLED === 'true' 
-          ? true 
-          : process.env.OIDC_AUTH_ENABLED === 'false' 
-            ? false 
-            : platform.oidcAuth?.enabled ?? false
+        enabled:
+          process.env.OIDC_AUTH_ENABLED === 'true'
+            ? true
+            : process.env.OIDC_AUTH_ENABLED === 'false'
+              ? false
+              : (platform.oidcAuth?.enabled ?? false)
       };
 
       // Sanitize configs for client - remove sensitive information
@@ -204,18 +221,21 @@ export default function registerDataRoutes(app) {
         // Exclude jwtSecret
       };
 
-      const sanitizedOidcAuth = oidcAuthConfig.enabled ? {
-        enabled: oidcAuthConfig.enabled,
-        providers: oidcAuthConfig.providers?.map(provider => ({
-          name: provider.name,
-          displayName: provider.displayName,
-          authorizationURL: provider.authorizationURL,
-          callbackURL: provider.callbackURL,
-          scope: provider.scope,
-          pkce: provider.pkce
-          // Exclude clientSecret, clientId, tokenURL, userInfoURL
-        })) || []
-      } : { enabled: false };
+      const sanitizedOidcAuth = oidcAuthConfig.enabled
+        ? {
+            enabled: oidcAuthConfig.enabled,
+            providers:
+              oidcAuthConfig.providers?.map(provider => ({
+                name: provider.name,
+                displayName: provider.displayName,
+                authorizationURL: provider.authorizationURL,
+                callbackURL: provider.callbackURL,
+                scope: provider.scope,
+                pkce: provider.pkce
+                // Exclude clientSecret, clientId, tokenURL, userInfoURL
+              })) || []
+          }
+        : { enabled: false };
 
       const sanitizedProxyAuth = {
         enabled: proxyAuthConfig.enabled,
@@ -224,10 +244,12 @@ export default function registerDataRoutes(app) {
       };
 
       // Sanitize admin config - remove sensitive admin credentials
-      const sanitizedAdmin = platform.admin ? {
-        pages: platform.admin.pages
-        // Exclude admin.secret
-      } : {};
+      const sanitizedAdmin = platform.admin
+        ? {
+            pages: platform.admin.pages
+            // Exclude admin.secret
+          }
+        : {};
 
       // Add version and computed salt to platform response
       const enhancedPlatform = {

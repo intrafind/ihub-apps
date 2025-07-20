@@ -54,14 +54,8 @@
     ]
   },
   "authorization": {
-    "adminGroups": [
-      "admin",
-      "admins"
-    ],
-    "userGroups": [
-      "user",
-      "users"
-    ],
+    "adminGroups": ["admin", "admins"],
+    "userGroups": ["user", "users"],
     "anonymousAccess": true,
     "defaultGroup": "anonymous"
   },
@@ -83,16 +77,10 @@
         "authorizationURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/auth",
         "tokenURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/token",
         "userInfoURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/userinfo",
-        "scope": [
-          "openid",
-          "profile",
-          "email"
-        ],
+        "scope": ["openid", "profile", "email"],
         "callbackURL": "/api/auth/oidc/keycloak/callback",
         "groupsAttribute": "groups",
-        "defaultGroups": [
-          "users"
-        ],
+        "defaultGroups": ["users"],
         "pkce": true
       },
       {
@@ -103,16 +91,10 @@
         "authorizationURL": "https://accounts.google.com/o/oauth2/v2/auth",
         "tokenURL": "https://www.googleapis.com/oauth2/v4/token",
         "userInfoURL": "https://www.googleapis.com/oauth2/v2/userinfo",
-        "scope": [
-          "openid",
-          "profile",
-          "email"
-        ],
+        "scope": ["openid", "profile", "email"],
         "callbackURL": "/api/auth/oidc/google/callback",
         "groupsAttribute": "groups",
-        "defaultGroups": [
-          "google-users"
-        ],
+        "defaultGroups": ["google-users"],
         "pkce": true
       },
       {
@@ -123,17 +105,10 @@
         "authorizationURL": "https://login.microsoftonline.com/09bb6857-2fbd-4b58-9c1a-93213574239a/oauth2/v2.0/authorize",
         "tokenURL": "https://login.microsoftonline.com/09bb6857-2fbd-4b58-9c1a-93213574239a/oauth2/v2.0/token",
         "userInfoURL": "https://graph.microsoft.com/v1.0/me",
-        "scope": [
-          "openid",
-          "profile",
-          "email",
-          "User.Read"
-        ],
+        "scope": ["openid", "profile", "email", "User.Read"],
         "callbackURL": "/api/auth/oidc/microsoft/callback",
         "groupsAttribute": "groups",
-        "defaultGroups": [
-          "microsoft-users"
-        ],
+        "defaultGroups": ["microsoft-users"],
         "pkce": true
       },
       {
@@ -144,16 +119,10 @@
         "authorizationURL": "https://${AUTH0_DOMAIN}/authorize",
         "tokenURL": "https://${AUTH0_DOMAIN}/oauth/token",
         "userInfoURL": "https://${AUTH0_DOMAIN}/userinfo",
-        "scope": [
-          "openid",
-          "profile",
-          "email"
-        ],
+        "scope": ["openid", "profile", "email"],
         "callbackURL": "/api/auth/oidc/auth0/callback",
         "groupsAttribute": "groups",
-        "defaultGroups": [
-          "auth0-users"
-        ],
+        "defaultGroups": ["auth0-users"],
         "pkce": true
       }
     ]

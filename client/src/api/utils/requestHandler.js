@@ -70,12 +70,14 @@ export const handleApiResponse = async (
         return data;
       } catch (error) {
         // Create user-friendly error messages
-        let userMessage = error.response?.data?.error || error.message || 'An unexpected error occurred';
+        let userMessage =
+          error.response?.data?.error || error.message || 'An unexpected error occurred';
         let userFriendlyMessage = userMessage;
-        
+
         // Handle specific error types with better messages
         if (error.response?.status === 403) {
-          userFriendlyMessage = 'You do not have permission to access this resource. Please contact your administrator if you believe this is an error.';
+          userFriendlyMessage =
+            'You do not have permission to access this resource. Please contact your administrator if you believe this is an error.';
         } else if (error.response?.status === 401) {
           userFriendlyMessage = 'Please log in to access this resource.';
         } else if (error.response?.status === 404) {

@@ -81,6 +81,7 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
 ### ✅ **Fully Implemented Components:**
 
 #### **Core Authentication Infrastructure**
+
 1. **Enhanced Platform Configuration** - `contents/config/platform.json`
    - Complete `auth` section with mode configuration
    - Environment variable overrides for all auth settings
@@ -104,6 +105,7 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
    - Authorization middleware factory
 
 #### **API Endpoints**
+
 5. **Authentication API Routes** - `server/routes/auth.js`
    - `POST /api/auth/login` - Local authentication
    - `GET /api/auth/user` - Current user information
@@ -117,6 +119,7 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
    - Real-time configuration for client applications
 
 #### **Group-Based Access Control**
+
 7. **Group Permissions System** - `contents/config/groupPermissions.json`
    - Comprehensive permission matrix for all user groups
    - Wildcard support (`*`) for admin access
@@ -130,11 +133,12 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
 
 9. **Resource Filtering Integration**
    - `/api/apps` - Group-based app filtering
-   - `/api/models` - Group-based model filtering  
+   - `/api/models` - Group-based model filtering
    - `/api/prompts` - Group-based prompt filtering
    - Individual resource access validation
 
 #### **Client-Side Components**
+
 10. **Authentication Context** - `client/src/shared/contexts/AuthContext.jsx`
     - Complete state management for authentication
     - Login/logout functionality
@@ -147,6 +151,7 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
     - Complete authentication UI workflow
 
 #### **Security Enhancements**
+
 12. **Enhanced Password Security**
     - Bcrypt with user ID salt for unique hashes per user
     - Prevents rainbow table attacks and hash copying
@@ -158,6 +163,7 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
     - Seamless transition from anonymous to authenticated
 
 #### **Documentation & Testing**
+
 14. **Comprehensive Documentation**
     - `docs/external-authentication.md` - Complete authentication guide
     - `docs/GETTING_STARTED.md` - Quick start with no-auth emphasis
@@ -171,6 +177,7 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
 ### ✅ **OIDC Authentication Mode (COMPLETE - 2025-07-19)**
 
 #### **🎉 OIDC Authentication Mode (FULLY IMPLEMENTED)**
+
 1. **Passport.js Integration** ✅ - Full OIDC provider support implemented
    - Dependencies: passport, passport-oauth2 installed and configured
    - Implementation: Complete server-side OIDC flows and callback handling
@@ -193,6 +200,7 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
    - **Set-Based Logic**: Permission aggregation uses JavaScript Sets to prevent duplicates
 
 #### **🔧 Implementation Details (COMPLETE)**
+
 - **Server Files**: `server/middleware/oidcAuth.js`, enhanced auth routes, session management
 - **Client Files**: Enhanced `AuthContext.jsx`, updated `LoginForm.jsx` with provider buttons
 - **Configuration**: Complete provider examples in `platform.json` with environment variable support
@@ -203,6 +211,7 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
 ### ⚠️ **Remaining Optional Enhancements (Future Implementation):**
 
 #### **🔧 Advanced Features (Optional Enhancements)**
+
 4. **User Profile Management** ❌ - User profile editing interface
    - Current: Users can view their info via UserMenu
    - Enhancement: Profile editing, password changes, preferences
@@ -244,6 +253,7 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
 ### 🧪 **Testing Recommendations:**
 
 #### **Proxy Mode Testing:**
+
 ```bash
 # Test with headers
 curl -H "X-Forwarded-User: test@example.com" \
@@ -256,6 +266,7 @@ curl -H "Authorization: Bearer <jwt-token>" \
 ```
 
 #### **Configuration Testing:**
+
 ```bash
 # Test platform config endpoint
 curl http://localhost:3000/api/configs/platform | jq '.auth'
@@ -267,11 +278,13 @@ npm start
 ```
 
 #### **Integration Testing Setup:**
+
 - Use Docker containers with nginx proxy for header injection
 - Mock JWT providers with test keys
 - Create test user directories for local mode
 
 ### 📋 **Next Steps (Future Enhancements):**
+
 1. ✅ ~~**OIDC Implementation**~~ - **COMPLETE** - Full Passport.js integration for OpenID Connect providers
 2. **User Management UI** - Admin panel interface for user management
 3. **Advanced Session Features** - Token refresh, session monitoring
@@ -286,8 +299,9 @@ npm start
 ### **Core Questions & Solutions:**
 
 #### **1. How to leverage groups for admin access?**
+
 - **Current State:** Admin access uses Bearer token from `platform.json` admin secret
-- **Proposed Enhancement:** 
+- **Proposed Enhancement:**
   ```json
   "authorization": {
     "adminGroups": ["Admins", "IT-Admin", "Platform-Admin"],
@@ -298,6 +312,7 @@ npm start
 - **Implementation:** Check if user's groups intersect with `adminGroups` for admin routes
 
 #### **2. How to handle anonymous users/groups?**
+
 - **Anonymous User Mapping:** Users without authentication get assigned to `["anonymous"]` group
 - **Configuration:**
   ```json
@@ -311,12 +326,13 @@ npm start
 #### **3. How to filter apps, prompts, models by groups?**
 
 **Group-Centric Access Control (Recommended Approach):**
+
 ```json
 {
   "groups": {
     "admin": {
       "apps": ["*"],
-      "prompts": ["*"], 
+      "prompts": ["*"],
       "models": ["*"],
       "adminAccess": true
     },
@@ -345,12 +361,14 @@ npm start
 ```
 
 **Benefits of Group-Centric Approach:**
+
 - **Centralized**: All permissions defined in one configuration
 - **Wildcard Support**: `"*"` means access to all resources of that type
 - **Flexible**: Groups can have empty arrays (no access) or specific resource lists
 - **Scalable**: Easy to add new groups without modifying individual resource files
 - **Override Ready**: Can be enhanced later with resource-level restrictions
-```
+
+````
 
 ### **Implementation Plan:**
 
@@ -361,7 +379,7 @@ npm start
      "groups": {
        "admin": {
          "apps": ["*"],
-         "prompts": ["*"], 
+         "prompts": ["*"],
          "models": ["*"],
          "adminAccess": true
        },
@@ -377,13 +395,13 @@ npm start
        }
      }
    }
-   ```
+````
 
 2. **Enhanced Group Mapping** (`contents/config/groupMap.json`)
    ```json
    {
      "IT-Admins": ["admin"],
-     "Platform-Admins": ["admin"], 
+     "Platform-Admins": ["admin"],
      "HR-Team": ["hr"],
      "Employees": ["users"],
      "Contractors": ["contractors"],
@@ -392,31 +410,38 @@ npm start
    ```
 
 #### **Phase 2: Group-Based Resource Filtering**
+
 1. **Authorization Utility** (`server/utils/authorization.js`)
+
    ```javascript
    export function getPermissionsForUser(userGroups, groupPermissions) {
-     const permissions = { apps: new Set(), prompts: new Set(), models: new Set(), adminAccess: false };
-     
+     const permissions = {
+       apps: new Set(),
+       prompts: new Set(),
+       models: new Set(),
+       adminAccess: false
+     };
+
      for (const group of userGroups) {
        const groupPerms = groupPermissions.groups[group];
        if (!groupPerms) continue;
-       
+
        // Handle wildcards and specific permissions
        if (groupPerms.apps?.includes('*')) permissions.apps.add('*');
        else groupPerms.apps?.forEach(app => permissions.apps.add(app));
-       
+
        if (groupPerms.prompts?.includes('*')) permissions.prompts.add('*');
        else groupPerms.prompts?.forEach(prompt => permissions.prompts.add(prompt));
-       
+
        if (groupPerms.models?.includes('*')) permissions.models.add('*');
        else groupPerms.models?.forEach(model => permissions.models.add(model));
-       
+
        if (groupPerms.adminAccess) permissions.adminAccess = true;
      }
-     
+
      return permissions;
    }
-   
+
    export function filterResourcesByPermissions(resources, allowedResources, resourceType) {
      if (allowedResources.has('*')) return resources;
      return resources.filter(resource => allowedResources.has(resource.id || resource.modelId));
@@ -425,17 +450,18 @@ npm start
 
 2. **Enhanced API Endpoints**
    - `GET /api/apps` - Filter by group permissions
-   - `GET /api/models` - Filter by group permissions  
+   - `GET /api/models` - Filter by group permissions
    - `GET /api/prompts` - Filter by group permissions
 
 #### **Phase 3: Admin Group Integration**
+
 1. **Group-Based Admin Access** - Use `adminAccess: true` from group permissions
-2. **Enhanced Admin Middleware** 
+2. **Enhanced Admin Middleware**
    ```javascript
    export function adminAuth(req, res, next) {
      // Check group-based admin access first
      if (req.user?.permissions?.adminAccess) return next();
-     
+
      // Fall back to Bearer token for backward compatibility
      return legacyAdminAuth(req, res, next);
    }
@@ -445,6 +471,7 @@ npm start
 ### **Configuration Examples:**
 
 #### **Enterprise Setup:**
+
 ```json
 {
   "proxyAuth": {
@@ -461,6 +488,7 @@ npm start
 ```
 
 #### **Open Platform Setup:**
+
 ```json
 {
   "authorization": {
@@ -472,6 +500,7 @@ npm start
 ```
 
 ### **Testing Strategy:**
+
 ```bash
 # Test admin access via groups
 curl -H "X-Forwarded-User: admin@company.com" \
@@ -496,18 +525,21 @@ This strategy provides flexible, group-based authorization while maintaining bac
 The External Authentication Integration concept has been **fully implemented** with the following key accomplishments:
 
 #### **✅ Complete Authentication System**
+
 - **Three Authentication Modes**: Proxy (SSO), Local (username/password), Anonymous (default)
 - **Zero-Configuration Default**: Works immediately without any setup
 - **Enterprise-Ready**: Corporate SSO integration via reverse proxy
 - **Secure Local Auth**: Enhanced bcrypt with user-specific salting
 
 #### **✅ Comprehensive Authorization**
+
 - **Group-Based Permissions**: Flexible access control system
 - **Resource Filtering**: Apps, models, and prompts filtered by user permissions
 - **Anonymous Support**: Full access for unauthenticated users by default
 - **Admin Integration**: Seamless admin panel access control
 
 #### **✅ Production-Ready Implementation**
+
 - **Security Best Practices**: JWT validation, secure password hashing, environment overrides
 - **Client Integration**: Complete React components and context providers
 - **API Endpoints**: Full RESTful authentication API
@@ -515,6 +547,7 @@ The External Authentication Integration concept has been **fully implemented** w
 - **Testing**: Automated test scripts and validation procedures
 
 #### **✅ Deployment Flexibility**
+
 - **No Auth Required**: Default configuration needs zero setup
 - **Easy Restriction**: Simple configuration to limit anonymous access
 - **Corporate Integration**: Ready for enterprise SSO deployments
@@ -531,6 +564,7 @@ The External Authentication Integration concept has been **fully implemented** w
 ### 🔄 **Implementation Status: CORE COMPLETE - PRODUCTION READY**
 
 #### **✅ FULLY IMPLEMENTED (100% Complete)**
+
 The External Authentication Integration concept core requirements are **fully implemented and production-ready**:
 
 - ✅ **Anonymous Access** - Default zero-config operation with full functionality
@@ -544,23 +578,28 @@ The External Authentication Integration concept core requirements are **fully im
 - ✅ **Documentation & Testing** - Comprehensive guides and automated test scripts
 
 #### **❌ NOT IMPLEMENTED (Future Enhancements)**
+
 - ❌ **Advanced Admin UI** - User management interface in admin panel
 - ❌ **Enhanced Security** - Rate limiting, brute force protection
 - ❌ **Audit Logging** - Structured authentication event logging
 - ❌ **Multi-tenant Support** - Organization-based user segmentation
 
 #### **🎯 Current Deployment Readiness**
+
 **Ready for Production:**
+
 - **Personal/Development**: ✅ Zero-config anonymous access
-- **Small Teams**: ✅ Local authentication with user accounts  
+- **Small Teams**: ✅ Local authentication with user accounts
 - **Corporate**: ✅ Proxy authentication with SSO integration
 - **Public/Demo**: ✅ Anonymous access with configurable restrictions
 - **Hybrid**: ✅ Mixed authenticated and anonymous access
 
 **Future Enhancement Needed:**
+
 - **Advanced Management**: Optional UI enhancements for user administration
 
 #### **🏆 Assessment: FULL IMPLEMENTATION COMPLETE**
+
 The system successfully delivers on all primary objectives and provides a comprehensive authentication solution. All core authentication modes (Anonymous, Proxy, Local, and OIDC) are now fully implemented, making this a complete authentication system ready for all deployment scenarios from personal use to enterprise-grade SSO integration.
 
 ---
@@ -568,34 +607,38 @@ The system successfully delivers on all primary objectives and provides a compre
 ## 📊 Quick Reference - Implementation Status
 
 ### **Authentication Modes**
-| Mode | Status | Description |
-|------|--------|-------------|
-| Anonymous | ✅ **Complete** | Default, zero-config, full access |
-| Proxy (SSO) | ✅ **Complete** | Corporate SSO via reverse proxy |
-| Local | ✅ **Complete** | Username/password with secure hashing |
-| OIDC | ✅ **Complete** | OpenID Connect with Google, Microsoft, Auth0 |
+
+| Mode        | Status          | Description                                  |
+| ----------- | --------------- | -------------------------------------------- |
+| Anonymous   | ✅ **Complete** | Default, zero-config, full access            |
+| Proxy (SSO) | ✅ **Complete** | Corporate SSO via reverse proxy              |
+| Local       | ✅ **Complete** | Username/password with secure hashing        |
+| OIDC        | ✅ **Complete** | OpenID Connect with Google, Microsoft, Auth0 |
 
 ### **Core Features**
-| Feature | Status | Implementation |
-|---------|--------|----------------|
-| Group-Based Authorization | ✅ **Complete** | `server/utils/authorization.js` |
-| Resource Filtering | ✅ **Complete** | Apps/models/prompts filtered by permissions |
-| Client Components | ✅ **Complete** | `client/src/features/auth/` |
-| API Endpoints | ✅ **Complete** | `server/routes/auth.js` |
-| Configuration Management | ✅ **Complete** | Environment overrides supported |
-| Security Implementation | ✅ **Complete** | JWT validation, bcrypt+userID hashing |
-| Documentation | ✅ **Complete** | `docs/external-authentication.md` |
+
+| Feature                   | Status          | Implementation                              |
+| ------------------------- | --------------- | ------------------------------------------- |
+| Group-Based Authorization | ✅ **Complete** | `server/utils/authorization.js`             |
+| Resource Filtering        | ✅ **Complete** | Apps/models/prompts filtered by permissions |
+| Client Components         | ✅ **Complete** | `client/src/features/auth/`                 |
+| API Endpoints             | ✅ **Complete** | `server/routes/auth.js`                     |
+| Configuration Management  | ✅ **Complete** | Environment overrides supported             |
+| Security Implementation   | ✅ **Complete** | JWT validation, bcrypt+userID hashing       |
+| Documentation             | ✅ **Complete** | `docs/external-authentication.md`           |
 
 ### **Deployment Scenarios**
-| Scenario | Readiness | Configuration Required |
-|----------|-----------|----------------------|
-| Personal/Development | ✅ **Ready** | None (default) |
-| Small Team | ✅ **Ready** | Enable local auth |
-| Corporate SSO | ✅ **Ready** | Configure proxy auth |
-| Public/Restricted | ✅ **Ready** | Modify anonymous permissions |
-| Enterprise OIDC | ✅ **Ready** | Configure OIDC providers |
+
+| Scenario             | Readiness    | Configuration Required       |
+| -------------------- | ------------ | ---------------------------- |
+| Personal/Development | ✅ **Ready** | None (default)               |
+| Small Team           | ✅ **Ready** | Enable local auth            |
+| Corporate SSO        | ✅ **Ready** | Configure proxy auth         |
+| Public/Restricted    | ✅ **Ready** | Modify anonymous permissions |
+| Enterprise OIDC      | ✅ **Ready** | Configure OIDC providers     |
 
 ### **Key Files**
+
 ```
 Authentication Implementation:
 ├── server/middleware/localAuth.js      ✅ Local authentication

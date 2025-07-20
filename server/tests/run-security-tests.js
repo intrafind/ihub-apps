@@ -2,7 +2,7 @@
 
 /**
  * Security Test Runner
- * 
+ *
  * Runs the authentication security test suite and reports results
  */
 
@@ -23,7 +23,7 @@ const testConfigs = [
     description: 'Core authentication bypass prevention tests'
   },
   {
-    name: 'Authentication Integration Tests', 
+    name: 'Authentication Integration Tests',
     file: 'tests/authentication-integration.test.js',
     description: 'Real-world authentication scenarios and edge cases'
   }
@@ -39,7 +39,7 @@ async function runTest(config) {
       cwd: path.resolve(__dirname, '..')
     });
 
-    jest.on('close', (code) => {
+    jest.on('close', code => {
       if (code === 0) {
         console.log(`\n✅ ${config.name} - PASSED\n`);
         resolve(true);
@@ -49,7 +49,7 @@ async function runTest(config) {
       }
     });
 
-    jest.on('error', (error) => {
+    jest.on('error', error => {
       console.error(`\n💥 Error running ${config.name}:`, error);
       reject(error);
     });
@@ -58,7 +58,7 @@ async function runTest(config) {
 
 async function runAllTests() {
   const results = [];
-  
+
   for (const config of testConfigs) {
     try {
       const result = await runTest(config);
@@ -86,7 +86,7 @@ async function runAllTests() {
 
   console.log('\n' + '-'.repeat(60));
   console.log(`📊 Results: ${passed}/${total} test suites passed`);
-  
+
   if (passed === total) {
     console.log('🎉 ALL SECURITY TESTS PASSED - Authentication is secure!');
     console.log('\n✅ The authentication bypass vulnerability has been successfully fixed');
@@ -98,20 +98,20 @@ async function runAllTests() {
     console.log('⚠️  SECURITY TESTS FAILED - Potential vulnerabilities detected!');
     console.log('\n🚨 Please review failed tests and fix security issues before deployment');
   }
-  
+
   console.log('\n' + '='.repeat(60));
-  
+
   // Exit with appropriate code
   process.exit(passed === total ? 0 : 1);
 }
 
 // Handle uncaught errors
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   console.error('\n💥 Uncaught Exception:', error);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', reason => {
   console.error('\n💥 Unhandled Rejection:', reason);
   process.exit(1);
 });

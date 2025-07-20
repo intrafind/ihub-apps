@@ -2,7 +2,7 @@
 
 ## Quick Start (No Authentication Required)
 
-**AI Hub Apps works immediately without any setup!** 
+**AI Hub Apps works immediately without any setup!**
 
 ```bash
 # 1. Clone and install
@@ -25,7 +25,7 @@ npm run dev
 ✅ **No Login Required**: Anonymous access enabled by default  
 ✅ **30+ AI Apps**: Chat, translation, summarization, analysis tools, and more  
 ✅ **Multiple AI Models**: Support for OpenAI, Anthropic, Google, and local models  
-✅ **Zero Configuration**: Works immediately with sensible defaults  
+✅ **Zero Configuration**: Works immediately with sensible defaults
 
 ## Default Configuration Summary
 
@@ -43,7 +43,7 @@ npm run dev
 Consider enabling authentication if you need:
 
 - **👤 User Tracking**: Know who is using which features
-- **🔒 Access Control**: Restrict apps/models to specific users or groups  
+- **🔒 Access Control**: Restrict apps/models to specific users or groups
 - **📊 Usage Analytics**: Track usage per user or department
 - **🏢 Corporate Integration**: Connect with existing SSO/identity systems
 - **📋 Compliance**: Meet security or audit requirements
@@ -51,21 +51,25 @@ Consider enabling authentication if you need:
 ## Authentication Options
 
 ### Option 1: Keep Default (Recommended for Testing)
+
 - **Setup**: None required
 - **Users**: Everyone has full access
 - **Best For**: Development, testing, personal use
 
-### Option 2: Add Local Authentication  
+### Option 2: Add Local Authentication
+
 - **Setup**: Enable local auth, create user accounts
 - **Users**: Username/password login with different permission levels
 - **Best For**: Small teams, controlled environments
 
 ### Option 3: Corporate SSO Integration
+
 - **Setup**: Configure reverse proxy with corporate authentication
 - **Users**: Authenticate via existing corporate identity provider
 - **Best For**: Enterprise deployments, existing SSO infrastructure
 
 ### Option 4: Restricted Anonymous Access
+
 - **Setup**: Modify group permissions to limit anonymous access
 - **Users**: Anonymous users see limited apps/models
 - **Best For**: Public deployments with controlled feature access

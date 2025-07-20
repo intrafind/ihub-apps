@@ -32,7 +32,7 @@ const AdminUsersPage = () => {
     try {
       const response = await makeAdminApiCall('/api/admin/auth/users');
       const data = await response.json();
-      
+
       // Convert users object to array
       const usersArray = Object.values(data.users || {});
       setUsers(usersArray);
@@ -46,9 +46,9 @@ const AdminUsersPage = () => {
     }
   };
 
-  const handleCreateUser = async (e) => {
+  const handleCreateUser = async e => {
     e.preventDefault();
-    
+
     if (formData.password !== formData.confirmPassword) {
       setMessage({
         type: 'error',
@@ -107,15 +107,15 @@ const AdminUsersPage = () => {
     }
   };
 
-  const handleUpdateUser = async (e) => {
+  const handleUpdateUser = async e => {
     e.preventDefault();
-    
+
     // Process groups string into array
     const groupsArray = formData.groupsString
       .split(',')
       .map(g => g.trim())
       .filter(g => g.length > 0);
-    
+
     try {
       const updateData = {
         email: formData.email,
@@ -171,7 +171,7 @@ const AdminUsersPage = () => {
     }
   };
 
-  const handleDeleteUser = async (userId) => {
+  const handleDeleteUser = async userId => {
     if (!window.confirm('Are you sure you want to delete this user?')) {
       return;
     }
@@ -212,7 +212,7 @@ const AdminUsersPage = () => {
     });
   };
 
-  const startEdit = (user) => {
+  const startEdit = user => {
     setEditingUser(user);
     setFormData({
       username: user.username,
@@ -230,7 +230,6 @@ const AdminUsersPage = () => {
     setEditingUser(null);
     resetForm();
   };
-
 
   if (loading) {
     return (
@@ -252,9 +251,7 @@ const AdminUsersPage = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  User Management
-                </h1>
+                <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
                 <p className="text-gray-600 mt-1">
                   Manage local authentication users and their permissions
                 </p>
@@ -305,9 +302,7 @@ const AdminUsersPage = () => {
           {/* Users List */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Local Users ({users.length})
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900">Local Users ({users.length})</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -337,7 +332,7 @@ const AdminUsersPage = () => {
                       </td>
                     </tr>
                   ) : (
-                    users.map((user) => (
+                    users.map(user => (
                       <tr key={user.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
@@ -350,12 +345,8 @@ const AdminUsersPage = () => {
                               <div className="text-sm font-medium text-gray-900">
                                 {user.name || user.username}
                               </div>
-                              <div className="text-sm text-gray-500">
-                                {user.email}
-                              </div>
-                              <div className="text-xs text-gray-400">
-                                @{user.username}
-                              </div>
+                              <div className="text-sm text-gray-500">{user.email}</div>
+                              <div className="text-xs text-gray-400">@{user.username}</div>
                             </div>
                           </div>
                         </td>
@@ -419,16 +410,17 @@ const AdminUsersPage = () => {
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 {editingUser ? 'Edit User' : 'Create New User'}
               </h3>
-              
-              <form onSubmit={editingUser ? handleUpdateUser : handleCreateUser} className="space-y-4">
+
+              <form
+                onSubmit={editingUser ? handleUpdateUser : handleCreateUser}
+                className="space-y-4"
+              >
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Username
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
                   <input
                     type="text"
                     value={formData.username}
-                    onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                    onChange={e => setFormData(prev => ({ ...prev, username: e.target.value }))}
                     disabled={!!editingUser}
                     required={!editingUser}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
@@ -437,26 +429,22 @@ const AdminUsersPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Enter email"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Enter full name"
                   />
@@ -469,7 +457,7 @@ const AdminUsersPage = () => {
                   <input
                     type="password"
                     value={formData.password}
-                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
                     required={!editingUser}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Enter password"
@@ -483,7 +471,9 @@ const AdminUsersPage = () => {
                   <input
                     type="password"
                     value={formData.confirmPassword}
-                    onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    onChange={e =>
+                      setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))
+                    }
                     required={!editingUser || formData.password}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Confirm password"
@@ -497,7 +487,7 @@ const AdminUsersPage = () => {
                   <input
                     type="text"
                     value={formData.groupsString}
-                    onChange={(e) => setFormData(prev => ({ ...prev, groupsString: e.target.value }))}
+                    onChange={e => setFormData(prev => ({ ...prev, groupsString: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="admin, user, editors"
                   />
@@ -511,7 +501,7 @@ const AdminUsersPage = () => {
                     <input
                       type="checkbox"
                       checked={formData.active}
-                      onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
+                      onChange={e => setFormData(prev => ({ ...prev, active: e.target.checked }))}
                       className="mr-2"
                     />
                     <span className="text-sm font-medium text-gray-700">Active User</span>

@@ -54,7 +54,7 @@ const AdminAuthPage = () => {
     try {
       const response = await makeAdminApiCall('/api/admin/configs/platform');
       const data = await response.json();
-      
+
       setConfig(prevConfig => ({
         ...prevConfig,
         ...data
@@ -102,7 +102,7 @@ const AdminAuthPage = () => {
     }
   };
 
-  const updateAuthMode = (mode) => {
+  const updateAuthMode = mode => {
     setConfig(prev => ({
       ...prev,
       auth: {
@@ -171,7 +171,7 @@ const AdminAuthPage = () => {
     }));
   };
 
-  const removeOidcProvider = (index) => {
+  const removeOidcProvider = index => {
     setConfig(prev => ({
       ...prev,
       oidcAuth: {
@@ -211,7 +211,7 @@ const AdminAuthPage = () => {
     }));
   };
 
-  const removeJwtProvider = (index) => {
+  const removeJwtProvider = index => {
     setConfig(prev => ({
       ...prev,
       proxyAuth: {
@@ -241,9 +241,7 @@ const AdminAuthPage = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  Authentication Configuration
-                </h1>
+                <h1 className="text-3xl font-bold text-gray-900">Authentication Configuration</h1>
                 <p className="text-gray-600 mt-1">
                   Configure authentication modes and user access settings
                 </p>
@@ -301,17 +299,31 @@ const AdminAuthPage = () => {
           <div className="space-y-8">
             {/* Authentication Mode Selection */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Authentication Mode
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Authentication Mode</h3>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {[
-                    { mode: 'proxy', title: 'Proxy Mode', desc: 'Authentication via reverse proxy or external service' },
-                    { mode: 'local', title: 'Local Mode', desc: 'Built-in username/password authentication' },
-                    { mode: 'oidc', title: 'OIDC Mode', desc: 'OpenID Connect with external providers' },
-                    { mode: 'anonymous', title: 'Anonymous Mode', desc: 'No authentication required (default)' }
-                  ].map((modeOption) => (
+                    {
+                      mode: 'proxy',
+                      title: 'Proxy Mode',
+                      desc: 'Authentication via reverse proxy or external service'
+                    },
+                    {
+                      mode: 'local',
+                      title: 'Local Mode',
+                      desc: 'Built-in username/password authentication'
+                    },
+                    {
+                      mode: 'oidc',
+                      title: 'OIDC Mode',
+                      desc: 'OpenID Connect with external providers'
+                    },
+                    {
+                      mode: 'anonymous',
+                      title: 'Anonymous Mode',
+                      desc: 'No authentication required (default)'
+                    }
+                  ].map(modeOption => (
                     <div
                       key={modeOption.mode}
                       className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
@@ -339,21 +351,23 @@ const AdminAuthPage = () => {
 
             {/* General Authentication Settings */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                General Settings
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">General Settings</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="flex items-center">
                     <input
                       type="checkbox"
                       checked={config.auth.allowAnonymous}
-                      onChange={(e) => updateNestedConfig('auth', 'allowAnonymous', e.target.checked)}
+                      onChange={e => updateNestedConfig('auth', 'allowAnonymous', e.target.checked)}
                       className="mr-2"
                     />
-                    <span className="text-sm font-medium text-gray-700">Allow Anonymous Access</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      Allow Anonymous Access
+                    </span>
                   </label>
-                  <p className="text-xs text-gray-500 mt-1">Allow users to access the application without authentication</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Allow users to access the application without authentication
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -362,7 +376,7 @@ const AdminAuthPage = () => {
                   <input
                     type="text"
                     value={config.auth.anonymousGroup}
-                    onChange={(e) => updateNestedConfig('auth', 'anonymousGroup', e.target.value)}
+                    onChange={e => updateNestedConfig('auth', 'anonymousGroup', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="anonymous"
                   />
@@ -374,7 +388,7 @@ const AdminAuthPage = () => {
                   <input
                     type="text"
                     value={config.auth.authenticatedGroup}
-                    onChange={(e) => updateNestedConfig('auth', 'authenticatedGroup', e.target.value)}
+                    onChange={e => updateNestedConfig('auth', 'authenticatedGroup', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="authenticated"
                   />
@@ -397,7 +411,9 @@ const AdminAuthPage = () => {
                       <input
                         type="text"
                         value={config.proxyAuth.userHeader}
-                        onChange={(e) => updateNestedConfig('proxyAuth', 'userHeader', e.target.value)}
+                        onChange={e =>
+                          updateNestedConfig('proxyAuth', 'userHeader', e.target.value)
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         placeholder="X-Forwarded-User"
                       />
@@ -409,7 +425,9 @@ const AdminAuthPage = () => {
                       <input
                         type="text"
                         value={config.proxyAuth.groupsHeader}
-                        onChange={(e) => updateNestedConfig('proxyAuth', 'groupsHeader', e.target.value)}
+                        onChange={e =>
+                          updateNestedConfig('proxyAuth', 'groupsHeader', e.target.value)
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         placeholder="X-Forwarded-Groups"
                       />
@@ -444,35 +462,35 @@ const AdminAuthPage = () => {
                             type="text"
                             placeholder="Provider name"
                             value={provider.name}
-                            onChange={(e) => updateJwtProvider(index, 'name', e.target.value)}
+                            onChange={e => updateJwtProvider(index, 'name', e.target.value)}
                             className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                           />
                           <input
                             type="text"
                             placeholder="Header name"
                             value={provider.header}
-                            onChange={(e) => updateJwtProvider(index, 'header', e.target.value)}
+                            onChange={e => updateJwtProvider(index, 'header', e.target.value)}
                             className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                           />
                           <input
                             type="text"
                             placeholder="Issuer URL"
                             value={provider.issuer}
-                            onChange={(e) => updateJwtProvider(index, 'issuer', e.target.value)}
+                            onChange={e => updateJwtProvider(index, 'issuer', e.target.value)}
                             className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                           />
                           <input
                             type="text"
                             placeholder="Audience"
                             value={provider.audience}
-                            onChange={(e) => updateJwtProvider(index, 'audience', e.target.value)}
+                            onChange={e => updateJwtProvider(index, 'audience', e.target.value)}
                             className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                           />
                           <input
                             type="text"
                             placeholder="JWK URL"
                             value={provider.jwkUrl}
-                            onChange={(e) => updateJwtProvider(index, 'jwkUrl', e.target.value)}
+                            onChange={e => updateJwtProvider(index, 'jwkUrl', e.target.value)}
                             className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm md:col-span-2"
                           />
                         </div>
@@ -497,7 +515,7 @@ const AdminAuthPage = () => {
                     <input
                       type="text"
                       value={config.localAuth.usersFile}
-                      onChange={(e) => updateNestedConfig('localAuth', 'usersFile', e.target.value)}
+                      onChange={e => updateNestedConfig('localAuth', 'usersFile', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       placeholder="contents/config/users.json"
                     />
@@ -509,7 +527,13 @@ const AdminAuthPage = () => {
                     <input
                       type="number"
                       value={config.localAuth.sessionTimeoutMinutes}
-                      onChange={(e) => updateNestedConfig('localAuth', 'sessionTimeoutMinutes', parseInt(e.target.value))}
+                      onChange={e =>
+                        updateNestedConfig(
+                          'localAuth',
+                          'sessionTimeoutMinutes',
+                          parseInt(e.target.value)
+                        )
+                      }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       placeholder="480"
                     />
@@ -521,23 +545,31 @@ const AdminAuthPage = () => {
                     <input
                       type="text"
                       value={config.localAuth.jwtSecret}
-                      onChange={(e) => updateNestedConfig('localAuth', 'jwtSecret', e.target.value)}
+                      onChange={e => updateNestedConfig('localAuth', 'jwtSecret', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       placeholder="$&#123;JWT_SECRET&#125;"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Use environment variable $&#123;JWT_SECRET&#125; for security</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Use environment variable $&#123;JWT_SECRET&#125; for security
+                    </p>
                   </div>
                   <div className="md:col-span-2">
                     <label className="flex items-center">
                       <input
                         type="checkbox"
                         checked={config.localAuth.showDemoAccounts}
-                        onChange={(e) => updateNestedConfig('localAuth', 'showDemoAccounts', e.target.checked)}
+                        onChange={e =>
+                          updateNestedConfig('localAuth', 'showDemoAccounts', e.target.checked)
+                        }
                         className="mr-2"
                       />
-                      <span className="text-sm font-medium text-gray-700">Show Demo Accounts in Login Form</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        Show Demo Accounts in Login Form
+                      </span>
                     </label>
-                    <p className="text-xs text-gray-500 mt-1">Display demo account credentials on the login form for development/testing</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Display demo account credentials on the login form for development/testing
+                    </p>
                   </div>
                 </div>
               </div>
@@ -589,7 +621,7 @@ const AdminAuthPage = () => {
                               type="text"
                               placeholder="google"
                               value={provider.name}
-                              onChange={(e) => updateOidcProvider(index, 'name', e.target.value)}
+                              onChange={e => updateOidcProvider(index, 'name', e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             />
                           </div>
@@ -601,7 +633,9 @@ const AdminAuthPage = () => {
                               type="text"
                               placeholder="Google"
                               value={provider.displayName}
-                              onChange={(e) => updateOidcProvider(index, 'displayName', e.target.value)}
+                              onChange={e =>
+                                updateOidcProvider(index, 'displayName', e.target.value)
+                              }
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             />
                           </div>
@@ -613,7 +647,7 @@ const AdminAuthPage = () => {
                               type="text"
                               placeholder="$&#123;GOOGLE_CLIENT_ID&#125;"
                               value={provider.clientId}
-                              onChange={(e) => updateOidcProvider(index, 'clientId', e.target.value)}
+                              onChange={e => updateOidcProvider(index, 'clientId', e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             />
                           </div>
@@ -625,7 +659,9 @@ const AdminAuthPage = () => {
                               type="password"
                               placeholder="$&#123;GOOGLE_CLIENT_SECRET&#125;"
                               value={provider.clientSecret}
-                              onChange={(e) => updateOidcProvider(index, 'clientSecret', e.target.value)}
+                              onChange={e =>
+                                updateOidcProvider(index, 'clientSecret', e.target.value)
+                              }
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             />
                           </div>
@@ -637,7 +673,9 @@ const AdminAuthPage = () => {
                               type="url"
                               placeholder="https://accounts.google.com/o/oauth2/v2/auth"
                               value={provider.authorizationURL}
-                              onChange={(e) => updateOidcProvider(index, 'authorizationURL', e.target.value)}
+                              onChange={e =>
+                                updateOidcProvider(index, 'authorizationURL', e.target.value)
+                              }
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             />
                           </div>
@@ -649,7 +687,7 @@ const AdminAuthPage = () => {
                               type="url"
                               placeholder="https://www.googleapis.com/oauth2/v4/token"
                               value={provider.tokenURL}
-                              onChange={(e) => updateOidcProvider(index, 'tokenURL', e.target.value)}
+                              onChange={e => updateOidcProvider(index, 'tokenURL', e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             />
                           </div>
@@ -661,7 +699,9 @@ const AdminAuthPage = () => {
                               type="url"
                               placeholder="https://www.googleapis.com/oauth2/v2/userinfo"
                               value={provider.userInfoURL}
-                              onChange={(e) => updateOidcProvider(index, 'userInfoURL', e.target.value)}
+                              onChange={e =>
+                                updateOidcProvider(index, 'userInfoURL', e.target.value)
+                              }
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             />
                           </div>
@@ -673,7 +713,9 @@ const AdminAuthPage = () => {
                               type="text"
                               placeholder="groups"
                               value={provider.groupsAttribute}
-                              onChange={(e) => updateOidcProvider(index, 'groupsAttribute', e.target.value)}
+                              onChange={e =>
+                                updateOidcProvider(index, 'groupsAttribute', e.target.value)
+                              }
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             />
                           </div>
@@ -685,7 +727,13 @@ const AdminAuthPage = () => {
                               type="text"
                               placeholder="openid, profile, email"
                               value={provider.scope ? provider.scope.join(', ') : ''}
-                              onChange={(e) => updateOidcProvider(index, 'scope', e.target.value.split(',').map(s => s.trim()))}
+                              onChange={e =>
+                                updateOidcProvider(
+                                  index,
+                                  'scope',
+                                  e.target.value.split(',').map(s => s.trim())
+                                )
+                              }
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             />
                           </div>
@@ -696,8 +744,19 @@ const AdminAuthPage = () => {
                             <input
                               type="text"
                               placeholder="google-users, external-users"
-                              value={provider.defaultGroups ? provider.defaultGroups.join(', ') : ''}
-                              onChange={(e) => updateOidcProvider(index, 'defaultGroups', e.target.value.split(',').map(s => s.trim()).filter(s => s))}
+                              value={
+                                provider.defaultGroups ? provider.defaultGroups.join(', ') : ''
+                              }
+                              onChange={e =>
+                                updateOidcProvider(
+                                  index,
+                                  'defaultGroups',
+                                  e.target.value
+                                    .split(',')
+                                    .map(s => s.trim())
+                                    .filter(s => s)
+                                )
+                              }
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             />
                           </div>
@@ -706,7 +765,7 @@ const AdminAuthPage = () => {
                               <input
                                 type="checkbox"
                                 checked={provider.pkce}
-                                onChange={(e) => updateOidcProvider(index, 'pkce', e.target.checked)}
+                                onChange={e => updateOidcProvider(index, 'pkce', e.target.checked)}
                                 className="mr-2"
                               />
                               <span className="text-sm font-medium text-gray-700">Enable PKCE</span>
@@ -722,9 +781,7 @@ const AdminAuthPage = () => {
 
             {/* Authorization Settings */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Authorization Settings
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Authorization Settings</h3>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -733,7 +790,13 @@ const AdminAuthPage = () => {
                   <input
                     type="text"
                     value={config.authorization.adminGroups.join(', ')}
-                    onChange={(e) => updateNestedConfig('authorization', 'adminGroups', e.target.value.split(',').map(s => s.trim()))}
+                    onChange={e =>
+                      updateNestedConfig(
+                        'authorization',
+                        'adminGroups',
+                        e.target.value.split(',').map(s => s.trim())
+                      )
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="admin, IT-Admin, Platform-Admin"
                   />
@@ -745,7 +808,13 @@ const AdminAuthPage = () => {
                   <input
                     type="text"
                     value={config.authorization.userGroups.join(', ')}
-                    onChange={(e) => updateNestedConfig('authorization', 'userGroups', e.target.value.split(',').map(s => s.trim()))}
+                    onChange={e =>
+                      updateNestedConfig(
+                        'authorization',
+                        'userGroups',
+                        e.target.value.split(',').map(s => s.trim())
+                      )
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="user, users"
                   />
@@ -756,10 +825,14 @@ const AdminAuthPage = () => {
                       <input
                         type="checkbox"
                         checked={config.authorization.anonymousAccess}
-                        onChange={(e) => updateNestedConfig('authorization', 'anonymousAccess', e.target.checked)}
+                        onChange={e =>
+                          updateNestedConfig('authorization', 'anonymousAccess', e.target.checked)
+                        }
                         className="mr-2"
                       />
-                      <span className="text-sm font-medium text-gray-700">Allow Anonymous Access</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        Allow Anonymous Access
+                      </span>
                     </label>
                   </div>
                   <div>
@@ -769,7 +842,9 @@ const AdminAuthPage = () => {
                     <input
                       type="text"
                       value={config.authorization.defaultGroup}
-                      onChange={(e) => updateNestedConfig('authorization', 'defaultGroup', e.target.value)}
+                      onChange={e =>
+                        updateNestedConfig('authorization', 'defaultGroup', e.target.value)
+                      }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       placeholder="anonymous"
                     />

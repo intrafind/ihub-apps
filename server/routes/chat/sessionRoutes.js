@@ -4,7 +4,11 @@ import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
 import { clients, activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
 import { throttledFetch } from '../../requestThrottler.js';
-import { authRequired, chatAuthRequired, modelAccessRequired } from '../../middleware/authRequired.js';
+import {
+  authRequired,
+  chatAuthRequired,
+  modelAccessRequired
+} from '../../middleware/authRequired.js';
 
 import ChatService from '../../services/chat/ChatService.js';
 import validate from '../../validators/validate.js';
@@ -15,121 +19,132 @@ export default function registerSessionRoutes(
   { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }
 ) {
   const chatService = new ChatService();
-  app.get('/api/models/:modelId/chat/test', authRequired, modelAccessRequired, validate(chatTestSchema), async (req, res) => {
-    try {
-      const { modelId } = req.params;
-      const messages = [{ role: 'user', content: 'Say hello!' }];
-
-      // Try to get models from cache first
-      let { data: models = [] } = configCache.getModels();
-
-      if (!models) {
-        return res.status(500).json({ error: 'Failed to load models configuration' });
-      }
-      const model = models.find(m => m.id === modelId);
-      if (!model) {
-        return res.status(404).json({ error: 'Model not found' });
-      }
-      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-      const apiKey = await verifyApiKey(
-        model,
-        res,
-        null,
-        req.headers['accept-language']?.split(',')[0] || defaultLang
-      );
-      if (!apiKey) {
-        return res.status(500).json({
-          error: `API key not found for model: ${model.id} (${model.provider})`,
-          provider: model.provider
-        });
-      }
-      const request = createCompletionRequest(model, messages, apiKey, {
-        stream: false,
-        tools: []
-      });
-      let timeoutId;
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT / 1000} seconds`)),
-          DEFAULT_TIMEOUT
-        );
-      });
+  app.get(
+    '/api/models/:modelId/chat/test',
+    authRequired,
+    modelAccessRequired,
+    validate(chatTestSchema),
+    async (req, res) => {
       try {
-        const responsePromise = throttledFetch(model.id, request.url, {
-          method: 'POST',
-          headers: request.headers,
-          body: JSON.stringify(request.body)
-        });
-        const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
-        clearTimeout(timeoutId);
-        if (!llmResponse.ok) {
-          const errorBody = await llmResponse.text();
-          console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
-          return res.status(llmResponse.status).json({
-            error: `LLM API request failed with status ${llmResponse.status}`,
-            details: errorBody
+        const { modelId } = req.params;
+        const messages = [{ role: 'user', content: 'Say hello!' }];
+
+        // Try to get models from cache first
+        let { data: models = [] } = configCache.getModels();
+
+        if (!models) {
+          return res.status(500).json({ error: 'Failed to load models configuration' });
+        }
+        const model = models.find(m => m.id === modelId);
+        if (!model) {
+          return res.status(404).json({ error: 'Model not found' });
+        }
+        const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+        const apiKey = await verifyApiKey(
+          model,
+          res,
+          null,
+          req.headers['accept-language']?.split(',')[0] || defaultLang
+        );
+        if (!apiKey) {
+          return res.status(500).json({
+            error: `API key not found for model: ${model.id} (${model.provider})`,
+            provider: model.provider
           });
         }
-        const responseData = await llmResponse.json();
-        return res.json(responseData);
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        if (fetchError.message.includes('timed out')) {
-          return res.status(504).json({
-            error: 'Request timed out',
-            message: `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`
-          });
-        }
-        const errorDetails = getErrorDetails(fetchError, model);
-        return res.status(500).json({
-          error: errorDetails.message,
-          code: errorDetails.code,
-          modelId: model.id,
-          provider: model.provider,
-          recommendation: errorDetails.recommendation,
-          details: fetchError.message
+        const request = createCompletionRequest(model, messages, apiKey, {
+          stream: false,
+          tools: []
         });
-      }
-    } catch (error) {
-      console.error('Error in test chat completion:', error);
-      res.status(500).json({ error: 'Internal server error', message: error.message });
-    }
-  });
-
-  app.get('/api/apps/:appId/chat/:chatId', chatAuthRequired, validate(chatConnectSchema), async (req, res) => {
-    try {
-      const { appId, chatId } = req.params;
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      clients.set(chatId, { response: res, lastActivity: new Date(), appId });
-      actionTracker.trackConnected(chatId);
-
-      req.on('close', () => {
-        if (clients.has(chatId)) {
-          if (activeRequests.has(chatId)) {
-            try {
-              const controller = activeRequests.get(chatId);
-              controller.abort();
-              activeRequests.delete(chatId);
-              console.log(`Aborted request for chat ID: ${chatId}`);
-            } catch (e) {
-              console.error(`Error aborting request for chat ID: ${chatId}`, e);
-            }
+        let timeoutId;
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(
+            () => reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT / 1000} seconds`)),
+            DEFAULT_TIMEOUT
+          );
+        });
+        try {
+          const responsePromise = throttledFetch(model.id, request.url, {
+            method: 'POST',
+            headers: request.headers,
+            body: JSON.stringify(request.body)
+          });
+          const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
+          clearTimeout(timeoutId);
+          if (!llmResponse.ok) {
+            const errorBody = await llmResponse.text();
+            console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
+            return res.status(llmResponse.status).json({
+              error: `LLM API request failed with status ${llmResponse.status}`,
+              details: errorBody
+            });
           }
-          clients.delete(chatId);
-          console.log(`Client disconnected: ${chatId}`);
+          const responseData = await llmResponse.json();
+          return res.json(responseData);
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          if (fetchError.message.includes('timed out')) {
+            return res.status(504).json({
+              error: 'Request timed out',
+              message: `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`
+            });
+          }
+          const errorDetails = getErrorDetails(fetchError, model);
+          return res.status(500).json({
+            error: errorDetails.message,
+            code: errorDetails.code,
+            modelId: model.id,
+            provider: model.provider,
+            recommendation: errorDetails.recommendation,
+            details: fetchError.message
+          });
         }
-      });
-    } catch (error) {
-      console.error('Error establishing SSE connection:', error);
-      if (!res.headersSent) {
-        return res.status(500).json({ error: 'Internal server error' });
+      } catch (error) {
+        console.error('Error in test chat completion:', error);
+        res.status(500).json({ error: 'Internal server error', message: error.message });
       }
-      actionTracker.trackError(chatId, { message: 'Internal server error' });
-      res.end();
     }
-  });
+  );
+
+  app.get(
+    '/api/apps/:appId/chat/:chatId',
+    chatAuthRequired,
+    validate(chatConnectSchema),
+    async (req, res) => {
+      try {
+        const { appId, chatId } = req.params;
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        clients.set(chatId, { response: res, lastActivity: new Date(), appId });
+        actionTracker.trackConnected(chatId);
+
+        req.on('close', () => {
+          if (clients.has(chatId)) {
+            if (activeRequests.has(chatId)) {
+              try {
+                const controller = activeRequests.get(chatId);
+                controller.abort();
+                activeRequests.delete(chatId);
+                console.log(`Aborted request for chat ID: ${chatId}`);
+              } catch (e) {
+                console.error(`Error aborting request for chat ID: ${chatId}`, e);
+              }
+            }
+            clients.delete(chatId);
+            console.log(`Client disconnected: ${chatId}`);
+          }
+        });
+      } catch (error) {
+        console.error('Error establishing SSE connection:', error);
+        if (!res.headersSent) {
+          return res.status(500).json({ error: 'Internal server error' });
+        }
+        actionTracker.trackError(chatId, { message: 'Internal server error' });
+        res.end();
+      }
+    }
+  );
 
   // Extract common chat processing logic to reduce duplication
   async function processChatRequest({
@@ -204,146 +219,151 @@ export default function registerSessionRoutes(
     }
   }
 
-  app.post('/api/apps/:appId/chat/:chatId', chatAuthRequired, validate(chatPostSchema), async (req, res) => {
-    try {
-      const { appId, chatId } = req.params;
-      const {
-        messages,
-        modelId,
-        temperature,
-        style,
-        outputFormat,
-        language,
-        useMaxTokens,
-        bypassAppPrompts
-      } = req.body;
-      const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-      const clientLanguage =
-        language || req.headers['accept-language']?.split(',')[0] || defaultLang;
-      let messageId = null;
-      if (messages && Array.isArray(messages) && messages.length > 0) {
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage && lastMessage.messageId) {
-          messageId = lastMessage.messageId;
-          console.log(`Using client-provided messageId: ${messageId}`);
+  app.post(
+    '/api/apps/:appId/chat/:chatId',
+    chatAuthRequired,
+    validate(chatPostSchema),
+    async (req, res) => {
+      try {
+        const { appId, chatId } = req.params;
+        const {
+          messages,
+          modelId,
+          temperature,
+          style,
+          outputFormat,
+          language,
+          useMaxTokens,
+          bypassAppPrompts
+        } = req.body;
+        const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
+        const clientLanguage =
+          language || req.headers['accept-language']?.split(',')[0] || defaultLang;
+        let messageId = null;
+        if (messages && Array.isArray(messages) && messages.length > 0) {
+          const lastMessage = messages[messages.length - 1];
+          if (lastMessage && lastMessage.messageId) {
+            messageId = lastMessage.messageId;
+            console.log(`Using client-provided messageId: ${messageId}`);
+          }
         }
-      }
-      const userSessionId = req.headers['x-session-id'];
-      let model;
-      let llmMessages;
-      function buildLogData(streaming, extra = {}) {
-        return {
-          messageId,
-          appId,
-          modelId: model?.id,
+        const userSessionId = req.headers['x-session-id'];
+        let model;
+        let llmMessages;
+        function buildLogData(streaming, extra = {}) {
+          return {
+            messageId,
+            appId,
+            modelId: model?.id,
+            sessionId: chatId,
+            userSessionId,
+            messages: llmMessages,
+            options: { temperature, style, outputFormat, language: clientLanguage, streaming },
+            ...extra
+          };
+        }
+        console.log(`Processing chat with language: ${clientLanguage}`);
+        if (!messages || !Array.isArray(messages)) {
+          const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
+          return res.status(400).json({ error: errorMessage });
+        }
+        trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
+        actionTracker.trackSessionStart(chatId, {
           sessionId: chatId,
-          userSessionId,
-          messages: llmMessages,
-          options: { temperature, style, outputFormat, language: clientLanguage, streaming },
-          ...extra
-        };
-      }
-      console.log(`Processing chat with language: ${clientLanguage}`);
-      if (!messages || !Array.isArray(messages)) {
-        const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
-        return res.status(400).json({ error: errorMessage });
-      }
-      trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
-      actionTracker.trackSessionStart(chatId, {
-        sessionId: chatId,
-        timestamp: new Date().toISOString()
-      });
-      if (!clients.has(chatId)) {
-        console.log(
-          `No active SSE connection for chat ID: ${chatId}. Creating response without streaming.`
-        );
-        const prep = await chatService.prepareChatRequest({
-          appId,
-          modelId,
-          messages,
-          temperature,
-          style,
-          outputFormat,
-          language: clientLanguage,
-          useMaxTokens,
-          bypassAppPrompts,
-          res
+          timestamp: new Date().toISOString()
         });
-        if (!prep.success) {
-          const errMsg = await getLocalizedError(
-            prep.error.code || 'internalError',
-            {},
-            clientLanguage
+        if (!clients.has(chatId)) {
+          console.log(
+            `No active SSE connection for chat ID: ${chatId}. Creating response without streaming.`
           );
-          return res
-            .status(
-              prep.error.code === 'APP_NOT_FOUND' || prep.error.code === 'MODEL_NOT_FOUND'
-                ? 404
-                : 500
-            )
-            .json({ error: errMsg });
-        }
-        ({ model, llmMessages } = prep.data);
+          const prep = await chatService.prepareChatRequest({
+            appId,
+            modelId,
+            messages,
+            temperature,
+            style,
+            outputFormat,
+            language: clientLanguage,
+            useMaxTokens,
+            bypassAppPrompts,
+            res
+          });
+          if (!prep.success) {
+            const errMsg = await getLocalizedError(
+              prep.error.code || 'internalError',
+              {},
+              clientLanguage
+            );
+            return res
+              .status(
+                prep.error.code === 'APP_NOT_FOUND' || prep.error.code === 'MODEL_NOT_FOUND'
+                  ? 404
+                  : 500
+              )
+              .json({ error: errMsg });
+          }
+          ({ model, llmMessages } = prep.data);
 
-        return processChatRequest({
-          prep: prep.data,
-          buildLogData,
-          messageId,
-          streaming: false,
-          res,
-          clientRes: null,
-          chatId: null,
-          DEFAULT_TIMEOUT,
-          getLocalizedError,
-          clientLanguage
-        });
-      } else {
-        const clientRes = clients.get(chatId).response;
-        clients.set(chatId, { ...clients.get(chatId), lastActivity: new Date() });
-        const prep = await chatService.prepareChatRequest({
-          appId,
-          modelId,
-          messages,
-          temperature,
-          style,
-          outputFormat,
-          language: clientLanguage,
-          useMaxTokens,
-          bypassAppPrompts,
-          clientRes
-        });
-        if (!prep.success) {
-          const errMsg = await getLocalizedError(
-            prep.error.code || 'internalError',
-            {},
+          return processChatRequest({
+            prep: prep.data,
+            buildLogData,
+            messageId,
+            streaming: false,
+            res,
+            clientRes: null,
+            chatId: null,
+            DEFAULT_TIMEOUT,
+            getLocalizedError,
             clientLanguage
-          );
-          actionTracker.trackError(chatId, { message: errMsg });
-          return res.json({ status: 'error', message: errMsg });
+          });
+        } else {
+          const clientRes = clients.get(chatId).response;
+          clients.set(chatId, { ...clients.get(chatId), lastActivity: new Date() });
+          const prep = await chatService.prepareChatRequest({
+            appId,
+            modelId,
+            messages,
+            temperature,
+            style,
+            outputFormat,
+            language: clientLanguage,
+            useMaxTokens,
+            bypassAppPrompts,
+            clientRes
+          });
+          if (!prep.success) {
+            const errMsg = await getLocalizedError(
+              prep.error.code || 'internalError',
+              {},
+              clientLanguage
+            );
+            actionTracker.trackError(chatId, { message: errMsg });
+            return res.json({ status: 'error', message: errMsg });
+          }
+          model = prep.data.model;
+          llmMessages = prep.data.llmMessages;
+
+          await processChatRequest({
+            prep: prep.data,
+            buildLogData,
+            messageId,
+            streaming: true,
+            res: null,
+            clientRes,
+            chatId,
+            DEFAULT_TIMEOUT,
+            getLocalizedError,
+            clientLanguage
+          });
+
+          return res.json({ status: 'streaming', chatId });
         }
-        model = prep.data.model;
-        llmMessages = prep.data.llmMessages;
-
-        await processChatRequest({
-          prep: prep.data,
-          buildLogData,
-          messageId,
-          streaming: true,
-          res: null,
-          clientRes,
-          chatId,
-          DEFAULT_TIMEOUT,
-          getLocalizedError,
-          clientLanguage
-        });
-
-        return res.json({ status: 'streaming', chatId });
+      } catch (error) {
+        console.error('Error in app chat:', error);
+        return res.status(500).json({ error: 'Internal server error', message: error.message });
       }
-    } catch (error) {
-      console.error('Error in app chat:', error);
-      return res.status(500).json({ error: 'Internal server error', message: error.message });
     }
-  });
+  );
 
   app.post('/api/apps/:appId/chat/:chatId/stop', chatAuthRequired, (req, res) => {
     const { chatId } = req.params;

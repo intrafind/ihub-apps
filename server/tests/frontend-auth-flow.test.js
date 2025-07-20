@@ -1,6 +1,6 @@
 /**
  * Frontend Authentication Flow Test
- * 
+ *
  * Tests the complete authentication flow from frontend perspective
  */
 
@@ -58,9 +58,9 @@ jest.mock('../configCache.js', () => ({
 
 function createTestApp(platformConfig = mockPlatformConfig) {
   const app = express();
-  
+
   setupMiddleware(app, platformConfig);
-  
+
   // Register routes
   registerAuthRoutes(app);
   registerGeneralRoutes(app, { getLocalizedError });
@@ -82,18 +82,14 @@ describe('Frontend Authentication Flow Tests', () => {
     });
 
     test('should block unauthenticated requests to apps endpoint', async () => {
-      const response = await request(app)
-        .get('/api/apps')
-        .expect(401);
+      const response = await request(app).get('/api/apps').expect(401);
 
       expect(response.body.error).toBe('Authentication required');
       expect(response.body.code).toBe('AUTH_REQUIRED');
     });
 
     test('should block unauthenticated requests to models endpoint', async () => {
-      const response = await request(app)
-        .get('/api/models')
-        .expect(401);
+      const response = await request(app).get('/api/models').expect(401);
 
       expect(response.body.error).toBe('Authentication required');
     });
@@ -112,15 +108,11 @@ describe('Frontend Authentication Flow Tests', () => {
     });
 
     test('should allow auth status endpoint without authentication', async () => {
-      await request(app)
-        .get('/api/auth/status')
-        .expect(200);
+      await request(app).get('/api/auth/status').expect(200);
     });
 
     test('should allow platform config endpoint without authentication', async () => {
-      await request(app)
-        .get('/api/configs/platform')
-        .expect(200);
+      await request(app).get('/api/configs/platform').expect(200);
     });
   });
 
@@ -135,9 +127,7 @@ describe('Frontend Authentication Flow Tests', () => {
     });
 
     test('should allow anonymous access to apps with filtering', async () => {
-      const response = await request(app)
-        .get('/api/apps')
-        .expect(200);
+      const response = await request(app).get('/api/apps').expect(200);
 
       // Should get filtered results for anonymous users
       expect(Array.isArray(response.body)).toBe(true);
@@ -146,9 +136,7 @@ describe('Frontend Authentication Flow Tests', () => {
     });
 
     test('should allow anonymous access to models with filtering', async () => {
-      const response = await request(app)
-        .get('/api/models')
-        .expect(200);
+      const response = await request(app).get('/api/models').expect(200);
 
       // Should get filtered results for anonymous users
       expect(Array.isArray(response.body)).toBe(true);
@@ -172,7 +160,7 @@ describe('Frontend Authentication Flow Tests', () => {
 
       // Mock user enhancement
       jest.mock('../utils/authorization.js', () => ({
-        enhanceUserWithPermissions: (user) => ({
+        enhanceUserWithPermissions: user => ({
           ...user,
           permissions: {
             apps: new Set(['*']),
@@ -193,17 +181,11 @@ describe('Frontend Authentication Flow Tests', () => {
     });
 
     test('should reject invalid Bearer token', async () => {
-      await request(app)
-        .get('/api/apps')
-        .set('Authorization', 'Bearer invalid-token')
-        .expect(401);
+      await request(app).get('/api/apps').set('Authorization', 'Bearer invalid-token').expect(401);
     });
 
     test('should reject malformed Authorization header', async () => {
-      await request(app)
-        .get('/api/apps')
-        .set('Authorization', 'InvalidFormat')
-        .expect(401);
+      await request(app).get('/api/apps').set('Authorization', 'InvalidFormat').expect(401);
     });
   });
 
@@ -239,9 +221,7 @@ describe('Frontend Authentication Flow Tests', () => {
     });
 
     test('should return proper error format for authentication failures', async () => {
-      const response = await request(app)
-        .get('/api/apps')
-        .expect(401);
+      const response = await request(app).get('/api/apps').expect(401);
 
       expect(response.body).toHaveProperty('error');
       expect(response.body).toHaveProperty('code');

@@ -14,7 +14,7 @@ export default function registerAdminGroupRoutes(app) {
     try {
       const rootDir = getRootDir();
       const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-      
+
       let groupsData = { groups: {}, metadata: {} };
       try {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
@@ -22,7 +22,7 @@ export default function registerAdminGroupRoutes(app) {
       } catch (error) {
         console.log('Groups file not found or invalid, returning empty list');
       }
-      
+
       res.json(groupsData);
     } catch (error) {
       console.error('Error getting groups:', error);
@@ -37,12 +37,12 @@ export default function registerAdminGroupRoutes(app) {
   app.get('/api/admin/groups/resources', adminAuth, async (req, res) => {
     try {
       const rootDir = getRootDir();
-      
+
       // Get apps
       const appsPath = join(rootDir, 'contents', 'apps');
       const appFiles = await fs.readdir(appsPath);
       const apps = [];
-      
+
       for (const file of appFiles) {
         if (file.endsWith('.json')) {
           try {
@@ -57,12 +57,12 @@ export default function registerAdminGroupRoutes(app) {
           }
         }
       }
-      
+
       // Get models
       const modelsPath = join(rootDir, 'contents', 'models');
       const modelFiles = await fs.readdir(modelsPath);
       const models = [];
-      
+
       for (const file of modelFiles) {
         if (file.endsWith('.json')) {
           try {
@@ -77,11 +77,11 @@ export default function registerAdminGroupRoutes(app) {
           }
         }
       }
-      
+
       // Get prompts
       const promptsPath = join(rootDir, 'contents', 'prompts');
       const prompts = [];
-      
+
       try {
         const promptFiles = await fs.readdir(promptsPath);
         for (const file of promptFiles) {
@@ -101,7 +101,7 @@ export default function registerAdminGroupRoutes(app) {
       } catch (error) {
         console.log('Prompts directory not found or empty');
       }
-      
+
       res.json({
         apps: apps.sort((a, b) => a.id.localeCompare(b.id)),
         models: models.sort((a, b) => a.id.localeCompare(b.id)),
@@ -119,7 +119,7 @@ export default function registerAdminGroupRoutes(app) {
   app.post('/api/admin/groups', adminAuth, async (req, res) => {
     try {
       const { id, name, description, permissions, mappings = [] } = req.body;
-      
+
       if (!id || !name) {
         return res.status(400).json({ error: 'Group ID and name are required' });
       }
@@ -131,7 +131,7 @@ export default function registerAdminGroupRoutes(app) {
 
       const rootDir = getRootDir();
       const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-      
+
       // Load existing groups
       let groupsData = { groups: {}, metadata: {} };
       try {
@@ -142,8 +142,8 @@ export default function registerAdminGroupRoutes(app) {
         groupsData = {
           groups: {},
           metadata: {
-            version: "1.0.0",
-            description: "Unified group configuration with permissions and external mappings",
+            version: '1.0.0',
+            description: 'Unified group configuration with permissions and external mappings',
             lastModified: new Date().toISOString()
           }
         };
@@ -173,12 +173,12 @@ export default function registerAdminGroupRoutes(app) {
 
       // Save to file
       await atomicWriteJSON(groupsFilePath, groupsData);
-      
+
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
-      
+
       console.log(`👥 Created new group: ${name} (${id})`);
-      
+
       res.json({ group: newGroup });
     } catch (error) {
       console.error('Error creating group:', error);
@@ -193,10 +193,10 @@ export default function registerAdminGroupRoutes(app) {
     try {
       const { groupId } = req.params;
       const { name, description, permissions, mappings } = req.body;
-      
+
       const rootDir = getRootDir();
       const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-      
+
       // Load existing groups
       let groupsData = { groups: {}, metadata: {} };
       try {
@@ -212,32 +212,39 @@ export default function registerAdminGroupRoutes(app) {
       }
 
       const group = groupsData.groups[groupId];
-      
+
       // Update fields
       if (name !== undefined) group.name = name;
       if (description !== undefined) group.description = description;
       if (mappings !== undefined) group.mappings = Array.isArray(mappings) ? mappings : [];
-      
+
       // Update permissions
       if (permissions !== undefined && typeof permissions === 'object') {
         group.permissions = {
           apps: Array.isArray(permissions.apps) ? permissions.apps : group.permissions.apps || [],
-          prompts: Array.isArray(permissions.prompts) ? permissions.prompts : group.permissions.prompts || [],
-          models: Array.isArray(permissions.models) ? permissions.models : group.permissions.models || [],
-          adminAccess: permissions.adminAccess !== undefined ? Boolean(permissions.adminAccess) : group.permissions.adminAccess || false
+          prompts: Array.isArray(permissions.prompts)
+            ? permissions.prompts
+            : group.permissions.prompts || [],
+          models: Array.isArray(permissions.models)
+            ? permissions.models
+            : group.permissions.models || [],
+          adminAccess:
+            permissions.adminAccess !== undefined
+              ? Boolean(permissions.adminAccess)
+              : group.permissions.adminAccess || false
         };
       }
-      
+
       groupsData.metadata.lastModified = new Date().toISOString();
 
       // Save to file
       await atomicWriteJSON(groupsFilePath, groupsData);
-      
+
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
-      
+
       console.log(`👥 Updated group: ${group.name} (${groupId})`);
-      
+
       res.json({ group });
     } catch (error) {
       console.error('Error updating group:', error);
@@ -251,16 +258,16 @@ export default function registerAdminGroupRoutes(app) {
   app.delete('/api/admin/groups/:groupId', adminAuth, async (req, res) => {
     try {
       const { groupId } = req.params;
-      
+
       // Prevent deletion of core system groups
       const protectedGroups = ['admin', 'user', 'anonymous', 'authenticated'];
       if (protectedGroups.includes(groupId)) {
         return res.status(400).json({ error: `Cannot delete protected system group: ${groupId}` });
       }
-      
+
       const rootDir = getRootDir();
       const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-      
+
       // Load existing groups
       let groupsData = { groups: {}, metadata: {} };
       try {
@@ -276,19 +283,19 @@ export default function registerAdminGroupRoutes(app) {
       }
 
       const groupName = groupsData.groups[groupId].name;
-      
+
       // Remove group
       delete groupsData.groups[groupId];
       groupsData.metadata.lastModified = new Date().toISOString();
 
       // Save to file
       await atomicWriteJSON(groupsFilePath, groupsData);
-      
+
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
-      
+
       console.log(`👥 Deleted group: ${groupName} (${groupId})`);
-      
+
       res.json({ message: 'Group deleted successfully' });
     } catch (error) {
       console.error('Error deleting group:', error);

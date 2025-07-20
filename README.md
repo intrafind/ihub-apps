@@ -285,23 +285,26 @@ AI Hub Apps includes a comprehensive authentication system supporting multiple a
 
 The system supports four authentication modes:
 
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| **Anonymous** | No authentication required | Public demos, open access |
-| **Local** | Built-in username/password | Development, small teams |
-| **OIDC** | OpenID Connect integration | Enterprise SSO, Google, Microsoft |
-| **Proxy** | Reverse proxy authentication | nginx, OAuth2 Proxy, corporate auth |
+| Mode          | Description                  | Use Case                            |
+| ------------- | ---------------------------- | ----------------------------------- |
+| **Anonymous** | No authentication required   | Public demos, open access           |
+| **Local**     | Built-in username/password   | Development, small teams            |
+| **OIDC**      | OpenID Connect integration   | Enterprise SSO, Google, Microsoft   |
+| **Proxy**     | Reverse proxy authentication | nginx, OAuth2 Proxy, corporate auth |
 
 ### Quick Start
 
 **Default Setup (No Authentication):**
+
 ```bash
 # Just start the application - works out of the box!
 npm run dev
 ```
+
 All users have full access to all apps and features by default.
 
 **Enable Local Authentication:**
+
 ```bash
 # Set environment variables
 export LOCAL_AUTH_ENABLED=true
@@ -315,6 +318,7 @@ export JWT_SECRET=your-secure-secret
 ```
 
 **Demo Accounts:**
+
 - Admin: `admin` / `password123`
 - User: `user` / `password123`
 
@@ -322,12 +326,13 @@ export JWT_SECRET=your-secure-secret
 
 The admin panel uses a **strict security model** based on authentication mode:
 
-| Auth Mode | Admin Access | Admin Secret |
-|-----------|-------------|-------------|
-| **Anonymous** | Admin secret required | ✅ Enabled |
-| **Local/OIDC/Proxy** | User groups only | ❌ Disabled |
+| Auth Mode            | Admin Access          | Admin Secret |
+| -------------------- | --------------------- | ------------ |
+| **Anonymous**        | Admin secret required | ✅ Enabled   |
+| **Local/OIDC/Proxy** | User groups only      | ❌ Disabled  |
 
 **Benefits:**
+
 - **No bypass attacks** - Admin secret can't bypass proper authentication
 - **Dynamic admin groups** - Configure admin access without code changes
 - **Seamless UX** - Admin users go directly to admin panel
@@ -341,7 +346,7 @@ Access control uses group-based permissions:
   "groups": {
     "admin": {
       "apps": ["*"],
-      "prompts": ["*"], 
+      "prompts": ["*"],
       "models": ["*"],
       "adminAccess": true
     },
@@ -374,6 +379,7 @@ Authentication is configured in `contents/config/platform.json`:
 ```
 
 For complete authentication documentation, see:
+
 - [External Authentication Guide](docs/external-authentication.md)
 - [OIDC Authentication Setup](docs/oidc-authentication.md)
 - [Security Implementation Details](concepts/2025-07-20-Final-Authentication-Security-Implementation.md)

@@ -12,18 +12,18 @@ export function adminAuth(req, res, next) {
     const platform = configCache.getPlatform();
     const auth = platform?.auth || {};
     const authMode = auth.mode || 'anonymous';
-    
+
     // First check if admin authentication is even required
     // This checks if user is already authenticated with admin permissions
     const authRequired = isAdminAuthRequired(req);
-    
+
     if (!authRequired) {
       // User is already authenticated with admin permissions
       return next();
     }
 
     // Admin authentication is required
-    
+
     if (authMode === 'anonymous') {
       // In anonymous mode, admin secret authentication is allowed
       const adminSecret = process.env.ADMIN_SECRET || platform?.admin?.secret;
@@ -112,29 +112,32 @@ export function isAdminAuthRequired(req = null) {
   const platform = configCache.getPlatform();
   const auth = platform?.auth || {};
   const authMode = auth.mode || 'anonymous';
-  
-  
+
   // SECURITY MODEL:
   // - Anonymous mode: Admin secret is the only way to access admin
   // - Local/OIDC/Proxy modes: Only authenticated users with admin groups can access admin
-  
+
   if (authMode === 'anonymous') {
     // In anonymous mode, admin secret is always required
     return true;
   }
-  
+
   // In local/OIDC/proxy modes, only user groups determine admin access
   if (req && req.user && req.user.id !== 'anonymous') {
     // Check if authenticated user has admin privileges
     const userGroups = req.user.groups || [];
-    const adminGroups = platform?.authorization?.adminGroups || ['admin', 'IT-Admin', 'Platform-Admin'];
-    
+    const adminGroups = platform?.authorization?.adminGroups || [
+      'admin',
+      'IT-Admin',
+      'Platform-Admin'
+    ];
+
     const isAdmin = userGroups.some(group => adminGroups.includes(group));
     if (isAdmin) {
       return false; // Allow access for authenticated admin users
     }
   }
-  
+
   // In non-anonymous modes, if user is not authenticated or not admin, deny access
   // Admin secret will not work in these modes
   return true;

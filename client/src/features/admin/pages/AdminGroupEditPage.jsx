@@ -55,7 +55,7 @@ const AdminGroupEditPage = () => {
       setLoading(true);
       const response = await makeAdminApiCall('/api/admin/groups');
       const data = await response.json();
-      
+
       const groupData = data.groups[groupId];
       if (!groupData) {
         throw new Error('Group not found');
@@ -69,7 +69,7 @@ const AdminGroupEditPage = () => {
     }
   };
 
-  const handleSave = async (e) => {
+  const handleSave = async e => {
     e.preventDefault();
 
     if (!group.id || !group.name) {
@@ -120,16 +120,16 @@ const AdminGroupEditPage = () => {
     }));
   };
 
-  const handleMappingChange = (mappings) => {
+  const handleMappingChange = mappings => {
     const mappingArray = mappings
       .split(',')
       .map(m => m.trim())
       .filter(m => m.length > 0);
-    
+
     handleInputChange('mappings', mappingArray);
   };
 
-  const isProtectedGroup = (groupId) => {
+  const isProtectedGroup = groupId => {
     return ['admin', 'user', 'anonymous', 'authenticated'].includes(groupId);
   };
 
@@ -175,10 +175,9 @@ const AdminGroupEditPage = () => {
               {groupId === 'new' ? 'Add New Group' : `Edit Group: ${group?.name}`}
             </h1>
             <p className="mt-2 text-sm text-gray-700">
-              {groupId === 'new' 
+              {groupId === 'new'
                 ? 'Configure a new user group with permissions and external mappings'
-                : 'Modify group settings, permissions, and external mappings'
-              }
+                : 'Modify group settings, permissions, and external mappings'}
             </p>
           </div>
           <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
@@ -197,56 +196,44 @@ const AdminGroupEditPage = () => {
           <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
-                  Basic Information
-                </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Basic group configuration and metadata
-                </p>
+                <h3 className="text-lg font-medium leading-6 text-gray-900">Basic Information</h3>
+                <p className="mt-1 text-sm text-gray-500">Basic group configuration and metadata</p>
               </div>
               <div className="mt-5 md:col-span-2 md:mt-0">
                 <div className="grid grid-cols-6 gap-6">
                   <div className="col-span-6 sm:col-span-3">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Group ID
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700">Group ID</label>
                     <input
                       type="text"
                       required
                       value={group.id}
-                      onChange={(e) => handleInputChange('id', e.target.value)}
+                      onChange={e => handleInputChange('id', e.target.value)}
                       disabled={groupId !== 'new' || isProtectedGroup(group.id)}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm disabled:bg-gray-100"
                       placeholder="Enter unique group ID"
                     />
                     {isProtectedGroup(group.id) && (
-                      <p className="mt-1 text-xs text-gray-500">
-                        This is a protected system group
-                      </p>
+                      <p className="mt-1 text-xs text-gray-500">This is a protected system group</p>
                     )}
                   </div>
 
                   <div className="col-span-6 sm:col-span-3">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Group Name
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700">Group Name</label>
                     <input
                       type="text"
                       required
                       value={group.name}
-                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      onChange={e => handleInputChange('name', e.target.value)}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       placeholder="Enter group display name"
                     />
                   </div>
 
                   <div className="col-span-6">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Description
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700">Description</label>
                     <textarea
                       value={group.description}
-                      onChange={(e) => handleInputChange('description', e.target.value)}
+                      onChange={e => handleInputChange('description', e.target.value)}
                       rows={3}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       placeholder="Enter group description"
@@ -258,12 +245,10 @@ const AdminGroupEditPage = () => {
                       <input
                         type="checkbox"
                         checked={group.permissions?.adminAccess || false}
-                        onChange={(e) => handlePermissionChange('adminAccess', e.target.checked)}
+                        onChange={e => handlePermissionChange('adminAccess', e.target.checked)}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
-                      <label className="ml-2 block text-sm text-gray-900">
-                        Admin Access
-                      </label>
+                      <label className="ml-2 block text-sm text-gray-900">Admin Access</label>
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
                       Allow members of this group to access administrative functions
@@ -293,12 +278,13 @@ const AdminGroupEditPage = () => {
                   <input
                     type="text"
                     value={(group.mappings || []).join(', ')}
-                    onChange={(e) => handleMappingChange(e.target.value)}
+                    onChange={e => handleMappingChange(e.target.value)}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     placeholder="IT-Admin, Platform-Admins, HR-Team"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group.
+                    Enter external group names that should be mapped to this group. Users with these
+                    external groups will automatically be assigned to this internal group.
                   </p>
                 </div>
               </div>
@@ -309,9 +295,7 @@ const AdminGroupEditPage = () => {
           <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
-                  Permissions
-                </h3>
+                <h3 className="text-lg font-medium leading-6 text-gray-900">Permissions</h3>
                 <p className="mt-1 text-sm text-gray-500">
                   Configure which apps, models, and prompts members of this group can access
                 </p>
@@ -323,7 +307,7 @@ const AdminGroupEditPage = () => {
                     label="Apps"
                     resources={resources.apps}
                     selectedResources={group.permissions?.apps || []}
-                    onSelectionChange={(selected) => handlePermissionChange('apps', selected)}
+                    onSelectionChange={selected => handlePermissionChange('apps', selected)}
                     placeholder="Search apps to add..."
                     emptyMessage="No apps selected - users won't see any apps"
                   />
@@ -333,7 +317,7 @@ const AdminGroupEditPage = () => {
                     label="Models"
                     resources={resources.models}
                     selectedResources={group.permissions?.models || []}
-                    onSelectionChange={(selected) => handlePermissionChange('models', selected)}
+                    onSelectionChange={selected => handlePermissionChange('models', selected)}
                     placeholder="Search models to add..."
                     emptyMessage="No models selected - users can't use any AI models"
                   />
@@ -343,7 +327,7 @@ const AdminGroupEditPage = () => {
                     label="Prompts"
                     resources={resources.prompts}
                     selectedResources={group.permissions?.prompts || []}
-                    onSelectionChange={(selected) => handlePermissionChange('prompts', selected)}
+                    onSelectionChange={selected => handlePermissionChange('prompts', selected)}
                     placeholder="Search prompts to add..."
                     emptyMessage="No prompts selected - users can't access any prompt templates"
                   />
@@ -366,10 +350,7 @@ const AdminGroupEditPage = () => {
               disabled={saving}
               className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
-              {saving 
-                ? 'Saving...' 
-                : groupId === 'new' ? 'Create Group' : 'Save Group'
-              }
+              {saving ? 'Saving...' : groupId === 'new' ? 'Create Group' : 'Save Group'}
             </button>
           </div>
         </form>

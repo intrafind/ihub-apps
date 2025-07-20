@@ -33,7 +33,6 @@ const AdminGroupsPage = () => {
     }
   };
 
-
   const handleDeleteGroup = async (groupId, groupName) => {
     if (!window.confirm(`Are you sure you want to delete the group "${groupName}"?`)) {
       return;
@@ -62,8 +61,7 @@ const AdminGroupsPage = () => {
     }
   };
 
-
-  const isProtectedGroup = (groupId) => {
+  const isProtectedGroup = groupId => {
     return ['admin', 'user', 'anonymous', 'authenticated'].includes(groupId);
   };
 
@@ -89,9 +87,7 @@ const AdminGroupsPage = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  Group Management
-                </h1>
+                <h1 className="text-3xl font-bold text-gray-900">Group Management</h1>
                 <p className="text-gray-600 mt-1">
                   Manage user groups, permissions, and external group mappings
                 </p>
@@ -139,9 +135,7 @@ const AdminGroupsPage = () => {
           {/* Groups List */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Groups ({groupsArray.length})
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900">Groups ({groupsArray.length})</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -171,7 +165,7 @@ const AdminGroupsPage = () => {
                       </td>
                     </tr>
                   ) : (
-                    groupsArray.map((group) => (
+                    groupsArray.map(group => (
                       <tr key={group.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
@@ -181,15 +175,9 @@ const AdminGroupsPage = () => {
                               </div>
                             </div>
                             <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">
-                                {group.name}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {group.description}
-                              </div>
-                              <div className="text-xs text-gray-400">
-                                ID: {group.id}
-                              </div>
+                              <div className="text-sm font-medium text-gray-900">{group.name}</div>
+                              <div className="text-sm text-gray-500">{group.description}</div>
+                              <div className="text-xs text-gray-400">ID: {group.id}</div>
                             </div>
                           </div>
                         </td>
@@ -270,7 +258,6 @@ const AdminGroupsPage = () => {
           </div>
         </div>
       </div>
-
     </AdminAuth>
   );
 };

@@ -9,7 +9,7 @@ const UserMenu = ({ className = '' }) => {
 
   // Close menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event) => {
+    const handleClickOutside = event => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setIsOpen(false);
       }
@@ -56,10 +56,7 @@ const UserMenu = ({ className = '' }) => {
             <div className="text-xs text-gray-500">{user.email}</div>
           )}
         </div>
-        <Icon 
-          name={isOpen ? 'chevron-up' : 'chevron-down'} 
-          className="w-4 h-4 text-gray-500"
-        />
+        <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} className="w-4 h-4 text-gray-500" />
       </button>
 
       {/* Dropdown Menu */}
@@ -68,12 +65,10 @@ const UserMenu = ({ className = '' }) => {
           {/* User Info */}
           <div className="px-4 py-3 border-b border-gray-100">
             <div className="text-sm font-medium text-gray-900">{displayName}</div>
-            {user.email && (
-              <div className="text-sm text-gray-500">{user.email}</div>
-            )}
+            {user.email && <div className="text-sm text-gray-500">{user.email}</div>}
             <div className="flex flex-wrap gap-1 mt-2">
               {user.groups?.map(group => (
-                <span 
+                <span
                   key={group}
                   className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
                 >
@@ -82,9 +77,7 @@ const UserMenu = ({ className = '' }) => {
               ))}
             </div>
             {user.authMethod && (
-              <div className="text-xs text-gray-400 mt-1">
-                via {user.authMethod}
-              </div>
+              <div className="text-xs text-gray-400 mt-1">via {user.authMethod}</div>
             )}
           </div>
 

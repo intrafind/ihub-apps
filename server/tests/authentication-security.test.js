@@ -1,6 +1,6 @@
 /**
  * Comprehensive Authentication & Authorization Security Test Suite
- * 
+ *
  * Tests critical security scenarios to prevent authentication bypass vulnerabilities
  */
 
@@ -160,12 +160,14 @@ jest.mock('../utils/authorization.js', () => ({
     return {
       ...user,
       permissions,
-      isAdmin: permissions.adminAccess || (authConfig.adminGroups && user.groups?.some(g => authConfig.adminGroups.includes(g)))
+      isAdmin:
+        permissions.adminAccess ||
+        (authConfig.adminGroups && user.groups?.some(g => authConfig.adminGroups.includes(g)))
     };
   },
   filterResourcesByPermissions: (resources, allowedResources, resourceType) => {
     if (allowedResources.has('*')) return resources;
-    return resources.filter(resource => 
+    return resources.filter(resource =>
       allowedResources.has(resource.id || resource.modelId || resource.name)
     );
   }
@@ -179,12 +181,12 @@ function createTestToken(payload) {
 // Helper function to create test app
 function createTestApp(platformConfig = mockPlatformConfigAnonymousDisabled) {
   const app = express();
-  
+
   // Set platform config globally for test
   global.mockPlatformConfig = platformConfig;
-  
+
   setupMiddleware(app, platformConfig);
-  
+
   // Register routes
   registerAuthRoutes(app);
   registerGeneralRoutes(app, { getLocalizedError });
@@ -201,7 +203,6 @@ function createTestApp(platformConfig = mockPlatformConfigAnonymousDisabled) {
 }
 
 describe('Authentication & Authorization Security Tests', () => {
-  
   describe('Anonymous Access Disabled - Complete Lockdown', () => {
     let app;
 
@@ -210,9 +211,7 @@ describe('Authentication & Authorization Security Tests', () => {
     });
 
     test('should block unauthenticated access to /api/apps', async () => {
-      const response = await request(app)
-        .get('/api/apps')
-        .expect(401);
+      const response = await request(app).get('/api/apps').expect(401);
 
       expect(response.body).toEqual({
         error: 'Authentication required',
@@ -222,18 +221,14 @@ describe('Authentication & Authorization Security Tests', () => {
     });
 
     test('should block unauthenticated access to /api/models', async () => {
-      const response = await request(app)
-        .get('/api/models')
-        .expect(401);
+      const response = await request(app).get('/api/models').expect(401);
 
       expect(response.body.error).toBe('Authentication required');
     });
 
     test('should block unauthenticated access to chat endpoints', async () => {
       // Test SSE connection endpoint
-      await request(app)
-        .get('/api/apps/test-app/chat/test-chat')
-        .expect(401);
+      await request(app).get('/api/apps/test-app/chat/test-chat').expect(401);
 
       // Test chat POST endpoint
       await request(app)
@@ -245,27 +240,19 @@ describe('Authentication & Authorization Security Tests', () => {
         .expect(401);
 
       // Test chat stop endpoint
-      await request(app)
-        .post('/api/apps/test-app/chat/test-chat/stop')
-        .expect(401);
+      await request(app).post('/api/apps/test-app/chat/test-chat/stop').expect(401);
     });
 
     test('should block unauthenticated access to model test endpoint', async () => {
-      await request(app)
-        .get('/api/models/gpt-4/chat/test')
-        .expect(401);
+      await request(app).get('/api/models/gpt-4/chat/test').expect(401);
     });
 
     test('should block unauthenticated access to tools', async () => {
-      await request(app)
-        .get('/api/tools')
-        .expect(401);
+      await request(app).get('/api/tools').expect(401);
     });
 
     test('should block unauthenticated access to prompts', async () => {
-      await request(app)
-        .get('/api/prompts')
-        .expect(401);
+      await request(app).get('/api/prompts').expect(401);
     });
 
     test('should block unauthenticated access to feedback', async () => {
@@ -281,15 +268,11 @@ describe('Authentication & Authorization Security Tests', () => {
     });
 
     test('should allow access to auth status endpoint', async () => {
-      await request(app)
-        .get('/api/auth/status')
-        .expect(200);
+      await request(app).get('/api/auth/status').expect(200);
     });
 
     test('should allow access to platform config endpoint', async () => {
-      await request(app)
-        .get('/api/configs/platform')
-        .expect(200);
+      await request(app).get('/api/configs/platform').expect(200);
     });
   });
 
@@ -301,9 +284,7 @@ describe('Authentication & Authorization Security Tests', () => {
     });
 
     test('should allow anonymous access to apps but filter by permissions', async () => {
-      const response = await request(app)
-        .get('/api/apps')
-        .expect(200);
+      const response = await request(app).get('/api/apps').expect(200);
 
       // Should only see apps allowed for anonymous group
       expect(response.body).toHaveLength(1);
@@ -311,9 +292,7 @@ describe('Authentication & Authorization Security Tests', () => {
     });
 
     test('should allow anonymous access to models but filter by permissions', async () => {
-      const response = await request(app)
-        .get('/api/models')
-        .expect(200);
+      const response = await request(app).get('/api/models').expect(200);
 
       // Should only see models allowed for anonymous group
       expect(response.body).toHaveLength(1);
@@ -321,15 +300,11 @@ describe('Authentication & Authorization Security Tests', () => {
     });
 
     test('should allow anonymous access to specific app if permitted', async () => {
-      await request(app)
-        .get('/api/apps/public-app')
-        .expect(200);
+      await request(app).get('/api/apps/public-app').expect(200);
     });
 
     test('should block anonymous access to restricted app', async () => {
-      await request(app)
-        .get('/api/apps/user-app')
-        .expect(403);
+      await request(app).get('/api/apps/user-app').expect(403);
     });
 
     test('should allow anonymous chat with permitted apps and models', async () => {
@@ -460,10 +435,7 @@ describe('Authentication & Authorization Security Tests', () => {
         groups: ['user', 'authenticated']
       });
 
-      await request(app)
-        .get('/api/admin/apps')
-        .set('Authorization', `Bearer ${token}`)
-        .expect(403);
+      await request(app).get('/api/admin/apps').set('Authorization', `Bearer ${token}`).expect(403);
 
       await request(app)
         .get('/api/admin/models')
@@ -477,9 +449,7 @@ describe('Authentication & Authorization Security Tests', () => {
     });
 
     test('should block anonymous user from accessing admin endpoints', async () => {
-      await request(app)
-        .get('/api/admin/apps')
-        .expect(401);
+      await request(app).get('/api/admin/apps').expect(401);
     });
 
     test('should allow admin user to access admin endpoints', async () => {
@@ -504,10 +474,7 @@ describe('Authentication & Authorization Security Tests', () => {
     });
 
     test('should reject invalid JWT tokens', async () => {
-      await request(app)
-        .get('/api/apps')
-        .set('Authorization', 'Bearer invalid-token')
-        .expect(401);
+      await request(app).get('/api/apps').set('Authorization', 'Bearer invalid-token').expect(401);
     });
 
     test('should reject expired JWT tokens', async () => {
@@ -534,10 +501,7 @@ describe('Authentication & Authorization Security Tests', () => {
         groups: ['user', 'authenticated']
       });
 
-      await request(app)
-        .get('/api/apps')
-        .set('Authorization', `Bearer ${validToken}`)
-        .expect(200);
+      await request(app).get('/api/apps').set('Authorization', `Bearer ${validToken}`).expect(200);
     });
   });
 
@@ -549,15 +513,9 @@ describe('Authentication & Authorization Security Tests', () => {
     });
 
     test('should handle malformed authorization headers', async () => {
-      await request(app)
-        .get('/api/apps')
-        .set('Authorization', 'InvalidFormat')
-        .expect(401);
+      await request(app).get('/api/apps').set('Authorization', 'InvalidFormat').expect(401);
 
-      await request(app)
-        .get('/api/apps')
-        .set('Authorization', 'Bearer ')
-        .expect(401);
+      await request(app).get('/api/apps').set('Authorization', 'Bearer ').expect(401);
     });
 
     test('should handle user with no groups', async () => {
@@ -621,30 +579,17 @@ describe('Authentication & Authorization Security Tests', () => {
 
     test('should not allow bypassing auth with header manipulation', async () => {
       // Try various header manipulation attempts
-      await request(app)
-        .get('/api/apps')
-        .set('X-Forwarded-User', 'admin')
-        .expect(401);
+      await request(app).get('/api/apps').set('X-Forwarded-User', 'admin').expect(401);
 
-      await request(app)
-        .get('/api/apps')
-        .set('X-User-Id', 'admin')
-        .expect(401);
+      await request(app).get('/api/apps').set('X-User-Id', 'admin').expect(401);
 
-      await request(app)
-        .get('/api/apps')
-        .set('User', 'admin')
-        .expect(401);
+      await request(app).get('/api/apps').set('User', 'admin').expect(401);
     });
 
     test('should not allow bypassing auth with query parameters', async () => {
-      await request(app)
-        .get('/api/apps?user=admin&token=fake')
-        .expect(401);
+      await request(app).get('/api/apps?user=admin&token=fake').expect(401);
 
-      await request(app)
-        .get('/api/apps?auth=bypass')
-        .expect(401);
+      await request(app).get('/api/apps?auth=bypass').expect(401);
     });
 
     test('should not allow bypassing auth with request body manipulation', async () => {
