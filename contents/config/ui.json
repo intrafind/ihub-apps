@@ -45,6 +45,13 @@
       },
       {
         "name": {
+          "en": "Secure Example",
+          "de": "Gesicherte Beispielseite"
+        },
+        "url": "/pages/secure-example"
+      },
+      {
+        "name": {
           "en": "Documentation",
           "de": "Dokumentation"
         },
@@ -300,7 +307,21 @@
       "filePath": {
         "en": "pages/en/opensearch-analysis-script.md",
         "de": "pages/en/opensearch-analysis-script.md"
-      }
+      },
+      "authRequired": true,
+      "allowedGroups": ["admin"]
+    },
+    "secure-example": {
+      "title": {
+        "en": "Secure Example",
+        "de": "Gesicherte Beispielseite"
+      },
+      "filePath": {
+        "en": "pages/en/secure-example.md",
+        "de": "pages/de/secure-example.md"
+      },
+      "authRequired": true,
+      "allowedGroups": ["user"]
     }
   }
 }

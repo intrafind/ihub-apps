@@ -35,6 +35,16 @@ const MarkdownPage = () => {
       } catch (err) {
         console.error('Error fetching page:', err);
 
+        if (err.isAuthRequired) {
+          navigate('/unauthorized');
+          return;
+        }
+
+        if (err.isAccessDenied) {
+          navigate('/forbidden');
+          return;
+        }
+
         // Use the enhanced error info from the API service
         if (err.status === 404) {
           setError('Page not found');

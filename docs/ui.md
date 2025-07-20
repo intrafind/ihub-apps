@@ -251,7 +251,12 @@ Each page has:
 
 - A localized `title`
 - Localized `content` in Markdown format
+- `authRequired` (optional): Require authentication to view the page
+- `allowedGroups` (optional): Array of group IDs allowed to view the page. Use `'*'` to allow all groups (default if omitted). Groups are defined in `contents/config/groups.json`.
 
 ### URL Routing
 
 Static pages can be accessed through URL routes using the pattern `/page/{pageId}`, where `{pageId}` corresponds to the key in the `pages` object (e.g., `/page/privacy` for the privacy policy).
+
+Navigation links pointing to pages are automatically hidden if the current user does not meet the `authRequired` or `allowedGroups` restrictions.
+These settings can also be managed via the admin interface at `/admin/pages`.

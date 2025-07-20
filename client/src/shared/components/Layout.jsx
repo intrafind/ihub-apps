@@ -9,6 +9,7 @@ import SmartSearch from './SmartSearch';
 import { updateSettingsFromUrl, saveIntegrationSettings } from '../../utils/integrationSettings';
 import Icon from './Icon';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 const Layout = () => {
   const { t, i18n } = useTranslation();
@@ -17,6 +18,7 @@ const Layout = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
+  const { user, isAuthenticated } = useAuth();
 
   // Update integration settings from URL parameters and retrieve current settings
   const { showHeader, showFooter, language } = updateSettingsFromUrl(searchParams);
@@ -46,6 +48,22 @@ const Layout = () => {
 
   const toggleMobileMenu = () => {
     setMobileMenuOpen(!mobileMenuOpen);
+  };
+
+  const canAccessLink = link => {
+    if (!link.url.startsWith('/pages/') || !uiConfig?.pages) return true;
+    const pageId = link.url.replace('/pages/', '');
+    const page = uiConfig.pages[pageId];
+    if (!page) return true;
+    if (page.authRequired && !isAuthenticated) return false;
+    if (Array.isArray(page.allowedGroups)) {
+      if (page.allowedGroups.includes('*')) return true;
+      if (page.allowedGroups.length > 0) {
+        const groups = user?.groups || [];
+        return groups.some(g => page.allowedGroups.includes(g));
+      }
+    }
+    return true;
   };
 
   return (
@@ -97,7 +115,9 @@ const Layout = () => {
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
                     .filter(
-                      link => !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false)
+                      link =>
+                        !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false) &&
+                        canAccessLink(link)
                     )
                     .map((link, index) => (
                       <Link
@@ -134,7 +154,9 @@ const Layout = () => {
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
                     .filter(
-                      link => !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false)
+                      link =>
+                        !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false) &&
+                        canAccessLink(link)
                     )
                     .map((link, index) => (
                       <Link
@@ -179,22 +201,24 @@ const Layout = () => {
               {!isAppPage && (
                 <div className="flex flex-wrap justify-center gap-4 md:gap-6">
                   {uiConfig?.footer?.links &&
-                    uiConfig.footer.links.map((link, index) => (
-                      <Link
-                        key={index}
-                        to={link.url}
-                        onClick={resetHeaderColor}
-                        className="hover:text-gray-300"
-                        target={
-                          link.url.startsWith('http') || link.url.startsWith('mailto:')
-                            ? '_blank'
-                            : undefined
-                        }
-                        rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                      >
-                        {getLocalizedContent(link.name, currentLanguage)}
-                      </Link>
-                    ))}
+                    uiConfig.footer.links
+                      .filter(link => canAccessLink(link))
+                      .map((link, index) => (
+                        <Link
+                          key={index}
+                          to={link.url}
+                          onClick={resetHeaderColor}
+                          className="hover:text-gray-300"
+                          target={
+                            link.url.startsWith('http') || link.url.startsWith('mailto:')
+                              ? '_blank'
+                              : undefined
+                          }
+                          rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                        >
+                          {getLocalizedContent(link.name, currentLanguage)}
+                        </Link>
+                      ))}
                 </div>
               )}
             </div>
