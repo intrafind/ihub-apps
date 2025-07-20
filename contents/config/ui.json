@@ -321,7 +321,7 @@
         "de": "pages/de/secure-example.md"
       },
       "authRequired": true,
-      "allowedGroups": ["user"]
+      "allowedGroups": ["user", "admin", "admins"]
     }
   }
 }
