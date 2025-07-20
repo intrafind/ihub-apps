@@ -48,6 +48,11 @@ cp server/*.cjs dist/server/ # Make sure to copy the CommonJS entry point
 cp -r server/adapters dist/server/
 cp server/package.json dist/server/
 
+# Step 4.5: Copy shared directory
+echo "Copying shared files..."
+mkdir -p dist/shared
+cp -r shared/* dist/shared/
+
 # Step 5: Copy config files
 echo "Copying configuration files..."
 cp package.json dist/

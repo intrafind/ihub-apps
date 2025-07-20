@@ -421,6 +421,12 @@ try {
   // Copy contents
   fs.cpSync(contentsDir, path.join(outputDir, 'contents'), { recursive: true });
 
+  // Copy shared directory
+  const sharedDir = path.join(__dirname, 'shared');
+  if (fs.existsSync(sharedDir)) {
+    fs.cpSync(sharedDir, path.join(outputDir, 'shared'), { recursive: true });
+  }
+
   // Copy examples
   fs.cpSync(examplesDir, path.join(outputDir, 'examples'), { recursive: true });
 
