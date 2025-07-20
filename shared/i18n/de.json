@@ -234,7 +234,9 @@
     "requestTimeout": "Anforderung nach {timeout} Sekunden abgelaufen. Das Modell könnte unter hoher Last stehen.",
     "llmApiError": "LLM-API-Anfrage fehlgeschlagen mit Status {status}",
     "responseStreamError": "Fehler bei der Verarbeitung des Antwortstreams: {error}",
-    "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration."
+    "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration.",
+    "unauthorized": "Ungültiger API-Schlüssel",
+    "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden"
   },
   "toolErrors": {
     "MISSING_URL": "URL-Parameter ist erforderlich.",

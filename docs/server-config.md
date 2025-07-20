@@ -59,6 +59,12 @@ Add a `proxyAuth` section to `platform.json`:
 }
 ```
 
+### OpenAI-Compatible Proxy
+
+The server exposes configured models via an OpenAI compatible API. It reuses the same authentication mechanism as the rest of the application (`proxy`, `local`, `jwt`, or `oidc`).
+
+Authenticated requests can call `/api/inference/v1/chat/completions` and `/api/inference/v1/models` using any OpenAI compatible client. Model access is filtered based on the user's permissions.
+
 ## SSL Configuration
 
 To enable HTTPS you must provide certificate files via environment variables:
