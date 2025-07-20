@@ -21,11 +21,9 @@ const mockPlatformConfig = {
     anonymousGroup: 'anonymous',
     authenticatedGroup: 'authenticated'
   },
-  authorization: {
-    adminGroups: ['admin'],
-    userGroups: ['user'],
-    anonymousAccess: false,
-    defaultGroup: 'anonymous'
+  anonymousAuth: {
+    enabled: false,
+    defaultGroups: ['anonymous']
   },
   localAuth: {
     enabled: true,

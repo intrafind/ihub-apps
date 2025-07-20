@@ -23,11 +23,9 @@ const mockPlatformConfigAnonymousDisabled = {
     anonymousGroup: 'anonymous',
     authenticatedGroup: 'authenticated'
   },
-  authorization: {
-    adminGroups: ['admin', 'IT-Admin'],
-    userGroups: ['user', 'users'],
-    anonymousAccess: false,
-    defaultGroup: 'anonymous'
+  anonymousAuth: {
+    enabled: false,
+    defaultGroups: ['anonymous']
   },
   localAuth: {
     enabled: true,
@@ -44,7 +42,7 @@ const mockPlatformConfigAnonymousEnabled = {
   },
   authorization: {
     ...mockPlatformConfigAnonymousDisabled.authorization,
-    anonymousAccess: true
+    enabled: true
   }
 };
 
@@ -160,9 +158,7 @@ jest.mock('../utils/authorization.js', () => ({
     return {
       ...user,
       permissions,
-      isAdmin:
-        permissions.adminAccess ||
-        (authConfig.adminGroups && user.groups?.some(g => authConfig.adminGroups.includes(g)))
+      isAdmin: permissions.adminAccess
     };
   },
   filterResourcesByPermissions: (resources, allowedResources, resourceType) => {

@@ -47,11 +47,9 @@ describe('Authentication Integration Tests', () => {
         jwtSecret: 'test-secret-key',
         sessionTimeoutMinutes: 480
       },
-      authorization: {
-        adminGroups: ['admin'],
-        userGroups: ['user'],
-        anonymousAccess: false,
-        defaultGroup: 'anonymous'
+      anonymousAuth: {
+        enabled: false,
+        defaultGroups: ['anonymous']
       }
     };
 

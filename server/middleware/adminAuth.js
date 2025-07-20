@@ -1,5 +1,6 @@
 import configCache from '../configCache.js';
 import bcrypt from 'bcrypt';
+import { loadGroupsConfiguration } from '../utils/authorization.js';
 
 /**
  * Admin authentication middleware
@@ -126,15 +127,25 @@ export function isAdminAuthRequired(req = null) {
   if (req && req.user && req.user.id !== 'anonymous') {
     // Check if authenticated user has admin privileges
     const userGroups = req.user.groups || [];
-    const adminGroups = platform?.authorization?.adminGroups || [
-      'admin',
-      'IT-Admin',
-      'Platform-Admin'
-    ];
 
-    const isAdmin = userGroups.some(group => adminGroups.includes(group));
-    if (isAdmin) {
-      return false; // Allow access for authenticated admin users
+    try {
+      const groupsConfig = loadGroupsConfiguration();
+      const hasAdminAccess = userGroups.some(groupName => {
+        const group = groupsConfig.groups?.[groupName];
+        return group?.permissions?.adminAccess === true;
+      });
+
+      if (hasAdminAccess) {
+        return false; // Allow access for authenticated admin users
+      }
+    } catch (error) {
+      console.warn('Failed to load groups configuration for admin check:', error);
+      // Fallback to default admin groups if groups config fails
+      const defaultAdminGroups = ['admin', 'admins'];
+      const isAdmin = userGroups.some(group => defaultAdminGroups.includes(group));
+      if (isAdmin) {
+        return false; // Allow access for authenticated admin users
+      }
     }
   }
 
