@@ -33,8 +33,8 @@
     }
   },
   "auth": {
-    "mode": "local",
-    "allowAnonymous": false,
+    "mode": "oidc",
+    "allowAnonymous": true,
     "anonymousGroup": "anonymous",
     "authenticatedGroup": "authenticated"
   },
@@ -56,8 +56,7 @@
   "authorization": {
     "adminGroups": [
       "admin",
-      "IT-Admin",
-      "Platform-Admin"
+      "admins"
     ],
     "userGroups": [
       "user",
@@ -67,15 +66,35 @@
     "defaultGroup": "anonymous"
   },
   "localAuth": {
-    "enabled": true,
+    "enabled": false,
     "usersFile": "contents/config/users.json",
     "sessionTimeoutMinutes": 480,
     "jwtSecret": "magic-secret",
-    "showDemoAccounts": true
+    "showDemoAccounts": false
   },
   "oidcAuth": {
-    "enabled": false,
+    "enabled": true,
     "providers": [
+      {
+        "name": "keycloak",
+        "displayName": "Keycloak",
+        "clientId": "${KEYCLOAK_CLIENT_ID}",
+        "clientSecret": "${KEYCLOAK_CLIENT_SECRET}",
+        "authorizationURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/auth",
+        "tokenURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/token",
+        "userInfoURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/userinfo",
+        "scope": [
+          "openid",
+          "profile",
+          "email"
+        ],
+        "callbackURL": "/api/auth/oidc/keycloak/callback",
+        "groupsAttribute": "groups",
+        "defaultGroups": [
+          "users"
+        ],
+        "pkce": true
+      },
       {
         "name": "google",
         "displayName": "Google",
@@ -101,8 +120,8 @@
         "displayName": "Microsoft",
         "clientId": "${MICROSOFT_CLIENT_ID}",
         "clientSecret": "${MICROSOFT_CLIENT_SECRET}",
-        "authorizationURL": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-        "tokenURL": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        "authorizationURL": "https://login.microsoftonline.com/09bb6857-2fbd-4b58-9c1a-93213574239a/oauth2/v2.0/authorize",
+        "tokenURL": "https://login.microsoftonline.com/09bb6857-2fbd-4b58-9c1a-93213574239a/oauth2/v2.0/token",
         "userInfoURL": "https://graph.microsoft.com/v1.0/me",
         "scope": [
           "openid",

@@ -6,33 +6,63 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * Load group permissions configuration
- * @returns {Object} Group permissions configuration
+ * Load unified groups configuration
+ * @returns {Object} Groups configuration with permissions and mappings
  */
-export function loadGroupPermissions() {
+export function loadGroupsConfiguration() {
   try {
-    const configPath = path.join(__dirname, '../../contents/config/groupPermissions.json');
+    const configPath = path.join(__dirname, '../../contents/config/groups.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     return config;
   } catch (error) {
-    console.warn('Could not load group permissions configuration:', error.message);
-    return { groups: {} };
+    console.warn('Could not load groups configuration, falling back to legacy files:', error.message);
+    throw new Error('Groups configuration not found.', { cause: error });
   }
 }
 
 /**
- * Load group mapping configuration
+ * Load group permissions configuration (backwards compatibility)
+ * @returns {Object} Group permissions configuration
+ */
+export function loadGroupPermissions() {
+  const config = loadGroupsConfiguration();
+  
+  // Convert new format to legacy format for backwards compatibility
+  const legacyFormat = { groups: {} };
+  for (const [groupId, group] of Object.entries(config.groups || {})) {
+    legacyFormat.groups[groupId] = {
+      apps: group.permissions?.apps || [],
+      prompts: group.permissions?.prompts || [],
+      models: group.permissions?.models || [],
+      adminAccess: group.permissions?.adminAccess || false,
+      description: group.description || ''
+    };
+  }
+  
+  return legacyFormat;
+}
+
+/**
+ * Load group mapping configuration (backwards compatibility)
  * @returns {Object} Group mapping configuration
  */
 export function loadGroupMapping() {
-  try {
-    const configPath = path.join(__dirname, '../../contents/config/groupMap.json');
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    return config;
-  } catch (error) {
-    console.warn('Could not load group mapping configuration:', error.message);
-    return {};
+  const config = loadGroupsConfiguration();
+  
+  // Convert new format to legacy mapping format
+  const mapping = {};
+  for (const [groupId, group] of Object.entries(config.groups || {})) {
+    if (group.mappings && Array.isArray(group.mappings)) {
+      for (const externalGroup of group.mappings) {
+        if (!mapping[externalGroup]) {
+          mapping[externalGroup] = [];
+        }
+        mapping[externalGroup].push(groupId);
+      }
+    }
   }
+  
+  return mapping;
 }
 
 /**

@@ -126,6 +126,13 @@ export function AuthProvider({ children }) {
         if (data.authenticated && data.user) {
           dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
         } else {
+          // If we had a token but auth status says not authenticated,
+          // it means the token was invalidated (possibly due to auth mode change)
+          const hadToken = !!localStorage.getItem('authToken');
+          if (hadToken) {
+            console.log('🔐 Token invalidated by server (possibly due to auth mode change)');
+            localStorage.removeItem('authToken');
+          }
           dispatch({ type: AUTH_ACTIONS.SET_USER, payload: null });
         }
       } else {
@@ -161,6 +168,15 @@ export function AuthProvider({ children }) {
       if (data.success && data.token) {
         // Store token
         localStorage.setItem('authToken', data.token);
+        
+        // Clear any existing cached data to prevent permission leakage
+        try {
+          const { clearApiCache } = require('../../api/utils/cache');
+          clearApiCache();
+        } catch (error) {
+          // Cache clearing is optional, don't fail login
+          console.warn('Could not clear API cache on login:', error);
+        }
         
         // Set user
         dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
@@ -200,6 +216,15 @@ export function AuthProvider({ children }) {
       const data = response.data;
       
       if (data.success && data.user) {
+        // Clear any existing cached data to prevent permission leakage
+        try {
+          const { clearApiCache } = require('../../api/utils/cache');
+          clearApiCache();
+        } catch (error) {
+          // Cache clearing is optional, don't fail login
+          console.warn('Could not clear API cache on token login:', error);
+        }
+        
         dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
         return { success: true };
       } else {

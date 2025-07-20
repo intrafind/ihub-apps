@@ -92,6 +92,7 @@ function createToken(user, secret, expiresIn = 28800) { // 8 hours default
     name: user.name,
     email: user.email,
     groups: user.groups,
+    authMode: 'local', // Include auth mode in token
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + expiresIn
   };
@@ -138,6 +139,20 @@ export default function localAuthMiddleware(req, res, next) {
   const now = Math.floor(Date.now() / 1000);
   if (decoded.exp && decoded.exp < now) {
     return next(); // Expired token, continue as anonymous
+  }
+  
+  // Check if token was issued for the current authentication mode
+  // If the auth mode changed, invalidate the token to force re-authentication
+  const currentAuthMode = platform.auth?.mode || 'anonymous';
+  if (decoded.authMode && decoded.authMode !== 'local') {
+    console.warn(`🔐 Token rejected: issued for ${decoded.authMode} mode, current mode is ${currentAuthMode}`);
+    return next(); // Token from different auth mode, continue as anonymous
+  }
+  
+  // Additional check: if current mode is not 'local', reject local tokens
+  if (currentAuthMode !== 'local') {
+    console.warn(`🔐 Token rejected: local token not valid in ${currentAuthMode} mode`);
+    return next(); // Current mode doesn't allow local tokens
   }
   
   // Create user object from token

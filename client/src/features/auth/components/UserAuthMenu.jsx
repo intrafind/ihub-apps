@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import LoginForm from './LoginForm';
@@ -35,14 +36,26 @@ const UserAuthMenu = () => {
     return null;
   }
 
+  // Check if any authentication methods are actually enabled
+  const hasEnabledAuthMethods = platformConfig?.localAuth?.enabled || 
+                                platformConfig?.oidcAuth?.enabled || 
+                                platformConfig?.proxyAuth?.enabled;
+
+  // Don't show login options when in anonymous-only mode
+  // This happens when allowAnonymous is true and no auth methods are enabled
+  if (allowAnonymous && !hasEnabledAuthMethods) {
+    return null;
+  }
+
   // If anonymous access is not allowed and user is not authenticated, show login modal
   if (!allowAnonymous && !isAuthenticated) {
-    return (
-      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-[9999]">
+    return createPortal(
+      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full" style={{ zIndex: 2147483647 }}>
         <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
           <LoginForm />
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
@@ -56,9 +69,8 @@ const UserAuthMenu = () => {
     setShowDropdown(false);
   };
 
-  const isAdmin = user?.groups?.some(group => 
-    ['admin', 'IT-Admin', 'Platform-Admin', 'admins'].includes(group)
-  );
+  // Use the backend-calculated isAdmin flag instead of hardcoded group names
+  const isAdmin = user?.isAdmin === true;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -167,8 +179,8 @@ const UserAuthMenu = () => {
       )}
 
       {/* Login modal */}
-      {showLoginModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-[9999]">
+      {showLoginModal && createPortal(
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full" style={{ zIndex: 2147483647 }}>
           <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium text-gray-900">Sign In</h3>
@@ -181,7 +193,8 @@ const UserAuthMenu = () => {
             </div>
             <LoginForm onSuccess={() => setShowLoginModal(false)} />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

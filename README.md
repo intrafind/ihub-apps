@@ -277,6 +277,107 @@ Or with the binary (replace `${VERSION}` with the current version):
 PORT=8080 HOST=127.0.0.1 WORKERS=4 ./dist-bin/ai-hub-apps-v${VERSION}-macos
 ```
 
+## Authentication and Authorization
+
+AI Hub Apps includes a comprehensive authentication system supporting multiple authentication modes with enterprise-grade security.
+
+### Authentication Modes
+
+The system supports four authentication modes:
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Anonymous** | No authentication required | Public demos, open access |
+| **Local** | Built-in username/password | Development, small teams |
+| **OIDC** | OpenID Connect integration | Enterprise SSO, Google, Microsoft |
+| **Proxy** | Reverse proxy authentication | nginx, OAuth2 Proxy, corporate auth |
+
+### Quick Start
+
+**Default Setup (No Authentication):**
+```bash
+# Just start the application - works out of the box!
+npm run dev
+```
+All users have full access to all apps and features by default.
+
+**Enable Local Authentication:**
+```bash
+# Set environment variables
+export LOCAL_AUTH_ENABLED=true
+export JWT_SECRET=your-secure-secret
+
+# Or edit contents/config/platform.json
+{
+  "auth": { "mode": "local" },
+  "localAuth": { "enabled": true }
+}
+```
+
+**Demo Accounts:**
+- Admin: `admin` / `password123`
+- User: `user` / `password123`
+
+### Admin Access Security
+
+The admin panel uses a **strict security model** based on authentication mode:
+
+| Auth Mode | Admin Access | Admin Secret |
+|-----------|-------------|-------------|
+| **Anonymous** | Admin secret required | ✅ Enabled |
+| **Local/OIDC/Proxy** | User groups only | ❌ Disabled |
+
+**Benefits:**
+- **No bypass attacks** - Admin secret can't bypass proper authentication
+- **Dynamic admin groups** - Configure admin access without code changes
+- **Seamless UX** - Admin users go directly to admin panel
+
+### Permission System
+
+Access control uses group-based permissions:
+
+```json
+{
+  "groups": {
+    "admin": {
+      "apps": ["*"],
+      "prompts": ["*"], 
+      "models": ["*"],
+      "adminAccess": true
+    },
+    "user": {
+      "apps": ["chat", "translator"],
+      "prompts": ["general"],
+      "models": ["gpt-3.5-turbo"],
+      "adminAccess": false
+    }
+  }
+}
+```
+
+### Configuration
+
+Authentication is configured in `contents/config/platform.json`:
+
+```json
+{
+  "auth": {
+    "mode": "local",
+    "allowAnonymous": false,
+    "authenticatedGroup": "authenticated"
+  },
+  "authorization": {
+    "adminGroups": ["admin", "admins"],
+    "userGroups": ["user", "users"]
+  }
+}
+```
+
+For complete authentication documentation, see:
+- [External Authentication Guide](docs/external-authentication.md)
+- [OIDC Authentication Setup](docs/oidc-authentication.md)
+- [Security Implementation Details](concepts/2025-07-20-Final-Authentication-Security-Implementation.md)
+
 ## Configuration Files
 
 Configuration JSON files are kept in `contents/config` during development. When building, they are copied to `dist/contents/config`.

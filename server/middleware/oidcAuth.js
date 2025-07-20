@@ -164,7 +164,8 @@ function generateJwtToken(user) {
     email: user.email,
     groups: user.groups,
     provider: user.provider,
-    authMethod: 'oidc',
+    authMode: 'oidc', // Include auth mode in token
+    authProvider: user.provider, // Include specific provider for validation
     iat: Math.floor(Date.now() / 1000)
   };
 

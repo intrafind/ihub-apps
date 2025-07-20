@@ -159,36 +159,55 @@ JWT_SECRET=your-secret-key
 OIDC_AUTH_ENABLED=true|false
 ```
 
-### Group Permissions
+### Group Management
 
-Configure group-based permissions in `contents/config/groupPermissions.json`:
+**NEW:** AI Hub Apps now includes a unified group management system accessible through the admin interface at `/admin/groups`.
+
+#### Admin Interface
+- **Create/Edit Groups**: Full UI for managing groups, permissions, and external mappings
+- **Permission Assignment**: Visual interface for assigning apps, models, and prompts to groups
+- **External Mappings**: Configure how external groups (from OIDC, LDAP, etc.) map to internal groups
+- **Wildcard Support**: Easy toggles for "All Apps (*)", "All Models (*)", "All Prompts (*)"
+
+#### Unified Configuration
+Group configuration is now stored in `contents/config/groups.json`:
 
 ```json
 {
   "groups": {
     "admin": {
-      "apps": ["*"],
-      "prompts": ["*"],
-      "models": ["*"],
-      "adminAccess": true,
-      "description": "Full administrative access"
+      "id": "admin",
+      "name": "Admin",
+      "description": "Full administrative access to all resources",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": true
+      },
+      "mappings": ["Admins", "IT-Admin", "Platform-Admin"]
     },
     "user": {
-      "apps": ["chat", "translator", "summarizer"],
-      "prompts": ["general"],
-      "models": ["gpt-3.5-turbo", "gemini-pro"],
-      "adminAccess": false,
-      "description": "Standard user access"
-    },
-    "anonymous": {
-      "apps": ["chat"],
-      "prompts": [],
-      "models": ["gemini-flash"],
-      "adminAccess": false,
-      "description": "Anonymous user access"
+      "id": "user", 
+      "name": "User",
+      "description": "Standard user access to common applications",
+      "permissions": {
+        "apps": ["chat", "translator", "summarizer"],
+        "prompts": ["general"],
+        "models": ["gpt-3.5-turbo", "gemini-pro"],
+        "adminAccess": false
+      },
+      "mappings": ["Users", "Employees", "Staff"]
     }
   }
 }
+```
+
+#### Legacy Support
+The system maintains backwards compatibility with existing `groupPermissions.json` and `groupMap.json` files. Use the migration script to convert to the new format:
+
+```bash
+node scripts/migrate-group-config.js
 ```
 
 ### Group Assignment
@@ -242,20 +261,6 @@ const multiGroup = getPermissionsForUser(['authenticated', 'google-users']);
 // Complex multiple groups: maximum access
 const complexGroups = getPermissionsForUser(['authenticated', 'microsoft-users', 'hr']);
 // Result: 7 apps, 4 models, 3 prompt types (union of all groups)
-```
-
-### Group Mapping
-
-Map external groups to internal groups in `contents/config/groupMap.json`:
-
-```json
-{
-  "IT-Admin": ["admin"],
-  "Users": ["user"],
-  "Employees": ["user"],
-  "Contractors": ["contractors"],
-  "anonymous": ["anonymous"]
-}
 ```
 
 ## Authentication Modes
@@ -513,6 +518,42 @@ function AdminComponent() {
    - Each password hash is unique even if users have the same password
    - Prevents rainbow table attacks and password hash copying between users
    - Uses bcrypt rounds 12+ for strong security
+
+## Admin Authentication Security
+
+**CRITICAL**: The admin authentication system enforces strict security based on authentication mode:
+
+### Admin Secret Usage Rules
+
+| Authentication Mode | Admin Secret | Admin Access Method |
+|-------------------|-------------|-------------------|
+| **Anonymous** | ✅ **Required** | Admin secret is the only way to access admin |
+| **Local** | ❌ **Disabled** | Only authenticated users with admin groups |
+| **OIDC** | ❌ **Disabled** | Only authenticated users with admin groups |
+| **Proxy** | ❌ **Disabled** | Only authenticated users with admin groups |
+
+### Security Benefits
+
+- **No Bypass Attacks**: Admin secret cannot be used to bypass proper authentication in local/OIDC/proxy modes
+- **Mode-Specific Security**: Each authentication mode has appropriate security measures
+- **Dynamic Admin Groups**: Admin groups are configurable without hardcoded frontend dependencies
+- **Clear Error Messages**: Users receive appropriate guidance based on their authentication status
+
+### Backend Security Implementation
+
+The system automatically:
+- Detects the current authentication mode
+- Validates user groups against configured admin groups
+- Rejects admin secret attempts in non-anonymous modes
+- Provides clear error messages for unauthorized access attempts
+
+### Frontend Integration
+
+The admin UI automatically:
+- Uses regular authentication tokens for admin users in authenticated modes
+- Falls back to admin secret authentication only in anonymous mode
+- Shows appropriate forms and error messages based on authentication context
+- Handles authentication failures gracefully with proper redirects
 
 ## Troubleshooting
 

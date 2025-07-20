@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext, createContext } from 'react';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
 const AdminAuthContext = createContext();
 
@@ -7,11 +8,16 @@ export function AdminAuthProvider({ children }) {
   const [authRequired, setAuthRequired] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [token, setToken] = useState(localStorage.getItem('adminToken') || '');
+  const { user, isAuthenticated: userIsAuthenticated } = useAuth();
 
   // Check authentication status
   const checkAuthStatus = async () => {
     try {
-      const response = await fetch('/api/admin/auth/status');
+      // Include authentication headers so backend can check current user
+      const authToken = localStorage.getItem('authToken');
+      const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+      
+      const response = await fetch('/api/admin/auth/status', { headers });
       const data = await response.json();
 
       setAuthRequired(data.authRequired);
@@ -51,6 +57,36 @@ export function AdminAuthProvider({ children }) {
   useEffect(() => {
     checkAuthStatus();
   }, [token]);
+
+  // Refresh admin auth status when user authentication changes
+  useEffect(() => {
+    const handleAuthChange = () => {
+      // Only refresh if we're not already authenticated to prevent unnecessary re-checks
+      if (!isAuthenticated) {
+        checkAuthStatus();
+      }
+    };
+
+    // Listen for auth token changes in localStorage
+    window.addEventListener('storage', handleAuthChange);
+    
+    // Also refresh on page focus (in case auth changed in another tab)
+    // But only if we're not already authenticated
+    window.addEventListener('focus', handleAuthChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleAuthChange);
+      window.removeEventListener('focus', handleAuthChange);
+    };
+  }, [isAuthenticated]);
+
+  // Refresh when user authentication or admin status changes
+  // But only if admin is not already authenticated to prevent session resets
+  useEffect(() => {
+    if (!isAuthenticated) {
+      checkAuthStatus();
+    }
+  }, [user?.id, user?.isAdmin, userIsAuthenticated, isAuthenticated]);
 
   const login = async adminSecret => {
     try {

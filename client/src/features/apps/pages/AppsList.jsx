@@ -7,6 +7,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { createFavoriteItemHelpers } from '../../../utils/favoriteItems';
 import { getRecentAppIds } from '../../../utils/recentApps';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import Icon from '../../../shared/components/Icon';
 
 // Instead of fixed values, we'll calculate based on viewport
@@ -14,6 +15,7 @@ const AppsList = () => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { resetHeaderColor, uiConfig } = useUIConfig();
+  const { user, isAuthenticated } = useAuth();
 
   // Create favorite apps helpers
   const {
@@ -200,7 +202,7 @@ const AppsList = () => {
     return () => {
       isMounted = false;
     };
-  }, [currentLanguage, calculateVisibleAppCount]); // Added calculateVisibleAppCount as dependency
+  }, [currentLanguage, calculateVisibleAppCount, user?.id, isAuthenticated]); // Added auth dependencies to reload apps when user changes
 
   // Reset display count when search changes
   useEffect(() => {

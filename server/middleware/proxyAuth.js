@@ -53,6 +53,16 @@ export async function proxyAuth(req, res, next) {
   };
 
   if (!proxyCfg.enabled) {
+    // Even if proxy auth is disabled, check for invalid JWT tokens from other auth modes
+    const currentAuthMode = platform.auth?.mode || 'anonymous';
+    const authHeader = req.headers.authorization;
+    
+    if (authHeader && authHeader.startsWith('Bearer ') && currentAuthMode === 'anonymous') {
+      // If we're in anonymous mode but someone sends a JWT token, it should be rejected
+      console.warn(`🔐 Token rejected: JWT token not valid in ${currentAuthMode} mode`);
+      // Don't set req.user, let it continue as anonymous
+    }
+    
     return next();
   }
 
@@ -77,7 +87,29 @@ export async function proxyAuth(req, res, next) {
       token = token.slice(7);
     }
     tokenPayload = await verifyJwt(token, provider);
-    if (tokenPayload) break;
+    if (tokenPayload) {
+      // Check if token was issued for the current authentication mode
+      const currentAuthMode = platform.auth?.mode || 'anonymous';
+      if (tokenPayload.authMode && tokenPayload.authMode !== currentAuthMode) {
+        console.warn(`🔐 Token rejected: issued for ${tokenPayload.authMode} mode, current mode is ${currentAuthMode}`);
+        tokenPayload = null; // Invalidate token from different auth mode
+        continue;
+      }
+      
+      // For OIDC tokens, also check if the provider is still enabled and available
+      if (tokenPayload.authMode === 'oidc' && tokenPayload.authProvider) {
+        const oidcConfig = platform.oidcAuth || {};
+        const enabledProviders = oidcConfig.enabled ? (oidcConfig.providers || []).map(p => p.name) : [];
+        
+        if (!enabledProviders.includes(tokenPayload.authProvider)) {
+          console.warn(`🔐 Token rejected: OIDC provider '${tokenPayload.authProvider}' is no longer enabled`);
+          tokenPayload = null; // Invalidate token from disabled provider
+          continue;
+        }
+      }
+      
+      break;
+    }
   }
 
   if (tokenPayload) {

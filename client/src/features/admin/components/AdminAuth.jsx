@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
 import { useAdminAuth } from '../hooks/useAdminAuth';
+import { useAuth } from '../../../shared/contexts/AuthContext';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import Icon from '../../../shared/components/Icon';
 
 const AdminAuth = ({ children }) => {
   const { isAuthenticated, authRequired, isLoading, login, logout } = useAdminAuth();
+  const { user, isAuthenticated: userIsAuthenticated } = useAuth();
+  const { platformConfig } = usePlatformConfig();
   const [adminSecret, setAdminSecret] = useState('');
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Get auth mode from platform config
+  const authMode = platformConfig?.auth?.mode || 'anonymous';
 
   const handleLogin = async e => {
     e.preventDefault();
@@ -75,14 +82,30 @@ const AdminAuth = ({ children }) => {
             <Icon name="shield-check" className="h-6 w-6 text-indigo-600" />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Admin Authentication
+            Admin Access Required
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Enter your admin secret to access the admin panel
-          </p>
+          {authMode === 'anonymous' ? (
+            <p className="mt-2 text-center text-sm text-gray-600">
+              Enter your admin secret to access the admin panel
+            </p>
+          ) : (
+            <div className="mt-2 text-center text-sm text-gray-600">
+              <p>Admin access requires authentication with admin privileges.</p>
+              {userIsAuthenticated ? (
+                <p className="mt-1 text-red-600">
+                  Your account does not have admin access. Contact your administrator.
+                </p>
+              ) : (
+                <p className="mt-1 text-blue-600">
+                  Please log in with an admin account to access the admin panel.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleLogin}>
+        {authMode === 'anonymous' && (
+          <form className="mt-8 space-y-6" onSubmit={handleLogin}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="admin-secret" className="sr-only">
@@ -132,6 +155,19 @@ const AdminAuth = ({ children }) => {
             </button>
           </div>
         </form>
+        )}
+        
+        {/* Show return/login link for non-anonymous modes */}
+        {authMode !== 'anonymous' && !userIsAuthenticated && (
+          <div className="mt-6 text-center">
+            <a 
+              href="/"
+              className="text-indigo-600 hover:text-indigo-500 font-medium"
+            >
+              ← Return to login
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );
