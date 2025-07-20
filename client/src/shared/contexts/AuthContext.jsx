@@ -174,7 +174,7 @@ export function AuthProvider({ children }) {
 
         // Clear any existing cached data to prevent permission leakage
         try {
-          const { clearApiCache } = require('../../api/utils/cache');
+          const { clearApiCache } = await import('../../api/utils/cache');
           clearApiCache();
         } catch (error) {
           // Cache clearing is optional, don't fail login
