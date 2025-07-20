@@ -27,13 +27,107 @@
       "models": true,
       "prompts": true,
       "shortlinks": true,
-      "pages": true
+      "pages": true,
+      "auth": true,
+      "users": true
     }
+  },
+  "auth": {
+    "mode": "anonymous",
+    "authenticatedGroup": "authenticated"
+  },
+  "anonymousAuth": {
+    "enabled": true,
+    "defaultGroups": ["anonymous"]
   },
   "proxyAuth": {
     "enabled": false,
     "userHeader": "X-Forwarded-User",
     "groupsHeader": "X-Forwarded-Groups",
-    "jwtProviders": []
+    "jwtProviders": [
+      {
+        "name": "example-provider",
+        "header": "Authorization",
+        "issuer": "https://example.com",
+        "audience": "ai-hub-apps",
+        "jwkUrl": "https://example.com/.well-known/jwks.json"
+      }
+    ]
+  },
+  "authorization": {
+    "adminGroups": ["admin", "admins"],
+    "userGroups": ["user", "users"]
+  },
+  "localAuth": {
+    "enabled": false,
+    "usersFile": "contents/config/users.json",
+    "sessionTimeoutMinutes": 480,
+    "jwtSecret": "magic-secret",
+    "showDemoAccounts": false
+  },
+  "oidcAuth": {
+    "enabled": false,
+    "providers": [
+      {
+        "name": "keycloak",
+        "displayName": "Keycloak",
+        "clientId": "${KEYCLOAK_CLIENT_ID}",
+        "clientSecret": "${KEYCLOAK_CLIENT_SECRET}",
+        "authorizationURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/auth",
+        "tokenURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/token",
+        "userInfoURL": "https://if6gpu.intrafind.org/keycloak/realms/intrafind/protocol/openid-connect/userinfo",
+        "scope": ["openid", "profile", "email"],
+        "callbackURL": "/api/auth/oidc/keycloak/callback",
+        "groupsAttribute": "groups",
+        "defaultGroups": ["users"],
+        "pkce": true,
+        "autoRedirect": false
+      },
+      {
+        "name": "google",
+        "displayName": "Google",
+        "clientId": "${GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET}",
+        "authorizationURL": "https://accounts.google.com/o/oauth2/v2/auth",
+        "tokenURL": "https://www.googleapis.com/oauth2/v4/token",
+        "userInfoURL": "https://www.googleapis.com/oauth2/v2/userinfo",
+        "scope": ["openid", "profile", "email"],
+        "callbackURL": "/api/auth/oidc/google/callback",
+        "groupsAttribute": "groups",
+        "defaultGroups": ["google-users"],
+        "pkce": true,
+        "autoRedirect": false
+      },
+      {
+        "name": "microsoft",
+        "displayName": "Microsoft",
+        "clientId": "${MICROSOFT_CLIENT_ID}",
+        "clientSecret": "${MICROSOFT_CLIENT_SECRET}",
+        "authorizationURL": "https://login.microsoftonline.com/09bb6857-2fbd-4b58-9c1a-93213574239a/oauth2/v2.0/authorize",
+        "tokenURL": "https://login.microsoftonline.com/09bb6857-2fbd-4b58-9c1a-93213574239a/oauth2/v2.0/token",
+        "userInfoURL": "https://graph.microsoft.com/v1.0/me",
+        "scope": ["openid", "profile", "email", "User.Read"],
+        "callbackURL": "/api/auth/oidc/microsoft/callback",
+        "groupsAttribute": "groups",
+        "defaultGroups": ["microsoft-users"],
+        "pkce": true,
+        "autoRedirect": false
+      },
+      {
+        "name": "auth0",
+        "displayName": "Auth0",
+        "clientId": "${AUTH0_CLIENT_ID}",
+        "clientSecret": "${AUTH0_CLIENT_SECRET}",
+        "authorizationURL": "https://${AUTH0_DOMAIN}/authorize",
+        "tokenURL": "https://${AUTH0_DOMAIN}/oauth/token",
+        "userInfoURL": "https://${AUTH0_DOMAIN}/userinfo",
+        "scope": ["openid", "profile", "email"],
+        "callbackURL": "/api/auth/oidc/auth0/callback",
+        "groupsAttribute": "groups",
+        "defaultGroups": ["auth0-users"],
+        "pkce": true,
+        "autoRedirect": false
+      }
+    ]
   }
 }

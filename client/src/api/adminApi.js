@@ -1,6 +1,12 @@
 // Utility function to make authenticated API calls to admin endpoints
 export const makeAdminApiCall = async (url, options = {}) => {
-  const token = localStorage.getItem('adminToken');
+  // In local/OIDC/proxy modes, use the regular authToken
+  // In anonymous mode, use the adminToken (admin secret)
+  const authToken = localStorage.getItem('authToken');
+  const adminToken = localStorage.getItem('adminToken');
+
+  // Prefer authToken (regular authentication) over adminToken (admin secret)
+  const token = authToken || adminToken;
 
   const headers = {
     'Content-Type': 'application/json',
@@ -17,12 +23,21 @@ export const makeAdminApiCall = async (url, options = {}) => {
   });
 
   if (response.status === 401 || response.status === 403) {
-    // Clear invalid token
-    localStorage.removeItem('adminToken');
+    // Clear invalid tokens
+    if (adminToken) {
+      localStorage.removeItem('adminToken');
+    }
 
-    // Redirect to admin home to trigger authentication
+    // For auth failures, redirect appropriately based on the auth mode
     if (window.location.pathname.startsWith('/admin')) {
-      window.location.href = '/admin';
+      // If we have a regular auth token, this suggests a permission issue
+      if (authToken) {
+        // User is authenticated but doesn't have admin permissions
+        window.location.href = '/admin'; // Will show appropriate error message
+      } else {
+        // User is not authenticated, redirect to login
+        window.location.href = '/';
+      }
     }
 
     throw new Error('Authentication required');
@@ -118,7 +133,7 @@ export const translateText = async ({ text, from, to }) => {
     body: JSON.stringify({ text, from, to })
   });
   return response.json();
-};    
+};
 
 export const toggleApps = async (ids, enabled) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
@@ -127,7 +142,7 @@ export const toggleApps = async (ids, enabled) => {
     body: JSON.stringify({ enabled })
   });
   return response.json();
-};    
+};
 
 export const fetchAdminPages = async () => {
   const response = await makeAdminApiCall('/api/admin/pages');

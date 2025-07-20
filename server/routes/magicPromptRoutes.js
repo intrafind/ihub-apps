@@ -6,10 +6,11 @@ import validate from '../validators/validate.js';
 import { magicPromptSchema } from '../validators/index.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
+import { authRequired } from '../middleware/authRequired.js';
 
 // BIG FAT TODO reuse methods like simpleCompletion and extract the adapter specifics
 export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT }) {
-  app.post('/api/magic-prompt', validate(magicPromptSchema), async (req, res) => {
+  app.post('/api/magic-prompt', authRequired, validate(magicPromptSchema), async (req, res) => {
     try {
       const { input, prompt, modelId, appId = 'direct' } = req.body;
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';

@@ -25,6 +25,10 @@ import AdminPromptsPage from './features/admin/pages/AdminPromptsPage';
 import AdminPromptEditPage from './features/admin/pages/AdminPromptEditPage';
 import AdminPagesPage from './features/admin/pages/AdminPagesPage';
 import AdminPageEditPage from './features/admin/pages/AdminPageEditPage';
+import AdminAuthPage from './features/admin/pages/AdminAuthPage';
+import AdminUsersPage from './features/admin/pages/AdminUsersPage';
+import AdminGroupsPage from './features/admin/pages/AdminGroupsPage';
+import AdminGroupEditPage from './features/admin/pages/AdminGroupEditPage';
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
@@ -32,6 +36,7 @@ import { useUIConfig } from './shared/contexts/UIConfigContext';
 import { usePlatformConfig } from './shared/contexts/PlatformConfigContext';
 import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
+import { AuthProvider } from './shared/contexts/AuthContext';
 import { configureMarked } from './shared/components/MarkdownRenderer';
 
 // Create safe versions of components that need error boundaries
@@ -53,6 +58,10 @@ const SafeAdminPrompts = withSafeRoute(AdminPromptsPage);
 const SafeAdminPromptEdit = withSafeRoute(AdminPromptEditPage);
 const SafeAdminPages = withSafeRoute(AdminPagesPage);
 const SafeAdminPageEdit = withSafeRoute(AdminPageEditPage);
+const SafeAdminAuth = withSafeRoute(AdminAuthPage);
+const SafeAdminUsers = withSafeRoute(AdminUsersPage);
+const SafeAdminGroups = withSafeRoute(AdminGroupsPage);
+const SafeAdminGroupEdit = withSafeRoute(AdminGroupEditPage);
 const SafePromptsList = withSafeRoute(PromptsList);
 
 function App() {
@@ -69,63 +78,79 @@ function App() {
 
   return (
     <AppProviders>
-      <AdminAuthProvider>
-        <BrowserRouter>
-          {/* Document title management - must be inside Router for useLocation/useParams */}
-          <DocumentTitle />
+      <AuthProvider>
+        <AdminAuthProvider>
+          <BrowserRouter>
+            {/* Document title management - must be inside Router for useLocation/useParams */}
+            <DocumentTitle />
 
-          <Routes>
-            {/* Widget page should be outside of the regular Layout */}
-            <Route path="/widget/chat" element={<SafeWidgetPage />} />
+            <Routes>
+              {/* Widget page should be outside of the regular Layout */}
+              <Route path="/widget/chat" element={<SafeWidgetPage />} />
 
-            {/* Regular application routes */}
-            <Route path="/" element={<Layout />}>
-              <Route index element={<SafeAppsList />} />
-              {uiConfig?.promptsList?.enabled !== false && (
-                <Route path="prompts" element={<SafePromptsList />} />
-              )}
-              <Route path="apps/:appId" element={<SafeAppChat />} />
-              <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
-              <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
-              {showAdminPage('home') && <Route path="admin" element={<SafeAdminHome />} />}
-              {showAdminPage('usage') && <Route path="admin/usage" element={<SafeAdminUsage />} />}
-              {showAdminPage('system') && (
-                <Route path="admin/system" element={<SafeAdminSystem />} />
-              )}
-              {showAdminPage('apps') && <Route path="admin/apps" element={<SafeAdminApps />} />}
-              {showAdminPage('apps') && (
-                <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
-              )}
-              {showAdminPage('shortlinks') && (
-                <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
-              )}
-              {showAdminPage('shortlinks') && (
-                <Route path="admin/shortlinks/:code" element={<SafeAdminShortLinkEdit />} />
-              )}
-              {showAdminPage('models') && (
-                <Route path="admin/models" element={<SafeAdminModels />} />
-              )}
-              {showAdminPage('models') && (
-                <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
-              )}
-              {showAdminPage('pages') && <Route path="admin/pages" element={<SafeAdminPages />} />}
-              {showAdminPage('pages') && (
-                <Route path="admin/pages/:pageId" element={<SafeAdminPageEdit />} />
-              )}
-              {showAdminPage('prompts') && (
-                <Route path="admin/prompts" element={<SafeAdminPrompts />} />
-              )}
-              {showAdminPage('prompts') && (
-                <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
-              )}
-              <Route path="unauthorized" element={<Unauthorized />} />
-              <Route path="forbidden" element={<Forbidden />} />
-              <Route path="server-error" element={<ServerError />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </AdminAuthProvider>
+              {/* Regular application routes */}
+              <Route path="/" element={<Layout />}>
+                <Route index element={<SafeAppsList />} />
+                {uiConfig?.promptsList?.enabled !== false && (
+                  <Route path="prompts" element={<SafePromptsList />} />
+                )}
+                <Route path="apps/:appId" element={<SafeAppChat />} />
+                <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
+                <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
+                {showAdminPage('home') && <Route path="admin" element={<SafeAdminHome />} />}
+                {showAdminPage('usage') && (
+                  <Route path="admin/usage" element={<SafeAdminUsage />} />
+                )}
+                {showAdminPage('system') && (
+                  <Route path="admin/system" element={<SafeAdminSystem />} />
+                )}
+                {showAdminPage('apps') && <Route path="admin/apps" element={<SafeAdminApps />} />}
+                {showAdminPage('apps') && (
+                  <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
+                )}
+                {showAdminPage('shortlinks') && (
+                  <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
+                )}
+                {showAdminPage('shortlinks') && (
+                  <Route path="admin/shortlinks/:code" element={<SafeAdminShortLinkEdit />} />
+                )}
+                {showAdminPage('models') && (
+                  <Route path="admin/models" element={<SafeAdminModels />} />
+                )}
+                {showAdminPage('models') && (
+                  <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
+                )}
+                {showAdminPage('pages') && (
+                  <Route path="admin/pages" element={<SafeAdminPages />} />
+                )}
+                {showAdminPage('pages') && (
+                  <Route path="admin/pages/:pageId" element={<SafeAdminPageEdit />} />
+                )}
+                {showAdminPage('prompts') && (
+                  <Route path="admin/prompts" element={<SafeAdminPrompts />} />
+                )}
+                {showAdminPage('prompts') && (
+                  <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
+                )}
+                {showAdminPage('auth') && <Route path="admin/auth" element={<SafeAdminAuth />} />}
+                {showAdminPage('users') && (
+                  <Route path="admin/users" element={<SafeAdminUsers />} />
+                )}
+                {showAdminPage('groups') && (
+                  <Route path="admin/groups" element={<SafeAdminGroups />} />
+                )}
+                {showAdminPage('groups') && (
+                  <Route path="admin/groups/:groupId" element={<SafeAdminGroupEdit />} />
+                )}
+                <Route path="unauthorized" element={<Unauthorized />} />
+                <Route path="forbidden" element={<Forbidden />} />
+                <Route path="server-error" element={<ServerError />} />
+                <Route path="*" element={<NotFound />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </AdminAuthProvider>
+      </AuthProvider>
     </AppProviders>
   );
 }

@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import jwkToPem from 'jwk-to-pem';
 import config from '../config.js';
 import configCache from '../configCache.js';
+import { enhanceUserGroups } from '../utils/authorization.js';
 
 const jwksCache = new Map();
 
@@ -52,6 +53,20 @@ export async function proxyAuth(req, res, next) {
   };
 
   if (!proxyCfg.enabled) {
+    // Even if proxy auth is disabled, check for invalid JWT tokens from other auth modes
+    const currentAuthMode = platform.auth?.mode || 'anonymous';
+    const authHeader = req.headers.authorization;
+
+    if (authHeader && authHeader.startsWith('Bearer ') && currentAuthMode === 'anonymous') {
+      // In anonymous mode, JWT tokens are generally not valid, but admin tokens should be allowed
+      // Admin authentication will be handled by the adminAuth middleware
+      // Only warn for non-admin routes
+      if (!req.path.startsWith('/api/admin/')) {
+        console.warn(`🔐 Token rejected: JWT token not valid in ${currentAuthMode} mode`);
+      }
+      // Don't set req.user, let it continue as anonymous (admin auth will handle admin routes)
+    }
+
     return next();
   }
 
@@ -76,7 +91,46 @@ export async function proxyAuth(req, res, next) {
       token = token.slice(7);
     }
     tokenPayload = await verifyJwt(token, provider);
-    if (tokenPayload) break;
+    if (tokenPayload) {
+      // Check if token's auth method is still enabled
+      // Allow tokens from any enabled auth method, regardless of primary auth mode
+      const localAuthConfig = platform.localAuth || {};
+      const oidcAuthConfig = platform.oidcAuth || {};
+
+      let authMethodEnabled = false;
+      if (tokenPayload.authMode === 'local' && localAuthConfig.enabled) {
+        authMethodEnabled = true;
+      } else if (tokenPayload.authMode === 'oidc' && oidcAuthConfig.enabled) {
+        authMethodEnabled = true;
+      } else if (!tokenPayload.authMode) {
+        // Legacy tokens without authMode - allow if any auth method is enabled
+        authMethodEnabled = true;
+      }
+
+      if (!authMethodEnabled) {
+        console.warn(`🔐 Token rejected: ${tokenPayload.authMode} authentication is disabled`);
+        tokenPayload = null; // Invalidate token from disabled auth method
+        continue;
+      }
+
+      // For OIDC tokens, also check if the provider is still enabled and available
+      if (tokenPayload.authMode === 'oidc' && tokenPayload.authProvider) {
+        const oidcConfig = platform.oidcAuth || {};
+        const enabledProviders = oidcConfig.enabled
+          ? (oidcConfig.providers || []).map(p => p.name)
+          : [];
+
+        if (!enabledProviders.includes(tokenPayload.authProvider)) {
+          console.warn(
+            `🔐 Token rejected: OIDC provider '${tokenPayload.authProvider}' is no longer enabled`
+          );
+          tokenPayload = null; // Invalidate token from disabled provider
+          continue;
+        }
+      }
+
+      break;
+    }
   }
 
   if (tokenPayload) {
@@ -105,11 +159,26 @@ export async function proxyAuth(req, res, next) {
     else mapped.add(m);
   }
 
-  req.user = {
+  let user = {
     id: userId,
-    name: req.headers['x-forwarded-name'],
-    email: req.headers['x-forwarded-email'],
-    groups: Array.from(mapped)
+    name:
+      req.headers['x-forwarded-name'] ||
+      (tokenPayload &&
+        (tokenPayload.name ||
+          (tokenPayload.given_name && tokenPayload.family_name
+            ? `${tokenPayload.given_name} ${tokenPayload.family_name}`.trim()
+            : tokenPayload.given_name || tokenPayload.family_name))) ||
+      userId,
+    email: req.headers['x-forwarded-email'] || (tokenPayload && tokenPayload.email) || null,
+    groups: Array.from(mapped),
+    authenticated: true,
+    authMethod: 'proxy'
   };
+
+  // Enhance user with authenticated group
+  const authConfig = platform.auth || {};
+  user = enhanceUserGroups(user, authConfig);
+
+  req.user = user;
   next();
 }

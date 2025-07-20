@@ -1,6 +1,10 @@
 import cors from 'cors';
 import express from 'express';
+import session from 'express-session';
 import { proxyAuth } from './middleware/proxyAuth.js';
+import localAuthMiddleware from './middleware/localAuth.js';
+import { initializePassport, configureOidcProviders } from './middleware/oidcAuth.js';
+import { enhanceUserWithPermissions } from './utils/authorization.js';
 import { loadJson, loadText } from './configLoader.js';
 import { getApiKeyForModel } from './utils.js';
 import { sendSSE, clients, activeRequests } from './sse.js';
@@ -42,7 +46,55 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(checkContentLength(limit));
   app.use(express.json({ limit: `${limitMb}mb` }));
   app.use(express.urlencoded({ limit: `${limitMb}mb`, extended: true }));
+
+  // Set platform config on app for middleware access
+  app.set('platform', platformConfig);
+
+  // Session middleware for OIDC (only needed if OIDC is enabled)
+  const oidcConfig = platformConfig.oidcAuth || {};
+  if (oidcConfig.enabled) {
+    app.use(
+      session({
+        secret: config.JWT_SECRET || 'fallback-session-secret',
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+          secure: process.env.NODE_ENV === 'production',
+          httpOnly: true,
+          maxAge: 10 * 60 * 1000 // 10 minutes for OIDC flow
+        }
+      })
+    );
+  }
+
+  // Initialize Passport for OIDC authentication
+  initializePassport(app);
+
+  // Configure OIDC providers based on platform configuration
+  configureOidcProviders();
+
+  // Authentication middleware (order matters: proxy auth first, then local auth)
   app.use(proxyAuth);
+  app.use(localAuthMiddleware);
+
+  // Enhance user with permissions after authentication
+  app.use((req, res, next) => {
+    if (req.user && !req.user.permissions) {
+      // Use auth config from platform config
+      const authConfig = platformConfig.auth || {};
+      req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
+
+      console.log('🔍 User permissions enhanced:', {
+        userId: req.user.id,
+        groups: req.user.groups,
+        hasPermissions: !!req.user.permissions,
+        appsCount: req.user.permissions?.apps?.size || 0,
+        modelsCount: req.user.permissions?.models?.size || 0,
+        isAdmin: req.user.isAdmin
+      });
+    }
+    next();
+  });
 }
 
 const errorHandler = new ErrorHandler();

@@ -1,11 +1,12 @@
-import { loadJson } from '../../configLoader.js';
 import configCache from '../../configCache.js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
+import { filterResourcesByPermissions } from '../../utils/authorization.js';
+import { authRequired } from '../../middleware/authRequired.js';
 
 export default function registerDataRoutes(app) {
-  app.get('/api/styles', async (req, res) => {
+  app.get('/api/styles', authRequired, async (req, res) => {
     try {
       // Try to get styles from cache first
       let { data: styles = [] } = configCache.getStyles();
@@ -20,13 +21,19 @@ export default function registerDataRoutes(app) {
     }
   });
 
-  app.get('/api/prompts', async (req, res) => {
+  app.get('/api/prompts', authRequired, async (req, res) => {
     try {
       // Get prompts with ETag from cache
-      const { data: prompts, etag } = configCache.getPrompts();
+      let { data: prompts, etag } = configCache.getPrompts();
 
       if (!prompts) {
         return res.status(500).json({ error: 'Failed to load prompts configuration' });
+      }
+
+      // Apply group-based filtering if user is authenticated
+      if (req.user && req.user.permissions) {
+        const allowedPrompts = req.user.permissions.prompts || new Set();
+        prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
       }
 
       // Set ETag header
@@ -142,11 +149,118 @@ export default function registerDataRoutes(app) {
       };
       const computedSalt = `${appVersion}.${refreshSalt.salt}`;
 
+      // Apply environment variable overrides for auth configuration
+      const authConfig = {
+        ...platform.auth,
+        mode: process.env.AUTH_MODE || platform.auth?.mode || 'proxy',
+        allowAnonymous:
+          process.env.AUTH_ALLOW_ANONYMOUS === 'true'
+            ? true
+            : process.env.AUTH_ALLOW_ANONYMOUS === 'false'
+              ? false
+              : (platform.auth?.allowAnonymous ?? true),
+        anonymousGroup:
+          process.env.AUTH_ANONYMOUS_GROUP || platform.auth?.anonymousGroup || 'anonymous'
+      };
+
+      // Apply environment variable overrides for proxy auth
+      const proxyAuthConfig = {
+        ...platform.proxyAuth,
+        enabled:
+          process.env.PROXY_AUTH_ENABLED === 'true'
+            ? true
+            : process.env.PROXY_AUTH_ENABLED === 'false'
+              ? false
+              : (platform.proxyAuth?.enabled ?? false),
+        userHeader:
+          process.env.PROXY_AUTH_USER_HEADER ||
+          platform.proxyAuth?.userHeader ||
+          'X-Forwarded-User',
+        groupsHeader:
+          process.env.PROXY_AUTH_GROUPS_HEADER ||
+          platform.proxyAuth?.groupsHeader ||
+          'X-Forwarded-Groups',
+        anonymousGroup:
+          process.env.PROXY_AUTH_ANONYMOUS_GROUP ||
+          platform.proxyAuth?.anonymousGroup ||
+          'anonymous'
+      };
+
+      // Apply environment variable overrides for local auth
+      const localAuthConfig = {
+        ...platform.localAuth,
+        enabled:
+          process.env.LOCAL_AUTH_ENABLED === 'true'
+            ? true
+            : process.env.LOCAL_AUTH_ENABLED === 'false'
+              ? false
+              : (platform.localAuth?.enabled ?? false),
+        sessionTimeoutMinutes:
+          parseInt(process.env.LOCAL_AUTH_SESSION_TIMEOUT) ||
+          platform.localAuth?.sessionTimeoutMinutes ||
+          480,
+        jwtSecret: process.env.JWT_SECRET || platform.localAuth?.jwtSecret || '${JWT_SECRET}'
+      };
+
+      // Apply environment variable overrides for OIDC auth
+      const oidcAuthConfig = {
+        ...platform.oidcAuth,
+        enabled:
+          process.env.OIDC_AUTH_ENABLED === 'true'
+            ? true
+            : process.env.OIDC_AUTH_ENABLED === 'false'
+              ? false
+              : (platform.oidcAuth?.enabled ?? false)
+      };
+
+      // Sanitize configs for client - remove sensitive information
+      const sanitizedLocalAuth = {
+        enabled: localAuthConfig.enabled,
+        sessionTimeoutMinutes: localAuthConfig.sessionTimeoutMinutes,
+        showDemoAccounts: localAuthConfig.showDemoAccounts
+        // Exclude jwtSecret
+      };
+
+      const sanitizedOidcAuth = oidcAuthConfig.enabled
+        ? {
+            enabled: oidcAuthConfig.enabled,
+            providers:
+              oidcAuthConfig.providers?.map(provider => ({
+                name: provider.name,
+                displayName: provider.displayName,
+                authorizationURL: provider.authorizationURL,
+                callbackURL: provider.callbackURL,
+                scope: provider.scope,
+                pkce: provider.pkce
+                // Exclude clientSecret, clientId, tokenURL, userInfoURL
+              })) || []
+          }
+        : { enabled: false };
+
+      const sanitizedProxyAuth = {
+        enabled: proxyAuthConfig.enabled,
+        anonymousGroup: proxyAuthConfig.anonymousGroup
+        // Exclude userHeader, groupsHeader which could be sensitive
+      };
+
+      // Sanitize admin config - remove sensitive admin credentials
+      const sanitizedAdmin = platform.admin
+        ? {
+            pages: platform.admin.pages
+            // Exclude admin.secret
+          }
+        : {};
+
       // Add version and computed salt to platform response
       const enhancedPlatform = {
-        ...platform,
         version: appVersion,
-        computedRefreshSalt: computedSalt
+        computedRefreshSalt: computedSalt,
+        defaultLanguage: platform.defaultLanguage,
+        auth: authConfig,
+        proxyAuth: sanitizedProxyAuth,
+        localAuth: sanitizedLocalAuth,
+        oidcAuth: sanitizedOidcAuth,
+        admin: sanitizedAdmin
       };
 
       res.json(enhancedPlatform);
