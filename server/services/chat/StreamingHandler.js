@@ -92,6 +92,16 @@ class StreamingHandler {
             { provider: model.provider },
             clientLanguage
           );
+        } else if (llmResponse.status === 400) {
+          // Check if it's an API key error based on the error body
+          const errorBodyLower = errorBody.toLowerCase();
+          if (errorBodyLower.includes('api key') || errorBodyLower.includes('api_key')) {
+            errorMessage = await getLocalizedError(
+              'authenticationFailed',
+              { provider: model.provider },
+              clientLanguage
+            );
+          }
         } else if (llmResponse.status === 429) {
           errorMessage = await getLocalizedError(
             'rateLimitExceeded',

@@ -2,8 +2,13 @@ import configCache from '../../configCache.js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
-import { filterResourcesByPermissions } from '../../utils/authorization.js';
-import { authRequired } from '../../middleware/authRequired.js';
+import {
+  filterResourcesByPermissions,
+  isAnonymousAccessAllowed,
+  enhanceUserWithPermissions
+} from '../../utils/authorization.js';
+import { authRequired, authOptional } from '../../middleware/authRequired.js';
+import crypto from 'crypto';
 
 export default function registerDataRoutes(app) {
   app.get('/api/styles', authRequired, async (req, res) => {
@@ -21,8 +26,20 @@ export default function registerDataRoutes(app) {
     }
   });
 
-  app.get('/api/prompts', authRequired, async (req, res) => {
+  app.get('/api/prompts', authOptional, async (req, res) => {
     try {
+      const platformConfig = req.app.get('platform') || {};
+      const authConfig = platformConfig.auth || {};
+
+      // Check if anonymous access is allowed
+      if (!isAnonymousAccessAllowed(platformConfig) && (!req.user || req.user.id === 'anonymous')) {
+        return res.status(401).json({
+          error: 'Authentication required',
+          code: 'AUTH_REQUIRED',
+          message: 'You must be logged in to access this resource'
+        });
+      }
+
       // Get prompts with ETag from cache
       let { data: prompts, etag } = configCache.getPrompts();
 
@@ -30,19 +47,56 @@ export default function registerDataRoutes(app) {
         return res.status(500).json({ error: 'Failed to load prompts configuration' });
       }
 
+      // Force permission enhancement if not already done
+      if (req.user && !req.user.permissions) {
+        const platformConfig = req.app.get('platform') || {};
+        const authConfig = platformConfig.auth || {};
+        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
+      }
+
+      // Create anonymous user if none exists and anonymous access is allowed
+      if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
+        const platformConfig = req.app.get('platform') || {};
+        const authConfig = platformConfig.auth || {};
+        req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
+      }
+
       // Apply group-based filtering if user is authenticated
       if (req.user && req.user.permissions) {
         const allowedPrompts = req.user.permissions.prompts || new Set();
         prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
+      } else if (isAnonymousAccessAllowed(platformConfig)) {
+        // For anonymous users, filter to only anonymous-allowed prompts
+        const allowedPrompts = new Set(); // No default prompts for anonymous
+        prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
       }
 
+      // Generate user-specific ETag to prevent cache poisoning between users with different permissions
+      let userSpecificEtag = etag;
+
+      // Create ETag based on the actual filtered prompts content
+      // This ensures users with the same permissions share cache, but different permissions get different ETags
+      const originalPromptsCount = configCache.getPrompts().data?.length || 0;
+      if (prompts.length < originalPromptsCount) {
+        // Prompts were filtered - create content-based ETag from filtered prompt IDs
+        const promptIds = prompts.map(prompt => prompt.id).sort();
+        const contentHash = crypto
+          .createHash('md5')
+          .update(JSON.stringify(promptIds))
+          .digest('hex')
+          .substring(0, 8);
+
+        userSpecificEtag = `${etag}-${contentHash}`;
+      }
+      // If prompts.length === originalPromptsCount, user sees all prompts, use original ETag
+
       // Set ETag header
-      if (etag) {
-        res.setHeader('ETag', etag);
+      if (userSpecificEtag) {
+        res.setHeader('ETag', userSpecificEtag);
 
         // Check if client has the same ETag
         const clientETag = req.headers['if-none-match'];
-        if (clientETag && clientETag === etag) {
+        if (clientETag && clientETag === userSpecificEtag) {
           return res.status(304).end();
         }
       }
@@ -221,15 +275,19 @@ export default function registerDataRoutes(app) {
       // Apply environment variable overrides for auth configuration
       const authConfig = {
         ...platform.auth,
-        mode: process.env.AUTH_MODE || platform.auth?.mode || 'proxy',
-        allowAnonymous:
+        mode: process.env.AUTH_MODE || platform.auth?.mode || 'proxy'
+      };
+
+      // Apply environment variable overrides for anonymous auth configuration
+      const anonymousAuthConfig = {
+        ...platform.anonymousAuth,
+        enabled:
           process.env.AUTH_ALLOW_ANONYMOUS === 'true'
             ? true
             : process.env.AUTH_ALLOW_ANONYMOUS === 'false'
               ? false
-              : (platform.auth?.allowAnonymous ?? true),
-        anonymousGroup:
-          process.env.AUTH_ANONYMOUS_GROUP || platform.auth?.anonymousGroup || 'anonymous'
+              : (platform.anonymousAuth?.enabled ?? true),
+        defaultGroups: platform.anonymousAuth?.defaultGroups || ['anonymous']
       };
 
       // Apply environment variable overrides for proxy auth
@@ -248,11 +306,7 @@ export default function registerDataRoutes(app) {
         groupsHeader:
           process.env.PROXY_AUTH_GROUPS_HEADER ||
           platform.proxyAuth?.groupsHeader ||
-          'X-Forwarded-Groups',
-        anonymousGroup:
-          process.env.PROXY_AUTH_ANONYMOUS_GROUP ||
-          platform.proxyAuth?.anonymousGroup ||
-          'anonymous'
+          'X-Forwarded-Groups'
       };
 
       // Apply environment variable overrides for local auth
@@ -307,9 +361,8 @@ export default function registerDataRoutes(app) {
         : { enabled: false };
 
       const sanitizedProxyAuth = {
-        enabled: proxyAuthConfig.enabled,
-        anonymousGroup: proxyAuthConfig.anonymousGroup
-        // Exclude userHeader, groupsHeader which could be sensitive
+        enabled: proxyAuthConfig.enabled
+        // Exclude userHeader, groupsHeader, anonymousGroup which could be sensitive
       };
 
       // Sanitize admin config - remove sensitive admin credentials
@@ -326,6 +379,7 @@ export default function registerDataRoutes(app) {
         computedRefreshSalt: computedSalt,
         defaultLanguage: platform.defaultLanguage,
         auth: authConfig,
+        anonymousAuth: anonymousAuthConfig,
         proxyAuth: sanitizedProxyAuth,
         localAuth: sanitizedLocalAuth,
         oidcAuth: sanitizedOidcAuth,

@@ -423,8 +423,10 @@ Authentication is configured in `contents/config/platform.json`:
 {
   "auth": {
     "mode": "local",
-    "allowAnonymous": false,
     "authenticatedGroup": "authenticated"
+  },
+  "anonymousAuth": {
+    "enabled": false
   },
   "authorization": {
     "adminGroups": ["admin", "admins"],

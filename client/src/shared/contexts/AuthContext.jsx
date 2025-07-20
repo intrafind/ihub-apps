@@ -18,7 +18,10 @@ const initialState = {
   error: null,
   authConfig: {
     authMode: 'proxy',
-    allowAnonymous: true,
+    anonymousAuth: {
+      enabled: true,
+      defaultGroups: ['anonymous']
+    },
     authMethods: {
       proxy: { enabled: false },
       local: { enabled: false },
@@ -121,7 +124,7 @@ export function AuthProvider({ children }) {
           type: AUTH_ACTIONS.SET_AUTH_CONFIG,
           payload: {
             authMode: data.authMode,
-            allowAnonymous: data.allowAnonymous,
+            anonymousAuth: data.anonymousAuth,
             authMethods: data.authMethods,
             autoRedirect: data.autoRedirect
           }

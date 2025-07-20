@@ -23,15 +23,16 @@ export default function registerAdminConfigRoutes(app) {
         platformConfig = {
           auth: {
             mode: 'proxy',
-            allowAnonymous: true,
-            anonymousGroup: 'anonymous',
             authenticatedGroup: 'authenticated'
+          },
+          anonymousAuth: {
+            enabled: true,
+            defaultGroups: ['anonymous']
           },
           proxyAuth: {
             enabled: false,
             userHeader: 'X-Forwarded-User',
             groupsHeader: 'X-Forwarded-Groups',
-            anonymousGroup: 'anonymous',
             jwtProviders: []
           },
           localAuth: {

@@ -35,9 +35,11 @@ The system is designed to be stateless and flexible, supporting both authenticat
 ```json
 {
   "auth": {
-    "mode": "proxy",
-    "allowAnonymous": true,
-    "anonymousGroup": "anonymous"
+    "mode": "proxy"
+  },
+  "anonymousAuth": {
+    "enabled": true,
+    "defaultGroups": ["anonymous"]
   },
   "proxyAuth": {
     "enabled": false
@@ -113,15 +115,16 @@ Authentication is configured in `contents/config/platform.json`:
 ```json
 {
   "auth": {
-    "mode": "proxy",
-    "allowAnonymous": true,
-    "anonymousGroup": "anonymous"
+    "mode": "proxy"
+  },
+  "anonymousAuth": {
+    "enabled": true,
+    "defaultGroups": ["anonymous"]
   },
   "proxyAuth": {
     "enabled": false,
     "userHeader": "X-Forwarded-User",
     "groupsHeader": "X-Forwarded-Groups",
-    "anonymousGroup": "anonymous",
     "jwtProviders": [
       {
         "name": "example-provider",
@@ -244,8 +247,11 @@ Set the authenticated group in `contents/config/platform.json`:
 ```json
 {
   "auth": {
-    "authenticatedGroup": "authenticated",
-    "anonymousGroup": "anonymous"
+    "authenticatedGroup": "authenticated"
+  },
+  "anonymousAuth": {
+    "enabled": true,
+    "defaultGroups": ["anonymous"]
   }
 }
 ```
@@ -803,7 +809,7 @@ export JWT_SECRET=your-secure-secret-key
 
 ```json
 {
-  "auth": { "allowAnonymous": false },
+  "anonymousAuth": { "enabled": false },
   "authorization": { "anonymousAccess": false }
 }
 ```

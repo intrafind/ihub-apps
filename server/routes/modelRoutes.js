@@ -5,6 +5,7 @@ import {
   enhanceUserWithPermissions
 } from '../utils/authorization.js';
 import { authRequired, authOptional, modelAccessRequired } from '../middleware/authRequired.js';
+import crypto from 'crypto';
 
 export default function registerModelRoutes(app, { getLocalizedError }) {
   app.get('/api/models', authOptional, async (req, res) => {
@@ -52,7 +53,26 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
         models = filterResourcesByPermissions(models, allowedModels, 'models');
       }
 
-      res.setHeader('ETag', modelsEtag);
+      // Generate user-specific ETag to prevent cache poisoning between users with different permissions
+      let userSpecificEtag = modelsEtag;
+
+      // Create ETag based on the actual filtered models content
+      // This ensures users with the same permissions share cache, but different permissions get different ETags
+      const originalModelsCount = configCache.getModels().data?.length || 0;
+      if (models.length < originalModelsCount) {
+        // Models were filtered - create content-based ETag from filtered model IDs
+        const modelIds = models.map(model => model.id).sort();
+        const contentHash = crypto
+          .createHash('md5')
+          .update(JSON.stringify(modelIds))
+          .digest('hex')
+          .substring(0, 8);
+
+        userSpecificEtag = `${modelsEtag}-${contentHash}`;
+      }
+      // If models.length === originalModelsCount, user sees all models, use original ETag
+
+      res.setHeader('ETag', userSpecificEtag);
       res.json(models);
     } catch (error) {
       console.error('Error fetching models:', error);

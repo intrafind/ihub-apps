@@ -15,7 +15,7 @@ const UserAuthMenu = () => {
 
   const auth = platformConfig?.auth || {};
   const authMode = auth.mode || 'anonymous';
-  const allowAnonymous = auth.allowAnonymous !== false;
+  const allowAnonymous = platformConfig?.anonymousAuth?.enabled !== false;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -43,7 +43,7 @@ const UserAuthMenu = () => {
     platformConfig?.proxyAuth?.enabled;
 
   // Don't show login options when in anonymous-only mode
-  // This happens when allowAnonymous is true and no auth methods are enabled
+  // This happens when anonymousAuth is enabled and no auth methods are enabled
   if (allowAnonymous && !hasEnabledAuthMethods) {
     return null;
   }

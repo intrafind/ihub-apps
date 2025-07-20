@@ -34,8 +34,6 @@
   },
   "auth": {
     "mode": "oidc",
-    "allowAnonymous": true,
-    "anonymousGroup": "anonymous",
     "authenticatedGroup": "authenticated"
   },
   "anonymousAuth": {

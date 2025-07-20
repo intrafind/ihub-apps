@@ -86,7 +86,7 @@ npm run test:watch
 ### Critical Security Scenarios
 
 1. **Complete Authentication Bypass Prevention**
-   - When `allowAnonymous: false`, NO API endpoints accessible without auth
+   - When `anonymousAuth.enabled: false`, NO API endpoints accessible without auth
    - Validates the critical vulnerability fix
 
 2. **Permission-Based Access Control**
@@ -118,8 +118,8 @@ All tests should **PASS** - any failures indicate potential security vulnerabili
 
 ### Key Assertions
 
-- `allowAnonymous: false` → **401 errors** for all API endpoints without auth
-- `allowAnonymous: true` → **403 errors** for unauthorized resources
+- `anonymousAuth.enabled: false` → **401 errors** for all API endpoints without auth
+- `anonymousAuth.enabled: true` → **403 errors** for unauthorized resources
 - Invalid tokens → **401 errors**
 - Admin endpoints → **403 errors** for non-admin users
 - Group permissions → **Filtered results** based on user groups

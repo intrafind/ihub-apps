@@ -214,7 +214,9 @@ export default function registerSessionRoutes(
         messageId,
         model: prep.model,
         llmMessages: prep.llmMessages,
-        DEFAULT_TIMEOUT
+        DEFAULT_TIMEOUT,
+        getLocalizedError,
+        clientLanguage
       });
     }
   }

@@ -7,7 +7,7 @@
 
 ### 1. Authentication Bypass Vulnerability (High Severity)
 
-**Issue:** When `allowAnonymous: false` was configured, users could still access apps and chat functionality without authentication by simply removing the login overlay.
+**Issue:** When `anonymousAuth.enabled: false` was configured, users could still access apps and chat functionality without authentication by simply removing the login overlay.
 
 **Root Cause:** API endpoints were not properly protected with authentication middleware.
 
@@ -143,7 +143,7 @@ User Login → JWT Token → Permission Enhancement → Content Filtering → Co
 
 - Demo User (group: `user`) correctly sees only 4 apps: `chat`, `translator`, `summarizer`, `email-composer`
 - Demo Admin (group: `admin`) correctly sees all 27 apps
-- Anonymous access properly blocked with 401 when `allowAnonymous: false`
+- Anonymous access properly blocked with 401 when `anonymousAuth.enabled: false`
 
 ### ETag Security ✅
 

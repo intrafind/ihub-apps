@@ -23,9 +23,11 @@ Enable OIDC in `contents/config/platform.json`:
 ```json
 {
   "auth": {
-    "mode": "oidc",
-    "allowAnonymous": false,
-    "anonymousGroup": "anonymous"
+    "mode": "oidc"
+  },
+  "anonymousAuth": {
+    "enabled": false,
+    "defaultGroups": ["anonymous"]
   },
   "oidcAuth": {
     "enabled": true,
@@ -443,7 +445,8 @@ DEBUG=auth:* npm start
 
 ```json
 {
-  "auth": { "mode": "oidc", "allowAnonymous": false },
+  "auth": { "mode": "oidc" },
+  "anonymousAuth": { "enabled": false },
   "oidcAuth": {
     "enabled": true,
     "providers": [
@@ -465,7 +468,8 @@ DEBUG=auth:* npm start
 
 ```json
 {
-  "auth": { "mode": "oidc", "allowAnonymous": true },
+  "auth": { "mode": "oidc" },
+  "anonymousAuth": { "enabled": true },
   "oidcAuth": {
     "enabled": true,
     "providers": [

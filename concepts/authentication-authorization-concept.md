@@ -96,7 +96,7 @@ This concept outlines a comprehensive authentication and authorization layer for
 #### Critical Security Vulnerabilities Fixed
 
 1. **Authentication Bypass (High Severity)**
-   - **Issue:** API endpoints accessible without authentication when `allowAnonymous: false`
+   - **Issue:** API endpoints accessible without authentication when `anonymousAuth.enabled: false`
    - **Fix:** Implemented comprehensive `authRequired` middleware on all protected endpoints
    - **Impact:** Prevented unauthorized access to apps, chat, and administrative functions
 
@@ -146,8 +146,10 @@ This concept outlines a comprehensive authentication and authorization layer for
 {
   "auth": {
     "mode": "local",
-    "allowAnonymous": false,
-    "anonymousGroup": "anonymous",
+  },
+  "anonymousAuth": {
+    "enabled": false,
+    "defaultGroups": ["anonymous"]
     "authenticatedGroup": "authenticated"
   },
   "localAuth": {

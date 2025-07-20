@@ -27,7 +27,7 @@
       "username": "manzked",
       "email": "daniel.manzke@googlemail.com",
       "name": "Daniel Manzke",
-      "groups": ["admins"],
+      "groups": ["admin", "user"],
       "active": true,
       "passwordHash": "$2b$12$T5m9t4qUGil5BBl.TiYoueuRx6utejTxixr2ZhSiwbgFvMem1xW1O",
       "createdAt": "2025-07-19T21:31:12.521Z",

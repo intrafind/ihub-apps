@@ -39,7 +39,7 @@ The system enforces a strict security model for admin access:
 
 ### 1. Authentication Bypass (CRITICAL - Fixed)
 
-**Issue:** API endpoints accessible without authentication when `allowAnonymous: false`  
+**Issue:** API endpoints accessible without authentication when `anonymousAuth.enabled: false`  
 **Fix:** Comprehensive `authRequired` middleware on all protected endpoints  
 **Impact:** Prevented unauthorized access to apps, chat, and admin functions
 
@@ -96,7 +96,9 @@ const token = authToken || adminToken; // Prefer regular auth
 {
   "auth": {
     "mode": "local|oidc|proxy|anonymous",
-    "allowAnonymous": false,
+  },
+  "anonymousAuth": {
+    "enabled": false
     "authenticatedGroup": "authenticated"
   },
   "authorization": {
@@ -198,7 +200,9 @@ const token = authToken || adminToken; // Prefer regular auth
 {
   "auth": {
     "mode": "oidc",
-    "allowAnonymous": false,
+  },
+  "anonymousAuth": {
+    "enabled": false
     "authenticatedGroup": "authenticated"
   },
   "oidcAuth": {
@@ -220,8 +224,11 @@ const token = authToken || adminToken; // Prefer regular auth
 {
   "auth": {
     "mode": "local",
-    "allowAnonymous": true,
-    "anonymousGroup": "anonymous"
+  },
+  "anonymousAuth": {
+    "enabled": true,
+    "defaultGroups": ["anonymous"]
+  }
   },
   "localAuth": {
     "enabled": true,

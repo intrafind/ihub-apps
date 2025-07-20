@@ -1,19 +1,19 @@
 /**
  * Authentication middleware to enforce authentication when required
  */
+import { isAnonymousAccessAllowed } from '../utils/authorization.js';
 
 /**
- * Middleware that requires authentication when allowAnonymous is false
+ * Middleware that requires authentication when anonymousAuth is disabled
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  * @param {Function} next - Express next function
  */
 export function authRequired(req, res, next) {
   const platformConfig = req.app.get('platform') || {};
-  const authConfig = platformConfig.auth || {};
 
   // If anonymous access is allowed, proceed regardless of authentication
-  if (authConfig.allowAnonymous === true) {
+  if (isAnonymousAccessAllowed(platformConfig)) {
     return next();
   }
 

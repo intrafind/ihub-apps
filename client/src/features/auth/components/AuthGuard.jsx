@@ -25,7 +25,7 @@ const AuthGuard = ({
   // Check if authentication is required
   if (requireAuth) {
     // If anonymous access is not allowed and user is not authenticated
-    if (!authConfig.allowAnonymous && !isAuthenticated) {
+    if (!authConfig.anonymousAuth?.enabled && !isAuthenticated) {
       if (showLogin && authConfig.authMethods.local.enabled) {
         if (showLoginForm) {
           return (

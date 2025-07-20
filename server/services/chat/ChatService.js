@@ -46,7 +46,17 @@ class ChatService {
   }
 
   async processNonStreamingChat(params) {
-    const { request, res, buildLogData, messageId, model, llmMessages, DEFAULT_TIMEOUT } = params;
+    const {
+      request,
+      res,
+      buildLogData,
+      messageId,
+      model,
+      llmMessages,
+      DEFAULT_TIMEOUT,
+      getLocalizedError,
+      clientLanguage
+    } = params;
 
     return await this.nonStreamingHandler.executeNonStreamingResponse({
       request,
@@ -55,7 +65,9 @@ class ChatService {
       messageId,
       model,
       llmMessages,
-      DEFAULT_TIMEOUT
+      DEFAULT_TIMEOUT,
+      getLocalizedError,
+      clientLanguage
     });
   }
 

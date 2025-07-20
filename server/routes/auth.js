@@ -157,7 +157,10 @@ export default function registerAuthRoutes(app) {
 
     const status = {
       authMode: authConfig.mode || 'proxy',
-      allowAnonymous: platform.anonymousAuth?.enabled ?? false,
+      anonymousAuth: {
+        enabled: platform.anonymousAuth?.enabled ?? false,
+        defaultGroups: platform.anonymousAuth?.defaultGroups || ['anonymous']
+      },
       authenticated: req.user && req.user.id !== 'anonymous',
       autoRedirect: shouldAutoRedirect
         ? {

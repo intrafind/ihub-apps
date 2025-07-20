@@ -27,8 +27,10 @@ Add JWT providers to your `contents/config/platform.json`:
 ```json
 {
   "auth": {
-    "mode": "proxy",
-    "allowAnonymous": false
+    "mode": "proxy"
+  },
+  "anonymousAuth": {
+    "enabled": false
   },
   "proxyAuth": {
     "enabled": true,

@@ -15,7 +15,9 @@ class NonStreamingHandler {
     messageId,
     model,
     llmMessages,
-    DEFAULT_TIMEOUT
+    DEFAULT_TIMEOUT,
+    getLocalizedError,
+    clientLanguage
   }) {
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
@@ -36,18 +38,55 @@ class NonStreamingHandler {
 
       if (!llmResponse.ok) {
         const errorBody = await llmResponse.text();
+        let errorMessage = await getLocalizedError(
+          'llmApiError',
+          { status: llmResponse.status },
+          clientLanguage
+        );
+
+        if (llmResponse.status === 401) {
+          errorMessage = await getLocalizedError(
+            'authenticationFailed',
+            { provider: model.provider },
+            clientLanguage
+          );
+        } else if (llmResponse.status === 400) {
+          // Check if it's an API key error based on the error body
+          const errorBodyLower = errorBody.toLowerCase();
+          if (errorBodyLower.includes('api key') || errorBodyLower.includes('api_key')) {
+            errorMessage = await getLocalizedError(
+              'authenticationFailed',
+              { provider: model.provider },
+              clientLanguage
+            );
+          }
+        } else if (llmResponse.status === 429) {
+          errorMessage = await getLocalizedError(
+            'rateLimitExceeded',
+            { provider: model.provider },
+            clientLanguage
+          );
+        } else if (llmResponse.status >= 500) {
+          errorMessage = await getLocalizedError(
+            'serviceError',
+            { provider: model.provider },
+            clientLanguage
+          );
+        }
+
         const errorLog = buildLogData(false, {
           responseType: 'error',
           error: {
-            message: `LLM API request failed with status ${llmResponse.status}`,
-            code: llmResponse.status.toString()
+            message: errorMessage,
+            code: llmResponse.status.toString(),
+            details: errorBody
           }
         });
 
         await logInteraction('chat_error', errorLog);
 
         return res.status(llmResponse.status).json({
-          error: `LLM API request failed with status ${llmResponse.status}`,
+          error: errorMessage,
           details: errorBody
         });
       }

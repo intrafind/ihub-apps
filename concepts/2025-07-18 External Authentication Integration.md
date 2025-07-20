@@ -317,8 +317,11 @@ npm start
 - **Configuration:**
   ```json
   "proxyAuth": {
-    "anonymousGroup": "anonymous",
-    "allowAnonymous": true
+  },
+  "anonymousAuth": {
+    "enabled": true,
+    "defaultGroups": ["anonymous"]
+  }
   }
   ```
 - **Group Mapping:** Map `"anonymous"` to specific internal permissions
