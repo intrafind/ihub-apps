@@ -12,7 +12,9 @@ export default function registerAdminPagesRoutes(app) {
       const { data: uiConfig } = configCache.getUI();
       const pages = Object.entries(uiConfig.pages || {}).map(([id, page]) => ({
         id,
-        title: page.title
+        title: page.title,
+        authRequired: page.authRequired || false,
+        allowedGroups: page.allowedGroups || []
       }));
       res.json(pages);
     } catch (error) {
@@ -39,7 +41,13 @@ export default function registerAdminPagesRoutes(app) {
           content[lang] = '';
         }
       }
-      res.json({ id: pageId, title: page.title, content });
+      res.json({
+        id: pageId,
+        title: page.title,
+        content,
+        authRequired: page.authRequired || false,
+        allowedGroups: page.allowedGroups || []
+      });
     } catch (error) {
       console.error('Error fetching page:', error);
       res.status(500).json({ error: 'Failed to fetch page' });
@@ -48,7 +56,7 @@ export default function registerAdminPagesRoutes(app) {
 
   app.post('/api/admin/pages', adminAuth, async (req, res) => {
     try {
-      const { id, title = {}, content = {} } = req.body;
+      const { id, title = {}, content = {}, authRequired = false, allowedGroups = '*' } = req.body;
       if (!id) {
         return res.status(400).json({ error: 'Missing page ID' });
       }
@@ -59,7 +67,7 @@ export default function registerAdminPagesRoutes(app) {
       if (uiConfig.pages[id]) {
         return res.status(400).json({ error: 'Page with this ID already exists' });
       }
-      uiConfig.pages[id] = { title, filePath: {} };
+      uiConfig.pages[id] = { title, filePath: {}, authRequired, allowedGroups };
       for (const [lang, md] of Object.entries(content)) {
         const dir = join(rootDir, 'contents', 'pages', lang);
         await fs.mkdir(dir, { recursive: true });
@@ -79,7 +87,7 @@ export default function registerAdminPagesRoutes(app) {
   app.put('/api/admin/pages/:pageId', adminAuth, async (req, res) => {
     try {
       const { pageId } = req.params;
-      const { id, title = {}, content = {} } = req.body;
+      const { id, title = {}, content = {}, authRequired = false, allowedGroups = '*' } = req.body;
       if (!id || id !== pageId) {
         return res.status(400).json({ error: 'Invalid page ID' });
       }
@@ -91,6 +99,8 @@ export default function registerAdminPagesRoutes(app) {
         return res.status(404).json({ error: 'Page not found' });
       }
       pageEntry.title = title;
+      pageEntry.authRequired = authRequired;
+      pageEntry.allowedGroups = allowedGroups;
       pageEntry.filePath = pageEntry.filePath || {};
       for (const [lang, md] of Object.entries(content)) {
         const dir = join(rootDir, 'contents', 'pages', lang);

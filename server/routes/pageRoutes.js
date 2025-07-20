@@ -13,6 +13,26 @@ export default function registerPageRoutes(app) {
         return res.status(404).json({ error: 'Page not found' });
       }
       const pageConfig = uiConfig.pages[pageId];
+
+      const { authRequired = false, allowedGroups } = pageConfig;
+
+      // Require authentication if configured
+      if (authRequired && (!req.user || req.user.id === 'anonymous')) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      // Check allowed groups if specified
+      if (
+        Array.isArray(allowedGroups) &&
+        allowedGroups.length > 0 &&
+        !allowedGroups.includes('*')
+      ) {
+        const userGroups = req.user?.groups || [];
+        const hasGroup = userGroups.some(g => allowedGroups.includes(g));
+        if (!hasGroup) {
+          return res.status(403).json({ error: 'Insufficient permissions' });
+        }
+      }
       const langFilePath = pageConfig.filePath[lang] || pageConfig.filePath['en'];
       if (!langFilePath) {
         return res

@@ -12,7 +12,13 @@ const AdminPageEditPage = () => {
   const navigate = useNavigate();
   const isNew = pageId === 'new';
 
-  const [page, setPage] = useState({ id: '', title: { en: '' }, content: { en: '' } });
+  const [page, setPage] = useState({
+    id: '',
+    title: { en: '' },
+    content: { en: '' },
+    authRequired: false,
+    allowedGroups: '*'
+  });
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -32,7 +38,12 @@ const AdminPageEditPage = () => {
       setPage({
         id: data.id,
         title: data.title || { en: '' },
-        content: data.content || { en: '' }
+        content: data.content || { en: '' },
+        authRequired: data.authRequired || false,
+        allowedGroups:
+          Array.isArray(data.allowedGroups) && data.allowedGroups.length > 0
+            ? data.allowedGroups.join(',')
+            : '*'
       });
     } catch (err) {
       setError(err.message);
@@ -47,12 +58,23 @@ const AdminPageEditPage = () => {
       alert(t('admin.pages.fields.idRequired', 'ID is required'));
       return;
     }
+    const trimmed = page.allowedGroups.trim();
+    const pageData = {
+      ...page,
+      allowedGroups:
+        trimmed === '' || trimmed === '*'
+          ? '*'
+          : trimmed
+              .split(',')
+              .map(g => g.trim())
+              .filter(g => g.length > 0)
+    };
     try {
       setSaving(true);
       if (isNew) {
-        await createPage(page);
+        await createPage(pageData);
       } else {
-        await updatePage(pageId, page);
+        await updatePage(pageId, pageData);
       }
       navigate('/admin/pages');
     } catch (err) {
@@ -101,6 +123,30 @@ const AdminPageEditPage = () => {
             type="textarea"
             required
           />
+          <div className="flex items-center">
+            <input
+              id="authRequired"
+              type="checkbox"
+              checked={page.authRequired}
+              onChange={e => setPage(prev => ({ ...prev, authRequired: e.target.checked }))}
+              className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+            />
+            <label htmlFor="authRequired" className="ml-2 block text-sm text-gray-700">
+              {t('admin.pages.fields.authRequired', 'Authentication Required')}
+            </label>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              {t('admin.pages.fields.allowedGroups', 'Allowed Groups')}
+            </label>
+            <input
+              type="text"
+              value={page.allowedGroups}
+              onChange={e => setPage(prev => ({ ...prev, allowedGroups: e.target.value }))}
+              placeholder="admin, user or *"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            />
+          </div>
           {error && <div className="text-red-600 text-sm">{error}</div>}
           <div className="flex justify-end space-x-2">
             <button

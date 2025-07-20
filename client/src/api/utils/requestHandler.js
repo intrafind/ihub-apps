@@ -69,12 +69,30 @@ export const handleApiResponse = async (
 
         return data;
       } catch (error) {
+        // Create user-friendly error messages
+        let userMessage =
+          error.response?.data?.error || error.message || 'An unexpected error occurred';
+        let userFriendlyMessage = userMessage;
+
+        // Handle specific error types with better messages
+        if (error.response?.status === 403) {
+          userFriendlyMessage =
+            'You do not have permission to access this resource. Please contact your administrator if you believe this is an error.';
+        } else if (error.response?.status === 401) {
+          userFriendlyMessage = 'Please log in to access this resource.';
+        } else if (error.response?.status === 404) {
+          userFriendlyMessage = 'The requested resource was not found.';
+        } else if (error.response?.status >= 500) {
+          userFriendlyMessage = 'A server error occurred. Please try again later.';
+        }
+
         // Enhance error object with useful information
-        const enhancedError = new Error(
-          error.response?.data?.error || error.message || 'An unexpected error occurred'
-        );
+        const enhancedError = new Error(userFriendlyMessage);
         enhancedError.status = error.response?.status || 500;
         enhancedError.originalError = error;
+        enhancedError.originalMessage = userMessage;
+        enhancedError.isAccessDenied = error.response?.status === 403;
+        enhancedError.isAuthRequired = error.response?.status === 401;
 
         // Add request details to error for better debugging
         enhancedError.requestDetails = {
@@ -83,8 +101,9 @@ export const handleApiResponse = async (
           timestamp: new Date().toISOString()
         };
 
-        console.error(`API Error: ${enhancedError.message}`, {
+        console.error(`API Error: ${enhancedError.originalMessage}`, {
           status: enhancedError.status,
+          userFriendlyMessage: enhancedError.message,
           details: error.response?.data,
           url: error.config?.url
         });

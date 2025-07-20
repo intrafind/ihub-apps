@@ -236,6 +236,30 @@ Pre-built binaries for all platforms are available on the [GitHub Releases](http
 
 For most users, downloading the complete package is recommended as it includes all necessary configuration files and assets.
 
+## Electron Desktop Application
+
+You can also run AI Hub Apps as a desktop application using Electron. During development run:
+
+```bash
+npm run electron:dev
+```
+
+For a packaged version build the production files and create installers with:
+
+```bash
+npm run electron:build
+```
+
+This creates platform-specific artifacts for macOS, Linux and Windows using `electron-builder`.
+
+To connect the desktop app to an existing backend instead of starting the
+server locally, set the `REMOTE_SERVER_URL` environment variable before
+launching Electron:
+
+```bash
+REMOTE_SERVER_URL=https://your-host.example.com npm run electron:dev
+```
+
 ## Configuration
 
 ### Server Configuration
@@ -276,6 +300,144 @@ Or with the binary (replace `${VERSION}` with the current version):
 ```bash
 PORT=8080 HOST=127.0.0.1 WORKERS=4 ./dist-bin/ai-hub-apps-v${VERSION}-macos
 ```
+
+## Authentication and Authorization
+
+AI Hub Apps includes a comprehensive authentication system supporting multiple authentication modes with enterprise-grade security.
+
+### Authentication Modes
+
+The system supports four authentication modes with **dual authentication capability**:
+
+| Mode          | Description                | Use Case                            |
+| ------------- | -------------------------- | ----------------------------------- |
+| **Anonymous** | No authentication required | Public demos, open access           |
+| **Local**     | Built-in username/password | Development, small teams            |
+| **OIDC**      | OpenID Connect integration | Enterprise SSO, Google, Microsoft   |
+| **Proxy**     | Reverse proxy + Pure JWT   | nginx, OAuth2 Proxy, corporate auth |
+
+**NEW**: Multiple authentication methods can be enabled simultaneously! Users can authenticate via local login, OIDC providers, or JWT tokens based on their preference and your configuration.
+
+### Quick Start
+
+**Default Setup (No Authentication):**
+
+```bash
+# Just start the application - works out of the box!
+npm run dev
+```
+
+All users have full access to all apps and features by default.
+
+**Enable Local Authentication:**
+
+```bash
+# Set environment variables
+export LOCAL_AUTH_ENABLED=true
+export JWT_SECRET=your-secure-secret
+
+# Or edit contents/config/platform.json
+{
+  "auth": { "mode": "local" },
+  "localAuth": { "enabled": true }
+}
+```
+
+**Enable Dual Authentication (Local + OIDC):**
+
+```json
+{
+  "auth": { "mode": "oidc" },
+  "localAuth": { "enabled": true },
+  "oidcAuth": { "enabled": true }
+}
+```
+
+**Enable Pure JWT Authentication:**
+
+```json
+{
+  "auth": { "mode": "proxy" },
+  "proxyAuth": {
+    "enabled": true,
+    "jwtProviders": [
+      {
+        "name": "your-provider",
+        "issuer": "https://your-provider.com",
+        "audience": "ai-hub-apps",
+        "jwkUrl": "https://your-provider.com/.well-known/jwks.json"
+      }
+    ]
+  }
+}
+```
+
+**Demo Accounts:**
+
+- Admin: `admin` / `password123`
+- User: `user` / `password123`
+
+### Admin Access Security
+
+The admin panel uses a **strict security model** based on authentication mode:
+
+| Auth Mode            | Admin Access          | Admin Secret |
+| -------------------- | --------------------- | ------------ |
+| **Anonymous**        | Admin secret required | ✅ Enabled   |
+| **Local/OIDC/Proxy** | User groups only      | ❌ Disabled  |
+
+**Benefits:**
+
+- **No bypass attacks** - Admin secret can't bypass proper authentication
+- **Dynamic admin groups** - Configure admin access without code changes
+- **Seamless UX** - Admin users go directly to admin panel
+
+### Permission System
+
+Access control uses group-based permissions:
+
+```json
+{
+  "groups": {
+    "admin": {
+      "apps": ["*"],
+      "prompts": ["*"],
+      "models": ["*"],
+      "adminAccess": true
+    },
+    "user": {
+      "apps": ["chat", "translator"],
+      "prompts": ["general"],
+      "models": ["gpt-3.5-turbo"],
+      "adminAccess": false
+    }
+  }
+}
+```
+
+### Configuration
+
+Authentication is configured in `contents/config/platform.json`:
+
+```json
+{
+  "auth": {
+    "mode": "local",
+    "allowAnonymous": false,
+    "authenticatedGroup": "authenticated"
+  },
+  "authorization": {
+    "adminGroups": ["admin", "admins"],
+    "userGroups": ["user", "users"]
+  }
+}
+```
+
+For complete authentication documentation, see:
+
+- [External Authentication Guide](docs/external-authentication.md)
+- [OIDC Authentication Setup](docs/oidc-authentication.md)
+- [Security Implementation Details](concepts/2025-07-20-Final-Authentication-Security-Implementation.md)
 
 ## Configuration Files
 

@@ -19,6 +19,8 @@ import registerPageRoutes from './routes/pageRoutes.js';
 import registerSessionRoutes from './routes/sessionRoutes.js';
 import registerMagicPromptRoutes from './routes/magicPromptRoutes.js';
 import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
+import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
+import registerAuthRoutes from './routes/auth.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import {
@@ -132,6 +134,7 @@ if (cluster.isPrimary && workerCount > 1) {
   // Implemented in serverHelpers.js
 
   // --- API Endpoints handled in separate route modules ---
+  registerAuthRoutes(app);
   registerGeneralRoutes(app, { getLocalizedError });
   registerModelRoutes(app, { getLocalizedError });
   registerToolRoutes(app);
@@ -144,6 +147,7 @@ if (cluster.isPrimary && workerCount > 1) {
     getLocalizedError,
     DEFAULT_TIMEOUT
   });
+  registerOpenAIProxyRoutes(app, { getLocalizedError });
   registerAdminRoutes(app);
   registerShortLinkRoutes(app);
 

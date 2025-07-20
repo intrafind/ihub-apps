@@ -7,6 +7,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { createFavoriteItemHelpers } from '../../../utils/favoriteItems';
 import { getRecentAppIds } from '../../../utils/recentApps';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import Icon from '../../../shared/components/Icon';
 
 // Instead of fixed values, we'll calculate based on viewport
@@ -14,6 +15,7 @@ const AppsList = () => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { resetHeaderColor, uiConfig } = useUIConfig();
+  const { user, isAuthenticated } = useAuth();
 
   // Create favorite apps helpers
   const {
@@ -65,14 +67,26 @@ const AppsList = () => {
   const recentAppIds = useMemo(() => getRecentAppIds(), [apps]);
   const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
 
-  // Only display categories that contain at least one app
+  // Only display categories that contain at least one app, with smart hiding logic
   const availableCategories = useMemo(() => {
     if (!categoriesConfig.enabled) return [];
+
+    // If only one app exists, don't show categories
+    if (apps.length <= 1) return [];
+
     const usedCategories = new Set(apps.map(app => app.category || 'utility'));
-    return categoriesConfig.list.filter(category => {
+    const filteredCategories = categoriesConfig.list.filter(category => {
       if (category.id === 'all') return categoriesConfig.showAll;
       return usedCategories.has(category.id);
     });
+
+    // Count specific categories (excluding 'all')
+    const specificCategories = filteredCategories.filter(cat => cat.id !== 'all');
+
+    // If we only have 'all' and one specific category, don't show categories
+    if (specificCategories.length <= 1) return [];
+
+    return filteredCategories;
   }, [categoriesConfig, apps]);
 
   useEffect(() => {
@@ -200,16 +214,16 @@ const AppsList = () => {
     return () => {
       isMounted = false;
     };
-  }, [currentLanguage, calculateVisibleAppCount]); // Added calculateVisibleAppCount as dependency
+  }, [currentLanguage, calculateVisibleAppCount, user?.id, isAuthenticated]); // Added auth dependencies to reload apps when user changes
 
   // Reset display count when search changes
   useEffect(() => {
-    // Only reset if search is enabled
-    if (searchConfig.enabled && searchTerm) {
+    // Only reset if search is enabled and there are enough apps to show search
+    if (searchConfig.enabled && apps.length > 3 && searchTerm) {
       const visibleCount = calculateVisibleAppCount();
       setDisplayCount(visibleCount);
     }
-  }, [searchTerm, calculateVisibleAppCount, searchConfig.enabled]);
+  }, [searchTerm, calculateVisibleAppCount, searchConfig.enabled, apps.length]);
 
   // Language change handler to ensure proper UI updates
   // Only re-render on actual language changes, not on every render
@@ -285,8 +299,8 @@ const AppsList = () => {
           }
         }
 
-        // Determine if search is enabled from config
-        const isSearchEnabled = searchConfig.enabled;
+        // Determine if search is enabled from config and app count
+        const isSearchEnabled = searchConfig.enabled && apps.length > 3;
 
         // If search is disabled, show all apps (after category filter)
         if (!isSearchEnabled) {
@@ -476,8 +490,8 @@ const AppsList = () => {
         </p>
       </div>
 
-      {/* Conditional rendering of search based on configuration */}
-      {searchConfig.enabled && (
+      {/* Conditional rendering of search based on configuration and app count */}
+      {searchConfig.enabled && apps.length > 3 && (
         <div
           className={`flex flex-col sm:flex-row items-stretch gap-4 mb-4 mx-auto ${
             searchConfig.width || 'w-full sm:w-2/3 lg:w-1/3'
@@ -551,7 +565,7 @@ const AppsList = () => {
       {displayedApps.length === 0 ? (
         <div className="text-center py-8">
           <p className="text-gray-500">{t('pages.appsList.noApps')}</p>
-          {searchConfig.enabled && searchTerm ? (
+          {searchConfig.enabled && apps.length > 3 && searchTerm ? (
             <button
               onClick={() => {
                 clearSearch();

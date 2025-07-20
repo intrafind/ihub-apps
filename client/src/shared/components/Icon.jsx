@@ -148,6 +148,8 @@ const iconMap = {
   star: { outline: OutlineStarIcon, solid: SolidStarIcon },
   trash: { outline: OutlineTrashIcon, solid: SolidTrashIcon },
   user: { outline: UserIcon, solid: UserIcon },
+  login: { outline: ArrowRightIcon, solid: ArrowRightIcon },
+  logout: { outline: ArrowLeftIcon, solid: ArrowLeftIcon },
   x: { outline: XMarkIcon, solid: XMarkIcon },
   'thumbs-up': { outline: OutlineHandThumbUpIcon, solid: SolidHandThumbUpIcon },
   'thumbs-down': { outline: OutlineHandThumbDownIcon, solid: SolidHandThumbDownIcon },

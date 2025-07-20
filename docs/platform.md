@@ -26,6 +26,7 @@ The optional `platform.json` file controls global platform behaviour. It is loca
 - **telemetry** – configures OpenTelemetry integration. When enabled, metrics are exported via Prometheus on the configured port and traces/logs can be collected.
 - **requestConcurrency** – default concurrency level for outbound requests when no per-model or per-tool override is specified. If omitted or set to a value below `1`, concurrency is unlimited.
 - **requestDelayMs** – default delay in milliseconds between outbound requests when no per-model or per-tool override is specified. Defaults to `0`.
+- **proxyAuth** – configuration for external authentication headers. When `enabled` is `true` the server expects user information to be forwarded by a reverse proxy. `userHeader` sets the header containing the user ID, `groupsHeader` specifies an optional comma separated list of groups and `jwtProviders` defines accepted JWT issuers.
 - **admin.pages** – optional object to enable or disable individual admin pages. Each property defaults to `true` when omitted. Example:
 
 ```json

@@ -1,0 +1,141 @@
+{
+  "groups": {
+    "admin": {
+      "id": "admin",
+      "name": "Admin",
+      "description": "Full administrative access to all resources",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": true
+      },
+      "mappings": ["Admins", "IT-Admin", "IT-Admins", "Platform-Admin", "Platform-Admins"]
+    },
+    "user": {
+      "id": "user",
+      "name": "User",
+      "description": "Standard user access to common applications and models",
+      "permissions": {
+        "apps": ["chat", "translator", "summarizer", "email-composer"],
+        "prompts": ["general", "writing", "analysis"],
+        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet", "gemini-2.0-flash"],
+        "adminAccess": false
+      },
+      "mappings": ["Users", "Employees", "Staff"]
+    },
+    "hr": {
+      "id": "hr",
+      "name": "HR Team",
+      "description": "HR team access with specialized tools and prompts",
+      "permissions": {
+        "apps": ["hr-assistant", "chat", "email-composer", "file-analysis"],
+        "prompts": ["general"],
+        "models": ["gpt-4", "claude-4-sonnet"],
+        "adminAccess": false
+      },
+      "mappings": ["HR-Team", "HR", "Human-Resources"]
+    },
+    "contractors": {
+      "id": "contractors",
+      "name": "Contractors",
+      "description": "Limited access for external contractors",
+      "permissions": {
+        "apps": ["chat", "translator"],
+        "prompts": ["general"],
+        "models": ["gpt-3.5-turbo", "gemini-2.0-flash"],
+        "adminAccess": false
+      },
+      "mappings": ["Contractors", "External", "Guests"]
+    },
+    "anonymous": {
+      "id": "anonymous",
+      "name": "Anonymous",
+      "description": "Access for anonymous users (default configuration)",
+      "permissions": {
+        "apps": ["chat"],
+        "prompts": ["*"],
+        "models": ["gemini-2.0-flash"],
+        "adminAccess": false
+      },
+      "mappings": ["anonymous", "public"]
+    },
+    "authenticated": {
+      "id": "authenticated",
+      "name": "Authenticated",
+      "description": "Base permissions for all authenticated users",
+      "permissions": {
+        "apps": ["chat", "translator", "summarizer", "email-composer", "file-analysis"],
+        "prompts": ["general", "writing"],
+        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet", "gemini-2.0-flash"],
+        "adminAccess": false
+      },
+      "mappings": []
+    },
+    "google-users": {
+      "id": "google-users",
+      "name": "Google Users",
+      "description": "Default permissions for Google authenticated users",
+      "permissions": {
+        "apps": ["chat", "translator"],
+        "prompts": ["general"],
+        "models": ["gpt-3.5-turbo", "gemini-2.0-flash"],
+        "adminAccess": false
+      },
+      "mappings": []
+    },
+    "microsoft-users": {
+      "id": "microsoft-users",
+      "name": "Microsoft Users",
+      "description": "Default permissions for Microsoft authenticated users",
+      "permissions": {
+        "apps": ["chat", "translator", "email-composer"],
+        "prompts": ["general", "writing"],
+        "models": ["gpt-4", "claude-4-sonnet"],
+        "adminAccess": false
+      },
+      "mappings": []
+    },
+    "auth0-users": {
+      "id": "auth0-users",
+      "name": "Auth0 Users",
+      "description": "Default permissions for Auth0 authenticated users",
+      "permissions": {
+        "apps": ["chat", "translator", "summarizer"],
+        "prompts": ["general"],
+        "models": ["gpt-3.5-turbo", "claude-4-sonnet"],
+        "adminAccess": false
+      },
+      "mappings": []
+    },
+    "users": {
+      "id": "users",
+      "name": "Users",
+      "description": "Standard user group with extended permissions",
+      "permissions": {
+        "apps": ["chat", "translator", "summarizer", "email-composer", "file-analysis"],
+        "prompts": ["general", "writing"],
+        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet", "gemini-2.0-flash"],
+        "adminAccess": false
+      },
+      "mappings": []
+    },
+    "admins": {
+      "id": "admins",
+      "name": "Admins",
+      "description": "Administrative group with full access",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": true
+      },
+      "mappings": []
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Unified group configuration with permissions and external mappings",
+    "lastModified": "2025-07-20T00:00:00Z"
+  }
+}

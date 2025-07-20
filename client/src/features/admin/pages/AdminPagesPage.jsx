@@ -95,6 +95,9 @@ const AdminPagesPage = () => {
                       <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {t('admin.pages.fields.title', 'Title')}
                       </th>
+                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('admin.pages.access', 'Access')}
+                      </th>
                       <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {t('admin.pages.actions', 'Actions')}
                       </th>
@@ -108,6 +111,13 @@ const AdminPagesPage = () => {
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
                           {getTitle(page)}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                          {page.authRequired
+                            ? Array.isArray(page.allowedGroups) && page.allowedGroups.length > 0
+                              ? page.allowedGroups.join(', ')
+                              : t('common.all', 'All')
+                            : t('common.none', 'None')}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap text-right text-sm font-medium space-x-2">
                           <button

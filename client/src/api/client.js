@@ -17,7 +17,7 @@ const apiClient = axios.create({
   }
 });
 
-// Add request interceptor to include session ID header
+// Add request interceptor to include session ID and auth headers
 apiClient.interceptors.request.use(config => {
   // Get session ID (creates a new one if needed)
   const sessionId = getSessionId();
@@ -29,6 +29,12 @@ apiClient.interceptors.request.use(config => {
 
   // Add session ID to request headers
   config.headers['X-Session-ID'] = sessionId;
+
+  // Add authentication header if token exists
+  const authToken = localStorage.getItem('authToken');
+  if (authToken) {
+    config.headers['Authorization'] = `Bearer ${authToken}`;
+  }
 
   return config;
 });
@@ -44,6 +50,22 @@ apiClient.interceptors.response.use(
   },
   async error => {
     const originalRequest = error.config;
+
+    // Handle authentication errors
+    if (error.response?.status === 401) {
+      // Token expired or invalid - clear it and potentially redirect to login
+      const currentToken = localStorage.getItem('authToken');
+      if (currentToken) {
+        console.log('Authentication token expired or invalid, clearing token');
+        localStorage.removeItem('authToken');
+
+        // Dispatch custom event for auth context to handle
+        window.dispatchEvent(new CustomEvent('authTokenExpired'));
+      }
+
+      // Don't retry auth requests to avoid infinite loops
+      return Promise.reject(error);
+    }
 
     // Only retry GET requests, and only once
     if (originalRequest.method === 'get' && !originalRequest._retry && !error.response) {

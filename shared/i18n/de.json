@@ -234,7 +234,9 @@
     "requestTimeout": "Anforderung nach {timeout} Sekunden abgelaufen. Das Modell könnte unter hoher Last stehen.",
     "llmApiError": "LLM-API-Anfrage fehlgeschlagen mit Status {status}",
     "responseStreamError": "Fehler bei der Verarbeitung des Antwortstreams: {error}",
-    "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration."
+    "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration.",
+    "unauthorized": "Ungültiger API-Schlüssel",
+    "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden"
   },
   "toolErrors": {
     "MISSING_URL": "URL-Parameter ist erforderlich.",
@@ -402,11 +404,14 @@
       "subtitle": "Statische Seiten der Anwendung verwalten",
       "create": "Seite erstellen",
       "actions": "Aktionen",
+      "access": "Zugriff",
       "fields": {
         "id": "Seiten-ID",
         "title": "Titel",
         "content": "Inhalt",
-        "idRequired": "ID ist erforderlich"
+        "idRequired": "ID ist erforderlich",
+        "authRequired": "Authentifizierung erforderlich",
+        "allowedGroups": "Erlaubte Gruppen (kommagetrennt, '*' = alle)"
       },
       "confirmDelete": "Möchten Sie diese Seite wirklich löschen?"
     }
