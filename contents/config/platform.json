@@ -60,7 +60,7 @@
     "defaultGroup": "anonymous"
   },
   "localAuth": {
-    "enabled": false,
+    "enabled": true,
     "usersFile": "contents/config/users.json",
     "sessionTimeoutMinutes": 480,
     "jwtSecret": "magic-secret",

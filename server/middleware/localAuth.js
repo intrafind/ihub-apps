@@ -152,10 +152,11 @@ export default function localAuthMiddleware(req, res, next) {
     return next(); // Token from different auth mode, continue as anonymous
   }
 
-  // Additional check: if current mode is not 'local', reject local tokens
-  if (currentAuthMode !== 'local') {
-    console.warn(`🔐 Token rejected: local token not valid in ${currentAuthMode} mode`);
-    return next(); // Current mode doesn't allow local tokens
+  // Additional check: if local auth is disabled, reject local tokens
+  // Allow local tokens when local auth is enabled, regardless of primary auth mode
+  if (!localAuthConfig.enabled) {
+    console.warn(`🔐 Token rejected: local token not valid - local auth is disabled`);
+    return next(); // Local auth is disabled
   }
 
   // Create user object from token

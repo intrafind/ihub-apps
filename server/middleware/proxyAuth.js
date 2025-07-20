@@ -88,13 +88,26 @@ export async function proxyAuth(req, res, next) {
     }
     tokenPayload = await verifyJwt(token, provider);
     if (tokenPayload) {
-      // Check if token was issued for the current authentication mode
-      const currentAuthMode = platform.auth?.mode || 'anonymous';
-      if (tokenPayload.authMode && tokenPayload.authMode !== currentAuthMode) {
+      // Check if token's auth method is still enabled
+      // Allow tokens from any enabled auth method, regardless of primary auth mode
+      const localAuthConfig = platform.localAuth || {};
+      const oidcAuthConfig = platform.oidcAuth || {};
+      
+      let authMethodEnabled = false;
+      if (tokenPayload.authMode === 'local' && localAuthConfig.enabled) {
+        authMethodEnabled = true;
+      } else if (tokenPayload.authMode === 'oidc' && oidcAuthConfig.enabled) {
+        authMethodEnabled = true;
+      } else if (!tokenPayload.authMode) {
+        // Legacy tokens without authMode - allow if any auth method is enabled
+        authMethodEnabled = true;
+      }
+      
+      if (!authMethodEnabled) {
         console.warn(
-          `🔐 Token rejected: issued for ${tokenPayload.authMode} mode, current mode is ${currentAuthMode}`
+          `🔐 Token rejected: ${tokenPayload.authMode} authentication is disabled`
         );
-        tokenPayload = null; // Invalidate token from different auth mode
+        tokenPayload = null; // Invalidate token from disabled auth method
         continue;
       }
 
@@ -146,8 +159,15 @@ export async function proxyAuth(req, res, next) {
 
   let user = {
     id: userId,
-    name: req.headers['x-forwarded-name'],
-    email: req.headers['x-forwarded-email'],
+    name: req.headers['x-forwarded-name'] || 
+          (tokenPayload && (tokenPayload.name || 
+            (tokenPayload.given_name && tokenPayload.family_name 
+              ? `${tokenPayload.given_name} ${tokenPayload.family_name}`.trim()
+              : tokenPayload.given_name || tokenPayload.family_name))) || 
+          userId,
+    email: req.headers['x-forwarded-email'] || 
+           (tokenPayload && tokenPayload.email) || 
+           null,
     groups: Array.from(mapped),
     authenticated: true,
     authMethod: 'proxy'
