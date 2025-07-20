@@ -126,10 +126,45 @@ export default function registerAuthRoutes(app) {
     const localAuthConfig = platform.localAuth || {};
     const oidcAuthConfig = platform.oidcAuth || {};
 
+    // Check for auto-redirect scenario
+    const enabledAuthMethods = [
+      proxyAuthConfig.enabled,
+      localAuthConfig.enabled,
+      oidcAuthConfig.enabled,
+      platform.anonymousAuth?.enabled
+    ].filter(Boolean).length;
+
+    const oidcProviders = getConfiguredProviders();
+    const enabledOidcProviders = oidcProviders.filter(p => p.enabled !== false);
+    const autoRedirectProvider = enabledOidcProviders.find(p => p.autoRedirect === true);
+
+    // Don't auto-redirect if this request comes from an OIDC callback or admin route
+    const isOidcCallback = req.headers.referer && req.headers.referer.includes('/api/auth/oidc/');
+    const isAdminRoute = req.headers.referer && req.headers.referer.includes('/admin');
+
+    // Auto-redirect should happen if:
+    // 1. Only OIDC is enabled (no anonymous, local, or proxy)
+    // 2. There's exactly one OIDC provider enabled
+    // 3. That provider has autoRedirect set to true
+    // 4. Not an OIDC callback or admin route
+    const shouldAutoRedirect =
+      enabledAuthMethods === 1 &&
+      oidcAuthConfig.enabled &&
+      enabledOidcProviders.length === 1 &&
+      autoRedirectProvider &&
+      !isOidcCallback &&
+      !isAdminRoute;
+
     const status = {
       authMode: authConfig.mode || 'proxy',
       allowAnonymous: platform.anonymousAuth?.enabled ?? false,
       authenticated: req.user && req.user.id !== 'anonymous',
+      autoRedirect: shouldAutoRedirect
+        ? {
+            provider: autoRedirectProvider.name,
+            url: `/api/auth/oidc/${autoRedirectProvider.name}`
+          }
+        : null,
       user:
         req.user && req.user.id !== 'anonymous'
           ? {
@@ -152,7 +187,7 @@ export default function registerAuthRoutes(app) {
         },
         oidc: {
           enabled: oidcAuthConfig.enabled ?? false,
-          providers: getConfiguredProviders()
+          providers: oidcProviders
         }
       }
     };

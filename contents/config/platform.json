@@ -80,7 +80,8 @@
         "callbackURL": "/api/auth/oidc/keycloak/callback",
         "groupsAttribute": "groups",
         "defaultGroups": ["users"],
-        "pkce": true
+        "pkce": true,
+        "autoRedirect": false
       },
       {
         "name": "google",
@@ -94,7 +95,8 @@
         "callbackURL": "/api/auth/oidc/google/callback",
         "groupsAttribute": "groups",
         "defaultGroups": ["google-users"],
-        "pkce": true
+        "pkce": true,
+        "autoRedirect": false
       },
       {
         "name": "microsoft",
@@ -108,7 +110,8 @@
         "callbackURL": "/api/auth/oidc/microsoft/callback",
         "groupsAttribute": "groups",
         "defaultGroups": ["microsoft-users"],
-        "pkce": true
+        "pkce": true,
+        "autoRedirect": false
       },
       {
         "name": "auth0",
@@ -122,7 +125,8 @@
         "callbackURL": "/api/auth/oidc/auth0/callback",
         "groupsAttribute": "groups",
         "defaultGroups": ["auth0-users"],
-        "pkce": true
+        "pkce": true,
+        "autoRedirect": false
       }
     ]
   }

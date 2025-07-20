@@ -122,13 +122,42 @@ export function AuthProvider({ children }) {
           payload: {
             authMode: data.authMode,
             allowAnonymous: data.allowAnonymous,
-            authMethods: data.authMethods
+            authMethods: data.authMethods,
+            autoRedirect: data.autoRedirect
           }
         });
 
         if (data.authenticated && data.user) {
+          // Clear any auto-redirect attempt tracking on successful authentication
+          Object.keys(sessionStorage).forEach(key => {
+            if (key.startsWith('autoRedirect_')) {
+              sessionStorage.removeItem(key);
+            }
+          });
           dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
         } else {
+          // Check for auto-redirect scenario
+          // Only redirect if user is not authenticated AND has no valid token
+          const hasValidToken = !!localStorage.getItem('authToken');
+          if (data.autoRedirect && !data.authenticated && !hasValidToken) {
+            // Prevent infinite redirect loops by checking if we've already attempted a redirect
+            const redirectAttemptKey = `autoRedirect_${data.autoRedirect.provider}`;
+            const lastRedirectAttempt = sessionStorage.getItem(redirectAttemptKey);
+            const now = Date.now();
+
+            // Only redirect if we haven't attempted in the last 5 minutes
+            if (!lastRedirectAttempt || now - parseInt(lastRedirectAttempt) > 5 * 60 * 1000) {
+              console.log(`🔀 Auto-redirecting to ${data.autoRedirect.provider} provider`);
+              sessionStorage.setItem(redirectAttemptKey, now.toString());
+              window.location.href = data.autoRedirect.url;
+              return; // Don't continue with normal auth flow
+            } else {
+              console.log(
+                `⚠️ Skipping auto-redirect to ${data.autoRedirect.provider} - attempted recently`
+              );
+            }
+          }
+
           // If we had a token but auth status says not authenticated,
           // it means the token was invalidated (possibly due to auth mode change)
           const hadToken = !!localStorage.getItem('authToken');

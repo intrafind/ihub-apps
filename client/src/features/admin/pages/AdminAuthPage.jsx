@@ -893,6 +893,25 @@ const AdminAuthPage = () => {
                               <span className="text-sm font-medium text-gray-700">Enable PKCE</span>
                             </label>
                           </div>
+                          <div>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={provider.autoRedirect}
+                                onChange={e =>
+                                  updateOidcProvider(index, 'autoRedirect', e.target.checked)
+                                }
+                                className="mr-2"
+                              />
+                              <span className="text-sm font-medium text-gray-700">
+                                Auto-redirect
+                              </span>
+                            </label>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Automatically redirect users to this provider when it's the only auth
+                              method enabled
+                            </p>
+                          </div>
                         </div>
                       </div>
                     ))}
