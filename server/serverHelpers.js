@@ -82,7 +82,7 @@ export function setupMiddleware(app, platformConfig = {}) {
     if (req.user && !req.user.permissions) {
       // Use auth config from platform config
       const authConfig = platformConfig.auth || {};
-      req.user = enhanceUserWithPermissions(req.user, authConfig);
+      req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
 
       console.log('🔍 User permissions enhanced:', {
         userId: req.user.id,

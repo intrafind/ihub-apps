@@ -58,9 +58,13 @@ export async function proxyAuth(req, res, next) {
     const authHeader = req.headers.authorization;
 
     if (authHeader && authHeader.startsWith('Bearer ') && currentAuthMode === 'anonymous') {
-      // If we're in anonymous mode but someone sends a JWT token, it should be rejected
-      console.warn(`🔐 Token rejected: JWT token not valid in ${currentAuthMode} mode`);
-      // Don't set req.user, let it continue as anonymous
+      // In anonymous mode, JWT tokens are generally not valid, but admin tokens should be allowed
+      // Admin authentication will be handled by the adminAuth middleware
+      // Only warn for non-admin routes
+      if (!req.path.startsWith('/api/admin/')) {
+        console.warn(`🔐 Token rejected: JWT token not valid in ${currentAuthMode} mode`);
+      }
+      // Don't set req.user, let it continue as anonymous (admin auth will handle admin routes)
     }
 
     return next();

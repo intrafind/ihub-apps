@@ -1,7 +1,8 @@
 import configCache from '../configCache.js';
 import {
   filterResourcesByPermissions,
-  enhanceUserWithPermissions
+  enhanceUserWithPermissions,
+  isAnonymousAccessAllowed
 } from '../utils/authorization.js';
 import { authRequired, authOptional, appAccessRequired } from '../middleware/authRequired.js';
 import crypto from 'crypto';
@@ -13,7 +14,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       const authConfig = platformConfig.auth || {};
 
       // Check if anonymous access is allowed
-      if (!authConfig.allowAnonymous && (!req.user || req.user.id === 'anonymous')) {
+      if (!isAnonymousAccessAllowed(platformConfig) && (!req.user || req.user.id === 'anonymous')) {
         return res.status(401).json({
           error: 'Authentication required',
           code: 'AUTH_REQUIRED',
@@ -36,14 +37,21 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       if (req.user && !req.user.permissions) {
         const platformConfig = req.app.get('platform') || {};
         const authConfig = platformConfig.auth || {};
-        req.user = enhanceUserWithPermissions(req.user, authConfig);
+        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
+      }
+
+      // Create anonymous user if none exists and anonymous access is allowed
+      if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
+        const platformConfig = req.app.get('platform') || {};
+        const authConfig = platformConfig.auth || {};
+        req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
       }
 
       // Apply group-based filtering if user is authenticated
       if (req.user && req.user.permissions) {
         allowedApps = req.user.permissions.apps || new Set();
         apps = filterResourcesByPermissions(apps, allowedApps, 'apps');
-      } else if (authConfig.allowAnonymous) {
+      } else if (isAnonymousAccessAllowed(platformConfig)) {
         // For anonymous users, filter to only anonymous-allowed apps
         allowedApps = new Set(['chat']); // Match group permissions for anonymous
         apps = filterResourcesByPermissions(apps, allowedApps, 'apps');

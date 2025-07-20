@@ -16,15 +16,16 @@ const AdminAuthPage = () => {
   const [config, setConfig] = useState({
     auth: {
       mode: 'proxy',
-      allowAnonymous: true,
-      anonymousGroup: 'anonymous',
       authenticatedGroup: 'authenticated'
+    },
+    anonymousAuth: {
+      enabled: true,
+      defaultGroups: ['anonymous']
     },
     proxyAuth: {
       enabled: false,
       userHeader: 'X-Forwarded-User',
       groupsHeader: 'X-Forwarded-Groups',
-      anonymousGroup: 'anonymous',
       jwtProviders: []
     },
     localAuth: {
@@ -40,9 +41,7 @@ const AdminAuthPage = () => {
     },
     authorization: {
       adminGroups: ['admin', 'IT-Admin', 'Platform-Admin'],
-      userGroups: ['user', 'users'],
-      anonymousAccess: true,
-      defaultGroup: 'anonymous'
+      userGroups: ['user', 'users']
     }
   });
 
@@ -108,18 +107,16 @@ const AdminAuthPage = () => {
       auth: {
         ...prev.auth,
         mode
-      },
-      proxyAuth: {
-        ...prev.proxyAuth,
-        enabled: mode === 'proxy'
-      },
-      localAuth: {
-        ...prev.localAuth,
-        enabled: mode === 'local'
-      },
-      oidcAuth: {
-        ...prev.oidcAuth,
-        enabled: mode === 'oidc'
+      }
+    }));
+  };
+
+  const toggleAuthMethod = (method, enabled) => {
+    setConfig(prev => ({
+      ...prev,
+      [method]: {
+        ...prev[method],
+        enabled
       }
     }));
   };
@@ -243,7 +240,8 @@ const AdminAuthPage = () => {
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">Authentication Configuration</h1>
                 <p className="text-gray-600 mt-1">
-                  Configure authentication modes and user access settings
+                  Configure multiple authentication methods and user access settings. Enable dual
+                  authentication for maximum flexibility.
                 </p>
               </div>
               <button
@@ -297,16 +295,21 @@ const AdminAuthPage = () => {
           )}
 
           <div className="space-y-8">
-            {/* Authentication Mode Selection */}
+            {/* Primary Authentication Mode Selection */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Authentication Mode</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Primary Authentication Mode
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select the primary authentication mode for default behavior and routing.
+              </p>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {[
                     {
                       mode: 'proxy',
                       title: 'Proxy Mode',
-                      desc: 'Authentication via reverse proxy or external service'
+                      desc: 'Authentication via reverse proxy or JWT tokens'
                     },
                     {
                       mode: 'local',
@@ -349,38 +352,144 @@ const AdminAuthPage = () => {
               </div>
             </div>
 
+            {/* Multiple Authentication Methods */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Authentication Methods</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Enable multiple authentication methods simultaneously. Users can choose their
+                preferred login method. The system will automatically show available login options
+                based on enabled methods.
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="flex">
+                  <Icon name="info" size="sm" className="text-blue-500 mt-0.5 mr-2" />
+                  <div className="text-sm text-blue-700">
+                    <strong>Dual Authentication:</strong> When multiple methods are enabled, users
+                    will see all available login options. For example, enabling both Local and OIDC
+                    will show username/password fields AND provider login buttons.
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="flex items-start space-x-3">
+                    <div className="flex items-center h-5">
+                      <input
+                        type="checkbox"
+                        checked={config.proxyAuth.enabled}
+                        onChange={e => toggleAuthMethod('proxyAuth', e.target.checked)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-gray-900">
+                        Proxy/JWT Authentication
+                      </label>
+                      <p className="text-xs text-gray-500">
+                        Headers or JWT tokens from reverse proxy
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3">
+                    <div className="flex items-center h-5">
+                      <input
+                        type="checkbox"
+                        checked={config.localAuth.enabled}
+                        onChange={e => toggleAuthMethod('localAuth', e.target.checked)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-gray-900">
+                        Local Authentication
+                      </label>
+                      <p className="text-xs text-gray-500">Built-in username/password system</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3">
+                    <div className="flex items-center h-5">
+                      <input
+                        type="checkbox"
+                        checked={config.oidcAuth.enabled}
+                        onChange={e => toggleAuthMethod('oidcAuth', e.target.checked)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-gray-900">
+                        OIDC Authentication
+                      </label>
+                      <p className="text-xs text-gray-500">
+                        OpenID Connect providers (Google, etc.)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3">
+                    <div className="flex items-center h-5">
+                      <input
+                        type="checkbox"
+                        checked={config.anonymousAuth.enabled}
+                        onChange={e => toggleAuthMethod('anonymousAuth', e.target.checked)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-gray-900">Anonymous Access</label>
+                      <p className="text-xs text-gray-500">
+                        Allow users to access without authentication
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Anonymous Auth Configuration */}
+            {config.anonymousAuth.enabled && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Anonymous Access Settings
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Default Groups for Anonymous Users
+                    </label>
+                    <input
+                      type="text"
+                      value={
+                        Array.isArray(config.anonymousAuth.defaultGroups)
+                          ? config.anonymousAuth.defaultGroups.join(', ')
+                          : ''
+                      }
+                      onChange={e =>
+                        updateNestedConfig(
+                          'anonymousAuth',
+                          'defaultGroups',
+                          e.target.value
+                            .split(',')
+                            .map(g => g.trim())
+                            .filter(g => g)
+                        )
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="anonymous, guest"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Groups assigned to users who access without authentication (comma-separated)
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* General Authentication Settings */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">General Settings</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={config.auth.allowAnonymous}
-                      onChange={e => updateNestedConfig('auth', 'allowAnonymous', e.target.checked)}
-                      className="mr-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700">
-                      Allow Anonymous Access
-                    </span>
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Allow users to access the application without authentication
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Anonymous Group
-                  </label>
-                  <input
-                    type="text"
-                    value={config.auth.anonymousGroup}
-                    onChange={e => updateNestedConfig('auth', 'anonymousGroup', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="anonymous"
-                  />
-                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Authenticated Group
@@ -392,16 +501,23 @@ const AdminAuthPage = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="authenticated"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Group automatically assigned to all authenticated users
+                  </p>
                 </div>
               </div>
             </div>
 
             {/* Proxy Auth Configuration */}
-            {config.auth.mode === 'proxy' && (
+            {config.proxyAuth.enabled && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Proxy Authentication Settings
+                  Proxy/JWT Authentication Settings
                 </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Configure header-based authentication from reverse proxy and/or JWT token
+                  validation for pure JWT authentication.
+                </p>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -437,7 +553,13 @@ const AdminAuthPage = () => {
                   {/* JWT Providers */}
                   <div>
                     <div className="flex justify-between items-center mb-4">
-                      <h4 className="text-md font-medium text-gray-900">JWT Providers</h4>
+                      <div>
+                        <h4 className="text-md font-medium text-gray-900">JWT Providers</h4>
+                        <p className="text-xs text-gray-500">
+                          Configure JWT token validation for pure JWT authentication (no headers
+                          required)
+                        </p>
+                      </div>
                       <button
                         onClick={addJwtProvider}
                         className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
@@ -502,7 +624,7 @@ const AdminAuthPage = () => {
             )}
 
             {/* Local Auth Configuration */}
-            {config.auth.mode === 'local' && (
+            {config.localAuth.enabled && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
                   Local Authentication Settings
@@ -576,7 +698,7 @@ const AdminAuthPage = () => {
             )}
 
             {/* OIDC Configuration */}
-            {config.auth.mode === 'oidc' && (
+            {config.oidcAuth.enabled && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">
@@ -818,37 +940,6 @@ const AdminAuthPage = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="user, users"
                   />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={config.authorization.anonymousAccess}
-                        onChange={e =>
-                          updateNestedConfig('authorization', 'anonymousAccess', e.target.checked)
-                        }
-                        className="mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">
-                        Allow Anonymous Access
-                      </span>
-                    </label>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Default Group
-                    </label>
-                    <input
-                      type="text"
-                      value={config.authorization.defaultGroup}
-                      onChange={e =>
-                        updateNestedConfig('authorization', 'defaultGroup', e.target.value)
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      placeholder="anonymous"
-                    />
-                  </div>
                 </div>
               </div>
             </div>

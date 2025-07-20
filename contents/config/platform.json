@@ -33,16 +33,17 @@
     }
   },
   "auth": {
-    "mode": "oidc",
-    "allowAnonymous": true,
-    "anonymousGroup": "anonymous",
+    "mode": "anonymous",
     "authenticatedGroup": "authenticated"
+  },
+  "anonymousAuth": {
+    "enabled": true,
+    "defaultGroups": ["anonymous"]
   },
   "proxyAuth": {
     "enabled": false,
     "userHeader": "X-Forwarded-User",
     "groupsHeader": "X-Forwarded-Groups",
-    "anonymousGroup": "anonymous",
     "jwtProviders": [
       {
         "name": "example-provider",
@@ -55,19 +56,17 @@
   },
   "authorization": {
     "adminGroups": ["admin", "admins"],
-    "userGroups": ["user", "users"],
-    "anonymousAccess": true,
-    "defaultGroup": "anonymous"
+    "userGroups": ["user", "users"]
   },
   "localAuth": {
-    "enabled": true,
+    "enabled": false,
     "usersFile": "contents/config/users.json",
     "sessionTimeoutMinutes": 480,
     "jwtSecret": "magic-secret",
     "showDemoAccounts": false
   },
   "oidcAuth": {
-    "enabled": true,
+    "enabled": false,
     "providers": [
       {
         "name": "keycloak",

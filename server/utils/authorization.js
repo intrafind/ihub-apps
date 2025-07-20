@@ -188,43 +188,57 @@ export function hasAdminAccess(userGroups, authConfig) {
 
 /**
  * Check if anonymous access is allowed
- * @param {Object} authConfig - Authorization configuration
+ * @param {Object} platform - Platform configuration
  * @returns {boolean} True if anonymous access is allowed
  */
-export function isAnonymousAccessAllowed(authConfig) {
-  return authConfig?.anonymousAccess === true;
+export function isAnonymousAccessAllowed(platform) {
+  return platform?.anonymousAuth?.enabled === true;
 }
 
 /**
- * Get default group for anonymous users
- * @param {Object} authConfig - Authorization configuration
- * @returns {string} Default group name
+ * Get default groups for anonymous users
+ * @param {Object} platform - Platform configuration
+ * @returns {string[]} Default group names
  */
-export function getDefaultAnonymousGroup(authConfig) {
-  return authConfig?.defaultGroup || 'anonymous';
+export function getDefaultAnonymousGroups(platform) {
+  // Support both old defaultGroup and new defaultGroups format
+  const anonymousAuth = platform?.anonymousAuth;
+  if (!anonymousAuth) return ['anonymous'];
+
+  if (Array.isArray(anonymousAuth.defaultGroups)) {
+    return anonymousAuth.defaultGroups;
+  }
+
+  // Backward compatibility with defaultGroup
+  if (anonymousAuth.defaultGroup) {
+    return [anonymousAuth.defaultGroup];
+  }
+
+  return ['anonymous'];
 }
 
 /**
  * Enhance user object with permissions
  * @param {Object} user - User object from request
  * @param {Object} authConfig - Authorization configuration
+ * @param {Object} platform - Platform configuration
  * @returns {Object} Enhanced user object with permissions
  */
-export function enhanceUserWithPermissions(user, authConfig) {
+export function enhanceUserWithPermissions(user, authConfig, platform) {
   if (!user) {
     // Anonymous user
-    const defaultGroup = getDefaultAnonymousGroup(authConfig);
+    const defaultGroups = getDefaultAnonymousGroups(platform);
     user = {
       id: 'anonymous',
       name: 'Anonymous',
       email: null,
-      groups: [defaultGroup]
+      groups: defaultGroups
     };
   }
 
   // Ensure user has groups array
   if (!Array.isArray(user.groups)) {
-    user.groups = [getDefaultAnonymousGroup(authConfig)];
+    user.groups = getDefaultAnonymousGroups(platform);
   }
 
   // Map external groups to internal groups if needed
@@ -251,15 +265,16 @@ export function createAuthorizationMiddleware(options = {}) {
 
   return (req, res, next) => {
     const authConfig = req.app.get('authConfig') || {};
+    const platform = req.app.get('platform') || {};
 
     // Enhance user with permissions if not already done
     if (req.user && !req.user.permissions) {
-      req.user = enhanceUserWithPermissions(req.user, authConfig);
+      req.user = enhanceUserWithPermissions(req.user, authConfig, platform);
     }
 
     // Check if authentication is required
     if (requireAuth && (!req.user || req.user.id === 'anonymous')) {
-      if (!isAnonymousAccessAllowed(authConfig)) {
+      if (!isAnonymousAccessAllowed(platform)) {
         return res.status(401).json({ error: 'Authentication required' });
       }
     }

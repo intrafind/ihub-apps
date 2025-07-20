@@ -1,5 +1,9 @@
 import configCache from '../configCache.js';
-import { filterResourcesByPermissions } from '../utils/authorization.js';
+import {
+  filterResourcesByPermissions,
+  isAnonymousAccessAllowed,
+  enhanceUserWithPermissions
+} from '../utils/authorization.js';
 import { authRequired, authOptional, modelAccessRequired } from '../middleware/authRequired.js';
 
 export default function registerModelRoutes(app, { getLocalizedError }) {
@@ -9,7 +13,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       const authConfig = platformConfig.auth || {};
 
       // Check if anonymous access is allowed
-      if (!authConfig.allowAnonymous && (!req.user || req.user.id === 'anonymous')) {
+      if (!isAnonymousAccessAllowed(platformConfig) && (!req.user || req.user.id === 'anonymous')) {
         return res.status(401).json({
           error: 'Authentication required',
           code: 'AUTH_REQUIRED',
@@ -24,11 +28,25 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
         return res.status(500).json({ error: 'Failed to load models configuration' });
       }
 
+      // Force permission enhancement if not already done
+      if (req.user && !req.user.permissions) {
+        const platformConfig = req.app.get('platform') || {};
+        const authConfig = platformConfig.auth || {};
+        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
+      }
+
+      // Create anonymous user if none exists and anonymous access is allowed
+      if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
+        const platformConfig = req.app.get('platform') || {};
+        const authConfig = platformConfig.auth || {};
+        req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
+      }
+
       // Apply group-based filtering if user is authenticated
       if (req.user && req.user.permissions) {
         const allowedModels = req.user.permissions.models || new Set();
         models = filterResourcesByPermissions(models, allowedModels, 'models');
-      } else if (authConfig.allowAnonymous) {
+      } else if (isAnonymousAccessAllowed(platformConfig)) {
         // For anonymous users, filter to only anonymous-allowed models
         const allowedModels = new Set(['gpt-4']); // Default anonymous models
         models = filterResourcesByPermissions(models, allowedModels, 'models');
