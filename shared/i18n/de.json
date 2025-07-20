@@ -402,11 +402,14 @@
       "subtitle": "Statische Seiten der Anwendung verwalten",
       "create": "Seite erstellen",
       "actions": "Aktionen",
+      "access": "Zugriff",
       "fields": {
         "id": "Seiten-ID",
         "title": "Titel",
         "content": "Inhalt",
-        "idRequired": "ID ist erforderlich"
+        "idRequired": "ID ist erforderlich",
+        "authRequired": "Authentifizierung erforderlich",
+        "allowedGroups": "Erlaubte Gruppen (kommagetrennt, '*' = alle)"
       },
       "confirmDelete": "Möchten Sie diese Seite wirklich löschen?"
     }
