@@ -236,6 +236,30 @@ Pre-built binaries for all platforms are available on the [GitHub Releases](http
 
 For most users, downloading the complete package is recommended as it includes all necessary configuration files and assets.
 
+## Electron Desktop Application
+
+You can also run AI Hub Apps as a desktop application using Electron. During development run:
+
+```bash
+npm run electron:dev
+```
+
+For a packaged version build the production files and create installers with:
+
+```bash
+npm run electron:build
+```
+
+This creates platform-specific artifacts for macOS, Linux and Windows using `electron-builder`.
+
+To connect the desktop app to an existing backend instead of starting the
+server locally, set the `REMOTE_SERVER_URL` environment variable before
+launching Electron:
+
+```bash
+REMOTE_SERVER_URL=https://your-host.example.com npm run electron:dev
+```
+
 ## Configuration
 
 ### Server Configuration
