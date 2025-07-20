@@ -196,15 +196,49 @@ export default function registerDataRoutes(app) {
             : platform.oidcAuth?.enabled ?? false
       };
 
+      // Sanitize configs for client - remove sensitive information
+      const sanitizedLocalAuth = {
+        enabled: localAuthConfig.enabled,
+        sessionTimeoutMinutes: localAuthConfig.sessionTimeoutMinutes,
+        showDemoAccounts: localAuthConfig.showDemoAccounts
+        // Exclude jwtSecret
+      };
+
+      const sanitizedOidcAuth = oidcAuthConfig.enabled ? {
+        enabled: oidcAuthConfig.enabled,
+        providers: oidcAuthConfig.providers?.map(provider => ({
+          name: provider.name,
+          displayName: provider.displayName,
+          authorizationURL: provider.authorizationURL,
+          callbackURL: provider.callbackURL,
+          scope: provider.scope,
+          pkce: provider.pkce
+          // Exclude clientSecret, clientId, tokenURL, userInfoURL
+        })) || []
+      } : { enabled: false };
+
+      const sanitizedProxyAuth = {
+        enabled: proxyAuthConfig.enabled,
+        anonymousGroup: proxyAuthConfig.anonymousGroup
+        // Exclude userHeader, groupsHeader which could be sensitive
+      };
+
+      // Sanitize admin config - remove sensitive admin credentials
+      const sanitizedAdmin = platform.admin ? {
+        pages: platform.admin.pages
+        // Exclude admin.secret
+      } : {};
+
       // Add version and computed salt to platform response
       const enhancedPlatform = {
-        ...platform,
         version: appVersion,
         computedRefreshSalt: computedSalt,
+        defaultLanguage: platform.defaultLanguage,
         auth: authConfig,
-        proxyAuth: proxyAuthConfig,
-        localAuth: localAuthConfig,
-        oidcAuth: oidcAuthConfig
+        proxyAuth: sanitizedProxyAuth,
+        localAuth: sanitizedLocalAuth,
+        oidcAuth: sanitizedOidcAuth,
+        admin: sanitizedAdmin
       };
 
       res.json(enhancedPlatform);
