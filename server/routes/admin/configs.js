@@ -44,11 +44,9 @@ export default function registerAdminConfigRoutes(app) {
             enabled: false,
             providers: []
           },
-          authorization: {
-            adminGroups: ['admin', 'IT-Admin', 'Platform-Admin'],
-            userGroups: ['user', 'users'],
-            anonymousAccess: true,
-            defaultGroup: 'anonymous'
+          anonymousAuth: {
+            enabled: true,
+            defaultGroups: ['anonymous']
           }
         };
       }

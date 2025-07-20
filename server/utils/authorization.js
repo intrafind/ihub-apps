@@ -175,15 +175,25 @@ export function filterResourcesByPermissions(resources, allowedResources, resour
 /**
  * Check if user has admin access
  * @param {string[]} userGroups - User's internal group names
- * @param {Object} authConfig - Authorization configuration
  * @returns {boolean} True if user has admin access
  */
-export function hasAdminAccess(userGroups, authConfig) {
-  if (!Array.isArray(userGroups) || !authConfig?.adminGroups) {
+export function hasAdminAccess(userGroups) {
+  if (!Array.isArray(userGroups)) {
     return false;
   }
 
-  return userGroups.some(group => authConfig.adminGroups.includes(group));
+  try {
+    const groupsConfig = loadGroupsConfiguration();
+    return userGroups.some(groupName => {
+      const group = groupsConfig.groups?.[groupName];
+      return group?.permissions?.adminAccess === true;
+    });
+  } catch (error) {
+    console.warn('Failed to load groups configuration for admin check:', error);
+    // Fallback to default admin groups if groups config fails
+    const defaultAdminGroups = ['admin', 'admins'];
+    return userGroups.some(group => defaultAdminGroups.includes(group));
+  }
 }
 
 /**

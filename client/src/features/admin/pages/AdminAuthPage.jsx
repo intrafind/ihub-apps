@@ -38,10 +38,6 @@ const AdminAuthPage = () => {
     oidcAuth: {
       enabled: false,
       providers: []
-    },
-    authorization: {
-      adminGroups: ['admin', 'IT-Admin', 'Platform-Admin'],
-      userGroups: ['user', 'users']
     }
   });
 
@@ -447,52 +443,13 @@ const AdminAuthPage = () => {
               </div>
             </div>
 
-            {/* Anonymous Auth Configuration */}
-            {config.anonymousAuth.enabled && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Anonymous Access Settings
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Default Groups for Anonymous Users
-                    </label>
-                    <input
-                      type="text"
-                      value={
-                        Array.isArray(config.anonymousAuth.defaultGroups)
-                          ? config.anonymousAuth.defaultGroups.join(', ')
-                          : ''
-                      }
-                      onChange={e =>
-                        updateNestedConfig(
-                          'anonymousAuth',
-                          'defaultGroups',
-                          e.target.value
-                            .split(',')
-                            .map(g => g.trim())
-                            .filter(g => g)
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      placeholder="anonymous, guest"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Groups assigned to users who access without authentication (comma-separated)
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* General Authentication Settings */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">General Settings</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Default Groups</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Authenticated Group
+                    Authenticated Groups
                   </label>
                   <input
                     type="text"
@@ -503,6 +460,34 @@ const AdminAuthPage = () => {
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Group automatically assigned to all authenticated users
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Anonymous Groups
+                  </label>
+                  <input
+                    type="text"
+                    value={
+                      Array.isArray(config.anonymousAuth.defaultGroups)
+                        ? config.anonymousAuth.defaultGroups.join(', ')
+                        : ''
+                    }
+                    onChange={e =>
+                      updateNestedConfig(
+                        'anonymousAuth',
+                        'defaultGroups',
+                        e.target.value
+                          .split(',')
+                          .map(g => g.trim())
+                          .filter(g => g)
+                      )
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="anonymous, guest"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Groups assigned to users who access without authentication (comma-separated)
                   </p>
                 </div>
               </div>
@@ -919,49 +904,6 @@ const AdminAuthPage = () => {
                 )}
               </div>
             )}
-
-            {/* Authorization Settings */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Authorization Settings</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Admin Groups (comma-separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={config.authorization.adminGroups.join(', ')}
-                    onChange={e =>
-                      updateNestedConfig(
-                        'authorization',
-                        'adminGroups',
-                        e.target.value.split(',').map(s => s.trim())
-                      )
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="admin, IT-Admin, Platform-Admin"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    User Groups (comma-separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={config.authorization.userGroups.join(', ')}
-                    onChange={e =>
-                      updateNestedConfig(
-                        'authorization',
-                        'userGroups',
-                        e.target.value.split(',').map(s => s.trim())
-                      )
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="user, users"
-                  />
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

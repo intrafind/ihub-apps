@@ -33,7 +33,9 @@
     }
   },
   "auth": {
-    "mode": "anonymous",
+    "mode": "oidc",
+    "allowAnonymous": true,
+    "anonymousGroup": "anonymous",
     "authenticatedGroup": "authenticated"
   },
   "anonymousAuth": {
@@ -54,19 +56,15 @@
       }
     ]
   },
-  "authorization": {
-    "adminGroups": ["admin", "admins"],
-    "userGroups": ["user", "users"]
-  },
   "localAuth": {
-    "enabled": false,
+    "enabled": true,
     "usersFile": "contents/config/users.json",
     "sessionTimeoutMinutes": 480,
     "jwtSecret": "magic-secret",
     "showDemoAccounts": false
   },
   "oidcAuth": {
-    "enabled": false,
+    "enabled": true,
     "providers": [
       {
         "name": "keycloak",
