@@ -457,6 +457,7 @@ npm start
 
 1. **Group-Based Admin Access** - Use `adminAccess: true` from group permissions
 2. **Enhanced Admin Middleware**
+
    ```javascript
    export function adminAuth(req, res, next) {
      // Check group-based admin access first
@@ -466,6 +467,7 @@ npm start
      return legacyAdminAuth(req, res, next);
    }
    ```
+
 3. **Gradual Migration** - Support both approaches during transition
 
 ### **Configuration Examples:**

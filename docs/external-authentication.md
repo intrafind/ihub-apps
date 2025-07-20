@@ -14,6 +14,14 @@ AI Hub Apps supports multiple authentication modes and is **fully functional wit
 
 ### **Optional Authentication Modes**
 
+The platform supports five authentication methods:
+
+1. **[JWT Authentication](jwt-authentication.md)** - External JWT tokens (no handshake required)
+2. **[OIDC Authentication](oidc-authentication.md)** - Full OpenID Connect flow
+3. **Local Authentication** - Built-in user database
+4. **Proxy Authentication** - Reverse proxy headers
+5. **Anonymous** - No authentication (default)
+
 - **Proxy Mode**: Authentication handled by reverse proxy or external service
 - **Local Mode**: Built-in username/password authentication
 - **OIDC Mode**: OpenID Connect authentication with external providers
