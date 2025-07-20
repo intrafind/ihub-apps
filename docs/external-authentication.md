@@ -287,22 +287,37 @@ const complexGroups = getPermissionsForUser(['authenticated', 'microsoft-users',
 
 ### 1. Proxy Mode
 
-Authentication is handled by a reverse proxy (nginx, Apache, OAuth2 Proxy, etc.).
+Authentication is handled by a reverse proxy (nginx, Apache, OAuth2 Proxy, etc.) or pure JWT tokens.
 
 **Configuration:**
 
 ```json
 {
   "auth": { "mode": "proxy" },
-  "proxyAuth": { "enabled": true }
+  "proxyAuth": { 
+    "enabled": true,
+    "userHeader": "X-Forwarded-User",
+    "groupsHeader": "X-Forwarded-Groups",
+    "jwtProviders": [
+      {
+        "name": "your-provider",
+        "header": "Authorization",
+        "issuer": "https://your-provider.com",
+        "audience": "ai-hub-apps",
+        "jwkUrl": "https://your-provider.com/.well-known/jwks.json"
+      }
+    ]
+  }
 }
 ```
 
-**Headers Expected:**
+**Authentication Methods:**
 
+#### **Header-Based Authentication (Traditional)**
 - `X-Forwarded-User`: User identifier (email or username)
 - `X-Forwarded-Groups`: Comma-separated list of groups
-- `Authorization`: Bearer JWT token (optional)
+- `X-Forwarded-Name`: User's display name (optional)
+- `X-Forwarded-Email`: User's email address (optional)
 
 **Example nginx configuration:**
 
@@ -311,7 +326,46 @@ location / {
     proxy_pass http://ai-hub-apps:3000;
     proxy_set_header X-Forwarded-User $remote_user;
     proxy_set_header X-Forwarded-Groups "Users,Employees";
+    proxy_set_header X-Forwarded-Name "$http_x_forwarded_name";
+    proxy_set_header X-Forwarded-Email "$http_x_forwarded_email";
 }
+```
+
+#### **Pure JWT Authentication (New)**
+Supports authentication using **only JWT tokens** without requiring any headers:
+
+- `Authorization: Bearer <jwt-token>`: JWT token containing all user information
+
+**JWT Token Claims:**
+```json
+{
+  "sub": "user123",
+  "preferred_username": "johndoe",
+  "email": "john@example.com",
+  "name": "John Doe",
+  "given_name": "John",
+  "family_name": "Doe",
+  "groups": ["users", "admins"],
+  "iss": "https://your-provider.com",
+  "aud": "ai-hub-apps"
+}
+```
+
+**User Extraction Priority:**
+1. **User ID**: `preferred_username` → `upn` → `email` → `sub`
+2. **Name**: JWT `name` → `given_name + family_name` → header `X-Forwarded-Name` → user ID
+3. **Email**: JWT `email` → header `X-Forwarded-Email`
+4. **Groups**: JWT `groups` array + header `X-Forwarded-Groups` (combined)
+
+#### **Hybrid Mode**
+Combines both methods - headers provide base authentication, JWT provides enhanced user data:
+
+```bash
+# Headers for basic auth + JWT for enhanced data
+curl -H "X-Forwarded-User: user@example.com" \
+     -H "X-Forwarded-Groups: basic-users" \
+     -H "Authorization: Bearer <jwt-with-detailed-info>" \
+     http://localhost:3000/api/auth/status
 ```
 
 ### 2. Local Mode
@@ -454,13 +508,26 @@ Content-Type: application/json
 Test with curl:
 
 ```bash
-# Test with headers
-curl -H "X-Forwarded-User: test@example.com" \\
-     -H "X-Forwarded-Groups: admin,users" \\
+# Test with headers (traditional)
+curl -H "X-Forwarded-User: test@example.com" \
+     -H "X-Forwarded-Groups: admin,users" \
+     -H "X-Forwarded-Name: Test User" \
+     -H "X-Forwarded-Email: test@example.com" \
      http://localhost:3000/api/auth/status
 
-# Test with JWT
-curl -H "Authorization: Bearer <jwt-token>" \\
+# Test with pure JWT (no headers required)
+curl -H "Authorization: Bearer <jwt-token>" \
+     http://localhost:3000/api/auth/status
+
+# Test hybrid mode (headers + JWT)
+curl -H "X-Forwarded-User: test@example.com" \
+     -H "X-Forwarded-Groups: basic-users" \
+     -H "Authorization: Bearer <jwt-with-enhanced-data>" \
+     http://localhost:3000/api/auth/status
+
+# Test JWT with specific claims
+# JWT payload: {"sub":"user123","email":"john@example.com","groups":["admin"],"name":"John Doe"}
+curl -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9..." \
      http://localhost:3000/api/auth/status
 ```
 
