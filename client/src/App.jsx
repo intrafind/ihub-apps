@@ -34,6 +34,7 @@ import { useUIConfig } from './shared/contexts/UIConfigContext';
 import { usePlatformConfig } from './shared/contexts/PlatformConfigContext';
 import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
+import { AuthProvider } from './shared/contexts/AuthContext';
 import { configureMarked } from './shared/components/MarkdownRenderer';
 
 // Create safe versions of components that need error boundaries
@@ -73,8 +74,9 @@ function App() {
 
   return (
     <AppProviders>
-      <AdminAuthProvider>
-        <BrowserRouter>
+      <AuthProvider>
+        <AdminAuthProvider>
+          <BrowserRouter>
           {/* Document title management - must be inside Router for useLocation/useParams */}
           <DocumentTitle />
 
@@ -134,8 +136,9 @@ function App() {
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
-        </BrowserRouter>
-      </AdminAuthProvider>
+          </BrowserRouter>
+        </AdminAuthProvider>
+      </AuthProvider>
     </AppProviders>
   );
 }

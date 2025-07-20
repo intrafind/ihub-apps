@@ -33,8 +33,8 @@
     }
   },
   "auth": {
-    "mode": "anonymous",
-    "allowAnonymous": true,
+    "mode": "local",
+    "allowAnonymous": false,
     "anonymousGroup": "anonymous",
     "authenticatedGroup": "authenticated"
   },
@@ -67,10 +67,11 @@
     "defaultGroup": "anonymous"
   },
   "localAuth": {
-    "enabled": false,
+    "enabled": true,
     "usersFile": "contents/config/users.json",
     "sessionTimeoutMinutes": 480,
-    "jwtSecret": "${JWT_SECRET}"
+    "jwtSecret": "magic-secret",
+    "showDemoAccounts": true
   },
   "oidcAuth": {
     "enabled": false,

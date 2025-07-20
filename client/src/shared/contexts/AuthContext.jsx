@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { apiRequest } from '../../api/api.js';
+import { apiClient } from '../../api/client.js';
 
 // Auth action types
 const AUTH_ACTIONS = {
@@ -91,6 +91,18 @@ export function AuthProvider({ children }) {
     } else {
       loadAuthStatus();
     }
+
+    // Listen for token expiration events from API client
+    const handleTokenExpired = () => {
+      console.log('Token expired, logging out user');
+      dispatch({ type: AUTH_ACTIONS.LOGOUT });
+    };
+
+    window.addEventListener('authTokenExpired', handleTokenExpired);
+    
+    return () => {
+      window.removeEventListener('authTokenExpired', handleTokenExpired);
+    };
   }, []);
 
   // Load authentication status
@@ -98,20 +110,21 @@ export function AuthProvider({ children }) {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
       
-      const response = await apiRequest('/api/auth/status', {
-        method: 'GET',
+      const response = await apiClient.get('/auth/status', {
         headers: getAuthHeaders()
       });
       
-      if (response.success !== false) {
+      const data = response.data;
+      
+      if (data.success !== false) {
         dispatch({ type: AUTH_ACTIONS.SET_AUTH_CONFIG, payload: {
-          authMode: response.authMode,
-          allowAnonymous: response.allowAnonymous,
-          authMethods: response.authMethods
+          authMode: data.authMode,
+          allowAnonymous: data.allowAnonymous,
+          authMethods: data.authMethods
         }});
         
-        if (response.authenticated && response.user) {
-          dispatch({ type: AUTH_ACTIONS.SET_USER, payload: response.user });
+        if (data.authenticated && data.user) {
+          dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
         } else {
           dispatch({ type: AUTH_ACTIONS.SET_USER, payload: null });
         }
@@ -138,22 +151,28 @@ export function AuthProvider({ children }) {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
       
-      const response = await apiRequest('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+      const response = await apiClient.post('/auth/login', {
+        username, 
+        password
       });
       
-      if (response.success && response.token) {
+      const data = response.data;
+      
+      if (data.success && data.token) {
         // Store token
-        localStorage.setItem('authToken', response.token);
+        localStorage.setItem('authToken', data.token);
         
         // Set user
-        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: response.user });
+        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
+        
+        // Refresh auth status to ensure all components are updated
+        setTimeout(() => {
+          loadAuthStatus();
+        }, 100);
         
         return { success: true };
       } else {
-        const error = response.error || 'Login failed';
+        const error = data.error || 'Login failed';
         dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
         return { success: false, error };
       }
@@ -174,13 +193,14 @@ export function AuthProvider({ children }) {
       localStorage.setItem('authToken', token);
       
       // Verify token by getting user info
-      const response = await apiRequest('/api/auth/user', {
-        method: 'GET',
+      const response = await apiClient.get('/auth/user', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      if (response.success && response.user) {
-        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: response.user });
+      const data = response.data;
+      
+      if (data.success && data.user) {
+        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
         return { success: true };
       } else {
         localStorage.removeItem('authToken');
@@ -246,20 +266,94 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Logout
+  // Logout with comprehensive cleanup
   const logout = async () => {
     try {
       // Call logout API if authenticated
       if (state.isAuthenticated) {
-        await apiRequest('/api/auth/logout', {
-          method: 'POST',
+        await apiClient.post('/auth/logout', {}, {
           headers: getAuthHeaders()
         });
       }
     } catch (error) {
       console.error('Logout API error:', error);
     } finally {
+      // Comprehensive cleanup
+      performLogoutCleanup();
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
+    }
+  };
+
+  // Comprehensive logout cleanup function
+  const performLogoutCleanup = () => {
+    try {
+      // Clear authentication token
+      localStorage.removeItem('authToken');
+      
+      // Clear all auth-related localStorage items
+      const authKeys = ['authToken', 'userPreferences', 'lastLoginTime'];
+      authKeys.forEach(key => localStorage.removeItem(key));
+      
+      // Clear all sessionStorage (contains temporary session data)
+      sessionStorage.clear();
+      
+      // Clear API cache if available
+      try {
+        const { clearApiCache } = require('../../api/utils/cache');
+        clearApiCache();
+      } catch (error) {
+        // Cache clearing is optional, don't fail logout
+        console.warn('Could not clear API cache:', error);
+      }
+      
+      // Clear any cached user data from various sources
+      const cacheKeys = [
+        'recentApps', 'recentPrompts', 'recentItems', 'favoriteApps', 
+        'favoritePrompts', 'chatHistory', 'uploadHistory', 'appSettings'
+      ];
+      cacheKeys.forEach(key => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+      
+      // Clear any IndexedDB or other persistent storage if used
+      if ('indexedDB' in window) {
+        // Clear common AI Hub Apps databases
+        const dbNames = ['aiHubApps', 'chatHistory', 'userFiles'];
+        dbNames.forEach(dbName => {
+          try {
+            indexedDB.deleteDatabase(dbName);
+          } catch (error) {
+            console.warn(`Could not clear IndexedDB ${dbName}:`, error);
+          }
+        });
+      }
+      
+      // Clear browser caches if possible (Service Worker)
+      if ('serviceWorker' in navigator && 'caches' in window) {
+        caches.keys().then(cacheNames => {
+          return Promise.all(
+            cacheNames.map(cacheName => {
+              if (cacheName.includes('aiHubApps') || cacheName.includes('api')) {
+                return caches.delete(cacheName);
+              }
+            })
+          );
+        }).catch(error => {
+          console.warn('Could not clear service worker caches:', error);
+        });
+      }
+      
+      // Dispatch custom event for other components to clean up
+      window.dispatchEvent(new CustomEvent('userLoggedOut', {
+        detail: { timestamp: new Date().toISOString() }
+      }));
+      
+      console.log('🧹 Logout cleanup completed - all user data cleared');
+      
+    } catch (error) {
+      console.error('Error during logout cleanup:', error);
+      // Don't prevent logout if cleanup fails
     }
   };
 
@@ -268,13 +362,14 @@ export function AuthProvider({ children }) {
     if (!state.isAuthenticated) return;
     
     try {
-      const response = await apiRequest('/api/auth/user', {
-        method: 'GET',
+      const response = await apiClient.get('/auth/user', {
         headers: getAuthHeaders()
       });
       
-      if (response.success && response.user) {
-        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: response.user });
+      const data = response.data;
+      
+      if (data.success && data.user) {
+        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
       } else {
         // Token might be expired, logout
         dispatch({ type: AUTH_ACTIONS.LOGOUT });

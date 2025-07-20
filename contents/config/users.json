@@ -25,6 +25,33 @@
       "passwordHash": "$2b$12$vIxSlOJ3nGH/nv2treLpLeBjimsCuHI3JlztLIc2Yv41VtZKCBhJG",
       "createdAt": "2025-07-19T00:00:00.000Z",
       "updatedAt": "2025-07-19T00:00:00.000Z"
+    },
+    "user_5f509bbf_227d_489a_bdeb_edb7914a087f": {
+      "id": "user_5f509bbf_227d_489a_bdeb_edb7914a087f",
+      "username": "manzked",
+      "email": "daniel.manzke@googlemail.com",
+      "name": "Daniel Manzke",
+      "groups": [
+        "admins"
+      ],
+      "active": true,
+      "passwordHash": "$2b$12$T5m9t4qUGil5BBl.TiYoueuRx6utejTxixr2ZhSiwbgFvMem1xW1O",
+      "createdAt": "2025-07-19T21:31:12.521Z",
+      "updatedAt": "2025-07-19T21:31:12.521Z"
+    },
+    "user_dba2ac10_9c1f_4c1e_9d32_7694ed033d58": {
+      "id": "user_dba2ac10_9c1f_4c1e_9d32_7694ed033d58",
+      "username": "daniel.manzke@intrafind.com",
+      "email": "daniel.manzke@intrafind.com",
+      "name": "Daniel Manzke",
+      "groups": [
+        "users",
+        "user"
+      ],
+      "active": true,
+      "passwordHash": "$2b$12$rpaE1sCrVNk5daH/LCV83OOaa/56W5SO1gUnQ6Jds/PQKJhJntaWq",
+      "createdAt": "2025-07-20T08:28:34.729Z",
+      "updatedAt": "2025-07-20T08:43:15.518Z"
     }
   },
   "metadata": {
@@ -32,7 +59,7 @@
     "description": "Local user database for AI Hub Apps - Updated with user-specific password hashing",
     "defaultPassword": "password123",
     "note": "Passwords are now hashed with user ID for unique hashes. Demo users still use 'password123'.",
-    "lastUpdated": "2025-07-19T13:48:26.500Z",
+    "lastUpdated": "2025-07-20T08:43:15.518Z",
     "passwordHashingMethod": "bcrypt + userId salt"
   }
 }

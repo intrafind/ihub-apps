@@ -68,13 +68,14 @@ const AdminNavigation = () => {
       icon: 'shield-check',
       current: location.pathname.startsWith('/admin/auth')
     },
-    {
+    // Only show Users navigation if local auth is enabled
+    ...(platformConfig?.auth?.mode === 'local' && platformConfig?.localAuth?.enabled ? [{
       key: 'users',
       name: t('admin.nav.users', 'Users'),
       href: '/admin/users',
       icon: 'users',
       current: location.pathname.startsWith('/admin/users')
-    },
+    }] : []),
     {
       key: 'system',
       name: t('admin.nav.system', 'System'),

@@ -4,6 +4,7 @@ import session from 'express-session';
 import { proxyAuth } from './middleware/proxyAuth.js';
 import localAuthMiddleware from './middleware/localAuth.js';
 import { initializePassport, configureOidcProviders } from './middleware/oidcAuth.js';
+import { enhanceUserWithPermissions } from './utils/authorization.js';
 import { loadJson, loadText } from './configLoader.js';
 import { getApiKeyForModel } from './utils.js';
 import { sendSSE, clients, activeRequests } from './sse.js';
@@ -73,6 +74,25 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Authentication middleware (order matters: proxy auth first, then local auth)
   app.use(proxyAuth);
   app.use(localAuthMiddleware);
+  
+  // Enhance user with permissions after authentication
+  app.use((req, res, next) => {
+    if (req.user && !req.user.permissions) {
+      // Use auth config from platform config
+      const authConfig = platformConfig.auth || {};
+      req.user = enhanceUserWithPermissions(req.user, authConfig);
+      
+      console.log('🔍 User permissions enhanced:', {
+        userId: req.user.id,
+        groups: req.user.groups,
+        hasPermissions: !!req.user.permissions,
+        appsCount: req.user.permissions?.apps?.size || 0,
+        modelsCount: req.user.permissions?.models?.size || 0,
+        isAdmin: req.user.isAdmin
+      });
+    }
+    next();
+  });
 }
 
 const errorHandler = new ErrorHandler();

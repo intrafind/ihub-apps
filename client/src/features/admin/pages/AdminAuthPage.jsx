@@ -5,9 +5,11 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 const AdminAuthPage = () => {
   const { t } = useTranslation();
+  const { refreshConfig } = usePlatformConfig();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -29,7 +31,8 @@ const AdminAuthPage = () => {
       enabled: false,
       usersFile: 'contents/config/users.json',
       sessionTimeoutMinutes: 480,
-      jwtSecret: '${JWT_SECRET}'
+      jwtSecret: '$' + '{JWT_SECRET}',
+      showDemoAccounts: true
     },
     oidcAuth: {
       enabled: false,
@@ -84,6 +87,8 @@ const AdminAuthPage = () => {
           type: 'success',
           text: 'Authentication configuration saved successfully!'
         });
+        // Refresh the platform config context to update navigation
+        refreshConfig();
       } else {
         throw new Error('Failed to save configuration');
       }
@@ -518,9 +523,21 @@ const AdminAuthPage = () => {
                       value={config.localAuth.jwtSecret}
                       onChange={(e) => updateNestedConfig('localAuth', 'jwtSecret', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      placeholder="${JWT_SECRET}"
+                      placeholder="$&#123;JWT_SECRET&#125;"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Use environment variable ${JWT_SECRET} for security</p>
+                    <p className="text-xs text-gray-500 mt-1">Use environment variable $&#123;JWT_SECRET&#125; for security</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={config.localAuth.showDemoAccounts}
+                        onChange={(e) => updateNestedConfig('localAuth', 'showDemoAccounts', e.target.checked)}
+                        className="mr-2"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Show Demo Accounts in Login Form</span>
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">Display demo account credentials on the login form for development/testing</p>
                   </div>
                 </div>
               </div>
@@ -594,7 +611,7 @@ const AdminAuthPage = () => {
                             </label>
                             <input
                               type="text"
-                              placeholder="${GOOGLE_CLIENT_ID}"
+                              placeholder="$&#123;GOOGLE_CLIENT_ID&#125;"
                               value={provider.clientId}
                               onChange={(e) => updateOidcProvider(index, 'clientId', e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -606,7 +623,7 @@ const AdminAuthPage = () => {
                             </label>
                             <input
                               type="password"
-                              placeholder="${GOOGLE_CLIENT_SECRET}"
+                              placeholder="$&#123;GOOGLE_CLIENT_SECRET&#125;"
                               value={provider.clientSecret}
                               onChange={(e) => updateOidcProvider(index, 'clientSecret', e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"

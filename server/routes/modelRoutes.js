@@ -1,9 +1,22 @@
 import configCache from '../configCache.js';
 import { filterResourcesByPermissions } from '../utils/authorization.js';
+import { authRequired, authOptional, modelAccessRequired } from '../middleware/authRequired.js';
 
 export default function registerModelRoutes(app, { getLocalizedError }) {
-  app.get('/api/models', async (req, res) => {
+  app.get('/api/models', authOptional, async (req, res) => {
     try {
+      const platformConfig = req.app.get('platform') || {};
+      const authConfig = platformConfig.auth || {};
+      
+      // Check if anonymous access is allowed
+      if (!authConfig.allowAnonymous && (!req.user || req.user.id === 'anonymous')) {
+        return res.status(401).json({ 
+          error: 'Authentication required',
+          code: 'AUTH_REQUIRED',
+          message: 'You must be logged in to access this resource'
+        });
+      }
+
       // Try to get models from cache first
       let { data: models = [], etag: modelsEtag } = configCache.getModels();
 
@@ -15,6 +28,10 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       if (req.user && req.user.permissions) {
         const allowedModels = req.user.permissions.models || new Set();
         models = filterResourcesByPermissions(models, allowedModels, 'models');
+      } else if (authConfig.allowAnonymous) {
+        // For anonymous users, filter to only anonymous-allowed models
+        const allowedModels = new Set(['gpt-4']); // Default anonymous models
+        models = filterResourcesByPermissions(models, allowedModels, 'models');
       }
 
       res.setHeader('ETag', modelsEtag);
@@ -25,7 +42,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
     }
   });
 
-  app.get('/api/models/:modelId', async (req, res) => {
+  app.get('/api/models/:modelId', authRequired, modelAccessRequired, async (req, res) => {
     try {
       const { modelId } = req.params;
       const platform = configCache.getPlatform() || {};

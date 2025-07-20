@@ -4,6 +4,7 @@ import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
 import { clients, activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
 import { throttledFetch } from '../../requestThrottler.js';
+import { authRequired, chatAuthRequired, modelAccessRequired } from '../../middleware/authRequired.js';
 
 import ChatService from '../../services/chat/ChatService.js';
 import validate from '../../validators/validate.js';
@@ -14,7 +15,7 @@ export default function registerSessionRoutes(
   { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }
 ) {
   const chatService = new ChatService();
-  app.get('/api/models/:modelId/chat/test', validate(chatTestSchema), async (req, res) => {
+  app.get('/api/models/:modelId/chat/test', authRequired, modelAccessRequired, validate(chatTestSchema), async (req, res) => {
     try {
       const { modelId } = req.params;
       const messages = [{ role: 'user', content: 'Say hello!' }];
@@ -95,7 +96,7 @@ export default function registerSessionRoutes(
     }
   });
 
-  app.get('/api/apps/:appId/chat/:chatId', validate(chatConnectSchema), async (req, res) => {
+  app.get('/api/apps/:appId/chat/:chatId', chatAuthRequired, validate(chatConnectSchema), async (req, res) => {
     try {
       const { appId, chatId } = req.params;
       res.setHeader('Content-Type', 'text/event-stream');
@@ -203,7 +204,7 @@ export default function registerSessionRoutes(
     }
   }
 
-  app.post('/api/apps/:appId/chat/:chatId', validate(chatPostSchema), async (req, res) => {
+  app.post('/api/apps/:appId/chat/:chatId', chatAuthRequired, validate(chatPostSchema), async (req, res) => {
     try {
       const { appId, chatId } = req.params;
       const {
@@ -344,7 +345,7 @@ export default function registerSessionRoutes(
     }
   });
 
-  app.post('/api/apps/:appId/chat/:chatId/stop', (req, res) => {
+  app.post('/api/apps/:appId/chat/:chatId/stop', chatAuthRequired, (req, res) => {
     const { chatId } = req.params;
     if (clients.has(chatId)) {
       if (activeRequests.has(chatId)) {
@@ -367,7 +368,7 @@ export default function registerSessionRoutes(
     return res.status(404).json({ success: false, message: 'Chat session not found' });
   });
 
-  app.get('/api/apps/:appId/chat/:chatId/status', (req, res) => {
+  app.get('/api/apps/:appId/chat/:chatId/status', chatAuthRequired, (req, res) => {
     const { chatId } = req.params;
     if (clients.has(chatId)) {
       return res.status(200).json({

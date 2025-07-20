@@ -81,9 +81,33 @@ export function hashPassword(password) {
 
 /**
  * Check if admin authentication is required
+ * @param {object} req - Request object (optional, for checking user auth)
  */
-export function isAdminAuthRequired() {
+export function isAdminAuthRequired(req = null) {
   const platform = configCache.getPlatform();
   const adminSecret = process.env.ADMIN_SECRET || platform?.admin?.secret;
-  return !!adminSecret;
+  
+  // If no admin secret is configured, no auth required
+  if (!adminSecret) {
+    return false;
+  }
+  
+  // Check if regular authentication is enabled and user is authenticated
+  const auth = platform?.auth || {};
+  const authMode = auth.mode || 'anonymous';
+  
+  // If auth mode is not anonymous and user is authenticated via regular auth,
+  // skip admin password requirement
+  if (authMode !== 'anonymous' && req && req.user && req.user.id !== 'anonymous') {
+    // Check if user has admin privileges
+    const userGroups = req.user.groups || [];
+    const adminGroups = platform?.authorization?.adminGroups || ['admin', 'IT-Admin', 'Platform-Admin'];
+    
+    const isAdmin = userGroups.some(group => adminGroups.includes(group));
+    if (isAdmin) {
+      return false; // Skip admin auth for authenticated admin users
+    }
+  }
+  
+  return true; // Require admin auth
 }

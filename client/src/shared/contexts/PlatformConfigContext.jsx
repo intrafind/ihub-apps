@@ -4,7 +4,8 @@ import { fetchPlatformConfig } from '../../api/api';
 const PlatformConfigContext = createContext({
   platformConfig: null,
   isLoading: true,
-  error: null
+  error: null,
+  refreshConfig: () => {}
 });
 
 export const PlatformConfigProvider = ({ children }) => {
@@ -12,25 +13,30 @@ export const PlatformConfigProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const loadConfig = async () => {
+    try {
+      setIsLoading(true);
+      const data = await fetchPlatformConfig();
+      setPlatformConfig(data);
+      setError(null);
+    } catch (e) {
+      console.error('Error fetching platform configuration:', e);
+      setError('Failed to load platform configuration');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshConfig = () => {
+    loadConfig();
+  };
+
   useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        setIsLoading(true);
-        const data = await fetchPlatformConfig();
-        setPlatformConfig(data);
-        setError(null);
-      } catch (e) {
-        console.error('Error fetching platform configuration:', e);
-        setError('Failed to load platform configuration');
-      } finally {
-        setIsLoading(false);
-      }
-    };
     loadConfig();
   }, []);
 
   return (
-    <PlatformConfigContext.Provider value={{ platformConfig, isLoading, error }}>
+    <PlatformConfigContext.Provider value={{ platformConfig, isLoading, error, refreshConfig }}>
       {children}
     </PlatformConfigContext.Provider>
   );

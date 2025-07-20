@@ -2,11 +2,12 @@ import configCache from '../../configCache.js';
 import { logInteraction } from '../../utils.js';
 import { recordFeedback } from '../../usageTracker.js';
 import { storeFeedback } from '../../feedbackStorage.js';
+import { authRequired } from '../../middleware/authRequired.js';
 import validate from '../../validators/validate.js';
 import { feedbackSchema } from '../../validators/index.js';
 
 export default function registerFeedbackRoutes(app, { getLocalizedError }) {
-  app.post('/api/feedback', validate(feedbackSchema), async (req, res) => {
+  app.post('/api/feedback', authRequired, validate(feedbackSchema), async (req, res) => {
     try {
       const { messageId, appId, chatId, messageContent, rating, feedback, modelId } = req.body;
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';

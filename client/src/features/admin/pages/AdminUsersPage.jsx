@@ -20,6 +20,7 @@ const AdminUsersPage = () => {
     password: '',
     confirmPassword: '',
     groups: [],
+    groupsString: '', // Add separate field for groups input string
     active: true
   });
 
@@ -64,6 +65,12 @@ const AdminUsersPage = () => {
       return;
     }
 
+    // Process groups string into array
+    const groupsArray = formData.groupsString
+      .split(',')
+      .map(g => g.trim())
+      .filter(g => g.length > 0);
+
     try {
       const response = await makeAdminApiCall('/api/admin/auth/users', {
         method: 'POST',
@@ -75,7 +82,7 @@ const AdminUsersPage = () => {
           email: formData.email,
           name: formData.name,
           password: formData.password,
-          groups: formData.groups,
+          groups: groupsArray,
           active: formData.active
         })
       });
@@ -103,11 +110,17 @@ const AdminUsersPage = () => {
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     
+    // Process groups string into array
+    const groupsArray = formData.groupsString
+      .split(',')
+      .map(g => g.trim())
+      .filter(g => g.length > 0);
+    
     try {
       const updateData = {
         email: formData.email,
         name: formData.name,
-        groups: formData.groups,
+        groups: groupsArray,
         active: formData.active
       };
 
@@ -194,6 +207,7 @@ const AdminUsersPage = () => {
       password: '',
       confirmPassword: '',
       groups: [],
+      groupsString: '',
       active: true
     });
   };
@@ -207,6 +221,7 @@ const AdminUsersPage = () => {
       password: '',
       confirmPassword: '',
       groups: user.groups || [],
+      groupsString: (user.groups || []).join(', '),
       active: user.active !== false
     });
   };
@@ -216,13 +231,6 @@ const AdminUsersPage = () => {
     resetForm();
   };
 
-  const handleGroupsChange = (groupsString) => {
-    const groupsArray = groupsString
-      .split(',')
-      .map(g => g.trim())
-      .filter(g => g.length > 0);
-    setFormData(prev => ({ ...prev, groups: groupsArray }));
-  };
 
   if (loading) {
     return (
@@ -488,8 +496,8 @@ const AdminUsersPage = () => {
                   </label>
                   <input
                     type="text"
-                    value={formData.groups.join(', ')}
-                    onChange={(e) => handleGroupsChange(e.target.value)}
+                    value={formData.groupsString}
+                    onChange={(e) => setFormData(prev => ({ ...prev, groupsString: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="admin, user, editors"
                   />

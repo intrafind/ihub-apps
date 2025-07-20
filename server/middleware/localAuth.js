@@ -150,9 +150,11 @@ export default function localAuthMiddleware(req, res, next) {
     authMethod: 'local'
   };
   
-  // Enhance user with permissions
-  const authConfig = platform.authorization || {};
-  req.user = enhanceUserWithPermissions(req.user, authConfig);
+  console.log('🔐 User authenticated via local auth:', {
+    userId: req.user.id,
+    groups: req.user.groups,
+    authMethod: req.user.authMethod
+  });
   
   next();
 }

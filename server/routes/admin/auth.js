@@ -10,7 +10,10 @@ import { v4 as uuidv4 } from 'uuid';
 export default function registerAdminAuthRoutes(app) {
   app.get('/api/admin/auth/status', async (req, res) => {
     try {
-      const authRequired = isAdminAuthRequired();
+      // Check if admin auth is required considering current user authentication
+      // req.user is populated by the global auth middleware (proxyAuth, localAuth)
+      const authRequired = isAdminAuthRequired(req);
+      
       res.json({
         authRequired,
         authenticated: !authRequired || req.headers.authorization?.startsWith('Bearer ')

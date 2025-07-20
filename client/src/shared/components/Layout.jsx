@@ -8,6 +8,7 @@ import DisclaimerPopup from './DisclaimerPopup';
 import SmartSearch from './SmartSearch';
 import { updateSettingsFromUrl, saveIntegrationSettings } from '../../utils/integrationSettings';
 import Icon from './Icon';
+import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
 
 const Layout = () => {
   const { t, i18n } = useTranslation();
@@ -114,6 +115,7 @@ const Layout = () => {
 
               <div className="flex items-center space-x-4">
                 {uiConfig?.header?.languageSelector?.enabled !== false && <LanguageSelector />}
+                <UserAuthMenu />
                 <button
                   className="md:hidden text-white"
                   onClick={toggleMobileMenu}

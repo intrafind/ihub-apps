@@ -3,9 +3,10 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { filterResourcesByPermissions } from '../../utils/authorization.js';
+import { authRequired } from '../../middleware/authRequired.js';
 
 export default function registerDataRoutes(app) {
-  app.get('/api/styles', async (req, res) => {
+  app.get('/api/styles', authRequired, async (req, res) => {
     try {
       // Try to get styles from cache first
       let { data: styles = [] } = configCache.getStyles();
@@ -20,7 +21,7 @@ export default function registerDataRoutes(app) {
     }
   });
 
-  app.get('/api/prompts', async (req, res) => {
+  app.get('/api/prompts', authRequired, async (req, res) => {
     try {
       // Get prompts with ETag from cache
       let { data: prompts, etag } = configCache.getPrompts();

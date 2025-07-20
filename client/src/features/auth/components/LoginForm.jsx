@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../../shared/contexts/AuthContext.jsx';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext.jsx';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner.jsx';
 
 const LoginForm = ({ onSuccess, onCancel }) => {
   const { login, loginWithOidc, isLoading, error, authConfig } = useAuth();
+  const { platformConfig } = usePlatformConfig();
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -48,6 +50,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
   const oidcProviders = authConfig?.authMethods?.oidc?.providers || [];
   const hasOidcProviders = authConfig?.authMethods?.oidc?.enabled && oidcProviders.length > 0;
   const hasLocalAuth = authConfig?.authMethods?.local?.enabled;
+  const showDemoAccounts = platformConfig?.localAuth?.showDemoAccounts !== false;
 
   // Provider icon mapping
   const getProviderIcon = (providerName) => {
@@ -121,7 +124,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
             onChange={handleInputChange}
             required
             disabled={isFormLoading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
             placeholder="Enter your username or email"
           />
         </div>
@@ -138,7 +141,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
             onChange={handleInputChange}
             required
             disabled={isFormLoading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
             placeholder="Enter your password"
           />
         </div>
@@ -173,8 +176,8 @@ const LoginForm = ({ onSuccess, onCancel }) => {
         </form>
       )}
 
-      {/* Show demo accounts only if local auth is enabled */}
-      {hasLocalAuth && (
+      {/* Show demo accounts only if local auth is enabled and configured to show */}
+      {hasLocalAuth && showDemoAccounts && (
         <div className="mt-6 text-xs text-gray-500 text-center">
           <p>Demo accounts:</p>
           <p>Admin: admin / password123</p>

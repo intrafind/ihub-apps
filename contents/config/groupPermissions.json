@@ -29,9 +29,9 @@
       "description": "Limited access for external contractors"
     },
     "anonymous": {
-      "apps": ["*"],
+      "apps": ["chat"],
       "prompts": ["*"],
-      "models": ["*"],
+      "models": ["gemini-flash"],
       "adminAccess": false,
       "description": "Full access for anonymous users (default configuration)"
     },
@@ -62,6 +62,20 @@
       "models": ["gpt-3.5-turbo", "claude-3-sonnet"],
       "adminAccess": false,
       "description": "Default permissions for Auth0 authenticated users"
+    },
+    "users": {
+      "apps": ["chat", "translator", "summarizer", "email-composer", "file-analysis"],
+      "prompts": ["general", "writing"],
+      "models": ["gpt-3.5-turbo", "gpt-4", "claude-3-sonnet", "gemini-pro"],
+      "adminAccess": false,
+      "description": "Standard user group with extended permissions"
+    },
+    "admins": {
+      "apps": ["*"],
+      "prompts": ["*"],
+      "models": ["*"],
+      "adminAccess": true,
+      "description": "Administrative group with full access"
     }
   },
   "resourceDefaults": {
