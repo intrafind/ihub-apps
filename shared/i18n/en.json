@@ -240,7 +240,9 @@
     "requestTimeout": "Request timed out after {timeout} seconds. The model may be experiencing high load.",
     "llmApiError": "LLM API request failed with status {status}",
     "responseStreamError": "Error processing response stream: {error}",
-    "connectionRefused": "Connection refused while trying to access {provider} API for model {model}. Please check your connection or server configuration."
+    "connectionRefused": "Connection refused while trying to access {provider} API for model {model}. Please check your connection or server configuration.",
+    "unauthorized": "Invalid API key",
+    "modelAccessDenied": "API key not allowed to access this model"
   },
   "toolErrors": {
     "MISSING_URL": "URL parameter is required.",
