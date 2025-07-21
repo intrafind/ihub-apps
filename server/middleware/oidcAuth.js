@@ -258,7 +258,9 @@ export function createOidcCallbackHandler(providerName) {
   return (req, res, next) => {
     const provider = configuredProviders.get(providerName);
     if (!provider) {
-      return res.status(404).json({ error: `OIDC provider '${providerName}' not found` });
+      // Redirect to app with error instead of returning JSON
+      const errorMessage = encodeURIComponent(`OIDC provider '${providerName}' not found`);
+      return res.redirect(`/?auth=error&message=${errorMessage}`);
     }
 
     passport.authenticate(provider.strategyName, { session: false }, (err, user, info) => {
@@ -272,18 +274,18 @@ export function createOidcCallbackHandler(providerName) {
           console.error('Request query:', req.query);
           console.error('Session:', req.session);
         }
-        return res.status(500).json({
-          error: 'Authentication failed',
-          details: err.message || 'Unable to verify authorization request state.'
-        });
+        
+        // Redirect back to the app with error message instead of returning JSON
+        const errorMessage = encodeURIComponent(err.message || 'Unable to verify authorization request state.');
+        return res.redirect(`/?auth=error&message=${errorMessage}`);
       }
 
       if (!user) {
         console.warn(`OIDC authentication failed for provider ${providerName}:`, info);
-        return res.status(401).json({
-          error: 'Authentication failed',
-          details: info?.message || 'Unknown error'
-        });
+        
+        // Redirect back to the app with error message
+        const errorMessage = encodeURIComponent(info?.message || 'Authentication failed');
+        return res.redirect(`/?auth=error&message=${errorMessage}`);
       }
 
       try {
@@ -327,10 +329,10 @@ export function createOidcCallbackHandler(providerName) {
         });
       } catch (tokenError) {
         console.error(`JWT token generation error for provider ${providerName}:`, tokenError);
-        return res.status(500).json({
-          error: 'Token generation failed',
-          details: tokenError.message
-        });
+        
+        // Redirect back to the app with error message
+        const errorMessage = encodeURIComponent('Token generation failed: ' + tokenError.message);
+        return res.redirect(`/?auth=error&message=${errorMessage}`);
       }
     })(req, res, next);
   };

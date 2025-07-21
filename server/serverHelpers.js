@@ -61,10 +61,11 @@ export function setupMiddleware(app, platformConfig = {}) {
         saveUninitialized: false,
         name: 'oidc.session',
         cookie: {
-          secure: process.env.NODE_ENV === 'production',
+          secure: config.USE_HTTPS === 'true', // Use HTTPS setting instead of NODE_ENV
           httpOnly: true,
           maxAge: 10 * 60 * 1000, // 10 minutes for OIDC flow
-          sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax' // Use 'lax' in dev for better compatibility
+          sameSite: 'lax', // Always use 'lax' for better compatibility
+          path: '/' // Ensure cookie is available for all paths
         }
       })
     );
