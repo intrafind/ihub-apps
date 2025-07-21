@@ -310,6 +310,16 @@
       },
       "authRequired": true,
       "allowedGroups": ["admin"]
+    },
+    "qr-generator": {
+      "title": {
+        "en": "QR Code Generator",
+        "de": "QR-Code-Generator"
+      },
+      "filePath": {
+        "en": "pages/en/qr-generator.jsx"
+      },
+      "contentType": "react"
     }
   }
 }
