@@ -291,7 +291,9 @@ export default function registerSessionRoutes(
             language: clientLanguage,
             useMaxTokens,
             bypassAppPrompts,
-            res
+            res,
+            user: req.user,
+            chatId
           });
           if (!prep.success) {
             const errMsg = await getLocalizedError(
@@ -335,7 +337,9 @@ export default function registerSessionRoutes(
             language: clientLanguage,
             useMaxTokens,
             bypassAppPrompts,
-            clientRes
+            clientRes,
+            user: req.user,
+            chatId
           });
           if (!prep.success) {
             const errMsg = await getLocalizedError(

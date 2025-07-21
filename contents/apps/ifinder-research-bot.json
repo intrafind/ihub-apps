@@ -1,0 +1,146 @@
+{
+  "id": "ifinder-research-bot", 
+  "order": 2,
+  "name": {
+    "en": "iFinder Research Assistant",
+    "de": "iFinder-Forschungsassistent"
+  },
+  "description": {
+    "en": "AI assistant with access to iFinder document management system for research and document retrieval",
+    "de": "KI-Assistent mit Zugang zum iFinder-Dokumentenmanagementsystem für Forschung und Dokumentenabruf"
+  },
+  "color": "#7C3AED",
+  "icon": "document-search",
+  "system": {
+    "en": "You are a research assistant with access to the iFinder document management system. You can search for documents, retrieve specific content, and provide comprehensive answers based on the available documents.\n\nYou have access to both pre-loaded knowledge and interactive search capabilities. Use the search tools when you need to find specific documents or when the user asks for information that might require searching through the document database.\n\nWhen citing information, always mention the document title and author when available. If you're unsure about something, use the search tools to find more information.",
+    "de": "Du bist ein Forschungsassistent mit Zugang zum iFinder-Dokumentenmanagementsystem. Du kannst nach Dokumenten suchen, spezifische Inhalte abrufen und umfassende Antworten basierend auf den verfügbaren Dokumenten geben.\n\nDu hast Zugang sowohl zu vorgeladenen Wissen als auch zu interaktiven Suchfunktionen. Nutze die Suchtools, wenn du spezifische Dokumente finden musst oder wenn der Benutzer nach Informationen fragt, die eine Suche in der Dokumentendatenbank erfordern könnten.\n\nGib beim Zitieren von Informationen immer den Dokumenttitel und Autor an, wenn verfügbar. Wenn du dir bei etwas unsicher bist, nutze die Suchtools, um weitere Informationen zu finden."
+  },
+  "sources": [
+    {
+      "id": "recent-reports",
+      "type": "ifinder",
+      "description": "Recent quarterly reports and financial documents",
+      "config": {
+        "query": "quarterly report 2024",
+        "searchProfile": "default",
+        "maxResults": 3,
+        "maxLength": 20000
+      },
+      "exposeAs": "prompt",
+      "caching": {
+        "ttl": 1800,
+        "strategy": "static"
+      },
+      "enabled": true
+    },
+    {
+      "id": "document-search",
+      "type": "ifinder",
+      "description": "Search for documents in iFinder",
+      "config": {
+        "searchProfile": "default",
+        "maxResults": 10,
+        "maxLength": 15000
+      },
+      "exposeAs": "tool",
+      "caching": {
+        "ttl": 600,
+        "strategy": "static"
+      },
+      "enabled": true
+    },
+    {
+      "id": "technical-docs",
+      "type": "ifinder", 
+      "description": "Technical documentation and manuals",
+      "config": {
+        "query": "technical documentation manual",
+        "searchProfile": "default", 
+        "maxResults": 5,
+        "maxLength": 25000
+      },
+      "exposeAs": "tool",
+      "caching": {
+        "ttl": 3600,
+        "strategy": "static"
+      },
+      "enabled": true
+    }
+  ],
+  "messagePlaceholder": {
+    "en": "Ask me to search for documents or research topics...",
+    "de": "Bitte mich, nach Dokumenten zu suchen oder Themen zu recherchieren..."
+  },
+  "tokenLimit": 16000,
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "professional",
+  "preferredTemperature": 0.2,
+  "sendChatHistory": true,
+  "prompt": {
+    "en": "{{content}}",
+    "de": "{{content}}"
+  },
+  "enabled": true,
+  "tools": [
+    "source_document-search",
+    "source_technical-docs"
+  ],
+  "greeting": {
+    "en": {
+      "title": "📚 iFinder Research Assistant", 
+      "subtitle": "I can help you search and analyze documents from our knowledge base!"
+    },
+    "de": {
+      "title": "📚 iFinder-Forschungsassistent",
+      "subtitle": "Ich kann dir beim Suchen und Analysieren von Dokumenten aus unserer Wissensdatenbank helfen!"
+    }
+  },
+  "starterPrompts": [
+    {
+      "en": "Search for the latest quarterly reports",
+      "de": "Suche nach den neuesten Quartalberichten"
+    },
+    {
+      "en": "Find technical documentation about our products", 
+      "de": "Finde technische Dokumentation zu unseren Produkten"
+    },
+    {
+      "en": "What information do you have about our recent projects?",
+      "de": "Welche Informationen hast du über unsere aktuellen Projekte?"
+    }
+  ],
+  "allowEmptyContent": false,
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": true
+    },
+    "outputFormat": {
+      "enabled": true
+    },
+    "chatHistory": {
+      "enabled": true
+    },
+    "style": {
+      "enabled": true
+    }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "imageUpload": {
+    "enabled": false
+  },
+  "fileUpload": {
+    "enabled": false
+  }
+}

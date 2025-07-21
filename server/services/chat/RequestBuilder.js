@@ -32,7 +32,9 @@ class RequestBuilder {
     bypassAppPrompts = false,
     processMessageTemplates,
     res,
-    clientRes
+    clientRes,
+    user,
+    chatId
   }) {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps();
@@ -78,7 +80,9 @@ class RequestBuilder {
         style,
         outputFormat,
         language,
-        app.outputSchema
+        app.outputSchema,
+        user,
+        chatId
       );
       llmMessages = preprocessMessagesWithFileData(llmMessages);
 
