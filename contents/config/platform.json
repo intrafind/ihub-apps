@@ -140,5 +140,23 @@
         "autoRedirect": false
       }
     ]
+  },
+  "iFinder": {
+    "enabled": true,
+    "baseUrl": "${IFINDER_API_URL}",
+    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "algorithm": "RS256",
+    "issuer": "ai-hub-apps",
+    "audience": "ifinder-api",
+    "defaultScope": "fa_index_read",
+    "tokenExpirationSeconds": 3600,
+    "timeout": 30000,
+    "downloadDir": "/tmp/ifinder-downloads",
+    "endpoints": {
+      "search": "/api/v1/search",
+      "metadata": "/api/v1/documents/{documentId}/metadata",
+      "content": "/api/v1/documents/{documentId}/content",
+      "download": "/api/v1/documents/{documentId}/download"
+    }
   }
 }
