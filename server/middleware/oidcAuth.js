@@ -266,7 +266,9 @@ export function createOidcCallbackHandler(providerName) {
         console.error(`OIDC authentication error for provider ${providerName}:`, err);
         // Special handling for state verification errors
         if (err.message && err.message.includes('Failed to verify request state')) {
-          console.error('OAuth state verification failed. This might be due to session issues in development.');
+          console.error(
+            'OAuth state verification failed. This might be due to session issues in development.'
+          );
           console.error('Request query:', req.query);
           console.error('Session:', req.session);
         }
@@ -295,7 +297,8 @@ export function createOidcCallbackHandler(providerName) {
         }
 
         // In development, redirect to Vite dev server instead of backend
-        const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production';
+        const isDevelopment =
+          process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production';
         if (isDevelopment && returnUrl.startsWith('/')) {
           // Convert relative URLs to Vite dev server URL
           const viteDevServer = process.env.VITE_DEV_SERVER || 'http://localhost:5173';
@@ -340,7 +343,6 @@ export function reconfigureOidcProviders() {
   console.log('Reconfiguring OIDC providers...');
   configureOidcProviders();
 }
-
 
 // Export for testing
 export { configuredProviders, normalizeOidcUser, generateJwtToken };

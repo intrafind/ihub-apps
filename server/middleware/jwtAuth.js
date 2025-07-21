@@ -19,7 +19,7 @@ export default function jwtAuthMiddleware(req, res, next) {
   }
 
   const token = authHeader.substring(7);
-  
+
   const platform = configCache.getPlatform() || {};
   const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret;
 
@@ -79,7 +79,6 @@ export default function jwtAuthMiddleware(req, res, next) {
 
     req.user = user;
     return next();
-
   } catch (error) {
     // Invalid token, continue as anonymous
     console.warn('JWT token validation failed:', error.message);

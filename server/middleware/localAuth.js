@@ -110,10 +110,10 @@ function createToken(user, secret, expiresIn = 28800) {
 export default function localAuthMiddleware(req, res, next) {
   // Local auth middleware now only handles local authentication setup
   // JWT token validation is handled by the unified jwtAuthMiddleware
-  
+
   // This middleware is now primarily a placeholder for any local auth specific logic
   // The actual JWT validation happens in jwtAuthMiddleware
-  
+
   next();
 }
 
