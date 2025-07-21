@@ -1,4 +1,4 @@
-function QRCodeGenerator(props) {
+function UserComponent(props) {
   const { React, useState, useEffect, useRef } = props;
 
   const [activeTab, setActiveTab] = useState('url');
@@ -69,36 +69,12 @@ function QRCodeGenerator(props) {
 
       // Style the canvas
       canvas.className = 'w-full h-auto rounded-xl shadow-lg bg-white';
-      canvas.style.maxWidth = '300px';
+      canvas.style.maxWidth = '600px';
       canvas.style.height = 'auto';
     } catch (error) {
       console.error('Error creating QR code:', error);
       generateFallbackQR(text);
     }
-  };
-
-  const generateFallbackQR = text => {
-    if (!qrContainerRef.current) return;
-
-    // Clear previous content
-    qrContainerRef.current.innerHTML = '';
-
-    // Create img element for fallback
-    const img = document.createElement('img');
-    const encodedData = encodeURIComponent(text);
-    img.src = `https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=${encodedData}&choe=UTF-8`;
-    img.alt = 'Generated QR Code';
-    img.className = 'w-full h-auto rounded-xl shadow-lg bg-white p-4';
-    img.style.maxWidth = '300px';
-    img.style.height = 'auto';
-
-    // Add error handling for the fallback image
-    img.onerror = () => {
-      // If Google Charts also fails, try QR Server API
-      img.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodedData}&format=png&margin=10`;
-    };
-
-    qrContainerRef.current.appendChild(img);
   };
 
   const formatUrl = url => {

@@ -15,6 +15,7 @@
     - [OIDC Authentication](oidc-authentication.md)
   - [Features]()
     - [Tools (Experimental)](tools.md)
+    - [iFinder Integration](iFinder-Integration.md)
     - [File Upload Feature](file-upload-feature.md)
     - [Microphone Feature](microphone-feature.md)
     - [Web Tools](web-tools.md)

@@ -124,9 +124,42 @@ admin (inherits from users) → users (inherits from authenticated) → authenti
 client/src/
 ├── features/          # Feature modules (apps, auth, chat, admin)
 ├── shared/           # Shared components and contexts
+├── pages/            # Page components (UnifiedPage for dynamic content)
 ├── api/              # API client with caching
 └── utils/            # Client utilities
 ```
+
+#### React Component Rendering System
+
+AI Hub Apps supports dynamic React component rendering through the `ReactComponentRenderer` and `UnifiedPage` components:
+
+**Key Components:**
+- **`UnifiedPage.jsx`**: Main page component that handles both markdown and React content
+- **`ReactComponentRenderer.jsx`**: Compiles and renders JSX code dynamically in the browser
+- **Auto-detection**: Automatically identifies React/JSX content vs markdown content
+
+**Architecture Flow:**
+1. **Content Loading**: `fetchPageContent()` retrieves page content from `/contents/pages/{lang}/{id}.jsx`
+2. **Type Detection**: System detects content type based on JSX patterns (`function`, `useState`, `<Components>`, etc.)
+3. **Dynamic Compilation**: For React content, Babel Standalone compiles JSX to JavaScript in the browser
+4. **Safe Execution**: Components execute in controlled environment with provided React hooks and props
+5. **Error Handling**: Comprehensive error boundaries with clear development feedback
+
+**Component Structure Requirements:**
+- Components must be named `UserComponent`
+- Receive props containing React hooks: `{ React, useState, useEffect, useRef, etc. }`
+- No export statements needed (handled automatically)
+- Full access to Tailwind CSS classes
+
+**Available Props for Components:**
+- React hooks: `React`, `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`
+- App context: `t` (translation), `navigate` (router), `user` (user data)
+
+**Security & Performance:**
+- Components run in isolated execution context using `new Function()`
+- Babel loaded once from multiple CDN sources with fallbacks
+- Export statements automatically stripped before execution
+- Error boundaries prevent app crashes
 
 #### Key Features
 
@@ -348,11 +381,45 @@ The system uses `anonymousAuth` structure instead of legacy `allowAnonymous`:
 - **`client/src/App.jsx`**: Main React application and routing
 - **`client/src/shared/contexts/AuthContext.jsx`**: Authentication state management
 - **`client/src/features/apps/pages/AppChat.jsx`**: Core chat interface
+- **`client/src/pages/UnifiedPage.jsx`**: Dynamic page component for React/markdown content
+- **`client/src/shared/components/ReactComponentRenderer.jsx`**: JSX compilation and rendering engine
 
 ### Configuration Files
 
 - **`contents/config/platform.json`**: Core platform configuration
 - **`contents/config/apps.json`**: AI application definitions
 - **`contents/config/groups.json`**: User permissions and groups
+
+### Dynamic Content Files
+
+- **`contents/pages/{language}/{page-id}.md`**: Markdown content files
+- **`contents/pages/{language}/{page-id}.jsx`**: React component files
+- **Examples**: `contents/pages/en/qr-generator.jsx`, `contents/pages/en/dashboard.md`
+
+#### React Component File Structure
+
+React components in the pages directory must follow this structure:
+
+```jsx
+function UserComponent(props) {
+  const { React, useState, useEffect, useRef, t, navigate, user } = props;
+  
+  // Component logic here
+  
+  return (
+    <div className="p-4">
+      {/* JSX content */}
+    </div>
+  );
+}
+// No export statement needed - handled automatically
+```
+
+**Key Requirements:**
+- Function must be named `UserComponent`
+- Destructure needed props from the `props` parameter
+- Use Tailwind CSS for styling
+- No import/export statements needed
+- Access to all React hooks and app context through props
 
 This architecture supports enterprise-grade AI applications with flexible authentication, real-time chat, and extensive customization capabilities.

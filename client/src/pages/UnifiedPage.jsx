@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../shared/components/LoadingSpinner';
 import { marked } from 'marked';
 import { fetchPageContent } from '../api/api';
-import MarkdownRenderer, { configureMarked } from '../shared/components/MarkdownRenderer';
+import { configureMarked } from '../shared/components/MarkdownRenderer';
 import ReactComponentRenderer from '../shared/components/ReactComponentRenderer';
 
 const UnifiedPage = () => {
@@ -134,17 +134,7 @@ const UnifiedPage = () => {
     }
   };
 
-  return (
-    <div className="container mx-auto py-8 px-4 max-w-4xl">
-      {contentType === 'markdown' && <MarkdownRenderer />}
-      {pageTitle && (
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{pageTitle}</h1>
-        </div>
-      )}
-      {renderContent()}
-    </div>
-  );
+  return <div className="container">{renderContent()}</div>;
 };
 
 export default UnifiedPage;

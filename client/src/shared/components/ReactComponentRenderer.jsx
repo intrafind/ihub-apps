@@ -64,19 +64,65 @@ const ReactComponentRenderer = ({ jsxCode, componentProps = {}, className = '' }
         setCompileError(null);
 
         // Wait for Babel to be available
-        if (typeof window.Babel === 'undefined') {
+        if (!window.Babel || (!window.Babel.transform && !window.Babel.transformSync)) {
           // Try to load Babel if not already loaded
           await new Promise((resolve, reject) => {
-            if (document.querySelector('script[src*="babel"]')) {
+            const existingScript = document.querySelector('script[src*="babel"]');
+
+            if (
+              existingScript &&
+              window.Babel &&
+              (window.Babel.transform || window.Babel.transformSync)
+            ) {
               resolve();
               return;
             }
 
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/@babel/standalone/babel.min.js';
-            script.onload = resolve;
-            script.onerror = reject;
-            document.head.appendChild(script);
+            // Remove any existing incomplete Babel script
+            if (existingScript) {
+              existingScript.remove();
+            }
+
+            const babelUrls = [
+              'https://unpkg.com/@babel/standalone/babel.min.js',
+              'https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js'
+            ];
+
+            let urlIndex = 0;
+
+            const tryLoadBabel = () => {
+              if (urlIndex >= babelUrls.length) {
+                reject(new Error('Failed to load Babel from all CDN sources'));
+                return;
+              }
+
+              const script = document.createElement('script');
+              script.src = babelUrls[urlIndex];
+              script.onload = () => {
+                // Wait a bit for Babel to fully initialize
+                setTimeout(() => {
+                  if (window.Babel && (window.Babel.transform || window.Babel.transformSync)) {
+                    console.log('✅ Babel loaded successfully:', {
+                      hasTransform: !!window.Babel.transform,
+                      hasTransformSync: !!window.Babel.transformSync,
+                      availableMethods: Object.keys(window.Babel)
+                    });
+                    resolve();
+                  } else {
+                    console.error('❌ Babel object:', window.Babel);
+                    reject(new Error('Babel failed to initialize properly'));
+                  }
+                }, 150);
+              };
+              script.onerror = () => {
+                script.remove();
+                urlIndex++;
+                tryLoadBabel();
+              };
+              document.head.appendChild(script);
+            };
+
+            tryLoadBabel();
           });
         }
 
@@ -107,10 +153,31 @@ UserComponent;
         }
 
         // Transform JSX to JS using Babel
-        const transformed = window.Babel.transform(fullCode, {
-          presets: ['react'],
-          plugins: []
-        });
+        let transformed;
+        try {
+          // Use transformSync if available, otherwise fallback to transform
+          const transformMethod = window.Babel.transformSync || window.Babel.transform;
+          if (!transformMethod) {
+            throw new Error('No Babel transform method available');
+          }
+
+          transformed = transformMethod(fullCode, {
+            presets: ['react'],
+            plugins: []
+          });
+        } catch (babelError) {
+          console.error('Babel transform error:', babelError);
+          throw new Error(`Babel transformation failed: ${babelError.message}`);
+        }
+
+        if (!transformed || !transformed.code) {
+          throw new Error('Babel transformation returned no code');
+        }
+
+        // Remove export statements since new Function() can't handle them
+        let executableCode = transformed.code;
+        executableCode = executableCode.replace(/export\s+default\s+\w+;?\s*$/, '');
+        executableCode = executableCode.replace(/export\s*\{[^}]*\}.*;?\s*$/, '');
 
         // Create a safe execution context
         const executeInContext = new Function(
@@ -123,7 +190,7 @@ UserComponent;
           'props',
           `
           try {
-            ${transformed.code}
+            ${executableCode}
             return typeof UserComponent !== 'undefined' ? UserComponent : 
                    typeof module !== 'undefined' && module.exports ? module.exports.default || module.exports :
                    null;

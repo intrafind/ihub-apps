@@ -15,7 +15,7 @@ class ToolExecutor {
     this.streamingHandler = new StreamingHandler();
   }
 
-  async executeToolCall(toolCall, tools, chatId, buildLogData) {
+  async executeToolCall(toolCall, tools, chatId, buildLogData, user) {
     const toolId =
       tools.find(t => normalizeName(t.id) === toolCall.function.name)?.id || toolCall.function.name;
     let args = {};
@@ -51,7 +51,7 @@ class ToolExecutor {
     // --- DEBUG LOGGING END ---
 
     try {
-      const result = await runTool(toolId, { ...args, chatId });
+      const result = await runTool(toolId, { ...args, chatId, user });
       // --- DEBUG LOGGING START ---
       console.log(`--- Tool Result: ${toolId} ---`);
       console.log(JSON.stringify(result, null, 2));
@@ -120,7 +120,8 @@ class ToolExecutor {
     buildLogData,
     DEFAULT_TIMEOUT,
     getLocalizedError,
-    clientLanguage
+    clientLanguage,
+    user
   }) {
     const {
       request,
@@ -298,7 +299,7 @@ class ToolExecutor {
       llmMessages.push(assistantMessage);
 
       for (const call of collectedToolCalls) {
-        const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData);
+        const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData, user);
         llmMessages.push(toolResult.message);
       }
 
@@ -322,7 +323,8 @@ class ToolExecutor {
         buildLogData,
         DEFAULT_TIMEOUT,
         getLocalizedError,
-        clientLanguage
+        clientLanguage,
+        user
       });
     } catch (error) {
       clearTimeout(timeoutId);
@@ -366,7 +368,8 @@ class ToolExecutor {
     buildLogData,
     DEFAULT_TIMEOUT,
     getLocalizedError,
-    clientLanguage
+    clientLanguage,
+    user
   }) {
     const maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
@@ -530,7 +533,7 @@ class ToolExecutor {
         llmMessages.push(assistantMessage);
 
         for (const call of collectedToolCalls) {
-          const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData);
+          const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData, user);
           llmMessages.push(toolResult.message);
         }
 

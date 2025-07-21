@@ -321,135 +321,81 @@
     }
   },
   {
-    "id": "iFinderSearch",
-    "name": "iFinder Document Search",
-    "description": "Search for documents in the iFinder system using authenticated user context. Use the 'query' parameter with your search terms.",
-    "script": "iFinderSearch.js",
-    "concurrency": 3,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "Search query to find documents in iFinder. Example: 'contract proposals' or 'technical documentation'"
-        },
-        "maxResults": {
-          "type": "integer",
-          "description": "Maximum number of search results to return (default: 10, max: 50)",
-          "default": 10,
-          "minimum": 1,
-          "maximum": 50
-        },
-        "language": {
-          "type": "string",
-          "description": "Filter documents by language (optional)",
-          "enum": ["en", "de", "fr", "es", "it"]
-        },
-        "documentType": {
-          "type": "string",
-          "description": "Filter by document type (optional)",
-          "enum": ["pdf", "doc", "docx", "txt", "html", "xml"]
+    "id": "iFinder",
+    "name": "iFinder Document Management",
+    "description": "Comprehensive document search, content retrieval, and management for the iFinder system",
+    "script": "iFinder.js",
+    "functions": {
+      "search": {
+        "description": "Search for documents in the iFinder system",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Search query to find documents in iFinder. Example: 'contract proposals' or 'technical documentation'"
+            },
+            "maxResults": {
+              "type": "integer",
+              "description": "Maximum number of search results to return (default: 10, max: 100)",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "searchProfile": {
+              "type": "string",
+              "description": "Search profile ID (optional, uses default if not specified)"
+            },
+            "returnFields": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Fields to return in search results (optional)"
+            }
+          },
+          "required": ["query"]
         }
       },
-      "required": ["query"]
-    }
-  },
-  {
-    "id": "iFinderMetadata",
-    "name": "iFinder Document Metadata",
-    "description": "Fetch detailed metadata for a specific document from iFinder using document ID.",
-    "script": "iFinderMetadata.js",
-    "concurrency": 5,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "documentId": {
-          "type": "string",
-          "description": "Document ID to fetch metadata for. Example: 'doc123456'"
-        },
-        "includePermissions": {
-          "type": "boolean",
-          "description": "Include document permissions in metadata (default: false)",
-          "default": false
-        },
-        "includeVersions": {
-          "type": "boolean",
-          "description": "Include version history in metadata (default: false)",
-          "default": false
+      "getContent": {
+        "description": "Fetch document content from iFinder for LLM processing",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "documentId": {
+              "type": "string",
+              "description": "Document ID to fetch content for. Example: 'doc123456'"
+            },
+            "searchProfile": {
+              "type": "string",
+              "description": "Search profile ID (optional, uses default if not specified)"
+            },
+            "maxLength": {
+              "type": "integer",
+              "description": "Maximum content length in characters (default: 50000)",
+              "default": 50000,
+              "minimum": 1000,
+              "maximum": 100000
+            }
+          },
+          "required": ["documentId"]
         }
       },
-      "required": ["documentId"]
-    }
-  },
-  {
-    "id": "iFinderContent",
-    "name": "iFinder Document Content",
-    "description": "Fetch document content from iFinder for LLM processing. Perfect for summarization, translation, and analysis tasks.",
-    "script": "iFinderContent.js",
-    "concurrency": 2,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "documentId": {
-          "type": "string",
-          "description": "Document ID to fetch content for. Example: 'doc123456'"
-        },
-        "format": {
-          "type": "string",
-          "description": "Content format to retrieve (default: text)",
-          "enum": ["text", "html", "markdown", "raw"],
-          "default": "text"
-        },
-        "maxLength": {
-          "type": "integer",
-          "description": "Maximum content length in characters (default: 50000)",
-          "default": 50000,
-          "minimum": 1000,
-          "maximum": 100000
-        },
-        "includeMetadata": {
-          "type": "boolean",
-          "description": "Include document metadata with content (default: true)",
-          "default": true
-        },
-        "pageRange": {
-          "type": "string",
-          "description": "Specific page range for multi-page documents (e.g., '1-5')"
+      "getMetadata": {
+        "description": "Fetch detailed metadata for a specific document from iFinder",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "documentId": {
+              "type": "string",
+              "description": "Document ID to fetch metadata for. Example: 'doc123456'"
+            },
+            "searchProfile": {
+              "type": "string",
+              "description": "Search profile ID (optional, uses default if not specified)"
+            }
+          },
+          "required": ["documentId"]
         }
-      },
-      "required": ["documentId"]
-    }
-  },
-  {
-    "id": "iFinderDownload",
-    "name": "iFinder Document Download",
-    "description": "Download documents from iFinder or provide secure download URLs for client access.",
-    "script": "iFinderDownload.js",
-    "concurrency": 1,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "documentId": {
-          "type": "string",
-          "description": "Document ID to download. Example: 'doc123456'"
-        },
-        "action": {
-          "type": "string",
-          "description": "Download action: 'url' for download URL, 'download' for server-side download",
-          "enum": ["url", "download"],
-          "default": "url"
-        },
-        "filename": {
-          "type": "string",
-          "description": "Custom filename for download (optional)"
-        },
-        "includeMetadata": {
-          "type": "boolean",
-          "description": "Include metadata file with download (default: false)",
-          "default": false
-        }
-      },
-      "required": ["documentId"]
+      }
     }
   }
 ]

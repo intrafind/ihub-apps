@@ -4,11 +4,11 @@ import configCache from '../configCache.js';
 
 /**
  * iFinder JWT utility for generating tokens based on authenticated users
- * 
+ *
  * Expected JWT format for iFinder API:
  * {
  *   "sub": "user.email@example.com",
- *   "name": "User Name", 
+ *   "name": "User Name",
  *   "admin": true/false,
  *   "iat": 1516239022,
  *   "scope": "fa_index_read"
@@ -20,18 +20,38 @@ import configCache from '../configCache.js';
  * @returns {string} Private key for JWT signing
  */
 function getIFinderPrivateKey() {
+  let privateKey;
+
   // Try environment variable first
   if (config.IFINDER_PRIVATE_KEY) {
-    return config.IFINDER_PRIVATE_KEY;
+    privateKey = config.IFINDER_PRIVATE_KEY;
+  } else {
+    // Try platform configuration
+    const platform = configCache.getPlatform() || {};
+    if (platform.iFinder?.privateKey) {
+      privateKey = platform.iFinder.privateKey;
+    }
   }
 
-  // Try platform configuration
-  const platform = configCache.getPlatform() || {};
-  if (platform.iFinder?.privateKey) {
-    return platform.iFinder.privateKey;
+  if (!privateKey) {
+    throw new Error(
+      'iFinder private key not configured. Set IFINDER_PRIVATE_KEY environment variable or configure in platform.json'
+    );
   }
 
-  throw new Error('iFinder private key not configured. Set IFINDER_PRIVATE_KEY environment variable or configure in platform.json');
+  // Format the private key properly - replace escaped newlines with actual newlines
+  if (typeof privateKey === 'string') {
+    privateKey = privateKey.replace(/\\n/g, '\n');
+
+    // Ensure proper PEM format
+    if (!privateKey.startsWith('-----BEGIN')) {
+      throw new Error(
+        'iFinder private key must be in PEM format (starting with -----BEGIN PRIVATE KEY-----)'
+      );
+    }
+  }
+
+  return privateKey;
 }
 
 /**
@@ -58,7 +78,7 @@ export function generateIFinderJWT(user, options = {}) {
 
   const privateKey = getIFinderPrivateKey();
   const config = getIFinderConfig();
-  
+
   const {
     scope = config.defaultScope || 'fa_index_read',
     expiresIn = config.tokenExpirationSeconds || 3600
@@ -66,9 +86,10 @@ export function generateIFinderJWT(user, options = {}) {
 
   // Determine if user has admin privileges
   // Check if user is admin through their groups or explicit admin flag
-  const isAdmin = user.isAdmin || 
-                  (user.groups && user.groups.includes('admin')) ||
-                  (user.permissions && user.permissions.adminAccess);
+  const isAdmin =
+    user.isAdmin ||
+    (user.groups && user.groups.includes('admin')) ||
+    (user.permissions && user.permissions.adminAccess);
 
   // Create JWT payload matching iFinder expected format
   const payload = {
@@ -78,6 +99,10 @@ export function generateIFinderJWT(user, options = {}) {
     iat: Math.floor(Date.now() / 1000),
     scope: scope
   };
+
+  console.log(
+    `Generating iFinder JWT for user ${payload.sub} with scope '${scope}' and expiresIn ${expiresIn} seconds with private key ${privateKey}`
+  );
 
   // Sign the JWT token with the private key
   const token = jwt.sign(payload, privateKey, {

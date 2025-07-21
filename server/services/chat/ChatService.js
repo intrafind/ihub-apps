@@ -98,7 +98,7 @@ class ChatService {
   }
 
   async processChatWithTools(params) {
-    const { prep, chatId, buildLogData, DEFAULT_TIMEOUT, getLocalizedError, clientLanguage } =
+    const { prep, chatId, buildLogData, DEFAULT_TIMEOUT, getLocalizedError, clientLanguage, user } =
       params;
 
     return await this.toolExecutor.processChatWithTools({
@@ -107,7 +107,8 @@ class ChatService {
       buildLogData,
       DEFAULT_TIMEOUT,
       getLocalizedError,
-      clientLanguage
+      clientLanguage,
+      user
     });
   }
 

@@ -15,8 +15,13 @@ The purpose of this repository is to provide a collection of apps, which a user 
 ## Apps
 
 ### Chat
+Basic conversational AI interface supporting multiple models.
 
 ### Translation
+Multi-language translation capabilities.
+
+### iFinder Document Explorer
+Advanced document management integration with iFinder systems. Provides AI-powered document search, content analysis, and metadata retrieval. See [iFinder Integration documentation](docs/iFinder-Integration.md) for detailed setup and configuration.
 
 ## Implementation
 

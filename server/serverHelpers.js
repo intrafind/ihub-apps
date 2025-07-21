@@ -65,7 +65,7 @@ export function setupMiddleware(app, platformConfig = {}) {
         saveUninitialized: true, // Changed to true for OAuth2 state persistence
         name: 'oidc.session',
         cookie: {
-          secure: false, // Set to false for HTTP localhost development
+          secure: config.USE_HTTPS === 'true', // Set to false for HTTP localhost development
           httpOnly: true,
           maxAge: 10 * 60 * 1000, // 10 minutes for OIDC flow
           sameSite: 'lax', // Always use 'lax' for better compatibility
@@ -94,14 +94,14 @@ export function setupMiddleware(app, platformConfig = {}) {
       const authConfig = platformConfig.auth || {};
       req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
 
-      console.log('🔍 User permissions enhanced:', {
-        userId: req.user.id,
-        groups: req.user.groups,
-        hasPermissions: !!req.user.permissions,
-        appsCount: req.user.permissions?.apps?.size || 0,
-        modelsCount: req.user.permissions?.models?.size || 0,
-        isAdmin: req.user.isAdmin
-      });
+      // console.log('🔍 User permissions enhanced:', {
+      //   userId: req.user.id,
+      //   groups: req.user.groups,
+      //   hasPermissions: !!req.user.permissions,
+      //   appsCount: req.user.permissions?.apps?.size || 0,
+      //   modelsCount: req.user.permissions?.models?.size || 0,
+      //   isAdmin: req.user.isAdmin
+      // });
     }
     next();
   });

@@ -157,7 +157,8 @@ export default function registerSessionRoutes(
     chatId,
     DEFAULT_TIMEOUT,
     getLocalizedError,
-    clientLanguage
+    clientLanguage,
+    user
   }) {
     const { model, llmMessages } = prep;
 
@@ -179,7 +180,8 @@ export default function registerSessionRoutes(
           buildLogData,
           DEFAULT_TIMEOUT,
           getLocalizedError,
-          clientLanguage
+          clientLanguage,
+          user
         });
       } else {
         return await chatService.processChatWithTools({
@@ -188,7 +190,8 @@ export default function registerSessionRoutes(
           buildLogData,
           DEFAULT_TIMEOUT,
           getLocalizedError,
-          clientLanguage
+          clientLanguage,
+          user
         });
       }
     }
@@ -316,7 +319,8 @@ export default function registerSessionRoutes(
             chatId: null,
             DEFAULT_TIMEOUT,
             getLocalizedError,
-            clientLanguage
+            clientLanguage,
+            user: req.user
           });
         } else {
           const clientRes = clients.get(chatId).response;
@@ -355,7 +359,8 @@ export default function registerSessionRoutes(
             chatId,
             DEFAULT_TIMEOUT,
             getLocalizedError,
-            clientLanguage
+            clientLanguage,
+            user: req.user
           });
 
           return res.json({ status: 'streaming', chatId });

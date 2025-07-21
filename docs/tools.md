@@ -14,4 +14,37 @@ Each entry in `config/tools.json` uses the following fields:
 | `script`      | The script file in `server/tools` implementing the tool |
 | `parameters`  | JSON schema describing the tool input                   |
 
+#### Built-in Integrations
+
+Some tools provide comprehensive integrations with external systems:
+
+**iFinder Document Management**
+- **Tool ID**: `iFinder`
+- **Methods**: `search`, `getContent`, `getMetadata`, `download`
+- **Description**: Comprehensive document search, content retrieval, and management for iFinder systems
+- **Authentication**: Requires authenticated users and JWT configuration
+- **Documentation**: See [iFinder Integration](iFinder-Integration.md) for detailed setup and usage
+
+**Entra People Search**
+- **Tool ID**: `entraPeopleSearch`
+- **Methods**: `findUser`, `getAllUserDetails`, `getUserManager`, `getUserGroups`, `getTeamMembers`, `getUserPhotoBase64`
+- **Description**: Corporate directory integration for Microsoft Entra/Azure AD
+- **Authentication**: Requires Azure credentials and proper permissions
+
+#### Method-Based Tools
+
+Some tools use a method-based approach where a single tool provides multiple related functions:
+
+```json
+{
+  "id": "iFinder",
+  "functions": {
+    "search": { "description": "Search documents", "parameters": {...} },
+    "getContent": { "description": "Fetch content", "parameters": {...} }
+  }
+}
+```
+
+Apps can reference specific methods using dot notation: `"tools": ["iFinder.search", "iFinder.getContent"]`
+
 > **Note**: Tool support is experimental and subject to change.
