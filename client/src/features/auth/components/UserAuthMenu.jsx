@@ -11,6 +11,7 @@ const UserAuthMenu = () => {
   const { platformConfig } = usePlatformConfig();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showAllGroups, setShowAllGroups] = useState(false);
   const dropdownRef = useRef(null);
 
   const auth = platformConfig?.auth || {};
@@ -22,6 +23,7 @@ const UserAuthMenu = () => {
     const handleClickOutside = event => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
+        setShowAllGroups(false);
       }
     };
 
@@ -66,11 +68,13 @@ const UserAuthMenu = () => {
   const handleLoginClick = () => {
     setShowLoginModal(true);
     setShowDropdown(false);
+    setShowAllGroups(false);
   };
 
   const handleLogout = () => {
     logout();
     setShowDropdown(false);
+    setShowAllGroups(false);
   };
 
   // Use the backend-calculated isAdmin flag instead of hardcoded group names
@@ -119,14 +123,27 @@ const UserAuthMenu = () => {
                     {user?.email && <p className="text-sm text-gray-500 truncate">{user.email}</p>}
                     {user?.groups && user.groups.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {user.groups.map((group, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                        {(showAllGroups ? user.groups : user.groups.slice(0, 3)).map(
+                          (group, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                            >
+                              {group}
+                            </span>
+                          )
+                        )}
+                        {user.groups.length > 3 && (
+                          <button
+                            onClick={e => {
+                              e.preventDefault();
+                              setShowAllGroups(!showAllGroups);
+                            }}
+                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
                           >
-                            {group}
-                          </span>
-                        ))}
+                            {showAllGroups ? 'Show less' : `+${user.groups.length - 3} more`}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -138,7 +155,10 @@ const UserAuthMenu = () => {
                 <Link
                   to="/admin"
                   className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  onClick={() => setShowDropdown(false)}
+                  onClick={() => {
+                    setShowDropdown(false);
+                    setShowAllGroups(false);
+                  }}
                 >
                   <Icon name="settings" size="sm" className="mr-3 text-gray-400" />
                   Admin Panel
