@@ -91,8 +91,23 @@ Uses a flexible multi-mode authentication system:
 Key files:
 
 - **`middleware/authRequired.js`**: Authentication enforcement middleware
-- **`utils/authorization.js`**: Group-based permission system with `isAnonymousAccessAllowed()`, `enhanceUserWithPermissions()`
+- **`utils/authorization.js`**: Group-based permission system with `isAnonymousAccessAllowed()`, `enhanceUserWithPermissions()`, `resolveGroupInheritance()`
 - **`routes/auth.js`**: Authentication endpoints and user management
+
+##### Group Inheritance System
+
+The authentication system supports hierarchical group inheritance, allowing complex permission structures:
+
+- **Inheritance Chain**: Groups can inherit permissions from parent groups using the `inherits` array
+- **Automatic Resolution**: Inheritance is resolved at configuration load time for performance
+- **Circular Dependency Detection**: System prevents and throws errors for circular inheritance chains
+- **Permission Merging**: Child groups merge permissions from all parent groups, with their own permissions taking precedence
+- **Built-in Hierarchy**: Standard hierarchy follows `admin` → `users` → `authenticated` → `anonymous`
+
+Example inheritance chain:
+```
+admin (inherits from users) → users (inherits from authenticated) → authenticated (inherits from anonymous) → anonymous (base)
+```
 
 #### Configuration Architecture
 
@@ -132,8 +147,50 @@ client/src/
 - **`platform.json`**: Server behavior, authentication, authorization
 - **`apps.json`**: AI application definitions with prompts and variables
 - **`models.json`**: LLM model configurations and endpoints
-- **`groups.json`**: User groups and permissions
+- **`groups.json`**: User groups, permissions, and inheritance hierarchy
 - **`ui.json`**: UI customization, pages, and branding
+
+#### Groups Configuration Structure
+
+The `groups.json` file defines user groups with hierarchical inheritance support:
+
+```javascript
+{
+  "groups": {
+    "admin": {
+      "id": "admin",
+      "name": "Admin",
+      "description": "Full administrative access to all resources",
+      "inherits": ["users"],                    // Inherits from users group
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": true
+      },
+      "mappings": ["Admins", "IT-Admin"]        // External group mappings
+    },
+    "users": {
+      "id": "users", 
+      "name": "Users",
+      "description": "Standard user group with extended permissions",
+      "inherits": ["authenticated"],            // Inherits from authenticated group
+      "permissions": {
+        "apps": [],                            // Merged with inherited permissions
+        "prompts": ["analysis"],
+        "models": ["gemini-2.0-flash"],
+        "adminAccess": false
+      }
+    }
+  }
+}
+```
+
+**Key Features:**
+- **`inherits`**: Array of parent group IDs to inherit permissions from
+- **Permission Merging**: Child permissions are merged with inherited permissions  
+- **External Mappings**: `mappings` array links external auth provider groups to internal groups
+- **Performance**: Groups cached with resolved inheritance for fast runtime access
 
 #### App Configuration Structure
 
@@ -193,10 +250,21 @@ Apps must conform to the Zod schema defined in `server/validators/appConfigSchem
 
 ### Authentication Flow
 
-1. **Middleware**: `authRequired` or `authOptional` on routes
-2. **Permission Check**: `isAnonymousAccessAllowed(platformConfig)`
-3. **User Enhancement**: `enhanceUserWithPermissions()` adds group permissions
-4. **Resource Filtering**: `filterResourcesByPermissions()` based on user groups
+1. **Configuration Loading**: `loadGroupsConfiguration()` loads and resolves group inheritance automatically
+2. **Middleware**: `authRequired` or `authOptional` on routes  
+3. **Permission Check**: `isAnonymousAccessAllowed(platformConfig)`
+4. **User Enhancement**: `enhanceUserWithPermissions()` adds resolved group permissions
+5. **Resource Filtering**: `filterResourcesByPermissions()` based on merged user permissions
+
+#### Group Inheritance Resolution
+
+The system automatically resolves group inheritance at startup:
+
+1. **Load Configuration**: Groups loaded from `groups.json`
+2. **Dependency Resolution**: `resolveGroupInheritance()` processes inheritance chains
+3. **Circular Detection**: Prevents circular dependencies with error reporting  
+4. **Permission Merging**: Parent permissions merged with child permissions
+5. **Cache Storage**: Resolved groups cached for runtime performance
 
 ### Adding New Features
 
@@ -217,7 +285,7 @@ To add a new LLM provider:
 
 - **Platform/Auth**: Requires server restart
 - **Apps/Models/UI**: Reloaded automatically via `configCache`
-- **Groups/Permissions**: Reloaded automatically
+- **Groups/Permissions**: Reloaded automatically with inheritance resolution
 
 ## Important Implementation Details
 
@@ -244,6 +312,7 @@ The system uses `anonymousAuth` structure instead of legacy `allowAnonymous`:
 ### Performance Optimizations
 
 - **Configuration caching**: `configCache` eliminates disk I/O on requests
+- **Group inheritance resolution**: Computed once at startup and cached for runtime performance
 - **Permission caching**: User permissions computed once and cached
 - **ETag support**: Client-side caching for static resources
 - **Clustering**: Multi-worker support for production scaling
