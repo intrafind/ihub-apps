@@ -6,6 +6,139 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
+ * Resolve group inheritance by merging permissions from parent groups
+ * @param {Object} groupsConfig - Groups configuration object
+ * @returns {Object} Groups configuration with resolved inheritance
+ */
+export function resolveGroupInheritance(groupsConfig) {
+  if (!groupsConfig || !groupsConfig.groups) {
+    return groupsConfig;
+  }
+
+  const groups = { ...groupsConfig.groups };
+  const visited = new Set();
+  const resolving = new Set();
+
+  function resolveGroup(groupId) {
+    // Prevent circular dependencies
+    if (resolving.has(groupId)) {
+      throw new Error(`Circular dependency detected in group inheritance: ${groupId}`);
+    }
+
+    // Skip if already resolved
+    if (visited.has(groupId)) {
+      return groups[groupId];
+    }
+
+    const group = groups[groupId];
+    if (!group) {
+      throw new Error(`Group not found: ${groupId}`);
+    }
+
+    // Mark as currently resolving to detect circular dependencies
+    resolving.add(groupId);
+
+    try {
+      // If no inheritance, mark as resolved and return
+      if (!group.inherits || !Array.isArray(group.inherits) || group.inherits.length === 0) {
+        visited.add(groupId);
+        resolving.delete(groupId);
+        return group;
+      }
+
+      // Recursively resolve parent groups first
+      const parentGroups = group.inherits.map(parentId => {
+        if (!groups[parentId]) {
+          throw new Error(`Parent group not found: ${parentId} (referenced by ${groupId})`);
+        }
+        return resolveGroup(parentId);
+      });
+
+      // Merge permissions from parent groups
+      const mergedPermissions = {
+        apps: new Set(),
+        prompts: new Set(),
+        models: new Set(),
+        adminAccess: false
+      };
+
+      // Merge from parent groups first (in order)
+      for (const parentGroup of parentGroups) {
+        const parentPerms = parentGroup.permissions || {};
+
+        // Merge apps
+        if (Array.isArray(parentPerms.apps)) {
+          parentPerms.apps.forEach(app => mergedPermissions.apps.add(app));
+        }
+
+        // Merge prompts
+        if (Array.isArray(parentPerms.prompts)) {
+          parentPerms.prompts.forEach(prompt => mergedPermissions.prompts.add(prompt));
+        }
+
+        // Merge models
+        if (Array.isArray(parentPerms.models)) {
+          parentPerms.models.forEach(model => mergedPermissions.models.add(model));
+        }
+
+        // Admin access: if any parent has admin access, inherit it
+        if (parentPerms.adminAccess === true) {
+          mergedPermissions.adminAccess = true;
+        }
+      }
+
+      // Merge own permissions on top (overrides parents)
+      const ownPerms = group.permissions || {};
+      if (Array.isArray(ownPerms.apps)) {
+        ownPerms.apps.forEach(app => mergedPermissions.apps.add(app));
+      }
+      if (Array.isArray(ownPerms.prompts)) {
+        ownPerms.prompts.forEach(prompt => mergedPermissions.prompts.add(prompt));
+      }
+      if (Array.isArray(ownPerms.models)) {
+        ownPerms.models.forEach(model => mergedPermissions.models.add(model));
+      }
+      if (ownPerms.adminAccess === true) {
+        mergedPermissions.adminAccess = true;
+      }
+
+      // Update the group with resolved permissions
+      groups[groupId] = {
+        ...group,
+        permissions: {
+          apps: Array.from(mergedPermissions.apps),
+          prompts: Array.from(mergedPermissions.prompts),
+          models: Array.from(mergedPermissions.models),
+          adminAccess: mergedPermissions.adminAccess
+        }
+      };
+
+      visited.add(groupId);
+      resolving.delete(groupId);
+      return groups[groupId];
+    } catch (error) {
+      resolving.delete(groupId);
+      throw error;
+    }
+  }
+
+  // Resolve all groups
+  for (const groupId of Object.keys(groups)) {
+    try {
+      resolveGroup(groupId);
+    } catch (error) {
+      console.error(`Error resolving group inheritance for ${groupId}:`, error.message);
+      throw error;
+    }
+  }
+
+  return {
+    ...groupsConfig,
+    groups
+  };
+}
+
+/**
  * Load unified groups configuration
  * @returns {Object} Groups configuration with permissions and mappings
  */
@@ -13,7 +146,11 @@ export function loadGroupsConfiguration() {
   try {
     const configPath = path.join(__dirname, '../../contents/config/groups.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    return config;
+
+    // Resolve group inheritance
+    const resolvedConfig = resolveGroupInheritance(config);
+
+    return resolvedConfig;
   } catch (error) {
     console.warn(
       'Could not load groups configuration, falling back to legacy files:',
