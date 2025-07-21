@@ -152,11 +152,13 @@
     "tokenExpirationSeconds": 3600,
     "timeout": 30000,
     "downloadDir": "/tmp/ifinder-downloads",
+    "defaultSearchProfile": "${IFINDER_SEARCH_PROFILE:-default}",
     "endpoints": {
-      "search": "/api/v1/search",
-      "metadata": "/api/v1/documents/{documentId}/metadata",
-      "content": "/api/v1/documents/{documentId}/content",
-      "download": "/api/v1/documents/{documentId}/download"
+      "search": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_search",
+      "document": "/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}",
+      "facets": "/public-api/retrieval/api/v1/search-profiles/{profileId}/facets/{facetId}/_search",
+      "autocomplete": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_autocomplete",
+      "indexing": "/public-api/indexing/api/v0/docs"
     }
   }
 }

@@ -2,6 +2,7 @@ import { actionTracker } from '../actionTracker.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
 import { getIFinderAuthorizationHeader } from '../utils/iFinderJwt.js';
+import configCache from '../configCache.js';
 
 /**
  * iFinder Search Tool
@@ -13,25 +14,40 @@ import { getIFinderAuthorizationHeader } from '../utils/iFinderJwt.js';
  * @returns {Object} iFinder API configuration
  */
 function getIFinderConfig() {
+  const platform = configCache.getPlatform() || {};
+  const iFinderConfig = platform.iFinder || {};
+  
   return {
-    baseUrl: config.IFINDER_API_URL || process.env.IFINDER_API_URL || 'https://api.ifinder.example.com',
-    searchEndpoint: config.IFINDER_SEARCH_ENDPOINT || process.env.IFINDER_SEARCH_ENDPOINT || '/api/v1/search',
-    timeout: config.IFINDER_TIMEOUT || 30000
+    baseUrl: config.IFINDER_API_URL || process.env.IFINDER_API_URL || iFinderConfig.baseUrl || 'https://api.ifinder.example.com',
+    searchEndpoint: iFinderConfig.endpoints?.search || '/public-api/retrieval/api/v1/search-profiles/{profileId}/_search',
+    defaultSearchProfile: iFinderConfig.defaultSearchProfile || process.env.IFINDER_SEARCH_PROFILE || 'default',
+    timeout: iFinderConfig.timeout || config.IFINDER_TIMEOUT || 30000
   };
 }
 
 /**
  * Search for documents in iFinder
  * @param {Object} params - Search parameters
- * @param {string} params.query - Search query string
+ * @param {string} params.query - Search query string (Lucene syntax)
  * @param {string} params.chatId - Chat session ID for tracking
  * @param {Object} params.user - Authenticated user object (injected by middleware)
  * @param {number} params.maxResults - Maximum number of results to return (default: 10)
- * @param {string} params.language - Language filter (optional)
- * @param {string} params.documentType - Document type filter (optional)
+ * @param {string} params.searchProfile - Search profile ID (optional, uses default if not specified)
+ * @param {Array} params.returnFields - Fields to return in search results (optional)
+ * @param {Array} params.returnFacets - Facets to return in search results (optional)
+ * @param {Array} params.sort - Sorting criteria in format 'field:asc/desc' (optional)
  * @returns {Object} Search results
  */
-export default async function iFinderSearch({ query, chatId, user, maxResults = 10, language, documentType }) {
+export default async function iFinderSearch({ 
+  query, 
+  chatId, 
+  user, 
+  maxResults = 10, 
+  searchProfile,
+  returnFields,
+  returnFacets,
+  sort
+}) {
   if (!query) {
     throw new Error('Query parameter is required');
   }
@@ -41,11 +57,13 @@ export default async function iFinderSearch({ query, chatId, user, maxResults = 
   }
 
   const finderConfig = getIFinderConfig();
+  const profileId = searchProfile || finderConfig.defaultSearchProfile;
   
   // Track the action
   actionTracker.trackAction(chatId, { 
     action: 'ifinder_search', 
     query: query,
+    searchProfile: profileId,
     user: user.id
   });
 
@@ -53,31 +71,41 @@ export default async function iFinderSearch({ query, chatId, user, maxResults = 
     // Generate JWT token for the user
     const authHeader = getIFinderAuthorizationHeader(user, { scope: 'fa_index_read' });
     
-    // Construct search URL
-    const searchUrl = `${finderConfig.baseUrl}${finderConfig.searchEndpoint}`;
+    // Construct search URL with profile ID
+    const searchEndpoint = finderConfig.searchEndpoint.replace('{profileId}', encodeURIComponent(profileId));
+    const baseUrl = `${finderConfig.baseUrl}${searchEndpoint}`;
     
-    // Prepare request body
-    const requestBody = {
-      query: query,
-      maxResults: Math.min(maxResults, 50), // Limit to reasonable number
-      ...(language && { language }),
-      ...(documentType && { documentType })
-    };
+    // Build query parameters
+    const params = new URLSearchParams();
+    if (query) params.append('query', query);
+    params.append('size', Math.min(maxResults, 100).toString()); // API max is likely higher than 50
+    
+    if (returnFields && returnFields.length > 0) {
+      returnFields.forEach(field => params.append('return_fields', field));
+    }
+    
+    if (returnFacets && returnFacets.length > 0) {
+      returnFacets.forEach(facet => params.append('return_facets', facet));
+    }
+    
+    if (sort && sort.length > 0) {
+      sort.forEach(sortCriteria => params.append('sort', sortCriteria));
+    }
+    
+    const searchUrl = `${baseUrl}?${params.toString()}`;
 
-    console.log(`iFinder Search: Searching for "${query}" as user ${user.email || user.id}`);
+    console.log(`iFinder Search: Searching for "${query}" in profile "${profileId}" as user ${user.email || user.id}`);
     
-    // Make API request
+    // Make API request (using GET as per the real API)
     const response = await throttledFetch(
       'iFinderSearch',
       searchUrl,
       {
-        method: 'POST',
+        method: 'GET',
         headers: {
           'Authorization': authHeader,
-          'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(requestBody),
         timeout: finderConfig.timeout
       }
     );
@@ -89,30 +117,54 @@ export default async function iFinderSearch({ query, chatId, user, maxResults = 
 
     const data = await response.json();
     
-    // Process and normalize the results
+    // Process and normalize the results based on real API response format
     const results = {
       query: query,
-      totalFound: data.totalFound || data.total || (data.results ? data.results.length : 0),
-      results: []
+      searchProfile: profileId,
+      metadata: data.metadata || {},
+      totalFound: data.metadata?.total_hits || (data.results ? data.results.length : 0),
+      took: data.metadata?.took,
+      results: [],
+      facets: data.facets || null
     };
 
-    // Normalize result format (adapt based on actual API response)
+    // Normalize result format based on real iFinder API response structure
     if (data.results && Array.isArray(data.results)) {
-      results.results = data.results.map(item => ({
-        id: item.id || item.documentId,
-        title: item.title || item.name,
-        summary: item.summary || item.description || item.snippet,
-        url: item.url,
-        documentType: item.documentType || item.type,
-        language: item.language,
-        lastModified: item.lastModified || item.modifiedDate,
-        size: item.size,
-        author: item.author,
-        metadata: item.metadata || {}
-      }));
+      results.results = data.results.map(hit => {
+        const doc = hit.document || {};
+        const metadata = hit.metadata || {};
+        
+        return {
+          // Document identification
+          id: doc.id,
+          score: metadata.score,
+          
+          // Basic document fields (from document object)
+          title: doc.title,
+          content: doc.content, 
+          url: doc.url,
+          filename: doc.filename,
+          
+          // Document metadata fields
+          documentType: doc.documentType || doc.type,
+          mimeType: doc.mimeType,
+          language: doc.language,
+          size: doc.size,
+          author: doc.author || doc.creator,
+          createdDate: doc.createdDate || doc.created,
+          lastModified: doc.lastModified || doc.modified,
+          
+          // Search-specific metadata
+          teasers: metadata.teasers || [],
+          
+          // Raw document data for advanced use
+          rawDocument: doc,
+          rawMetadata: metadata
+        };
+      });
     }
 
-    console.log(`iFinder Search: Found ${results.totalFound} results`);
+    console.log(`iFinder Search: Found ${results.totalFound} results in ${results.took || 'unknown time'}`);
     return results;
 
   } catch (error) {

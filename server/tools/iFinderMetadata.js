@@ -2,6 +2,7 @@ import { actionTracker } from '../actionTracker.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
 import { getIFinderAuthorizationHeader } from '../utils/iFinderJwt.js';
+import configCache from '../configCache.js';
 
 /**
  * iFinder Metadata Fetch Tool
@@ -13,10 +14,14 @@ import { getIFinderAuthorizationHeader } from '../utils/iFinderJwt.js';
  * @returns {Object} iFinder API configuration
  */
 function getIFinderConfig() {
+  const platform = configCache.getPlatform() || {};
+  const iFinderConfig = platform.iFinder || {};
+  
   return {
-    baseUrl: config.IFINDER_API_URL || process.env.IFINDER_API_URL || 'https://api.ifinder.example.com',
-    metadataEndpoint: config.IFINDER_METADATA_ENDPOINT || process.env.IFINDER_METADATA_ENDPOINT || '/api/v1/documents/{documentId}/metadata',
-    timeout: config.IFINDER_TIMEOUT || 30000
+    baseUrl: config.IFINDER_API_URL || process.env.IFINDER_API_URL || iFinderConfig.baseUrl || 'https://api.ifinder.example.com',
+    documentEndpoint: iFinderConfig.endpoints?.document || '/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}',
+    defaultSearchProfile: iFinderConfig.defaultSearchProfile || process.env.IFINDER_SEARCH_PROFILE || 'default',
+    timeout: iFinderConfig.timeout || config.IFINDER_TIMEOUT || 30000
   };
 }
 
@@ -26,11 +31,10 @@ function getIFinderConfig() {
  * @param {string} params.documentId - Document ID to fetch metadata for
  * @param {string} params.chatId - Chat session ID for tracking
  * @param {Object} params.user - Authenticated user object (injected by middleware)
- * @param {boolean} params.includePermissions - Include document permissions in metadata (default: false)
- * @param {boolean} params.includeVersions - Include version history in metadata (default: false)
+ * @param {string} params.searchProfile - Search profile ID (optional, uses default if not specified)
  * @returns {Object} Document metadata
  */
-export default async function iFinderMetadata({ documentId, chatId, user, includePermissions = false, includeVersions = false }) {
+export default async function iFinderMetadata({ documentId, chatId, user, searchProfile }) {
   if (!documentId) {
     throw new Error('Document ID parameter is required');
   }
@@ -40,11 +44,13 @@ export default async function iFinderMetadata({ documentId, chatId, user, includ
   }
 
   const finderConfig = getIFinderConfig();
+  const profileId = searchProfile || finderConfig.defaultSearchProfile;
   
   // Track the action
   actionTracker.trackAction(chatId, { 
     action: 'ifinder_metadata', 
     documentId: documentId,
+    searchProfile: profileId,
     user: user.id
   });
 
@@ -52,26 +58,18 @@ export default async function iFinderMetadata({ documentId, chatId, user, includ
     // Generate JWT token for the user
     const authHeader = getIFinderAuthorizationHeader(user, { scope: 'fa_index_read' });
     
-    // Construct metadata URL
-    const metadataUrl = `${finderConfig.baseUrl}${finderConfig.metadataEndpoint.replace('{documentId}', encodeURIComponent(documentId))}`;
-    
-    // Add query parameters if specified
-    const urlParams = new URLSearchParams();
-    if (includePermissions) {
-      urlParams.append('includePermissions', 'true');
-    }
-    if (includeVersions) {
-      urlParams.append('includeVersions', 'true');
-    }
-    
-    const finalUrl = urlParams.toString() ? `${metadataUrl}?${urlParams.toString()}` : metadataUrl;
+    // Construct document URL with profile ID and document ID
+    const documentEndpoint = finderConfig.documentEndpoint
+      .replace('{profileId}', encodeURIComponent(profileId))
+      .replace('{docId}', encodeURIComponent(documentId));
+    const documentUrl = `${finderConfig.baseUrl}${documentEndpoint}`;
 
-    console.log(`iFinder Metadata: Fetching metadata for document ${documentId} as user ${user.email || user.id}`);
+    console.log(`iFinder Metadata: Fetching document ${documentId} from profile "${profileId}" as user ${user.email || user.id}`);
     
     // Make API request
     const response = await throttledFetch(
       'iFinderMetadata',
-      finalUrl,
+      documentUrl,
       {
         method: 'GET',
         headers: {
@@ -97,63 +95,58 @@ export default async function iFinderMetadata({ documentId, chatId, user, includ
 
     const data = await response.json();
     
-    // Process and normalize the metadata
+    // Process and normalize the metadata from RetrievalResult format
+    const doc = data.document || {};
+    const apiMetadata = data.metadata || {};
+    
     const metadata = {
-      documentId: data.id || data.documentId || documentId,
-      title: data.title || data.name,
-      description: data.description || data.summary,
-      documentType: data.documentType || data.type || data.mimeType,
-      language: data.language,
+      // API response metadata
+      searchProfile: profileId,
+      took: apiMetadata.took,
       
-      // File information
-      filename: data.filename || data.fileName,
-      size: data.size || data.fileSize,
-      sizeFormatted: data.sizeFormatted || formatFileSize(data.size),
-      mimeType: data.mimeType || data.contentType,
+      // Document identification
+      documentId: doc.id || documentId,
+      
+      // Basic document fields
+      title: doc.title,
+      content: doc.content,
+      url: doc.url,
+      filename: doc.filename,
+      
+      // Document metadata fields
+      documentType: doc.documentType || doc.type,
+      mimeType: doc.mimeType,
+      language: doc.language,
+      size: doc.size,
+      sizeFormatted: formatFileSize(doc.size),
       
       // Timestamps
-      createdDate: data.createdDate || data.created,
-      lastModified: data.lastModified || data.modified,
-      indexedDate: data.indexedDate || data.indexed,
+      createdDate: doc.createdDate || doc.created,
+      lastModified: doc.lastModified || doc.modified,
+      indexedDate: doc.indexedDate || doc.indexed,
       
       // Author/ownership
-      author: data.author || data.creator,
-      owner: data.owner,
+      author: doc.author || doc.creator,
+      owner: doc.owner,
       
       // Content information
-      pageCount: data.pageCount || data.pages,
-      wordCount: data.wordCount || data.words,
+      pageCount: doc.pageCount || doc.pages,
+      wordCount: doc.wordCount || doc.words,
       
-      // URLs and paths
-      url: data.url || data.accessUrl,
-      downloadUrl: data.downloadUrl,
-      thumbnailUrl: data.thumbnailUrl || data.preview,
-      
-      // Custom metadata
-      customMetadata: data.customMetadata || data.metadata || {},
+      // Additional URLs
+      downloadUrl: doc.downloadUrl,
+      thumbnailUrl: doc.thumbnailUrl || doc.preview,
       
       // Tags and categories
-      tags: data.tags || [],
-      categories: data.categories || [],
+      tags: doc.tags || [],
+      categories: doc.categories || [],
       
-      // Access information (if requested)
-      ...(includePermissions && {
-        permissions: {
-          canRead: data.permissions?.canRead !== false,
-          canWrite: data.permissions?.canWrite || false,
-          canDelete: data.permissions?.canDelete || false,
-          canShare: data.permissions?.canShare || false
-        }
-      }),
-      
-      // Version information (if requested)
-      ...(includeVersions && {
-        versions: data.versions || [],
-        currentVersion: data.currentVersion || data.version
-      })
+      // Raw document data for advanced use
+      rawDocument: doc,
+      rawApiMetadata: apiMetadata
     };
 
-    console.log(`iFinder Metadata: Successfully fetched metadata for document ${documentId}`);
+    console.log(`iFinder Metadata: Successfully fetched document ${documentId} metadata in ${metadata.took || 'unknown time'}`);
     return metadata;
 
   } catch (error) {
@@ -211,9 +204,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const result = await iFinderMetadata({ 
       documentId: documentId, 
       user: mockUser,
-      chatId: 'cli-test',
-      includePermissions: true,
-      includeVersions: true
+      chatId: 'cli-test'
     });
     
     console.log('\niFinder Document Metadata:');
@@ -234,12 +225,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.log(`Tags: ${result.tags.join(', ')}`);
     }
     
-    if (result.permissions) {
-      console.log('\nPermissions:');
-      console.log(`  Can Read: ${result.permissions.canRead}`);
-      console.log(`  Can Write: ${result.permissions.canWrite}`);
-      console.log(`  Can Delete: ${result.permissions.canDelete}`);
-      console.log(`  Can Share: ${result.permissions.canShare}`);
+    if (result.took) {
+      console.log(`Fetch Time: ${result.took}`);
     }
     
   } catch (error) {

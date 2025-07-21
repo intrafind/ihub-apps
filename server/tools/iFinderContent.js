@@ -2,6 +2,7 @@ import { actionTracker } from '../actionTracker.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
 import { getIFinderAuthorizationHeader } from '../utils/iFinderJwt.js';
+import configCache from '../configCache.js';
 
 /**
  * iFinder Content Fetch Tool
@@ -13,10 +14,14 @@ import { getIFinderAuthorizationHeader } from '../utils/iFinderJwt.js';
  * @returns {Object} iFinder API configuration
  */
 function getIFinderConfig() {
+  const platform = configCache.getPlatform() || {};
+  const iFinderConfig = platform.iFinder || {};
+  
   return {
-    baseUrl: config.IFINDER_API_URL || process.env.IFINDER_API_URL || 'https://api.ifinder.example.com',
-    contentEndpoint: config.IFINDER_CONTENT_ENDPOINT || process.env.IFINDER_CONTENT_ENDPOINT || '/api/v1/documents/{documentId}/content',
-    timeout: config.IFINDER_TIMEOUT || 60000 // Longer timeout for content fetch
+    baseUrl: config.IFINDER_API_URL || process.env.IFINDER_API_URL || iFinderConfig.baseUrl || 'https://api.ifinder.example.com',
+    documentEndpoint: iFinderConfig.endpoints?.document || '/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}',
+    defaultSearchProfile: iFinderConfig.defaultSearchProfile || process.env.IFINDER_SEARCH_PROFILE || 'default',
+    timeout: iFinderConfig.timeout || config.IFINDER_TIMEOUT || 60000 // Longer timeout for content fetch
   };
 }
 
@@ -26,20 +31,16 @@ function getIFinderConfig() {
  * @param {string} params.documentId - Document ID to fetch content for
  * @param {string} params.chatId - Chat session ID for tracking
  * @param {Object} params.user - Authenticated user object (injected by middleware)
- * @param {string} params.format - Content format ('text', 'html', 'markdown', 'raw') - default: 'text'
+ * @param {string} params.searchProfile - Search profile ID (optional, uses default if not specified)
  * @param {number} params.maxLength - Maximum content length in characters (default: 50000)
- * @param {boolean} params.includeMetadata - Include document metadata with content (default: true)
- * @param {string} params.pageRange - Specific page range for multi-page documents (e.g., '1-5')
  * @returns {Object} Document content and metadata
  */
 export default async function iFinderContent({ 
   documentId, 
   chatId, 
   user, 
-  format = 'text', 
-  maxLength = 50000,
-  includeMetadata = true,
-  pageRange
+  searchProfile,
+  maxLength = 50000
 }) {
   if (!documentId) {
     throw new Error('Document ID parameter is required');
@@ -50,12 +51,13 @@ export default async function iFinderContent({
   }
 
   const finderConfig = getIFinderConfig();
+  const profileId = searchProfile || finderConfig.defaultSearchProfile;
   
   // Track the action
   actionTracker.trackAction(chatId, { 
     action: 'ifinder_content', 
     documentId: documentId,
-    format: format,
+    searchProfile: profileId,
     user: user.id
   });
 
@@ -63,33 +65,18 @@ export default async function iFinderContent({
     // Generate JWT token for the user
     const authHeader = getIFinderAuthorizationHeader(user, { scope: 'fa_index_read' });
     
-    // Construct content URL
-    const contentUrl = `${finderConfig.baseUrl}${finderConfig.contentEndpoint.replace('{documentId}', encodeURIComponent(documentId))}`;
-    
-    // Add query parameters
-    const urlParams = new URLSearchParams();
-    urlParams.append('format', format);
-    
-    if (maxLength && maxLength > 0) {
-      urlParams.append('maxLength', maxLength.toString());
-    }
-    
-    if (includeMetadata) {
-      urlParams.append('includeMetadata', 'true');
-    }
-    
-    if (pageRange) {
-      urlParams.append('pageRange', pageRange);
-    }
-    
-    const finalUrl = `${contentUrl}?${urlParams.toString()}`;
+    // Construct document URL with profile ID and document ID
+    const documentEndpoint = finderConfig.documentEndpoint
+      .replace('{profileId}', encodeURIComponent(profileId))
+      .replace('{docId}', encodeURIComponent(documentId));
+    const documentUrl = `${finderConfig.baseUrl}${documentEndpoint}`;
 
-    console.log(`iFinder Content: Fetching content for document ${documentId} as user ${user.email || user.id}`);
+    console.log(`iFinder Content: Fetching content for document ${documentId} from profile "${profileId}" as user ${user.email || user.id}`);
     
     // Make API request
     const response = await throttledFetch(
       'iFinderContent',
-      finalUrl,
+      documentUrl,
       {
         method: 'GET',
         headers: {
@@ -118,46 +105,42 @@ export default async function iFinderContent({
 
     const data = await response.json();
     
-    // Process and normalize the content response
+    // Process and normalize the content response from RetrievalResult format
+    const doc = data.document || {};
+    const apiMetadata = data.metadata || {};
+    
+    const content = doc.content || '';
+    
     const result = {
-      documentId: data.documentId || documentId,
-      content: data.content || data.text || '',
-      format: data.format || format,
+      // API response metadata
+      searchProfile: profileId,
+      took: apiMetadata.took,
       
-      // Content metadata
-      contentLength: (data.content || data.text || '').length,
-      contentLengthFormatted: formatContentLength((data.content || data.text || '').length),
-      extractedPages: data.extractedPages || data.pageCount,
-      pageRange: data.pageRange || pageRange,
+      // Document identification
+      documentId: doc.id || documentId,
       
-      // Processing information
-      extractionMethod: data.extractionMethod || 'unknown',
-      lastExtracted: data.lastExtracted || data.extractedAt,
-      quality: data.quality || 'unknown',
+      // Content information
+      content: content,
+      contentLength: content.length,
+      contentLengthFormatted: formatContentLength(content.length),
       
-      // Document metadata (if included)
-      ...(includeMetadata && data.metadata && {
-        metadata: {
-          title: data.metadata.title,
-          documentType: data.metadata.documentType || data.metadata.type,
-          language: data.metadata.language,
-          author: data.metadata.author,
-          createdDate: data.metadata.createdDate,
-          lastModified: data.metadata.lastModified,
-          fileSize: data.metadata.size,
-          filename: data.metadata.filename
-        }
-      }),
+      // Document metadata
+      metadata: {
+        title: doc.title,
+        documentType: doc.documentType || doc.type,
+        mimeType: doc.mimeType,
+        language: doc.language,
+        size: doc.size,
+        author: doc.author || doc.creator,
+        createdDate: doc.createdDate || doc.created,
+        lastModified: doc.lastModified || doc.modified,
+        filename: doc.filename,
+        url: doc.url
+      },
       
-      // Content structure (for structured documents)
-      ...(data.structure && {
-        structure: {
-          headings: data.structure.headings || [],
-          sections: data.structure.sections || [],
-          tables: data.structure.tables || [],
-          images: data.structure.images || []
-        }
-      })
+      // Raw document data for advanced use
+      rawDocument: doc,
+      rawApiMetadata: apiMetadata
     };
 
     // Validate content length
@@ -229,22 +212,23 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const result = await iFinderContent({ 
       documentId: documentId, 
       user: mockUser,
-      format: format,
       chatId: 'cli-test',
-      maxLength: 10000, // Smaller limit for CLI output
-      includeMetadata: true
+      maxLength: 10000 // Smaller limit for CLI output
     });
     
     console.log('\niFinder Document Content:');
     console.log('========================');
     console.log(`Document ID: ${result.documentId}`);
     console.log(`Content Length: ${result.contentLengthFormatted}`);
-    console.log(`Format: ${result.format}`);
     
     if (result.metadata) {
       console.log(`Title: ${result.metadata.title}`);
       console.log(`Type: ${result.metadata.documentType}`);
       console.log(`Author: ${result.metadata.author}`);
+    }
+    
+    if (result.took) {
+      console.log(`Fetch Time: ${result.took}`);
     }
     
     console.log('\nContent Preview (first 500 characters):');
