@@ -5,6 +5,46 @@ import { loadAllPrompts } from './promptsLoader.js';
 import { resolveGroupInheritance } from './utils/authorization.js';
 import { createHash } from 'crypto';
 
+/**
+ * Resolve environment variables in a string
+ * Replaces ${VAR_NAME} with the value of process.env.VAR_NAME
+ */
+function resolveEnvVars(value) {
+  if (typeof value !== 'string') return value;
+
+  return value.replace(/\$\{([^}]+)\}/g, (match, varName) => {
+    const envValue = process.env[varName];
+    if (envValue === undefined) {
+      console.warn(`Environment variable ${varName} is not defined, keeping placeholder: ${match}`);
+      return match;
+    }
+    return envValue;
+  });
+}
+
+/**
+ * Recursively resolve environment variables in an object
+ */
+function resolveEnvVarsInObject(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => resolveEnvVarsInObject(item));
+  }
+
+  const resolved = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value === 'string') {
+      resolved[key] = resolveEnvVars(value);
+    } else if (typeof value === 'object') {
+      resolved[key] = resolveEnvVarsInObject(value);
+    } else {
+      resolved[key] = value;
+    }
+  }
+  return resolved;
+}
+
 function expandToolFunctions(tools = []) {
   const expanded = [];
   for (const tool of tools) {
@@ -194,12 +234,15 @@ class ConfigCache {
       clearTimeout(this.refreshTimers.get(key));
     }
 
+    // Resolve environment variables in the data
+    const resolvedData = resolveEnvVarsInObject(data);
+
     // Generate ETag for the data
-    const etag = this.generateETag(data);
+    const etag = this.generateETag(resolvedData);
 
     // Set cache entry
     this.cache.set(key, {
-      data,
+      data: resolvedData,
       etag,
       timestamp: Date.now()
     });

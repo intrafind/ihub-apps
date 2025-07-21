@@ -42,6 +42,10 @@ export function checkContentLength(limit) {
 export function setupMiddleware(app, platformConfig = {}) {
   const limitMb = parseInt(platformConfig.requestBodyLimitMB || '50', 10);
   const limit = limitMb * 1024 * 1024;
+
+  // Trust proxy for proper IP and protocol detection
+  app.set('trust proxy', 1);
+
   app.use(cors());
   // Reject requests with a Content-Length exceeding the configured limit
   app.use(checkContentLength(limit));
@@ -58,14 +62,15 @@ export function setupMiddleware(app, platformConfig = {}) {
       session({
         secret: config.JWT_SECRET || 'fallback-session-secret',
         resave: false,
-        saveUninitialized: false,
+        saveUninitialized: true, // Changed to true for OAuth2 state persistence
         name: 'oidc.session',
         cookie: {
-          secure: config.USE_HTTPS === 'true', // Use HTTPS setting instead of NODE_ENV
+          secure: false, // Set to false for HTTP localhost development
           httpOnly: true,
           maxAge: 10 * 60 * 1000, // 10 minutes for OIDC flow
           sameSite: 'lax', // Always use 'lax' for better compatibility
-          path: '/' // Ensure cookie is available for all paths
+          path: '/', // Ensure cookie is available for all paths
+          domain: undefined // Let browser handle domain for better localhost compatibility
         }
       })
     );

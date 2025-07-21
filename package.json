@@ -7,7 +7,7 @@
     "ai-hub-apps": "./server/sea-server.cjs"
   },
   "scripts": {
-    "server": "cd server && node server.js",
+    "server": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
     "client": "cd client && npm run dev",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "install:all": "npm install && cd client && npm install && cd ../server && npm install",
@@ -20,7 +20,7 @@
     "build:config": "cp package.json dist/ && npm run build:dotenv",
     "build:dotenv": "[ -f .env ] && cp .env dist/ || echo 'No .env file found, skipping'",
     "build:package": "cd dist && npm install --production && cd server && npm install --production",
-    "start": "cd server && node server.js",
+    "start": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
     "start:prod": "cd dist && node server/start-prod.js",
     "prod:build": "npm run build && npm run build:package",
     "prod:deploy": "npm run prod:build && npm run start:prod",
@@ -64,6 +64,8 @@
     "react-quill": "^2.0.0"
   },
   "devDependencies": {
+    "electron": "^29.2.0",
+    "electron-builder": "^24.6.0",
     "esbuild": "^0.25.6",
     "eslint": "^9.18.0",
     "globals": "^16.3.0",
@@ -72,9 +74,7 @@
     "nodemon": "^3.1.10",
     "postject": "^1.0.0-alpha.6",
     "prettier": "^3.4.2",
-    "rimraf": "^6.0.1",
-    "electron": "^29.2.0",
-    "electron-builder": "^24.6.0"
+    "rimraf": "^6.0.1"
   },
   "engines": {
     "node": ">=20.0.0"

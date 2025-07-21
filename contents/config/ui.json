@@ -310,18 +310,6 @@
       },
       "authRequired": true,
       "allowedGroups": ["admin"]
-    },
-    "secure-example": {
-      "title": {
-        "en": "Secure Example",
-        "de": "Gesicherte Beispielseite"
-      },
-      "filePath": {
-        "en": "pages/en/secure-example.md",
-        "de": "pages/de/secure-example.md"
-      },
-      "authRequired": true,
-      "allowedGroups": ["user", "admin", "admins"]
     }
   }
 }

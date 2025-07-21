@@ -237,12 +237,21 @@ export function createOidcAuthHandler(providerName) {
       return res.status(404).json({ error: `OIDC provider '${providerName}' not found` });
     }
 
+    // Debug session state
+    console.log(`[OIDC Auth] Starting auth for provider: ${providerName}`);
+    console.log(`[OIDC Auth] Session ID: ${req.sessionID}`);
+    console.log(`[OIDC Auth] Session exists: ${!!req.session}`);
+
     // Store return URL in session/state if provided
     const returnUrl = req.query.returnUrl;
     if (returnUrl) {
-      // In a stateless setup, we could encode this in the state parameter
-      req.session = req.session || {};
-      req.session.returnUrl = returnUrl;
+      // Ensure session exists
+      if (!req.session) {
+        console.error('[OIDC Auth] No session available to store returnUrl');
+      } else {
+        req.session.returnUrl = returnUrl;
+        console.log(`[OIDC Auth] Stored returnUrl in session: ${returnUrl}`);
+      }
     }
 
     passport.authenticate(provider.strategyName, {
@@ -263,16 +272,19 @@ export function createOidcCallbackHandler(providerName) {
       return res.redirect(`/?auth=error&message=${errorMessage}`);
     }
 
-    passport.authenticate(provider.strategyName, { session: false }, (err, user, info) => {
+    passport.authenticate(provider.strategyName, (err, user, info) => {
       if (err) {
         console.error(`OIDC authentication error for provider ${providerName}:`, err);
         // Special handling for state verification errors
         if (err.message && err.message.includes('Failed to verify request state')) {
           console.error(
-            'OAuth state verification failed. This might be due to session issues in development.'
+            '[OIDC Callback] OAuth state verification failed. This might be due to session issues.'
           );
-          console.error('Request query:', req.query);
-          console.error('Session:', req.session);
+          console.error('[OIDC Callback] Error details:', err);
+          console.error('[OIDC Callback] Request query:', req.query);
+          console.error('[OIDC Callback] Session ID:', req.sessionID);
+          console.error('[OIDC Callback] Session data:', req.session);
+          console.error('[OIDC Callback] Cookies:', req.headers.cookie);
         }
 
         // Redirect back to the app with error message instead of returning JSON
