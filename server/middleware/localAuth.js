@@ -108,73 +108,12 @@ function createToken(user, secret, expiresIn = 28800) {
  * @param {Function} next - Express next function
  */
 export default function localAuthMiddleware(req, res, next) {
-  // Skip if local auth is not enabled
-  const platform = req.app.get('platform') || {};
-  const localAuthConfig = platform.localAuth || {};
-
-  if (!localAuthConfig.enabled) {
-    return next();
-  }
-
-  // Check for Authorization header
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return next(); // No token, continue as anonymous
-  }
-
-  const token = authHeader.substring(7);
-  const jwtSecret = localAuthConfig.jwtSecret;
-
-  if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
-    console.warn('Local auth enabled but JWT_SECRET not configured');
-    return next();
-  }
-
-  // Verify token
-  const decoded = verifyToken(token, jwtSecret);
-  if (!decoded) {
-    return next(); // Invalid token, continue as anonymous
-  }
-
-  // Check token expiration
-  const now = Math.floor(Date.now() / 1000);
-  if (decoded.exp && decoded.exp < now) {
-    return next(); // Expired token, continue as anonymous
-  }
-
-  // Check if token was issued for the current authentication mode
-  // If the auth mode changed, invalidate the token to force re-authentication
-  const currentAuthMode = platform.auth?.mode || 'anonymous';
-  if (decoded.authMode && decoded.authMode !== 'local') {
-    console.warn(
-      `🔐 Token rejected: issued for ${decoded.authMode} mode, current mode is ${currentAuthMode}`
-    );
-    return next(); // Token from different auth mode, continue as anonymous
-  }
-
-  // Additional check: if local auth is disabled, reject local tokens
-  // Allow local tokens when local auth is enabled, regardless of primary auth mode
-  if (!localAuthConfig.enabled) {
-    console.warn(`🔐 Token rejected: local token not valid - local auth is disabled`);
-    return next(); // Local auth is disabled
-  }
-
-  // Create user object from token
-  req.user = {
-    id: decoded.id,
-    name: decoded.name,
-    email: decoded.email,
-    groups: decoded.groups || ['user'],
-    authenticated: true,
-    authMethod: 'local'
-  };
-
-  console.log('🔐 User authenticated via local auth:', {
-    userId: req.user.id,
-    groups: req.user.groups,
-    authMethod: req.user.authMethod
-  });
-
+  // Local auth middleware now only handles local authentication setup
+  // JWT token validation is handled by the unified jwtAuthMiddleware
+  
+  // This middleware is now primarily a placeholder for any local auth specific logic
+  // The actual JWT validation happens in jwtAuthMiddleware
+  
   next();
 }
 

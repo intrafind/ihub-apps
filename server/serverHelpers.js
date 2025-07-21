@@ -4,6 +4,7 @@ import session from 'express-session';
 import { proxyAuth } from './middleware/proxyAuth.js';
 import localAuthMiddleware from './middleware/localAuth.js';
 import { initializePassport, configureOidcProviders } from './middleware/oidcAuth.js';
+import jwtAuthMiddleware from './middleware/jwtAuth.js';
 import { enhanceUserWithPermissions } from './utils/authorization.js';
 import { loadJson, loadText } from './configLoader.js';
 import { getApiKeyForModel } from './utils.js';
@@ -58,10 +59,12 @@ export function setupMiddleware(app, platformConfig = {}) {
         secret: config.JWT_SECRET || 'fallback-session-secret',
         resave: false,
         saveUninitialized: false,
+        name: 'oidc.session',
         cookie: {
           secure: process.env.NODE_ENV === 'production',
           httpOnly: true,
-          maxAge: 10 * 60 * 1000 // 10 minutes for OIDC flow
+          maxAge: 10 * 60 * 1000, // 10 minutes for OIDC flow
+          sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax' // Use 'lax' in dev for better compatibility
         }
       })
     );
@@ -73,9 +76,10 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Configure OIDC providers based on platform configuration
   configureOidcProviders();
 
-  // Authentication middleware (order matters: proxy auth first, then local auth)
+  // Authentication middleware (order matters: proxy auth first, then unified JWT validation)
   app.use(proxyAuth);
-  app.use(localAuthMiddleware);
+  app.use(jwtAuthMiddleware);
+  app.use(localAuthMiddleware); // Now mainly a placeholder for local auth specific logic
 
   // Enhance user with permissions after authentication
   app.use((req, res, next) => {

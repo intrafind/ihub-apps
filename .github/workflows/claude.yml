@@ -19,9 +19,9 @@ jobs:
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: read
-      issues: read
+      contents: write
+      pull-requests: write
+      issues: write
       id-token: write
       actions: read # Required for Claude to read CI results on PRs
     steps:
@@ -50,7 +50,7 @@ jobs:
           # assignee_trigger: "claude-bot"
 
           # Optional: Allow Claude to run specific commands
-          allowed_tools: 'Bash,Bash(*),Bash(chmod:*),Bash(git:*),Bash(npm install),Bash(npm run dev),Bash(npm run build),Bash(npm run test:*),Bash(npm run lint:*),Bash(npm run format:*),WebFetch,WebSearch,Write,MultiEdit,Edit,Bash(curl:*)'
+          allowed_tools: 'Bash,Bash(*),Bash(chmod:*),Bash(git:*),Bash(npm install),Bash(npm run dev),Bash(npm run build),Bash(npm run test:*),Bash(npm run lint:*),Bash(npm run format:*),WebFetch,WebSearch,Write,MultiEdit,Edit,Bash(curl:*),mcp__github__create_pull_request,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff'
 
           # Optional: Add custom instructions for Claude to customize its behavior for your project
           # custom_instructions: |

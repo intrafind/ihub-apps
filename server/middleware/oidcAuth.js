@@ -48,7 +48,10 @@ export function configureOidcProviders() {
           callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`,
           scope: provider.scope || ['openid', 'profile', 'email'],
           state: true,
-          pkce: provider.pkce ?? true
+          pkce: provider.pkce ?? true,
+          // Add custom state verification to handle development issues
+          customHeaders: {},
+          skipUserProfile: true // We'll fetch user info manually
         },
         async (accessToken, _refreshToken, _profile, done) => {
           try {
@@ -261,9 +264,15 @@ export function createOidcCallbackHandler(providerName) {
     passport.authenticate(provider.strategyName, { session: false }, (err, user, info) => {
       if (err) {
         console.error(`OIDC authentication error for provider ${providerName}:`, err);
+        // Special handling for state verification errors
+        if (err.message && err.message.includes('Failed to verify request state')) {
+          console.error('OAuth state verification failed. This might be due to session issues in development.');
+          console.error('Request query:', req.query);
+          console.error('Session:', req.session);
+        }
         return res.status(500).json({
           error: 'Authentication failed',
-          details: err.message
+          details: err.message || 'Unable to verify authorization request state.'
         });
       }
 
@@ -280,9 +289,17 @@ export function createOidcCallbackHandler(providerName) {
         const { token, expiresIn } = generateJwtToken(user);
 
         // Get return URL
-        const returnUrl = req.session?.returnUrl || '/';
+        let returnUrl = req.session?.returnUrl || '/';
         if (req.session) {
           delete req.session.returnUrl;
+        }
+
+        // In development, redirect to Vite dev server instead of backend
+        const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production';
+        if (isDevelopment && returnUrl.startsWith('/')) {
+          // Convert relative URLs to Vite dev server URL
+          const viteDevServer = process.env.VITE_DEV_SERVER || 'http://localhost:5173';
+          returnUrl = `${viteDevServer}${returnUrl}`;
         }
 
         // For web flows, redirect with token in query (or set as cookie)
@@ -323,6 +340,7 @@ export function reconfigureOidcProviders() {
   console.log('Reconfiguring OIDC providers...');
   configureOidcProviders();
 }
+
 
 // Export for testing
 export { configuredProviders, normalizeOidcUser, generateJwtToken };
