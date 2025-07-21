@@ -144,6 +144,51 @@ Apps are defined with:
 - **Variables**: User input fields with types (string, date, select, etc.)
 - **Permissions**: Group-based access control
 
+#### App Configuration Schema
+
+Apps must conform to the Zod schema defined in `server/validators/appConfigSchema.js`:
+
+```javascript
+{
+  id: string,                           // Required: Unique app identifier
+  order: number,                        // Optional: Display order
+  name: object,                         // Required: Localized app names
+  description: object,                  // Required: Localized descriptions
+  color: string,                        // Required: UI color theme
+  icon: string,                         // Required: Icon identifier
+  system: object,                       // Required: Localized system prompts
+  tokenLimit: number,                   // Required: Maximum tokens per request
+  preferredModel: string,               // Optional: Default model selection
+  preferredOutputFormat: string,        // Optional: Output format preference
+  preferredStyle: string,               // Optional: Style preference
+  preferredTemperature: number,         // Optional: Temperature setting
+  sendChatHistory: boolean,             // Optional: Include chat history
+  messagePlaceholder: object,           // Optional: Localized input placeholder
+  prompt: object,                       // Optional: Localized user prompts
+  variables: array,                     // Optional: Input variable definitions
+  settings: any,                        // Optional: Additional settings
+  inputMode: any,                       // Optional: Input mode configuration
+  imageUpload: any,                     // Optional: Image upload settings
+  fileUpload: any,                      // Optional: File upload settings
+  features: any,                        // Optional: Feature flags
+  greeting: any,                        // Optional: Welcome message
+  starterPrompts: array,                // Optional: Suggested prompts
+  sourcePath: string,                   // Optional: Source file path
+  allowedModels: array,                 // Optional: Restricted model list
+  disallowModelSelection: boolean,      // Optional: Hide model selector
+  allowEmptyContent: boolean,           // Optional: Allow empty submissions
+  tools: array,                         // Optional: Available tool names
+  outputSchema: any,                    // Optional: Structured output schema
+  category: string,                     // Optional: App category
+  enabled: boolean,                     // Optional: Enable/disable app
+  // Inheritance fields
+  allowInheritance: boolean,            // Optional: Allow child apps
+  parentId: string,                     // Optional: Parent app ID
+  inheritanceLevel: number,             // Optional: Inheritance depth
+  overriddenFields: array               // Optional: Fields overridden from parent
+}
+```
+
 ## Development Patterns
 
 ### Authentication Flow
