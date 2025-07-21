@@ -5,6 +5,7 @@ import Icon from '../../../shared/components/Icon.jsx';
 const UserMenu = ({ className = '' }) => {
   const { user, isAuthenticated, logout, authConfig } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const [showAllGroups, setShowAllGroups] = useState(false);
   const menuRef = useRef(null);
 
   // Close menu when clicking outside
@@ -12,6 +13,7 @@ const UserMenu = ({ className = '' }) => {
     const handleClickOutside = event => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setIsOpen(false);
+        setShowAllGroups(false);
       }
     };
 
@@ -21,6 +23,7 @@ const UserMenu = ({ className = '' }) => {
 
   const handleLogout = async () => {
     setIsOpen(false);
+    setShowAllGroups(false);
     await logout();
   };
 
@@ -66,16 +69,29 @@ const UserMenu = ({ className = '' }) => {
           <div className="px-4 py-3 border-b border-gray-100">
             <div className="text-sm font-medium text-gray-900">{displayName}</div>
             {user.email && <div className="text-sm text-gray-500">{user.email}</div>}
-            <div className="flex flex-wrap gap-1 mt-2">
-              {user.groups?.map(group => (
-                <span
-                  key={group}
-                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                >
-                  {group}
-                </span>
-              ))}
-            </div>
+            {user.groups && user.groups.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {(showAllGroups ? user.groups : user.groups.slice(0, 3)).map(group => (
+                  <span
+                    key={group}
+                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                  >
+                    {group}
+                  </span>
+                ))}
+                {user.groups.length > 3 && (
+                  <button
+                    onClick={e => {
+                      e.preventDefault();
+                      setShowAllGroups(!showAllGroups);
+                    }}
+                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                  >
+                    {showAllGroups ? 'Show less' : `+${user.groups.length - 3} more`}
+                  </button>
+                )}
+              </div>
+            )}
             {user.authMethod && (
               <div className="text-xs text-gray-400 mt-1">via {user.authMethod}</div>
             )}
@@ -86,7 +102,10 @@ const UserMenu = ({ className = '' }) => {
             {/* Profile/Settings (placeholder) */}
             <button
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-              onClick={() => setIsOpen(false)}
+              onClick={() => {
+                setIsOpen(false);
+                setShowAllGroups(false);
+              }}
             >
               <Icon name="user" className="w-4 h-4 mr-3" />
               Profile
@@ -97,7 +116,10 @@ const UserMenu = ({ className = '' }) => {
               <a
                 href="/admin"
                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  setIsOpen(false);
+                  setShowAllGroups(false);
+                }}
               >
                 <Icon name="settings" className="w-4 h-4 mr-3" />
                 Admin Panel
