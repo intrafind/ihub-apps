@@ -130,21 +130,6 @@ const ChatHeader = ({
               <span className="hidden sm:inline">{t('pages.appChat.canvas', 'Canvas')}</span>
             </button>
           )}
-          {showParametersButton && !isMobile && (
-            <button
-              onClick={onToggleParameters}
-              className={`text-gray-800 px-3 py-1 rounded flex items-center ${
-                parametersVisible ? 'bg-gray-300' : 'bg-gray-200 hover:bg-gray-300'
-              }`}
-              aria-pressed={parametersVisible}
-              title={t('pages.appChat.parameters')}
-            >
-              <Icon name="sliders" size="sm" className="sm:mr-1" />
-              <span className="hidden sm:inline">
-                {t('pages.appChat.parameters', 'Parameters')}
-              </span>
-            </button>
-          )}
           <ChatActionsMenu
             onClearChat={onClearChat}
             onToggleConfig={onToggleConfig}
@@ -157,7 +142,7 @@ const ChatHeader = ({
             onToggleCanvas={onToggleCanvas}
             showCanvasButton={showCanvasButton}
             onToggleParameters={onToggleParameters}
-            showParametersButton={showParametersButton && isMobile}
+            showParametersButton={showParametersButton}
             parametersVisible={parametersVisible}
           />
         </div>
