@@ -23,6 +23,7 @@
     "@opentelemetry/sdk-trace-node": "^2.0.1",
     "axios": "^1.10.0",
     "bcrypt": "^6.0.0",
+    "botbuilder": "^4.17.0-blobs1",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "duck-duck-scrape": "^2.2.7",
@@ -38,6 +39,7 @@
     "passport-oauth2": "^1.8.0",
     "pdfjs-dist": "^5.3.31",
     "playwright": "^1.41.2",
+    "restify": "^11.1.0",
     "selenium-webdriver": "^4.20.0",
     "zod": "^3.25.74"
   },

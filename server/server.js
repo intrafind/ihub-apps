@@ -32,6 +32,10 @@ import {
   cleanupInactiveClients
 } from './serverHelpers.js';
 
+// Teams integration imports
+import { TeamsBot, createTeamsAdapter } from './teamsBot.js';
+import { TeamsMessageExtension } from './teamsMessageExtension.js';
+
 // Initialize environment variables
 dotenv.config();
 
@@ -150,6 +154,82 @@ if (cluster.isPrimary && workerCount > 1) {
   registerOpenAIProxyRoutes(app, { getLocalizedError });
   registerAdminRoutes(app);
   registerShortLinkRoutes(app);
+
+  // --- Teams Integration Setup ---
+  let teamsAdapter = null;
+  let teamsBot = null;
+  let teamsMessageExtension = null;
+
+  try {
+    teamsAdapter = createTeamsAdapter();
+    if (teamsAdapter) {
+      teamsBot = new TeamsBot();
+      teamsMessageExtension = new TeamsMessageExtension();
+
+      // Teams bot messaging endpoint
+      app.post('/api/teams/messages', (req, res) => {
+        teamsAdapter.processActivity(req, res, async context => {
+          if (context.activity.type === 'message') {
+            await teamsBot.run(context);
+          } else if (context.activity.type === 'invoke') {
+            // Handle message extensions and other invoke activities
+            if (context.activity.name === 'composeExtension/submitAction') {
+              const response = await teamsMessageExtension.handleMessageExtensionAction(context);
+              return response;
+            } else if (context.activity.name === 'composeExtension/query') {
+              const response = await teamsMessageExtension.handleComposeExtensionQuery(context);
+              return response;
+            }
+          }
+        });
+      });
+
+      // Teams tab configuration endpoint
+      app.get('/teams/config', (req, res) => {
+        res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>AI Hub Apps - Teams Configuration</title>
+              <script src="https://res.cdn.office.net/teams-js/2.0.0/js/MicrosoftTeams.min.js"></script>
+          </head>
+          <body>
+              <div style="text-align: center; padding: 20px;">
+                  <h2>AI Hub Apps Configuration</h2>
+                  <p>Click Save to add AI Hub Apps to this team.</p>
+                  <button onclick="saveConfiguration()">Save Configuration</button>
+              </div>
+              <script>
+                  microsoftTeams.app.initialize();
+                  
+                  function saveConfiguration() {
+                      microsoftTeams.pages.config.setConfig({
+                          suggestedDisplayName: 'AI Hub Apps',
+                          entityId: 'aihubapps-team-tab',
+                          contentUrl: '${req.protocol}://${req.get('host')}/?teams=true&teamContext=true',
+                          websiteUrl: '${req.protocol}://${req.get('host')}'
+                      }).then(() => {
+                          microsoftTeams.pages.config.setValidityState(true);
+                      });
+                  }
+                  
+                  // Enable the Save button
+                  microsoftTeams.pages.config.setValidityState(true);
+              </script>
+          </body>
+          </html>
+        `);
+      });
+
+      console.log('✅ Teams integration initialized successfully');
+    } else {
+      console.log(
+        '⚠️  Teams integration disabled (TEAMS_APP_ID or TEAMS_APP_PASSWORD not configured)'
+      );
+    }
+  } catch (error) {
+    console.error('❌ Failed to initialize Teams integration:', error);
+  }
 
   // --- Session Management handled in sessionRoutes ---
 
