@@ -91,7 +91,7 @@ class RequestBuilder {
         return { success: false, error: apiKeyResult.error };
       }
 
-      const tools = await getToolsForApp(app);
+      const tools = await getToolsForApp(app, language);
       const request = createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
         temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
         maxTokens: finalTokens,

@@ -4,16 +4,94 @@ import configCache from './configCache.js';
 import { throttledFetch } from './requestThrottler.js';
 
 /**
- * Load tools defined locally in config/tools.json
+ * Resolve a translation key from localization data
+ * @param {string} key - Translation key like "tools.braveSearch.name"
+ * @param {object} translations - Translation object
+ * @returns {string} - Resolved translation or the key if not found
  */
-export async function loadConfiguredTools() {
+function resolveTranslationKey(key, translations) {
+  if (!key || typeof key !== 'string' || !key.startsWith('tools.')) {
+    return key;
+  }
+  
+  const keyParts = key.split('.');
+  let current = translations;
+  
+  for (const part of keyParts) {
+    if (current && typeof current === 'object' && current[part] !== undefined) {
+      current = current[part];
+    } else {
+      return key; // Return original key if not found
+    }
+  }
+  
+  return typeof current === 'string' ? current : key;
+}
+
+/**
+ * Recursively resolve translation keys in an object
+ * @param {any} obj - Object to process
+ * @param {object} translations - Translation data
+ * @returns {any} - Object with resolved translations
+ */
+function resolveTranslationsInObject(obj, translations) {
+  if (typeof obj === 'string') {
+    return resolveTranslationKey(obj, translations);
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => resolveTranslationsInObject(item, translations));
+  }
+  
+  if (obj && typeof obj === 'object') {
+    const result = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = resolveTranslationsInObject(value, translations);
+    }
+    return result;
+  }
+  
+  return obj;
+}
+
+/**
+ * Localize tools based on user language
+ * @param {Array} tools - Array of tool objects
+ * @param {string} language - User language (e.g., 'en', 'de')
+ * @returns {Array} - Localized tools
+ */
+function localizeTools(tools, language = 'en') {
+  const translations = configCache.getLocalizations(language);
+  if (!translations) {
+    console.warn(`No translations found for language: ${language}`);
+    // Fallback to English
+    const fallbackTranslations = configCache.getLocalizations('en');
+    return fallbackTranslations ? 
+      tools.map(tool => resolveTranslationsInObject(tool, fallbackTranslations)) : 
+      tools;
+  }
+  
+  return tools.map(tool => resolveTranslationsInObject(tool, translations));
+}
+
+/**
+ * Load tools defined locally in config/tools.json
+ * @param {string} language - Optional language for localization
+ */
+export async function loadConfiguredTools(language = null) {
   // Try to get tools from cache first
   const { data: tools, etag: toolsEtag } = configCache.getTools();
   if (!tools) {
     console.warn('Tools could not be loaded');
+    return [];
   }
 
-  return tools || [];
+  // If language is specified, localize the tools
+  if (language) {
+    return localizeTools(tools, language);
+  }
+
+  return tools;
 }
 
 /**
@@ -38,9 +116,10 @@ export async function discoverMcpTools() {
 
 /**
  * Load tools from local configuration and MCP server
+ * @param {string} language - Optional language for localization
  */
-export async function loadTools() {
-  const configured = await loadConfiguredTools();
+export async function loadTools(language = null) {
+  const configured = await loadConfiguredTools(language);
   const discovered = await discoverMcpTools();
   const all = [...configured];
   for (const tool of discovered) {
@@ -54,14 +133,23 @@ export async function loadTools() {
 /**
  * Get tools applicable to a specific app
  * @param {Object} app - app configuration object
+ * @param {string} language - Optional language for localization
  */
-export async function getToolsForApp(app) {
-  const allTools = await loadTools();
+export async function getToolsForApp(app, language = null) {
+  const allTools = await loadTools(language);
   if (Array.isArray(app.tools) && app.tools.length > 0) {
     return allTools.filter(t => app.tools.includes(t.id));
   }
   return [];
 }
+
+/**
+ * Export the localizeTools function for use by other modules
+ * @param {Array} tools - Array of tool objects
+ * @param {string} language - User language (e.g., 'en', 'de')
+ * @returns {Array} - Localized tools
+ */
+export { localizeTools };
 
 /**
  * Dynamically import and run a tool implementation securely.

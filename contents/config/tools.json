@@ -1,8 +1,8 @@
 [
   {
     "id": "braveSearch",
-    "name": "Brave Web / Internet Search",
-    "description": "Search the web / internet using Brave for up-to-date information. Use the 'query' parameter with your search terms.",
+    "name": "tools.braveSearch.name",
+    "description": "tools.braveSearch.description",
     "script": "braveSearch.js",
     "concurrency": 5,
     "parameters": {
@@ -10,7 +10,7 @@
       "properties": {
         "query": {
           "type": "string",
-          "description": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'"
+          "description": "tools.braveSearch.parameters.query"
         }
       },
       "required": ["query"]
@@ -18,8 +18,8 @@
   },
   {
     "id": "tavilySearch",
-    "name": "Tavily Web Search",
-    "description": "Search the web using the Tavily API. Use the 'query' parameter with your search terms.",
+    "name": "tools.tavilySearch.name",
+    "description": "tools.tavilySearch.description",
     "script": "tavilySearch.js",
     "concurrency": 5,
     "parameters": {
@@ -27,17 +27,17 @@
       "properties": {
         "query": {
           "type": "string",
-          "description": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'"
+          "description": "tools.tavilySearch.parameters.query"
         },
         "search_depth": {
           "type": "string",
           "enum": ["basic", "advanced"],
           "default": "basic",
-          "description": "Depth of the search"
+          "description": "tools.tavilySearch.parameters.search_depth"
         },
         "max_results": {
           "type": "integer",
-          "description": "Maximum number of search results to return",
+          "description": "tools.tavilySearch.parameters.max_results",
           "default": 5,
           "minimum": 1,
           "maximum": 10
@@ -48,8 +48,8 @@
   },
   {
     "id": "webContentExtractor",
-    "name": "Web Content Extractor",
-    "description": "Extract clean, readable content from an URL. This can be content like PDFs or webpages, removing ads, headers, footers, and other non-content elements. Use the 'url' parameter with a valid HTTP/HTTPS URL.",
+    "name": "tools.webContentExtractor.name",
+    "description": "tools.webContentExtractor.description",
     "script": "webContentExtractor.js",
     "concurrency": 3,
     "parameters": {
@@ -57,18 +57,18 @@
       "properties": {
         "url": {
           "type": "string",
-          "description": "The full URL of the webpage to extract content from. Must be a valid HTTP or HTTPS URL. Example: 'https://example.com/article'"
+          "description": "tools.webContentExtractor.parameters.url"
         },
         "maxLength": {
           "type": "integer",
-          "description": "Maximum length of extracted content in characters (default: 5000)",
+          "description": "tools.webContentExtractor.parameters.maxLength",
           "default": 5000,
           "minimum": 100,
           "maximum": 50000
         },
         "ignoreSSL": {
           "type": "boolean",
-          "description": "Ignore invalid HTTPS certificates (default: false, admin configurable)",
+          "description": "tools.webContentExtractor.parameters.ignoreSSL",
           "default": false
         }
       },
@@ -77,31 +77,31 @@
   },
   {
     "id": "enhancedWebSearch",
-    "name": "Enhanced Web Search with Content",
-    "description": "Performs web search and automatically extracts full content from the top results for comprehensive information gathering. Perfect for 'chat with web' functionality. Use the 'query' parameter with your search terms.",
+    "name": "tools.enhancedWebSearch.name",
+    "description": "tools.enhancedWebSearch.description",
     "script": "enhancedWebSearch.js",
     "parameters": {
       "type": "object",
       "properties": {
         "query": {
           "type": "string",
-          "description": "The search query or search terms to find on the web. Example: 'artificial intelligence trends 2024' or 'best programming languages'"
+          "description": "tools.enhancedWebSearch.parameters.query"
         },
         "extractContent": {
           "type": "boolean",
-          "description": "Whether to extract full content from search results (default: true)",
+          "description": "tools.enhancedWebSearch.parameters.extractContent",
           "default": true
         },
         "maxResults": {
           "type": "integer",
-          "description": "Maximum number of search results to process and extract content from (default: 3)",
+          "description": "tools.enhancedWebSearch.parameters.maxResults",
           "default": 3,
           "minimum": 1,
           "maximum": 10
         },
         "contentMaxLength": {
           "type": "integer",
-          "description": "Maximum length of extracted content per page in characters (default: 3000)",
+          "description": "tools.enhancedWebSearch.parameters.contentMaxLength",
           "default": 3000,
           "minimum": 500,
           "maximum": 10000
@@ -112,73 +112,73 @@
   },
   {
     "id": "deepResearch",
-    "name": "Deep Research",
-    "description": "Perform iterative web research with progress updates via SSE events.",
+    "name": "tools.deepResearch.name",
+    "description": "tools.deepResearch.description",
     "script": "deepResearch.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "query": { "type": "string", "description": "Initial search query" },
+        "query": { "type": "string", "description": "tools.deepResearch.parameters.query" },
         "maxRounds": {
           "type": "integer",
-          "description": "Number of search iterations",
+          "description": "tools.deepResearch.parameters.maxRounds",
           "default": 5,
           "minimum": 5,
           "maximum": 10
         },
         "maxResults": {
           "type": "integer",
-          "description": "Number of results to process per round",
+          "description": "tools.deepResearch.parameters.maxResults",
           "default": 5,
           "minimum": 1,
           "maximum": 10
         },
         "contentMaxLength": {
           "type": "integer",
-          "description": "Maximum length of extracted content per page",
+          "description": "tools.deepResearch.parameters.contentMaxLength",
           "default": 5000,
           "minimum": 500,
           "maximum": 10000
         },
-        "chatId": { "type": "string", "description": "Chat session ID" }
+        "chatId": { "type": "string", "description": "tools.deepResearch.parameters.chatId" }
       },
       "required": ["query"]
     }
   },
   {
     "id": "researchPlanner",
-    "name": "Research Planner",
-    "description": "Break down a research topic into distinct investigative tasks",
+    "name": "tools.researchPlanner.name",
+    "description": "tools.researchPlanner.description",
     "script": "researchPlanner.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "question": { "type": "string", "description": "Research topic" },
+        "question": { "type": "string", "description": "tools.researchPlanner.parameters.question" },
         "teamSize": {
           "type": "integer",
-          "description": "Number of tasks to generate",
+          "description": "tools.researchPlanner.parameters.teamSize",
           "default": 3,
           "minimum": 1,
           "maximum": 10
         },
-        "soundBites": { "type": "string", "description": "Additional context" }
+        "soundBites": { "type": "string", "description": "tools.researchPlanner.parameters.soundBites" }
       },
       "required": ["question"]
     }
   },
   {
     "id": "evaluator",
-    "name": "Answer Evaluator",
-    "description": "Evaluate answers for definitiveness, freshness and completeness.",
+    "name": "tools.evaluator.name",
+    "description": "tools.evaluator.description",
     "script": "evaluator.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "question": { "type": "string", "description": "Original user question" },
-        "answer": { "type": "string", "description": "Draft answer to evaluate" },
+        "question": { "type": "string", "description": "tools.evaluator.parameters.question" },
+        "answer": { "type": "string", "description": "tools.evaluator.parameters.answer" },
         "model": {
           "type": "string",
-          "description": "Model ID for evaluation",
+          "description": "tools.evaluator.parameters.model",
           "default": "gemini-1.5-flash"
         }
       },
@@ -187,18 +187,18 @@
   },
   {
     "id": "queryRewriter",
-    "name": "Query Rewriter",
-    "description": "Rewrite user search queries into optimized variations.",
+    "name": "tools.queryRewriter.name",
+    "description": "tools.queryRewriter.description",
     "script": "queryRewriter.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "query": { "type": "string", "description": "Search query to rewrite" },
-        "think": { "type": "string", "description": "User motivation" },
-        "context": { "type": "string", "description": "Optional context" },
+        "query": { "type": "string", "description": "tools.queryRewriter.parameters.query" },
+        "think": { "type": "string", "description": "tools.queryRewriter.parameters.think" },
+        "context": { "type": "string", "description": "tools.queryRewriter.parameters.context" },
         "model": {
           "type": "string",
-          "description": "Model id",
+          "description": "tools.queryRewriter.parameters.model",
           "default": "gemini-2.5-flash-preview-05-20"
         }
       },
@@ -207,23 +207,23 @@
   },
   {
     "id": "playwrightScreenshot",
-    "name": "Website Screenshot (Playwright)",
-    "description": "Capture a screenshot or PDF of a webpage using Playwright.",
+    "name": "tools.playwrightScreenshot.name",
+    "description": "tools.playwrightScreenshot.description",
     "script": "playwrightScreenshot.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "url": { "type": "string", "description": "Target URL" },
-        "format": { "type": "string", "enum": ["png", "pdf"], "default": "png" },
-        "fullPage": { "type": "boolean", "default": true }
+        "url": { "type": "string", "description": "tools.playwrightScreenshot.parameters.url" },
+        "format": { "type": "string", "enum": ["png", "pdf"], "default": "png", "description": "tools.playwrightScreenshot.parameters.format" },
+        "fullPage": { "type": "boolean", "default": true, "description": "tools.playwrightScreenshot.parameters.fullPage" }
       },
       "required": ["url"]
     }
   },
   {
     "id": "answerReducer",
-    "name": "Answer Reducer",
-    "description": "Merge multiple text passages into a single concise article.",
+    "name": "tools.answerReducer.name",
+    "description": "tools.answerReducer.description",
     "script": "answerReducer.js",
     "parameters": {
       "type": "object",
@@ -231,7 +231,7 @@
         "answers": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Texts to merge"
+          "description": "tools.answerReducer.parameters.answers"
         }
       },
       "required": ["answers"]
@@ -239,81 +239,81 @@
   },
   {
     "id": "seleniumScreenshot",
-    "name": "Website Screenshot (Selenium)",
-    "description": "Capture a screenshot or PDF of a webpage using Selenium.",
+    "name": "tools.seleniumScreenshot.name",
+    "description": "tools.seleniumScreenshot.description",
     "script": "seleniumScreenshot.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "url": { "type": "string", "description": "Target URL" },
-        "format": { "type": "string", "enum": ["png", "pdf"], "default": "png" },
-        "fullPage": { "type": "boolean", "default": true }
+        "url": { "type": "string", "description": "tools.seleniumScreenshot.parameters.url" },
+        "format": { "type": "string", "enum": ["png", "pdf"], "default": "png", "description": "tools.seleniumScreenshot.parameters.format" },
+        "fullPage": { "type": "boolean", "default": true, "description": "tools.seleniumScreenshot.parameters.fullPage" }
       },
       "required": ["url"]
     }
   },
   {
     "id": "entraPeopleSearch",
-    "name": "Entra People Search",
-    "description": "Query the corporate directory for people and teams",
+    "name": "tools.entraPeopleSearch.name",
+    "description": "tools.entraPeopleSearch.description",
     "script": "entraPeopleSearch.js",
     "functions": {
       "findUser": {
-        "description": "Find a user by name or email",
+        "description": "tools.entraPeopleSearch.functions.findUser.description",
         "parameters": {
           "type": "object",
           "properties": {
-            "name": { "type": "string", "description": "User name or email" }
+            "name": { "type": "string", "description": "tools.entraPeopleSearch.functions.findUser.parameters.name" }
           },
           "required": ["name"]
         }
       },
       "getAllUserDetails": {
-        "description": "Get all details for a user",
+        "description": "tools.entraPeopleSearch.functions.getAllUserDetails.description",
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { "type": "string", "description": "User identifier" }
+            "userId": { "type": "string", "description": "tools.entraPeopleSearch.functions.getAllUserDetails.parameters.userId" }
           },
           "required": ["userId"]
         }
       },
       "getUserManager": {
-        "description": "Get the direct manager of a user",
+        "description": "tools.entraPeopleSearch.functions.getUserManager.description",
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { "type": "string", "description": "User identifier" }
+            "userId": { "type": "string", "description": "tools.entraPeopleSearch.functions.getUserManager.parameters.userId" }
           },
           "required": ["userId"]
         }
       },
       "getUserGroups": {
-        "description": "List teams the user belongs to",
+        "description": "tools.entraPeopleSearch.functions.getUserGroups.description",
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { "type": "string", "description": "User identifier" }
+            "userId": { "type": "string", "description": "tools.entraPeopleSearch.functions.getUserGroups.parameters.userId" }
           },
           "required": ["userId"]
         }
       },
       "getTeamMembers": {
-        "description": "Get members of a team",
+        "description": "tools.entraPeopleSearch.functions.getTeamMembers.description",
         "parameters": {
           "type": "object",
           "properties": {
-            "teamId": { "type": "string", "description": "Team identifier" }
+            "teamId": { "type": "string", "description": "tools.entraPeopleSearch.functions.getTeamMembers.parameters.teamId" }
           },
           "required": ["teamId"]
         }
       },
       "getUserPhotoBase64": {
-        "description": "Get a user's profile photo as Base64",
+        "description": "tools.entraPeopleSearch.functions.getUserPhotoBase64.description",
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { "type": "string", "description": "User identifier" }
+            "userId": { "type": "string", "description": "tools.entraPeopleSearch.functions.getUserPhotoBase64.parameters.userId" }
           },
           "required": ["userId"]
         }
@@ -322,55 +322,55 @@
   },
   {
     "id": "iFinder",
-    "name": "iFinder Document Management",
-    "description": "Comprehensive document search, content retrieval, and management for the iFinder system",
+    "name": "tools.iFinder.name",
+    "description": "tools.iFinder.description",
     "script": "iFinder.js",
     "functions": {
       "search": {
-        "description": "Search for documents in the iFinder system",
+        "description": "tools.iFinder.functions.search.description",
         "parameters": {
           "type": "object",
           "properties": {
             "query": {
               "type": "string",
-              "description": "Search query to find documents in iFinder. Example: 'contract proposals' or 'technical documentation'"
+              "description": "tools.iFinder.functions.search.parameters.query"
             },
             "maxResults": {
               "type": "integer",
-              "description": "Maximum number of search results to return (default: 10, max: 100)",
+              "description": "tools.iFinder.functions.search.parameters.maxResults",
               "default": 10,
               "minimum": 1,
               "maximum": 100
             },
             "searchProfile": {
               "type": "string",
-              "description": "Search profile ID (optional, uses default if not specified)"
+              "description": "tools.iFinder.functions.search.parameters.searchProfile"
             },
             "returnFields": {
               "type": "array",
               "items": { "type": "string" },
-              "description": "Fields to return in search results (optional)"
+              "description": "tools.iFinder.functions.search.parameters.returnFields"
             }
           },
           "required": ["query"]
         }
       },
       "getContent": {
-        "description": "Fetch document content from iFinder for LLM processing",
+        "description": "tools.iFinder.functions.getContent.description",
         "parameters": {
           "type": "object",
           "properties": {
             "documentId": {
               "type": "string",
-              "description": "Document ID to fetch content for. Example: 'doc123456'"
+              "description": "tools.iFinder.functions.getContent.parameters.documentId"
             },
             "searchProfile": {
               "type": "string",
-              "description": "Search profile ID (optional, uses default if not specified)"
+              "description": "tools.iFinder.functions.getContent.parameters.searchProfile"
             },
             "maxLength": {
               "type": "integer",
-              "description": "Maximum content length in characters (default: 50000)",
+              "description": "tools.iFinder.functions.getContent.parameters.maxLength",
               "default": 50000,
               "minimum": 1000,
               "maximum": 100000
@@ -380,17 +380,17 @@
         }
       },
       "getMetadata": {
-        "description": "Fetch detailed metadata for a specific document from iFinder",
+        "description": "tools.iFinder.functions.getMetadata.description",
         "parameters": {
           "type": "object",
           "properties": {
             "documentId": {
               "type": "string",
-              "description": "Document ID to fetch metadata for. Example: 'doc123456'"
+              "description": "tools.iFinder.functions.getMetadata.parameters.documentId"
             },
             "searchProfile": {
               "type": "string",
-              "description": "Search profile ID (optional, uses default if not specified)"
+              "description": "tools.iFinder.functions.getMetadata.parameters.searchProfile"
             }
           },
           "required": ["documentId"]
