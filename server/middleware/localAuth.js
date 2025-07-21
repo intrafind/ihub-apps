@@ -98,7 +98,10 @@ function createToken(user, secret, expiresIn = 28800) {
     exp: Math.floor(Date.now() / 1000) + expiresIn
   };
 
-  return jwt.sign(payload, secret);
+  return jwt.sign(payload, secret, {
+    issuer: 'ai-hub-apps',
+    audience: 'ai-hub-apps'
+  });
 }
 
 /**
