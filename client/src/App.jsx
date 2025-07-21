@@ -10,7 +10,7 @@ import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
 import Forbidden from './pages/error/Forbidden';
 import ServerError from './pages/error/ServerError';
-import MarkdownPage from './pages/MarkdownPage';
+import UnifiedPage from './pages/UnifiedPage';
 import WidgetPage from './pages/WidgetPage';
 import AdminHome from './features/admin/pages/AdminHome';
 import AdminUsageReports from './features/admin/pages/AdminUsageReports';
@@ -43,7 +43,7 @@ import { configureMarked } from './shared/components/MarkdownRenderer';
 const SafeAppsList = withSafeRoute(AppsList);
 const SafeAppChat = withSafeRoute(AppChat);
 const SafeAppCanvas = withSafeRoute(AppCanvas);
-const SafeMarkdownPage = withSafeRoute(MarkdownPage);
+const SafeUnifiedPage = withSafeRoute(UnifiedPage);
 const SafeWidgetPage = withSafeRoute(WidgetPage);
 const SafeAdminHome = withSafeRoute(AdminHome);
 const SafeAdminUsage = withSafeRoute(AdminUsageReports);
@@ -96,7 +96,7 @@ function App() {
                 )}
                 <Route path="apps/:appId" element={<SafeAppChat />} />
                 <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
-                <Route path="pages/:pageId" element={<SafeMarkdownPage />} />
+                <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
                 {showAdminPage('home') && <Route path="admin" element={<SafeAdminHome />} />}
                 {showAdminPage('usage') && (
                   <Route path="admin/usage" element={<SafeAdminUsage />} />

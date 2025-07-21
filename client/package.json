@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@babel/standalone": "^7.28.1",
     "@heroicons/react": "2.2.0",
     "@opendocsg/pdf2md": "^0.2.1",
     "@tailwindcss/typography": "^0.5.16",
@@ -20,6 +21,7 @@
     "microsoft-cognitiveservices-speech-sdk": "^1.44.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-error-boundary": "^6.0.0",
     "react-i18next": "^15.4.1",
     "react-quill": "^2.0.0",
     "react-router-dom": "^6.10.0",

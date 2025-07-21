@@ -43,7 +43,24 @@ export default function registerPageRoutes(app) {
       if (!content) {
         return res.status(404).json({ error: 'Page content file not found' });
       }
-      res.json({ id: pageId, title: pageConfig.title[lang] || pageConfig.title['en'], content });
+
+      // Determine content type from configuration or file extension
+      let contentType = pageConfig.contentType;
+      if (!contentType) {
+        // Auto-detect from file extension
+        if (langFilePath.endsWith('.jsx') || langFilePath.endsWith('.js')) {
+          contentType = 'react';
+        } else {
+          contentType = 'markdown';
+        }
+      }
+
+      res.json({
+        id: pageId,
+        title: pageConfig.title[lang] || pageConfig.title['en'],
+        content,
+        contentType
+      });
     } catch (error) {
       console.error('Error fetching page content:', error);
       res.status(500).json({ error: 'Failed to fetch page content' });

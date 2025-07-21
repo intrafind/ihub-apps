@@ -17,7 +17,8 @@ const AdminPageEditPage = () => {
     title: { en: '' },
     content: { en: '' },
     authRequired: false,
-    allowedGroups: '*'
+    allowedGroups: '*',
+    contentType: 'markdown'
   });
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
@@ -43,7 +44,8 @@ const AdminPageEditPage = () => {
         allowedGroups:
           Array.isArray(data.allowedGroups) && data.allowedGroups.length > 0
             ? data.allowedGroups.join(',')
-            : '*'
+            : '*',
+        contentType: data.contentType || 'markdown'
       });
     } catch (err) {
       setError(err.message);
@@ -123,6 +125,24 @@ const AdminPageEditPage = () => {
             type="textarea"
             required
           />
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              {t('admin.pages.fields.contentType', 'Content Type')}
+            </label>
+            <select
+              value={page.contentType}
+              onChange={e => setPage(prev => ({ ...prev, contentType: e.target.value }))}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="markdown">Markdown (.md)</option>
+              <option value="react">React Component (.jsx)</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              {page.contentType === 'react'
+                ? 'Write JSX code that will be compiled and rendered as a React component'
+                : 'Write standard markdown content with syntax highlighting support'}
+            </p>
+          </div>
           <div className="flex items-center">
             <input
               id="authRequired"

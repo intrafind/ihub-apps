@@ -14,7 +14,8 @@ export default function registerAdminPagesRoutes(app) {
         id,
         title: page.title,
         authRequired: page.authRequired || false,
-        allowedGroups: page.allowedGroups || []
+        allowedGroups: page.allowedGroups || [],
+        contentType: page.contentType || 'markdown'
       }));
       res.json(pages);
     } catch (error) {
@@ -46,7 +47,8 @@ export default function registerAdminPagesRoutes(app) {
         title: page.title,
         content,
         authRequired: page.authRequired || false,
-        allowedGroups: page.allowedGroups || []
+        allowedGroups: page.allowedGroups || [],
+        contentType: page.contentType || 'markdown'
       });
     } catch (error) {
       console.error('Error fetching page:', error);
@@ -56,7 +58,14 @@ export default function registerAdminPagesRoutes(app) {
 
   app.post('/api/admin/pages', adminAuth, async (req, res) => {
     try {
-      const { id, title = {}, content = {}, authRequired = false, allowedGroups = '*' } = req.body;
+      const {
+        id,
+        title = {},
+        content = {},
+        authRequired = false,
+        allowedGroups = '*',
+        contentType = 'markdown'
+      } = req.body;
       if (!id) {
         return res.status(400).json({ error: 'Missing page ID' });
       }
@@ -67,12 +76,13 @@ export default function registerAdminPagesRoutes(app) {
       if (uiConfig.pages[id]) {
         return res.status(400).json({ error: 'Page with this ID already exists' });
       }
-      uiConfig.pages[id] = { title, filePath: {}, authRequired, allowedGroups };
-      for (const [lang, md] of Object.entries(content)) {
+      uiConfig.pages[id] = { title, filePath: {}, authRequired, allowedGroups, contentType };
+      const fileExtension = contentType === 'react' ? 'jsx' : 'md';
+      for (const [lang, contentText] of Object.entries(content)) {
         const dir = join(rootDir, 'contents', 'pages', lang);
         await fs.mkdir(dir, { recursive: true });
-        const rel = `pages/${lang}/${id}.md`;
-        await atomicWriteFile(join(rootDir, 'contents', rel), md);
+        const rel = `pages/${lang}/${id}.${fileExtension}`;
+        await atomicWriteFile(join(rootDir, 'contents', rel), contentText);
         uiConfig.pages[id].filePath[lang] = rel;
       }
       await atomicWriteJSON(uiPath, uiConfig);
@@ -87,7 +97,14 @@ export default function registerAdminPagesRoutes(app) {
   app.put('/api/admin/pages/:pageId', adminAuth, async (req, res) => {
     try {
       const { pageId } = req.params;
-      const { id, title = {}, content = {}, authRequired = false, allowedGroups = '*' } = req.body;
+      const {
+        id,
+        title = {},
+        content = {},
+        authRequired = false,
+        allowedGroups = '*',
+        contentType = 'markdown'
+      } = req.body;
       if (!id || id !== pageId) {
         return res.status(400).json({ error: 'Invalid page ID' });
       }
@@ -101,12 +118,14 @@ export default function registerAdminPagesRoutes(app) {
       pageEntry.title = title;
       pageEntry.authRequired = authRequired;
       pageEntry.allowedGroups = allowedGroups;
+      pageEntry.contentType = contentType;
       pageEntry.filePath = pageEntry.filePath || {};
-      for (const [lang, md] of Object.entries(content)) {
+      const fileExtension = contentType === 'react' ? 'jsx' : 'md';
+      for (const [lang, contentText] of Object.entries(content)) {
         const dir = join(rootDir, 'contents', 'pages', lang);
         await fs.mkdir(dir, { recursive: true });
-        const rel = pageEntry.filePath[lang] || `pages/${lang}/${pageId}.md`;
-        await atomicWriteFile(join(rootDir, 'contents', rel), md);
+        const rel = pageEntry.filePath[lang] || `pages/${lang}/${pageId}.${fileExtension}`;
+        await atomicWriteFile(join(rootDir, 'contents', rel), contentText);
         pageEntry.filePath[lang] = rel;
       }
       await atomicWriteJSON(uiPath, uiConfig);
