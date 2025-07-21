@@ -160,6 +160,17 @@ export const configureMarked = () => {
     const displayLanguage = language || code.lang || 'text';
     const languageDisplayName = getLanguageDisplayName(displayLanguage);
 
+    // Ensure code is a string - handle both string and object cases
+    let codeString;
+    if (typeof code === 'string') {
+      codeString = code;
+    } else if (code && typeof code === 'object') {
+      // If code is an object, try to extract the text property or convert to string
+      codeString = code.text || code.raw || JSON.stringify(code);
+    } else {
+      codeString = String(code);
+    }
+
     return `
       <div class="code-block-container relative group border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
         ${enhancedHtml}
@@ -171,7 +182,7 @@ export const configureMarked = () => {
             <button
               class="code-copy-btn p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1"
               data-code-id="${codeBlockId}"
-              data-code-content="${encodeURIComponent(String(code))}"
+              data-code-content="${encodeURIComponent(codeString)}"
               type="button"
               title="Copy code"
               aria-label="Copy code"
@@ -184,7 +195,7 @@ export const configureMarked = () => {
             <button
               class="code-download-btn p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1"
               data-code-id="${codeBlockId}"
-              data-code-content="${encodeURIComponent(String(code))}"
+              data-code-content="${encodeURIComponent(codeString)}"
               data-code-language="${displayLanguage}"
               type="button"
               title="Download code"
