@@ -2,6 +2,7 @@ import { loadJson, loadBuiltinLocaleJson } from './configLoader.js';
 import { loadAllApps } from './appsLoader.js';
 import { loadAllModels } from './modelsLoader.js';
 import { loadAllPrompts } from './promptsLoader.js';
+import { resolveGroupInheritance } from './utils/authorization.js';
 import { createHash } from 'crypto';
 
 function expandToolFunctions(tools = []) {
@@ -57,6 +58,7 @@ class ConfigCache {
       'config/prompts.json',
       'config/platform.json',
       'config/ui.json',
+      'config/groups.json',
       'config/groupMap.json'
     ];
 
@@ -97,6 +99,21 @@ class ConfigCache {
           const allPrompts = await loadAllPrompts(true);
           this.setCacheEntry(configPath, allPrompts);
           console.log(`✓ Cached: ${configPath} (${allPrompts.length} total prompts)`);
+          return;
+        }
+
+        // Special handling for groups.json - load and resolve inheritance
+        if (configPath === 'config/groups.json') {
+          const groupsConfig = await loadJson(configPath);
+          if (groupsConfig !== null) {
+            const resolvedConfig = resolveGroupInheritance(groupsConfig);
+            this.setCacheEntry(configPath, resolvedConfig);
+            console.log(
+              `✓ Cached: ${configPath} (${Object.keys(resolvedConfig.groups || {}).length} groups with resolved inheritance)`
+            );
+          } else {
+            console.warn(`⚠️  Failed to load: ${configPath}`);
+          }
           return;
         }
 
@@ -232,6 +249,23 @@ class ConfigCache {
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, prompts);
           console.log(`✓ Cached: config/prompts.json (${prompts.length} total prompts)`);
+        }
+        return;
+      }
+
+      // Special handling for groups.json - load and resolve inheritance
+      if (key === 'config/groups.json') {
+        const groupsConfig = await loadJson(key, { useCache: false });
+        if (groupsConfig !== null) {
+          const resolvedConfig = resolveGroupInheritance(groupsConfig);
+          const newEtag = this.generateETag(resolvedConfig);
+          const existing = this.cache.get(key);
+          if (!existing || existing.etag !== newEtag) {
+            this.setCacheEntry(key, resolvedConfig);
+            console.log(
+              `✓ Cached: config/groups.json (${Object.keys(resolvedConfig.groups || {}).length} groups with resolved inheritance)`
+            );
+          }
         }
         return;
       }
@@ -400,6 +434,13 @@ class ConfigCache {
    */
   getPlatform() {
     return this.get('config/platform.json').data;
+  }
+
+  /**
+   * Get groups configuration with resolved inheritance
+   */
+  getGroups() {
+    return this.get('config/groups.json');
   }
 
   /**

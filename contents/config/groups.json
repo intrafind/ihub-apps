@@ -4,6 +4,7 @@
       "id": "admin",
       "name": "Admin",
       "description": "Full administrative access to all resources",
+      "inherits": ["users"],
       "permissions": {
         "apps": ["*"],
         "prompts": ["*"],
@@ -28,9 +29,10 @@
       "id": "hr",
       "name": "HR Team",
       "description": "HR team access with specialized tools and prompts",
+      "inherits": ["authenticated"],
       "permissions": {
-        "apps": ["hr-assistant", "chat", "email-composer", "file-analysis"],
-        "prompts": ["general"],
+        "apps": ["hr-assistant"],
+        "prompts": [],
         "models": ["gpt-4", "claude-4-sonnet"],
         "adminAccess": false
       },
@@ -40,10 +42,11 @@
       "id": "contractors",
       "name": "Contractors",
       "description": "Limited access for external contractors",
+      "inherits": ["authenticated"],
       "permissions": {
-        "apps": ["chat", "translator"],
-        "prompts": ["general"],
-        "models": ["gpt-3.5-turbo", "gemini-2.0-flash"],
+        "apps": [],
+        "prompts": [],
+        "models": [],
         "adminAccess": false
       },
       "mappings": ["Contractors", "External", "Guests"]
@@ -64,10 +67,11 @@
       "id": "authenticated",
       "name": "Authenticated",
       "description": "Base permissions for all authenticated users",
+      "inherits": ["anonymous"],
       "permissions": {
-        "apps": ["chat", "translator", "summarizer", "email-composer", "file-analysis"],
-        "prompts": ["general", "writing"],
-        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet", "gemini-2.0-flash"],
+        "apps": ["translator", "summarizer", "email-composer", "file-analysis"],
+        "prompts": ["writing"],
+        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet"],
         "adminAccess": false
       },
       "mappings": []
@@ -112,10 +116,11 @@
       "id": "users",
       "name": "Users",
       "description": "Standard user group with extended permissions",
+      "inherits": ["authenticated"],
       "permissions": {
-        "apps": ["chat", "translator", "summarizer", "email-composer", "file-analysis"],
-        "prompts": ["general", "writing"],
-        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet", "gemini-2.0-flash"],
+        "apps": [],
+        "prompts": ["analysis"],
+        "models": ["gemini-2.0-flash"],
         "adminAccess": false
       },
       "mappings": []
@@ -124,6 +129,7 @@
       "id": "admins",
       "name": "Admins",
       "description": "Administrative group with full access",
+      "inherits": ["users"],
       "permissions": {
         "apps": ["*"],
         "prompts": ["*"],
