@@ -274,15 +274,17 @@ export function createOidcCallbackHandler(providerName) {
           console.error('Request query:', req.query);
           console.error('Session:', req.session);
         }
-        
+
         // Redirect back to the app with error message instead of returning JSON
-        const errorMessage = encodeURIComponent(err.message || 'Unable to verify authorization request state.');
+        const errorMessage = encodeURIComponent(
+          err.message || 'Unable to verify authorization request state.'
+        );
         return res.redirect(`/?auth=error&message=${errorMessage}`);
       }
 
       if (!user) {
         console.warn(`OIDC authentication failed for provider ${providerName}:`, info);
-        
+
         // Redirect back to the app with error message
         const errorMessage = encodeURIComponent(info?.message || 'Authentication failed');
         return res.redirect(`/?auth=error&message=${errorMessage}`);
@@ -329,7 +331,7 @@ export function createOidcCallbackHandler(providerName) {
         });
       } catch (tokenError) {
         console.error(`JWT token generation error for provider ${providerName}:`, tokenError);
-        
+
         // Redirect back to the app with error message
         const errorMessage = encodeURIComponent('Token generation failed: ' + tokenError.message);
         return res.redirect(`/?auth=error&message=${errorMessage}`);

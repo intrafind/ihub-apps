@@ -32,7 +32,7 @@ const streamingApiClient = axios.create({
 });
 
 // Shared request interceptor function
-const addRequestInterceptor = (client) => {
+const addRequestInterceptor = client => {
   client.interceptors.request.use(config => {
     // Get session ID (creates a new one if needed)
     const sessionId = getSessionId();
@@ -60,7 +60,7 @@ addRequestInterceptor(apiClient);
 addRequestInterceptor(streamingApiClient);
 
 // Shared response interceptor function
-const addResponseInterceptor = (client) => {
+const addResponseInterceptor = client => {
   client.interceptors.response.use(
     response => {
       // Handle 304 Not Modified responses properly

@@ -167,13 +167,14 @@ function useChatMessages(chatId = 'default') {
     setMessages(prev =>
       prev.map(msg =>
         msg.id === id
-          ? { 
-              ...msg, 
-              content: preserveContent && msg.content 
-                ? `${msg.content}\n\n_Error: ${errorMessage}_`
-                : `_Error: ${errorMessage}_`, 
-              loading: false, 
-              error: true 
+          ? {
+              ...msg,
+              content:
+                preserveContent && msg.content
+                  ? `${msg.content}\n\n_Error: ${errorMessage}_`
+                  : `_Error: ${errorMessage}_`,
+              loading: false,
+              error: true
             }
           : msg
       )

@@ -76,7 +76,8 @@ export const handleApiResponse = async (
 
         // Handle specific error types with better messages
         if (isTimeoutError(error)) {
-          userFriendlyMessage = 'Request timed out. The operation may have taken longer than expected.';
+          userFriendlyMessage =
+            'Request timed out. The operation may have taken longer than expected.';
         } else if (error.response?.status === 403) {
           userFriendlyMessage =
             'You do not have permission to access this resource. Please contact your administrator if you believe this is an error.';
