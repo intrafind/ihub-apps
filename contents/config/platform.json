@@ -140,5 +140,25 @@
         "autoRedirect": false
       }
     ]
+  },
+  "iFinder": {
+    "enabled": true,
+    "baseUrl": "${IFINDER_API_URL}",
+    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "algorithm": "RS256",
+    "issuer": "ai-hub-apps",
+    "audience": "ifinder-api",
+    "defaultScope": "fa_index_read",
+    "tokenExpirationSeconds": 3600,
+    "timeout": 30000,
+    "downloadDir": "/tmp/ifinder-downloads",
+    "defaultSearchProfile": "${IFINDER_SEARCH_PROFILE:-default}",
+    "endpoints": {
+      "search": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_search",
+      "document": "/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}",
+      "facets": "/public-api/retrieval/api/v1/search-profiles/{profileId}/facets/{facetId}/_search",
+      "autocomplete": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_autocomplete",
+      "indexing": "/public-api/indexing/api/v0/docs"
+    }
   }
 }
