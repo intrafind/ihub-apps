@@ -7,6 +7,7 @@ This proof-of-concept explores integrating custom, domain-specific user interfac
 ## Problem Statement
 
 Traditional AI chat interfaces are limited for complex, data-rich domains that require:
+
 - **Visual data representation** (dashboards, charts, tables)
 - **Domain-specific interactions** (incident management, system monitoring)
 - **Real-time data updates** based on AI responses
@@ -19,12 +20,14 @@ Repeatedly generating HTML via LLMs is inefficient and wastes tokens. A better a
 ### 1. **UI Architecture Patterns**
 
 #### ❌ **Anti-Pattern: HTML Generation**
+
 ```
 User Query → LLM → Generate HTML → Display HTML
 Problems: Token waste, inconsistent markup, no interactivity
 ```
 
 #### ✅ **Recommended Pattern: Static UI + Dynamic Data**
+
 ```
 User Query → LLM → Generate JSON → Update Static UI
 Benefits: Token efficiency, consistent UX, true interactivity
@@ -35,6 +38,7 @@ Benefits: Token efficiency, consistent UX, true interactivity
 **Expected vs. Actual**: LLMs rarely follow exact JSON schemas precisely.
 
 **Expected Format:**
+
 ```json
 {
   "type": "incident_response",
@@ -43,6 +47,7 @@ Benefits: Token efficiency, consistent UX, true interactivity
 ```
 
 **Actual LLM Response:**
+
 ```json
 {
   "dashboard": { "summary": {...}, "recent_incidents": [...] }
@@ -72,11 +77,13 @@ graph TD
 ### 1. **Static UI Components**
 
 **Storage Strategy:**
+
 - **Development**: `client/public/` (served by Vite)
 - **Production**: `public/` (served by Express)
 - **Mobile**: Popup windows for complex interfaces
 
 **UI Requirements:**
+
 - Self-contained HTML files with embedded CSS/JS
 - Message listener for parent-child communication
 - Responsive design for multiple screen sizes
@@ -85,19 +92,23 @@ graph TD
 ### 2. **LLM Configuration**
 
 **System Prompt Structure:**
+
 ```markdown
 ## RESPONSE FORMAT
+
 For [domain] queries, respond with structured JSON:
 
 [Include example JSON structure]
 
 Customize based on query type:
+
 - Include only relevant data sections
 - Adjust detail level based on request
 - Handle edge cases gracefully
 ```
 
 **Key Settings:**
+
 - `preferredOutputFormat: "json"`
 - Temperature: 0.7 (balance creativity and consistency)
 - Token limit: Match complexity requirements
@@ -105,21 +116,31 @@ Customize based on query type:
 ### 3. **Communication Layer**
 
 **Message Protocol:**
+
 ```javascript
 // Parent → Child (Dashboard)
-window.postMessage({
-  type: 'dashboard-update',
-  data: { /* formatted data */ }
-}, '*');
+window.postMessage(
+  {
+    type: 'dashboard-update',
+    data: {
+      /* formatted data */
+    }
+  },
+  '*'
+);
 
 // Error Handling
-window.postMessage({
-  type: 'dashboard-error',
-  error: 'Data parsing failed'
-}, '*');
+window.postMessage(
+  {
+    type: 'dashboard-error',
+    error: 'Data parsing failed'
+  },
+  '*'
+);
 ```
 
 **Data Transformation Pipeline:**
+
 1. **Raw LLM Response** → JSON parsing
 2. **Format Detection** → Expected vs. actual structure
 3. **Data Mapping** → Transform to standard format
@@ -129,6 +150,7 @@ window.postMessage({
 ### 4. **Integration Points**
 
 **Chat Interface Integration:**
+
 ```javascript
 // In handleMessageComplete callback
 if (isSpecializedApp(appId) && hasStructuredData(response)) {
@@ -138,6 +160,7 @@ if (isSpecializedApp(appId) && hasStructuredData(response)) {
 ```
 
 **Responsive Design:**
+
 - **Desktop**: Iframe sidebar integration
 - **Tablet**: Collapsible panels
 - **Mobile**: Floating action button → popup window
@@ -145,6 +168,7 @@ if (isSpecializedApp(appId) && hasStructuredData(response)) {
 ## Recommended Architecture
 
 ### **Option 1: Embedded Integration (Current)**
+
 ```
 [Chat Interface] [Custom Dashboard Iframe]
 Pros: Unified view, real-time updates
@@ -152,6 +176,7 @@ Cons: Space constraints, complexity
 ```
 
 ### **Option 2: Tab-Based Interface**
+
 ```
 [Chat Tab] [Dashboard Tab] [Reports Tab]
 Pros: More space, focused interactions
@@ -159,6 +184,7 @@ Cons: Context switching required
 ```
 
 ### **Option 3: Overlay System**
+
 ```
 [Chat Interface]
   ↓ (trigger)
@@ -170,6 +196,7 @@ Cons: Modal interaction pattern
 ## Storage and Deployment Strategy
 
 ### **File Organization**
+
 ```
 project/
 ├── client/
@@ -187,6 +214,7 @@ project/
 ```
 
 ### **Build Pipeline**
+
 ```bash
 # Development
 cp client/public/dashboards/* public/dashboards/
@@ -198,6 +226,7 @@ cp client/public/dashboards/* public/dashboards/
 ## Data Flow Patterns
 
 ### **Pattern 1: Request-Response**
+
 ```
 User: "Show system status"
 LLM: { systems: [...], alerts: [...] }
@@ -205,6 +234,7 @@ UI: Updates dashboard immediately
 ```
 
 ### **Pattern 2: Conversational Updates**
+
 ```
 User: "What about the Berlin datacenter?"
 LLM: { filtered_systems: [...] }
@@ -212,6 +242,7 @@ UI: Filters existing dashboard view
 ```
 
 ### **Pattern 3: Progressive Enhancement**
+
 ```
 User: "More details on incident #123"
 LLM: { incident_details: {...} }
@@ -221,15 +252,19 @@ UI: Expands incident card with details
 ## Security Considerations
 
 ### **Iframe Sandbox**
+
 ```html
 <iframe sandbox="allow-scripts allow-same-origin" />
 ```
+
 **Warning**: This combination can escape sandboxing. Consider:
+
 - `allow-scripts allow-same-origin allow-forms`
 - Content Security Policy headers
 - Domain restrictions for postMessage
 
 ### **Data Validation**
+
 ```javascript
 function validateDashboardData(data) {
   if (!data?.dashboard_data) return false;
@@ -242,11 +277,13 @@ function validateDashboardData(data) {
 ## Performance Considerations
 
 ### **Token Efficiency**
+
 - **Before**: ~2000 tokens per HTML generation
 - **After**: ~500 tokens for JSON data
 - **Improvement**: 75% token reduction
 
 ### **Loading Performance**
+
 - Preload dashboard iframes on app initialization
 - Cache static UI components
 - Minimize data transformation overhead
@@ -254,6 +291,7 @@ function validateDashboardData(data) {
 ## Future Enhancement Opportunities
 
 ### **1. UI Template System**
+
 ```javascript
 // Dynamic UI generation from templates
 const template = await loadTemplate('incident-dashboard');
@@ -261,19 +299,22 @@ const ui = renderTemplate(template, data);
 ```
 
 ### **2. Component Library**
+
 ```javascript
 // Reusable dashboard components
 import { StatCard, IncidentList, SystemMap } from './components';
 ```
 
 ### **3. Real-time Synchronization**
+
 ```javascript
 // WebSocket integration for live updates
 const ws = new WebSocket('/dashboard-updates');
-ws.onmessage = (event) => updateDashboard(event.data);
+ws.onmessage = event => updateDashboard(event.data);
 ```
 
 ### **4. Multi-App Orchestration**
+
 ```javascript
 // Cross-app data sharing
 window.postMessage({
@@ -302,6 +343,7 @@ window.postMessage({
 ### **Code Architecture**
 
 **App Configuration:**
+
 ```json
 {
   "id": "br-nexus-assistant",
@@ -314,6 +356,7 @@ window.postMessage({
 ```
 
 **Message Handling:**
+
 ```javascript
 // In AppChat.jsx - handleMessageComplete
 if (appId === 'br-nexus-assistant' && aiResponse) {
@@ -323,9 +366,10 @@ if (appId === 'br-nexus-assistant' && aiResponse) {
 ```
 
 **Dashboard Integration:**
+
 ```javascript
 // Dashboard HTML - message listener
-window.addEventListener('message', function(event) {
+window.addEventListener('message', function (event) {
   if (event.data?.type === 'dashboard-update') {
     updateDashboard(event.data.data);
   }
@@ -369,6 +413,6 @@ This framework can be applied to various domains: financial dashboards, project 
 
 ---
 
-*Document created: 2025-07-21*  
-*Based on: BR Nexus Dashboard POC implementation*  
-*Authors: AI Hub Development Team*
+_Document created: 2025-07-21_  
+_Based on: BR Nexus Dashboard POC implementation_  
+_Authors: AI Hub Development Team_
