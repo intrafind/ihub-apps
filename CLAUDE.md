@@ -105,6 +105,7 @@ The authentication system supports hierarchical group inheritance, allowing comp
 - **Built-in Hierarchy**: Standard hierarchy follows `admin` → `users` → `authenticated` → `anonymous`
 
 Example inheritance chain:
+
 ```
 admin (inherits from users) → users (inherits from authenticated) → authenticated (inherits from anonymous) → anonymous (base)
 ```
@@ -171,7 +172,7 @@ The `groups.json` file defines user groups with hierarchical inheritance support
       "mappings": ["Admins", "IT-Admin"]        // External group mappings
     },
     "users": {
-      "id": "users", 
+      "id": "users",
       "name": "Users",
       "description": "Standard user group with extended permissions",
       "inherits": ["authenticated"],            // Inherits from authenticated group
@@ -187,8 +188,9 @@ The `groups.json` file defines user groups with hierarchical inheritance support
 ```
 
 **Key Features:**
+
 - **`inherits`**: Array of parent group IDs to inherit permissions from
-- **Permission Merging**: Child permissions are merged with inherited permissions  
+- **Permission Merging**: Child permissions are merged with inherited permissions
 - **External Mappings**: `mappings` array links external auth provider groups to internal groups
 - **Performance**: Groups cached with resolved inheritance for fast runtime access
 
@@ -251,7 +253,7 @@ Apps must conform to the Zod schema defined in `server/validators/appConfigSchem
 ### Authentication Flow
 
 1. **Configuration Loading**: `loadGroupsConfiguration()` loads and resolves group inheritance automatically
-2. **Middleware**: `authRequired` or `authOptional` on routes  
+2. **Middleware**: `authRequired` or `authOptional` on routes
 3. **Permission Check**: `isAnonymousAccessAllowed(platformConfig)`
 4. **User Enhancement**: `enhanceUserWithPermissions()` adds resolved group permissions
 5. **Resource Filtering**: `filterResourcesByPermissions()` based on merged user permissions
@@ -262,7 +264,7 @@ The system automatically resolves group inheritance at startup:
 
 1. **Load Configuration**: Groups loaded from `groups.json`
 2. **Dependency Resolution**: `resolveGroupInheritance()` processes inheritance chains
-3. **Circular Detection**: Prevents circular dependencies with error reporting  
+3. **Circular Detection**: Prevents circular dependencies with error reporting
 4. **Permission Merging**: Parent permissions merged with child permissions
 5. **Cache Storage**: Resolved groups cached for runtime performance
 
