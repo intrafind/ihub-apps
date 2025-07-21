@@ -75,7 +75,9 @@ export const handleApiResponse = async (
         let userFriendlyMessage = userMessage;
 
         // Handle specific error types with better messages
-        if (error.response?.status === 403) {
+        if (isTimeoutError(error)) {
+          userFriendlyMessage = 'Request timed out. The operation may have taken longer than expected.';
+        } else if (error.response?.status === 403) {
           userFriendlyMessage =
             'You do not have permission to access this resource. Please contact your administrator if you believe this is an error.';
         } else if (error.response?.status === 401) {
@@ -91,8 +93,10 @@ export const handleApiResponse = async (
         enhancedError.status = error.response?.status || 500;
         enhancedError.originalError = error;
         enhancedError.originalMessage = userMessage;
+        enhancedError.userFriendlyMessage = userFriendlyMessage;
         enhancedError.isAccessDenied = error.response?.status === 403;
         enhancedError.isAuthRequired = error.response?.status === 401;
+        enhancedError.isTimeout = isTimeoutError(error);
 
         // Add request details to error for better debugging
         enhancedError.requestDetails = {

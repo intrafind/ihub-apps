@@ -54,13 +54,12 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
               pendingMessageDataRef.current = null;
             } catch (error) {
               if (lastMessageIdRef.current) {
-                setMessageError(
-                  lastMessageIdRef.current,
-                  t(
-                    'error.failedToGenerateResponse',
-                    'Error: Failed to generate response. Please try again or select a different model.'
-                  )
+                // Use the userFriendlyMessage from the enhanced error, or fall back to a generic message
+                const errorMessage = error.userFriendlyMessage || error.message || t(
+                  'error.failedToGenerateResponse',
+                  'Error: Failed to generate response. Please try again or select a different model.'
                 );
+                setMessageError(lastMessageIdRef.current, errorMessage);
               }
               cleanupEventSourceRef.current?.();
               setProcessing(false);

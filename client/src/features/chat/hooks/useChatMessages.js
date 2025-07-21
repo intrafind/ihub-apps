@@ -161,12 +161,20 @@ function useChatMessages(chatId = 'default') {
    * Set an error on a message
    * @param {string} id - The ID of the message to update
    * @param {string} errorMessage - The error message
+   * @param {boolean} preserveContent - Whether to preserve existing content (default: true)
    */
-  const setMessageError = useCallback((id, errorMessage) => {
+  const setMessageError = useCallback((id, errorMessage, preserveContent = true) => {
     setMessages(prev =>
       prev.map(msg =>
         msg.id === id
-          ? { ...msg, content: `Error: ${errorMessage}`, loading: false, error: true }
+          ? { 
+              ...msg, 
+              content: preserveContent && msg.content 
+                ? `${msg.content}\n\n_Error: ${errorMessage}_`
+                : `_Error: ${errorMessage}_`, 
+              loading: false, 
+              error: true 
+            }
           : msg
       )
     );

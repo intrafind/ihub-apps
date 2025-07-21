@@ -1,4 +1,4 @@
-import { apiClient } from '../client';
+import { apiClient, streamingApiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
 
 // Apps
@@ -29,7 +29,7 @@ export const sendAppChatMessage = async (appId, chatId, messages, options = {}) 
 
   return handleApiResponse(
     () =>
-      apiClient.post(`/apps/${appId}/chat/${chatId}`, {
+      streamingApiClient.post(`/apps/${appId}/chat/${chatId}`, {
         messages,
         ...options
       }),
