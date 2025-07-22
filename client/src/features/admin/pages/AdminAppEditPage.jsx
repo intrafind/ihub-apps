@@ -234,7 +234,7 @@ const AdminAppEditPage = () => {
       const method = appId === 'new' ? 'POST' : 'PUT';
       const url = appId === 'new' ? '/api/admin/apps' : `/api/admin/apps/${appId}`;
 
-      const response = await makeAdminApiCall(url, {
+      await makeAdminApiCall(url, {
         method,
         body: JSON.stringify(app)
       });
