@@ -137,6 +137,19 @@
         "adminAccess": true
       },
       "mappings": []
+    },
+    "teams-users": {
+      "id": "teams-users",
+      "name": "Teams Users",
+      "description": "Default permissions for Microsoft Teams users",
+      "inherits": ["authenticated"],
+      "permissions": {
+        "apps": ["chat", "translator", "summarizer", "email-composer", "image-analysis", "file-analysis"],
+        "prompts": ["general", "writing", "analysis"],
+        "models": ["gpt-4", "claude-4-sonnet", "gemini-2.0-flash"],
+        "adminAccess": false
+      },
+      "mappings": ["Teams-Users", "Microsoft-Teams"]
     }
   },
   "metadata": {

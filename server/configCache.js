@@ -667,3 +667,39 @@ class ConfigCache {
 const configCache = new ConfigCache();
 
 export default configCache;
+
+// Convenience wrapper functions for compatibility
+export async function loadAppConfigurations(includeDisabled = false) {
+  await configCache.initialize();
+  const apps = configCache.getApps(includeDisabled);
+  
+  // Convert array format to object format for backward compatibility
+  if (Array.isArray(apps.data)) {
+    const appsObject = {};
+    apps.data.forEach(app => {
+      if (app.id) {
+        appsObject[app.id] = app;
+      }
+    });
+    return appsObject;
+  }
+  
+  return apps.data || {};
+}
+
+export async function loadTeamsConfiguration() {
+  await configCache.initialize();
+  const config = configCache.get('config/teams.json');
+  return config?.data || {};
+}
+
+export async function loadPlatformConfiguration() {
+  await configCache.initialize();
+  return configCache.getPlatform();
+}
+
+export async function loadGroupsConfiguration() {
+  await configCache.initialize();
+  const config = configCache.getGroups();
+  return config?.data || {};
+}

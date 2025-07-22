@@ -221,6 +221,40 @@ if (cluster.isPrimary && workerCount > 1) {
         `);
       });
 
+      // Dynamic Teams manifest endpoint
+      app.get('/teams/manifest.json', async (req, res) => {
+        try {
+          const { loadTeamsConfiguration, loadAppConfigurations } = await import('./configCache.js');
+          const { enhanceUserWithPermissions, filterResourcesByPermissions } = await import('./utils/authorization.js');
+          
+          // Get user from query parameter (for admin/development use) or default user
+          const user = {
+            id: req.query.userId || 'default',
+            groups: req.query.groups ? req.query.groups.split(',') : ['authenticated', 'teams-users']
+          };
+          
+          // Enhance user with permissions
+          const enhancedUser = await enhanceUserWithPermissions(user);
+          
+          // Get available apps and Teams configuration
+          const [apps, teamsConfig] = await Promise.all([
+            loadAppConfigurations(),
+            loadTeamsConfiguration()
+          ]);
+          
+          // Filter apps by user permissions
+          const allowedApps = filterResourcesByPermissions(apps, enhancedUser.permissions?.apps || []);
+          
+          // Generate dynamic manifest
+          const manifest = await generateDynamicTeamsManifest(allowedApps, teamsConfig, req);
+          
+          res.json(manifest);
+        } catch (error) {
+          console.error('Error generating dynamic Teams manifest:', error);
+          res.status(500).json({ error: 'Failed to generate manifest' });
+        }
+      });
+
       console.log('✅ Teams integration initialized successfully');
     } else {
       console.log(
@@ -230,6 +264,184 @@ if (cluster.isPrimary && workerCount > 1) {
   } catch (error) {
     console.error('❌ Failed to initialize Teams integration:', error);
   }
+
+/**
+ * Generate dynamic Teams manifest based on user permissions and configuration
+ */
+async function generateDynamicTeamsManifest(allowedApps, teamsConfig, req) {
+  const appId = process.env.TEAMS_APP_ID || '{{TEAMS_APP_ID}}';
+  const domainName = req.get('host') || '{{DOMAIN_NAME}}';
+  const protocol = req.protocol;
+
+  // Base manifest structure
+  const manifest = {
+    "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+    "manifestVersion": "1.16",
+    "version": "1.0.0",
+    "id": appId,
+    "packageName": "com.aihubapps.teams",
+    "developer": {
+      "name": teamsConfig?.ui?.branding?.appName || "AI Hub Apps",
+      "websiteUrl": `${protocol}://${domainName}`,
+      "privacyUrl": `${protocol}://${domainName}/privacy`,
+      "termsOfUseUrl": `${protocol}://${domainName}/terms`
+    },
+    "icons": {
+      "color": "color-icon.png",
+      "outline": "outline-icon.png"
+    },
+    "name": {
+      "short": teamsConfig?.ui?.branding?.appName || "AI Hub Apps",
+      "full": `${teamsConfig?.ui?.branding?.appName || "AI Hub Apps"} - AI-Powered Assistant Suite`
+    },
+    "description": {
+      "short": "Access AI-powered applications for your daily tasks.",
+      "full": `AI Hub Apps brings powerful AI capabilities directly to Microsoft Teams. Access ${Object.keys(allowedApps).length} AI-powered applications including ${Object.keys(allowedApps).slice(0, 3).join(', ')} and more through an intelligent bot interface and convenient message actions.`
+    },
+    "accentColor": teamsConfig?.ui?.branding?.accentColor || "#6366F1",
+    "bots": [{
+      "botId": appId,
+      "scopes": ["personal", "team", "groupchat"],
+      "supportsCalling": false,
+      "supportsVideo": false,
+      "supportsFiles": teamsConfig?.messageExtensions?.fileSupport?.enabled || true,
+      "commandLists": [{
+        "scopes": ["personal", "team", "groupchat"],
+        "commands": generateBotCommands(allowedApps, teamsConfig)
+      }]
+    }],
+    "composeExtensions": [{
+      "botId": appId,
+      "commands": generateMessageExtensionCommands(allowedApps, teamsConfig),
+      "messageHandlers": [{
+        "type": "link",
+        "value": {
+          "domains": [domainName]
+        }
+      }]
+    }],
+    "configurableTabs": [{
+      "configurationUrl": `${protocol}://${domainName}/teams/config`,
+      "canUpdateConfiguration": true,
+      "scopes": ["team", "groupchat"]
+    }],
+    "staticTabs": [{
+      "entityId": "aihubapps",
+      "name": teamsConfig?.ui?.branding?.appName || "AI Hub Apps",
+      "contentUrl": `${protocol}://${domainName}/?teams=true`,
+      "websiteUrl": `${protocol}://${domainName}`,
+      "scopes": ["personal"]
+    }],
+    "permissions": ["identity", "messageTeamMembers"],
+    "validDomains": [domainName, "token.botframework.com"],
+    "webApplicationInfo": {
+      "id": appId,
+      "resource": `${protocol}://${domainName}`
+    },
+    "authorization": {
+      "permissions": {
+        "resourceSpecific": [
+          {
+            "name": "ChannelMessage.Read.Group",
+            "type": "Application"
+          },
+          {
+            "name": "TeamMember.Read.Group",
+            "type": "Application"
+          }
+        ]
+      }
+    }
+  };
+
+  return manifest;
+}
+
+/**
+ * Generate bot commands based on allowed apps
+ */
+function generateBotCommands(allowedApps, teamsConfig) {
+  const commands = [
+    {
+      "title": "Help",
+      "description": "Show available AI Hub Apps and how to use them"
+    },
+    {
+      "title": "List Apps",
+      "description": "Show all available AI-powered applications"
+    }
+  ];
+
+  // Add commands for top apps
+  const topApps = Object.entries(allowedApps).slice(0, 5);
+  topApps.forEach(([appId, app]) => {
+    const title = app.name?.en || appId;
+    const description = app.description?.en || `Use ${title} for AI assistance`;
+    commands.push({
+      title: title.length > 32 ? title.substring(0, 29) + '...' : title,
+      description: description.length > 80 ? description.substring(0, 77) + '...' : description
+    });
+  });
+
+  return commands;
+}
+
+/**
+ * Generate message extension commands based on allowed apps and configuration
+ */
+function generateMessageExtensionCommands(allowedApps, teamsConfig) {
+  const commands = [];
+  const configuredCommands = teamsConfig?.messageExtensions?.commands || [];
+
+  // Use configured commands that match allowed apps
+  configuredCommands.forEach(command => {
+    if (allowedApps[command.appId]) {
+      commands.push({
+        "id": command.id,
+        "type": "action",
+        "title": command.title?.en || command.id,
+        "description": command.description?.en || `Use ${command.id} action`,
+        "context": command.context || ["message", "compose"],
+        "fetchTask": false,
+        "parameters": [{
+          "name": "content",
+          "title": `Content to ${command.id}`,
+          "description": `The content that will be processed by ${command.id}`
+        }]
+      });
+    }
+  });
+
+  // If no configured commands, create default ones for common apps
+  if (commands.length === 0) {
+    const defaultCommands = [
+      { appId: 'summarizer', id: 'summarize', title: 'Summarize', description: 'Create a summary of the selected content' },
+      { appId: 'translator', id: 'translate', title: 'Translate', description: 'Translate the selected text' },
+      { appId: 'chat', id: 'analyze', title: 'Analyze', description: 'Analyze the selected content' },
+      { appId: 'email-composer', id: 'improve-writing', title: 'Improve Writing', description: 'Enhance the selected text' }
+    ];
+
+    defaultCommands.forEach(command => {
+      if (allowedApps[command.appId]) {
+        commands.push({
+          "id": command.id,
+          "type": "action",
+          "title": command.title,
+          "description": command.description,
+          "context": ["message", "compose"],
+          "fetchTask": false,
+          "parameters": [{
+            "name": "content",
+            "title": `Content to ${command.id}`,
+            "description": `The content that will be processed`
+          }]
+        });
+      }
+    });
+  }
+
+  return commands;
+}
 
   // --- Session Management handled in sessionRoutes ---
 

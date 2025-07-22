@@ -1,0 +1,159 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Microsoft Teams integration configuration for AI Hub Apps",
+    "lastModified": "2025-07-22T22:00:00Z"
+  },
+  "bot": {
+    "enabled": true,
+    "welcomeMessage": {
+      "en": "Welcome to AI Hub Apps! You can ask me to help with various tasks. Just describe what you need and I'll determine the best AI app to help you!",
+      "de": "Willkommen bei AI Hub Apps! Sie können mich um Hilfe bei verschiedenen Aufgaben bitten. Beschreiben Sie einfach, was Sie benötigen, und ich bestimme die beste KI-App, um Ihnen zu helfen!"
+    },
+    "fallbackMessage": {
+      "en": "I couldn't determine which app to use for your request. Could you be more specific about what you'd like me to help you with?",
+      "de": "Ich konnte nicht bestimmen, welche App für Ihre Anfrage verwendet werden soll. Könnten Sie spezifischer sein, womit ich Ihnen helfen soll?"
+    },
+    "processingMessage": {
+      "en": "🤖 Processing with {{appName}}...",
+      "de": "🤖 Verarbeitung mit {{appName}}..."
+    },
+    "errorMessage": {
+      "en": "Sorry, I encountered an error processing your request. Please try again.",
+      "de": "Entschuldigung, beim Verarbeiten Ihrer Anfrage ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut."
+    },
+    "intentDetection": {
+      "enabled": true,
+      "useAI": true,
+      "systemPrompt": {
+        "en": "You are an AI assistant that determines which app from the AI Hub should handle a user's request. Based on the user's message, return only the app ID that best matches their intent. Available apps: {{availableApps}}. If no app matches well, return 'general-chat'.",
+        "de": "Sie sind ein KI-Assistent, der bestimmt, welche App aus dem AI Hub eine Benutzeranfrage bearbeiten soll. Basierend auf der Nachricht des Benutzers, geben Sie nur die App-ID zurück, die am besten zu ihrer Absicht passt. Verfügbare Apps: {{availableApps}}. Wenn keine App gut passt, geben Sie 'general-chat' zurück."
+      },
+      "fallbackApps": ["chat", "general-assistant", "help-assistant", "faq-bot"]
+    },
+    "streaming": {
+      "enabled": true,
+      "chunkSize": 100,
+      "updateInterval": 1000
+    }
+  },
+  "messageExtensions": {
+    "enabled": true,
+    "commands": [
+      {
+        "id": "summarize",
+        "appId": "summarizer",
+        "title": {
+          "en": "Summarize",
+          "de": "Zusammenfassen"
+        },
+        "description": {
+          "en": "Create a summary of the selected message or document",
+          "de": "Erstellen Sie eine Zusammenfassung der ausgewählten Nachricht oder des Dokuments"
+        },
+        "context": ["message", "compose"],
+        "icon": "document-text",
+        "variables": {
+          "action": "summarize"
+        }
+      },
+      {
+        "id": "translate",
+        "appId": "translator", 
+        "title": {
+          "en": "Translate",
+          "de": "Übersetzen"
+        },
+        "description": {
+          "en": "Translate the selected text to your preferred language",
+          "de": "Übersetzen Sie den ausgewählten Text in Ihre bevorzugte Sprache"
+        },
+        "context": ["message", "compose"],
+        "icon": "globe",
+        "variables": {
+          "language": "English"
+        }
+      },
+      {
+        "id": "analyze", 
+        "appId": "chat",
+        "title": {
+          "en": "Analyze",
+          "de": "Analysieren"
+        },
+        "description": {
+          "en": "Analyze the selected content for insights",
+          "de": "Analysieren Sie den ausgewählten Inhalt auf Erkenntnisse"
+        },
+        "context": ["message", "compose"],
+        "icon": "chart-bar"
+      },
+      {
+        "id": "improve-writing",
+        "appId": "email-composer",
+        "title": {
+          "en": "Improve Writing",
+          "de": "Schreibweise Verbessern"
+        },
+        "description": {
+          "en": "Improve the writing style and grammar of the selected text",
+          "de": "Verbessern Sie den Schreibstil und die Grammatik des ausgewählten Textes"
+        },
+        "context": ["message", "compose"],
+        "icon": "pencil"
+      },
+      {
+        "id": "extract-key-points",
+        "appId": "summarizer",
+        "title": {
+          "en": "Extract Key Points",
+          "de": "Wichtige Punkte Extrahieren"
+        },
+        "description": {
+          "en": "Extract key points and action items from the content",
+          "de": "Extrahieren Sie wichtige Punkte und Aktionspunkte aus dem Inhalt"
+        },
+        "context": ["message", "compose"],
+        "icon": "list-bullet",
+        "variables": {
+          "action": "extract the key facts from"
+        }
+      }
+    ],
+    "imageSupport": {
+      "enabled": true,
+      "maxSize": 10485760,
+      "supportedTypes": ["image/jpeg", "image/png", "image/gif", "image/webp"],
+      "defaultApp": "image-analysis"
+    },
+    "fileSupport": {
+      "enabled": true,
+      "maxSize": 52428800,
+      "supportedTypes": ["application/pdf", "text/plain", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+      "defaultApp": "file-analysis"
+    }
+  },
+  "permissions": {
+    "defaultGroups": ["authenticated", "teams-users"],
+    "requiredPermissions": {
+      "apps": ["read"],
+      "models": ["read"]
+    },
+    "adminPermissions": {
+      "apps": ["*"],
+      "models": ["*"],
+      "adminAccess": true
+    }
+  },
+  "ui": {
+    "adaptiveCards": {
+      "version": "1.4",
+      "theme": "default"
+    },
+    "branding": {
+      "appName": "AI Hub Apps",
+      "icon": "🤖",
+      "accentColor": "#0078d4"
+    }
+  }
+}
