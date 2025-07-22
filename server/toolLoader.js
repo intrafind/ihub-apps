@@ -4,49 +4,54 @@ import configCache from './configCache.js';
 import { throttledFetch } from './requestThrottler.js';
 
 /**
- * Resolve a translation key from localization data
- * @param {string} key - Translation key like "tools.braveSearch.name"
- * @param {object} translations - Translation object
- * @returns {string} - Resolved translation or the key if not found
+ * Extract language-specific value from a multilingual object or return the value as-is
+ * @param {any} value - Value that might be a multilingual object {en: "...", de: "..."}
+ * @param {string} language - Target language (e.g., 'en', 'de')
+ * @param {string} fallbackLanguage - Fallback language (default: 'en')
+ * @returns {any} - Language-specific value or original value
  */
-function resolveTranslationKey(key, translations) {
-  if (!key || typeof key !== 'string' || !key.startsWith('tools.')) {
-    return key;
-  }
-  
-  const keyParts = key.split('.');
-  let current = translations;
-  
-  for (const part of keyParts) {
-    if (current && typeof current === 'object' && current[part] !== undefined) {
-      current = current[part];
-    } else {
-      return key; // Return original key if not found
+function extractLanguageValue(value, language = 'en', fallbackLanguage = 'en') {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    // Check if this looks like a multilingual object
+    if (value[language] !== undefined) {
+      return value[language];
+    }
+    if (value[fallbackLanguage] !== undefined) {
+      return value[fallbackLanguage];
+    }
+    // If it has language keys but not the requested one, try first available
+    const availableLanguages = Object.keys(value).filter(key => 
+      typeof value[key] === 'string' && key.length === 2
+    );
+    if (availableLanguages.length > 0) {
+      return value[availableLanguages[0]];
     }
   }
   
-  return typeof current === 'string' ? current : key;
+  return value;
 }
 
 /**
- * Recursively resolve translation keys in an object
+ * Recursively extract language-specific values from multilingual objects
  * @param {any} obj - Object to process
- * @param {object} translations - Translation data
- * @returns {any} - Object with resolved translations
+ * @param {string} language - Target language
+ * @param {string} fallbackLanguage - Fallback language
+ * @returns {any} - Object with language-specific values
  */
-function resolveTranslationsInObject(obj, translations) {
-  if (typeof obj === 'string') {
-    return resolveTranslationKey(obj, translations);
-  }
-  
+function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = 'en') {
   if (Array.isArray(obj)) {
-    return obj.map(item => resolveTranslationsInObject(item, translations));
+    return obj.map(item => extractLanguageFromObject(item, language, fallbackLanguage));
   }
   
   if (obj && typeof obj === 'object') {
     const result = {};
     for (const [key, value] of Object.entries(obj)) {
-      result[key] = resolveTranslationsInObject(value, translations);
+      if (key === 'description' || key === 'name') {
+        // These are typically multilingual fields
+        result[key] = extractLanguageValue(value, language, fallbackLanguage);
+      } else {
+        result[key] = extractLanguageFromObject(value, language, fallbackLanguage);
+      }
     }
     return result;
   }
@@ -55,23 +60,13 @@ function resolveTranslationsInObject(obj, translations) {
 }
 
 /**
- * Localize tools based on user language
+ * Localize tools based on user language by extracting language-specific values from multilingual objects
  * @param {Array} tools - Array of tool objects
  * @param {string} language - User language (e.g., 'en', 'de')
  * @returns {Array} - Localized tools
  */
 function localizeTools(tools, language = 'en') {
-  const translations = configCache.getLocalizations(language);
-  if (!translations) {
-    console.warn(`No translations found for language: ${language}`);
-    // Fallback to English
-    const fallbackTranslations = configCache.getLocalizations('en');
-    return fallbackTranslations ? 
-      tools.map(tool => resolveTranslationsInObject(tool, fallbackTranslations)) : 
-      tools;
-  }
-  
-  return tools.map(tool => resolveTranslationsInObject(tool, translations));
+  return tools.map(tool => extractLanguageFromObject(tool, language, 'en'));
 }
 
 /**

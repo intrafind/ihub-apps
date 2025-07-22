@@ -1,8 +1,14 @@
 [
   {
     "id": "braveSearch",
-    "name": "tools.braveSearch.name",
-    "description": "tools.braveSearch.description",
+    "name": {
+      "en": "Brave Web / Internet Search",
+      "de": "Brave Web- / Internetsuche"
+    },
+    "description": {
+      "en": "Search the web / internet using Brave for up-to-date information. Use the 'query' parameter with your search terms.",
+      "de": "Durchsuchen Sie das Web / Internet mit Brave für aktuelle Informationen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
+    },
     "script": "braveSearch.js",
     "concurrency": 5,
     "parameters": {
@@ -10,7 +16,10 @@
       "properties": {
         "query": {
           "type": "string",
-          "description": "tools.braveSearch.parameters.query"
+          "description": {
+            "en": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'",
+            "de": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'neueste KI-Nachrichten' oder 'Python Programmier-Tutorial'"
+          }
         }
       },
       "required": ["query"]
@@ -18,8 +27,14 @@
   },
   {
     "id": "tavilySearch",
-    "name": "tools.tavilySearch.name",
-    "description": "tools.tavilySearch.description",
+    "name": {
+      "en": "Tavily Web Search",
+      "de": "Tavily Websuche"
+    },
+    "description": {
+      "en": "Search the web using the Tavily API. Use the 'query' parameter with your search terms.",
+      "de": "Durchsuchen Sie das Web mit der Tavily API. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
+    },
     "script": "tavilySearch.js",
     "concurrency": 5,
     "parameters": {
@@ -27,17 +42,26 @@
       "properties": {
         "query": {
           "type": "string",
-          "description": "tools.tavilySearch.parameters.query"
+          "description": {
+            "en": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'",
+            "de": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'neueste KI-Nachrichten' oder 'Python Programmier-Tutorial'"
+          }
         },
         "search_depth": {
           "type": "string",
           "enum": ["basic", "advanced"],
           "default": "basic",
-          "description": "tools.tavilySearch.parameters.search_depth"
+          "description": {
+            "en": "Search depth",
+            "de": "Suchtiefe"
+          }
         },
         "max_results": {
           "type": "integer",
-          "description": "tools.tavilySearch.parameters.max_results",
+          "description": {
+            "en": "Maximum number of search results to return",
+            "de": "Maximale Anzahl der zurückzugebenden Suchergebnisse"
+          },
           "default": 5,
           "minimum": 1,
           "maximum": 10
@@ -48,8 +72,14 @@
   },
   {
     "id": "webContentExtractor",
-    "name": "tools.webContentExtractor.name",
-    "description": "tools.webContentExtractor.description",
+    "name": {
+      "en": "Web Content Extractor",
+      "de": "Web-Inhalts-Extraktor"
+    },
+    "description": {
+      "en": "Extract clean, readable content from a URL. This can be content like PDFs or web pages, with advertising, headers, footers, and other non-content elements removed. Use the 'url' parameter with a valid HTTP/HTTPS URL.",
+      "de": "Extrahieren Sie saubere, lesbare Inhalte von einer URL. Dies können Inhalte wie PDFs oder Webseiten sein, wobei Werbung, Kopfzeilen, Fußzeilen und andere Nicht-Inhaltselemente entfernt werden. Verwenden Sie den 'url' Parameter mit einer gültigen HTTP/HTTPS-URL."
+    },
     "script": "webContentExtractor.js",
     "concurrency": 3,
     "parameters": {
@@ -57,18 +87,27 @@
       "properties": {
         "url": {
           "type": "string",
-          "description": "tools.webContentExtractor.parameters.url"
+          "description": {
+            "en": "The full URL of the website to extract content from. Must be a valid HTTP or HTTPS URL. Example: 'https://example.com/article'",
+            "de": "Die vollständige URL der Webseite, von der Inhalte extrahiert werden sollen. Muss eine gültige HTTP- oder HTTPS-URL sein. Beispiel: 'https://example.com/artikel'"
+          }
         },
         "maxLength": {
           "type": "integer",
-          "description": "tools.webContentExtractor.parameters.maxLength",
+          "description": {
+            "en": "Maximum length of extracted content in characters (default: 5000)",
+            "de": "Maximale Länge der extrahierten Inhalte in Zeichen (Standard: 5000)"
+          },
           "default": 5000,
           "minimum": 100,
           "maximum": 50000
         },
         "ignoreSSL": {
           "type": "boolean",
-          "description": "tools.webContentExtractor.parameters.ignoreSSL",
+          "description": {
+            "en": "Ignore invalid HTTPS certificates (default: false, configurable by admin)",
+            "de": "Ungültige HTTPS-Zertifikate ignorieren (Standard: false, vom Administrator konfigurierbar)"
+          },
           "default": false
         }
       },
@@ -77,31 +116,49 @@
   },
   {
     "id": "enhancedWebSearch",
-    "name": "tools.enhancedWebSearch.name",
-    "description": "tools.enhancedWebSearch.description",
+    "name": {
+      "en": "Enhanced Web Search with Content",
+      "de": "Erweiterte Websuche mit Inhalten"
+    },
+    "description": {
+      "en": "Performs web search and automatically extracts full content from top results for comprehensive information gathering. Perfect for 'chat with web' functionality. Use the 'query' parameter with your search terms.",
+      "de": "Führt eine Websuche durch und extrahiert automatisch vollständige Inhalte aus den Top-Ergebnissen für umfassende Informationsbeschaffung. Perfekt für 'Chat mit Web'-Funktionalität. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
+    },
     "script": "enhancedWebSearch.js",
     "parameters": {
       "type": "object",
       "properties": {
         "query": {
           "type": "string",
-          "description": "tools.enhancedWebSearch.parameters.query"
+          "description": {
+            "en": "The search query or search terms for web search. Example: 'artificial intelligence trends 2024' or 'best programming languages'",
+            "de": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'Trends der künstlichen Intelligenz 2024' oder 'beste Programmiersprachen'"
+          }
         },
         "extractContent": {
           "type": "boolean",
-          "description": "tools.enhancedWebSearch.parameters.extractContent",
+          "description": {
+            "en": "Whether to extract full content from search results (default: true)",
+            "de": "Ob vollständige Inhalte aus Suchergebnissen extrahiert werden sollen (Standard: true)"
+          },
           "default": true
         },
         "maxResults": {
           "type": "integer",
-          "description": "tools.enhancedWebSearch.parameters.maxResults",
+          "description": {
+            "en": "Maximum number of search results to process and extract content from (default: 3)",
+            "de": "Maximale Anzahl der zu verarbeitenden und zu extrahierenden Suchergebnisse (Standard: 3)"
+          },
           "default": 3,
           "minimum": 1,
           "maximum": 10
         },
         "contentMaxLength": {
           "type": "integer",
-          "description": "tools.enhancedWebSearch.parameters.contentMaxLength",
+          "description": {
+            "en": "Maximum length of extracted content per page in characters (default: 3000)",
+            "de": "Maximale Länge der extrahierten Inhalte pro Seite in Zeichen (Standard: 3000)"
+          },
           "default": 3000,
           "minimum": 500,
           "maximum": 10000
@@ -112,73 +169,142 @@
   },
   {
     "id": "deepResearch",
-    "name": "tools.deepResearch.name",
-    "description": "tools.deepResearch.description",
+    "name": {
+      "en": "Deep Research",
+      "de": "Tiefgehende Recherche"
+    },
+    "description": {
+      "en": "Perform iterative web research with progress updates through SSE events.",
+      "de": "Führen Sie iterative Webrecherchen mit Fortschrittsupdates über SSE-Ereignisse durch."
+    },
     "script": "deepResearch.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "query": { "type": "string", "description": "tools.deepResearch.parameters.query" },
+        "query": { 
+          "type": "string", 
+          "description": {
+            "en": "Initial search query",
+            "de": "Erste Suchanfrage"
+          }
+        },
         "maxRounds": {
           "type": "integer",
-          "description": "tools.deepResearch.parameters.maxRounds",
+          "description": {
+            "en": "Number of search iterations",
+            "de": "Anzahl der Suchiterationen"
+          },
           "default": 5,
           "minimum": 5,
           "maximum": 10
         },
         "maxResults": {
           "type": "integer",
-          "description": "tools.deepResearch.parameters.maxResults",
+          "description": {
+            "en": "Number of results to process per round",
+            "de": "Anzahl der pro Runde zu verarbeitenden Ergebnisse"
+          },
           "default": 5,
           "minimum": 1,
           "maximum": 10
         },
         "contentMaxLength": {
           "type": "integer",
-          "description": "tools.deepResearch.parameters.contentMaxLength",
+          "description": {
+            "en": "Maximum length of extracted content per page",
+            "de": "Maximale Länge der extrahierten Inhalte pro Seite"
+          },
           "default": 5000,
           "minimum": 500,
           "maximum": 10000
         },
-        "chatId": { "type": "string", "description": "tools.deepResearch.parameters.chatId" }
+        "chatId": { 
+          "type": "string", 
+          "description": {
+            "en": "Chat session ID",
+            "de": "Chat-Sitzungs-ID"
+          }
+        }
       },
       "required": ["query"]
     }
   },
   {
     "id": "researchPlanner",
-    "name": "tools.researchPlanner.name",
-    "description": "tools.researchPlanner.description",
+    "name": {
+      "en": "Research Planner",
+      "de": "Recherche-Planer"
+    },
+    "description": {
+      "en": "Break down a research topic into different investigative tasks",
+      "de": "Zerlegen Sie ein Forschungsthema in verschiedene investigative Aufgaben"
+    },
     "script": "researchPlanner.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "question": { "type": "string", "description": "tools.researchPlanner.parameters.question" },
+        "question": { 
+          "type": "string", 
+          "description": {
+            "en": "Research topic",
+            "de": "Forschungsthema"
+          }
+        },
         "teamSize": {
           "type": "integer",
-          "description": "tools.researchPlanner.parameters.teamSize",
+          "description": {
+            "en": "Number of tasks to generate",
+            "de": "Anzahl der zu generierenden Aufgaben"
+          },
           "default": 3,
           "minimum": 1,
           "maximum": 10
         },
-        "soundBites": { "type": "string", "description": "tools.researchPlanner.parameters.soundBites" }
+        "soundBites": { 
+          "type": "string", 
+          "description": {
+            "en": "Additional context",
+            "de": "Zusätzlicher Kontext"
+          }
+        }
       },
       "required": ["question"]
     }
   },
   {
     "id": "evaluator",
-    "name": "tools.evaluator.name",
-    "description": "tools.evaluator.description",
+    "name": {
+      "en": "Answer Evaluator",
+      "de": "Antwort-Bewerter"
+    },
+    "description": {
+      "en": "Evaluate answers for certainty, freshness, and completeness.",
+      "de": "Bewerten Sie Antworten auf Bestimmtheit, Aktualität und Vollständigkeit."
+    },
     "script": "evaluator.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "question": { "type": "string", "description": "tools.evaluator.parameters.question" },
-        "answer": { "type": "string", "description": "tools.evaluator.parameters.answer" },
+        "question": { 
+          "type": "string", 
+          "description": {
+            "en": "Original user question",
+            "de": "Ursprüngliche Benutzerfrage"
+          }
+        },
+        "answer": { 
+          "type": "string", 
+          "description": {
+            "en": "Draft answer to evaluate",
+            "de": "Entwurfsantwort zur Bewertung"
+          }
+        },
         "model": {
           "type": "string",
-          "description": "tools.evaluator.parameters.model",
+          "description": {
+            "en": "Model ID for evaluation",
+            "de": "Modell-ID für die Bewertung"
+          },
           "default": "gemini-1.5-flash"
         }
       },
@@ -187,18 +313,45 @@
   },
   {
     "id": "queryRewriter",
-    "name": "tools.queryRewriter.name",
-    "description": "tools.queryRewriter.description",
+    "name": {
+      "en": "Query Rewriter",
+      "de": "Anfragen-Umschreiber"
+    },
+    "description": {
+      "en": "Rewrite user search queries into optimized variants.",
+      "de": "Schreiben Sie Benutzersuchanfragen in optimierte Varianten um."
+    },
     "script": "queryRewriter.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "query": { "type": "string", "description": "tools.queryRewriter.parameters.query" },
-        "think": { "type": "string", "description": "tools.queryRewriter.parameters.think" },
-        "context": { "type": "string", "description": "tools.queryRewriter.parameters.context" },
+        "query": { 
+          "type": "string", 
+          "description": {
+            "en": "Search query to rewrite",
+            "de": "Suchanfrage zum Umschreiben"
+          }
+        },
+        "think": { 
+          "type": "string", 
+          "description": {
+            "en": "User motivation",
+            "de": "Benutzermotivation"
+          }
+        },
+        "context": { 
+          "type": "string", 
+          "description": {
+            "en": "Optional context",
+            "de": "Optionaler Kontext"
+          }
+        },
         "model": {
           "type": "string",
-          "description": "tools.queryRewriter.parameters.model",
+          "description": {
+            "en": "Model ID",
+            "de": "Modell-ID"
+          },
           "default": "gemini-2.5-flash-preview-05-20"
         }
       },
@@ -207,23 +360,56 @@
   },
   {
     "id": "playwrightScreenshot",
-    "name": "tools.playwrightScreenshot.name",
-    "description": "tools.playwrightScreenshot.description",
+    "name": {
+      "en": "Website Screenshot (Playwright)",
+      "de": "Website-Screenshot (Playwright)"
+    },
+    "description": {
+      "en": "Take a screenshot or PDF of a webpage using Playwright.",
+      "de": "Erstellen Sie einen Screenshot oder PDF einer Webseite mit Playwright."
+    },
     "script": "playwrightScreenshot.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "url": { "type": "string", "description": "tools.playwrightScreenshot.parameters.url" },
-        "format": { "type": "string", "enum": ["png", "pdf"], "default": "png", "description": "tools.playwrightScreenshot.parameters.format" },
-        "fullPage": { "type": "boolean", "default": true, "description": "tools.playwrightScreenshot.parameters.fullPage" }
+        "url": { 
+          "type": "string", 
+          "description": {
+            "en": "Target URL",
+            "de": "Ziel-URL"
+          }
+        },
+        "format": { 
+          "type": "string", 
+          "enum": ["png", "pdf"], 
+          "default": "png", 
+          "description": {
+            "en": "Output format (png or pdf)",
+            "de": "Ausgabeformat (png oder pdf)"
+          }
+        },
+        "fullPage": { 
+          "type": "boolean", 
+          "default": true, 
+          "description": {
+            "en": "Capture full page or just visible area",
+            "de": "Ganze Seite oder nur sichtbaren Bereich erfassen"
+          }
+        }
       },
       "required": ["url"]
     }
   },
   {
     "id": "answerReducer",
-    "name": "tools.answerReducer.name",
-    "description": "tools.answerReducer.description",
+    "name": {
+      "en": "Answer Reducer",
+      "de": "Antwort-Reduzierer"
+    },
+    "description": {
+      "en": "Consolidate multiple text passages into a single concise article.",
+      "de": "Führen Sie mehrere Textpassagen zu einem einzigen prägnanten Artikel zusammen."
+    },
     "script": "answerReducer.js",
     "parameters": {
       "type": "object",
@@ -231,7 +417,10 @@
         "answers": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "tools.answerReducer.parameters.answers"
+          "description": {
+            "en": "Text passages to consolidate",
+            "de": "Zu vereinende Texte"
+          }
         }
       },
       "required": ["answers"]
@@ -239,81 +428,168 @@
   },
   {
     "id": "seleniumScreenshot",
-    "name": "tools.seleniumScreenshot.name",
-    "description": "tools.seleniumScreenshot.description",
+    "name": {
+      "en": "Website Screenshot (Selenium)",
+      "de": "Website-Screenshot (Selenium)"
+    },
+    "description": {
+      "en": "Take a screenshot or PDF of a webpage using Selenium.",
+      "de": "Erstellen Sie einen Screenshot oder PDF einer Webseite mit Selenium."
+    },
     "script": "seleniumScreenshot.js",
     "parameters": {
       "type": "object",
       "properties": {
-        "url": { "type": "string", "description": "tools.seleniumScreenshot.parameters.url" },
-        "format": { "type": "string", "enum": ["png", "pdf"], "default": "png", "description": "tools.seleniumScreenshot.parameters.format" },
-        "fullPage": { "type": "boolean", "default": true, "description": "tools.seleniumScreenshot.parameters.fullPage" }
+        "url": { 
+          "type": "string", 
+          "description": {
+            "en": "Target URL",
+            "de": "Ziel-URL"
+          }
+        },
+        "format": { 
+          "type": "string", 
+          "enum": ["png", "pdf"], 
+          "default": "png", 
+          "description": {
+            "en": "Output format (png or pdf)",
+            "de": "Ausgabeformat (png oder pdf)"
+          }
+        },
+        "fullPage": { 
+          "type": "boolean", 
+          "default": true, 
+          "description": {
+            "en": "Capture full page or just visible area",
+            "de": "Ganze Seite oder nur sichtbaren Bereich erfassen"
+          }
+        }
       },
       "required": ["url"]
     }
   },
   {
     "id": "entraPeopleSearch",
-    "name": "tools.entraPeopleSearch.name",
-    "description": "tools.entraPeopleSearch.description",
+    "name": {
+      "en": "Entra People Search",
+      "de": "Entra Personensuche"
+    },
+    "description": {
+      "en": "Query the corporate directory for people and teams",
+      "de": "Durchsuchen Sie das Unternehmensverzeichnis nach Personen und Teams"
+    },
     "script": "entraPeopleSearch.js",
     "functions": {
       "findUser": {
-        "description": "tools.entraPeopleSearch.functions.findUser.description",
+        "description": {
+          "en": "Find a user by name or email",
+          "de": "Einen Benutzer nach Name oder E-Mail finden"
+        },
         "parameters": {
           "type": "object",
           "properties": {
-            "name": { "type": "string", "description": "tools.entraPeopleSearch.functions.findUser.parameters.name" }
+            "name": { 
+              "type": "string", 
+              "description": {
+                "en": "User name or email",
+                "de": "Benutzername oder E-Mail"
+              }
+            }
           },
           "required": ["name"]
         }
       },
       "getAllUserDetails": {
-        "description": "tools.entraPeopleSearch.functions.getAllUserDetails.description",
+        "description": {
+          "en": "Get all details for a user",
+          "de": "Alle Details für einen Benutzer abrufen"
+        },
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { "type": "string", "description": "tools.entraPeopleSearch.functions.getAllUserDetails.parameters.userId" }
+            "userId": { 
+              "type": "string", 
+              "description": {
+                "en": "User identifier",
+                "de": "Benutzerkennung"
+              }
+            }
           },
           "required": ["userId"]
         }
       },
       "getUserManager": {
-        "description": "tools.entraPeopleSearch.functions.getUserManager.description",
+        "description": {
+          "en": "Get the direct manager of a user",
+          "de": "Den direkten Vorgesetzten eines Benutzers abrufen"
+        },
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { "type": "string", "description": "tools.entraPeopleSearch.functions.getUserManager.parameters.userId" }
+            "userId": { 
+              "type": "string", 
+              "description": {
+                "en": "User identifier",
+                "de": "Benutzerkennung"
+              }
+            }
           },
           "required": ["userId"]
         }
       },
       "getUserGroups": {
-        "description": "tools.entraPeopleSearch.functions.getUserGroups.description",
+        "description": {
+          "en": "List teams the user belongs to",
+          "de": "Teams auflisten, denen der Benutzer angehört"
+        },
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { "type": "string", "description": "tools.entraPeopleSearch.functions.getUserGroups.parameters.userId" }
+            "userId": { 
+              "type": "string", 
+              "description": {
+                "en": "User identifier",
+                "de": "Benutzerkennung"
+              }
+            }
           },
           "required": ["userId"]
         }
       },
       "getTeamMembers": {
-        "description": "tools.entraPeopleSearch.functions.getTeamMembers.description",
+        "description": {
+          "en": "Get members of a team",
+          "de": "Mitglieder eines Teams abrufen"
+        },
         "parameters": {
           "type": "object",
           "properties": {
-            "teamId": { "type": "string", "description": "tools.entraPeopleSearch.functions.getTeamMembers.parameters.teamId" }
+            "teamId": { 
+              "type": "string", 
+              "description": {
+                "en": "Team identifier",
+                "de": "Team-Kennung"
+              }
+            }
           },
           "required": ["teamId"]
         }
       },
       "getUserPhotoBase64": {
-        "description": "tools.entraPeopleSearch.functions.getUserPhotoBase64.description",
+        "description": {
+          "en": "Get a user's profile photo as Base64",
+          "de": "Profilbild eines Benutzers als Base64 abrufen"
+        },
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { "type": "string", "description": "tools.entraPeopleSearch.functions.getUserPhotoBase64.parameters.userId" }
+            "userId": { 
+              "type": "string", 
+              "description": {
+                "en": "User identifier",
+                "de": "Benutzerkennung"
+              }
+            }
           },
           "required": ["userId"]
         }
@@ -322,55 +598,88 @@
   },
   {
     "id": "iFinder",
-    "name": "tools.iFinder.name",
-    "description": "tools.iFinder.description",
+    "name": {
+      "en": "iFinder Document Management",
+      "de": "iFinder Dokumentenverwaltung"
+    },
+    "description": {
+      "en": "Comprehensive document search, content retrieval, and management for the iFinder system",
+      "de": "Umfassende Dokumentensuche, Inhaltsabruf und -verwaltung für das iFinder-System"
+    },
     "script": "iFinder.js",
     "functions": {
       "search": {
-        "description": "tools.iFinder.functions.search.description",
+        "description": {
+          "en": "Search for documents in the iFinder system",
+          "de": "Nach Dokumenten im iFinder-System suchen"
+        },
         "parameters": {
           "type": "object",
           "properties": {
             "query": {
               "type": "string",
-              "description": "tools.iFinder.functions.search.parameters.query"
+              "description": {
+                "en": "Search query to find documents in iFinder. Example: 'contract proposals' or 'technical documentation'",
+                "de": "Suchanfrage zum Finden von Dokumenten in iFinder. Beispiel: 'Vertragsvorschläge' oder 'technische Dokumentation'"
+              }
             },
             "maxResults": {
               "type": "integer",
-              "description": "tools.iFinder.functions.search.parameters.maxResults",
+              "description": {
+                "en": "Maximum number of search results to return (default: 10, max: 100)",
+                "de": "Maximale Anzahl der zurückzugebenden Suchergebnisse (Standard: 10, max: 100)"
+              },
               "default": 10,
               "minimum": 1,
               "maximum": 100
             },
             "searchProfile": {
               "type": "string",
-              "description": "tools.iFinder.functions.search.parameters.searchProfile"
+              "description": {
+                "en": "Search profile ID (optional, uses default if not specified)",
+                "de": "Suchprofil-ID (optional, verwendet Standard wenn nicht angegeben)"
+              }
             },
             "returnFields": {
               "type": "array",
               "items": { "type": "string" },
-              "description": "tools.iFinder.functions.search.parameters.returnFields"
+              "description": {
+                "en": "Fields to return in search results (optional)",
+                "de": "In Suchergebnissen zurückzugebende Felder (optional)"
+              }
             }
           },
           "required": ["query"]
         }
       },
       "getContent": {
-        "description": "tools.iFinder.functions.getContent.description",
+        "description": {
+          "en": "Fetch document content from iFinder for LLM processing",
+          "de": "Dokumentinhalt aus iFinder für LLM-Verarbeitung abrufen"
+        },
         "parameters": {
           "type": "object",
           "properties": {
             "documentId": {
               "type": "string",
-              "description": "tools.iFinder.functions.getContent.parameters.documentId"
+              "description": {
+                "en": "Document ID to fetch content for. Example: 'doc123456'",
+                "de": "Dokument-ID für die Inhalte abgerufen werden sollen. Beispiel: 'doc123456'"
+              }
             },
             "searchProfile": {
               "type": "string",
-              "description": "tools.iFinder.functions.getContent.parameters.searchProfile"
+              "description": {
+                "en": "Search profile ID (optional, uses default if not specified)",
+                "de": "Suchprofil-ID (optional, verwendet Standard wenn nicht angegeben)"
+              }
             },
             "maxLength": {
               "type": "integer",
-              "description": "tools.iFinder.functions.getContent.parameters.maxLength",
+              "description": {
+                "en": "Maximum content length in characters (default: 50000)",
+                "de": "Maximale Inhaltslänge in Zeichen (Standard: 50000)"
+              },
               "default": 50000,
               "minimum": 1000,
               "maximum": 100000
@@ -380,17 +689,26 @@
         }
       },
       "getMetadata": {
-        "description": "tools.iFinder.functions.getMetadata.description",
+        "description": {
+          "en": "Fetch detailed metadata for a specific document from iFinder",
+          "de": "Detaillierte Metadaten für ein spezifisches Dokument aus iFinder abrufen"
+        },
         "parameters": {
           "type": "object",
           "properties": {
             "documentId": {
               "type": "string",
-              "description": "tools.iFinder.functions.getMetadata.parameters.documentId"
+              "description": {
+                "en": "Document ID to fetch metadata for. Example: 'doc123456'",
+                "de": "Dokument-ID für die Metadaten abgerufen werden sollen. Beispiel: 'doc123456'"
+              }
             },
             "searchProfile": {
               "type": "string",
-              "description": "tools.iFinder.functions.getMetadata.parameters.searchProfile"
+              "description": {
+                "en": "Search profile ID (optional, uses default if not specified)",
+                "de": "Suchprofil-ID (optional, verwendet Standard wenn nicht angegeben)"
+              }
             }
           },
           "required": ["documentId"]
