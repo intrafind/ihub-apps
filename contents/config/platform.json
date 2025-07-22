@@ -2,6 +2,28 @@
   "features": {
     "usageTracking": true
   },
+  "pdfExport": {
+    "defaultTemplate": "default",
+    "watermark": {
+      "text": "AI Hub Apps",
+      "position": "bottom-right",
+      "opacity": 0.5
+    },
+    "templates": {
+      "default": {
+        "name": "Default",
+        "description": "Standard chat export with colors and branding"
+      },
+      "professional": {
+        "name": "Professional",
+        "description": "Clean professional layout suitable for business"
+      },
+      "minimal": {
+        "name": "Minimal",
+        "description": "Simple minimal design with clean lines"
+      }
+    }
+  },
   "defaultLanguage": "en",
   "requestBodyLimitMB": 50,
   "telemetry": {

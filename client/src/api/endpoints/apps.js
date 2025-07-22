@@ -56,3 +56,36 @@ export const checkAppChatStatus = async (appId, chatId) => {
     false // Don't deduplicate status checks
   );
 };
+
+export const exportChatToPDF = async (appId, chatId, exportData) => {
+  if (!appId || !chatId || !exportData) {
+    throw new Error('Missing required parameters');
+  }
+
+  const response = await apiClient.post(`/apps/${appId}/chat/${chatId}/export/pdf`, exportData, {
+    responseType: 'blob' // Important for binary PDF data
+  });
+
+  // Create download link from blob response
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  
+  // Extract filename from Content-Disposition header if available
+  const contentDisposition = response.headers['content-disposition'];
+  let filename = 'chat-export.pdf';
+  if (contentDisposition) {
+    const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+    if (filenameMatch) {
+      filename = filenameMatch[1].replace(/['"]/g, '');
+    }
+  }
+  
+  // Trigger download
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  
+  return { success: true, filename };
+};

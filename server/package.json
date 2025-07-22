@@ -38,6 +38,7 @@
     "passport-oauth2": "^1.8.0",
     "pdfjs-dist": "^5.3.31",
     "playwright": "^1.41.2",
+    "puppeteer": "^24.14.0",
     "selenium-webdriver": "^4.20.0",
     "zod": "^3.25.74"
   },
