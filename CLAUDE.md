@@ -348,6 +348,37 @@ The system uses `anonymousAuth` structure instead of legacy `allowAnonymous`:
 - **Group-based permissions**: All resource access controlled by user groups
 - **Request validation**: Input validation on all API endpoints
 - **Authentication bypass prevention**: `authRequired` middleware on protected routes
+- **CORS Support**: Cross-Origin Resource Sharing configured for web app integration
+
+#### CORS Configuration
+
+AI Hub Apps has built-in CORS support for embedding and integration with other web applications:
+
+**Current Implementation:**
+- **Location**: `server/serverHelpers.js:49`
+- **Configuration**: Uses `cors` npm package with default settings
+- **Behavior**: Allows all origins (*), standard HTTP methods, and basic headers
+- **Usage**: Suitable for development and cross-origin API calls
+
+**Integration Example:**
+```javascript
+// Calling AI Hub APIs from another web application
+fetch('https://your-ai-hub-domain.com/api/health', {
+  method: 'GET',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer your-jwt-token' // if authentication required
+  }
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+**Production Considerations:**
+For production deployments, consider implementing configurable CORS settings in `platform.json`:
+- Restrict allowed origins to trusted domains
+- Configure specific HTTP methods and headers
+- Enable credentials for authenticated cross-origin requests
 
 ### Performance Optimizations
 
