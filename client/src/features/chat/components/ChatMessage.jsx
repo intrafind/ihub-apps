@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import MarkdownRenderer, { configureMarked } from '../../../shared/components/MarkdownRenderer';
 import { sendMessageFeedback } from '../../../api/api';
+import StarRating from '../../../shared/components/StarRating';
 import MessageVariables from './MessageVariables';
 import Icon from '../../../shared/components/Icon';
 import StreamingMarkdown from './StreamingMarkdown';
@@ -42,10 +43,10 @@ const ChatMessage = ({
   const [copied, setCopied] = useState(false);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
-  const [feedbackRating, setFeedbackRating] = useState(null);
+  const [feedbackRating, setFeedbackRating] = useState(0); // 0-5 rating scale
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
-  const [activeFeedback, setActiveFeedback] = useState(null); // Track active feedback button
+  const [activeFeedback, setActiveFeedback] = useState(0); // Track active rating (0-5)
   const [showThoughts, setShowThoughts] = useState(false);
   const [showCopyMenu, setShowCopyMenu] = useState(false);
   const copyMenuRef = useRef(null);
@@ -183,7 +184,7 @@ const ChatMessage = ({
   const handleFeedbackSubmit = async e => {
     e.preventDefault();
 
-    if (!feedbackRating) return;
+    if (!feedbackRating || feedbackRating <= 0) return;
 
     setSubmittingFeedback(true);
 
@@ -199,7 +200,7 @@ const ChatMessage = ({
         appId,
         chatId,
         modelId,
-        rating: feedbackRating, // 'positive' or 'negative'
+        rating: feedbackRating, // Numeric rating (1-5)
         feedback: feedbackText,
         messageContent: message.content.substring(0, 300) // Send a snippet for context
       });
@@ -224,9 +225,9 @@ const ChatMessage = ({
     }
   };
 
-  // Handle showing feedback form
-  const handleFeedbackClick = rating => {
-    // Only set a temporary rating - don't activate the button yet
+  // Handle star rating click
+  const handleStarRatingClick = rating => {
+    // Set the rating and show the feedback form
     setFeedbackRating(rating);
     setShowFeedbackForm(true);
   };
@@ -235,7 +236,7 @@ const ChatMessage = ({
   const handleCloseModal = () => {
     // Only reset if feedback wasn't submitted
     if (!feedbackSubmitted) {
-      setFeedbackRating(null);
+      setFeedbackRating(0);
     }
     setShowFeedbackForm(false);
   };
@@ -531,42 +532,23 @@ const ChatMessage = ({
             {!compact && <span>{t('common.delete')}</span>}
           </button>
 
-          {/* Add feedback buttons for AI responses only */}
+          {/* Add star rating for AI responses only */}
           {!isUser && !isError && !message.loading && (
             <>
               {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
-              <button
-                onClick={() => {
-                  setFeedbackRating('positive');
-                  handleFeedbackClick('positive');
-                }}
-                className={`p-1 flex items-center gap-1 ${activeFeedback === 'positive' ? 'text-green-600' : 'text-gray-500 hover:text-green-600'} transition-colors duration-150`}
-                title={t('feedback.thumbsUp', 'This response was helpful')}
-              >
-                <Icon
-                  name="thumbs-up"
-                  size="sm"
-                  solid={activeFeedback === 'positive'}
+              <div className="flex items-center gap-2">
+                <StarRating
+                  rating={activeFeedback}
+                  onRatingChange={handleStarRatingClick}
+                  allowHalfStars={true}
+                  size="w-4 h-4"
+                  showTooltip={true}
                   className="flex-shrink-0"
                 />
-                {!compact && <span>{t('feedback.helpful', 'Helpful')}</span>}
-              </button>
-              <button
-                onClick={() => {
-                  setFeedbackRating('negative');
-                  handleFeedbackClick('negative');
-                }}
-                className={`p-1 flex items-center gap-1 ${activeFeedback === 'negative' ? 'text-red-600' : 'text-gray-500 hover:text-red-600'} transition-colors duration-150`}
-                title={t('feedback.thumbsDown', 'This response was not helpful')}
-              >
-                <Icon
-                  name="thumbs-down"
-                  size="sm"
-                  solid={activeFeedback === 'negative'}
-                  className="flex-shrink-0"
-                />
-                {!compact && <span>{t('feedback.notHelpful', 'Not helpful')}</span>}
-              </button>
+                {!compact && activeFeedback > 0 && (
+                  <span className="text-sm text-gray-600">{t('feedback.rated', 'Rated')}</span>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -577,10 +559,20 @@ const ChatMessage = ({
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 animate-fade-in mx-4">
             <h3 className="text-lg font-medium mb-4">
-              {feedbackRating === 'positive'
-                ? t('feedback.positiveHeading', 'What was helpful about this response?')
-                : t('feedback.negativeHeading', 'What was unhelpful about this response?')}
+              {t('feedback.ratingHeading', 'Rate this response')}
             </h3>
+
+            {/* Star rating display in modal */}
+            <div className="flex items-center justify-center mb-4">
+              <StarRating
+                rating={feedbackRating}
+                onRatingChange={setFeedbackRating}
+                allowHalfStars={true}
+                size="w-8 h-8"
+                showTooltip={true}
+                readonly={feedbackSubmitted}
+              />
+            </div>
 
             {feedbackSubmitted ? (
               <div className="text-center py-4">
@@ -595,8 +587,8 @@ const ChatMessage = ({
                   className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-4"
                   rows={4}
                   placeholder={t(
-                    'feedback.placeholder',
-                    'Your feedback helps us improve (optional)'
+                    'feedback.commentPlaceholder',
+                    'Tell us more about your rating (optional)'
                   )}
                 ></textarea>
 

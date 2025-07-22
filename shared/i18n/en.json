@@ -532,5 +532,12 @@
       },
       "confirmDelete": "Are you sure you want to delete this page?"
     }
+  },
+  "feedback": {
+    "ratingHeading": "Rate this response",
+    "commentPlaceholder": "Tell us more about your rating (optional)",
+    "rated": "Rated",
+    "sendFeedback": "Send Feedback",
+    "thankYou": "Thank you for your feedback!"
   }
 }
