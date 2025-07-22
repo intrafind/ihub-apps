@@ -32,7 +32,8 @@ class RequestBuilder {
     bypassAppPrompts = false,
     processMessageTemplates,
     res,
-    clientRes
+    clientRes,
+    user
   }) {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps();
@@ -72,13 +73,18 @@ class RequestBuilder {
         return { success: false, error };
       }
 
+      // Get model name for standard variables
+      const modelName = model?.name || model?.id || resolvedModelId;
+      
       let llmMessages = await processMessageTemplates(
         messages,
         bypassAppPrompts ? null : app,
         style,
         outputFormat,
         language,
-        app.outputSchema
+        app.outputSchema,
+        user,
+        modelName
       );
       llmMessages = preprocessMessagesWithFileData(llmMessages);
 

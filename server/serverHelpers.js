@@ -124,17 +124,87 @@ export async function verifyApiKey(model, res, clientRes = null, language) {
   return result.success ? result.apiKey : false;
 }
 
+/**
+ * Resolve standard variables that should be automatically available in prompts
+ * @param {object} user - User object from request 
+ * @param {string} modelName - Name of the model being used
+ * @param {string} language - Current language setting
+ * @param {string} style - Current style/tone setting
+ * @returns {object} Object containing standard variables
+ */
+function resolveStandardVariables(user = null, modelName = null, language = null, style = null) {
+  const now = new Date();
+  const platformConfig = configCache.getPlatform() || {};
+  
+  // Get timezone from user or default to UTC
+  const timezone = user?.timezone || user?.settings?.timezone || 'UTC';
+  
+  // Create timezone-aware date formatter
+  const tzOptions = { timeZone: timezone };
+  const dateFormatter = new Intl.DateTimeFormat(language || 'en', tzOptions);
+  const timeFormatter = new Intl.DateTimeFormat(language || 'en', { 
+    ...tzOptions, 
+    timeStyle: 'medium' 
+  });
+  
+  const standardVars = {
+    // Date and time variables
+    year: now.getFullYear().toString(),
+    month: (now.getMonth() + 1).toString().padStart(2, '0'),
+    date: now.toISOString().split('T')[0], // YYYY-MM-DD format
+    time: timeFormatter.format(now),
+    day_of_week: now.toLocaleDateString(language || 'en', { ...tzOptions, weekday: 'long' }),
+    
+    // Locale and timezone
+    timezone: timezone,
+    locale: language || platformConfig.defaultLanguage || 'en',
+    
+    // User information (only if user is authenticated)
+    user_name: user?.name || user?.displayName || '',
+    user_email: user?.email || '',
+    
+    // Model information
+    model_name: modelName || '',
+    
+    // Style/tone setting
+    tone: style || '',
+    
+    // Location (from user profile if available)
+    location: user?.location || user?.settings?.location || '',
+    
+    // Platform context (configurable in platform.json)
+    platform_context: platformConfig.standardVariables?.context || ''
+  };
+  
+  // Filter out empty values to avoid replacing with empty strings unintentionally
+  const filteredVars = {};
+  for (const [key, value] of Object.entries(standardVars)) {
+    if (value !== null && value !== undefined && value !== '') {
+      filteredVars[key] = value;
+    }
+  }
+  
+  return filteredVars;
+}
+
 export async function processMessageTemplates(
   messages,
   app,
   style = null,
   outputFormat = null,
   language,
-  outputSchema = null
+  outputSchema = null,
+  user = null,
+  modelName = null
 ) {
   const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
   const lang = language || defaultLang;
   console.log(`Using language '${lang}' for message templates`);
+  
+  // Resolve standard variables once for use throughout the function
+  const standardVariables = resolveStandardVariables(user, modelName, lang, style);
+  console.log(`Resolved ${Object.keys(standardVariables).length} standard variables`);
+  
   let llmMessages = [...messages].map(msg => {
     if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
       let processedContent =
@@ -142,11 +212,12 @@ export async function processMessageTemplates(
           ? getLocalizedContent(msg.promptTemplate, lang)
           : msg.promptTemplate || msg.content;
       if (typeof processedContent !== 'string') processedContent = String(processedContent || '');
-      const variables = { ...msg.variables, content: msg.content };
+      // Combine user-defined variables with standard variables (user variables take precedence)
+      const variables = { ...standardVariables, ...msg.variables, content: msg.content };
       if (variables && Object.keys(variables).length > 0) {
         for (const [key, value] of Object.entries(variables)) {
           const strValue = typeof value === 'string' ? value : String(value || '');
-          processedContent = processedContent.replace(`{{${key}}}`, strValue);
+          processedContent = processedContent.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), strValue);
         }
       }
       const processedMsg = { role: 'user', content: processedContent };
@@ -168,11 +239,13 @@ export async function processMessageTemplates(
     let systemPrompt =
       typeof app.system === 'object' ? getLocalizedContent(app.system, lang) : app.system || '';
     if (typeof systemPrompt !== 'string') systemPrompt = String(systemPrompt || '');
-    if (Object.keys(userVariables).length > 0) {
-      for (const [key, value] of Object.entries(userVariables)) {
+    // Combine user variables with standard variables for system prompt processing
+    const allVariables = { ...standardVariables, ...userVariables };
+    if (Object.keys(allVariables).length > 0) {
+      for (const [key, value] of Object.entries(allVariables)) {
         if (typeof value === 'function' || (typeof value === 'object' && value !== null)) continue;
         const strValue = String(value || '');
-        systemPrompt = systemPrompt.replace(`{{${key}}}`, strValue);
+        systemPrompt = systemPrompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), strValue);
       }
     }
     if (app.sourcePath && systemPrompt.includes('{{source}}')) {

@@ -141,6 +141,9 @@
       }
     ]
   },
+  "standardVariables": {
+    "context": "This is AI Hub Apps, a platform for AI-powered applications."
+  },
   "iFinder": {
     "enabled": true,
     "baseUrl": "${IFINDER_API_URL}",
