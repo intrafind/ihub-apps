@@ -5,6 +5,14 @@ import fetch from 'node-fetch';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
+import { 
+  loadUsers, 
+  findUserByIdentifier, 
+  createOrUpdateOidcUser, 
+  isUserActive, 
+  mergeUserGroups,
+  updateUserActivity 
+} from '../utils/userManager.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -58,12 +66,15 @@ export function configureOidcProviders() {
             // Get user info from OIDC provider
             const userInfo = await fetchUserInfo(provider.userInfoURL, accessToken);
 
-            // Normalize user data
-            const user = normalizeOidcUser(userInfo, provider);
+            // Normalize user data from OIDC provider
+            const oidcUser = normalizeOidcUser(userInfo, provider);
 
-            return done(null, user);
+            // Validate and persist user based on platform configuration
+            const validatedUser = await validateAndPersistOidcUser(oidcUser, provider);
+
+            return done(null, validatedUser);
           } catch (error) {
-            console.error(`OIDC user info fetch error for provider ${provider.name}:`, error);
+            console.error(`OIDC user validation error for provider ${provider.name}:`, error);
             return done(error, null);
           }
         }
@@ -166,6 +177,64 @@ function normalizeOidcUser(userInfo, provider) {
 }
 
 /**
+ * Validate and persist OIDC user based on platform configuration
+ */
+async function validateAndPersistOidcUser(oidcUser, provider) {
+  const platform = configCache.getPlatform() || {};
+  const oidcConfig = platform.oidcAuth || {};
+  const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+  
+  // Check if user exists in users.json
+  const usersConfig = loadUsers(usersFilePath);
+  const existingUser = findUserByIdentifier(usersConfig, oidcUser.email, 'oidc') ||
+                       findUserByIdentifier(usersConfig, oidcUser.id, 'oidc');
+  
+  // If user exists, check if they are active
+  if (existingUser) {
+    if (!isUserActive(existingUser)) {
+      throw new Error(`User account is disabled. User ID: ${existingUser.id}, Email: ${existingUser.email}. Please contact your administrator.`);
+    }
+    
+    // Update existing user and merge groups
+    const persistedUser = await createOrUpdateOidcUser(oidcUser, usersFilePath);
+    
+    // Update activity tracking
+    await updateUserActivity(persistedUser.id, usersFilePath);
+    
+    // Merge groups: JWT groups + configured additional groups
+    const mergedGroups = mergeUserGroups(oidcUser.groups || [], persistedUser.groups || []);
+    
+    return {
+      ...oidcUser,
+      id: persistedUser.id,
+      groups: mergedGroups,
+      active: persistedUser.active,
+      authMethods: persistedUser.authMethods || ['oidc'],
+      lastActiveDate: persistedUser.lastActiveDate,
+      persistedUser: true
+    };
+  }
+  
+  // User doesn't exist - check self-signup settings
+  if (!oidcConfig.allowSelfSignup) {
+    throw new Error(`New user registration is not allowed. User ID: ${oidcUser.id}, Email: ${oidcUser.email}. Please contact your administrator.`);
+  }
+  
+  // Create new user (self-signup allowed)
+  const persistedUser = await createOrUpdateOidcUser(oidcUser, usersFilePath);
+  
+  return {
+    ...oidcUser,
+    id: persistedUser.id,
+    groups: persistedUser.groups || oidcUser.groups || [],
+    active: true,
+    authMethods: ['oidc'],
+    lastActiveDate: persistedUser.lastActiveDate,
+    persistedUser: true
+  };
+}
+
+/**
  * Generate JWT token for authenticated user
  */
 function generateJwtToken(user) {
@@ -184,6 +253,9 @@ function generateJwtToken(user) {
     provider: user.provider,
     authMode: 'oidc', // Include auth mode in token
     authProvider: user.provider, // Include specific provider for validation
+    authMethods: user.authMethods || ['oidc'], // Include supported auth methods
+    active: user.active !== false, // Include active status
+    persistedUser: user.persistedUser || false, // Indicate if user is persisted
     iat: Math.floor(Date.now() / 1000)
   };
 

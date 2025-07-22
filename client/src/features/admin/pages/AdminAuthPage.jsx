@@ -24,6 +24,7 @@ const AdminAuthPage = () => {
     },
     proxyAuth: {
       enabled: false,
+      allowSelfSignup: false,
       userHeader: 'X-Forwarded-User',
       groupsHeader: 'X-Forwarded-Groups',
       jwtProviders: []
@@ -37,6 +38,7 @@ const AdminAuthPage = () => {
     },
     oidcAuth: {
       enabled: false,
+      allowSelfSignup: false,
       providers: []
     }
   });
@@ -535,6 +537,24 @@ const AdminAuthPage = () => {
                     </div>
                   </div>
 
+                  {/* Self-signup Setting */}
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={config.proxyAuth.allowSelfSignup || false}
+                        onChange={e =>
+                          updateNestedConfig('proxyAuth', 'allowSelfSignup', e.target.checked)
+                        }
+                        className="mr-2"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Allow Self-Signup</span>
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Allow new users to register automatically through proxy authentication. If disabled, new users must be added manually by administrators.
+                    </p>
+                  </div>
+
                   {/* JWT Providers */}
                   <div>
                     <div className="flex justify-between items-center mb-4">
@@ -696,6 +716,24 @@ const AdminAuthPage = () => {
                     <Icon name="plus" size="sm" className="mr-2" />
                     Add OIDC Provider
                   </button>
+                </div>
+
+                {/* Self-signup Setting */}
+                <div className="mb-6">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={config.oidcAuth.allowSelfSignup || false}
+                      onChange={e =>
+                        updateNestedConfig('oidcAuth', 'allowSelfSignup', e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Allow Self-Signup</span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Allow new users to register automatically through OIDC authentication. If disabled, new users must be added manually by administrators.
+                  </p>
                 </div>
 
                 {config.oidcAuth.providers.length === 0 ? (

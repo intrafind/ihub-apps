@@ -199,6 +199,41 @@ const AdminUsersPage = () => {
     }
   };
 
+  const handleToggleUserStatus = async user => {
+    const newStatus = !user.active;
+    
+    try {
+      const response = await makeAdminApiCall(`/api/admin/auth/users/${user.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: user.email,
+          name: user.name,
+          groups: user.groups || [],
+          active: newStatus
+        })
+      });
+
+      if (response.ok) {
+        setMessage({
+          type: 'success',
+          text: `User ${newStatus ? 'enabled' : 'disabled'} successfully!`
+        });
+        loadUsers();
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update user status');
+      }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: `Failed to update user status: ${error.message}`
+      });
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       username: '',
@@ -302,7 +337,7 @@ const AdminUsersPage = () => {
           {/* Users List */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Local Users ({users.length})</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Users ({users.length})</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -312,10 +347,16 @@ const AdminUsersPage = () => {
                       User
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Auth Method
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Groups
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Last Active
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -325,7 +366,7 @@ const AdminUsersPage = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {users.length === 0 ? (
                     <tr>
-                      <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
                         <Icon name="users" size="lg" className="mx-auto mb-4 text-gray-400" />
                         <p>No users found</p>
                         <p className="text-sm">Create your first user to get started</p>
@@ -351,6 +392,41 @@ const AdminUsersPage = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex flex-col">
+                            <div className="flex flex-wrap gap-1">
+                              {(user.authMethods || ['local']).map((method, index) => (
+                                <span
+                                  key={index}
+                                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                    method === 'local' 
+                                      ? 'bg-gray-100 text-gray-800' 
+                                      : method === 'oidc'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : 'bg-purple-100 text-purple-800'
+                                  }`}
+                                >
+                                  <Icon 
+                                    name={method === 'local' ? 'key' : method === 'oidc' ? 'globe' : 'shield'} 
+                                    size="xs" 
+                                    className="mr-1" 
+                                  />
+                                  {method.toUpperCase()}
+                                </span>
+                              ))}
+                            </div>
+                            {user.oidcData && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {user.oidcData.provider}
+                              </div>
+                            )}
+                            {user.proxyData && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Proxy
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex flex-wrap gap-1">
                             {(user.groups || []).map((group, index) => (
                               <span
@@ -366,15 +442,38 @@ const AdminUsersPage = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              user.active !== false
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {user.active !== false ? 'Active' : 'Inactive'}
-                          </span>
+                          <div className="flex items-center space-x-3">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                user.active !== false
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}
+                            >
+                              {user.active !== false ? 'Active' : 'Inactive'}
+                            </span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={user.active !== false}
+                                onChange={() => handleToggleUserStatus(user)}
+                                className="sr-only peer"
+                              />
+                              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {user.lastActiveDate ? (
+                            <div className="flex flex-col">
+                              <span>{new Date(user.lastActiveDate).toLocaleDateString()}</span>
+                              <span className="text-xs text-gray-400">
+                                {Math.floor((Date.now() - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24))} days ago
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">Never</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex space-x-2">
