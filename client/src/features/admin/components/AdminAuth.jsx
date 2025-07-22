@@ -6,7 +6,7 @@ import Icon from '../../../shared/components/Icon';
 
 const AdminAuth = ({ children }) => {
   const { isAuthenticated, authRequired, isLoading, login, logout } = useAdminAuth();
-  const { user, isAuthenticated: userIsAuthenticated } = useAuth();
+  const { isAuthenticated: userIsAuthenticated } = useAuth();
   const { platformConfig } = usePlatformConfig();
   const [adminSecret, setAdminSecret] = useState('');
   const [error, setError] = useState('');
