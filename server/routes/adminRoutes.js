@@ -7,6 +7,7 @@ import registerAdminPromptsRoutes from './admin/prompts.js';
 import registerAdminGroupRoutes from './admin/groups.js';
 import registerAdminTranslateRoute from './admin/translate.js';
 import registerAdminPagesRoutes from './admin/pages.js';
+import registerAdminUIRoutes from './admin/ui.js';
 
 export default function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
@@ -18,4 +19,5 @@ export default function registerAdminRoutes(app) {
   registerAdminGroupRoutes(app);
   registerAdminTranslateRoute(app);
   registerAdminPagesRoutes(app);
+  registerAdminUIRoutes(app);
 }

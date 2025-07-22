@@ -194,3 +194,47 @@ export const deletePage = async pageId => {
   });
   return response.json();
 };
+
+// UI Customization API functions
+export const getUIConfig = async () => {
+  const response = await makeAdminApiCall('/api/admin/ui/config');
+  return response;
+};
+
+export const updateUIConfig = async (config) => {
+  const response = await makeAdminApiCall('/api/admin/ui/config', {
+    method: 'POST',
+    body: JSON.stringify({ config }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  return response;
+};
+
+export const backupUIConfig = async () => {
+  const response = await makeAdminApiCall('/api/admin/ui/backup', {
+    method: 'POST',
+  });
+  return response;
+};
+
+export const getUIAssets = async () => {
+  const response = await makeAdminApiCall('/api/admin/ui/assets');
+  return response;
+};
+
+export const uploadUIAsset = async (formData) => {
+  const response = await makeAdminApiCall('/api/admin/ui/upload-asset', {
+    method: 'POST',
+    body: formData,
+  });
+  return response;
+};
+
+export const deleteUIAsset = async (assetId) => {
+  const response = await makeAdminApiCall(`/api/admin/ui/assets/${assetId}`, {
+    method: 'DELETE',
+  });
+  return response;
+};
