@@ -54,14 +54,17 @@
     "applications"
   ],
   "dependencies": {
+    "archiver": "^7.0.1",
     "concurrently": "^9.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "microsoft-cognitiveservices-speech-sdk": "^1.45.0",
+    "multer": "^1.4.5-lts.1",
     "node-fetch": "^3.3.0",
     "pdf2md": "^1.0.2",
-    "react-quill": "^2.0.0"
+    "react-quill": "^2.0.0",
+    "yauzl": "^3.0.0"
   },
   "devDependencies": {
     "electron": "^29.2.0",
