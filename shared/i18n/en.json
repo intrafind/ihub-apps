@@ -73,6 +73,7 @@
       "recent": "Recently used",
       "toggleImageUpload": "Toggle image upload",
       "toggleFileUpload": "Toggle file upload",
+      "toggleUpload": "Toggle file upload",
       "favorites": "Favorites",
       "clearFilters": "Clear filters",
       "loadMore": "Load More",
@@ -531,6 +532,15 @@
         "allowedGroups": "Allowed Groups (comma separated, '*' = all)"
       },
       "confirmDelete": "Are you sure you want to delete this page?"
+    }
+  },
+  "components": {
+    "uploader": {
+      "imageSelected": "Image selected",
+      "fileSelected": "File selected and processed", 
+      "processing": "Processing file...",
+      "uploadFile": "Upload File",
+      "supportedFormats": "Supported: {{formats}} (max {{maxSize}}MB)"
     }
   }
 }

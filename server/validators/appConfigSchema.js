@@ -22,6 +22,7 @@ export const appConfigSchema = z
     inputMode: z.any().optional(),
     imageUpload: z.any().optional(),
     fileUpload: z.any().optional(),
+    upload: z.any().optional(), // Unified upload configuration
     features: z.any().optional(),
     greeting: z.any().optional(),
     starterPrompts: z.array(z.any()).optional(),
