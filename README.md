@@ -294,6 +294,8 @@ For HTTPS support, set these environment variables or define them in `config.env
 | `SSL_CERT` | Path to SSL certificate           |
 | `SSL_CA`   | Path to CA certificate (optional) |
 
+For handling external services with self-signed certificates, see [docs/ssl-certificates.md](docs/ssl-certificates.md).
+
 Example of running with custom configuration:
 
 ```bash
