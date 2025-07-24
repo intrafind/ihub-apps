@@ -73,7 +73,7 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      // Get model name for standard variables
+      // Get model name for global prompt variables
       const modelName = model?.name || model?.id || resolvedModelId;
 
       let llmMessages = await processMessageTemplates(

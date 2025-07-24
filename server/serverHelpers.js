@@ -136,14 +136,14 @@ export async function verifyApiKey(model, res, clientRes = null, language) {
 }
 
 /**
- * Resolve standard variables that should be automatically available in prompts
+ * Resolve global prompt variables that should be automatically available in prompts
  * @param {object} user - User object from request
  * @param {string} modelName - Name of the model being used
  * @param {string} language - Current language setting
  * @param {string} style - Current style/tone setting
- * @returns {object} Object containing standard variables
+ * @returns {object} Object containing global prompt variables
  */
-function resolveStandardVariables(user = null, modelName = null, language = null, style = null) {
+function resolveGlobalPromptVariables(user = null, modelName = null, language = null, style = null) {
   const now = new Date();
   const platformConfig = configCache.getPlatform() || {};
 
@@ -158,7 +158,7 @@ function resolveStandardVariables(user = null, modelName = null, language = null
     timeStyle: 'medium'
   });
 
-  const standardVars = {
+  const globalPromptVars = {
     // Date and time variables
     year: now.getFullYear().toString(),
     month: (now.getMonth() + 1).toString().padStart(2, '0'),
@@ -184,12 +184,12 @@ function resolveStandardVariables(user = null, modelName = null, language = null
     location: user?.location || user?.settings?.location || '',
 
     // Platform context (configurable in platform.json)
-    platform_context: platformConfig.standardVariables?.context || ''
+    platform_context: platformConfig.globalPromptVariables?.context || ''
   };
 
   // Filter out empty values to avoid replacing with empty strings unintentionally
   const filteredVars = {};
-  for (const [key, value] of Object.entries(standardVars)) {
+  for (const [key, value] of Object.entries(globalPromptVars)) {
     if (value !== null && value !== undefined && value !== '') {
       filteredVars[key] = value;
     }
@@ -212,9 +212,9 @@ export async function processMessageTemplates(
   const lang = language || defaultLang;
   console.log(`Using language '${lang}' for message templates`);
 
-  // Resolve standard variables once for use throughout the function
-  const standardVariables = resolveStandardVariables(user, modelName, lang, style);
-  console.log(`Resolved ${Object.keys(standardVariables).length} standard variables`);
+  // Resolve global prompt variables once for use throughout the function
+  const globalPromptVariables = resolveGlobalPromptVariables(user, modelName, lang, style);
+  console.log(`Resolved ${Object.keys(globalPromptVariables).length} global prompt variables`);
 
   let llmMessages = [...messages].map(msg => {
     if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
@@ -223,8 +223,8 @@ export async function processMessageTemplates(
           ? getLocalizedContent(msg.promptTemplate, lang)
           : msg.promptTemplate || msg.content;
       if (typeof processedContent !== 'string') processedContent = String(processedContent || '');
-      // Combine user-defined variables with standard variables (user variables take precedence)
-      const variables = { ...standardVariables, ...msg.variables, content: msg.content };
+      // Combine user-defined variables with global prompt variables (user variables take precedence)
+      const variables = { ...globalPromptVariables, ...msg.variables, content: msg.content };
       if (variables && Object.keys(variables).length > 0) {
         for (const [key, value] of Object.entries(variables)) {
           const strValue = typeof value === 'string' ? value : String(value || '');
@@ -253,8 +253,8 @@ export async function processMessageTemplates(
     let systemPrompt =
       typeof app.system === 'object' ? getLocalizedContent(app.system, lang) : app.system || '';
     if (typeof systemPrompt !== 'string') systemPrompt = String(systemPrompt || '');
-    // Combine user variables with standard variables for system prompt processing
-    const allVariables = { ...standardVariables, ...userVariables };
+    // Combine user variables with global prompt variables for system prompt processing
+    const allVariables = { ...globalPromptVariables, ...userVariables };
     if (Object.keys(allVariables).length > 0) {
       for (const [key, value] of Object.entries(allVariables)) {
         if (typeof value === 'function' || (typeof value === 'object' && value !== null)) continue;
