@@ -5,6 +5,7 @@ This document describes how to configure and use LDAP and NTLM/Windows authentic
 ## Overview
 
 AI Hub Apps supports enterprise authentication through:
+
 - **LDAP Authentication**: Connect to LDAP servers including Active Directory
 - **NTLM Authentication**: Windows Integrated Authentication using NTLM protocol
 
@@ -87,21 +88,21 @@ AD_BIND_PASSWORD=your_ad_service_password
 
 ### Configuration Options
 
-| Option | Description | Required | Default |
-|--------|-------------|----------|---------|
-| `name` | Unique identifier for the LDAP provider | Yes | - |
-| `displayName` | Human-readable name | No | Same as `name` |
-| `url` | LDAP server URL (ldap:// or ldaps://) | Yes | - |
-| `adminDn` | DN for binding to LDAP (if required) | No | - |
-| `adminPassword` | Password for admin binding | No | - |
-| `userSearchBase` | Base DN for user searches | Yes | - |
-| `usernameAttribute` | Attribute to match username | No | `uid` |
-| `userDn` | Pattern for user DN ({{username}} placeholder) | No | `uid={{username}},ou=people,dc=example,dc=org` |
-| `groupSearchBase` | Base DN for group searches | No | - |
-| `groupClass` | LDAP class for groups | No | `groupOfNames` |
-| `defaultGroups` | Default groups for authenticated users | No | `[]` |
-| `sessionTimeoutMinutes` | JWT token timeout | No | `480` |
-| `tlsOptions` | TLS connection options | No | `{}` |
+| Option                  | Description                                    | Required | Default                                        |
+| ----------------------- | ---------------------------------------------- | -------- | ---------------------------------------------- |
+| `name`                  | Unique identifier for the LDAP provider        | Yes      | -                                              |
+| `displayName`           | Human-readable name                            | No       | Same as `name`                                 |
+| `url`                   | LDAP server URL (ldap:// or ldaps://)          | Yes      | -                                              |
+| `adminDn`               | DN for binding to LDAP (if required)           | No       | -                                              |
+| `adminPassword`         | Password for admin binding                     | No       | -                                              |
+| `userSearchBase`        | Base DN for user searches                      | Yes      | -                                              |
+| `usernameAttribute`     | Attribute to match username                    | No       | `uid`                                          |
+| `userDn`                | Pattern for user DN ({{username}} placeholder) | No       | `uid={{username}},ou=people,dc=example,dc=org` |
+| `groupSearchBase`       | Base DN for group searches                     | No       | -                                              |
+| `groupClass`            | LDAP class for groups                          | No       | `groupOfNames`                                 |
+| `defaultGroups`         | Default groups for authenticated users         | No       | `[]`                                           |
+| `sessionTimeoutMinutes` | JWT token timeout                              | No       | `480`                                          |
+| `tlsOptions`            | TLS connection options                         | No       | `{}`                                           |
 
 ## NTLM Authentication
 
@@ -136,22 +137,23 @@ Add NTLM configuration to your `contents/config/platform.json`:
 
 ### Configuration Options
 
-| Option | Description | Required | Default |
-|--------|-------------|----------|---------|
-| `enabled` | Enable NTLM authentication | Yes | `false` |
-| `domain` | Windows domain name | No | - |
-| `domainController` | Domain controller hostname | No | - |
-| `type` | Authentication type (`ntlm` or `negotiate`) | No | `ntlm` |
-| `debug` | Enable debug logging | No | `false` |
-| `getUserInfo` | Retrieve user information | No | `true` |
-| `getGroups` | Retrieve user groups | No | `true` |
-| `defaultGroups` | Default groups for authenticated users | No | `[]` |
-| `sessionTimeoutMinutes` | JWT token timeout | No | `480` |
-| `generateJwtToken` | Generate JWT for API access | No | `true` |
+| Option                  | Description                                 | Required | Default |
+| ----------------------- | ------------------------------------------- | -------- | ------- |
+| `enabled`               | Enable NTLM authentication                  | Yes      | `false` |
+| `domain`                | Windows domain name                         | No       | -       |
+| `domainController`      | Domain controller hostname                  | No       | -       |
+| `type`                  | Authentication type (`ntlm` or `negotiate`) | No       | `ntlm`  |
+| `debug`                 | Enable debug logging                        | No       | `false` |
+| `getUserInfo`           | Retrieve user information                   | No       | `true`  |
+| `getGroups`             | Retrieve user groups                        | No       | `true`  |
+| `defaultGroups`         | Default groups for authenticated users      | No       | `[]`    |
+| `sessionTimeoutMinutes` | JWT token timeout                           | No       | `480`   |
+| `generateJwtToken`      | Generate JWT for API access                 | No       | `true`  |
 
 ### Platform Requirements
 
 NTLM authentication has specific platform requirements:
+
 - **Windows Server**: Best compatibility and full feature support
 - **Linux/Unix**: Limited support, may require additional configuration
 - **Network**: Direct connection required (no proxy support)
@@ -178,7 +180,7 @@ The system includes predefined groups for LDAP and NTLM users:
   },
   "ntlm-users": {
     "id": "ntlm-users",
-    "name": "NTLM Users", 
+    "name": "NTLM Users",
     "description": "Default permissions for NTLM authenticated users",
     "inherits": ["authenticated"],
     "permissions": {
@@ -208,6 +210,7 @@ Both LDAP and NTLM support automatic group mapping. Groups from the authenticati
 ### LDAP Authentication
 
 #### Login
+
 ```http
 POST /api/auth/ldap/login
 Content-Type: application/json
@@ -220,6 +223,7 @@ Content-Type: application/json
 ```
 
 #### Get Providers
+
 ```http
 GET /api/auth/ldap/providers
 ```
@@ -227,11 +231,13 @@ GET /api/auth/ldap/providers
 ### NTLM Authentication
 
 #### Login (requires Windows authentication)
+
 ```http
 POST /api/auth/ntlm/login
 ```
 
 #### Status
+
 ```http
 GET /api/auth/ntlm/status
 ```
@@ -258,7 +264,7 @@ async function loginLdap(username, password, provider) {
     },
     body: JSON.stringify({ username, password, provider })
   });
-  
+
   const result = await response.json();
   if (result.success) {
     localStorage.setItem('auth_token', result.token);
@@ -273,7 +279,7 @@ async function loginNtlm() {
     method: 'POST',
     credentials: 'include' // Important for NTLM
   });
-  
+
   const result = await response.json();
   if (result.success) {
     localStorage.setItem('auth_token', result.token);
@@ -287,7 +293,7 @@ async function makeAuthenticatedRequest(url) {
   const token = localStorage.getItem('auth_token');
   const response = await fetch(url, {
     headers: {
-      'Authorization': `Bearer ${token}`
+      Authorization: `Bearer ${token}`
     }
   });
   return response.json();
@@ -381,6 +387,7 @@ This feature requires the following npm packages:
 ## Compatibility
 
 ### LDAP Compatibility
+
 - OpenLDAP
 - Microsoft Active Directory
 - Apache Directory Server
@@ -388,6 +395,7 @@ This feature requires the following npm packages:
 - IBM Security Directory Server
 
 ### NTLM Compatibility
+
 - Windows Server 2016+
 - Windows 10+
 - Limited Linux support (testing required)
@@ -410,7 +418,7 @@ The new implementation uses `ldap-authentication` instead of the deprecated `pas
   }
 }
 
-// New configuration  
+// New configuration
 {
   url: 'ldap://localhost:389',
   adminDn: 'cn=root',

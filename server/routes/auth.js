@@ -103,8 +103,9 @@ export default function registerAuthRoutes(app) {
 
       // Check if NTLM data is available from the middleware
       if (!req.ntlm || !req.ntlm.authenticated) {
-        return res.status(401).json({ 
-          error: 'NTLM authentication required. This endpoint requires Windows Integrated Authentication.' 
+        return res.status(401).json({
+          error:
+            'NTLM authentication required. This endpoint requires Windows Integrated Authentication.'
         });
       }
 
@@ -327,11 +328,13 @@ export default function registerAuthRoutes(app) {
       domain: ntlmConfig?.domain,
       type: ntlmConfig?.type || 'ntlm',
       authenticated: req.ntlm?.authenticated ?? false,
-      user: req.ntlm?.authenticated ? {
-        username: req.ntlm.username,
-        domain: req.ntlm.domain,
-        workstation: req.ntlm.workstation
-      } : null
+      user: req.ntlm?.authenticated
+        ? {
+            username: req.ntlm.username,
+            domain: req.ntlm.domain,
+            workstation: req.ntlm.workstation
+          }
+        : null
     });
   });
 

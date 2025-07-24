@@ -27,7 +27,9 @@ export function createNtlmMiddleware(ntlmConfig = {}) {
     ...ntlmConfig.options
   };
 
-  console.log(`[NTLM Auth] Configuring NTLM middleware with domain: ${options.domain || 'default'}`);
+  console.log(
+    `[NTLM Auth] Configuring NTLM middleware with domain: ${options.domain || 'default'}`
+  );
 
   return expressNtlm(options);
 }
@@ -44,7 +46,7 @@ function processNtlmUser(req, ntlmConfig) {
   }
 
   const ntlmUser = req.ntlm;
-  
+
   // Check if user is authenticated
   if (!ntlmUser.authenticated) {
     console.warn(`[NTLM Auth] User not authenticated: ${ntlmUser.username || 'unknown'}`);
@@ -124,7 +126,8 @@ function generateJwtToken(user, ntlmConfig) {
     iat: Math.floor(Date.now() / 1000)
   };
 
-  const sessionTimeout = ntlmConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480; // 8 hours default
+  const sessionTimeout =
+    ntlmConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480; // 8 hours default
   const expiresIn = sessionTimeout * 60; // Convert to seconds
 
   const token = jwt.sign(tokenPayload, jwtSecret, {
@@ -152,14 +155,16 @@ export function ntlmAuthMiddleware(req, res, next) {
 
   // Check if NTLM data is available (should be set by express-ntlm middleware)
   if (!req.ntlm) {
-    console.warn('[NTLM Auth] No NTLM data found in request. Make sure express-ntlm middleware is configured.');
+    console.warn(
+      '[NTLM Auth] No NTLM data found in request. Make sure express-ntlm middleware is configured.'
+    );
     return next();
   }
 
   try {
     // Process NTLM user data
     let user = processNtlmUser(req, ntlmAuth);
-    
+
     if (!user) {
       req.user = null;
       return next();
@@ -184,7 +189,9 @@ export function ntlmAuthMiddleware(req, res, next) {
       }
     }
 
-    console.log(`[NTLM Auth] User authenticated: ${user.id} with groups: ${user.groups.join(', ')}`);
+    console.log(
+      `[NTLM Auth] User authenticated: ${user.id} with groups: ${user.groups.join(', ')}`
+    );
     next();
   } catch (error) {
     console.error('[NTLM Auth] Error processing NTLM authentication:', error);
@@ -215,7 +222,7 @@ export function processNtlmLogin(req, ntlmConfig) {
 
   // Process NTLM user data
   let user = processNtlmUser(req, ntlmConfig);
-  
+
   if (!user) {
     throw new Error('Failed to process NTLM user data');
   }

@@ -93,7 +93,12 @@ async function authenticateLdapUser(username, password, ldapConfig) {
     // Normalize user data
     const normalizedUser = {
       id: user.uid || user.sAMAccountName || user.cn || username,
-      name: user.displayName || user.cn || user.name || `${user.givenName || ''} ${user.sn || ''}`.trim() || username,
+      name:
+        user.displayName ||
+        user.cn ||
+        user.name ||
+        `${user.givenName || ''} ${user.sn || ''}`.trim() ||
+        username,
       email: user.mail || user.email || null,
       groups: Array.from(mappedGroups),
       authenticated: true,
@@ -131,7 +136,8 @@ function generateJwtToken(user, ldapConfig) {
     iat: Math.floor(Date.now() / 1000)
   };
 
-  const sessionTimeout = ldapConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480; // 8 hours default
+  const sessionTimeout =
+    ldapConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480; // 8 hours default
   const expiresIn = sessionTimeout * 60; // Convert to seconds
 
   const token = jwt.sign(tokenPayload, jwtSecret, {
@@ -161,7 +167,7 @@ export async function loginLdapUser(username, password, ldapConfig) {
 
   // Authenticate user
   let user = await authenticateLdapUser(username, password, ldapConfig);
-  
+
   if (!user) {
     throw new Error('Invalid credentials');
   }
@@ -210,7 +216,7 @@ export default function ldapAuthMiddleware(req, res, next) {
 export function getLdapConfig(providerName) {
   const platform = configCache.getPlatform() || {};
   const ldapAuth = platform.ldapAuth || {};
-  
+
   if (!ldapAuth.enabled || !ldapAuth.providers) {
     return null;
   }
@@ -225,7 +231,7 @@ export function getLdapConfig(providerName) {
 export function getConfiguredLdapProviders() {
   const platform = configCache.getPlatform() || {};
   const ldapAuth = platform.ldapAuth || {};
-  
+
   if (!ldapAuth.enabled || !ldapAuth.providers) {
     return [];
   }
