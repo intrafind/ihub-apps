@@ -16,10 +16,10 @@
     "build:client": "cd client && npm run build && mkdir -p ../dist/public && cp -r dist/* ../dist/public/",
     "docs:build": "mdbook build docs",
     "build:contents": "mkdir -p dist/contents && cp -r contents/* dist/contents/",
-    "build:server": "mkdir -p dist/server && cp -r server/*.js dist/server/ && cp server/*.cjs dist/server/ && cp server/package.json dist/server/ && cp -r server/adapters dist/server/",
-    "build:config": "cp package.json dist/ && npm run build:dotenv",
+    "build:server": "mkdir -p dist/server && cp -r server/*.js dist/server/ && cp server/*.cjs dist/server/ && cp server/package.json server/package-lock.json dist/server/ && cp -r server/adapters dist/server/",
+    "build:config": "cp package.json package-lock.json dist/ && npm run build:dotenv",
     "build:dotenv": "[ -f .env ] && cp .env dist/ || echo 'No .env file found, skipping'",
-    "build:package": "cd dist && npm install --production && cd server && npm install --production",
+    "build:package": "cd dist && npm ci --omit=dev && cd server && npm ci --omit=dev",
     "start": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
     "start:prod": "cd dist && node server/start-prod.js",
     "prod:build": "npm run build && npm run build:package",
@@ -54,19 +54,15 @@
     "applications"
   ],
   "dependencies": {
-    "concurrently": "^9.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "express-ntlm": "^2.7.0",
     "ldap-authentication": "^3.3.4",
-    "microsoft-cognitiveservices-speech-sdk": "^1.45.0",
-    "node-fetch": "^3.3.0",
-    "passport-ntlm": "^0.3.0",
-    "pdf2md": "^1.0.2",
-    "react-quill": "^2.0.0"
+    "node-fetch": "^3.3.0"
   },
   "devDependencies": {
+    "concurrently": "^9.2.0",
     "electron": "^29.2.0",
     "electron-builder": "^24.6.0",
     "esbuild": "^0.25.6",

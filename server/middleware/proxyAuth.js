@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import jwkToPem from 'jwk-to-pem';
 import config from '../config.js';
 import configCache from '../configCache.js';
-import { enhanceUserGroups } from '../utils/authorization.js';
+import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 
 const jwksCache = new Map();
 
@@ -151,13 +151,8 @@ export async function proxyAuth(req, res, next) {
     return next();
   }
 
-  const groupMap = configCache.getGroupMap();
-  const mapped = new Set();
-  for (const g of groups) {
-    const m = groupMap[g] || g;
-    if (Array.isArray(m)) m.forEach(x => mapped.add(x));
-    else mapped.add(m);
-  }
+  // Apply group mapping using the new groups.json format
+  const mapped = mapExternalGroups(groups);
 
   let user = {
     id: userId,
@@ -170,7 +165,7 @@ export async function proxyAuth(req, res, next) {
             : tokenPayload.given_name || tokenPayload.family_name))) ||
       userId,
     email: req.headers['x-forwarded-email'] || (tokenPayload && tokenPayload.email) || null,
-    groups: Array.from(mapped),
+    groups: mapped,
     authenticated: true,
     authMethod: 'proxy'
   };

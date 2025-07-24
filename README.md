@@ -15,12 +15,15 @@ The purpose of this repository is to provide a collection of apps, which a user 
 ## Apps
 
 ### Chat
+
 Basic conversational AI interface supporting multiple models.
 
 ### Translation
+
 Multi-language translation capabilities.
 
 ### iFinder Document Explorer
+
 Advanced document management integration with iFinder systems. Provides AI-powered document search, content analysis, and metadata retrieval. See [iFinder Integration documentation](docs/iFinder-Integration.md) for detailed setup and configuration.
 
 ## Implementation
@@ -293,6 +296,8 @@ For HTTPS support, set these environment variables or define them in `config.env
 | `SSL_KEY`  | Path to SSL private key           |
 | `SSL_CERT` | Path to SSL certificate           |
 | `SSL_CA`   | Path to CA certificate (optional) |
+
+For handling external services with self-signed certificates, see [docs/ssl-certificates.md](docs/ssl-certificates.md).
 
 Example of running with custom configuration:
 

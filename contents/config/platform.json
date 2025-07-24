@@ -196,7 +196,7 @@
     "algorithm": "RS256",
     "issuer": "ai-hub-apps",
     "audience": "ifinder-api",
-    "defaultScope": "fa_index_read",
+    "defaultScope": "",
     "tokenExpirationSeconds": 3600,
     "timeout": 30000,
     "downloadDir": "contents/data/downloads/ifinder-downloads",
