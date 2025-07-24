@@ -146,11 +146,6 @@ else
     echo "❌ groupPermissions.json missing"
 fi
 
-if [ -f "contents/config/groupMap.json" ]; then
-    echo "✅ groupMap.json exists"
-else
-    echo "❌ groupMap.json missing"
-fi
 
 if [ -f "contents/config/users.json" ]; then
     echo "✅ users.json exists"

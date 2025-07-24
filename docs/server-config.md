@@ -77,6 +77,10 @@ To enable HTTPS you must provide certificate files via environment variables:
 
 When `SSL_KEY` and `SSL_CERT` are set the server starts in HTTPS mode.
 
+### External Services with Self-Signed Certificates
+
+If AI Hub Apps needs to communicate with external services using self-signed SSL certificates (such as custom LLM endpoints, internal APIs, or authentication providers), see the [SSL Certificates Guide](ssl-certificates.md) for configuration options.
+
 ## Example
 
 Run the production build with four workers on port 8080:

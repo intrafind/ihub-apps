@@ -333,7 +333,7 @@
           "properties": {
             "query": {
               "type": "string",
-              "description": "Search query to find documents in iFinder. Example: 'contract proposals' or 'technical documentation'"
+              "description": "Search query to find documents in iFinder. Example: 'contract proposals' or 'technical documentation'. If you want to filter on filetype use the syntax 'application.keyword:PDF', 'application.keyword:Word' or other types like JIRA,PDF,Text,Other,Jira+Work+Item,ZIP,Email,Excel,HTML,XML,Powerpoint."
             },
             "maxResults": {
               "type": "integer",
@@ -349,7 +349,7 @@
             "returnFields": {
               "type": "array",
               "items": { "type": "string" },
-              "description": "Fields to return in search results (optional)"
+              "description": "Fields to return in search results (optional) Example: ['title', 'application', 'date']"
             }
           },
           "required": ["query"]

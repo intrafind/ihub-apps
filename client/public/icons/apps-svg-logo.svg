@@ -1,5 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="51" height="39" xml:space="preserve">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #a2a1a1;
+      }
+
+      .cls-2 {
+        fill: url(#gradient);
+      }
+    </style>
+    <linearGradient id="gradient" data-name="gradient" gradientTransform="translate(0 109.41) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#329248"/>
+      <stop offset="1" stop-color="#008fba"/>
+    </linearGradient>
+  </defs>
     <path fill="#999999" d="M25.639 10.251C24.63 8.53 22.766 7.37 20.625 7.37c-.56 0-1.1.084-1.612.232L.714 38.458h8.128l16.797-28.207z"/>
-    <path fill="#328F42"
+    <path class="cls-2"
           d="M42.021 38.458h8.409L30.647 4.411C29.924 3.187 28.355.725 25.681.725c-2.671 0-4.119 2.601-4.775 3.684l-1.893 3.193c.511-.148 1.051-.231 1.611-.231 2.142 0 4.005 1.159 5.015 2.88l16.382 28.207z"/>
     </svg>

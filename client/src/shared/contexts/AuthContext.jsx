@@ -345,6 +345,10 @@ export function AuthProvider({ children }) {
       // Comprehensive cleanup
       performLogoutCleanup();
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
+
+      // Redirect to apps home page for security
+      // This ensures users don't remain on admin or other protected pages after logout
+      window.location.href = '/';
     }
   };
 
