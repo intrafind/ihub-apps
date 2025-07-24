@@ -157,8 +157,9 @@ function resolveGlobalPromptVariables(
 
   // Create timezone-aware date formatter
   const tzOptions = { timeZone: timezone };
-  const dateFormatter = new Intl.DateTimeFormat(language || 'en', tzOptions);
-  const timeFormatter = new Intl.DateTimeFormat(language || 'en', {
+  const defaultLang = platformConfig.defaultLanguage || 'en';
+  const dateFormatter = new Intl.DateTimeFormat(language || defaultLang, tzOptions);
+  const timeFormatter = new Intl.DateTimeFormat(language || defaultLang, {
     ...tzOptions,
     timeStyle: 'medium'
   });
@@ -169,7 +170,7 @@ function resolveGlobalPromptVariables(
     month: (now.getMonth() + 1).toString().padStart(2, '0'),
     date: now.toISOString().split('T')[0], // YYYY-MM-DD format
     time: timeFormatter.format(now),
-    day_of_week: now.toLocaleDateString(language || 'en', { ...tzOptions, weekday: 'long' }),
+    day_of_week: now.toLocaleDateString(language || defaultLang, { ...tzOptions, weekday: 'long' }),
 
     // Locale and timezone
     timezone: timezone,
@@ -244,7 +245,18 @@ export async function processMessageTemplates(
       if (msg.fileData) processedMsg.fileData = msg.fileData;
       return processedMsg;
     }
-    const processedMsg = { role: msg.role, content: msg.content };
+    // Apply global prompt variables to normal prompts as well
+    let processedContent = msg.content;
+    if (typeof processedContent === 'string' && globalPromptVariables && Object.keys(globalPromptVariables).length > 0) {
+      for (const [key, value] of Object.entries(globalPromptVariables)) {
+        const strValue = typeof value === 'string' ? value : String(value || '');
+        processedContent = processedContent.replace(
+          new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
+          strValue
+        );
+      }
+    }
+    const processedMsg = { role: msg.role, content: processedContent };
     if (msg.imageData) processedMsg.imageData = msg.imageData;
     if (msg.fileData) processedMsg.fileData = msg.fileData;
     return processedMsg;
