@@ -102,7 +102,9 @@ class IFinderClient {
 
     try {
       // Generate JWT token for the user
-      const authHeader = getIFinderAuthorizationHeader(user, { scope: 'fa_index_read' });
+      const authHeader = getIFinderAuthorizationHeader(user);
+
+      console.log(`iFinder Search: Auth Header for user ${user.email || user.id}:`, authHeader);
 
       // Construct search URL with profile ID
       const searchEndpoint = config.endpoints.search.replace(
@@ -232,7 +234,7 @@ class IFinderClient {
 
     try {
       // Generate JWT token for the user
-      const authHeader = getIFinderAuthorizationHeader(user, { scope: 'fa_index_read' });
+      const authHeader = getIFinderAuthorizationHeader(user);
 
       // Construct document URL
       const documentEndpoint = config.endpoints.document
@@ -346,7 +348,7 @@ class IFinderClient {
 
     try {
       // Generate JWT token for the user
-      const authHeader = getIFinderAuthorizationHeader(user, { scope: 'fa_index_read' });
+      const authHeader = getIFinderAuthorizationHeader(user);
 
       // Construct document URL
       const documentEndpoint = config.endpoints.document
@@ -467,7 +469,7 @@ class IFinderClient {
 
     try {
       // Generate JWT token for the user
-      const authHeader = getIFinderAuthorizationHeader(user, { scope: 'fa_index_read' });
+      const authHeader = getIFinderAuthorizationHeader(user);
 
       // Construct document URL
       const documentEndpoint = config.endpoints.document
