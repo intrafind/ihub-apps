@@ -496,49 +496,54 @@ const AppChat = () => {
   const createUploadConfig = (app, selectedModel) => {
     // New unified upload config structure
     const uploadConfig = app?.upload || {};
-    
+
     // Backward compatibility with old structure
     const imageConfig = uploadConfig?.imageUpload || app?.imageUpload || {};
     const fileConfig = uploadConfig?.fileUpload || app?.fileUpload || {};
-    
+
     // Check if upload is enabled at all
-    const uploadEnabled = uploadConfig?.enabled !== false && (
-      imageConfig?.enabled === true || 
-      fileConfig?.enabled === true ||
-      // Legacy check
-      app?.imageUpload?.enabled === true ||
-      app?.fileUpload?.maxFileSizeMB > 0
-    );
-    
+    const uploadEnabled =
+      uploadConfig?.enabled !== false &&
+      (imageConfig?.enabled === true ||
+        fileConfig?.enabled === true ||
+        // Legacy check
+        app?.imageUpload?.enabled === true ||
+        app?.fileUpload?.maxFileSizeMB > 0);
+
     if (!uploadEnabled) {
       return { enabled: false };
     }
-    
+
     // Determine if image upload should be disabled based on model capabilities
     // Models that don't support vision: check if model name suggests it lacks vision
-    const isVisionModel = selectedModel && (
-      selectedModel.includes('vision') || 
-      selectedModel.includes('gpt-4') || 
-      selectedModel.includes('claude-3') ||
-      selectedModel.includes('gemini') ||
-      selectedModel.includes('4o')
-    );
-    
+    const isVisionModel =
+      selectedModel &&
+      (selectedModel.includes('vision') ||
+        selectedModel.includes('gpt-4') ||
+        selectedModel.includes('claude-3') ||
+        selectedModel.includes('gemini') ||
+        selectedModel.includes('4o'));
+
     const imageUploadEnabled = imageConfig?.enabled !== false && isVisionModel;
     const fileUploadEnabled = fileConfig?.enabled !== false;
-    
+
     return {
       enabled: true,
       imageUploadEnabled,
       fileUploadEnabled,
-      maxFileSizeMB: Math.max(imageConfig?.maxFileSizeMB || 0, fileConfig?.maxFileSizeMB || 0) || 10,
+      maxFileSizeMB:
+        Math.max(imageConfig?.maxFileSizeMB || 0, fileConfig?.maxFileSizeMB || 0) || 10,
       // Image-specific settings
       imageUpload: {
         enabled: imageUploadEnabled,
         resizeImages: imageConfig?.resizeImages !== false,
         maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
         supportedFormats: imageConfig?.supportedFormats || [
-          'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'image/gif',
+          'image/webp'
         ],
         maxFileSizeMB: imageConfig?.maxFileSizeMB || 10
       },
@@ -547,22 +552,44 @@ const AppChat = () => {
         enabled: fileUploadEnabled,
         maxFileSizeMB: fileConfig?.maxFileSizeMB || 5,
         supportedTextFormats: fileConfig?.supportedTextFormats || [
-          'text/plain', 'text/markdown', 'text/csv', 'application/json',
-          'text/html', 'text/css', 'text/javascript', 'application/javascript'
+          'text/plain',
+          'text/markdown',
+          'text/csv',
+          'application/json',
+          'text/html',
+          'text/css',
+          'text/javascript',
+          'application/javascript'
         ],
         supportedPdfFormats: fileConfig?.supportedPdfFormats || ['application/pdf']
       },
       // Legacy format for backward compatibility
       resizeImages: imageConfig?.resizeImages !== false,
       maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
-      supportedImageFormats: imageUploadEnabled ? (imageConfig?.supportedFormats || [
-        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'
-      ]) : [],
-      supportedTextFormats: fileUploadEnabled ? (fileConfig?.supportedTextFormats || [
-        'text/plain', 'text/markdown', 'text/csv', 'application/json',
-        'text/html', 'text/css', 'text/javascript', 'application/javascript'
-      ]) : [],
-      supportedPdfFormats: fileUploadEnabled ? (fileConfig?.supportedPdfFormats || ['application/pdf']) : []
+      supportedImageFormats: imageUploadEnabled
+        ? imageConfig?.supportedFormats || [
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'image/gif',
+            'image/webp'
+          ]
+        : [],
+      supportedTextFormats: fileUploadEnabled
+        ? fileConfig?.supportedTextFormats || [
+            'text/plain',
+            'text/markdown',
+            'text/csv',
+            'application/json',
+            'text/html',
+            'text/css',
+            'text/javascript',
+            'application/javascript'
+          ]
+        : [],
+      supportedPdfFormats: fileUploadEnabled
+        ? fileConfig?.supportedPdfFormats || ['application/pdf']
+        : []
     };
   };
 
@@ -1014,9 +1041,7 @@ const AppChat = () => {
                       }
                       onFileSelect={handleFileSelect}
                       uploadConfig={createUploadConfig(app, selectedModel)}
-                      allowEmptySubmit={
-                        app?.allowEmptyContent || selectedFile !== null
-                      }
+                      allowEmptySubmit={app?.allowEmptyContent || selectedFile !== null}
                       inputRef={inputRef}
                       selectedFile={selectedFile}
                       showUploader={showUploader}
@@ -1075,9 +1100,7 @@ const AppChat = () => {
                       }
                       onFileSelect={handleFileSelect}
                       uploadConfig={createUploadConfig(app, selectedModel)}
-                      allowEmptySubmit={
-                        app?.allowEmptyContent || selectedFile !== null
-                      }
+                      allowEmptySubmit={app?.allowEmptyContent || selectedFile !== null}
                       inputRef={inputRef}
                       selectedFile={selectedFile}
                       showUploader={showUploader}
@@ -1136,9 +1159,7 @@ const AppChat = () => {
                     }
                     onFileSelect={handleFileSelect}
                     uploadConfig={createUploadConfig(app, selectedModel)}
-                    allowEmptySubmit={
-                      app?.allowEmptyContent || selectedFile !== null
-                    }
+                    allowEmptySubmit={app?.allowEmptyContent || selectedFile !== null}
                     inputRef={inputRef}
                     selectedFile={selectedFile}
                     showUploader={showUploader}
@@ -1191,9 +1212,7 @@ const AppChat = () => {
                   }
                   onFileSelect={handleFileSelect}
                   uploadConfig={createUploadConfig(app)}
-                  allowEmptySubmit={
-                    app?.allowEmptyContent || selectedFile !== null
-                  }
+                  allowEmptySubmit={app?.allowEmptyContent || selectedFile !== null}
                   inputRef={inputRef}
                   selectedFile={selectedFile}
                   showUploader={showUploader}

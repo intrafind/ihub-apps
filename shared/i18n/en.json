@@ -539,7 +539,7 @@
   "components": {
     "uploader": {
       "imageSelected": "Image selected",
-      "fileSelected": "File selected and processed", 
+      "fileSelected": "File selected and processed",
       "processing": "Processing file...",
       "uploadFile": "Upload File",
       "supportedFormats": "Supported: {{formats}} (max {{maxSize}}MB)"
