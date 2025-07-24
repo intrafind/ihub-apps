@@ -10,7 +10,12 @@ import { throttledFetch } from './requestThrottler.js';
  * @param {string} fallbackLanguage - Fallback language (default: 'en')
  * @returns {any} - Language-specific value or original value
  */
-function extractLanguageValue(value, language = 'en', fallbackLanguage = 'en') {
+function extractLanguageValue(value, language = 'en', fallbackLanguage = null) {
+  // Get platform default language if not provided
+  if (!fallbackLanguage) {
+    const platformConfig = configCache.getPlatform() || {};
+    fallbackLanguage = platformConfig?.defaultLanguage || 'en';
+  }
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     // Check if this looks like a multilingual object
     if (value[language] !== undefined) {
@@ -38,7 +43,12 @@ function extractLanguageValue(value, language = 'en', fallbackLanguage = 'en') {
  * @param {string} fallbackLanguage - Fallback language
  * @returns {any} - Object with language-specific values
  */
-function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = 'en') {
+function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = null) {
+  // Get platform default language if not provided
+  if (!fallbackLanguage) {
+    const platformConfig = configCache.getPlatform() || {};
+    fallbackLanguage = platformConfig?.defaultLanguage || 'en';
+  }
   if (Array.isArray(obj)) {
     return obj.map(item => extractLanguageFromObject(item, language, fallbackLanguage));
   }
@@ -66,7 +76,9 @@ function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = 'en'
  * @returns {Array} - Localized tools
  */
 function localizeTools(tools, language = 'en') {
-  return tools.map(tool => extractLanguageFromObject(tool, language, 'en'));
+  const platformConfig = configCache.getPlatform() || {};
+  const fallbackLanguage = platformConfig?.defaultLanguage || 'en';
+  return tools.map(tool => extractLanguageFromObject(tool, language, fallbackLanguage));
 }
 
 /**

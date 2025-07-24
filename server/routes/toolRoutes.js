@@ -29,8 +29,10 @@ export default function registerToolRoutes(app) {
       // Get tools with ETag from cache
       const { data: configuredTools, etag: toolsEtag } = configCache.getTools();
 
-      // Get user language from Accept-Language header or default to 'en'
-      const userLanguage = req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en';
+      // Get user language from query parameters or platform default
+      const platformConfig = req.app.get('platform') || {};
+      const defaultLang = platformConfig?.defaultLanguage || 'en';
+      const userLanguage = req.query.language || req.query.lang || defaultLang;
       
       // Load all tools (including MCP discovered ones) with localization
       let tools = await loadTools(userLanguage);
