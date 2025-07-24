@@ -126,8 +126,8 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
    - Anonymous users have full access by default
    - Flexible resource-level permissions
 
-8. **Group Mapping Configuration** - `contents/config/groupMap.json`
-   - External group to internal group mapping
+8. **Group Mapping Configuration** - Now handled in `contents/config/groups.json`
+   - External group to internal group mapping via "mappings" arrays
    - Support for corporate group names
    - Anonymous user group assignment
 
@@ -400,15 +400,67 @@ npm start
    }
 ````
 
-2. **Enhanced Group Mapping** (`contents/config/groupMap.json`)
+2. **Enhanced Group Mapping** (now in `contents/config/groups.json`)
    ```json
    {
-     "IT-Admins": ["admin"],
-     "Platform-Admins": ["admin"],
-     "HR-Team": ["hr"],
-     "Employees": ["users"],
-     "Contractors": ["contractors"],
-     "anonymous": ["anonymous"]
+     "groups": {
+       "admin": {
+         "id": "admin",
+         "name": "Admin",
+         "description": "Full administrative access",
+         "permissions": {
+           "apps": ["*"],
+           "prompts": ["*"],
+           "models": ["*"],
+           "adminAccess": true
+         },
+         "mappings": ["IT-Admins", "Platform-Admins"]
+       },
+       "hr": {
+         "id": "hr",
+         "name": "HR Team",
+         "description": "HR department access",
+         "permissions": {
+           "apps": ["hr-assistant", "chat", "email-composer"],
+           "prompts": ["hr-policies", "interview-questions"],
+           "models": ["gpt-4", "claude-3-sonnet"]
+         },
+         "mappings": ["HR-Team"]
+       },
+       "users": {
+         "id": "users",
+         "name": "Users",
+         "description": "Standard user access",
+         "permissions": {
+           "apps": ["chat", "translator", "summarizer"],
+           "prompts": ["general"],
+           "models": ["gpt-3.5-turbo", "gemini-pro"]
+         },
+         "mappings": ["Employees"]
+       },
+       "contractors": {
+         "id": "contractors",
+         "name": "Contractors",
+         "description": "Limited contractor access",
+         "permissions": {
+           "apps": ["chat"],
+           "prompts": [],
+           "models": ["gpt-3.5-turbo"]
+         },
+         "mappings": ["Contractors"]
+       },
+       "anonymous": {
+         "id": "anonymous",
+         "name": "Anonymous",
+         "description": "Unauthenticated user access",
+         "permissions": {
+           "apps": ["chat"],
+           "prompts": [],
+           "models": ["gemini-flash"]
+         },
+         "mappings": ["anonymous"]
+       }
+     }
    }
    ```
 
@@ -655,7 +707,7 @@ Authentication Implementation:
 ├── client/src/features/auth/          ✅ Auth components
 ├── contents/config/platform.json     ✅ Auth configuration
 ├── contents/config/groupPermissions.json ✅ Permission matrix
-├── contents/config/groupMap.json      ✅ Group mapping
+├── contents/config/groups.json        ✅ Groups with permissions and mappings
 ├── contents/config/users.json         ✅ Local user database
 ├── docs/external-authentication.md    ✅ Complete documentation
 ├── docs/oidc-authentication.md       ✅ OIDC setup guide

@@ -98,8 +98,7 @@ class ConfigCache {
       'config/prompts.json',
       'config/platform.json',
       'config/ui.json',
-      'config/groups.json',
-      'config/groupMap.json'
+      'config/groups.json'
     ];
 
     // Built-in locales that should always be preloaded
@@ -486,13 +485,6 @@ class ConfigCache {
     return this.get('config/groups.json');
   }
 
-  /**
-   * Get group mapping configuration
-   */
-  getGroupMap() {
-    const entry = this.get('config/groupMap.json');
-    return entry ? entry.data || {} : {};
-  }
 
   /**
    * Get UI configuration
