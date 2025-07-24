@@ -124,11 +124,17 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
         >
           <div className="flex items-center gap-2">
             <Icon name="file-text" size="sm" />
-            {isExporting ? t('pages.appChat.export.exportingPDF', 'Exporting PDF...') : t('pages.appChat.export.toPDF', 'as PDF')}
+            {isExporting
+              ? t('pages.appChat.export.exportingPDF', 'Exporting PDF...')
+              : t('pages.appChat.export.toPDF', 'as PDF')}
           </div>
-          <Icon name="chevron-right" size="sm" className={`transition-transform ${showPdfOptions ? 'rotate-90' : ''}`} />
+          <Icon
+            name="chevron-right"
+            size="sm"
+            className={`transition-transform ${showPdfOptions ? 'rotate-90' : ''}`}
+          />
         </button>
-        
+
         {showPdfOptions && (
           <div className="absolute left-full top-0 ml-2 bg-white border border-gray-200 rounded shadow-lg min-w-[300px] p-3">
             <div className="space-y-3">
@@ -138,15 +144,21 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
                 </label>
                 <select
                   value={pdfConfig.template}
-                  onChange={(e) => setPdfConfig(prev => ({ ...prev, template: e.target.value }))}
+                  onChange={e => setPdfConfig(prev => ({ ...prev, template: e.target.value }))}
                   className="w-full text-sm border border-gray-300 rounded px-2 py-1"
                 >
-                  <option value="default">{t('pages.appChat.export.templateDefault', 'Default')}</option>
-                  <option value="professional">{t('pages.appChat.export.templateProfessional', 'Professional')}</option>
-                  <option value="minimal">{t('pages.appChat.export.templateMinimal', 'Minimal')}</option>
+                  <option value="default">
+                    {t('pages.appChat.export.templateDefault', 'Default')}
+                  </option>
+                  <option value="professional">
+                    {t('pages.appChat.export.templateProfessional', 'Professional')}
+                  </option>
+                  <option value="minimal">
+                    {t('pages.appChat.export.templateMinimal', 'Minimal')}
+                  </option>
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   {t('pages.appChat.export.watermarkText', 'Watermark Text')}
@@ -154,36 +166,47 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
                 <input
                   type="text"
                   value={pdfConfig.watermark.text}
-                  onChange={(e) => setPdfConfig(prev => ({
-                    ...prev,
-                    watermark: { ...prev.watermark, text: e.target.value }
-                  }))}
+                  onChange={e =>
+                    setPdfConfig(prev => ({
+                      ...prev,
+                      watermark: { ...prev.watermark, text: e.target.value }
+                    }))
+                  }
                   className="w-full text-sm border border-gray-300 rounded px-2 py-1"
                   placeholder="Enter watermark text"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   {t('pages.appChat.export.watermarkPosition', 'Position')}
                 </label>
                 <select
                   value={pdfConfig.watermark.position}
-                  onChange={(e) => setPdfConfig(prev => ({
-                    ...prev,
-                    watermark: { ...prev.watermark, position: e.target.value }
-                  }))}
+                  onChange={e =>
+                    setPdfConfig(prev => ({
+                      ...prev,
+                      watermark: { ...prev.watermark, position: e.target.value }
+                    }))
+                  }
                   className="w-full text-sm border border-gray-300 rounded px-2 py-1"
                 >
-                  <option value="bottom-right">{t('pages.appChat.export.bottomRight', 'Bottom Right')}</option>
-                  <option value="bottom-left">{t('pages.appChat.export.bottomLeft', 'Bottom Left')}</option>
-                  <option value="bottom-center">{t('pages.appChat.export.bottomCenter', 'Bottom Center')}</option>
+                  <option value="bottom-right">
+                    {t('pages.appChat.export.bottomRight', 'Bottom Right')}
+                  </option>
+                  <option value="bottom-left">
+                    {t('pages.appChat.export.bottomLeft', 'Bottom Left')}
+                  </option>
+                  <option value="bottom-center">
+                    {t('pages.appChat.export.bottomCenter', 'Bottom Center')}
+                  </option>
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                  {t('pages.appChat.export.watermarkOpacity', 'Opacity')} ({Math.round(pdfConfig.watermark.opacity * 100)}%)
+                  {t('pages.appChat.export.watermarkOpacity', 'Opacity')} (
+                  {Math.round(pdfConfig.watermark.opacity * 100)}%)
                 </label>
                 <input
                   type="range"
@@ -191,30 +214,34 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
                   max="1.0"
                   step="0.1"
                   value={pdfConfig.watermark.opacity}
-                  onChange={(e) => setPdfConfig(prev => ({
-                    ...prev,
-                    watermark: { ...prev.watermark, opacity: parseFloat(e.target.value) }
-                  }))}
+                  onChange={e =>
+                    setPdfConfig(prev => ({
+                      ...prev,
+                      watermark: { ...prev.watermark, opacity: parseFloat(e.target.value) }
+                    }))
+                  }
                   className="w-full"
                 />
               </div>
-              
+
               <div className="pt-2 border-t border-gray-200">
                 <button
                   onClick={handlePDFExport}
                   disabled={isExporting}
                   className="w-full bg-blue-600 text-white text-sm px-3 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  {isExporting ? t('pages.appChat.export.generating', 'Generating...') : t('pages.appChat.export.generatePDF', 'Generate PDF')}
+                  {isExporting
+                    ? t('pages.appChat.export.generating', 'Generating...')
+                    : t('pages.appChat.export.generatePDF', 'Generate PDF')}
                 </button>
               </div>
             </div>
           </div>
         )}
       </div>
-      
+
       <div className="border-t border-gray-200"></div>
-      
+
       <button
         onClick={() => handleExport('json')}
         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"

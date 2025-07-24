@@ -69,7 +69,7 @@ export const exportChatToPDF = async (appId, chatId, exportData) => {
   // Create download link from blob response
   const blob = new Blob([response.data], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
-  
+
   // Extract filename from Content-Disposition header if available
   const contentDisposition = response.headers['content-disposition'];
   let filename = 'chat-export.pdf';
@@ -79,13 +79,13 @@ export const exportChatToPDF = async (appId, chatId, exportData) => {
       filename = filenameMatch[1].replace(/['"]/g, '');
     }
   }
-  
+
   // Trigger download
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-  
+
   return { success: true, filename };
 };

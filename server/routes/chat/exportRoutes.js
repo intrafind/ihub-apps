@@ -60,8 +60,8 @@ const getDefaultConfig = () => {
 const generatePDFHTML = (messages, settings, template, watermark, appName) => {
   const styles = getTemplateStyles(template);
   const watermarkStyle = getWatermarkStyle(watermark);
-  
-  const formatTimestamp = (timestamp) => {
+
+  const formatTimestamp = timestamp => {
     try {
       return new Date(timestamp).toLocaleString();
     } catch {
@@ -69,7 +69,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
     }
   };
 
-  const formatContent = (content) => {
+  const formatContent = content => {
     if (!content) return '';
     // Basic markdown-like formatting for PDF
     return content
@@ -85,7 +85,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
     .map(message => {
       const roleClass = message.role === 'user' ? 'user-message' : 'assistant-message';
       const roleLabel = message.role === 'user' ? 'User' : 'Assistant';
-      
+
       return `
         <div class="message ${roleClass}">
           <div class="message-header">
@@ -100,7 +100,8 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
     })
     .join('');
 
-  const metadataHTML = settings ? `
+  const metadataHTML = settings
+    ? `
     <div class="metadata">
       <h3>Chat Settings</h3>
       <div class="metadata-grid">
@@ -108,12 +109,19 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
         ${settings.temperature !== undefined ? `<div><strong>Temperature:</strong> ${settings.temperature}</div>` : ''}
         ${settings.style ? `<div><strong>Style:</strong> ${settings.style}</div>` : ''}
         ${settings.outputFormat ? `<div><strong>Output Format:</strong> ${settings.outputFormat}</div>` : ''}
-        ${settings.variables && Object.keys(settings.variables).length > 0 ? `
-          <div><strong>Variables:</strong> ${Object.entries(settings.variables).map(([k, v]) => `${k}: ${v}`).join(', ')}</div>
-        ` : ''}
+        ${
+          settings.variables && Object.keys(settings.variables).length > 0
+            ? `
+          <div><strong>Variables:</strong> ${Object.entries(settings.variables)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(', ')}</div>
+        `
+            : ''
+        }
       </div>
     </div>
-  ` : '';
+  `
+    : '';
 
   return `
 <!DOCTYPE html>
@@ -149,7 +157,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
 };
 
 // Template styles
-const getTemplateStyles = (template) => {
+const getTemplateStyles = template => {
   const baseStyles = `
     * {
       box-sizing: border-box;
@@ -284,7 +292,9 @@ const getTemplateStyles = (template) => {
 
   switch (template) {
     case 'professional':
-      return baseStyles + `
+      return (
+        baseStyles +
+        `
         .user-message {
           background-color: #f8f9fa;
           border-left-color: #495057;
@@ -298,10 +308,13 @@ const getTemplateStyles = (template) => {
         .header h1 {
           color: #212529;
         }
-      `;
-    
+      `
+      );
+
     case 'minimal':
-      return baseStyles + `
+      return (
+        baseStyles +
+        `
         .message {
           border: none;
           border-radius: 0;
@@ -322,15 +335,16 @@ const getTemplateStyles = (template) => {
           background-color: transparent;
           border: 1px solid #e2e8f0;
         }
-      `;
-    
+      `
+      );
+
     default:
       return baseStyles;
   }
 };
 
 // Watermark positioning
-const getWatermarkStyle = (watermark) => {
+const getWatermarkStyle = watermark => {
   const positions = {
     'bottom-right': 'bottom: 30px; right: 30px;',
     'bottom-left': 'bottom: 30px; left: 30px;',
@@ -364,21 +378,21 @@ export default function registerExportRoutes(app) {
     validate(pdfExportSchema),
     async (req, res) => {
       let browser = null;
-      
+
       try {
         const { appId, chatId } = req.params;
         const { messages, settings, template, watermark } = req.body;
-        
+
         // Get default configuration and merge with request
         const defaultConfig = getDefaultConfig();
         const finalTemplate = template || defaultConfig.template;
         const finalWatermark = { ...defaultConfig.watermark, ...watermark };
-        
+
         // Get app information for better context
         const { data: apps = [] } = configCache.getApps();
         const app = apps.find(a => a.id === appId);
         const appName = app?.name?.en || app?.name || `App ${appId}`;
-        
+
         // Generate HTML content
         const htmlContent = generatePDFHTML(
           messages,
@@ -387,7 +401,7 @@ export default function registerExportRoutes(app) {
           finalWatermark,
           appName
         );
-        
+
         // Launch Puppeteer
         browser = await puppeteer.launch({
           headless: true,
@@ -398,14 +412,14 @@ export default function registerExportRoutes(app) {
             '--disable-software-rasterizer'
           ]
         });
-        
+
         const page = await browser.newPage();
-        
+
         // Set content and generate PDF
         await page.setContent(htmlContent, {
           waitUntil: 'networkidle0'
         });
-        
+
         const pdfBuffer = await page.pdf({
           format: 'A4',
           margin: {
@@ -416,17 +430,16 @@ export default function registerExportRoutes(app) {
           },
           printBackground: true
         });
-        
+
         // Set response headers
         const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
         const filename = `chat-${appName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${timestamp}.pdf`;
-        
+
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Length', pdfBuffer.length);
-        
+
         res.send(pdfBuffer);
-        
       } catch (error) {
         console.error('PDF export error:', error);
         res.status(500).json({
