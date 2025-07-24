@@ -67,7 +67,7 @@ function getIFinderConfig() {
  * Generate JWT token for iFinder API based on authenticated user
  * @param {Object} user - Authenticated user object
  * @param {Object} options - Additional options for token generation
- * @param {string} options.scope - JWT scope (default: 'fa_index_read')
+ * @param {string} options.scope - JWT scope (default: '')
  * @param {number} options.expiresIn - Token expiration in seconds (default: 3600)
  * @returns {string} Generated JWT token
  */
@@ -79,29 +79,19 @@ export function generateIFinderJWT(user, options = {}) {
   const privateKey = getIFinderPrivateKey();
   const config = getIFinderConfig();
 
-  const {
-    scope = config.defaultScope || 'fa_index_read',
-    expiresIn = config.tokenExpirationSeconds || 3600
-  } = options;
-
-  // Determine if user has admin privileges
-  // Check if user is admin through their groups or explicit admin flag
-  const isAdmin =
-    user.isAdmin ||
-    (user.groups && user.groups.includes('admin')) ||
-    (user.permissions && user.permissions.adminAccess);
+  const { scope = config.defaultScope, expiresIn = config.tokenExpirationSeconds || 3600 } =
+    options;
 
   // Create JWT payload matching iFinder expected format
   const payload = {
     sub: user.email || user.id,
     name: user.name || user.displayName || user.id,
-    admin: isAdmin || false,
     iat: Math.floor(Date.now() / 1000),
     scope: scope
   };
 
   console.log(
-    `Generating iFinder JWT for user ${payload.sub} with scope '${scope}' and expiresIn ${expiresIn} seconds with private key ${privateKey}`
+    `Generating iFinder JWT for user ${payload.sub} with scope '${scope}' and expiresIn ${expiresIn} seconds`
   );
 
   // Sign the JWT token with the private key

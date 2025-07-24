@@ -61,6 +61,7 @@ export function throttledFetch(id, url, options = {}) {
         if (wait > 0) {
           await new Promise(r => setTimeout(r, wait));
         }
+
         const res = await fetch(url, options);
         resolve(res);
       } catch (err) {

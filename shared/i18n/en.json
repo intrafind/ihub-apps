@@ -544,5 +544,12 @@
       "uploadFile": "Upload File",
       "supportedFormats": "Supported: {{formats}} (max {{maxSize}}MB)"
     }
+  },
+  "feedback": {
+    "ratingHeading": "Rate this response",
+    "commentPlaceholder": "Tell us more about your rating (optional)",
+    "rated": "Rated",
+    "sendFeedback": "Send Feedback",
+    "thankYou": "Thank you for your feedback!"
   }
 }

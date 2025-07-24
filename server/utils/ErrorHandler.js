@@ -137,6 +137,51 @@ class ErrorHandler {
     return new LLMApiError(message, status, provider, errorKey.toUpperCase(), details);
   }
 
+  async createEnhancedLLMApiError(llmResponse, model, language) {
+    const errorBody = await llmResponse.text();
+    let errorMessage = await this.getLocalizedError(
+      'llmApiError',
+      { status: llmResponse.status },
+      language
+    );
+
+    if (llmResponse.status === 401) {
+      errorMessage = await this.getLocalizedError(
+        'authenticationFailed',
+        { provider: model.provider },
+        language
+      );
+    } else if (llmResponse.status === 400) {
+      // Check if it's an API key error based on the error body
+      const errorBodyLower = errorBody.toLowerCase();
+      if (errorBodyLower.includes('api key') || errorBodyLower.includes('api_key')) {
+        errorMessage = await this.getLocalizedError(
+          'authenticationFailed',
+          { provider: model.provider },
+          language
+        );
+      }
+    } else if (llmResponse.status === 429) {
+      errorMessage = await this.getLocalizedError(
+        'rateLimitExceeded',
+        { provider: model.provider },
+        language
+      );
+    } else if (llmResponse.status >= 500) {
+      errorMessage = await this.getLocalizedError(
+        'serviceError',
+        { provider: model.provider },
+        language
+      );
+    }
+
+    return {
+      message: errorMessage,
+      code: llmResponse.status.toString(),
+      details: errorBody
+    };
+  }
+
   formatErrorResponse(error) {
     const response = {
       error: error.message,

@@ -5,6 +5,8 @@ import { proxyAuth } from './middleware/proxyAuth.js';
 import localAuthMiddleware from './middleware/localAuth.js';
 import { initializePassport, configureOidcProviders } from './middleware/oidcAuth.js';
 import jwtAuthMiddleware from './middleware/jwtAuth.js';
+import ldapAuthMiddleware from './middleware/ldapAuth.js';
+import ntlmAuthMiddleware, { createNtlmMiddleware } from './middleware/ntlmAuth.js';
 import { enhanceUserWithPermissions } from './utils/authorization.js';
 import { loadJson, loadText } from './configLoader.js';
 import { getApiKeyForModel } from './utils.js';
@@ -82,10 +84,19 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Configure OIDC providers based on platform configuration
   configureOidcProviders();
 
+  // NTLM middleware setup (must come before other auth middlewares)
+  const ntlmConfig = platformConfig.ntlmAuth || {};
+  if (ntlmConfig.enabled) {
+    console.log('[Server] Configuring NTLM authentication middleware');
+    app.use(createNtlmMiddleware(ntlmConfig));
+    app.use(ntlmAuthMiddleware);
+  }
+
   // Authentication middleware (order matters: proxy auth first, then unified JWT validation)
   app.use(proxyAuth);
   app.use(jwtAuthMiddleware);
   app.use(localAuthMiddleware); // Now mainly a placeholder for local auth specific logic
+  app.use(ldapAuthMiddleware); // LDAP auth placeholder for any LDAP-specific logic
 
   // Enhance user with permissions after authentication
   app.use((req, res, next) => {

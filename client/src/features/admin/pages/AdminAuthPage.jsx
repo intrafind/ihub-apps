@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
@@ -8,7 +7,6 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 const AdminAuthPage = () => {
-  const { t } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
