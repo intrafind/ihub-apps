@@ -19,6 +19,7 @@ Each entry in `config/tools.json` uses the following fields:
 Some tools provide comprehensive integrations with external systems:
 
 **iFinder Document Management**
+
 - **Tool ID**: `iFinder`
 - **Methods**: `search`, `getContent`, `getMetadata`, `download`
 - **Description**: Comprehensive document search, content retrieval, and management for iFinder systems
@@ -26,6 +27,7 @@ Some tools provide comprehensive integrations with external systems:
 - **Documentation**: See [iFinder Integration](iFinder-Integration.md) for detailed setup and usage
 
 **Entra People Search**
+
 - **Tool ID**: `entraPeopleSearch`
 - **Methods**: `findUser`, `getAllUserDetails`, `getUserManager`, `getUserGroups`, `getTeamMembers`, `getUserPhotoBase64`
 - **Description**: Corporate directory integration for Microsoft Entra/Azure AD

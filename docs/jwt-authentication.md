@@ -193,15 +193,46 @@ const apps = await response.json();
 
 ## Group Mapping
 
-Configure group mappings to translate JWT groups to application roles:
+Configure group mappings to translate JWT groups to application roles in `contents/config/groups.json`. External group mappings are handled via the "mappings" arrays within each group definition:
 
 ```json
 {
-  "authorization": {
-    "groupMappings": {
-      "jwt-admins": ["admin", "platform-admin"],
-      "jwt-users": ["users"],
-      "jwt-developers": ["users", "developers"]
+  "groups": {
+    "admin": {
+      "id": "admin",
+      "name": "Admin",
+      "description": "Full administrative access to all resources",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": true
+      },
+      "mappings": ["jwt-admins", "platform-admin"]
+    },
+    "users": {
+      "id": "users",
+      "name": "Users",
+      "description": "Standard user access",
+      "permissions": {
+        "apps": ["chat", "translator", "summarizer"],
+        "prompts": ["general"],
+        "models": ["gpt-3.5-turbo", "gemini-pro"],
+        "adminAccess": false
+      },
+      "mappings": ["jwt-users"]
+    },
+    "developers": {
+      "id": "developers",
+      "name": "Developers",
+      "description": "Developer access with additional tools",
+      "permissions": {
+        "apps": ["chat", "code-assistant", "api-tools"],
+        "prompts": ["general", "development"],
+        "models": ["gpt-4", "claude-3-sonnet"],
+        "adminAccess": false
+      },
+      "mappings": ["jwt-developers"]
     }
   }
 }

@@ -66,7 +66,7 @@ const AdminPromptsPage = () => {
 
   const handleTogglePrompt = async promptId => {
     try {
-      const response = await makeAdminApiCall(`/api/admin/prompts/${promptId}/toggle`, {
+      await makeAdminApiCall(`/api/admin/prompts/${promptId}/toggle`, {
         method: 'POST'
       });
 

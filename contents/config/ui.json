@@ -45,13 +45,6 @@
       },
       {
         "name": {
-          "en": "Secure Example",
-          "de": "Gesicherte Beispielseite"
-        },
-        "url": "/pages/secure-example"
-      },
-      {
-        "name": {
           "en": "Documentation",
           "de": "Dokumentation"
         },
@@ -126,8 +119,8 @@
   },
   "appsList": {
     "title": {
-      "en": "I Hub Apps",
-      "de": "I Hub Apps"
+      "en": "AI Hub Apps",
+      "de": "AI Hub Apps"
     },
     "subtitle": {
       "en": "Choose an application to start a conversation",
