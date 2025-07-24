@@ -57,6 +57,8 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
+    "express-ntlm": "^2.7.0",
+    "ldap-authentication": "^3.3.4",
     "node-fetch": "^3.3.0"
   },
   "devDependencies": {

@@ -5,6 +5,8 @@ import {
   createOidcAuthHandler,
   createOidcCallbackHandler
 } from '../middleware/oidcAuth.js';
+import { loginLdapUser, getConfiguredLdapProviders } from '../middleware/ldapAuth.js';
+import { processNtlmLogin, getNtlmConfig } from '../middleware/ntlmAuth.js';
 
 export default function registerAuthRoutes(app) {
   /**
@@ -38,6 +40,87 @@ export default function registerAuthRoutes(app) {
       res.status(401).json({
         success: false,
         error: error.message || 'Authentication failed'
+      });
+    }
+  });
+
+  /**
+   * LDAP authentication login
+   */
+  app.post('/api/auth/ldap/login', async (req, res) => {
+    try {
+      const platform = app.get('platform') || {};
+      const ldapAuthConfig = platform.ldapAuth || {};
+
+      if (!ldapAuthConfig.enabled) {
+        return res.status(400).json({ error: 'LDAP authentication is not enabled' });
+      }
+
+      const { username, password, provider } = req.body;
+
+      if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password are required' });
+      }
+
+      if (!provider) {
+        return res.status(400).json({ error: 'LDAP provider is required' });
+      }
+
+      // Find the specified LDAP provider
+      const ldapProvider = ldapAuthConfig.providers?.find(p => p.name === provider);
+      if (!ldapProvider) {
+        return res.status(400).json({ error: `LDAP provider '${provider}' not found` });
+      }
+
+      const result = await loginLdapUser(username, password, ldapProvider);
+
+      res.json({
+        success: true,
+        user: result.user,
+        token: result.token,
+        expiresIn: result.expiresIn
+      });
+    } catch (error) {
+      console.error('LDAP login error:', error);
+      res.status(401).json({
+        success: false,
+        error: error.message || 'LDAP authentication failed'
+      });
+    }
+  });
+
+  /**
+   * NTLM authentication login (for API usage)
+   */
+  app.post('/api/auth/ntlm/login', async (req, res) => {
+    try {
+      const platform = app.get('platform') || {};
+      const ntlmAuthConfig = platform.ntlmAuth || {};
+
+      if (!ntlmAuthConfig.enabled) {
+        return res.status(400).json({ error: 'NTLM authentication is not enabled' });
+      }
+
+      // Check if NTLM data is available from the middleware
+      if (!req.ntlm || !req.ntlm.authenticated) {
+        return res.status(401).json({ 
+          error: 'NTLM authentication required. This endpoint requires Windows Integrated Authentication.' 
+        });
+      }
+
+      const result = processNtlmLogin(req, ntlmAuthConfig);
+
+      res.json({
+        success: true,
+        user: result.user,
+        token: result.token,
+        expiresIn: result.expiresIn
+      });
+    } catch (error) {
+      console.error('NTLM login error:', error);
+      res.status(401).json({
+        success: false,
+        error: error.message || 'NTLM authentication failed'
       });
     }
   });
@@ -125,12 +208,16 @@ export default function registerAuthRoutes(app) {
     const proxyAuthConfig = platform.proxyAuth || {};
     const localAuthConfig = platform.localAuth || {};
     const oidcAuthConfig = platform.oidcAuth || {};
+    const ldapAuthConfig = platform.ldapAuth || {};
+    const ntlmAuthConfig = platform.ntlmAuth || {};
 
     // Check for auto-redirect scenario
     const enabledAuthMethods = [
       proxyAuthConfig.enabled,
       localAuthConfig.enabled,
       oidcAuthConfig.enabled,
+      ldapAuthConfig.enabled,
+      ntlmAuthConfig.enabled,
       platform.anonymousAuth?.enabled
     ].filter(Boolean).length;
 
@@ -191,6 +278,15 @@ export default function registerAuthRoutes(app) {
         oidc: {
           enabled: oidcAuthConfig.enabled ?? false,
           providers: oidcProviders
+        },
+        ldap: {
+          enabled: ldapAuthConfig.enabled ?? false,
+          providers: getConfiguredLdapProviders()
+        },
+        ntlm: {
+          enabled: ntlmAuthConfig.enabled ?? false,
+          domain: ntlmAuthConfig.domain,
+          type: ntlmAuthConfig.type || 'ntlm'
         }
       }
     };
@@ -206,6 +302,36 @@ export default function registerAuthRoutes(app) {
     res.json({
       success: true,
       providers
+    });
+  });
+
+  /**
+   * LDAP provider list
+   */
+  app.get('/api/auth/ldap/providers', (req, res) => {
+    const providers = getConfiguredLdapProviders();
+    res.json({
+      success: true,
+      providers
+    });
+  });
+
+  /**
+   * NTLM authentication status
+   */
+  app.get('/api/auth/ntlm/status', (req, res) => {
+    const ntlmConfig = getNtlmConfig();
+    res.json({
+      success: true,
+      enabled: ntlmConfig?.enabled ?? false,
+      domain: ntlmConfig?.domain,
+      type: ntlmConfig?.type || 'ntlm',
+      authenticated: req.ntlm?.authenticated ?? false,
+      user: req.ntlm?.authenticated ? {
+        username: req.ntlm.username,
+        domain: req.ntlm.domain,
+        workstation: req.ntlm.workstation
+      } : null
     });
   });
 
