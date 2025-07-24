@@ -238,6 +238,44 @@
     }
   },
   {
+    "id": "summarizer",
+    "name": "Content Summarizer",
+    "description": "Intelligently summarizes long content while preserving key information. Supports multiple output formats and token-aware compression. Available to all apps for handling large documents and tool outputs.",
+    "script": "summarizer.js",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Content to summarize - can be text, documents, tool outputs, or any long-form content"
+        },
+        "targetLength": {
+          "type": "integer",
+          "description": "Target summary length in tokens (default: 500)",
+          "default": 500,
+          "minimum": 50,
+          "maximum": 5000
+        },
+        "style": {
+          "type": "string",
+          "enum": ["bullet", "paragraph", "detailed"],
+          "default": "paragraph",
+          "description": "Summary format style: 'bullet' for bullet points, 'paragraph' for flowing text, 'detailed' for comprehensive analysis"
+        },
+        "focus": {
+          "type": "string",
+          "description": "Specific aspect to focus on during summarization (optional). Example: 'technical details', 'financial data', 'key decisions'"
+        },
+        "preserveStructure": {
+          "type": "boolean",
+          "description": "Whether to preserve original document structure like headings and sections (default: false)",
+          "default": false
+        }
+      },
+      "required": ["content"]
+    }
+  },
+  {
     "id": "seleniumScreenshot",
     "name": "Website Screenshot (Selenium)",
     "description": "Capture a screenshot or PDF of a webpage using Selenium.",

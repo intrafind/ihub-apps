@@ -54,7 +54,8 @@
     "applications"
   ],
   "dependencies": {
-    "dotenv": "^17.2.0"
+    "dotenv": "^17.2.0",
+    "tiktoken": "^1.0.21"
   },
   "devDependencies": {
     "concurrently": "^9.2.0",
