@@ -247,7 +247,11 @@ export async function processMessageTemplates(
     }
     // Apply global prompt variables to normal prompts as well
     let processedContent = msg.content;
-    if (typeof processedContent === 'string' && globalPromptVariables && Object.keys(globalPromptVariables).length > 0) {
+    if (
+      typeof processedContent === 'string' &&
+      globalPromptVariables &&
+      Object.keys(globalPromptVariables).length > 0
+    ) {
       for (const [key, value] of Object.entries(globalPromptVariables)) {
         const strValue = typeof value === 'string' ? value : String(value || '');
         processedContent = processedContent.replace(
