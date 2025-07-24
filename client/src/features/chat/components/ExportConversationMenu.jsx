@@ -3,7 +3,13 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import TurndownService from 'turndown';
 import { markdownToHtml, htmlToMarkdown, isMarkdown } from '../../../utils/markdownUtils';
-import { exportChatToPDF } from '../../../api/endpoints/apps';
+import {
+  exportChatToPDF,
+  exportChatToJSON,
+  exportChatToJSONL,
+  exportChatToMarkdown,
+  exportChatToHTML
+} from '../../../api/endpoints/apps';
 
 const turndownService = new TurndownService();
 
@@ -73,44 +79,40 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
     }
   };
 
-  const handleExport = format => {
-    let data = '';
-    let mime = 'text/plain';
-    let ext = format;
-
-    switch (format) {
-      case 'json':
-        data = asJSON();
-        mime = 'application/json';
-        ext = 'json';
-        break;
-      case 'jsonl':
-        data = asJSONL();
-        mime = 'application/json';
-        ext = 'jsonl';
-        break;
-      case 'markdown':
-        data = asMarkdown();
-        mime = 'text/markdown';
-        ext = 'md';
-        break;
-      case 'html':
-        data = asHTML();
-        mime = 'text/html';
-        ext = 'html';
-        break;
-      default:
-        return;
+  const handleExport = async format => {
+    if (!appId || !chatId) {
+      console.error('Missing appId or chatId for export');
+      return;
     }
 
-    const blob = new Blob([data], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `conversation.${ext}`;
-    a.click();
-    URL.revokeObjectURL(url);
-    onClose?.();
+    try {
+      const exportData = {
+        messages: messages.filter(m => !m.isGreeting),
+        settings: buildMeta()
+      };
+
+      switch (format) {
+        case 'json':
+          await exportChatToJSON(appId, chatId, exportData);
+          break;
+        case 'jsonl':
+          await exportChatToJSONL(appId, chatId, exportData);
+          break;
+        case 'markdown':
+          await exportChatToMarkdown(appId, chatId, exportData);
+          break;
+        case 'html':
+          await exportChatToHTML(appId, chatId, exportData);
+          break;
+        default:
+          return;
+      }
+
+      onClose?.();
+    } catch (error) {
+      console.error(`${format.toUpperCase()} export failed:`, error);
+      // TODO: Add proper error notification
+    }
   };
 
   return (

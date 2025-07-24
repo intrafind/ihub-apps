@@ -89,3 +89,57 @@ export const exportChatToPDF = async (appId, chatId, exportData) => {
 
   return { success: true, filename };
 };
+
+// Generic export function for other formats
+const exportChatToFormat = async (appId, chatId, exportData, format, mimeType) => {
+  if (!appId || !chatId || !exportData) {
+    throw new Error('Missing required parameters');
+  }
+
+  const response = await apiClient.post(
+    `/apps/${appId}/chat/${chatId}/export/${format}`,
+    exportData,
+    {
+      responseType: 'blob'
+    }
+  );
+
+  // Create download link from blob response
+  const blob = new Blob([response.data], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+
+  // Extract filename from Content-Disposition header if available
+  const contentDisposition = response.headers['content-disposition'];
+  let filename = `chat-export.${format}`;
+  if (contentDisposition) {
+    const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+    if (filenameMatch) {
+      filename = filenameMatch[1].replace(/['"]/g, '');
+    }
+  }
+
+  // Trigger download
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  return { success: true, filename };
+};
+
+export const exportChatToJSON = async (appId, chatId, exportData) => {
+  return exportChatToFormat(appId, chatId, exportData, 'json', 'application/json');
+};
+
+export const exportChatToJSONL = async (appId, chatId, exportData) => {
+  return exportChatToFormat(appId, chatId, exportData, 'jsonl', 'application/json');
+};
+
+export const exportChatToMarkdown = async (appId, chatId, exportData) => {
+  return exportChatToFormat(appId, chatId, exportData, 'markdown', 'text/markdown');
+};
+
+export const exportChatToHTML = async (appId, chatId, exportData) => {
+  return exportChatToFormat(appId, chatId, exportData, 'html', 'text/html');
+};

@@ -43,16 +43,49 @@ const pdfExportSchema = {
   required: ['messages']
 };
 
+// Validation schema for other export formats
+const basicExportSchema = {
+  type: 'object',
+  properties: {
+    messages: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          role: { type: 'string', enum: ['user', 'assistant', 'system'] },
+          content: { type: 'string' },
+          meta: { type: 'object' }
+        },
+        required: ['id', 'role', 'content']
+      }
+    },
+    settings: {
+      type: 'object',
+      properties: {
+        model: { type: 'string' },
+        style: { type: 'string' },
+        outputFormat: { type: 'string' },
+        temperature: { type: 'number' },
+        variables: { type: 'object' }
+      }
+    }
+  },
+  required: ['messages']
+};
+
 // Default PDF export configuration
 const getDefaultConfig = () => {
   const platformConfig = configCache.getPlatform() || {};
   return {
     watermark: {
+      enabled: platformConfig.pdfExport?.watermark?.enabled !== false,
       text: platformConfig.pdfExport?.watermark?.text || 'AI Hub Apps',
       position: platformConfig.pdfExport?.watermark?.position || 'bottom-right',
       opacity: platformConfig.pdfExport?.watermark?.opacity || 0.5
     },
-    template: platformConfig.pdfExport?.defaultTemplate || 'default'
+    template: platformConfig.pdfExport?.defaultTemplate || 'default',
+    enableExportTracking: platformConfig.pdfExport?.enableExportTracking !== false
   };
 };
 
@@ -149,7 +182,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
       ${messagesHTML}
     </main>
     
-    ${watermark.text ? `<div class="watermark">${watermark.text}</div>` : ''}
+    ${watermark.enabled && watermark.text ? `<div class="watermark">${watermark.text}</div>` : ''}
   </div>
 </body>
 </html>
@@ -370,6 +403,81 @@ const getWatermarkStyle = watermark => {
   `;
 };
 
+// Helper functions for other export formats
+const logExportActivity = (user, appId, chatId, format) => {
+  const defaultConfig = getDefaultConfig();
+  if (defaultConfig.enableExportTracking) {
+    console.log(
+      `[EXPORT] ${format.toUpperCase()} export by user ${user?.username || 'anonymous'} for app ${appId}, chat ${chatId}, timestamp: ${new Date().toISOString()}`
+    );
+  }
+};
+
+const buildMetadata = (settings = {}) => ({
+  model: settings.model,
+  style: settings.style,
+  outputFormat: settings.outputFormat,
+  temperature: settings.temperature,
+  variables: settings.variables
+});
+
+const generateJSON = (messages, settings) => {
+  return JSON.stringify({ ...buildMetadata(settings), messages }, null, 2);
+};
+
+const generateJSONL = (messages, settings) => {
+  const lines = [JSON.stringify({ meta: buildMetadata(settings) })];
+  messages.forEach(m => lines.push(JSON.stringify(m)));
+  return lines.join('\n');
+};
+
+const htmlToMarkdown = content => {
+  if (!content) return '';
+  // Simple HTML to markdown conversion
+  return content
+    .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
+    .replace(/<em>(.*?)<\/em>/g, '*$1*')
+    .replace(/<code>(.*?)<\/code>/g, '`$1`')
+    .replace(/<br\s*\/?>/g, '\n')
+    .replace(/<\/p><p>/g, '\n\n')
+    .replace(/<\/?p>/g, '')
+    .replace(/<\/?div>/g, '')
+    .trim();
+};
+
+const isMarkdown = content => {
+  if (!content) return false;
+  // Simple check for markdown patterns
+  return /[*_`#\[\]]\w/.test(content) || /\n\s*[-*+]\s/.test(content);
+};
+
+const markdownToHtml = content => {
+  if (!content) return '';
+  // Simple markdown to HTML conversion
+  return content
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`(.*?)`/g, '<code>$1</code>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+};
+
+const generateMarkdown = messages => {
+  return messages
+    .filter(m => !m.isGreeting)
+    .map(
+      m => `**${m.role}**: ${isMarkdown(m.content) ? m.content : htmlToMarkdown(m.content || '')}`
+    )
+    .join('\n\n');
+};
+
+const generateHTML = messages => {
+  return messages
+    .filter(m => !m.isGreeting)
+    .map(m => `<p><strong>${m.role}:</strong> ${markdownToHtml(m.content)}</p>`)
+    .join('');
+};
+
 export default function registerExportRoutes(app) {
   // PDF Export endpoint
   app.post(
@@ -387,6 +495,13 @@ export default function registerExportRoutes(app) {
         const defaultConfig = getDefaultConfig();
         const finalTemplate = template || defaultConfig.template;
         const finalWatermark = { ...defaultConfig.watermark, ...watermark };
+
+        // Log export activity for security tracking
+        if (defaultConfig.enableExportTracking) {
+          console.log(
+            `[EXPORT] PDF export by user ${req.user?.username || 'anonymous'} for app ${appId}, chat ${chatId}, template: ${finalTemplate}, timestamp: ${new Date().toISOString()}`
+          );
+        }
 
         // Get app information for better context
         const { data: apps = [] } = configCache.getApps();
@@ -450,6 +565,128 @@ export default function registerExportRoutes(app) {
         if (browser) {
           await browser.close();
         }
+      }
+    }
+  );
+
+  // JSON Export endpoint
+  app.post(
+    '/api/apps/:appId/chat/:chatId/export/json',
+    chatAuthRequired,
+    validate(basicExportSchema),
+    async (req, res) => {
+      try {
+        const { appId, chatId } = req.params;
+        const { messages, settings } = req.body;
+
+        logExportActivity(req.user, appId, chatId, 'json');
+
+        const jsonData = generateJSON(
+          messages.filter(m => !m.isGreeting),
+          settings
+        );
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        const filename = `chat-${appId}-${timestamp}.json`;
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(jsonData);
+      } catch (error) {
+        console.error('JSON export error:', error);
+        res.status(500).json({
+          error: 'Failed to generate JSON export',
+          details: error.message
+        });
+      }
+    }
+  );
+
+  // JSONL Export endpoint
+  app.post(
+    '/api/apps/:appId/chat/:chatId/export/jsonl',
+    chatAuthRequired,
+    validate(basicExportSchema),
+    async (req, res) => {
+      try {
+        const { appId, chatId } = req.params;
+        const { messages, settings } = req.body;
+
+        logExportActivity(req.user, appId, chatId, 'jsonl');
+
+        const jsonlData = generateJSONL(
+          messages.filter(m => !m.isGreeting),
+          settings
+        );
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        const filename = `chat-${appId}-${timestamp}.jsonl`;
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(jsonlData);
+      } catch (error) {
+        console.error('JSONL export error:', error);
+        res.status(500).json({
+          error: 'Failed to generate JSONL export',
+          details: error.message
+        });
+      }
+    }
+  );
+
+  // Markdown Export endpoint
+  app.post(
+    '/api/apps/:appId/chat/:chatId/export/markdown',
+    chatAuthRequired,
+    validate(basicExportSchema),
+    async (req, res) => {
+      try {
+        const { appId, chatId } = req.params;
+        const { messages, settings } = req.body;
+
+        logExportActivity(req.user, appId, chatId, 'markdown');
+
+        const markdownData = generateMarkdown(messages.filter(m => !m.isGreeting));
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        const filename = `chat-${appId}-${timestamp}.md`;
+
+        res.setHeader('Content-Type', 'text/markdown');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(markdownData);
+      } catch (error) {
+        console.error('Markdown export error:', error);
+        res.status(500).json({
+          error: 'Failed to generate Markdown export',
+          details: error.message
+        });
+      }
+    }
+  );
+
+  // HTML Export endpoint
+  app.post(
+    '/api/apps/:appId/chat/:chatId/export/html',
+    chatAuthRequired,
+    validate(basicExportSchema),
+    async (req, res) => {
+      try {
+        const { appId, chatId } = req.params;
+        const { messages, settings } = req.body;
+
+        logExportActivity(req.user, appId, chatId, 'html');
+
+        const htmlData = generateHTML(messages.filter(m => !m.isGreeting));
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        const filename = `chat-${appId}-${timestamp}.html`;
+
+        res.setHeader('Content-Type', 'text/html');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(htmlData);
+      } catch (error) {
+        console.error('HTML export error:', error);
+        res.status(500).json({
+          error: 'Failed to generate HTML export',
+          details: error.message
+        });
       }
     }
   );
