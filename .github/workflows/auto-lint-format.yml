@@ -5,6 +5,9 @@ on:
     branches: [main, develop]
     types: [opened, synchronize, reopened]
 
+permissions:
+  contents: write
+
 jobs:
   auto-lint-format:
     runs-on: ubuntu-latest
@@ -16,7 +19,7 @@ jobs:
       - name: Checkout PR
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
@@ -51,8 +54,8 @@ jobs:
       - name: Commit auto-fixes
         if: steps.changes.outputs.changes == 'true'
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "🔧 Auto-fix lint and format issues [skip-lint]"
           git push
