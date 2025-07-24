@@ -97,7 +97,10 @@ class StreamingHandler {
           })
         );
 
-        actionTracker.trackError(chatId, { message: errorInfo.message, details: errorInfo.details });
+        actionTracker.trackError(chatId, {
+          message: errorInfo.message,
+          details: errorInfo.details
+        });
 
         if (activeRequests.get(chatId) === controller) {
           activeRequests.delete(chatId);

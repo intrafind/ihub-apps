@@ -431,13 +431,10 @@ class ToolExecutor {
             clientLanguage
           );
 
-          throw Object.assign(
-            new Error(errorInfo.message),
-            {
-              code: errorInfo.code,
-              details: errorInfo.details
-            }
-          );
+          throw Object.assign(new Error(errorInfo.message), {
+            code: errorInfo.code,
+            details: errorInfo.details
+          });
         }
 
         const reader = llmResponse.body.getReader();
