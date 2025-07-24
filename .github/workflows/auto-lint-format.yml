@@ -1,0 +1,77 @@
+name: Auto Lint & Format
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  auto-lint-format:
+    runs-on: ubuntu-latest
+
+    # Skip if the commit message contains [skip-lint]
+    if: "!contains(github.event.head_commit.message, '[skip-lint]')"
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Auto-fix lint issues
+        run: npm run lint:fix
+        continue-on-error: true
+
+      - name: Auto-fix format issues
+        run: npm run format:fix
+        continue-on-error: true
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+            echo "Files were auto-fixed"
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "No auto-fixes needed"
+          fi
+
+      - name: Commit auto-fixes
+        if: steps.changes.outputs.changes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "🔧 Auto-fix lint and format issues [skip-lint]"
+          git push
+
+      - name: Final validation
+        run: |
+          npm run lint
+          npm run format
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on PR (if fixes applied)
+        if: steps.changes.outputs.changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🔧 **Auto-fix applied**: Lint and format issues have been automatically fixed and committed to this PR.'
+            })
