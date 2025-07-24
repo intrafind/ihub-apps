@@ -485,7 +485,6 @@ class ConfigCache {
     return this.get('config/groups.json');
   }
 
-
   /**
    * Get UI configuration
    */

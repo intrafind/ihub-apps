@@ -15,6 +15,7 @@ Error: certificate verify failed
 ```
 
 These errors occur when AI Hub Apps makes requests to:
+
 - Custom LLM endpoints with self-signed certificates
 - Internal APIs configured as tools
 - Authentication providers (OIDC) using self-signed certificates
@@ -27,6 +28,7 @@ These errors occur when AI Hub Apps makes requests to:
 The most secure approach is to add your self-signed certificates to the system's trusted certificate store.
 
 #### On Linux/Ubuntu:
+
 ```bash
 # Copy your certificate to the certificates directory
 sudo cp your-certificate.crt /usr/local/share/ca-certificates/
@@ -39,6 +41,7 @@ systemctl restart ai-hub-apps
 ```
 
 #### On CentOS/RHEL:
+
 ```bash
 # Copy your certificate
 sudo cp your-certificate.crt /etc/pki/ca-trust/source/anchors/
@@ -51,6 +54,7 @@ systemctl restart ai-hub-apps
 ```
 
 #### On macOS:
+
 ```bash
 # Add certificate to system keychain
 sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain your-certificate.crt
@@ -59,6 +63,7 @@ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keyc
 ```
 
 #### On Windows:
+
 1. Open the certificate file in Windows Explorer
 2. Click "Install Certificate"
 3. Choose "Local Machine" and place in "Trusted Root Certification Authorities"
@@ -77,6 +82,7 @@ npm run start:prod
 ```
 
 Or when running the binary:
+
 ```bash
 NODE_EXTRA_CA_CERTS=/path/to/your-certificate.pem ./ai-hub-apps-v1.0.0-linux
 ```
@@ -110,6 +116,7 @@ npm run start:prod
 ```
 
 Or when running the binary:
+
 ```bash
 NODE_TLS_REJECT_UNAUTHORIZED=0 ./ai-hub-apps-v1.0.0-linux
 ```
@@ -132,6 +139,7 @@ NODE_TLS_REJECT_UNAUTHORIZED=0
 When running AI Hub Apps in Docker containers:
 
 #### Method 1: Mount Certificate Volume
+
 ```dockerfile
 # In your Dockerfile or docker-compose.yml
 COPY your-certificate.crt /usr/local/share/ca-certificates/
@@ -139,6 +147,7 @@ RUN update-ca-certificates
 ```
 
 Or with volume mount:
+
 ```yaml
 # docker-compose.yml
 services:
@@ -150,6 +159,7 @@ services:
 ```
 
 #### Method 2: Environment Variable in Docker
+
 ```yaml
 # docker-compose.yml
 services:
@@ -163,6 +173,7 @@ services:
 ### Kubernetes Deployments
 
 #### Using ConfigMaps for Certificates:
+
 ```yaml
 apiVersion: v1
 kind: ConfigMap
@@ -182,18 +193,18 @@ spec:
   template:
     spec:
       containers:
-      - name: ai-hub-apps
-        env:
-        - name: NODE_EXTRA_CA_CERTS
-          value: /etc/ssl/certs/bundle.pem
-        volumeMounts:
-        - name: ca-certs
-          mountPath: /etc/ssl/certs/bundle.pem
-          subPath: bundle.pem
+        - name: ai-hub-apps
+          env:
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/ssl/certs/bundle.pem
+          volumeMounts:
+            - name: ca-certs
+              mountPath: /etc/ssl/certs/bundle.pem
+              subPath: bundle.pem
       volumes:
-      - name: ca-certs
-        configMap:
-          name: ca-certificates
+        - name: ca-certs
+          configMap:
+            name: ca-certificates
 ```
 
 ### Load Balancer and Reverse Proxy Scenarios
@@ -201,9 +212,11 @@ spec:
 If AI Hub Apps is behind a reverse proxy (nginx, Apache, etc.), you have additional options:
 
 #### Option 1: Terminate SSL at Proxy
+
 Configure your reverse proxy to handle SSL termination and communicate with backend services over HTTP or with proper certificates.
 
 #### Option 2: Proxy Certificate Verification
+
 Some reverse proxies can handle certificate verification on behalf of the backend application.
 
 ## Testing Your Configuration
@@ -211,6 +224,7 @@ Some reverse proxies can handle certificate verification on behalf of the backen
 After configuring certificate handling, test that external connections work:
 
 ### Test with curl
+
 ```bash
 # Test the same endpoint that AI Hub Apps needs to reach
 curl -v https://your-internal-api.example.com/health
@@ -220,6 +234,7 @@ NODE_TLS_REJECT_UNAUTHORIZED=0 curl -v https://your-internal-api.example.com/hea
 ```
 
 ### Check AI Hub Apps Logs
+
 Monitor the application logs for SSL-related errors:
 
 ```bash
@@ -228,8 +243,9 @@ tail -f /var/log/ai-hub-apps/app.log | grep -i "certificate\|ssl\|tls"
 ```
 
 ### Test Specific Features
+
 - Try using LLM models with custom endpoints
-- Test authentication if using OIDC with self-signed certificates  
+- Test authentication if using OIDC with self-signed certificates
 - Verify any custom tools that make external API calls
 
 ## Security Considerations
@@ -244,33 +260,39 @@ tail -f /var/log/ai-hub-apps/app.log | grep -i "certificate\|ssl\|tls"
 
 ### Risk Assessment
 
-| Method | Security Level | Suitable For |
-|--------|----------------|-------------|
-| Import to system store | High | Production environments |
-| NODE_EXTRA_CA_CERTS | High | Production environments |
-| Certificate bundle | High | Container/cloud deployments |
-| NODE_TLS_REJECT_UNAUTHORIZED=0 | Low | Development only |
+| Method                         | Security Level | Suitable For                |
+| ------------------------------ | -------------- | --------------------------- |
+| Import to system store         | High           | Production environments     |
+| NODE_EXTRA_CA_CERTS            | High           | Production environments     |
+| Certificate bundle             | High           | Container/cloud deployments |
+| NODE_TLS_REJECT_UNAUTHORIZED=0 | Low            | Development only            |
 
 ## Troubleshooting
 
 ### Common Issues
 
 #### Certificate Format Problems
+
 Ensure certificates are in PEM format:
+
 ```bash
 # Convert from DER to PEM if needed
 openssl x509 -inform der -in certificate.der -out certificate.pem
 ```
 
 #### Certificate Chain Issues
+
 Include the full certificate chain if using intermediate certificates:
+
 ```bash
 # Create full chain
 cat server.crt intermediate.crt root.crt > fullchain.pem
 ```
 
 #### Permission Issues
+
 Ensure the application can read certificate files:
+
 ```bash
 # Set appropriate permissions
 chmod 644 /path/to/certificate.pem
@@ -280,6 +302,7 @@ chown root:root /path/to/certificate.pem
 ### Debug Certificate Issues
 
 Enable Node.js TLS debugging:
+
 ```bash
 # Enable detailed TLS debugging
 export NODE_DEBUG=tls
@@ -291,6 +314,7 @@ This will show detailed information about certificate verification attempts.
 ### Verify Certificate Details
 
 Check certificate information:
+
 ```bash
 # View certificate details
 openssl x509 -in certificate.pem -text -noout

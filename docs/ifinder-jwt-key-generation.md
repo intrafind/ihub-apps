@@ -28,6 +28,7 @@ openssl genpkey -algorithm RSA -out ifinder_private.pem -pkeyopt rsa_keygen_bits
 ```
 
 **Command breakdown:**
+
 - `genpkey`: Generate a private key
 - `-algorithm RSA`: Use RSA encryption algorithm
 - `-out ifinder_private.pem`: Output file for the private key
@@ -44,6 +45,7 @@ openssl pkey -in ifinder_private.pem -pubout -out ifinder_public.pem
 ```
 
 **Command breakdown:**
+
 - `pkey`: Process private key
 - `-in ifinder_private.pem`: Input private key file
 - `-pubout`: Output the public key
@@ -159,7 +161,7 @@ spring:
       resourceserver:
         jwt:
           public-key-location: classpath:ifinder_public.pem
-          principal-claim-name: email  # Use email claim as username
+          principal-claim-name: email # Use email claim as username
 ```
 
 ### 3. Resource Location Options
@@ -182,7 +184,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          principal-claim-name: email  # Options: sub, email, preferred_username, upn
+          principal-claim-name: email # Options: sub, email, preferred_username, upn
 ```
 
 **Important for Microsoft Entra ID**: When using Microsoft Entra ID (formerly Azure AD) as the issuer, use the `email` claim as the username to ensure proper integration with Microsoft 365.
@@ -216,12 +218,14 @@ The generated JWT tokens will have this structure:
 ### Key Management
 
 1. **Secure Storage**: Store private keys in secure locations with restricted file permissions
+
    ```bash
    chmod 600 ifinder_private.pem
    chown app:app ifinder_private.pem
    ```
 
 2. **Environment Variables**: Use environment variables or secure secret management for production
+
    ```bash
    # Never commit private keys to version control
    echo "*.pem" >> .gitignore
@@ -237,6 +241,7 @@ The generated JWT tokens will have this structure:
 ### Production Considerations
 
 1. **Key Size**: Use 2048-bit minimum, 4096-bit for enhanced security
+
    ```bash
    openssl genpkey -algorithm RSA -out ifinder_private.pem -pkeyopt rsa_keygen_bits:4096
    ```
@@ -291,6 +296,7 @@ INFO: User granted access to search profile: default
 **Cause**: Public/private key mismatch or incorrect key format
 
 **Solutions**:
+
 1. Verify both keys were generated from the same source
 2. Check key format (PEM with correct headers)
 3. Ensure no extra characters or line breaks in configuration
@@ -301,6 +307,7 @@ INFO: User granted access to search profile: default
 **Cause**: Incorrect key format or encoding
 
 **Solutions**:
+
 1. Regenerate keys using the exact commands provided
 2. Verify key starts with `-----BEGIN PRIVATE KEY-----`
 3. Check for proper line breaks in JSON configuration (`\n`)
@@ -311,6 +318,7 @@ INFO: User granted access to search profile: default
 **Cause**: Public key not properly configured in iFinder
 
 **Solutions**:
+
 1. Verify public key is uploaded to correct location in iFinder
 2. Check Spring Security configuration syntax
 3. Ensure `principal-claim-name` matches JWT claims
@@ -321,6 +329,7 @@ INFO: User granted access to search profile: default
 **Cause**: JWT token lifetime too short or clock skew
 
 **Solutions**:
+
 1. Increase `tokenExpirationSeconds` in configuration
 2. Synchronize clocks between AI Hub Apps and iFinder servers
 3. Check JWT `exp` claim value
@@ -411,4 +420,4 @@ For issues with JWT key generation or iFinder integration:
 
 ---
 
-*Last updated: July 2024*
+_Last updated: July 2024_

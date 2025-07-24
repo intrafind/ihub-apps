@@ -45,6 +45,7 @@ IFINDER_DOWNLOAD_DIR=/tmp/ifinder-downloads
 ```
 
 **Important Notes:**
+
 - **IFINDER_PRIVATE_KEY**: Must be in PEM format for RS256 JWT signing
 - **Line breaks**: Use actual newlines or `\n` escapes - the system will convert them automatically
 - **Search Profile**: This is the default profile ID used for all searches
@@ -66,7 +67,7 @@ Alternatively, configure iFinder in your `platform.json`:
     "timeout": 30000,
     "downloadDir": "/tmp/ifinder-downloads",
     "algorithm": "RS256",
-    "issuer": "ai-hub-apps", 
+    "issuer": "ai-hub-apps",
     "audience": "ifinder-api",
     "defaultScope": "fa_index_read",
     "tokenExpirationSeconds": 3600
@@ -89,6 +90,7 @@ The iFinder integration uses JWT tokens for authentication with the following st
 ```
 
 **Key Requirements:**
+
 - **Algorithm**: RS256 (RSA with SHA-256)
 - **Private Key**: Must be in PEM format
 - **Scope**: `fa_index_read` for document access
@@ -111,6 +113,7 @@ The iFinder integration provides four main tools accessible through the `iFinder
 Search for documents using natural language queries.
 
 **Parameters:**
+
 - `query` (required): Search query string
 - `maxResults` (optional): Maximum results to return (default: 10, max: 100)
 - `searchProfile` (optional): Specific search profile ID
@@ -119,20 +122,22 @@ Search for documents using natural language queries.
 - `sort` (optional): Array of sort criteria
 
 **Example Usage:**
+
 ```javascript
 // Basic search
-iFinder.search({ query: "contract proposals 2024" })
+iFinder.search({ query: 'contract proposals 2024' });
 
 // Advanced search with options
 iFinder.search({
-  query: "technical documentation",
+  query: 'technical documentation',
   maxResults: 20,
-  returnFields: ["title", "author", "createdDate"],
-  sort: ["createdDate:desc"]
-})
+  returnFields: ['title', 'author', 'createdDate'],
+  sort: ['createdDate:desc']
+});
 ```
 
 **Response Format:**
+
 ```json
 {
   "query": "contract proposals",
@@ -159,19 +164,22 @@ iFinder.search({
 Retrieve the full content of a specific document for analysis.
 
 **Parameters:**
+
 - `documentId` (required): Document ID to fetch
 - `maxLength` (optional): Maximum content length (default: 50000)
 - `searchProfile` (optional): Specific search profile ID
 
 **Example Usage:**
+
 ```javascript
-iFinder.getContent({ 
-  documentId: "doc123456",
+iFinder.getContent({
+  documentId: 'doc123456',
   maxLength: 10000
-})
+});
 ```
 
 **Response Format:**
+
 ```json
 {
   "documentId": "doc123456",
@@ -193,15 +201,18 @@ iFinder.getContent({
 Get detailed metadata for a specific document without fetching content.
 
 **Parameters:**
+
 - `documentId` (required): Document ID to fetch metadata for
 - `searchProfile` (optional): Specific search profile ID
 
 **Example Usage:**
+
 ```javascript
-iFinder.getMetadata({ documentId: "doc123456" })
+iFinder.getMetadata({ documentId: 'doc123456' });
 ```
 
 **Response Format:**
+
 ```json
 {
   "documentId": "doc123456",
@@ -225,25 +236,27 @@ iFinder.getMetadata({ documentId: "doc123456" })
 Get download information or save documents locally.
 
 **Parameters:**
+
 - `documentId` (required): Document ID to download
 - `action` (optional): "content" for info, "save" for local save (default: "content")
 - `filename` (optional): Custom filename for downloads
 - `searchProfile` (optional): Specific search profile ID
 
 **Example Usage:**
+
 ```javascript
 // Get download information
-iFinder.download({ 
-  documentId: "doc123456",
-  action: "content"
-})
+iFinder.download({
+  documentId: 'doc123456',
+  action: 'content'
+});
 
 // Save document locally
 iFinder.download({
-  documentId: "doc123456", 
-  action: "save",
-  filename: "contract-proposal.pdf"
-})
+  documentId: 'doc123456',
+  action: 'save',
+  filename: 'contract-proposal.pdf'
+});
 ```
 
 ## Usage Examples
@@ -319,6 +332,7 @@ The system includes a pre-configured app called "iFinder Document Explorer" that
 - **Smart Tool Selection**: AI automatically chooses the right tools for each request
 
 **App Configuration:**
+
 - **App ID**: `ifinder-document-explorer`
 - **Tools**: `iFinder.search`, `iFinder.getContent`, `iFinder.getMetadata`, `iFinder.download`
 - **Features**: Chat history, model selection, output formatting
@@ -368,25 +382,29 @@ The system includes a pre-configured app called "iFinder Document Explorer" that
 ### Common Issues
 
 #### "iFinder search requires authenticated user"
+
 - **Cause**: User is anonymous or not properly authenticated
 - **Solution**: Ensure user is logged in through your authentication system
 
 #### "iFinder authentication failed. Please check JWT configuration."
+
 - **Cause**: Invalid private key or JWT configuration
-- **Solution**: 
+- **Solution**:
   - Verify private key is in correct PEM format
   - Check that key matches iFinder's public key
   - Ensure algorithm is RS256
 
 #### "iFinder search request timed out"
+
 - **Cause**: Network issues or slow iFinder instance
-- **Solution**: 
+- **Solution**:
   - Increase `IFINDER_TIMEOUT` environment variable
   - Check network connectivity to iFinder instance
 
 #### "Document not found: doc123456"
+
 - **Cause**: Document ID doesn't exist or user lacks permissions
-- **Solution**: 
+- **Solution**:
   - Verify document ID is correct
   - Check user has access rights in iFinder
   - Try searching to find the correct document ID
@@ -394,6 +412,7 @@ The system includes a pre-configured app called "iFinder Document Explorer" that
 ### Debugging
 
 Enable debug logging by checking server logs for:
+
 - `iFinder Search: User X searching for "query"`
 - `iFinder Content: Fetching content for document...`
 - `Generating iFinder JWT for user...`
@@ -411,24 +430,24 @@ Test your iFinder configuration:
 
 ### Configuration Options
 
-| Setting | Environment Variable | Platform Config | Default | Description |
-|---------|---------------------|-----------------|---------|-------------|
-| Base URL | `IFINDER_API_URL` | `iFinder.baseUrl` | `https://api.ifinder.example.com` | iFinder instance URL |
-| Search Profile | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `default` | Default search profile ID |
-| Private Key | `IFINDER_PRIVATE_KEY` | `iFinder.privateKey` | - | JWT signing private key (PEM format) |
-| Timeout | `IFINDER_TIMEOUT` | `iFinder.timeout` | `30000` | Request timeout (milliseconds) |
-| Download Dir | `IFINDER_DOWNLOAD_DIR` | `iFinder.downloadDir` | `/tmp/ifinder-downloads` | Local download directory |
+| Setting        | Environment Variable     | Platform Config                | Default                           | Description                          |
+| -------------- | ------------------------ | ------------------------------ | --------------------------------- | ------------------------------------ |
+| Base URL       | `IFINDER_API_URL`        | `iFinder.baseUrl`              | `https://api.ifinder.example.com` | iFinder instance URL                 |
+| Search Profile | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `default`                         | Default search profile ID            |
+| Private Key    | `IFINDER_PRIVATE_KEY`    | `iFinder.privateKey`           | -                                 | JWT signing private key (PEM format) |
+| Timeout        | `IFINDER_TIMEOUT`        | `iFinder.timeout`              | `30000`                           | Request timeout (milliseconds)       |
+| Download Dir   | `IFINDER_DOWNLOAD_DIR`   | `iFinder.downloadDir`          | `/tmp/ifinder-downloads`          | Local download directory             |
 
 ### Error Codes
 
-| Error | Meaning | Resolution |
-|-------|---------|------------|
-| `ENOENT` | iFinder instance not found | Check `IFINDER_API_URL` |
-| `401` | Authentication failed | Verify JWT configuration and private key |
-| `403` | Access denied | Check user permissions in iFinder |
-| `404` | Document not found | Verify document ID or search for document |
-| `413` | Content too large | Reduce `maxLength` parameter |
-| `ETIMEDOUT` | Request timed out | Increase `IFINDER_TIMEOUT` setting |
+| Error       | Meaning                    | Resolution                                |
+| ----------- | -------------------------- | ----------------------------------------- |
+| `ENOENT`    | iFinder instance not found | Check `IFINDER_API_URL`                   |
+| `401`       | Authentication failed      | Verify JWT configuration and private key  |
+| `403`       | Access denied              | Check user permissions in iFinder         |
+| `404`       | Document not found         | Verify document ID or search for document |
+| `413`       | Content too large          | Reduce `maxLength` parameter              |
+| `ETIMEDOUT` | Request timed out          | Increase `IFINDER_TIMEOUT` setting        |
 
 ## Best Practices
 
@@ -464,4 +483,4 @@ For technical support with iFinder integration:
 
 ---
 
-*Last updated: January 2025*
+_Last updated: January 2025_
