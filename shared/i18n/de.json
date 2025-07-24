@@ -415,5 +415,12 @@
       },
       "confirmDelete": "Möchten Sie diese Seite wirklich löschen?"
     }
+  },
+  "feedback": {
+    "ratingHeading": "Bewerte diese Antwort",
+    "commentPlaceholder": "Erzähle uns mehr über deine Bewertung (optional)",
+    "rated": "Bewertet",
+    "sendFeedback": "Feedback senden",
+    "thankYou": "Danke für dein Feedback!"
   }
 }
