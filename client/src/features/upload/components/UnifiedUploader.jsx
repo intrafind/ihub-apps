@@ -12,22 +12,30 @@ import '../components/ImageUpload.css';
 const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, config = {} }) => {
   const { t } = useTranslation();
   
+  // Image upload configuration
+  const imageConfig = config.imageUpload || {};
+  const isImageUploadEnabled = imageConfig.enabled !== false && config.imageUploadEnabled !== false;
+  
+  // File upload configuration
+  const fileConfig = config.fileUpload || {};
+  const isFileUploadEnabled = fileConfig.enabled !== false && config.fileUploadEnabled !== false;
+  
   // Configuration with defaults
-  const MAX_FILE_SIZE_MB = config.maxFileSizeMB || 10;
+  const MAX_FILE_SIZE_MB = config.maxFileSizeMB || Math.max(imageConfig.maxFileSizeMB || 0, fileConfig.maxFileSizeMB || 0) || 10;
   
   // Image-specific configuration
-  const IMAGE_FORMATS = config.supportedImageFormats || [
+  const IMAGE_FORMATS = isImageUploadEnabled ? (imageConfig.supportedFormats || config.supportedImageFormats || [
     'image/jpeg',
     'image/jpg', 
     'image/png',
     'image/gif',
     'image/webp'
-  ];
-  const RESIZE_IMAGES = config.resizeImages !== false;
-  const MAX_DIMENSION = config.maxResizeDimension || 1024;
+  ]) : [];
+  const RESIZE_IMAGES = imageConfig.resizeImages !== false && config.resizeImages !== false;
+  const MAX_DIMENSION = imageConfig.maxResizeDimension || config.maxResizeDimension || 1024;
   
   // File-specific configuration  
-  const TEXT_FORMATS = config.supportedTextFormats || [
+  const TEXT_FORMATS = isFileUploadEnabled ? (fileConfig.supportedTextFormats || config.supportedTextFormats || [
     'text/plain',
     'text/markdown',
     'text/csv',
@@ -36,8 +44,8 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     'text/css',
     'text/javascript',
     'application/javascript'
-  ];
-  const PDF_FORMATS = config.supportedPdfFormats || ['application/pdf'];
+  ]) : [];
+  const PDF_FORMATS = isFileUploadEnabled ? (fileConfig.supportedPdfFormats || config.supportedPdfFormats || ['application/pdf']) : [];
   
   // All supported formats combined
   const ALL_FORMATS = [...IMAGE_FORMATS, ...TEXT_FORMATS, ...PDF_FORMATS];
@@ -142,6 +150,16 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   };
   
   const processFile = async (file) => {
+    // Check if image files are disabled
+    if (!isImageUploadEnabled && IMAGE_FORMATS.some(format => format === file.type)) {
+      throw new Error('image-upload-disabled');
+    }
+    
+    // Check if file upload is disabled
+    if (!isFileUploadEnabled && (TEXT_FORMATS.some(format => format === file.type) || PDF_FORMATS.some(format => format === file.type))) {
+      throw new Error('file-upload-disabled');
+    }
+    
     // Handle image files
     if (isImageFile(file.type)) {
       return await processImage(file);
@@ -216,6 +234,10 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
         return t('errors.invalidImage', 'Invalid image file');
       case 'read-error':
         return t('errors.readError', 'Error reading file');
+      case 'image-upload-disabled':
+        return t('errors.imageUploadDisabled', 'Image upload is not supported by the selected model. Please choose a different model or upload a text file instead.');
+      case 'file-upload-disabled':
+        return t('errors.fileUploadDisabled', 'File upload is disabled for this application.');
       default:
         return t('errors.fileProcessingError', 'Error processing file. Please try again.');
     }

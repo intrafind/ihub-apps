@@ -493,32 +493,76 @@ const AppChat = () => {
   };
 
   // Create unified upload configuration
-  const createUploadConfig = (app) => {
-    const imageConfig = app?.imageUpload || {};
-    const fileConfig = app?.fileUpload || {};
+  const createUploadConfig = (app, selectedModel) => {
+    // New unified upload config structure
+    const uploadConfig = app?.upload || {};
     
-    // Check if either uploader is enabled
-    const enabled = imageConfig?.enabled === true || fileConfig?.enabled === true;
+    // Backward compatibility with old structure
+    const imageConfig = uploadConfig?.imageUpload || app?.imageUpload || {};
+    const fileConfig = uploadConfig?.fileUpload || app?.fileUpload || {};
     
-    if (!enabled) {
+    // Check if upload is enabled at all
+    const uploadEnabled = uploadConfig?.enabled !== false && (
+      imageConfig?.enabled === true || 
+      fileConfig?.enabled === true ||
+      // Legacy check
+      app?.imageUpload?.enabled === true ||
+      app?.fileUpload?.maxFileSizeMB > 0
+    );
+    
+    if (!uploadEnabled) {
       return { enabled: false };
     }
     
+    // Determine if image upload should be disabled based on model capabilities
+    // Models that don't support vision: check if model name suggests it lacks vision
+    const isVisionModel = selectedModel && (
+      selectedModel.includes('vision') || 
+      selectedModel.includes('gpt-4') || 
+      selectedModel.includes('claude-3') ||
+      selectedModel.includes('gemini') ||
+      selectedModel.includes('4o')
+    );
+    
+    const imageUploadEnabled = imageConfig?.enabled !== false && isVisionModel;
+    const fileUploadEnabled = fileConfig?.enabled !== false;
+    
     return {
       enabled: true,
+      imageUploadEnabled,
+      fileUploadEnabled,
       maxFileSizeMB: Math.max(imageConfig?.maxFileSizeMB || 0, fileConfig?.maxFileSizeMB || 0) || 10,
       // Image-specific settings
+      imageUpload: {
+        enabled: imageUploadEnabled,
+        resizeImages: imageConfig?.resizeImages !== false,
+        maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
+        supportedFormats: imageConfig?.supportedFormats || [
+          'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'
+        ],
+        maxFileSizeMB: imageConfig?.maxFileSizeMB || 10
+      },
+      // File-specific settings
+      fileUpload: {
+        enabled: fileUploadEnabled,
+        maxFileSizeMB: fileConfig?.maxFileSizeMB || 5,
+        supportedTextFormats: fileConfig?.supportedTextFormats || [
+          'text/plain', 'text/markdown', 'text/csv', 'application/json',
+          'text/html', 'text/css', 'text/javascript', 'application/javascript'
+        ],
+        supportedPdfFormats: fileConfig?.supportedPdfFormats || ['application/pdf']
+      },
+      // Legacy format for backward compatibility
       resizeImages: imageConfig?.resizeImages !== false,
       maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
-      supportedImageFormats: imageConfig?.supportedFormats || [
+      supportedImageFormats: imageUploadEnabled ? (imageConfig?.supportedFormats || [
         'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'
-      ],
-      // File-specific settings
-      supportedTextFormats: fileConfig?.supportedTextFormats || [
+      ]) : [],
+      supportedTextFormats: fileUploadEnabled ? (fileConfig?.supportedTextFormats || [
         'text/plain', 'text/markdown', 'text/csv', 'application/json',
         'text/html', 'text/css', 'text/javascript', 'application/javascript'
-      ],
-      supportedPdfFormats: fileConfig?.supportedPdfFormats || ['application/pdf']
+      ]) : [],
+      supportedPdfFormats: fileUploadEnabled ? (fileConfig?.supportedPdfFormats || ['application/pdf']) : []
     };
   };
 
@@ -969,7 +1013,7 @@ const AppChat = () => {
                           : undefined
                       }
                       onFileSelect={handleFileSelect}
-                      uploadConfig={createUploadConfig(app)}
+                      uploadConfig={createUploadConfig(app, selectedModel)}
                       allowEmptySubmit={
                         app?.allowEmptyContent || selectedFile !== null
                       }
@@ -1030,7 +1074,7 @@ const AppChat = () => {
                           : undefined
                       }
                       onFileSelect={handleFileSelect}
-                      uploadConfig={createUploadConfig(app)}
+                      uploadConfig={createUploadConfig(app, selectedModel)}
                       allowEmptySubmit={
                         app?.allowEmptyContent || selectedFile !== null
                       }
@@ -1091,7 +1135,7 @@ const AppChat = () => {
                         : undefined
                     }
                     onFileSelect={handleFileSelect}
-                    uploadConfig={createUploadConfig(app)}
+                    uploadConfig={createUploadConfig(app, selectedModel)}
                     allowEmptySubmit={
                       app?.allowEmptyContent || selectedFile !== null
                     }

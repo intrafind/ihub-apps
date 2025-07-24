@@ -221,7 +221,9 @@
   "errors": {
     "fetchFailed": "Failed to fetch data",
     "sendFailed": "Failed to send message",
-    "configSaveFailed": "Failed to save configuration"
+    "configSaveFailed": "Failed to save configuration",
+    "imageUploadDisabled": "Image upload is not supported by the selected model. Please choose a different model or upload a text file instead.",
+    "fileUploadDisabled": "File upload is disabled for this application."
   },
   "serverErrors": {
     "appNotFound": "App not found",
