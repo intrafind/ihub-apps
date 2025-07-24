@@ -89,7 +89,7 @@ const AppConfigForm = ({
             onChange={e => onStyleChange(e.target.value)}
             className="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
           >
-            {Object.entries(styles).map(([id, description]) => (
+            {Object.entries(styles).map(([id]) => (
               <option key={id} value={id}>
                 {t(`responseStyles.${id}`, id.charAt(0).toUpperCase() + id.slice(1))}
               </option>
