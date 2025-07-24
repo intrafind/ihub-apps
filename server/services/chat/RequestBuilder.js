@@ -75,7 +75,7 @@ class RequestBuilder {
 
       // Get model name for standard variables
       const modelName = model?.name || model?.id || resolvedModelId;
-      
+
       let llmMessages = await processMessageTemplates(
         messages,
         bypassAppPrompts ? null : app,

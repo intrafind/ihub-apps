@@ -137,7 +137,7 @@ export async function verifyApiKey(model, res, clientRes = null, language) {
 
 /**
  * Resolve standard variables that should be automatically available in prompts
- * @param {object} user - User object from request 
+ * @param {object} user - User object from request
  * @param {string} modelName - Name of the model being used
  * @param {string} language - Current language setting
  * @param {string} style - Current style/tone setting
@@ -146,18 +146,18 @@ export async function verifyApiKey(model, res, clientRes = null, language) {
 function resolveStandardVariables(user = null, modelName = null, language = null, style = null) {
   const now = new Date();
   const platformConfig = configCache.getPlatform() || {};
-  
+
   // Get timezone from user or default to UTC
   const timezone = user?.timezone || user?.settings?.timezone || 'UTC';
-  
+
   // Create timezone-aware date formatter
   const tzOptions = { timeZone: timezone };
   const dateFormatter = new Intl.DateTimeFormat(language || 'en', tzOptions);
-  const timeFormatter = new Intl.DateTimeFormat(language || 'en', { 
-    ...tzOptions, 
-    timeStyle: 'medium' 
+  const timeFormatter = new Intl.DateTimeFormat(language || 'en', {
+    ...tzOptions,
+    timeStyle: 'medium'
   });
-  
+
   const standardVars = {
     // Date and time variables
     year: now.getFullYear().toString(),
@@ -165,28 +165,28 @@ function resolveStandardVariables(user = null, modelName = null, language = null
     date: now.toISOString().split('T')[0], // YYYY-MM-DD format
     time: timeFormatter.format(now),
     day_of_week: now.toLocaleDateString(language || 'en', { ...tzOptions, weekday: 'long' }),
-    
+
     // Locale and timezone
     timezone: timezone,
     locale: language || platformConfig.defaultLanguage || 'en',
-    
+
     // User information (only if user is authenticated)
     user_name: user?.name || user?.displayName || '',
     user_email: user?.email || '',
-    
+
     // Model information
     model_name: modelName || '',
-    
+
     // Style/tone setting
     tone: style || '',
-    
+
     // Location (from user profile if available)
     location: user?.location || user?.settings?.location || '',
-    
+
     // Platform context (configurable in platform.json)
     platform_context: platformConfig.standardVariables?.context || ''
   };
-  
+
   // Filter out empty values to avoid replacing with empty strings unintentionally
   const filteredVars = {};
   for (const [key, value] of Object.entries(standardVars)) {
@@ -194,7 +194,7 @@ function resolveStandardVariables(user = null, modelName = null, language = null
       filteredVars[key] = value;
     }
   }
-  
+
   return filteredVars;
 }
 
@@ -211,11 +211,11 @@ export async function processMessageTemplates(
   const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
   const lang = language || defaultLang;
   console.log(`Using language '${lang}' for message templates`);
-  
+
   // Resolve standard variables once for use throughout the function
   const standardVariables = resolveStandardVariables(user, modelName, lang, style);
   console.log(`Resolved ${Object.keys(standardVariables).length} standard variables`);
-  
+
   let llmMessages = [...messages].map(msg => {
     if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
       let processedContent =
@@ -228,7 +228,10 @@ export async function processMessageTemplates(
       if (variables && Object.keys(variables).length > 0) {
         for (const [key, value] of Object.entries(variables)) {
           const strValue = typeof value === 'string' ? value : String(value || '');
-          processedContent = processedContent.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), strValue);
+          processedContent = processedContent.replace(
+            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
+            strValue
+          );
         }
       }
       const processedMsg = { role: 'user', content: processedContent };
