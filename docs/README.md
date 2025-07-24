@@ -16,6 +16,7 @@ This book contains configuration details and user instructions for the AI Hub Ap
 - [Styles](styles.md)
 - [Prompts Database](prompts.md)
 - [Content Management](content-management.md)
+- [SSL Certificates](ssl-certificates.md)
 
 ## Features
 
