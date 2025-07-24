@@ -143,7 +143,12 @@ export async function verifyApiKey(model, res, clientRes = null, language) {
  * @param {string} style - Current style/tone setting
  * @returns {object} Object containing global prompt variables
  */
-function resolveGlobalPromptVariables(user = null, modelName = null, language = null, style = null) {
+function resolveGlobalPromptVariables(
+  user = null,
+  modelName = null,
+  language = null,
+  style = null
+) {
   const now = new Date();
   const platformConfig = configCache.getPlatform() || {};
 
