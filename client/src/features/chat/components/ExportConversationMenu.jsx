@@ -3,13 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import TurndownService from 'turndown';
 import { markdownToHtml, htmlToMarkdown, isMarkdown } from '../../../utils/markdownUtils';
-import {
-  exportChatToPDF,
-  exportChatToJSON,
-  exportChatToJSONL,
-  exportChatToMarkdown,
-  exportChatToHTML
-} from '../../../api/endpoints/apps';
+import { exportChatToFormat } from '../../../api/endpoints/apps';
 
 const turndownService = new TurndownService();
 
@@ -54,35 +48,14 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
       .map(m => `<p><strong>${m.role}:</strong> ${markdownToHtml(m.content)}</p>`) // markdownToHtml handles null
       .join('');
 
-  const handlePDFExport = async () => {
-    if (!appId || !chatId) {
-      console.error('Missing appId or chatId for PDF export');
-      return;
-    }
-
-    setIsExporting(true);
-    try {
-      const exportData = {
-        messages: messages.filter(m => !m.isGreeting), // Exclude greeting messages
-        settings: buildMeta(),
-        template: pdfConfig.template,
-        watermark: pdfConfig.watermark
-      };
-
-      await exportChatToPDF(appId, chatId, exportData);
-      onClose?.();
-    } catch (error) {
-      console.error('PDF export failed:', error);
-      // TODO: Add proper error notification
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   const handleExport = async format => {
     if (!appId || !chatId) {
       console.error('Missing appId or chatId for export');
       return;
+    }
+
+    if (format === 'pdf') {
+      setIsExporting(true);
     }
 
     try {
@@ -91,27 +64,24 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
         settings: buildMeta()
       };
 
-      switch (format) {
-        case 'json':
-          await exportChatToJSON(appId, chatId, exportData);
-          break;
-        case 'jsonl':
-          await exportChatToJSONL(appId, chatId, exportData);
-          break;
-        case 'markdown':
-          await exportChatToMarkdown(appId, chatId, exportData);
-          break;
-        case 'html':
-          await exportChatToHTML(appId, chatId, exportData);
-          break;
-        default:
-          return;
+      // Add PDF-specific configuration if exporting to PDF
+      if (format === 'pdf') {
+        exportData.template = pdfConfig.template;
+        exportData.watermark = pdfConfig.watermark;
       }
 
+      // Get app name for better file naming
+      const appName = 'AI Hub Apps'; // Could be passed as prop or fetched
+
+      await exportChatToFormat(appId, chatId, exportData, format, appName);
       onClose?.();
     } catch (error) {
       console.error(`${format.toUpperCase()} export failed:`, error);
       // TODO: Add proper error notification
+    } finally {
+      if (format === 'pdf') {
+        setIsExporting(false);
+      }
     }
   };
 
@@ -228,7 +198,7 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
 
               <div className="pt-2 border-t border-gray-200">
                 <button
-                  onClick={handlePDFExport}
+                  onClick={() => handleExport('pdf')}
                   disabled={isExporting}
                   className="w-full bg-blue-600 text-white text-sm px-3 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >

@@ -10,7 +10,6 @@
       "position": "bottom-right",
       "opacity": 0.5
     },
-    "enableExportTracking": true,
     "templates": {
       "default": {
         "name": "Default",
