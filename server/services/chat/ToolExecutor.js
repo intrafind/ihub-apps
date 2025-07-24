@@ -172,10 +172,15 @@ class ToolExecutor {
       clearTimeout(timeoutId);
 
       if (!llmResponse.ok) {
-        const errorBody = await llmResponse.text();
-        throw Object.assign(new Error(`LLM API request failed with status ${llmResponse.status}`), {
-          code: llmResponse.status.toString(),
-          details: errorBody
+        const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
+          llmResponse,
+          model,
+          clientLanguage
+        );
+
+        throw Object.assign(new Error(errorInfo.message), {
+          code: errorInfo.code,
+          details: errorInfo.details
         });
       }
 
@@ -420,12 +425,17 @@ class ToolExecutor {
         clearTimeout(timeoutId);
 
         if (!llmResponse.ok) {
-          const errorBody = await llmResponse.text();
+          const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
+            llmResponse,
+            model,
+            clientLanguage
+          );
+
           throw Object.assign(
-            new Error(`LLM API request failed with status ${llmResponse.status}`),
+            new Error(errorInfo.message),
             {
-              code: llmResponse.status.toString(),
-              details: errorBody
+              code: errorInfo.code,
+              details: errorInfo.details
             }
           );
         }
