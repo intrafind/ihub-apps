@@ -130,48 +130,102 @@ const FeedbackCard = ({ data }) => {
   const goodPercentage = totalFeedback > 0 ? ((data.good || 0) / totalFeedback) * 100 : 0;
   const badPercentage = totalFeedback > 0 ? ((data.bad || 0) / totalFeedback) * 100 : 0;
 
+  // New star rating data
+  const starRatings = data.ratings || {};
+  const totalStarRatings = data.total || 0;
+  const averageRating = data.averageRating || 0;
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Feedback Overview</h3>
 
-      {/* Total Stats */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="text-center p-4 bg-green-50 rounded-lg">
-          <div className="text-3xl font-bold text-green-600">{data.good || 0}</div>
-          <div className="text-sm text-green-600 font-medium">Positive</div>
-          <div className="text-xs text-green-500">{goodPercentage.toFixed(1)}%</div>
-        </div>
-        <div className="text-center p-4 bg-red-50 rounded-lg">
-          <div className="text-3xl font-bold text-red-600">{data.bad || 0}</div>
-          <div className="text-sm text-red-600 font-medium">Negative</div>
-          <div className="text-xs text-red-500">{badPercentage.toFixed(1)}%</div>
-        </div>
-      </div>
-
-      {/* Visual Progress Bar */}
-      {totalFeedback > 0 && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-            <span>Satisfaction Rate</span>
-            <span>{goodPercentage.toFixed(1)}% positive</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-            <div className="h-full flex">
-              <div
-                className="bg-green-500 transition-all duration-300"
-                style={{ width: `${goodPercentage}%` }}
-              ></div>
-              <div
-                className="bg-red-500 transition-all duration-300"
-                style={{ width: `${badPercentage}%` }}
-              ></div>
+      {/* Star Rating Summary (if available) */}
+      {totalStarRatings > 0 && (
+        <div className="mb-6 p-4 bg-amber-50 rounded-lg">
+          <div className="flex items-center justify-center space-x-2 mb-3">
+            <div className="flex items-center">
+              {[1, 2, 3, 4, 5].map(star => (
+                <svg
+                  key={star}
+                  className={`w-6 h-6 ${
+                    star <= Math.round(averageRating) ? 'text-yellow-400' : 'text-gray-300'
+                  }`}
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+              ))}
             </div>
+            <span className="text-2xl font-bold text-amber-600">{averageRating.toFixed(1)}</span>
+          </div>
+          <div className="text-center">
+            <div className="text-sm text-amber-600 font-medium">
+              Average Rating ({totalStarRatings} ratings)
+            </div>
+          </div>
+
+          {/* Star rating breakdown */}
+          <div className="mt-4 space-y-2">
+            {[5, 4, 3, 2, 1].map(star => {
+              const count = starRatings[star] || 0;
+              const percentage = totalStarRatings > 0 ? (count / totalStarRatings) * 100 : 0;
+              return (
+                <div key={star} className="flex items-center space-x-2 text-sm">
+                  <span className="w-8 text-gray-600">{star}★</span>
+                  <div className="flex-1 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-yellow-400 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                  <span className="w-8 text-gray-600 text-xs">{count}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
+      {/* Legacy positive/negative stats (for backward compatibility) */}
+      {totalFeedback > 0 && (
+        <>
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <div className="text-3xl font-bold text-green-600">{data.good || 0}</div>
+              <div className="text-sm text-green-600 font-medium">Positive</div>
+              <div className="text-xs text-green-500">{goodPercentage.toFixed(1)}%</div>
+            </div>
+            <div className="text-center p-4 bg-red-50 rounded-lg">
+              <div className="text-3xl font-bold text-red-600">{data.bad || 0}</div>
+              <div className="text-sm text-red-600 font-medium">Negative</div>
+              <div className="text-xs text-red-500">{badPercentage.toFixed(1)}%</div>
+            </div>
+          </div>
+          {/* Visual Progress Bar */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+              <span>Satisfaction Rate</span>
+              <span>{goodPercentage.toFixed(1)}% positive</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+              <div className="h-full flex">
+                <div
+                  className="bg-green-500 transition-all duration-300"
+                  style={{ width: `${goodPercentage}%` }}
+                ></div>
+                <div
+                  className="bg-red-500 transition-all duration-300"
+                  style={{ width: `${badPercentage}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       <div className="text-center text-sm text-gray-600">
-        Total feedback: {totalFeedback} responses
+        Total feedback: {Math.max(totalFeedback, totalStarRatings)} responses
       </div>
     </div>
   );

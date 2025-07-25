@@ -73,6 +73,7 @@
       "recent": "Recently used",
       "toggleImageUpload": "Toggle image upload",
       "toggleFileUpload": "Toggle file upload",
+      "toggleUpload": "Toggle file upload",
       "favorites": "Favorites",
       "clearFilters": "Clear filters",
       "loadMore": "Load More",
@@ -135,46 +136,6 @@
       "noModels": "No models available",
       "loading": "Loading models..."
     },
-    "imageUpload": {
-      "placeholder": "Click or drag to upload image",
-      "uploading": "Uploading...",
-      "error": "Upload failed",
-      "success": "Image uploaded"
-    },
-    "fileUpload": {
-      "placeholder": "Click or drag to upload file",
-      "uploading": "Uploading...",
-      "error": "Upload failed",
-      "success": "File uploaded",
-      "remove": "Remove file",
-      "size": "Size",
-      "type": "Type"
-    },
-    "settings": {
-      "title": "Chat Settings",
-      "temperature": {
-        "label": "Temperature",
-        "description": "Controls randomness in responses"
-      },
-      "maxTokens": {
-        "label": "Max Tokens",
-        "description": "Maximum length of response"
-      },
-      "systemPrompt": {
-        "label": "System Prompt",
-        "description": "Instructions for the AI assistant"
-      }
-    },
-    "shareDialog": {
-      "title": "Share Conversation",
-      "copy": "Copy Link",
-      "copied": "Copied!",
-      "expires": "Expires",
-      "never": "Never",
-      "oneHour": "1 hour",
-      "oneDay": "1 day",
-      "oneWeek": "1 week"
-    }
   },
   "auth": {
     "login": {
@@ -368,177 +329,20 @@
       "confirmDelete": "Are you sure you want to delete this page?"
     }
   },
-  "tools": {
-    "braveSearch": {
-      "name": "Brave Web / Internet Search",
-      "description": "Search the web / internet using Brave for up-to-date information. Use the 'query' parameter with your search terms.",
-      "parameters": {
-        "query": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'"
-      }
-    },
-    "tavilySearch": {
-      "name": "Tavily Web Search",
-      "description": "Search the web using the Tavily API. Use the 'query' parameter with your search terms.",
-      "parameters": {
-        "query": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'",
-        "search_depth": "Depth of the search",
-        "max_results": "Maximum number of search results to return"
-      }
-    },
-    "webContentExtractor": {
-      "name": "Web Content Extractor",
-      "description": "Extract clean, readable content from an URL. This can be content like PDFs or webpages, removing ads, headers, footers, and other non-content elements. Use the 'url' parameter with a valid HTTP/HTTPS URL.",
-      "parameters": {
-        "url": "The full URL of the webpage to extract content from. Must be a valid HTTP or HTTPS URL. Example: 'https://example.com/article'",
-        "maxLength": "Maximum length of extracted content in characters (default: 5000)",
-        "ignoreSSL": "Ignore invalid HTTPS certificates (default: false, admin configurable)"
-      }
-    },
-    "enhancedWebSearch": {
-      "name": "Enhanced Web Search with Content",
-      "description": "Performs web search and automatically extracts full content from the top results for comprehensive information gathering. Perfect for 'chat with web' functionality. Use the 'query' parameter with your search terms.",
-      "parameters": {
-        "query": "The search query or search terms to find on the web. Example: 'artificial intelligence trends 2024' or 'best programming languages'",
-        "extractContent": "Whether to extract full content from search results (default: true)",
-        "maxResults": "Maximum number of search results to process and extract content from (default: 3)",
-        "contentMaxLength": "Maximum length of extracted content per page in characters (default: 3000)"
-      }
-    },
-    "deepResearch": {
-      "name": "Deep Research",
-      "description": "Perform iterative web research with progress updates via SSE events.",
-      "parameters": {
-        "query": "Initial search query",
-        "maxRounds": "Number of search iterations",
-        "maxResults": "Number of results to process per round",
-        "contentMaxLength": "Maximum length of extracted content per page",
-        "chatId": "Chat session ID"
-      }
-    },
-    "researchPlanner": {
-      "name": "Research Planner",
-      "description": "Break down a research topic into distinct investigative tasks",
-      "parameters": {
-        "question": "Research topic",
-        "teamSize": "Number of tasks to generate",
-        "soundBites": "Additional context"
-      }
-    },
-    "evaluator": {
-      "name": "Answer Evaluator",
-      "description": "Evaluate answers for definitiveness, freshness and completeness.",
-      "parameters": {
-        "question": "Original user question",
-        "answer": "Draft answer to evaluate",
-        "model": "Model ID for evaluation"
-      }
-    },
-    "queryRewriter": {
-      "name": "Query Rewriter",
-      "description": "Rewrite user search queries into optimized variations.",
-      "parameters": {
-        "query": "Search query to rewrite",
-        "think": "User motivation",
-        "context": "Optional context",
-        "model": "Model id"
-      }
-    },
-    "playwrightScreenshot": {
-      "name": "Website Screenshot (Playwright)",
-      "description": "Capture a screenshot or PDF of a webpage using Playwright.",
-      "parameters": {
-        "url": "Target URL",
-        "format": "Output format (png or pdf)",
-        "fullPage": "Capture full page or visible area only"
-      }
-    },
-    "answerReducer": {
-      "name": "Answer Reducer",
-      "description": "Merge multiple text passages into a single concise article.",
-      "parameters": {
-        "answers": "Texts to merge"
-      }
-    },
-    "seleniumScreenshot": {
-      "name": "Website Screenshot (Selenium)",
-      "description": "Capture a screenshot or PDF of a webpage using Selenium.",
-      "parameters": {
-        "url": "Target URL",
-        "format": "Output format (png or pdf)",
-        "fullPage": "Capture full page or visible area only"
-      }
-    },
-    "entraPeopleSearch": {
-      "name": "Entra People Search",
-      "description": "Query the corporate directory for people and teams",
-      "functions": {
-        "findUser": {
-          "description": "Find a user by name or email",
-          "parameters": {
-            "name": "User name or email"
-          }
-        },
-        "getAllUserDetails": {
-          "description": "Get all details for a user",
-          "parameters": {
-            "userId": "User identifier"
-          }
-        },
-        "getUserManager": {
-          "description": "Get the direct manager of a user",
-          "parameters": {
-            "userId": "User identifier"
-          }
-        },
-        "getUserGroups": {
-          "description": "List teams the user belongs to",
-          "parameters": {
-            "userId": "User identifier"
-          }
-        },
-        "getTeamMembers": {
-          "description": "Get members of a team",
-          "parameters": {
-            "teamId": "Team identifier"
-          }
-        },
-        "getUserPhotoBase64": {
-          "description": "Get a user's profile photo as Base64",
-          "parameters": {
-            "userId": "User identifier"
-          }
-        }
-      }
-    },
-    "iFinder": {
-      "name": "iFinder Document Management",
-      "description": "Comprehensive document search, content retrieval, and management for the iFinder system",
-      "functions": {
-        "search": {
-          "description": "Search for documents in the iFinder system",
-          "parameters": {
-            "query": "Search query to find documents in iFinder. Example: 'contract proposals' or 'technical documentation'",
-            "maxResults": "Maximum number of search results to return (default: 10, max: 100)",
-            "searchProfile": "Search profile ID (optional, uses default if not specified)",
-            "returnFields": "Fields to return in search results (optional)"
-          }
-        },
-        "getContent": {
-          "description": "Fetch document content from iFinder for LLM processing",
-          "parameters": {
-            "documentId": "Document ID to fetch content for. Example: 'doc123456'",
-            "searchProfile": "Search profile ID (optional, uses default if not specified)",
-            "maxLength": "Maximum content length in characters (default: 50000)"
-          }
-        },
-        "getMetadata": {
-          "description": "Fetch detailed metadata for a specific document from iFinder",
-          "parameters": {
-            "documentId": "Document ID to fetch metadata for. Example: 'doc123456'",
-            "searchProfile": "Search profile ID (optional, uses default if not specified)"
-          }
-        }
-      }
+ "components": {
+    "uploader": {
+      "imageSelected": "Image selected",
+      "fileSelected": "File selected and processed",
+      "processing": "Processing file...",
+      "uploadFile": "Upload File",
+      "supportedFormats": "Supported: {{formats}} (max {{maxSize}}MB)"
     }
+  },
+  "feedback": {
+    "ratingHeading": "Rate this response",
+    "commentPlaceholder": "Tell us more about your rating (optional)",
+    "rated": "Rated",
+    "sendFeedback": "Send Feedback",
+    "thankYou": "Thank you for your feedback!"
   }
 }

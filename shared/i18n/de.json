@@ -214,7 +214,9 @@
   "errors": {
     "fetchFailed": "Daten konnten nicht abgerufen werden",
     "sendFailed": "Nachricht konnte nicht gesendet werden",
-    "configSaveFailed": "Konfiguration konnte nicht gespeichert werden"
+    "configSaveFailed": "Konfiguration konnte nicht gespeichert werden",
+    "imageUploadDisabled": "Bild-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell oder laden Sie stattdessen eine Textdatei hoch.",
+    "fileUploadDisabled": "Datei-Upload ist für diese Anwendung deaktiviert."
   },
   "serverErrors": {
     "appNotFound": "Anwendung nicht gefunden",
@@ -416,177 +418,20 @@
       "confirmDelete": "Möchten Sie diese Seite wirklich löschen?"
     }
   },
-  "tools": {
-    "braveSearch": {
-      "name": "Brave Web- / Internetsuche",
-      "description": "Durchsuchen Sie das Web / Internet mit Brave für aktuelle Informationen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen.",
-      "parameters": {
-        "query": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'neueste KI-Nachrichten' oder 'Python Programmier-Tutorial'"
-      }
-    },
-    "tavilySearch": {
-      "name": "Tavily Websuche",
-      "description": "Durchsuchen Sie das Web mit der Tavily API. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen.",
-      "parameters": {
-        "query": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'neueste KI-Nachrichten' oder 'Python Programmier-Tutorial'",
-        "search_depth": "Suchtiefe",
-        "max_results": "Maximale Anzahl der zurückzugebenden Suchergebnisse"
-      }
-    },
-    "webContentExtractor": {
-      "name": "Web-Inhalts-Extraktor",
-      "description": "Extrahieren Sie saubere, lesbare Inhalte von einer URL. Dies können Inhalte wie PDFs oder Webseiten sein, wobei Werbung, Kopfzeilen, Fußzeilen und andere Nicht-Inhaltselemente entfernt werden. Verwenden Sie den 'url' Parameter mit einer gültigen HTTP/HTTPS-URL.",
-      "parameters": {
-        "url": "Die vollständige URL der Webseite, von der Inhalte extrahiert werden sollen. Muss eine gültige HTTP- oder HTTPS-URL sein. Beispiel: 'https://example.com/artikel'",
-        "maxLength": "Maximale Länge der extrahierten Inhalte in Zeichen (Standard: 5000)",
-        "ignoreSSL": "Ungültige HTTPS-Zertifikate ignorieren (Standard: false, vom Administrator konfigurierbar)"
-      }
-    },
-    "enhancedWebSearch": {
-      "name": "Erweiterte Websuche mit Inhalten",
-      "description": "Führt eine Websuche durch und extrahiert automatisch vollständige Inhalte aus den Top-Ergebnissen für umfassende Informationsbeschaffung. Perfekt für 'Chat mit Web'-Funktionalität. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen.",
-      "parameters": {
-        "query": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'Trends der künstlichen Intelligenz 2024' oder 'beste Programmiersprachen'",
-        "extractContent": "Ob vollständige Inhalte aus Suchergebnissen extrahiert werden sollen (Standard: true)",
-        "maxResults": "Maximale Anzahl der zu verarbeitenden und zu extrahierenden Suchergebnisse (Standard: 3)",
-        "contentMaxLength": "Maximale Länge der extrahierten Inhalte pro Seite in Zeichen (Standard: 3000)"
-      }
-    },
-    "deepResearch": {
-      "name": "Tiefgehende Recherche",
-      "description": "Führen Sie iterative Webrecherchen mit Fortschrittsupdates über SSE-Ereignisse durch.",
-      "parameters": {
-        "query": "Erste Suchanfrage",
-        "maxRounds": "Anzahl der Suchiterationen",
-        "maxResults": "Anzahl der pro Runde zu verarbeitenden Ergebnisse",
-        "contentMaxLength": "Maximale Länge der extrahierten Inhalte pro Seite",
-        "chatId": "Chat-Sitzungs-ID"
-      }
-    },
-    "researchPlanner": {
-      "name": "Recherche-Planer",
-      "description": "Zerlegen Sie ein Forschungsthema in verschiedene investigative Aufgaben",
-      "parameters": {
-        "question": "Forschungsthema",
-        "teamSize": "Anzahl der zu generierenden Aufgaben",
-        "soundBites": "Zusätzlicher Kontext"
-      }
-    },
-    "evaluator": {
-      "name": "Antwort-Bewerter",
-      "description": "Bewerten Sie Antworten auf Bestimmtheit, Aktualität und Vollständigkeit.",
-      "parameters": {
-        "question": "Ursprüngliche Benutzerfrage",
-        "answer": "Entwurfsantwort zur Bewertung",
-        "model": "Modell-ID für die Bewertung"
-      }
-    },
-    "queryRewriter": {
-      "name": "Anfragen-Umschreiber",
-      "description": "Schreiben Sie Benutzersuchanfragen in optimierte Varianten um.",
-      "parameters": {
-        "query": "Suchanfrage zum Umschreiben",
-        "think": "Benutzermotivation",
-        "context": "Optionaler Kontext",
-        "model": "Modell-ID"
-      }
-    },
-    "playwrightScreenshot": {
-      "name": "Website-Screenshot (Playwright)",
-      "description": "Erstellen Sie einen Screenshot oder PDF einer Webseite mit Playwright.",
-      "parameters": {
-        "url": "Ziel-URL",
-        "format": "Ausgabeformat (png oder pdf)",
-        "fullPage": "Ganze Seite oder nur sichtbaren Bereich erfassen"
-      }
-    },
-    "answerReducer": {
-      "name": "Antwort-Reduzierer",
-      "description": "Führen Sie mehrere Textpassagen zu einem einzigen prägnanten Artikel zusammen.",
-      "parameters": {
-        "answers": "Zu vereinende Texte"
-      }
-    },
-    "seleniumScreenshot": {
-      "name": "Website-Screenshot (Selenium)",
-      "description": "Erstellen Sie einen Screenshot oder PDF einer Webseite mit Selenium.",
-      "parameters": {
-        "url": "Ziel-URL",
-        "format": "Ausgabeformat (png oder pdf)",
-        "fullPage": "Ganze Seite oder nur sichtbaren Bereich erfassen"
-      }
-    },
-    "entraPeopleSearch": {
-      "name": "Entra Personensuche",
-      "description": "Durchsuchen Sie das Unternehmensverzeichnis nach Personen und Teams",
-      "functions": {
-        "findUser": {
-          "description": "Einen Benutzer nach Name oder E-Mail finden",
-          "parameters": {
-            "name": "Benutzername oder E-Mail"
-          }
-        },
-        "getAllUserDetails": {
-          "description": "Alle Details für einen Benutzer abrufen",
-          "parameters": {
-            "userId": "Benutzerkennung"
-          }
-        },
-        "getUserManager": {
-          "description": "Den direkten Vorgesetzten eines Benutzers abrufen",
-          "parameters": {
-            "userId": "Benutzerkennung"
-          }
-        },
-        "getUserGroups": {
-          "description": "Teams auflisten, denen der Benutzer angehört",
-          "parameters": {
-            "userId": "Benutzerkennung"
-          }
-        },
-        "getTeamMembers": {
-          "description": "Mitglieder eines Teams abrufen",
-          "parameters": {
-            "teamId": "Team-Kennung"
-          }
-        },
-        "getUserPhotoBase64": {
-          "description": "Profilbild eines Benutzers als Base64 abrufen",
-          "parameters": {
-            "userId": "Benutzerkennung"
-          }
-        }
-      }
-    },
-    "iFinder": {
-      "name": "iFinder Dokumentenverwaltung",
-      "description": "Umfassende Dokumentensuche, Inhaltsabruf und -verwaltung für das iFinder-System",
-      "functions": {
-        "search": {
-          "description": "Nach Dokumenten im iFinder-System suchen",
-          "parameters": {
-            "query": "Suchanfrage zum Finden von Dokumenten in iFinder. Beispiel: 'Vertragsvorschläge' oder 'technische Dokumentation'",
-            "maxResults": "Maximale Anzahl der zurückzugebenden Suchergebnisse (Standard: 10, max: 100)",
-            "searchProfile": "Suchprofil-ID (optional, verwendet Standard wenn nicht angegeben)",
-            "returnFields": "In Suchergebnissen zurückzugebende Felder (optional)"
-          }
-        },
-        "getContent": {
-          "description": "Dokumentinhalt aus iFinder für LLM-Verarbeitung abrufen",
-          "parameters": {
-            "documentId": "Dokument-ID für die Inhalte abgerufen werden sollen. Beispiel: 'doc123456'",
-            "searchProfile": "Suchprofil-ID (optional, verwendet Standard wenn nicht angegeben)",
-            "maxLength": "Maximale Inhaltslänge in Zeichen (Standard: 50000)"
-          }
-        },
-        "getMetadata": {
-          "description": "Detaillierte Metadaten für ein spezifisches Dokument aus iFinder abrufen",
-          "parameters": {
-            "documentId": "Dokument-ID für die Metadaten abgerufen werden sollen. Beispiel: 'doc123456'",
-            "searchProfile": "Suchprofil-ID (optional, verwendet Standard wenn nicht angegeben)"
-          }
-        }
-      }
+  "components": {
+    "uploader": {
+      "imageSelected": "Bild ausgewählt",
+      "fileSelected": "Datei ausgewählt und verarbeitet",
+      "processing": "Datei wird verarbeitet...",
+      "uploadFile": "Datei hochladen",
+      "supportedFormats": "Unterstützt: {{formats}} (max {{maxSize}}MB)"
     }
+  },
+  "feedback": {
+    "ratingHeading": "Bewerte diese Antwort",
+    "commentPlaceholder": "Erzähle uns mehr über deine Bewertung (optional)",
+    "rated": "Bewertet",
+    "sendFeedback": "Feedback senden",
+    "thankYou": "Danke für dein Feedback!"
   }
 }

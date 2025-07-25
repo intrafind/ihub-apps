@@ -16,7 +16,9 @@ const ChatActionsMenu = ({
   exportSettings = {},
   onToggleCanvas,
   onToggleParameters,
-  showCanvasButton = false
+  showCanvasButton = false,
+  appId,
+  chatId
 }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -117,6 +119,8 @@ const ChatActionsMenu = ({
                 messages={messages}
                 settings={exportSettings}
                 onClose={() => setShowExport(false)}
+                appId={appId}
+                chatId={chatId}
               />
             )}
           </div>

@@ -76,25 +76,28 @@
       "showTranscript": true
     }
   },
-  "imageUpload": {
-    "enabled": false,
-    "resizeImages": true,
-    "maxFileSizeMB": 10,
-    "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
-  },
-  "fileUpload": {
-    "maxFileSizeMB": 5,
-    "supportedTextFormats": [
-      "text/plain",
-      "text/markdown",
-      "text/csv",
-      "application/json",
-      "text/html",
-      "text/css",
-      "text/javascript",
-      "application/javascript",
-      "text/xml"
-    ],
-    "supportedPdfFormats": ["application/pdf"]
+  "upload": {
+    "enabled": true,
+    "imageUpload": {
+      "enabled": false,
+      "resizeImages": true,
+      "maxFileSizeMB": 10,
+      "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+    },
+    "fileUpload": {
+      "maxFileSizeMB": 5,
+      "supportedTextFormats": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/json",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/xml"
+      ],
+      "supportedPdfFormats": ["application/pdf"]
+    }
   }
 }

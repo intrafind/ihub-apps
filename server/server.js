@@ -148,7 +148,7 @@ if (cluster.isPrimary && workerCount > 1) {
     DEFAULT_TIMEOUT
   });
   registerOpenAIProxyRoutes(app, { getLocalizedError });
-  registerAdminRoutes(app);
+  await registerAdminRoutes(app);
   registerShortLinkRoutes(app);
 
   // --- Session Management handled in sessionRoutes ---
