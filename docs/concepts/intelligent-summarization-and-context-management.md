@@ -7,6 +7,7 @@ This document outlines the implementation strategy for intelligent summarization
 ## Problem Statement
 
 ### Current Issues
+
 - **Context Window Overflow**: Long documents can exceed LLM context limits, causing request failures
 - **Inaccurate Token Counting**: Current word-count estimation doesn't match actual tokenization
 - **No Context Awareness**: System doesn't track or manage context window usage
@@ -14,6 +15,7 @@ This document outlines the implementation strategy for intelligent summarization
 - **Poor User Experience**: No feedback when requests fail due to context limits
 
 ### Impact
+
 - Failed requests when processing large documents
 - Suboptimal summarization capabilities
 - No visibility into context window usage
@@ -24,6 +26,7 @@ This document outlines the implementation strategy for intelligent summarization
 ### Core Components
 
 #### 1. Token Counting Service (`/server/utils/TokenCounter.js`)
+
 **Purpose**: Accurate, model-specific token counting to replace word-count estimation.
 
 ```javascript
@@ -35,12 +38,14 @@ class TokenCounter {
 ```
 
 **Features**:
+
 - Model-specific tokenizers (GPT-4, Claude, Gemini)
 - Accurate token counting using `tiktoken` library
 - Context calculation including system prompts, history, and tool outputs
 - Performance optimized with caching
 
 #### 2. Summarization Tool (`/server/tools/summarizer.js`)
+
 **Purpose**: Universal summarization tool available to all apps.
 
 ```javascript
@@ -59,6 +64,7 @@ class TokenCounter {
 ```
 
 **Capabilities**:
+
 - Hierarchical summarization for very large content
 - Query-guided summarization with focus areas
 - Multiple output formats (bullets, paragraphs, detailed analysis)
@@ -66,6 +72,7 @@ class TokenCounter {
 - Preservation of critical information and context
 
 #### 3. Context Manager (`/server/services/ContextManager.js`)
+
 **Purpose**: Intelligent context window management with automatic optimization.
 
 ```javascript
@@ -79,6 +86,7 @@ class ContextManager {
 ```
 
 **Features**:
+
 - Pre-request context validation
 - Automatic message compaction at 80% usage threshold
 - Tool output summarization for large responses
@@ -86,9 +94,11 @@ class ContextManager {
 - User notification for context limitations
 
 #### 4. Enhanced Usage Tracking (`/server/utils/usageTracker.js`)
+
 **Purpose**: Real-time context window monitoring and analytics.
 
 **New Metrics**:
+
 ```javascript
 {
   contextUsage: {
@@ -108,6 +118,7 @@ class ContextManager {
 ```
 
 **Logging Features**:
+
 - Real-time context window usage tracking
 - Breakdown by context components
 - Context optimization events logging
@@ -117,9 +128,11 @@ class ContextManager {
 ### Implementation Strategy
 
 #### Phase 1: Foundation (Week 1)
+
 **Token Counting Infrastructure**
 
 1. **Install Dependencies**
+
    ```bash
    npm install tiktoken
    ```
@@ -145,6 +158,7 @@ class ContextManager {
    ```
 
 #### Phase 2: Context Management (Week 2)
+
 **Intelligent Context Window Handling**
 
 1. **Create ContextManager Service**
@@ -153,12 +167,15 @@ class ContextManager {
    - Message compaction strategies
 
 2. **Update ChatService Integration**
+
    ```javascript
    // In ChatService.processChat()
    const contextValidation = await ContextManager.validateContextWindow(
-     messages, systemPrompt, modelConfig
+     messages,
+     systemPrompt,
+     modelConfig
    );
-   
+
    if (contextValidation.exceedsLimit || contextValidation.usagePercentage > 80) {
      messages = await ContextManager.optimizeContext(messages, modelConfig);
    }
@@ -170,6 +187,7 @@ class ContextManager {
    - Context optimization event logging
 
 #### Phase 3: Summarization Tool (Week 3)
+
 **Universal Summarization Capability**
 
 1. **Implement Summarizer Tool**
@@ -178,11 +196,14 @@ class ContextManager {
    - Hierarchical processing for large content
 
 2. **Add Tool Configuration**
+
    ```json
    {
      "id": "summarizer",
      "script": "summarizer.js",
-     "parameters": { /* schema */ },
+     "parameters": {
+       /* schema */
+     },
      "autoAvailable": true // Available to all apps
    }
    ```
@@ -193,12 +214,14 @@ class ContextManager {
    - Quality preservation algorithms
 
 #### Phase 4: User Experience (Week 4)
+
 **Enhanced Feedback and Notifications**
 
 1. **Context Usage Display**
+
    ```javascript
    // Client-side context indicator
-   <ContextUsageIndicator 
+   <ContextUsageIndicator
      usage={contextUsage.usagePercentage}
      limit={contextUsage.contextLimit}
      optimized={contextUsage.compactionApplied}
@@ -218,18 +241,19 @@ class ContextManager {
 ### Technical Implementation Details
 
 #### Token Counting Implementation
+
 ```javascript
 // /server/utils/TokenCounter.js
-import { encoding_for_model, get_encoding } from "tiktoken";
+import { encoding_for_model, get_encoding } from 'tiktoken';
 
 export class TokenCounter {
   static encodingCache = new Map();
-  
+
   static getEncoding(modelFamily) {
     if (this.encodingCache.has(modelFamily)) {
       return this.encodingCache.get(modelFamily);
     }
-    
+
     let encoding;
     switch (modelFamily) {
       case 'gpt-4':
@@ -245,35 +269,36 @@ export class TokenCounter {
       default:
         encoding = get_encoding('cl100k_base');
     }
-    
+
     this.encodingCache.set(modelFamily, encoding);
     return encoding;
   }
-  
+
   static countTokens(text, modelFamily) {
     const encoding = this.getEncoding(modelFamily);
     return encoding.encode(text).length;
   }
-  
+
   static estimateContextTokens(messages, systemPrompt, modelFamily) {
     let totalTokens = 0;
-    
+
     // System prompt tokens
     if (systemPrompt) {
       totalTokens += this.countTokens(systemPrompt, modelFamily);
     }
-    
+
     // Message tokens
     for (const message of messages) {
       totalTokens += this.countTokens(JSON.stringify(message), modelFamily);
     }
-    
+
     return totalTokens;
   }
 }
 ```
 
 #### Context Manager Implementation
+
 ```javascript
 // /server/services/ContextManager.js
 import { TokenCounter } from '../utils/TokenCounter.js';
@@ -281,12 +306,14 @@ import { TokenCounter } from '../utils/TokenCounter.js';
 export class ContextManager {
   static async validateContextWindow(messages, systemPrompt, modelConfig) {
     const totalTokens = TokenCounter.estimateContextTokens(
-      messages, systemPrompt, modelConfig.tokenFamily
+      messages,
+      systemPrompt,
+      modelConfig.tokenFamily
     );
-    
+
     const contextLimit = modelConfig.contextLimit * (modelConfig.safetyMargin || 0.9);
     const usagePercentage = (totalTokens / contextLimit) * 100;
-    
+
     return {
       totalTokens,
       contextLimit: modelConfig.contextLimit,
@@ -296,65 +323,61 @@ export class ContextManager {
       breakdown: this.calculateTokenBreakdown(messages, systemPrompt, modelConfig.tokenFamily)
     };
   }
-  
+
   static async optimizeContext(messages, modelConfig) {
     // Strategy 1: Summarize tool outputs
     messages = await this.summarizeToolOutputs(messages, modelConfig);
-    
+
     // Strategy 2: Compact older messages
     if (this.stillExceedsLimit(messages, modelConfig)) {
       messages = await this.compactMessages(messages, 0.7, modelConfig);
     }
-    
+
     // Strategy 3: Remove oldest messages (keeping recent context)
     if (this.stillExceedsLimit(messages, modelConfig)) {
       messages = this.truncateOldMessages(messages, modelConfig);
     }
-    
+
     return messages;
   }
-  
+
   static async summarizeToolOutputs(messages, modelConfig) {
     const maxToolOutputTokens = Math.floor(modelConfig.contextLimit * 0.1); // 10% budget
-    
+
     for (let message of messages) {
       if (message.role === 'tool') {
         const tokens = TokenCounter.countTokens(message.content, modelConfig.tokenFamily);
         if (tokens > maxToolOutputTokens) {
           // Use summarizer tool to compress output
           message.content = await this.summarizeContent(
-            message.content, 
-            maxToolOutputTokens, 
+            message.content,
+            maxToolOutputTokens,
             modelConfig
           );
           message.summarized = true;
         }
       }
     }
-    
+
     return messages;
   }
 }
 ```
 
 #### Summarizer Tool Implementation
+
 ```javascript
 // /server/tools/summarizer.js
 import { TokenCounter } from '../utils/TokenCounter.js';
 
 export default async function summarizer(params, context) {
-  const { 
-    content, 
-    targetLength = 500, 
-    style = 'paragraph', 
-    focus 
-  } = params;
-  
+  const { content, targetLength = 500, style = 'paragraph', focus } = params;
+
   const { actionTracker, appConfig } = context;
-  
+
   try {
     actionTracker?.reportProgress('Analyzing content for summarization...');
-    
+
     // Check if content needs summarization
     const tokenCount = TokenCounter.countTokens(content, 'gpt-4');
     if (tokenCount <= targetLength) {
@@ -366,20 +389,20 @@ export default async function summarizer(params, context) {
         summarized: false
       };
     }
-    
+
     actionTracker?.reportProgress('Generating intelligent summary...');
-    
+
     // Build summarization prompt based on style and focus
     const prompt = this.buildSummarizationPrompt(content, targetLength, style, focus);
-    
+
     // Use the same LLM adapter that the current app is using
     const summary = await this.callLLMForSummarization(prompt, context);
-    
+
     const summaryTokens = TokenCounter.countTokens(summary, 'gpt-4');
     const compressionRatio = summaryTokens / tokenCount;
-    
+
     actionTracker?.reportProgress('Summarization complete');
-    
+
     return {
       summary,
       originalTokens: tokenCount,
@@ -389,7 +412,6 @@ export default async function summarizer(params, context) {
       style,
       focus: focus || 'general'
     };
-    
   } catch (error) {
     throw new Error(`Summarization failed: ${error.message}`);
   }
@@ -399,26 +421,29 @@ export default async function summarizer(params, context) {
 ### Context Usage Monitoring
 
 #### Enhanced Usage Tracking
+
 ```javascript
 // Enhanced usageTracker.js additions
 export function recordContextUsage(usage) {
   const timestamp = new Date().toISOString();
-  
+
   // Log context usage for monitoring
-  console.log(`[CONTEXT] ${timestamp} - Usage: ${usage.usagePercentage.toFixed(1)}% (${usage.totalTokens}/${usage.contextLimit} tokens)`);
-  
+  console.log(
+    `[CONTEXT] ${timestamp} - Usage: ${usage.usagePercentage.toFixed(1)}% (${usage.totalTokens}/${usage.contextLimit} tokens)`
+  );
+
   if (usage.usagePercentage > 80) {
     console.warn(`[CONTEXT] High context usage detected - optimization may be applied`);
   }
-  
+
   if (usage.compactionApplied) {
     console.info(`[CONTEXT] Context compaction applied - ${usage.compactionRatio}x compression`);
   }
-  
+
   if (usage.toolOutputsSummarized) {
     console.info(`[CONTEXT] Tool outputs summarized to prevent overflow`);
   }
-  
+
   // Store in usage data for analytics
   const usageData = loadUsageData();
   usageData.contextUsage = usageData.contextUsage || [];
@@ -426,17 +451,18 @@ export function recordContextUsage(usage) {
     timestamp,
     ...usage
   });
-  
+
   // Keep only last 1000 context usage records
   if (usageData.contextUsage.length > 1000) {
     usageData.contextUsage = usageData.contextUsage.slice(-1000);
   }
-  
+
   saveUsageData(usageData);
 }
 ```
 
 #### User Notifications
+
 ```javascript
 // Context-aware error handling in ChatService
 if (contextValidation.exceedsLimit) {
@@ -460,7 +486,7 @@ if (contextValidation.exceedsLimit) {
 if (contextValidation.needsOptimization) {
   // Apply optimization and notify user
   messages = await ContextManager.optimizeContext(messages, modelConfig);
-  
+
   // Include optimization notice in response
   response.contextOptimization = {
     applied: true,
@@ -474,6 +500,7 @@ if (contextValidation.needsOptimization) {
 ### Configuration Updates
 
 #### Tool Configuration (`/contents/config/tools.json`)
+
 ```json
 {
   "tools": [
@@ -523,6 +550,7 @@ if (contextValidation.needsOptimization) {
 ```
 
 #### Model Configuration Updates (`/contents/config/models.json`)
+
 ```json
 {
   "models": [
@@ -561,6 +589,7 @@ if (contextValidation.needsOptimization) {
 ## Benefits
 
 ### For Users
+
 - **Reliable Large Document Processing**: No more failed requests due to context limits
 - **Transparent Context Usage**: Clear visibility into context window consumption
 - **Intelligent Optimization**: Automatic optimization without losing important information
@@ -568,6 +597,7 @@ if (contextValidation.needsOptimization) {
 - **Universal Summarization**: Access to summarization capabilities across all apps
 
 ### For Developers
+
 - **Accurate Token Counting**: Proper tokenization instead of word-count estimation
 - **Context Awareness**: Real-time monitoring of context window usage
 - **Automated Optimization**: Intelligent context management without manual intervention
@@ -575,6 +605,7 @@ if (contextValidation.needsOptimization) {
 - **Extensible Architecture**: Framework for future context management features
 
 ### For Operations
+
 - **Proactive Monitoring**: Early detection of context window issues
 - **Performance Optimization**: Reduced failed requests and improved user experience
 - **Cost Management**: More efficient token usage through intelligent optimization
@@ -583,6 +614,7 @@ if (contextValidation.needsOptimization) {
 ## Success Metrics
 
 ### Technical Metrics
+
 - **Context Window Utilization**: Average usage percentage across requests
 - **Optimization Frequency**: How often automatic optimization is applied
 - **Failed Request Reduction**: Decrease in context-limit-related failures
@@ -590,12 +622,14 @@ if (contextValidation.needsOptimization) {
 - **Response Time Impact**: Performance impact of context management
 
 ### User Experience Metrics
+
 - **Request Success Rate**: Percentage of requests that complete successfully
 - **User Satisfaction**: Feedback on summarization quality and context handling
 - **Feature Adoption**: Usage of summarization tool across apps
 - **Error Resolution**: Time to resolve context-related issues
 
 ### Operational Metrics
+
 - **Support Ticket Reduction**: Fewer context-limit-related support requests
 - **System Reliability**: Improved overall system stability
 - **Resource Utilization**: More efficient use of LLM tokens and API calls
@@ -603,30 +637,35 @@ if (contextValidation.needsOptimization) {
 ## Implementation Timeline
 
 ### Week 1: Foundation
+
 - [ ] Install tiktoken dependency
 - [ ] Implement TokenCounter service
 - [ ] Update model configurations with accurate limits
 - [ ] Add basic context validation to ChatService
 
 ### Week 2: Context Management
+
 - [ ] Create ContextManager service
 - [ ] Implement context optimization strategies
 - [ ] Enhance usage tracking with context metrics
 - [ ] Add context-aware error handling
 
 ### Week 3: Summarization Tool
+
 - [ ] Implement summarizer tool
 - [ ] Add tool configuration and registration
 - [ ] Integrate automatic tool output summarization
 - [ ] Test summarization quality and performance
 
 ### Week 4: User Experience
+
 - [ ] Add client-side context usage indicators
 - [ ] Implement user notifications for context optimization
 - [ ] Enhance error messages with context information
 - [ ] Create documentation and user guides
 
 ### Week 5: Testing & Optimization
+
 - [ ] Comprehensive testing with large documents
 - [ ] Performance optimization and caching
 - [ ] Analytics and monitoring setup

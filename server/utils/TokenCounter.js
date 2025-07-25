@@ -1,4 +1,4 @@
-import { encoding_for_model, get_encoding } from "tiktoken";
+import { encoding_for_model, get_encoding } from 'tiktoken';
 
 /**
  * TokenCounter - Accurate token counting service for different LLM model families
@@ -7,7 +7,7 @@ import { encoding_for_model, get_encoding } from "tiktoken";
 export class TokenCounter {
   static encodingCache = new Map();
   static modelTokenLimits = new Map();
-  
+
   /**
    * Get the appropriate tokenizer encoding for a model family
    * @param {string} modelFamily - Model family (gpt-4, claude, gemini, etc.)
@@ -17,7 +17,7 @@ export class TokenCounter {
     if (this.encodingCache.has(modelFamily)) {
       return this.encodingCache.get(modelFamily);
     }
-    
+
     let encoding;
     try {
       switch (modelFamily?.toLowerCase()) {
@@ -53,7 +53,7 @@ export class TokenCounter {
           // Default to cl100k_base for unknown models
           encoding = get_encoding('cl100k_base');
       }
-      
+
       this.encodingCache.set(modelFamily, encoding);
       return encoding;
     } catch (error) {
@@ -64,7 +64,7 @@ export class TokenCounter {
       return encoding;
     }
   }
-  
+
   /**
    * Count tokens in a text string
    * @param {string} text - Text to count tokens for
@@ -75,7 +75,7 @@ export class TokenCounter {
     if (!text || typeof text !== 'string') {
       return 0;
     }
-    
+
     try {
       const encoding = this.getEncoding(modelFamily);
       return encoding.encode(text).length;
@@ -85,7 +85,7 @@ export class TokenCounter {
       return Math.ceil(text.split(/\s+/).length * 1.3);
     }
   }
-  
+
   /**
    * Estimate total context tokens including system prompt, messages, and tool outputs
    * @param {Array} messages - Chat messages array
@@ -97,12 +97,12 @@ export class TokenCounter {
     let systemTokens = 0;
     let messageTokens = 0;
     let toolOutputTokens = 0;
-    
+
     // Count system prompt tokens
     if (systemPrompt) {
       systemTokens = this.countTokens(systemPrompt, modelFamily);
     }
-    
+
     // Count message tokens
     if (messages && Array.isArray(messages)) {
       for (const message of messages) {
@@ -114,9 +114,9 @@ export class TokenCounter {
         }
       }
     }
-    
+
     const totalTokens = systemTokens + messageTokens + toolOutputTokens;
-    
+
     return {
       totalTokens,
       systemTokens,
@@ -129,7 +129,7 @@ export class TokenCounter {
       }
     };
   }
-  
+
   /**
    * Convert message object to string for token counting
    * @param {Object} message - Message object
@@ -137,11 +137,11 @@ export class TokenCounter {
    */
   static messageToString(message) {
     if (!message) return '';
-    
+
     if (typeof message === 'string') {
       return message;
     }
-    
+
     // Handle different message formats
     if (message.content) {
       if (typeof message.content === 'string') {
@@ -155,11 +155,11 @@ export class TokenCounter {
           .join(' ');
       }
     }
-    
+
     // Fallback to JSON string
     return JSON.stringify(message);
   }
-  
+
   /**
    * Calculate context usage percentage
    * @param {number} usedTokens - Currently used tokens
@@ -170,7 +170,7 @@ export class TokenCounter {
   static calculateUsage(usedTokens, contextLimit, safetyMargin = 0.9) {
     const effectiveLimit = Math.floor(contextLimit * safetyMargin);
     const usagePercentage = (usedTokens / effectiveLimit) * 100;
-    
+
     return {
       usedTokens,
       effectiveLimit,
@@ -183,7 +183,7 @@ export class TokenCounter {
       isNearLimit: usagePercentage > 90
     };
   }
-  
+
   /**
    * Validate if a request fits within context limits
    * @param {Array} messages - Chat messages
@@ -193,20 +193,31 @@ export class TokenCounter {
    * @returns {Object} Validation result
    */
   static validateContextWindow(messages, systemPrompt, modelConfig, additionalInput = '') {
-    const tokenEstimate = this.estimateContextTokens(messages, systemPrompt, modelConfig.tokenFamily);
-    
+    const tokenEstimate = this.estimateContextTokens(
+      messages,
+      systemPrompt,
+      modelConfig.tokenFamily
+    );
+
     // Add additional input tokens
     if (additionalInput) {
       tokenEstimate.totalTokens += this.countTokens(additionalInput, modelConfig.tokenFamily);
-      tokenEstimate.breakdown.additionalInput = this.countTokens(additionalInput, modelConfig.tokenFamily);
+      tokenEstimate.breakdown.additionalInput = this.countTokens(
+        additionalInput,
+        modelConfig.tokenFamily
+      );
     }
-    
+
     // Reserve space for output tokens
     const outputTokenReserve = modelConfig.maxOutputTokens || 4096;
     const availableForInput = modelConfig.contextLimit - outputTokenReserve;
-    
-    const usage = this.calculateUsage(tokenEstimate.totalTokens, availableForInput, modelConfig.safetyMargin);
-    
+
+    const usage = this.calculateUsage(
+      tokenEstimate.totalTokens,
+      availableForInput,
+      modelConfig.safetyMargin
+    );
+
     return {
       ...tokenEstimate,
       ...usage,
@@ -218,7 +229,7 @@ export class TokenCounter {
       warnings: this.generateWarnings(usage, tokenEstimate)
     };
   }
-  
+
   /**
    * Generate context usage warnings
    * @param {Object} usage - Usage statistics
@@ -227,7 +238,7 @@ export class TokenCounter {
    */
   static generateWarnings(usage, tokenEstimate) {
     const warnings = [];
-    
+
     if (usage.exceedsLimit) {
       warnings.push({
         type: 'error',
@@ -244,7 +255,7 @@ export class TokenCounter {
         message: `Context usage high: ${usage.usagePercentage}% used, optimization recommended`
       });
     }
-    
+
     // Specific warnings for large components
     if (tokenEstimate.toolOutputTokens > tokenEstimate.totalTokens * 0.3) {
       warnings.push({
@@ -252,17 +263,17 @@ export class TokenCounter {
         message: `Tool outputs use ${Math.round((tokenEstimate.toolOutputTokens / tokenEstimate.totalTokens) * 100)}% of context`
       });
     }
-    
+
     if (tokenEstimate.messageTokens > tokenEstimate.totalTokens * 0.5) {
       warnings.push({
         type: 'info',
         message: `Chat history uses ${Math.round((tokenEstimate.messageTokens / tokenEstimate.totalTokens) * 100)}% of context`
       });
     }
-    
+
     return warnings;
   }
-  
+
   /**
    * Clean up cached encodings (for memory management)
    */

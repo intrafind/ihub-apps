@@ -182,16 +182,18 @@ class ChatService {
 
         if (!contextValidation.success) {
           console.warn(`[CONTEXT] Validation failed for ${appId}:`, contextValidation.error);
-          
+
           if (res && !clientRes) {
-            return res.status(400).json(this.errorHandler.formatErrorResponse({
-              message: contextValidation.error,
-              code: 'CONTEXT_VALIDATION_FAILED',
-              details: contextValidation.details
-            }));
+            return res.status(400).json(
+              this.errorHandler.formatErrorResponse({
+                message: contextValidation.error,
+                code: 'CONTEXT_VALIDATION_FAILED',
+                details: contextValidation.details
+              })
+            );
           }
-          return { 
-            success: false, 
+          return {
+            success: false,
             error: {
               message: contextValidation.error,
               code: 'CONTEXT_VALIDATION_FAILED',
@@ -203,7 +205,9 @@ class ChatService {
         // Update messages if optimization was applied
         if (contextValidation.optimizedMessages) {
           prepResult.data.llmMessages = contextValidation.optimizedMessages;
-          console.log(`[CONTEXT] Applied optimization for ${appId}: ${contextValidation.optimization?.strategies?.join(', ') || 'unknown'}`);
+          console.log(
+            `[CONTEXT] Applied optimization for ${appId}: ${contextValidation.optimization?.strategies?.join(', ') || 'unknown'}`
+          );
         }
 
         // Record context usage for monitoring
@@ -221,12 +225,13 @@ class ChatService {
 
         // Add context information to response if available
         if (clientRes && contextValidation.contextInfo) {
-          clientRes.write(`data: ${JSON.stringify({
-            type: 'contextInfo',
-            data: contextValidation.contextInfo
-          })}\n\n`);
+          clientRes.write(
+            `data: ${JSON.stringify({
+              type: 'contextInfo',
+              data: contextValidation.contextInfo
+            })}\n\n`
+          );
         }
-
       } catch (contextError) {
         console.error('[CONTEXT] Context validation error:', contextError);
         // Continue with request but log the error
@@ -296,8 +301,8 @@ class ChatService {
 
       // Validate context window
       const validation = await ContextManager.validateContextWindow(
-        messages, 
-        systemPrompt, 
+        messages,
+        systemPrompt,
         modelConfig
       );
 
@@ -322,13 +327,17 @@ class ChatService {
 
       // Apply optimization if usage is high (>80%) or recommended
       if (validation.needsOptimization || validation.canOptimize?.worthwhile) {
-        console.log(`[CONTEXT] Applying context optimization for ${appId} - ${validation.usagePercentage}% usage`);
-        
+        console.log(
+          `[CONTEXT] Applying context optimization for ${appId} - ${validation.usagePercentage}% usage`
+        );
+
         optimization = await ContextManager.optimizeContext(messages, modelConfig, systemPrompt);
-        
+
         if (optimization.applied) {
           optimizedMessages = optimization.messages;
-          console.log(`[CONTEXT] Optimization successful: ${optimization.tokensSaved} tokens saved (${Math.round((1 - optimization.compressionRatio) * 100)}% reduction)`);
+          console.log(
+            `[CONTEXT] Optimization successful: ${optimization.tokensSaved} tokens saved (${Math.round((1 - optimization.compressionRatio) * 100)}% reduction)`
+          );
         }
       }
 
@@ -342,7 +351,6 @@ class ChatService {
         optimizedMessages,
         contextInfo
       };
-
     } catch (error) {
       console.error('[CONTEXT] Context validation/optimization error:', error);
       return {
@@ -368,19 +376,19 @@ class ChatService {
       if (modelId.includes('gpt-3.5')) return 'gpt-3.5';
       return 'gpt-4'; // Default for OpenAI
     }
-    
+
     if (provider === 'anthropic' || modelId.includes('claude')) {
       return 'claude';
     }
-    
+
     if (provider === 'google' || modelId.includes('gemini')) {
       return 'gemini';
     }
-    
+
     if (provider === 'mistral' || modelId.includes('mistral') || modelId.includes('mixtral')) {
       return 'mistral';
     }
-    
+
     // Default fallback
     return 'gpt-4';
   }
