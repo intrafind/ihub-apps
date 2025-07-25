@@ -7,6 +7,8 @@ import { processMessageTemplates } from '../../serverHelpers.js';
 import { ContextManager } from '../ContextManager.js';
 import { TokenCounter } from '../../utils/TokenCounter.js';
 import { recordContextUsage } from '../../usageTracker.js';
+import { getTokenFamily } from '../../adapters/index.js';
+import { actionTracker } from '../../actionTracker.js';
 
 class ChatService {
   constructor(options = {}) {
@@ -208,6 +210,21 @@ class ChatService {
           console.log(
             `[CONTEXT] Applied optimization for ${appId}: ${contextValidation.optimization?.strategies?.join(', ') || 'unknown'}`
           );
+
+          // Track optimization event
+          if (chatId && contextValidation.optimization) {
+            actionTracker.trackAction(chatId, {
+              event: 'contextOptimization',
+              message: `Context optimized: ${contextValidation.optimization.tokensSaved} tokens saved`,
+              data: {
+                strategies: contextValidation.optimization.strategies,
+                tokensSaved: contextValidation.optimization.tokensSaved,
+                compressionRatio: contextValidation.optimization.compressionRatio,
+                originalTokens: contextValidation.optimization.originalTokens,
+                optimizedTokens: contextValidation.optimization.optimizedTokens
+              }
+            });
+          }
         }
 
         // Record context usage for monitoring
@@ -223,14 +240,27 @@ class ChatService {
           exceedsLimit: contextValidation.validation.exceedsLimit
         });
 
-        // Add context information to response if available
-        if (clientRes && contextValidation.contextInfo) {
-          clientRes.write(
-            `data: ${JSON.stringify({
-              type: 'contextInfo',
-              data: contextValidation.contextInfo
-            })}\n\n`
-          );
+        // Track context usage percentage as action tracker event
+        if (chatId) {
+          actionTracker.trackAction(chatId, {
+            event: 'contextUsage',
+            message: `Context usage: ${contextValidation.validation.usagePercentage.toFixed(1)}%`,
+            data: {
+              usagePercentage: Math.round(contextValidation.validation.usagePercentage * 10) / 10,
+              totalTokens: contextValidation.validation.totalTokens,
+              contextLimit: contextValidation.validation.contextLimit,
+              breakdown: contextValidation.validation.breakdown
+            }
+          });
+        }
+
+        // Add context information to response if available using action tracker
+        if (chatId && contextValidation.contextInfo) {
+          actionTracker.trackAction(chatId, {
+            event: 'contextInfo',
+            message: 'Context information updated',
+            data: contextValidation.contextInfo
+          });
         }
       } catch (contextError) {
         console.error('[CONTEXT] Context validation error:', contextError);
@@ -294,7 +324,7 @@ class ChatService {
       const modelConfig = {
         contextLimit: model.tokenLimit || 4096,
         maxOutputTokens: model.maxOutputTokens || 4096,
-        tokenFamily: this.getModelTokenFamily(model),
+        tokenFamily: getTokenFamily(model),
         safetyMargin: 0.9,
         id: model.id
       };
@@ -361,37 +391,6 @@ class ChatService {
     }
   }
 
-  /**
-   * Determine token family based on model information
-   * @param {Object} model - Model configuration
-   * @returns {string} Token family identifier
-   */
-  getModelTokenFamily(model) {
-    const modelId = model.modelId || model.id || '';
-    const provider = model.provider || '';
-
-    // Determine token family based on model ID and provider
-    if (provider === 'openai' || modelId.includes('gpt')) {
-      if (modelId.includes('gpt-4')) return 'gpt-4';
-      if (modelId.includes('gpt-3.5')) return 'gpt-3.5';
-      return 'gpt-4'; // Default for OpenAI
-    }
-
-    if (provider === 'anthropic' || modelId.includes('claude')) {
-      return 'claude';
-    }
-
-    if (provider === 'google' || modelId.includes('gemini')) {
-      return 'gemini';
-    }
-
-    if (provider === 'mistral' || modelId.includes('mistral') || modelId.includes('mixtral')) {
-      return 'mistral';
-    }
-
-    // Default fallback
-    return 'gpt-4';
-  }
 }
 
 export default ChatService;

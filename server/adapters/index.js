@@ -56,3 +56,13 @@ export function formatMessages(provider, messages) {
   const adapter = getAdapter(provider);
   return adapter.formatMessages(messages);
 }
+
+/**
+ * Get token family for the provider/model
+ * @param {Object} model - The model configuration
+ * @returns {string} Token family identifier for token counting
+ */
+export function getTokenFamily(model) {
+  const adapter = getAdapter(model.provider);
+  return adapter.getTokenFamily ? adapter.getTokenFamily(model) : 'gpt-4'; // Default fallback
+}

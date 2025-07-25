@@ -161,7 +161,8 @@ export class ContextManager {
   }
 
   /**
-   * Compact older messages using summarization
+   * Compact older messages using simple concatenation approach
+   * Simplified approach that combines multiple consecutive messages from the same role
    * @param {Array} messages - Messages to compact
    * @param {Object} modelConfig - Model configuration
    * @param {number} compressionRatio - Target compression ratio
@@ -172,8 +173,8 @@ export class ContextManager {
       return messages; // Keep at least recent context
     }
 
-    // Keep the most recent messages intact
-    const recentCount = Math.min(4, Math.ceil(messages.length * 0.3));
+    // Keep the most recent messages intact (last 2-3 messages)
+    const recentCount = Math.min(3, Math.ceil(messages.length * 0.25));
     const recentMessages = messages.slice(-recentCount);
     const olderMessages = messages.slice(0, -recentCount);
 
@@ -183,50 +184,74 @@ export class ContextManager {
 
     console.log(`[CONTEXT] Compacting ${olderMessages.length} older messages`);
 
-    // Group older messages for summarization
-    const messageGroups = this.groupMessagesForCompaction(olderMessages);
-    const compactedGroups = [];
+    // Simple approach: combine consecutive messages from same role
+    const compactedMessages = [];
+    let currentGroup = null;
 
-    for (const group of messageGroups) {
-      if (group.length === 1) {
-        compactedGroups.push(group[0]);
+    for (const message of olderMessages) {
+      // Skip system messages - they should be preserved
+      if (message.role === 'system') {
+        if (currentGroup) {
+          compactedMessages.push(this.createCompactedMessage(currentGroup));
+          currentGroup = null;
+        }
+        compactedMessages.push(message);
         continue;
       }
 
-      const groupContent = group
-        .map(
-          msg =>
-            `${msg.role}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`
-        )
-        .join('\n');
-
-      const targetLength = Math.floor(
-        TokenCounter.countTokens(groupContent, modelConfig.tokenFamily) * compressionRatio
-      );
-
-      if (targetLength < 100) {
-        // Skip if would be too short
-        compactedGroups.push(...group);
-        continue;
+      // Start new group or add to existing group
+      if (!currentGroup || currentGroup.role !== message.role) {
+        if (currentGroup) {
+          compactedMessages.push(this.createCompactedMessage(currentGroup));
+        }
+        currentGroup = {
+          role: message.role,
+          messages: [message],
+          totalTokens: TokenCounter.countTokens(
+            typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+            modelConfig.tokenFamily
+          )
+        };
+      } else {
+        // Add to current group
+        currentGroup.messages.push(message);
+        currentGroup.totalTokens += TokenCounter.countTokens(
+          typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+          modelConfig.tokenFamily
+        );
       }
-
-      const summarized = await this.summarizeContent(
-        groupContent,
-        targetLength,
-        modelConfig,
-        'conversation history'
-      );
-
-      compactedGroups.push({
-        role: 'system',
-        content: `[Conversation summary: ${summarized}]`,
-        compacted: true,
-        original_message_count: group.length,
-        compacted_at: new Date().toISOString()
-      });
     }
 
-    return [...compactedGroups, ...recentMessages];
+    // Add the last group
+    if (currentGroup) {
+      compactedMessages.push(this.createCompactedMessage(currentGroup));
+    }
+
+    return [...compactedMessages, ...recentMessages];
+  }
+
+  /**
+   * Create a compacted message from a group of messages
+   * @param {Object} group - Group of messages with same role
+   * @returns {Object} Compacted message
+   */
+  static createCompactedMessage(group) {
+    if (group.messages.length === 1) {
+      return group.messages[0];
+    }
+
+    // Combine content from multiple messages
+    const combinedContent = group.messages
+      .map(msg => typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content))
+      .join('\n\n---\n\n'); // Separator between combined messages
+
+    return {
+      role: group.role,
+      content: combinedContent,
+      compacted: true,
+      original_message_count: group.messages.length,
+      compacted_at: new Date().toISOString()
+    };
   }
 
   /**
@@ -312,8 +337,8 @@ export class ContextManager {
   }
 
   /**
-   * Summarize content using a simple extraction approach
-   * Since we can't recursively use the summarizer tool, use a basic approach
+   * Summarize content using a simple truncation approach
+   * Removes the overengineered keyword detection system that doesn't work with internationalization
    * @param {string} content - Content to summarize
    * @param {number} targetTokens - Target token count
    * @param {Object} modelConfig - Model configuration
@@ -321,45 +346,42 @@ export class ContextManager {
    * @returns {string} Summarized content
    */
   static async summarizeContent(content, targetTokens, modelConfig, contentType = 'content') {
-    // Simple extractive summarization approach
     const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
 
     if (sentences.length <= 2) {
       return content; // Too short to summarize
     }
 
-    // Score sentences by position and keyword density
-    const scoredSentences = sentences.map((sentence, index) => {
-      let score = 1.0;
-
-      // Position scoring (beginning and end are important)
-      if (index === 0) score += 0.5;
-      if (index === sentences.length - 1) score += 0.3;
-      if (index < sentences.length * 0.2) score += 0.2;
-
-      // Keyword scoring
-      const importantWords =
-        /\b(important|key|critical|result|conclusion|summary|error|success|failed|completed)\b/gi;
-      const matches = (sentence.match(importantWords) || []).length;
-      score += matches * 0.3;
-
-      // Length scoring (prefer moderate length)
-      const wordCount = sentence.split(/\s+/).length;
-      if (wordCount > 5 && wordCount < 30) score += 0.2;
-
-      return { sentence: sentence.trim(), score, index };
-    });
-
-    // Sort by score and select top sentences
-    scoredSentences.sort((a, b) => b.score - a.score);
-
+    // Simple approach: take first and last sentences, then fill middle based on position
     let selectedSentences = [];
     let currentTokens = 0;
 
-    for (const item of scoredSentences) {
-      const sentenceTokens = TokenCounter.countTokens(item.sentence, modelConfig.tokenFamily);
+    // Always include first sentence if it fits
+    if (sentences.length > 0) {
+      const firstTokens = TokenCounter.countTokens(sentences[0].trim(), modelConfig.tokenFamily);
+      if (firstTokens <= targetTokens) {
+        selectedSentences.push({ sentence: sentences[0].trim(), index: 0 });
+        currentTokens += firstTokens;
+      }
+    }
+
+    // Always include last sentence if it fits and we have room
+    if (sentences.length > 1) {
+      const lastSentence = sentences[sentences.length - 1].trim();
+      const lastTokens = TokenCounter.countTokens(lastSentence, modelConfig.tokenFamily);
+      if (currentTokens + lastTokens <= targetTokens) {
+        selectedSentences.push({ sentence: lastSentence, index: sentences.length - 1 });
+        currentTokens += lastTokens;
+      }
+    }
+
+    // Fill remaining space with middle sentences in order
+    for (let i = 1; i < sentences.length - 1; i++) {
+      const sentence = sentences[i].trim();
+      const sentenceTokens = TokenCounter.countTokens(sentence, modelConfig.tokenFamily);
+      
       if (currentTokens + sentenceTokens <= targetTokens) {
-        selectedSentences.push(item);
+        selectedSentences.push({ sentence, index: i });
         currentTokens += sentenceTokens;
       }
     }

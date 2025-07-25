@@ -262,6 +262,15 @@ const AnthropicAdapter = {
     }
 
     return result;
+  },
+
+  /**
+   * Get token family for Anthropic models
+   * @param {Object} model - Model configuration
+   * @returns {string} Token family identifier
+   */
+  getTokenFamily(model) {
+    return 'claude';
   }
 };
 

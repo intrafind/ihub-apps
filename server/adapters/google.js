@@ -360,6 +360,15 @@ const GoogleAdapter = {
         errorMessage: `Error processing model response: ${error.message}`
       };
     }
+  },
+
+  /**
+   * Get token family for Google models
+   * @param {Object} model - Model configuration
+   * @returns {string} Token family identifier
+   */
+  getTokenFamily(model) {
+    return 'gemini';
   }
 };
 

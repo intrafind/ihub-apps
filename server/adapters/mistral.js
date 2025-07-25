@@ -193,6 +193,15 @@ const MistralAdapter = {
     }
 
     return result;
+  },
+
+  /**
+   * Get token family for Mistral models
+   * @param {Object} model - Model configuration
+   * @returns {string} Token family identifier
+   */
+  getTokenFamily(model) {
+    return 'mistral';
   }
 };
 
