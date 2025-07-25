@@ -25,14 +25,14 @@ function extractLanguageValue(value, language = 'en', fallbackLanguage = null) {
       return value[fallbackLanguage];
     }
     // If it has language keys but not the requested one, try first available
-    const availableLanguages = Object.keys(value).filter(key => 
-      typeof value[key] === 'string' && key.length === 2
+    const availableLanguages = Object.keys(value).filter(
+      key => typeof value[key] === 'string' && key.length === 2
     );
     if (availableLanguages.length > 0) {
       return value[availableLanguages[0]];
     }
   }
-  
+
   return value;
 }
 
@@ -52,7 +52,7 @@ function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = null
   if (Array.isArray(obj)) {
     return obj.map(item => extractLanguageFromObject(item, language, fallbackLanguage));
   }
-  
+
   if (obj && typeof obj === 'object') {
     const result = {};
     for (const [key, value] of Object.entries(obj)) {
@@ -65,7 +65,7 @@ function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = null
     }
     return result;
   }
-  
+
   return obj;
 }
 

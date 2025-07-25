@@ -135,7 +135,7 @@
       "choose": "Choose model",
       "noModels": "No models available",
       "loading": "Loading models..."
-    },
+    }
   },
   "auth": {
     "login": {
@@ -329,7 +329,7 @@
       "confirmDelete": "Are you sure you want to delete this page?"
     }
   },
- "components": {
+  "components": {
     "uploader": {
       "imageSelected": "Image selected",
       "fileSelected": "File selected and processed",

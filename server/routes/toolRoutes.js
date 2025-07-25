@@ -33,7 +33,7 @@ export default function registerToolRoutes(app) {
       const platformConfig = req.app.get('platform') || {};
       const defaultLang = platformConfig?.defaultLanguage || 'en';
       const userLanguage = req.query.language || req.query.lang || defaultLang;
-      
+
       // Load all tools (including MCP discovered ones) with localization
       let tools = await loadTools(userLanguage);
 

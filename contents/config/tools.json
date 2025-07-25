@@ -181,8 +181,8 @@
     "parameters": {
       "type": "object",
       "properties": {
-        "query": { 
-          "type": "string", 
+        "query": {
+          "type": "string",
           "description": {
             "en": "Initial search query",
             "de": "Erste Suchanfrage"
@@ -218,8 +218,8 @@
           "minimum": 500,
           "maximum": 10000
         },
-        "chatId": { 
-          "type": "string", 
+        "chatId": {
+          "type": "string",
           "description": {
             "en": "Chat session ID",
             "de": "Chat-Sitzungs-ID"
@@ -243,8 +243,8 @@
     "parameters": {
       "type": "object",
       "properties": {
-        "question": { 
-          "type": "string", 
+        "question": {
+          "type": "string",
           "description": {
             "en": "Research topic",
             "de": "Forschungsthema"
@@ -260,8 +260,8 @@
           "minimum": 1,
           "maximum": 10
         },
-        "soundBites": { 
-          "type": "string", 
+        "soundBites": {
+          "type": "string",
           "description": {
             "en": "Additional context",
             "de": "Zusätzlicher Kontext"
@@ -285,15 +285,15 @@
     "parameters": {
       "type": "object",
       "properties": {
-        "question": { 
-          "type": "string", 
+        "question": {
+          "type": "string",
           "description": {
             "en": "Original user question",
             "de": "Ursprüngliche Benutzerfrage"
           }
         },
-        "answer": { 
-          "type": "string", 
+        "answer": {
+          "type": "string",
           "description": {
             "en": "Draft answer to evaluate",
             "de": "Entwurfsantwort zur Bewertung"
@@ -325,22 +325,22 @@
     "parameters": {
       "type": "object",
       "properties": {
-        "query": { 
-          "type": "string", 
+        "query": {
+          "type": "string",
           "description": {
             "en": "Search query to rewrite",
             "de": "Suchanfrage zum Umschreiben"
           }
         },
-        "think": { 
-          "type": "string", 
+        "think": {
+          "type": "string",
           "description": {
             "en": "User motivation",
             "de": "Benutzermotivation"
           }
         },
-        "context": { 
-          "type": "string", 
+        "context": {
+          "type": "string",
           "description": {
             "en": "Optional context",
             "de": "Optionaler Kontext"
@@ -372,25 +372,25 @@
     "parameters": {
       "type": "object",
       "properties": {
-        "url": { 
-          "type": "string", 
+        "url": {
+          "type": "string",
           "description": {
             "en": "Target URL",
             "de": "Ziel-URL"
           }
         },
-        "format": { 
-          "type": "string", 
-          "enum": ["png", "pdf"], 
-          "default": "png", 
+        "format": {
+          "type": "string",
+          "enum": ["png", "pdf"],
+          "default": "png",
           "description": {
             "en": "Output format (png or pdf)",
             "de": "Ausgabeformat (png oder pdf)"
           }
         },
-        "fullPage": { 
-          "type": "boolean", 
-          "default": true, 
+        "fullPage": {
+          "type": "boolean",
+          "default": true,
           "description": {
             "en": "Capture full page or just visible area",
             "de": "Ganze Seite oder nur sichtbaren Bereich erfassen"
@@ -440,25 +440,25 @@
     "parameters": {
       "type": "object",
       "properties": {
-        "url": { 
-          "type": "string", 
+        "url": {
+          "type": "string",
           "description": {
             "en": "Target URL",
             "de": "Ziel-URL"
           }
         },
-        "format": { 
-          "type": "string", 
-          "enum": ["png", "pdf"], 
-          "default": "png", 
+        "format": {
+          "type": "string",
+          "enum": ["png", "pdf"],
+          "default": "png",
           "description": {
             "en": "Output format (png or pdf)",
             "de": "Ausgabeformat (png oder pdf)"
           }
         },
-        "fullPage": { 
-          "type": "boolean", 
-          "default": true, 
+        "fullPage": {
+          "type": "boolean",
+          "default": true,
           "description": {
             "en": "Capture full page or just visible area",
             "de": "Ganze Seite oder nur sichtbaren Bereich erfassen"
@@ -488,8 +488,8 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "name": { 
-              "type": "string", 
+            "name": {
+              "type": "string",
               "description": {
                 "en": "User name or email",
                 "de": "Benutzername oder E-Mail"
@@ -507,8 +507,8 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { 
-              "type": "string", 
+            "userId": {
+              "type": "string",
               "description": {
                 "en": "User identifier",
                 "de": "Benutzerkennung"
@@ -526,8 +526,8 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { 
-              "type": "string", 
+            "userId": {
+              "type": "string",
               "description": {
                 "en": "User identifier",
                 "de": "Benutzerkennung"
@@ -545,8 +545,8 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { 
-              "type": "string", 
+            "userId": {
+              "type": "string",
               "description": {
                 "en": "User identifier",
                 "de": "Benutzerkennung"
@@ -564,8 +564,8 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "teamId": { 
-              "type": "string", 
+            "teamId": {
+              "type": "string",
               "description": {
                 "en": "Team identifier",
                 "de": "Team-Kennung"
@@ -583,8 +583,8 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "userId": { 
-              "type": "string", 
+            "userId": {
+              "type": "string",
               "description": {
                 "en": "User identifier",
                 "de": "Benutzerkennung"
