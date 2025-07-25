@@ -186,17 +186,48 @@ If your OIDC provider sends group information, configure the `groupsAttribute`:
 
 ### 3. Group Mapping
 
-Configure group mapping in `contents/config/groupMap.json`:
+Configure group mapping in `contents/config/groups.json`. External group mappings are now handled via the "mappings" arrays within each group definition:
 
 ```json
 {
-  "Google Admins": ["admin"],
-  "Google Users": ["user"],
-  "Microsoft Administrators": ["admin"],
-  "Microsoft Users": ["user"],
-  "Auth0 Admins": ["admin"],
-  "Everyone": ["user"],
-  "anonymous": ["anonymous"]
+  "groups": {
+    "admin": {
+      "id": "admin",
+      "name": "Admin",
+      "description": "Full administrative access to all resources",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": true
+      },
+      "mappings": ["Google Admins", "Microsoft Administrators", "Auth0 Admins"]
+    },
+    "user": {
+      "id": "user",
+      "name": "User",
+      "description": "Standard user access to common applications",
+      "permissions": {
+        "apps": ["chat", "translator", "summarizer"],
+        "prompts": ["general"],
+        "models": ["gpt-3.5-turbo", "gemini-pro"],
+        "adminAccess": false
+      },
+      "mappings": ["Google Users", "Microsoft Users", "Everyone"]
+    },
+    "anonymous": {
+      "id": "anonymous",
+      "name": "Anonymous",
+      "description": "Access for unauthenticated users",
+      "permissions": {
+        "apps": ["chat"],
+        "prompts": [],
+        "models": ["gemini-flash"],
+        "adminAccess": false
+      },
+      "mappings": ["anonymous"]
+    }
+  }
 }
 ```
 
@@ -205,14 +236,14 @@ Configure group mapping in `contents/config/groupMap.json`:
 The complete group assignment process for an OIDC user:
 
 1. **Extract Groups**: Get groups from provider's `groupsAttribute` (if configured)
-2. **Map Groups**: Apply group mapping from `groupMap.json`
+2. **Map Groups**: Apply group mapping from `groups.json` using the "mappings" arrays
 3. **Add Provider Groups**: Add provider's `defaultGroups`
 4. **Add Authenticated Group**: Add the global `authenticatedGroup`
 
 **Example**: A Microsoft user with groups `["HR-Team", "Employees"]` would get:
 
 - Original: `["HR-Team", "Employees"]`
-- After mapping: `["hr", "user"]` (if mapped in groupMap.json)
+- After mapping: `["hr", "user"]` (if "HR-Team" and "Employees" are in the mappings arrays)
 - After provider groups: `["hr", "user", "microsoft-users"]`
 - After authenticated group: `["hr", "user", "microsoft-users", "authenticated"]`
 
@@ -242,22 +273,34 @@ Users with multiple groups receive the **union of all permissions** from every g
 - **Custom Groups**: Get specialized access through role-based groups
 - **Additive Model**: More groups = more access, never conflicts
 
-Set permissions in `contents/config/groupPermissions.json`:
+Set permissions in `contents/config/groups.json` (the same file that contains group mappings):
 
 ```json
 {
   "groups": {
     "admin": {
-      "apps": ["*"],
-      "prompts": ["*"],
-      "models": ["*"],
-      "adminAccess": true
+      "id": "admin",
+      "name": "Admin",
+      "description": "Full administrative access to all resources",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": true
+      },
+      "mappings": ["Google Admins", "Microsoft Administrators", "Auth0 Admins"]
     },
     "user": {
-      "apps": ["chat", "translator", "summarizer"],
-      "prompts": ["general"],
-      "models": ["gpt-3.5-turbo", "gemini-pro"],
-      "adminAccess": false
+      "id": "user",
+      "name": "User",
+      "description": "Standard user access to common applications",
+      "permissions": {
+        "apps": ["chat", "translator", "summarizer"],
+        "prompts": ["general"],
+        "models": ["gpt-3.5-turbo", "gemini-pro"],
+        "adminAccess": false
+      },
+      "mappings": ["Google Users", "Microsoft Users", "Everyone"]
     }
   }
 }

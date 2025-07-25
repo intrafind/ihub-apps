@@ -138,6 +138,32 @@
       },
       "mappings": []
     },
+    "ldap-users": {
+      "id": "ldap-users",
+      "name": "LDAP Users",
+      "description": "Default permissions for LDAP authenticated users",
+      "inherits": ["authenticated"],
+      "permissions": {
+        "apps": ["translator", "summarizer"],
+        "prompts": ["general", "writing"],
+        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet"],
+        "adminAccess": false
+      },
+      "mappings": []
+    },
+    "ad-users": {
+      "id": "ad-users",
+      "name": "Active Directory Users",
+      "description": "Default permissions for Active Directory authenticated users",
+      "inherits": ["authenticated"],
+      "permissions": {
+        "apps": ["chat", "email-composer", "file-analysis"],
+        "prompts": ["general", "writing", "analysis"],
+        "models": ["gpt-4", "claude-4-sonnet", "gemini-2.0-flash"],
+        "adminAccess": false
+      },
+      "mappings": ["Domain Users", "Employees", "Staff"]
+    },
     "teams-users": {
       "id": "teams-users",
       "name": "Teams Users",
@@ -145,11 +171,24 @@
       "inherits": ["authenticated"],
       "permissions": {
         "apps": ["chat", "translator", "summarizer", "email-composer", "image-analysis", "file-analysis"],
-        "prompts": ["general", "writing", "analysis"],
-        "models": ["gpt-4", "claude-4-sonnet", "gemini-2.0-flash"],
+        "prompts": ["general", "writing"],
+        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet"],
         "adminAccess": false
       },
       "mappings": ["Teams-Users", "Microsoft-Teams"]
+    },
+    "ntlm-users": {
+      "id": "ntlm-users",
+      "name": "NTLM Users",
+      "description": "Default permissions for NTLM authenticated users",
+      "inherits": ["authenticated"],
+      "permissions": {
+        "apps": ["chat", "translator", "email-composer"],
+        "prompts": ["general", "writing"],
+        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet"],
+        "adminAccess": false
+      },
+      "mappings": ["Domain Users", "NT AUTHORITY\\Authenticated Users"]
     }
   },
   "metadata": {

@@ -20,8 +20,9 @@ export const appConfigSchema = z
     variables: z.array(z.any()).optional(),
     settings: z.any().optional(),
     inputMode: z.any().optional(),
-    imageUpload: z.any().optional(),
-    fileUpload: z.any().optional(),
+    imageUpload: z.any().optional(), // DEPRECATED: Use 'upload' instead
+    fileUpload: z.any().optional(), // DEPRECATED: Use 'upload' instead
+    upload: z.any().optional(), // Unified upload configuration
     features: z.any().optional(),
     greeting: z.any().optional(),
     starterPrompts: z.array(z.any()).optional(),

@@ -134,11 +134,13 @@ client/src/
 AI Hub Apps supports dynamic React component rendering through the `ReactComponentRenderer` and `UnifiedPage` components:
 
 **Key Components:**
+
 - **`UnifiedPage.jsx`**: Main page component that handles both markdown and React content
 - **`ReactComponentRenderer.jsx`**: Compiles and renders JSX code dynamically in the browser
 - **Auto-detection**: Automatically identifies React/JSX content vs markdown content
 
 **Architecture Flow:**
+
 1. **Content Loading**: `fetchPageContent()` retrieves page content from `/contents/pages/{lang}/{id}.jsx`
 2. **Type Detection**: System detects content type based on JSX patterns (`function`, `useState`, `<Components>`, etc.)
 3. **Dynamic Compilation**: For React content, Babel Standalone compiles JSX to JavaScript in the browser
@@ -146,16 +148,19 @@ AI Hub Apps supports dynamic React component rendering through the `ReactCompone
 5. **Error Handling**: Comprehensive error boundaries with clear development feedback
 
 **Component Structure Requirements:**
+
 - Components must be named `UserComponent`
 - Receive props containing React hooks: `{ React, useState, useEffect, useRef, etc. }`
 - No export statements needed (handled automatically)
 - Full access to Tailwind CSS classes
 
 **Available Props for Components:**
+
 - React hooks: `React`, `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`
 - App context: `t` (translation), `navigate` (router), `user` (user data)
 
 **Security & Performance:**
+
 - Components run in isolated execution context using `new Function()`
 - Babel loaded once from multiple CDN sources with fallbacks
 - Export statements automatically stripped before execution
@@ -343,6 +348,40 @@ The system uses `anonymousAuth` structure instead of legacy `allowAnonymous`:
 - **Group-based permissions**: All resource access controlled by user groups
 - **Request validation**: Input validation on all API endpoints
 - **Authentication bypass prevention**: `authRequired` middleware on protected routes
+- **CORS Support**: Cross-Origin Resource Sharing configured for web app integration
+
+#### CORS Configuration
+
+AI Hub Apps has built-in CORS support for embedding and integration with other web applications:
+
+**Current Implementation:**
+
+- **Location**: `server/serverHelpers.js:49`
+- **Configuration**: Uses `cors` npm package with default settings
+- **Behavior**: Allows all origins (\*), standard HTTP methods, and basic headers
+- **Usage**: Suitable for development and cross-origin API calls
+
+**Integration Example:**
+
+```javascript
+// Calling AI Hub APIs from another web application
+fetch('https://your-ai-hub-domain.com/api/health', {
+  method: 'GET',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: 'Bearer your-jwt-token' // if authentication required
+  }
+})
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+**Production Considerations:**
+For production deployments, consider implementing configurable CORS settings in `platform.json`:
+
+- Restrict allowed origins to trusted domains
+- Configure specific HTTP methods and headers
+- Enable credentials for authenticated cross-origin requests
 
 ### Performance Optimizations
 
@@ -403,19 +442,16 @@ React components in the pages directory must follow this structure:
 ```jsx
 function UserComponent(props) {
   const { React, useState, useEffect, useRef, t, navigate, user } = props;
-  
+
   // Component logic here
-  
-  return (
-    <div className="p-4">
-      {/* JSX content */}
-    </div>
-  );
+
+  return <div className="p-4">{/* JSX content */}</div>;
 }
 // No export statement needed - handled automatically
 ```
 
 **Key Requirements:**
+
 - Function must be named `UserComponent`
 - Destructure needed props from the `props` parameter
 - Use Tailwind CSS for styling
