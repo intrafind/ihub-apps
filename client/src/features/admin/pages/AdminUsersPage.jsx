@@ -201,7 +201,7 @@ const AdminUsersPage = () => {
 
   const handleToggleUserStatus = async user => {
     const newStatus = !user.active;
-    
+
     try {
       const response = await makeAdminApiCall(`/api/admin/auth/users/${user.id}`, {
         method: 'PUT',
@@ -398,17 +398,23 @@ const AdminUsersPage = () => {
                                 <span
                                   key={index}
                                   className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                    method === 'local' 
-                                      ? 'bg-gray-100 text-gray-800' 
+                                    method === 'local'
+                                      ? 'bg-gray-100 text-gray-800'
                                       : method === 'oidc'
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : 'bg-purple-100 text-purple-800'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : 'bg-purple-100 text-purple-800'
                                   }`}
                                 >
-                                  <Icon 
-                                    name={method === 'local' ? 'key' : method === 'oidc' ? 'globe' : 'shield'} 
-                                    size="xs" 
-                                    className="mr-1" 
+                                  <Icon
+                                    name={
+                                      method === 'local'
+                                        ? 'key'
+                                        : method === 'oidc'
+                                          ? 'globe'
+                                          : 'shield'
+                                    }
+                                    size="xs"
+                                    className="mr-1"
                                   />
                                   {method.toUpperCase()}
                                 </span>
@@ -420,9 +426,7 @@ const AdminUsersPage = () => {
                               </div>
                             )}
                             {user.proxyData && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                Proxy
-                              </div>
+                              <div className="text-xs text-gray-500 mt-1">Proxy</div>
                             )}
                           </div>
                         </td>
@@ -468,7 +472,11 @@ const AdminUsersPage = () => {
                             <div className="flex flex-col">
                               <span>{new Date(user.lastActiveDate).toLocaleDateString()}</span>
                               <span className="text-xs text-gray-400">
-                                {Math.floor((Date.now() - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24))} days ago
+                                {Math.floor(
+                                  (Date.now() - new Date(user.lastActiveDate)) /
+                                    (1000 * 60 * 60 * 24)
+                                )}{' '}
+                                days ago
                               </span>
                             </div>
                           ) : (

@@ -549,7 +549,8 @@ const AdminAuthPage = () => {
                       <span className="text-sm font-medium text-gray-700">Allow Self-Signup</span>
                     </label>
                     <p className="text-xs text-gray-500 mt-1">
-                      Allow new users to register automatically through proxy authentication. If disabled, new users must be added manually by administrators.
+                      Allow new users to register automatically through proxy authentication. If
+                      disabled, new users must be added manually by administrators.
                     </p>
                   </div>
 
@@ -730,7 +731,8 @@ const AdminAuthPage = () => {
                     <span className="text-sm font-medium text-gray-700">Allow Self-Signup</span>
                   </label>
                   <p className="text-xs text-gray-500 mt-1">
-                    Allow new users to register automatically through OIDC authentication. If disabled, new users must be added manually by administrators.
+                    Allow new users to register automatically through OIDC authentication. If
+                    disabled, new users must be added manually by administrators.
                   </p>
                 </div>
 

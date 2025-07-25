@@ -5,13 +5,13 @@ import fetch from 'node-fetch';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
-import { 
-  loadUsers, 
-  findUserByIdentifier, 
-  createOrUpdateOidcUser, 
-  isUserActive, 
+import {
+  loadUsers,
+  findUserByIdentifier,
+  createOrUpdateOidcUser,
+  isUserActive,
   mergeUserGroups,
-  updateUserActivity 
+  updateUserActivity
 } from '../utils/userManager.js';
 
 // Store configured providers
@@ -173,27 +173,30 @@ async function validateAndPersistOidcUser(oidcUser, provider) {
   const platform = configCache.getPlatform() || {};
   const oidcConfig = platform.oidcAuth || {};
   const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
-  
+
   // Check if user exists in users.json
   const usersConfig = loadUsers(usersFilePath);
-  const existingUser = findUserByIdentifier(usersConfig, oidcUser.email, 'oidc') ||
-                       findUserByIdentifier(usersConfig, oidcUser.id, 'oidc');
-  
+  const existingUser =
+    findUserByIdentifier(usersConfig, oidcUser.email, 'oidc') ||
+    findUserByIdentifier(usersConfig, oidcUser.id, 'oidc');
+
   // If user exists, check if they are active
   if (existingUser) {
     if (!isUserActive(existingUser)) {
-      throw new Error(`User account is disabled. User ID: ${existingUser.id}, Email: ${existingUser.email}. Please contact your administrator.`);
+      throw new Error(
+        `User account is disabled. User ID: ${existingUser.id}, Email: ${existingUser.email}. Please contact your administrator.`
+      );
     }
-    
+
     // Update existing user and merge groups
     const persistedUser = await createOrUpdateOidcUser(oidcUser, usersFilePath);
-    
+
     // Update activity tracking
     await updateUserActivity(persistedUser.id, usersFilePath);
-    
+
     // Merge groups: JWT groups + configured additional groups
     const mergedGroups = mergeUserGroups(oidcUser.groups || [], persistedUser.groups || []);
-    
+
     return {
       ...oidcUser,
       id: persistedUser.id,
@@ -204,15 +207,17 @@ async function validateAndPersistOidcUser(oidcUser, provider) {
       persistedUser: true
     };
   }
-  
+
   // User doesn't exist - check self-signup settings
   if (!oidcConfig.allowSelfSignup) {
-    throw new Error(`New user registration is not allowed. User ID: ${oidcUser.id}, Email: ${oidcUser.email}. Please contact your administrator.`);
+    throw new Error(
+      `New user registration is not allowed. User ID: ${oidcUser.id}, Email: ${oidcUser.email}. Please contact your administrator.`
+    );
   }
-  
+
   // Create new user (self-signup allowed)
   const persistedUser = await createOrUpdateOidcUser(oidcUser, usersFilePath);
-  
+
   return {
     ...oidcUser,
     id: persistedUser.id,

@@ -64,23 +64,25 @@ export async function saveUsers(usersConfig, usersFilePath) {
  */
 export function findUserByIdentifier(usersConfig, identifier, authMethod = null) {
   const users = usersConfig.users || {};
-  
+
   for (const userId in users) {
     const user = users[userId];
-    
+
     // Check if user has the specified auth method (if provided)
     if (authMethod && user.authMethods && !user.authMethods.includes(authMethod)) {
       continue;
     }
-    
+
     // Match by username, email, or OIDC subject
-    if (user.username === identifier || 
-        user.email === identifier ||
-        (user.oidcData && user.oidcData.subject === identifier)) {
+    if (
+      user.username === identifier ||
+      user.email === identifier ||
+      (user.oidcData && user.oidcData.subject === identifier)
+    ) {
       return { ...user, id: userId };
     }
   }
-  
+
   return null;
 }
 
@@ -93,26 +95,27 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
 export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
   const usersConfig = loadUsers(usersFilePath);
   const authMethod = externalUser.provider === 'proxy' ? 'proxy' : 'oidc';
-  
+
   // Try to find existing user by email or external subject
-  let existingUser = findUserByIdentifier(usersConfig, externalUser.email, authMethod) ||
-                     findUserByIdentifier(usersConfig, externalUser.id, authMethod);
-  
+  let existingUser =
+    findUserByIdentifier(usersConfig, externalUser.email, authMethod) ||
+    findUserByIdentifier(usersConfig, externalUser.id, authMethod);
+
   const now = new Date().toISOString();
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-  
+
   if (existingUser) {
     // Update existing user
     const userId = existingUser.id;
     const user = usersConfig.users[userId];
-    
+
     // Ensure authMethods includes the current auth method
     if (!user.authMethods) {
       user.authMethods = [authMethod];
     } else if (!user.authMethods.includes(authMethod)) {
       user.authMethods.push(authMethod);
     }
-    
+
     // Update external auth data
     if (authMethod === 'oidc') {
       user.oidcData = {
@@ -129,28 +132,27 @@ export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
         ...user.proxyData
       };
     }
-    
+
     // Update basic info from external provider
     user.name = externalUser.name || user.name;
     user.email = externalUser.email || user.email;
-    
+
     // Merge groups: keep existing groups and add external groups
     const existingGroups = new Set(user.groups || []);
     const externalGroups = externalUser.groups || [];
     externalGroups.forEach(group => existingGroups.add(group));
     user.groups = Array.from(existingGroups);
-    
+
     // Update activity tracking
     user.lastActiveDate = today;
     user.updatedAt = now;
-    
+
     await saveUsers(usersConfig, usersFilePath);
     return { ...user, id: userId };
-    
   } else {
     // Create new user
     const userId = `user_${uuidv4().replace(/-/g, '_')}`;
-    
+
     const newUser = {
       id: userId,
       username: externalUser.email, // Use email as username for external users
@@ -163,7 +165,7 @@ export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
       createdAt: now,
       updatedAt: now
     };
-    
+
     // Add auth-specific data
     if (authMethod === 'oidc') {
       newUser.oidcData = {
@@ -178,7 +180,7 @@ export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
         lastProvider: externalUser.provider
       };
     }
-    
+
     usersConfig.users[userId] = newUser;
     await saveUsers(usersConfig, usersFilePath);
     return newUser;
@@ -193,13 +195,13 @@ export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
 export async function updateUserActivity(userId, usersFilePath) {
   const usersConfig = loadUsers(usersFilePath);
   const user = usersConfig.users[userId];
-  
+
   if (!user) {
     return;
   }
-  
+
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-  
+
   // Only update if it's a different day
   if (user.lastActiveDate !== today) {
     user.lastActiveDate = today;
@@ -225,12 +227,12 @@ export function isUserActive(user) {
  */
 export function mergeUserGroups(jwtGroups = [], configGroups = []) {
   const allGroups = new Set();
-  
+
   // Add JWT groups
   jwtGroups.forEach(group => allGroups.add(group));
-  
+
   // Add config groups
   configGroups.forEach(group => allGroups.add(group));
-  
+
   return Array.from(allGroups);
 }
