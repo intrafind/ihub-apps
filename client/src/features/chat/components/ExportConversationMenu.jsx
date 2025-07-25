@@ -75,7 +75,9 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
       }
 
       // Get app name for better file naming
-      const appName = uiConfig?.title ? getLocalizedContent(uiConfig.title, currentLanguage) : 'AI Hub Apps';
+      const appName = uiConfig?.title
+        ? getLocalizedContent(uiConfig.title, currentLanguage)
+        : 'AI Hub Apps';
 
       await exportChatToFormat(appId, chatId, exportData, format, appName);
       onClose?.();
