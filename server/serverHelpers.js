@@ -168,7 +168,7 @@ function resolveGlobalPromptVariables(
     // Date and time variables
     year: now.getFullYear().toString(),
     month: (now.getMonth() + 1).toString().padStart(2, '0'),
-    date: now.toISOString().split('T')[0], // YYYY-MM-DD format
+    date: dateFormatter.format(now),
     time: timeFormatter.format(now),
     day_of_week: now.toLocaleDateString(language || defaultLang, { ...tzOptions, weekday: 'long' }),
 
