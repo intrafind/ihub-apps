@@ -201,7 +201,7 @@ const OpenAIAdapter = {
    */
   getTokenFamily(model) {
     const modelId = model.modelId || model.id || '';
-    
+
     if (modelId.includes('gpt-4')) return 'gpt-4';
     if (modelId.includes('gpt-3.5')) return 'gpt-3.5';
     return 'gpt-4'; // Default for OpenAI

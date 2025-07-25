@@ -242,7 +242,7 @@ export class ContextManager {
 
     // Combine content from multiple messages
     const combinedContent = group.messages
-      .map(msg => typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content))
+      .map(msg => (typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)))
       .join('\n\n---\n\n'); // Separator between combined messages
 
     return {
@@ -379,7 +379,7 @@ export class ContextManager {
     for (let i = 1; i < sentences.length - 1; i++) {
       const sentence = sentences[i].trim();
       const sentenceTokens = TokenCounter.countTokens(sentence, modelConfig.tokenFamily);
-      
+
       if (currentTokens + sentenceTokens <= targetTokens) {
         selectedSentences.push({ sentence, index: i });
         currentTokens += sentenceTokens;
