@@ -15,13 +15,24 @@ const StarRating = ({
   const [hoverRating, setHoverRating] = useState(0);
 
   const handleStarClick = useCallback(
-    starIndex => {
+    (starIndex, event) => {
       if (readonly) return;
 
-      const newRating = starIndex + 1;
+      let newRating = starIndex + 1;
+
+      if (allowHalfStars) {
+        // Calculate position within star for half-star support
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const starWidth = rect.width;
+        const isLeftHalf = x < starWidth / 2;
+
+        newRating = isLeftHalf ? starIndex + 0.5 : starIndex + 1;
+      }
+
       onRatingChange?.(newRating);
     },
-    [readonly, onRatingChange]
+    [readonly, onRatingChange, allowHalfStars]
   );
 
   const handleStarHover = useCallback(
@@ -86,9 +97,8 @@ const StarRating = ({
       <div
         key={starIndex}
         className={`relative cursor-pointer ${readonly ? 'cursor-default' : ''}`}
-        onClick={() => handleStarClick(starIndex)}
+        onClick={e => handleStarClick(starIndex, e)}
         onMouseMove={e => handleStarHover(starIndex, e)}
-        onMouseLeave={handleMouseLeave}
         title={getTooltipText(starIndex)}
       >
         {/* Base star (outline) */}
@@ -112,7 +122,7 @@ const StarRating = ({
   };
 
   return (
-    <div className={`flex items-center space-x-1 ${className}`}>
+    <div className={`flex items-center space-x-1 ${className}`} onMouseLeave={handleMouseLeave}>
       {Array.from({ length: maxStars }, (_, index) => renderStar(index))}
 
       {/* Rating display */}
