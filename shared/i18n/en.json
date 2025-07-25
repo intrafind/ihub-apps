@@ -99,277 +99,120 @@
       "previous": "Previous",
       "next": "Next",
       "pageOfTotal": "Page {{current}} of {{total}}",
-      "sharePrompt": "Share prompt",
-      "linkCopied": "Link copied!",
-      "sort": {
-        "label": "Sort by",
-        "nameAsc": "Name A-Z",
-        "nameDesc": "Name Z-A",
-        "relevance": "Relevance"
-      }
-    },
-    "appChat": {
-      "messagePlaceholder": "Type your message here...",
-      "send": "Send",
-      "thinking": "Thinking...",
-      "regenerate": "Regenerate response",
-      "clear": "Clear chat",
-      "confirmClear": "Are you sure you want to clear the chat?",
-      "share": "Share app",
-      "export": {
-        "conversation": "Export",
-        "toJSON": "as JSON",
-        "toJSONL": "as JSONL",
-        "toMarkdown": "as Markdown",
-        "toHTML": "as HTML"
-      },
-      "copyToClipboard": "Copy to clipboard",
-      "copied": "Copied to clipboard!",
-      "showThoughts": "Show reasoning",
-      "hideThoughts": "Hide reasoning",
-      "configureApp": "Configure",
-      "parameters": "Parameters",
-      "inputParameters": "Input Parameters",
-      "startConversation": "Start conversation",
-      "starterPromptsTitle": "Starter Prompts",
-      "starterPromptsSubtitle": "Choose a prompt below to get started quickly",
-      "welcome": "Welcome",
-      "getStarted": "Get Started",
-      "examplePrompts": "Here are some example prompts to get you started",
-      "noMessagesTitle": "No Messages Yet",
-      "noMessagesSubtitle": "Start a conversation by sending a message!"
+      "showing": "Showing {{start}}-{{end}} of {{total}} prompts",
+      "relevantPrompts": "Relevant prompts",
+      "allPrompts": "All prompts",
+      "filterByApp": "Filter by app",
+      "clearApp": "Clear app filter"
     },
     "notFound": {
       "title": "Page Not Found",
-      "message": "We couldn't find the page you were looking for.",
-      "returnHome": "Return to Home"
+      "description": "The page you're looking for doesn't exist.",
+      "backHome": "Back to Home"
+    },
+    "authRequired": {
+      "title": "Authentication Required",
+      "description": "You need to log in to access this page.",
+      "login": "Login"
     }
   },
-  "examples": {
-    "helpWithTask": "Help me brainstorm ideas for my project",
-    "explainConcept": "Explain a complex topic in simple terms",
-    "writeContent": "Help me write professional content",
-    "planSomething": "Plan and organize my schedule"
-  },
-  "models": {
-    "temperature": "Temperature",
-    "provider": "Provider",
-    "descriptions": {
-      "gpt-3.5-turbo": "Fast and efficient model for most everyday tasks and conversations",
-      "gpt-4": "Advanced model with strong reasoning and knowledge capabilities",
-      "claude-3-opus": "Anthropic's most capable model with exceptional reasoning abilities",
-      "claude-3-sonnet": "Balanced performance and value for enterprise and everyday tasks",
-      "gemini-1.5-flash": "Google's versatile model optimized for text and code tasks",
-      "local-vllm": "Advanced model with strong reasoning and knowledge capabilities"
-    },
-    "outputFormat": "Output Format"
-  },
-  "variables": {
-    "content": "Content",
-    "topic": "Topic",
-    "language": "Language",
-    "format": "Format",
-    "tone": "Tone",
-    "length": "Length",
-    "enter": "Enter",
-    "enterLabel": "Enter {{label}}",
-    "selectLabel": "Please select {{label}}"
-  },
-  "settings": {
-    "title": "Settings",
-    "language": "Language",
-    "theme": "Theme",
-    "lightMode": "Light",
-    "darkMode": "Dark",
-    "apiKeys": "API Keys",
-    "save": "Save Settings",
-    "reset": "Reset to Default"
-  },
-  "error": {
-    "general": "An error occurred. Please try again.",
-    "notFound": "Resource not found.",
-    "apiKeyMissing": "API key for model not found",
-    "modelNotFound": "Model not found",
-    "appNotFound": "Application not found",
-    "missingRequiredFields": "Missing required fields:"
-  },
-  "languages": {
-    "en": "English",
-    "de": "German"
-  },
-  "appConfig": {
-    "title": "Configuration",
-    "save": "Save",
-    "cancel": "Cancel",
-    "defaultModel": "Default Model",
-    "temperature": "Temperature",
-    "temperatureDescription": "Controls randomness: Lower values are more deterministic, higher values are more creative.",
-    "systemPrompt": "System Prompt",
-    "systemPromptDescription": "Instructions for the AI at the beginning of the conversation.",
-    "markdown": "Markdown",
-    "plainText": "Plain Text",
-    "json": "JSON"
-  },
-  "chatMessage": {
-    "user": "You",
-    "assistant": "Assistant",
-    "system": "System",
-    "copy": "Copy",
-    "copied": "Copied!",
-    "edit": "Edit"
-  },
-  "errors": {
-    "fetchFailed": "Failed to fetch data",
-    "sendFailed": "Failed to send message",
-    "configSaveFailed": "Failed to save configuration",
-    "imageUploadDisabled": "Image upload is not supported by the selected model. Please choose a different model or upload a text file instead.",
-    "fileUploadDisabled": "File upload is disabled for this application."
-  },
-  "serverErrors": {
-    "appNotFound": "App not found",
-    "modelNotFound": "Model not found",
-    "missingRequiredFields": "Missing required fields",
-    "messagesRequired": "Messages array is required",
-    "missingSessionId": "Session ID is required",
-    "chatSessionNotFound": "Chat session not found",
-    "missingFeedbackFields": "Missing required fields: messageId, appId, chatId, and rating are required",
-    "apiKeyNotFound": "API key not found for provider: {provider}",
-    "invalidProvider": "Invalid provider: {provider}",
-    "invalidModel": "Invalid model: {model}",
-    "internalError": "Internal server error",
-    "authenticationFailed": "Authentication failed for {provider} API. Please check your API key.",
-    "rateLimitExceeded": "Rate limit exceeded for {provider} API. Please try again later.",
-    "serviceError": "{provider} API service error. The service may be experiencing issues.",
-    "requestTimeout": "Request timed out after {timeout} seconds. The model may be experiencing high load.",
-    "llmApiError": "LLM API request failed with status {status}",
-    "responseStreamError": "Error processing response stream: {error}",
-    "connectionRefused": "Connection refused while trying to access {provider} API for model {model}. Please check your connection or server configuration.",
-    "unauthorized": "Invalid API key",
-    "modelAccessDenied": "API key not allowed to access this model"
-  },
-  "toolErrors": {
-    "MISSING_URL": "URL parameter is required.",
-    "INVALID_URL": "Invalid URL.",
-    "UNSUPPORTED_PROTOCOL": "Only HTTP and HTTPS URLs are supported.",
-    "PAGE_NOT_FOUND": "Page could not be found.",
-    "AUTH_REQUIRED": "Authentication is required to access this page.",
-    "FETCH_ERROR": "Failed to fetch webpage.",
-    "CONTENT_NOT_FOUND": "Could not find content in the webpage.",
-    "TIMEOUT": "Request timed out while loading the webpage.",
-    "TLS_ERROR": "Certificate error encountered. Please contact your administrator.",
-    "EXTRACTION_FAILED": "Failed to extract content from webpage."
-  },
-  "responseStyles": {
-    "title": "Response Style",
-    "keep": "Keep Original",
-    "normal": "Normal",
-    "concise": "Concise",
-    "formal": "Formal",
-    "explanatory": "Explanatory",
-    "creative": "Creative",
-    "persuasive": "Persuasive",
-    "humorous": "Humorous",
-    "empathetic": "Empathetic",
-    "friendly": "Friendly",
-    "technical": "Technical",
-    "casual": "Casual",
-    "detailed": "Detailed",
-    "analytical": "Analytical",
-    "assertive": "Assertive",
-    "descriptions": {
-      "keep": "Keep the original style of the text.",
-      "normal": "Provide default, balanced responses.",
-      "concise": "Provide shorter and more direct responses. Be brief and to the point.",
-      "formal": "Provide clear, professional and polished responses using formal language.",
-      "explanatory": "Provide educational responses that explain concepts clearly, as if teaching a student.",
-      "creative": "Provide imaginative and artistic responses, using metaphors and analogies.",
-      "persuasive": "Provide convincing and compelling responses, using rhetorical techniques.",
-      "humorous": "Provide light-hearted and funny responses, using jokes and puns.",
-      "empathetic": "Provide compassionate and understanding responses, showing empathy and support.",
-      "friendly": "Provide warm and approachable responses, using a friendly tone.",
-      "technical": "Provide detailed and precise responses, using technical language.",
-      "casual": "Provide relaxed and informal responses, using everyday language.",
-      "detailed": "Provide thorough and comprehensive responses, covering all aspects of the topic.",
-      "analytical": "Provide logical and critical responses, analyzing the topic in depth.",
-      "assertive": "Provide confident and strong responses, taking a clear stance."
+  "chat": {
+    "title": "Chat",
+    "send": "Send",
+    "sendMessage": "Send message",
+    "newConversation": "New conversation",
+    "regenerate": "Regenerate",
+    "stopGeneration": "Stop generation",
+    "deleteMessage": "Delete message",
+    "deleteConversation": "Delete conversation",
+    "exportConversation": "Export conversation",
+    "thinking": "Thinking...",
+    "responseComplete": "Response complete",
+    "placeholder": "Type your message here...",
+    "conversationHistory": "Conversation History",
+    "modelSelector": {
+      "label": "Model",
+      "choose": "Choose model",
+      "noModels": "No models available",
+      "loading": "Loading models..."
     }
   },
-  "disclaimer": {
-    "title": "Disclaimer",
-    "accept": "I Understand",
-    "versionInfo": "Version {{version}}, Last Updated: {{date}}"
-  },
-  "canvas": {
-    "toolbox": {
-      "aiWriting": "AI Writing",
-      "textEditing": "Text Editing",
-      "toneStyle": "Tone & Style",
-      "utilities": "Utilities"
+  "auth": {
+    "login": {
+      "title": "Sign in to your account",
+      "username": "Username",
+      "usernamePlaceholder": "Enter your username",
+      "password": "Password",
+      "passwordPlaceholder": "Enter your password",
+      "button": "Sign in",
+      "error": "Invalid username or password",
+      "required": "This field is required"
     },
-    "continue": "Continue writing",
-    "summarize": "Summarize",
-    "outline": "Create outline",
-    "expand": "Expand",
-    "condense": "Condense",
-    "paraphrase": "Paraphrase",
-    "clarify": "Clarify",
-    "formal": "Formal",
-    "casual": "Casual",
-    "professional": "Professional",
-    "creative": "Creative",
-    "translate": "Translate",
-    "grammar": "Grammar",
-    "format": "Format"
+    "logout": "Sign out"
   },
   "admin": {
-    "translateField": "Translate",
-    "common": {
-      "enableAll": "Enable All",
-      "disableAll": "Disable All"
+    "title": "Administration",
+    "navigation": {
+      "overview": "Overview",
+      "apps": "Apps",
+      "models": "Models",
+      "users": "Users",
+      "settings": "Settings",
+      "logs": "Logs"
     },
     "apps": {
-      "createApp": "Create App",
-      "actions": {
-        "clone": "Clone"
+      "title": "Apps Management",
+      "list": {
+        "title": "Applications",
+        "addApp": "Add App",
+        "search": "Search apps...",
+        "noApps": "No apps found",
+        "edit": "Edit",
+        "delete": "Delete",
+        "confirmDelete": "Are you sure you want to delete this app?",
+        "status": "Status",
+        "enabled": "Enabled",
+        "disabled": "Disabled"
       },
-      "template": {
-        "title": "Choose App Template",
-        "description": "Start with an existing app as a template, or create from scratch",
-        "searchPlaceholder": "Search apps...",
-        "createFromScratch": "Create from Scratch",
-        "createFromScratchDescription": "Start with a blank app configuration",
-        "loading": "Loading apps...",
-        "noApps": "No apps found matching your search"
+      "edit": {
+        "title": "Edit App",
+        "create": "Create App",
+        "basicInfo": "Basic Information",
+        "name": "Name",
+        "description": "Description",
+        "color": "Color",
+        "icon": "Icon",
+        "category": "Category",
+        "enabled": "Enabled",
+        "advanced": "Advanced Settings",
+        "systemPrompt": "System Prompt",
+        "tokenLimit": "Token Limit",
+        "preferredModel": "Preferred Model",
+        "temperature": "Temperature",
+        "searchTools": "Search tools to add...",
+        "toolsHelper": "Search and select tools to add to this app. Click on selected tools to remove them."
       },
       "wizard": {
         "title": "Create New App",
-        "basedOn": "Based on",
-        "back": "Back",
-        "next": "Next",
-        "create": "Create App",
-        "finish": "Finish App",
-        "creating": "Creating...",
-        "revert": "Revert to parent",
-        "method": {
-          "title": "Creation Method",
-          "description": "How would you like to create your app?",
-          "instruction": "Choose how you want to create your app:",
-          "ai": "AI-Generated",
-          "aiDescription": "Describe what your app should do, and AI will generate the configuration for you.",
-          "manual": "Manual Configuration",
-          "manualDescription": "Configure your app step by step with full control over all settings.",
-          "template": "Based on Template",
-          "templateDescription": "Start with the configuration from \"{templateName}\" and customize it."
+        "steps": {
+          "basic": "Basic",
+          "prompt": "Prompt",
+          "advanced": "Advanced",
+          "tools": "Tools",
+          "review": "Review"
         },
-        "ai": {
-          "title": "AI Generation",
-          "description": "Describe what your app should do",
-          "prompt": "Describe your app",
-          "promptPlaceholder": "Example: Create a meeting summarizer app that takes meeting notes and extracts key points, action items, and decisions...",
+        "navigation": {
+          "previous": "Previous",
+          "next": "Next",
+          "finish": "Create App",
+          "saving": "Creating..."
+        },
+        "generator": {
+          "title": "AI App Generator",
+          "description": "Describe the app you want to create and I'll generate it for you",
+          "placeholder": "Describe your app idea...",
           "generate": "Generate App",
           "generating": "Generating...",
-          "success": "App configuration generated successfully! You can review and modify it in the next steps.",
-          "language": "Language",
           "loadingPrompt": "Loading prompt configuration...",
           "error": {
             "parse": "Failed to parse generated configuration",
@@ -380,38 +223,67 @@
         "basic": {
           "title": "Basic Information",
           "description": "Configure name, description, and appearance",
-          "language": "Language",
-          "appId": "App ID",
-          "appIdPlaceholder": "e.g., my-awesome-app",
-          "name": "App Name",
-          "namePlaceholder": "Enter app name",
-          "descriptionPlaceholder": "Enter app description",
-          "color": "Color",
-          "icon": "Icon",
-          "iconPlaceholder": "e.g., chat-bubbles"
+          "name": {
+            "label": "App Name",
+            "placeholder": "Enter app name"
+          },
+          "description": {
+            "label": "Description",
+            "placeholder": "Describe what this app does"
+          },
+          "color": {
+            "label": "Theme Color",
+            "description": "Choose a color for the app's theme"
+          },
+          "icon": {
+            "label": "Icon",
+            "description": "Select an icon for the app"
+          },
+          "category": {
+            "label": "Category",
+            "placeholder": "Select or enter category"
+          }
         },
-        "system": {
-          "title": "System Instructions",
-          "description": "Define how your app should behave",
-          "prompt": "System Instructions",
-          "promptPlaceholder": "Enter system instructions that define how the AI should behave...",
-          "messagePlaceholder": "Message Placeholder",
-          "messagePlaceholderPlaceholder": "Enter your message here...",
-          "model": "Preferred Model",
-          "temperature": "Temperature"
+        "prompt": {
+          "title": "System Prompt",
+          "description": "Define how the AI should behave",
+          "system": {
+            "label": "System Prompt",
+            "placeholder": "You are a helpful assistant that...",
+            "description": "Instructions that define the AI's role and behavior"
+          },
+          "variables": {
+            "title": "Variables",
+            "description": "Add variables that users can configure",
+            "add": "Add Variable",
+            "name": "Name",
+            "label": "Label",
+            "type": "Type",
+            "required": "Required",
+            "defaultValue": "Default Value",
+            "options": "Options (comma-separated)",
+            "placeholder": "Placeholder text"
+          }
         },
-        "variables": {
-          "title": "Variables",
-          "description": "Add user-configurable variables",
-          "instruction": "Variables allow users to customize the app behavior. They can be used in the prompt template with {{variableName}} syntax.",
-          "variable": "Variable {{index}}",
-          "name": "Name",
-          "namePlaceholder": "e.g., targetLanguage",
-          "type": "Type",
-          "label": "Label",
-          "labelPlaceholder": "e.g., Target Language",
-          "required": "Required",
-          "add": "Add Variable"
+        "advanced": {
+          "title": "Advanced Settings",
+          "description": "Configure model preferences and limits",
+          "model": {
+            "label": "Preferred Model",
+            "description": "Default model for this app"
+          },
+          "tokenLimit": {
+            "label": "Token Limit",
+            "description": "Maximum tokens per request"
+          },
+          "temperature": {
+            "label": "Temperature",
+            "description": "Controls creativity vs consistency"
+          },
+          "outputFormat": {
+            "label": "Output Format",
+            "description": "Default format for responses"
+          }
         },
         "tools": {
           "title": "Tools",
@@ -421,112 +293,33 @@
           "noResults": "No tools match your search",
           "noTools": "No tools available"
         },
-        "advanced": {
-          "title": "Advanced Settings",
-          "description": "Configure advanced features",
-          "instruction": "Configure advanced settings for your app.",
-          "allowEmptyContent": "Allow Empty Content",
-          "sendChatHistory": "Send Chat History",
-          "imageUpload": "Enable Image Upload",
-          "category": "Category",
-          "order": "Display Order"
-        },
         "review": {
           "title": "Review & Create",
-          "description": "Review your app configuration",
-          "instruction": "Review your app configuration before creating it.",
-          "basedOn": "Based on template: {templateName}",
-          "overridden": "Overridden fields: {fields}",
-          "warning": "Once created, you can edit the app configuration but cannot change its ID. Make sure the ID is unique and descriptive."
-        },
-        "error": {
-          "idRequired": "App ID is required",
-          "nameRequired": "App name is required",
-          "descriptionRequired": "App description is required",
-          "colorRequired": "App color is required",
-          "iconRequired": "App icon is required",
-          "systemRequired": "System instructions are required",
-          "tokenLimitRequired": "Token limit is required",
-          "createFailed": "Failed to create app"
+          "description": "Review your app configuration before creating",
+          "basicInfo": "Basic Information",
+          "systemPrompt": "System Prompt",
+          "settings": "Settings",
+          "selectedTools": "Selected Tools",
+          "noTools": "No tools selected"
         }
       }
     },
-    "models": {
-      "edit": {
-        "title": "Edit Model",
-        "titleNew": "Create New Model",
-        "subtitle": "Manage model configuration for {{name}}",
-        "subtitleNew": "Create a new AI model configuration",
-        "backToModels": "Back to Models",
-        "basicInfo": "Basic Information",
-        "basicInfoDesc": "Basic information about the model",
-        "configuration": "Configuration",
-        "configurationDesc": "Advanced configuration options for the model",
-        "requiredFields": "Please fill in all required fields",
-        "saving": "Saving...",
-        "createModel": "Create Model",
-        "saveChanges": "Save Changes",
-        "usageStats": "Usage Statistics",
-        "noUsageData": "No usage data available",
-        "appsUsingModel": "Apps Using This Model",
-        "noApps": "No apps are currently using this model",
-        "success": "Model {{action}} successfully!",
-        "successCreated": "created",
-        "successUpdated": "updated"
-      },
-      "fields": {
-        "id": "Model ID",
-        "name": "Name",
-        "description": "Description",
-        "provider": "Provider",
-        "modelId": "API Model ID",
-        "url": "API URL",
-        "tokenLimit": "Token Limit",
-        "concurrency": "Concurrency",
-        "requestDelay": "Request Delay (ms)",
-        "supportsTools": "Supports Tools",
-        "enabled": "Enabled",
-        "defaultModel": "Default Model"
-      },
-      "placeholders": {
-        "selectProvider": "Select a provider",
-        "apiModelId": "e.g., gpt-4, claude-3-sonnet",
-        "apiUrl": "e.g., https://api.openai.com/v1/chat/completions"
-      },
-      "hints": {
-        "modelId": "Unique identifier for this model configuration",
-        "apiModelId": "The model ID used in API calls to the provider"
-      },
-      "status": {
-        "enabled": "Enabled",
-        "disabled": "Disabled"
-      },
-      "details": {
-        "messages": "Messages",
-        "tokens": "Tokens",
-        "editModel": "Edit Model Details"
-      },
-      "table": {
-        "status": "Status"
-      },
-      "actions": {
-        "clone": "Clone",
-        "delete": "Delete"
-      }
-    },
-    "prompts": {
-      "clone": "Clone",
-      "delete": "Delete",
-      "edit": "Edit"
-    },
     "pages": {
-      "title": "Pages Administration",
-      "subtitle": "Manage static pages displayed in the application",
-      "create": "Create Page",
-      "actions": "Actions",
-      "access": "Access",
-      "fields": {
+      "title": "Pages Management",
+      "list": {
+        "title": "Pages",
+        "addPage": "Add Page",
+        "search": "Search pages...",
+        "noPages": "No pages found",
+        "edit": "Edit",
+        "delete": "Delete",
+        "view": "View"
+      },
+      "edit": {
+        "title": "Edit Page",
+        "create": "Create Page",
         "id": "Page ID",
+        "idPlaceholder": "page-id (used in URL)",
         "title": "Title",
         "content": "Content",
         "idRequired": "ID is required",
