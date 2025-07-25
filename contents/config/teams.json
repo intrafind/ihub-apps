@@ -59,7 +59,7 @@
       },
       {
         "id": "translate",
-        "appId": "translator", 
+        "appId": "translator",
         "title": {
           "en": "Translate",
           "de": "Übersetzen"
@@ -75,7 +75,7 @@
         }
       },
       {
-        "id": "analyze", 
+        "id": "analyze",
         "appId": "chat",
         "title": {
           "en": "Analyze",
@@ -129,7 +129,12 @@
     "fileSupport": {
       "enabled": true,
       "maxSize": 52428800,
-      "supportedTypes": ["application/pdf", "text/plain", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+      "supportedTypes": [
+        "application/pdf",
+        "text/plain",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
       "defaultApp": "file-analysis"
     }
   },

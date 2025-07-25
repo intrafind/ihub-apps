@@ -57,7 +57,7 @@ class TeamsBot extends ActivityHandler {
 
       // Get user information first
       const user = this.extractUserFromContext(context);
-      
+
       // Map user intent to AI Hub app using AI
       const appId = await this.mapUserIntentToApp(userMessage, user);
 
@@ -89,11 +89,14 @@ class TeamsBot extends ActivityHandler {
     try {
       const teamsConfig = await loadTeamsConfiguration();
       const apps = await loadAppConfigurations();
-      
+
       // Get user's available apps based on permissions
       const enhancedUser = await enhanceUserWithPermissions(user);
-      const availableApps = filterResourcesByPermissions(apps, enhancedUser.permissions?.apps || []);
-      
+      const availableApps = filterResourcesByPermissions(
+        apps,
+        enhancedUser.permissions?.apps || []
+      );
+
       if (!teamsConfig?.bot?.intentDetection?.useAI) {
         // Fallback to first available app if AI detection is disabled
         return this.getFallbackApp(availableApps, teamsConfig);
@@ -102,7 +105,9 @@ class TeamsBot extends ActivityHandler {
       // Prepare app list for LLM
       const appList = Object.entries(availableApps)
         .filter(([, app]) => app.enabled !== false)
-        .map(([id, app]) => `${id}: ${app.name?.en || id} - ${app.description?.en || 'AI assistant'}`)
+        .map(
+          ([id, app]) => `${id}: ${app.name?.en || id} - ${app.description?.en || 'AI assistant'}`
+        )
         .join('\n');
 
       if (!appList) {
@@ -110,10 +115,9 @@ class TeamsBot extends ActivityHandler {
       }
 
       // Use LLM to determine intent
-      const systemPrompt = teamsConfig.bot.intentDetection.systemPrompt?.en?.replace(
-        '{{availableApps}}', 
-        appList
-      ) || `Determine which app should handle this request. Available apps:\n${appList}\n\nReturn only the app ID.`;
+      const systemPrompt =
+        teamsConfig.bot.intentDetection.systemPrompt?.en?.replace('{{availableApps}}', appList) ||
+        `Determine which app should handle this request. Available apps:\n${appList}\n\nReturn only the app ID.`;
 
       const intentRequest = {
         message: systemPrompt + '\n\nUser request: ' + message,
@@ -144,9 +148,13 @@ class TeamsBot extends ActivityHandler {
    * Get fallback app when AI detection fails or is disabled
    */
   getFallbackApp(apps, teamsConfig) {
-    const fallbackApps = teamsConfig?.bot?.intentDetection?.fallbackApps || 
-      ['chat', 'general-assistant', 'help-assistant', 'faq-bot'];
-    
+    const fallbackApps = teamsConfig?.bot?.intentDetection?.fallbackApps || [
+      'chat',
+      'general-assistant',
+      'help-assistant',
+      'faq-bot'
+    ];
+
     for (const appId of fallbackApps) {
       if (apps[appId] && apps[appId].enabled !== false) {
         return appId;
@@ -198,11 +206,10 @@ class TeamsBot extends ActivityHandler {
       };
 
       // Send initial processing message
-      const processingMessageText = teamsConfig?.bot?.processingMessage?.en?.replace(
-        '{{appName}}', 
-        app.name?.en || appId
-      ) || `🤖 Processing with ${app.name?.en || appId}...`;
-      
+      const processingMessageText =
+        teamsConfig?.bot?.processingMessage?.en?.replace('{{appName}}', app.name?.en || appId) ||
+        `🤖 Processing with ${app.name?.en || appId}...`;
+
       const processingActivity = await context.sendActivity(
         MessageFactory.text(processingMessageText)
       );
@@ -213,7 +220,13 @@ class TeamsBot extends ActivityHandler {
       if (teamsConfig?.bot?.streaming?.enabled) {
         try {
           // Use streaming for real-time updates
-          responseText = await this.processWithStreaming(appId, chatRequest, context, processingActivity, teamsConfig);
+          responseText = await this.processWithStreaming(
+            appId,
+            chatRequest,
+            context,
+            processingActivity,
+            teamsConfig
+          );
         } catch (streamError) {
           console.warn('Streaming failed, falling back to non-streaming:', streamError);
           // Fallback to non-streaming
@@ -231,7 +244,7 @@ class TeamsBot extends ActivityHandler {
         // Create adaptive card for better formatting
         const responseCard = this.createResponseCard(responseText, app.name?.en || appId, app.icon);
         const responseActivity = MessageFactory.attachment(responseCard);
-        
+
         if (teamsConfig?.bot?.streaming?.enabled) {
           // Send new message with final response
           await context.sendActivity(responseActivity);
@@ -241,13 +254,15 @@ class TeamsBot extends ActivityHandler {
           await context.sendActivity(responseActivity);
         }
       } else {
-        const errorMessage = teamsConfig?.bot?.errorMessage?.en || "Sorry, I couldn't generate a response.";
+        const errorMessage =
+          teamsConfig?.bot?.errorMessage?.en || "Sorry, I couldn't generate a response.";
         await context.sendActivity(MessageFactory.text(errorMessage));
       }
     } catch (error) {
       console.error('Error processing with AI Hub:', error);
       const teamsConfig = await loadTeamsConfiguration();
-      const errorMessage = teamsConfig?.bot?.errorMessage?.en || 
+      const errorMessage =
+        teamsConfig?.bot?.errorMessage?.en ||
         'Sorry, there was an error processing your request with the AI service.';
       await context.sendActivity(MessageFactory.text(errorMessage));
     }
@@ -265,9 +280,9 @@ class TeamsBot extends ActivityHandler {
 
       // Create a simple streaming handler
       const streamHandler = {
-        onData: (chunk) => {
+        onData: chunk => {
           accumulatedResponse += chunk;
-          
+
           // Throttle updates to avoid overwhelming Teams
           const now = Date.now();
           if (now - lastUpdateTime > updateInterval && accumulatedResponse.length > chunkSize) {
@@ -278,13 +293,14 @@ class TeamsBot extends ActivityHandler {
         onEnd: () => {
           resolve(accumulatedResponse);
         },
-        onError: (error) => {
+        onError: error => {
           reject(error);
         }
       };
 
       // Process with streaming (simplified approach)
-      this.chatService.processNonStreaming(appId, chatRequest)
+      this.chatService
+        .processNonStreaming(appId, chatRequest)
         .then(response => {
           streamHandler.onData(response.content || '');
           streamHandler.onEnd();
@@ -342,7 +358,8 @@ class TeamsBot extends ActivityHandler {
   async createWelcomeCard() {
     try {
       const teamsConfig = await loadTeamsConfiguration();
-      const welcomeMessage = teamsConfig?.bot?.welcomeMessage?.en || 
+      const welcomeMessage =
+        teamsConfig?.bot?.welcomeMessage?.en ||
         "Welcome to AI Hub Apps! I can help you with various AI-powered tasks. Just describe what you need and I'll determine the best AI app to help you!";
 
       const card = {
@@ -365,7 +382,7 @@ class TeamsBot extends ActivityHandler {
           },
           {
             type: 'TextBlock',
-            text: '• **Natural Language** - Just tell me what you need\n• **Smart Detection** - I\'ll choose the best AI app for your task\n• **Real-time Responses** - Get answers quickly with streaming',
+            text: "• **Natural Language** - Just tell me what you need\n• **Smart Detection** - I'll choose the best AI app for your task\n• **Real-time Responses** - Get answers quickly with streaming",
             wrap: true,
             spacing: 'Medium'
           }

@@ -663,7 +663,7 @@ export default configCache;
 export async function loadAppConfigurations(includeDisabled = false) {
   await configCache.initialize();
   const apps = configCache.getApps(includeDisabled);
-  
+
   // Convert array format to object format for backward compatibility
   if (Array.isArray(apps.data)) {
     const appsObject = {};
@@ -674,7 +674,7 @@ export async function loadAppConfigurations(includeDisabled = false) {
     });
     return appsObject;
   }
-  
+
   return apps.data || {};
 }
 

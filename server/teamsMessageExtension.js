@@ -43,7 +43,7 @@ class TeamsMessageExtension {
       // Check if user has permission to use this app
       const apps = await loadAppConfigurations();
       const filteredApps = filterResourcesByPermissions(apps, enhancedUser.permissions?.apps || []);
-      
+
       if (!filteredApps[appId]) {
         return this.createErrorResponse(`You don't have permission to use the ${appId} app.`);
       }
@@ -54,7 +54,9 @@ class TeamsMessageExtension {
       return await this.createSuccessResponse(result, appId, commandId);
     } catch (error) {
       console.error('Error handling message extension action:', error);
-      return this.createErrorResponse(error.message || 'An error occurred processing your request.');
+      return this.createErrorResponse(
+        error.message || 'An error occurred processing your request.'
+      );
     }
   }
 
@@ -63,7 +65,7 @@ class TeamsMessageExtension {
    */
   async extractContentFromAction(action) {
     const teamsConfig = await loadTeamsConfiguration();
-    
+
     // Check for selected text
     if (action.messagePayload?.body?.content) {
       return {
@@ -85,15 +87,20 @@ class TeamsMessageExtension {
     // Check for attachment content with enhanced handling
     if (action.messagePayload?.attachments && action.messagePayload.attachments.length > 0) {
       const attachment = action.messagePayload.attachments[0];
-      
+
       // Handle images with AI Hub integration
-      if (this.isImageType(attachment.contentType) && teamsConfig?.messageExtensions?.imageSupport?.enabled) {
+      if (
+        this.isImageType(attachment.contentType) &&
+        teamsConfig?.messageExtensions?.imageSupport?.enabled
+      ) {
         const maxSize = teamsConfig.messageExtensions.imageSupport.maxSize || 10485760; // 10MB default
-        
+
         if (attachment.size && attachment.size > maxSize) {
-          throw new Error(`Image size (${Math.round(attachment.size / 1024 / 1024)}MB) exceeds maximum allowed size (${Math.round(maxSize / 1024 / 1024)}MB)`);
+          throw new Error(
+            `Image size (${Math.round(attachment.size / 1024 / 1024)}MB) exceeds maximum allowed size (${Math.round(maxSize / 1024 / 1024)}MB)`
+          );
         }
-        
+
         return {
           type: 'image',
           content: attachment.contentUrl,
@@ -104,15 +111,20 @@ class TeamsMessageExtension {
           }
         };
       }
-      
+
       // Handle files with AI Hub integration
-      if (this.isFileType(attachment.contentType) && teamsConfig?.messageExtensions?.fileSupport?.enabled) {
+      if (
+        this.isFileType(attachment.contentType) &&
+        teamsConfig?.messageExtensions?.fileSupport?.enabled
+      ) {
         const maxSize = teamsConfig.messageExtensions.fileSupport.maxSize || 52428800; // 50MB default
-        
+
         if (attachment.size && attachment.size > maxSize) {
-          throw new Error(`File size (${Math.round(attachment.size / 1024 / 1024)}MB) exceeds maximum allowed size (${Math.round(maxSize / 1024 / 1024)}MB)`);
+          throw new Error(
+            `File size (${Math.round(attachment.size / 1024 / 1024)}MB) exceeds maximum allowed size (${Math.round(maxSize / 1024 / 1024)}MB)`
+          );
         }
-        
+
         return {
           type: 'file',
           content: attachment.contentUrl,
@@ -123,7 +135,7 @@ class TeamsMessageExtension {
           }
         };
       }
-      
+
       // Handle text attachments
       if (attachment.contentType === 'text/plain' || attachment.contentType === 'text/html') {
         return {
@@ -135,7 +147,7 @@ class TeamsMessageExtension {
           }
         };
       }
-      
+
       // For unsupported file types, provide file info
       return {
         type: 'text',
@@ -152,22 +164,31 @@ class TeamsMessageExtension {
     const fallbackText = action.messagePayload?.from?.user?.displayName
       ? `Message from ${action.messagePayload.from.user.displayName}`
       : null;
-    
-    return fallbackText ? {
-      type: 'text',
-      content: fallbackText,
-      metadata: {}
-    } : null;
+
+    return fallbackText
+      ? {
+          type: 'text',
+          content: fallbackText,
+          metadata: {}
+        }
+      : null;
   }
-  
+
   /**
    * Check if content type is an image
    */
   isImageType(contentType) {
-    const imageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
+    const imageTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp',
+      'image/tiff'
+    ];
     return imageTypes.includes(contentType?.toLowerCase());
   }
-  
+
   /**
    * Check if content type is a supported file
    */
@@ -190,7 +211,7 @@ class TeamsMessageExtension {
     try {
       const teamsConfig = await loadTeamsConfiguration();
       const commands = teamsConfig?.messageExtensions?.commands || [];
-      
+
       const command = commands.find(cmd => cmd.id === commandId);
       return command?.appId || null;
     } catch (error) {
@@ -203,7 +224,7 @@ class TeamsMessageExtension {
         'improve-writing': 'email-composer',
         'extract-key-points': 'summarizer'
       };
-      
+
       return fallbackMap[commandId] || null;
     }
   }
@@ -251,13 +272,17 @@ class TeamsMessageExtension {
         variables: variables,
         sessionId: `teams-extension-${user.id}-${Date.now()}`,
         user: user,
-        files: extractedContent.type === 'image' || extractedContent.type === 'file' ? 
-          [{
-            name: extractedContent.metadata.name,
-            type: extractedContent.metadata.contentType,
-            url: extractedContent.content,
-            size: extractedContent.metadata.size
-          }] : undefined
+        files:
+          extractedContent.type === 'image' || extractedContent.type === 'file'
+            ? [
+                {
+                  name: extractedContent.metadata.name,
+                  type: extractedContent.metadata.contentType,
+                  url: extractedContent.content,
+                  size: extractedContent.metadata.size
+                }
+              ]
+            : undefined
       };
 
       // Process with chat service
@@ -273,44 +298,47 @@ class TeamsMessageExtension {
       throw error;
     }
   }
-  
+
   /**
    * Select appropriate app based on content type
    */
   selectAppForContentType(originalAppId, extractedContent, teamsConfig) {
-    if (extractedContent.type === 'image' && teamsConfig?.messageExtensions?.imageSupport?.enabled) {
+    if (
+      extractedContent.type === 'image' &&
+      teamsConfig?.messageExtensions?.imageSupport?.enabled
+    ) {
       return teamsConfig.messageExtensions.imageSupport.defaultApp || 'image-analysis';
     }
-    
+
     if (extractedContent.type === 'file' && teamsConfig?.messageExtensions?.fileSupport?.enabled) {
       return teamsConfig.messageExtensions.fileSupport.defaultApp || 'file-analysis';
     }
-    
+
     return originalAppId;
   }
-  
+
   /**
    * Prepare variables for the command
    */
   async prepareVariablesForCommand(extractedContent, teamsConfig) {
     const variables = {};
-    
+
     // Find the command configuration
     const commands = teamsConfig?.messageExtensions?.commands || [];
     const command = commands.find(cmd => cmd.appId);
-    
+
     if (command?.variables) {
       Object.assign(variables, command.variables);
     }
-    
+
     // Add content to variables if needed
     if (extractedContent.type === 'text') {
       variables.content = extractedContent.content;
     }
-    
+
     return variables;
   }
-  
+
   /**
    * Format content for AI processing
    */
@@ -332,7 +360,7 @@ class TeamsMessageExtension {
    */
   async createSuccessResponse(result, appId, commandId) {
     const displayName = await this.getAppDisplayName(appId, commandId);
-    
+
     return {
       composeExtension: {
         type: 'result',
@@ -420,7 +448,7 @@ class TeamsMessageExtension {
         loadAppConfigurations(),
         loadTeamsConfiguration()
       ]);
-      
+
       // First try to get name from Teams command configuration
       if (commandId && teamsConfig?.messageExtensions?.commands) {
         const command = teamsConfig.messageExtensions.commands.find(cmd => cmd.id === commandId);
@@ -428,23 +456,23 @@ class TeamsMessageExtension {
           return `${command.icon || '🤖'} ${command.title.en}`;
         }
       }
-      
+
       // Then try to get name from app configuration
       const app = apps[appId];
       if (app?.name?.en) {
         return `🤖 ${app.name.en}`;
       }
-      
+
       // Fallback to hardcoded display names
       const fallbackDisplayNames = {
         summarizer: '📄 Summarizer',
         translator: '🌐 Translator',
-        'chat': '💬 Chat Assistant',
+        chat: '💬 Chat Assistant',
         'email-composer': '✍️ Writing Assistant',
         'image-analysis': '🖼️ Image Analysis',
         'file-analysis': '📎 File Analysis'
       };
-      
+
       return fallbackDisplayNames[appId] || `🤖 ${appId}`;
     } catch (error) {
       console.error('Error getting app display name:', error);

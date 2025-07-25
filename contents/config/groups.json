@@ -170,7 +170,14 @@
       "description": "Default permissions for Microsoft Teams users",
       "inherits": ["authenticated"],
       "permissions": {
-        "apps": ["chat", "translator", "summarizer", "email-composer", "image-analysis", "file-analysis"],
+        "apps": [
+          "chat",
+          "translator",
+          "summarizer",
+          "email-composer",
+          "image-analysis",
+          "file-analysis"
+        ],
         "prompts": ["general", "writing"],
         "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet"],
         "adminAccess": false
