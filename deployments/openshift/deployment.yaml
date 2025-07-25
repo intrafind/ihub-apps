@@ -1,0 +1,187 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-hub-apps
+  namespace: ai-hub
+  labels:
+    app: ai-hub-apps
+    app.kubernetes.io/component: ai-hub-apps
+    app.kubernetes.io/instance: ai-hub-apps
+    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/part-of: ai-hub-platform
+    app.openshift.io/runtime: nodejs
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: ai-hub-apps
+  template:
+    metadata:
+      labels:
+        app: ai-hub-apps
+        deploymentconfig: ai-hub-apps
+    spec:
+      serviceAccountName: ai-hub-apps
+      securityContext:
+        runAsNonRoot: true
+        # OpenShift automatically assigns a random UID
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: ai-hub-apps
+        image: ghcr.io/intrafind/ai-hub-apps:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: CONFIG_DIR
+          value: "/app/config"
+        - name: DATA_DIR
+          value: "/app/data"
+        - name: LOG_DIR
+          value: "/app/logs"
+        # API Keys from secrets
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-hub-secrets
+              key: openai-api-key
+              optional: true
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-hub-secrets
+              key: anthropic-api-key
+              optional: true
+        - name: GOOGLE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-hub-secrets
+              key: google-api-key
+              optional: true
+        - name: MISTRAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-hub-secrets
+              key: mistral-api-key
+              optional: true
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: ai-hub-secrets
+              key: jwt-secret
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        - name: data-volume
+          mountPath: /app/data
+        - name: logs-volume
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+      volumes:
+      - name: config-volume
+        configMap:
+          name: ai-hub-config
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: ai-hub-data-pvc
+      - name: logs-volume
+        emptyDir:
+          sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-hub-apps-service
+  namespace: ai-hub
+  labels:
+    app: ai-hub-apps
+  annotations:
+    service.alpha.openshift.io/dependencies: '[{"name": "ai-hub-secrets", "kind": "Secret"}]'
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: ai-hub-apps
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ai-hub-apps-route
+  namespace: ai-hub
+  labels:
+    app: ai-hub-apps
+  annotations:
+    haproxy.router.openshift.io/timeout: 300s
+spec:
+  host: ai-hub.apps.your-openshift-cluster.com  # Replace with your OpenShift apps domain
+  to:
+    kind: Service
+    name: ai-hub-apps-service
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-hub-apps
+  namespace: ai-hub
+  labels:
+    app: ai-hub-apps
+  annotations:
+    serviceaccounts.openshift.io/oauth-redirectreference.primary: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"ai-hub-apps-route"}}'

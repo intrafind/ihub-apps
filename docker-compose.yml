@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  ai-hub-apps:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-hub-apps:latest
+    container_name: ai-hub-apps
+    ports:
+      - "3000:3000"
+    environment:
+      # Core application settings
+      - NODE_ENV=production
+      - PORT=3000
+      - LOG_LEVEL=info
+      
+      # API Keys for LLM providers (set these via .env file)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
+      
+      # Database and external services (if needed)
+      - DATABASE_URL=${DATABASE_URL:-}
+      - REDIS_URL=${REDIS_URL:-}
+      
+      # Authentication (if using external providers)
+      - JWT_SECRET=${JWT_SECRET:-}
+      - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID:-}
+      - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET:-}
+      
+      # Custom configuration paths
+      - CONFIG_DIR=/app/config
+      - DATA_DIR=/app/data
+      - LOG_DIR=/app/logs
+      
+    volumes:
+      # Configuration files (external override)
+      - ./docker/config:/app/config:ro
+      
+      # Persistent data storage
+      - ai-hub-data:/app/data
+      
+      # Log files (for external log aggregation)
+      - ai-hub-logs:/app/logs
+      
+      # Optional: Custom content overrides
+      - ./docker/contents:/app/contents-override:ro
+      
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      
+    # Security settings
+    user: "1000:1000"  # Run as non-root user
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+      - /app/logs:rw,size=500m
+      - /app/data:rw,size=1g
+
+# Named volumes for persistent data
+volumes:
+  ai-hub-data:
+    driver: local
+  ai-hub-logs:
+    driver: local
+
+# Example configuration for different environments
+---
+# Development override (use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up)
+version: '3.8'
+services:
+  ai-hub-apps:
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+    volumes:
+      # Mount source code for development
+      - .:/app/src:ro
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Debug port
+    command: ["node", "--inspect=0.0.0.0:9229", "/app/server/server.js"]

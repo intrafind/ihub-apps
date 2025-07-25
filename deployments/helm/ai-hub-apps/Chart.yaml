@@ -1,0 +1,25 @@
+apiVersion: v2
+name: ai-hub-apps
+description: A Helm chart for AI Hub Applications Platform
+type: application
+version: 1.0.5
+appVersion: "1.0.5"
+
+keywords:
+  - ai
+  - llm
+  - chatbot
+  - applications
+  - kubernetes
+
+home: https://github.com/intrafind/ai-hub-apps
+sources:
+  - https://github.com/intrafind/ai-hub-apps
+
+maintainers:
+  - name: AI Hub Team
+    email: support@intrafind.com
+
+annotations:
+  category: AI/ML
+  licenses: Apache-2.0

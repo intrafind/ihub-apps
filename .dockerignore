@@ -1,0 +1,62 @@
+# Git and CI/CD
+.git
+.github
+.gitignore
+
+# Dependencies
+node_modules
+client/node_modules
+server/node_modules
+
+# Build outputs (will be created during build)
+dist
+dist-bin
+client/dist
+
+# Development files
+.env.local
+.env.development
+.env.test
+*.log
+logs/
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Documentation build
+docs/book
+
+# Test files
+**/*.test.js
+**/__tests__/
+coverage/
+
+# Docker files (avoid recursion)
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# Examples and demos (include in image but not needed for build context)
+# examples/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Lock files (we copy package-lock.json explicitly)
+# Keep package-lock.json for reproducible builds

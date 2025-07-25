@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-hub-config
+  namespace: ai-hub
+  labels:
+    app: ai-hub-apps
+data:
+  platform.json: |
+    {
+      "server": {
+        "port": 3000,
+        "host": "0.0.0.0",
+        "clustering": false
+      },
+      "security": {
+        "cors": {
+          "enabled": true,
+          "origin": "*"
+        },
+        "rateLimiting": {
+          "enabled": true,
+          "windowMs": 900000,
+          "max": 100
+        }
+      },
+      "auth": {
+        "mode": "local",
+        "anonymousAuth": {
+          "enabled": true,
+          "defaultGroups": ["anonymous"]
+        },
+        "jwt": {
+          "expiresIn": "24h"
+        }
+      },
+      "logging": {
+        "level": "info",
+        "format": "json"
+      }
+    }
+  
+  apps.json: |
+    {
+      "apps": []
+    }
+  
+  models.json: |
+    {
+      "models": {
+        "openai-gpt-4": {
+          "id": "openai-gpt-4",
+          "name": "GPT-4",
+          "provider": "openai",
+          "model": "gpt-4",
+          "maxTokens": 8192,
+          "contextWindow": 128000
+        },
+        "anthropic-claude-3": {
+          "id": "anthropic-claude-3",
+          "name": "Claude 3 Sonnet",
+          "provider": "anthropic",
+          "model": "claude-3-sonnet-20240229",
+          "maxTokens": 4096,
+          "contextWindow": 200000
+        }
+      }
+    }
+  
+  groups.json: |
+    {
+      "groups": {
+        "admin": {
+          "id": "admin",
+          "name": "Admin",
+          "description": "Full administrative access",
+          "permissions": {
+            "apps": ["*"],
+            "models": ["*"],
+            "adminAccess": true
+          }
+        },
+        "users": {
+          "id": "users",
+          "name": "Users",
+          "description": "Standard users",
+          "permissions": {
+            "apps": ["*"],
+            "models": ["*"],
+            "adminAccess": false
+          }
+        },
+        "anonymous": {
+          "id": "anonymous",
+          "name": "Anonymous",
+          "description": "Anonymous access",
+          "permissions": {
+            "apps": ["demo"],
+            "models": ["openai-gpt-4"],
+            "adminAccess": false
+          }
+        }
+      }
+    }
+  
+  ui.json: |
+    {
+      "branding": {
+        "name": "AI Hub Apps",
+        "logo": "/logo.png",
+        "favicon": "/favicon.ico"
+      },
+      "theme": {
+        "primaryColor": "#3B82F6",
+        "darkMode": true
+      },
+      "features": {
+        "chat": true,
+        "apps": true,
+        "admin": true
+      }
+    }

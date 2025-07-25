@@ -1,0 +1,212 @@
+# Default values for ai-hub-apps
+# This is a YAML-formatted file.
+
+# Global settings
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+# Image configuration
+image:
+  registry: ghcr.io
+  repository: intrafind/ai-hub-apps
+  tag: "latest"
+  pullPolicy: Always
+
+# Deployment configuration
+replicaCount: 3
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod annotations and labels
+podAnnotations: {}
+podLabels: {}
+
+# Security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+    - ALL
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+  annotations: {}
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: ai-hub.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: ai-hub-tls
+      hosts:
+        - ai-hub.local
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Node selection
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Persistent storage
+persistence:
+  enabled: true
+  storageClass: ""  # Use default storage class
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+# Application configuration
+config:
+  nodeEnv: production
+  port: 3000
+  logLevel: info
+  
+  # Directories
+  configDir: /app/config
+  dataDir: /app/data
+  logDir: /app/logs
+
+# Secrets for API keys
+secrets:
+  # Set these values or create the secret externally
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  googleApiKey: ""
+  mistralApiKey: ""
+  jwtSecret: ""
+
+# External secrets (if using external-secrets operator)
+externalSecrets:
+  enabled: false
+  secretStore:
+    name: ""
+    kind: SecretStore  # or ClusterSecretStore
+
+# Health checks
+healthcheck:
+  enabled: true
+  path: /api/health
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    successThreshold: 1
+    failureThreshold: 3
+
+# Network policies
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Monitoring and observability
+monitoring:
+  enabled: false
+  prometheus:
+    enabled: false
+    port: 9090
+    path: /metrics
+  
+# ConfigMap for application configuration
+configMap:
+  platform:
+    server:
+      port: 3000
+      host: "0.0.0.0"
+      clustering: false
+    security:
+      cors:
+        enabled: true
+        origin: "*"
+      rateLimiting:
+        enabled: true
+        windowMs: 900000
+        max: 100
+    auth:
+      mode: "local"
+      anonymousAuth:
+        enabled: true
+        defaultGroups: ["anonymous"]
+      jwt:
+        expiresIn: "24h"
+    logging:
+      level: "info"
+      format: "json"
+
+  # Custom configuration override
+  customConfig: {}
+
+# Environment-specific overrides
+env: {}
+
+# Extra environment variables from ConfigMaps or Secrets
+extraEnvFrom: []
+
+# Extra volumes
+extraVolumes: []
+
+# Extra volume mounts
+extraVolumeMounts: []
+
+# Init containers
+initContainers: []
+
+# Sidecar containers
+sidecars: []
+
+# Pod security policy (deprecated but may be needed for older clusters)
+podSecurityPolicy:
+  enabled: false
