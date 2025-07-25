@@ -81,16 +81,22 @@ By default, anonymous users get access to everything through the `anonymous` gro
 }
 ```
 
-**To restrict anonymous access**, modify `contents/config/groupPermissions.json`:
+**To restrict anonymous access**, modify `contents/config/groups.json`:
 
 ```json
 {
   "groups": {
     "anonymous": {
-      "apps": ["chat", "translator"],
-      "prompts": ["general"],
-      "models": ["gemini-flash"],
-      "adminAccess": false
+      "id": "anonymous",
+      "name": "Anonymous",
+      "description": "Access for unauthenticated users",
+      "permissions": {
+        "apps": ["chat", "translator"],
+        "prompts": ["general"],
+        "models": ["gemini-flash"],
+        "adminAccess": false
+      },
+      "mappings": ["anonymous"]
     }
   }
 }
@@ -224,7 +230,7 @@ Group configuration is now stored in `contents/config/groups.json`:
 
 #### Legacy Support
 
-The system maintains backwards compatibility with existing `groupPermissions.json` and `groupMap.json` files. Use the migration script to convert to the new format:
+The system maintains backwards compatibility with existing `groupPermissions.json` and legacy `groupMap.json` files. Use the migration script to convert to the new format:
 
 ```bash
 node scripts/migrate-group-config.js
@@ -732,16 +738,22 @@ npm run dev
 
 **Goal**: Allow anonymous access but limit which apps/models are available
 
-1. Edit `contents/config/groupPermissions.json`:
+1. Edit `contents/config/groups.json`:
 
 ```json
 {
   "groups": {
     "anonymous": {
-      "apps": ["chat", "translator", "summarizer"],
-      "prompts": ["general"],
-      "models": ["gemini-flash", "gpt-3.5-turbo"],
-      "adminAccess": false
+      "id": "anonymous",
+      "name": "Anonymous",
+      "description": "Access for unauthenticated users",
+      "permissions": {
+        "apps": ["chat", "translator", "summarizer"],
+        "prompts": ["general"],
+        "models": ["gemini-flash", "gpt-3.5-turbo"],
+        "adminAccess": false
+      },
+      "mappings": ["anonymous"]
     }
   }
 }
@@ -795,7 +807,7 @@ export JWT_SECRET=your-secure-secret-key
 }
 ```
 
-3. Map corporate groups in `contents/config/groupMap.json`
+3. Map corporate groups in `contents/config/groups.json` using the "mappings" arrays
 
 **Result**: Users authenticate via corporate SSO, groups mapped to permissions
 

@@ -27,7 +27,17 @@ function createDefaultUsage() {
       prompt: { total: 0, perUser: {}, perApp: {}, perModel: {} },
       completion: { total: 0, perUser: {}, perApp: {}, perModel: {} }
     },
-    feedback: { good: 0, bad: 0, perUser: {}, perApp: {}, perModel: {} },
+    feedback: {
+      total: 0,
+      ratings: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      averageRating: 0,
+      perUser: {},
+      perApp: {},
+      perModel: {},
+      // Legacy format for backward compatibility
+      good: 0,
+      bad: 0
+    },
     magicPrompt: {
       total: 0,
       tokensIn: { total: 0, perUser: {}, perApp: {}, perModel: {} },
@@ -90,8 +100,44 @@ function inc(map, key, amount) {
 
 function incFeedback(map, key, rating) {
   if (!key) return;
-  map[key] = map[key] || { good: 0, bad: 0 };
-  map[key][rating] = (map[key][rating] || 0) + 1;
+  map[key] = map[key] || {
+    total: 0,
+    ratings: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+    averageRating: 0,
+    // Legacy format for backward compatibility
+    good: 0,
+    bad: 0
+  };
+
+  // Handle numeric ratings (1-5)
+  if (typeof rating === 'number') {
+    const roundedRating = Math.round(rating * 2) / 2; // Round to nearest 0.5
+    const ratingKey = Math.ceil(roundedRating); // Round up for indexing (1.5 -> 2)
+
+    if (ratingKey >= 1 && ratingKey <= 5) {
+      map[key].ratings[ratingKey] += 1;
+      map[key].total += 1;
+
+      // Calculate new average rating
+      const totalRatings = Object.values(map[key].ratings).reduce((sum, count) => sum + count, 0);
+      const weightedSum = Object.entries(map[key].ratings).reduce(
+        (sum, [rating, count]) => sum + parseInt(rating) * count,
+        0
+      );
+      map[key].averageRating = totalRatings > 0 ? weightedSum / totalRatings : 0;
+
+      // Update legacy format (ratings 4-5 = good, ratings 1-3 = bad)
+      if (ratingKey >= 4) {
+        map[key].good += 1;
+      } else {
+        map[key].bad += 1;
+      }
+    }
+  } else {
+    // Handle legacy string format for backward compatibility
+    const legacyRating = rating === 'positive' ? 'good' : 'bad';
+    map[key][legacyRating] = (map[key][legacyRating] || 0) + 1;
+  }
 }
 
 export function estimateTokens(text) {
@@ -144,11 +190,43 @@ export async function recordChatResponse({ userId, appId, modelId, tokens = 0 })
 export async function recordFeedback({ userId, appId, modelId, rating }) {
   if (!trackingEnabled) return;
   const data = await loadUsage();
-  const r = rating === 'positive' ? 'good' : 'bad';
-  data.feedback[r] += 1;
-  incFeedback(data.feedback.perUser, userId, r);
-  incFeedback(data.feedback.perApp, appId, r);
-  incFeedback(data.feedback.perModel, modelId, r);
+
+  // Handle numeric ratings (1-5)
+  if (typeof rating === 'number') {
+    const roundedRating = Math.round(rating * 2) / 2; // Round to nearest 0.5
+    const ratingKey = Math.ceil(roundedRating); // Round up for indexing
+
+    if (ratingKey >= 1 && ratingKey <= 5) {
+      data.feedback.ratings[ratingKey] += 1;
+      data.feedback.total += 1;
+
+      // Calculate new average rating
+      const totalRatings = Object.values(data.feedback.ratings).reduce(
+        (sum, count) => sum + count,
+        0
+      );
+      const weightedSum = Object.entries(data.feedback.ratings).reduce(
+        (sum, [rating, count]) => sum + parseInt(rating) * count,
+        0
+      );
+      data.feedback.averageRating = totalRatings > 0 ? weightedSum / totalRatings : 0;
+
+      // Update legacy format (ratings 4-5 = good, ratings 1-3 = bad)
+      if (ratingKey >= 4) {
+        data.feedback.good += 1;
+      } else {
+        data.feedback.bad += 1;
+      }
+    }
+  } else {
+    // Handle legacy string format for backward compatibility
+    const r = rating === 'positive' ? 'good' : 'bad';
+    data.feedback[r] += 1;
+  }
+
+  incFeedback(data.feedback.perUser, userId, rating);
+  incFeedback(data.feedback.perApp, appId, rating);
+  incFeedback(data.feedback.perModel, modelId, rating);
   dirty = true;
   scheduleSave();
 }

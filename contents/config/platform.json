@@ -2,6 +2,29 @@
   "features": {
     "usageTracking": true
   },
+  "pdfExport": {
+    "defaultTemplate": "default",
+    "watermark": {
+      "enabled": true,
+      "text": "AI Hub Apps",
+      "position": "bottom-right",
+      "opacity": 0.5
+    },
+    "templates": {
+      "default": {
+        "name": "Default",
+        "description": "Standard chat export with colors and branding"
+      },
+      "professional": {
+        "name": "Professional",
+        "description": "Clean professional layout suitable for business"
+      },
+      "minimal": {
+        "name": "Minimal",
+        "description": "Simple minimal design with clean lines"
+      }
+    }
+  },
   "defaultLanguage": "en",
   "requestBodyLimitMB": 50,
   "telemetry": {
@@ -143,6 +166,54 @@
       }
     ]
   },
+  "ldapAuth": {
+    "enabled": false,
+    "providers": [
+      {
+        "name": "corporate-ldap",
+        "displayName": "Corporate LDAP",
+        "url": "ldap://ldap.example.com:389",
+        "adminDn": "cn=admin,dc=example,dc=org",
+        "adminPassword": "${LDAP_ADMIN_PASSWORD}",
+        "userSearchBase": "ou=people,dc=example,dc=org",
+        "usernameAttribute": "uid",
+        "userDn": "uid={{username}},ou=people,dc=example,dc=org",
+        "groupSearchBase": "ou=groups,dc=example,dc=org",
+        "groupClass": "groupOfNames",
+        "defaultGroups": ["ldap-users"],
+        "sessionTimeoutMinutes": 480,
+        "tlsOptions": {
+          "rejectUnauthorized": false
+        }
+      },
+      {
+        "name": "active-directory",
+        "displayName": "Active Directory",
+        "url": "ldap://ad.example.com:389",
+        "adminDn": "${AD_BIND_USER}@example.com",
+        "adminPassword": "${AD_BIND_PASSWORD}",
+        "userSearchBase": "dc=example,dc=com",
+        "usernameAttribute": "sAMAccountName",
+        "userDn": "{{username}}@example.com",
+        "groupSearchBase": "dc=example,dc=com",
+        "groupClass": "group",
+        "defaultGroups": ["ad-users"],
+        "sessionTimeoutMinutes": 480
+      }
+    ]
+  },
+  "ntlmAuth": {
+    "enabled": false,
+    "domain": "EXAMPLE",
+    "domainController": "dc.example.com",
+    "type": "ntlm",
+    "debug": false,
+    "getUserInfo": true,
+    "getGroups": true,
+    "defaultGroups": ["ntlm-users"],
+    "sessionTimeoutMinutes": 480,
+    "generateJwtToken": true
+  },
   "iFinder": {
     "enabled": true,
     "baseUrl": "${IFINDER_API_URL}",
@@ -150,7 +221,7 @@
     "algorithm": "RS256",
     "issuer": "ai-hub-apps",
     "audience": "ifinder-api",
-    "defaultScope": "fa_index_read",
+    "defaultScope": "",
     "tokenExpirationSeconds": 3600,
     "timeout": 30000,
     "downloadDir": "contents/data/downloads/ifinder-downloads",

@@ -142,25 +142,15 @@ function normalizeOidcUser(userInfo, provider) {
     }
   }
 
-  // Apply group mapping
-  const groupMap = configCache.getGroupMap();
-  const mappedGroups = new Set();
-
-  for (const group of groups) {
-    const mapped = groupMap[group] || group;
-    if (Array.isArray(mapped)) {
-      mapped.forEach(g => mappedGroups.add(g));
-    } else {
-      mappedGroups.add(mapped);
-    }
-  }
+  // Apply group mapping using the new groups.json format
+  const mappedGroups = mapExternalGroups(groups);
 
   // Create user object
   let user = {
     id: userId,
     name: name,
     email: email,
-    groups: Array.from(mappedGroups),
+    groups: mappedGroups,
     provider: provider.name,
     authMethod: 'oidc',
     authenticated: true,

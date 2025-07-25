@@ -5,6 +5,8 @@ import { proxyAuth } from './middleware/proxyAuth.js';
 import localAuthMiddleware from './middleware/localAuth.js';
 import { initializePassport, configureOidcProviders } from './middleware/oidcAuth.js';
 import jwtAuthMiddleware from './middleware/jwtAuth.js';
+import ldapAuthMiddleware from './middleware/ldapAuth.js';
+import ntlmAuthMiddleware, { createNtlmMiddleware } from './middleware/ntlmAuth.js';
 import { enhanceUserWithPermissions } from './utils/authorization.js';
 import { loadJson, loadText } from './configLoader.js';
 import { getApiKeyForModel } from './utils.js';
@@ -82,10 +84,19 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Configure OIDC providers based on platform configuration
   configureOidcProviders();
 
+  // NTLM middleware setup (must come before other auth middlewares)
+  const ntlmConfig = platformConfig.ntlmAuth || {};
+  if (ntlmConfig.enabled) {
+    console.log('[Server] Configuring NTLM authentication middleware');
+    app.use(createNtlmMiddleware(ntlmConfig));
+    app.use(ntlmAuthMiddleware);
+  }
+
   // Authentication middleware (order matters: proxy auth first, then unified JWT validation)
   app.use(proxyAuth);
   app.use(jwtAuthMiddleware);
   app.use(localAuthMiddleware); // Now mainly a placeholder for local auth specific logic
+  app.use(ldapAuthMiddleware); // LDAP auth placeholder for any LDAP-specific logic
 
   // Enhance user with permissions after authentication
   app.use((req, res, next) => {
@@ -124,17 +135,93 @@ export async function verifyApiKey(model, res, clientRes = null, language) {
   return result.success ? result.apiKey : false;
 }
 
+/**
+ * Resolve global prompt variables that should be automatically available in prompts
+ * @param {object} user - User object from request
+ * @param {string} modelName - Name of the model being used
+ * @param {string} language - Current language setting
+ * @param {string} style - Current style/tone setting
+ * @returns {object} Object containing global prompt variables
+ */
+function resolveGlobalPromptVariables(
+  user = null,
+  modelName = null,
+  language = null,
+  style = null
+) {
+  const now = new Date();
+  const platformConfig = configCache.getPlatform() || {};
+
+  // Get timezone from user or default to UTC
+  const timezone = user?.timezone || user?.settings?.timezone || 'UTC';
+
+  // Create timezone-aware date formatter
+  const tzOptions = { timeZone: timezone };
+  const defaultLang = platformConfig.defaultLanguage || 'en';
+  const dateFormatter = new Intl.DateTimeFormat(language || defaultLang, tzOptions);
+  const timeFormatter = new Intl.DateTimeFormat(language || defaultLang, {
+    ...tzOptions,
+    timeStyle: 'medium'
+  });
+
+  const globalPromptVars = {
+    // Date and time variables
+    year: now.getFullYear().toString(),
+    month: (now.getMonth() + 1).toString().padStart(2, '0'),
+    date: dateFormatter.format(now),
+    time: timeFormatter.format(now),
+    day_of_week: now.toLocaleDateString(language || defaultLang, { ...tzOptions, weekday: 'long' }),
+
+    // Locale and timezone
+    timezone: timezone,
+    locale: language || platformConfig.defaultLanguage || 'en',
+
+    // User information (only if user is authenticated)
+    user_name: user?.name || user?.displayName || '',
+    user_email: user?.email || '',
+
+    // Model information
+    model_name: modelName || '',
+
+    // Style/tone setting
+    tone: style || '',
+
+    // Location (from user profile if available)
+    location: user?.location || user?.settings?.location || '',
+
+    // Platform context (configurable in platform.json)
+    platform_context: platformConfig.globalPromptVariables?.context || ''
+  };
+
+  // Filter out empty values to avoid replacing with empty strings unintentionally
+  const filteredVars = {};
+  for (const [key, value] of Object.entries(globalPromptVars)) {
+    if (value !== null && value !== undefined && value !== '') {
+      filteredVars[key] = value;
+    }
+  }
+
+  return filteredVars;
+}
+
 export async function processMessageTemplates(
   messages,
   app,
   style = null,
   outputFormat = null,
   language,
-  outputSchema = null
+  outputSchema = null,
+  user = null,
+  modelName = null
 ) {
   const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
   const lang = language || defaultLang;
   console.log(`Using language '${lang}' for message templates`);
+
+  // Resolve global prompt variables once for use throughout the function
+  const globalPromptVariables = resolveGlobalPromptVariables(user, modelName, lang, style);
+  console.log(`Resolved ${Object.keys(globalPromptVariables).length} global prompt variables`);
+
   let llmMessages = [...messages].map(msg => {
     if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
       let processedContent =
@@ -142,11 +229,15 @@ export async function processMessageTemplates(
           ? getLocalizedContent(msg.promptTemplate, lang)
           : msg.promptTemplate || msg.content;
       if (typeof processedContent !== 'string') processedContent = String(processedContent || '');
-      const variables = { ...msg.variables, content: msg.content };
+      // Combine user-defined variables with global prompt variables (user variables take precedence)
+      const variables = { ...globalPromptVariables, ...msg.variables, content: msg.content };
       if (variables && Object.keys(variables).length > 0) {
         for (const [key, value] of Object.entries(variables)) {
           const strValue = typeof value === 'string' ? value : String(value || '');
-          processedContent = processedContent.replace(`{{${key}}}`, strValue);
+          processedContent = processedContent.replace(
+            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
+            strValue
+          );
         }
       }
       const processedMsg = { role: 'user', content: processedContent };
@@ -154,7 +245,22 @@ export async function processMessageTemplates(
       if (msg.fileData) processedMsg.fileData = msg.fileData;
       return processedMsg;
     }
-    const processedMsg = { role: msg.role, content: msg.content };
+    // Apply global prompt variables to normal prompts as well
+    let processedContent = msg.content;
+    if (
+      typeof processedContent === 'string' &&
+      globalPromptVariables &&
+      Object.keys(globalPromptVariables).length > 0
+    ) {
+      for (const [key, value] of Object.entries(globalPromptVariables)) {
+        const strValue = typeof value === 'string' ? value : String(value || '');
+        processedContent = processedContent.replace(
+          new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
+          strValue
+        );
+      }
+    }
+    const processedMsg = { role: msg.role, content: processedContent };
     if (msg.imageData) processedMsg.imageData = msg.imageData;
     if (msg.fileData) processedMsg.fileData = msg.fileData;
     return processedMsg;
@@ -168,11 +274,13 @@ export async function processMessageTemplates(
     let systemPrompt =
       typeof app.system === 'object' ? getLocalizedContent(app.system, lang) : app.system || '';
     if (typeof systemPrompt !== 'string') systemPrompt = String(systemPrompt || '');
-    if (Object.keys(userVariables).length > 0) {
-      for (const [key, value] of Object.entries(userVariables)) {
+    // Combine user variables with global prompt variables for system prompt processing
+    const allVariables = { ...globalPromptVariables, ...userVariables };
+    if (Object.keys(allVariables).length > 0) {
+      for (const [key, value] of Object.entries(allVariables)) {
         if (typeof value === 'function' || (typeof value === 'object' && value !== null)) continue;
         const strValue = String(value || '');
-        systemPrompt = systemPrompt.replace(`{{${key}}}`, strValue);
+        systemPrompt = systemPrompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), strValue);
       }
     }
     if (app.sourcePath && systemPrompt.includes('{{source}}')) {

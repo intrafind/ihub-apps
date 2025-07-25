@@ -214,7 +214,9 @@
   "errors": {
     "fetchFailed": "Daten konnten nicht abgerufen werden",
     "sendFailed": "Nachricht konnte nicht gesendet werden",
-    "configSaveFailed": "Konfiguration konnte nicht gespeichert werden"
+    "configSaveFailed": "Konfiguration konnte nicht gespeichert werden",
+    "imageUploadDisabled": "Bild-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell oder laden Sie stattdessen eine Textdatei hoch.",
+    "fileUploadDisabled": "Datei-Upload ist für diese Anwendung deaktiviert."
   },
   "serverErrors": {
     "appNotFound": "Anwendung nicht gefunden",
@@ -415,5 +417,21 @@
       },
       "confirmDelete": "Möchten Sie diese Seite wirklich löschen?"
     }
+  },
+  "components": {
+    "uploader": {
+      "imageSelected": "Bild ausgewählt",
+      "fileSelected": "Datei ausgewählt und verarbeitet",
+      "processing": "Datei wird verarbeitet...",
+      "uploadFile": "Datei hochladen",
+      "supportedFormats": "Unterstützt: {{formats}} (max {{maxSize}}MB)"
+    }
+  },
+  "feedback": {
+    "ratingHeading": "Bewerte diese Antwort",
+    "commentPlaceholder": "Erzähle uns mehr über deine Bewertung (optional)",
+    "rated": "Bewertet",
+    "sendFeedback": "Feedback senden",
+    "thankYou": "Danke für dein Feedback!"
   }
 }

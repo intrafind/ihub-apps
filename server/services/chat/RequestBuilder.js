@@ -32,7 +32,8 @@ class RequestBuilder {
     bypassAppPrompts = false,
     processMessageTemplates,
     res,
-    clientRes
+    clientRes,
+    user
   }) {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps();
@@ -72,13 +73,18 @@ class RequestBuilder {
         return { success: false, error };
       }
 
+      // Get model name for global prompt variables
+      const modelName = model?.name || model?.id || resolvedModelId;
+
       let llmMessages = await processMessageTemplates(
         messages,
         bypassAppPrompts ? null : app,
         style,
         outputFormat,
         language,
-        app.outputSchema
+        app.outputSchema,
+        user,
+        modelName
       );
       llmMessages = preprocessMessagesWithFileData(llmMessages);
 
@@ -91,7 +97,7 @@ class RequestBuilder {
         return { success: false, error: apiKeyResult.error };
       }
 
-      const tools = await getToolsForApp(app);
+      const tools = await getToolsForApp(app, language);
       const request = createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
         temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
         maxTokens: finalTokens,
