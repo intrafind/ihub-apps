@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Production builds
+dist/
+build/
+coverage/
+
+# Logs
+logs/
+*.log
+
+# Documentation
+docs/
+
+# Examples
+examples/
+
+# GitHub workflows and actions
+.github/
+
+# Other
+*.min.js

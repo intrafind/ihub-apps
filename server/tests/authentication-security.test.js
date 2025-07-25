@@ -175,7 +175,7 @@ function createTestToken(payload) {
 }
 
 // Helper function to create test app
-function createTestApp(platformConfig = mockPlatformConfigAnonymousDisabled) {
+async function createTestApp(platformConfig = mockPlatformConfigAnonymousDisabled) {
   const app = express();
 
   // Set platform config globally for test
@@ -193,7 +193,7 @@ function createTestApp(platformConfig = mockPlatformConfigAnonymousDisabled) {
     getLocalizedError,
     DEFAULT_TIMEOUT: 30000
   });
-  registerAdminRoutes(app);
+  await registerAdminRoutes(app);
 
   return app;
 }
@@ -202,8 +202,8 @@ describe('Authentication & Authorization Security Tests', () => {
   describe('Anonymous Access Disabled - Complete Lockdown', () => {
     let app;
 
-    beforeEach(() => {
-      app = createTestApp(mockPlatformConfigAnonymousDisabled);
+    beforeEach(async () => {
+      app = await createTestApp(mockPlatformConfigAnonymousDisabled);
     });
 
     test('should block unauthenticated access to /api/apps', async () => {
@@ -275,8 +275,8 @@ describe('Authentication & Authorization Security Tests', () => {
   describe('Anonymous Access Enabled - Limited Access', () => {
     let app;
 
-    beforeEach(() => {
-      app = createTestApp(mockPlatformConfigAnonymousEnabled);
+    beforeEach(async () => {
+      app = await createTestApp(mockPlatformConfigAnonymousEnabled);
     });
 
     test('should allow anonymous access to apps but filter by permissions', async () => {
@@ -327,8 +327,8 @@ describe('Authentication & Authorization Security Tests', () => {
   describe('Authenticated User Access - Group-Based Permissions', () => {
     let app;
 
-    beforeEach(() => {
-      app = createTestApp(mockPlatformConfigAnonymousDisabled);
+    beforeEach(async () => {
+      app = await createTestApp(mockPlatformConfigAnonymousDisabled);
     });
 
     test('should allow user group access to user and public apps', async () => {
@@ -420,8 +420,8 @@ describe('Authentication & Authorization Security Tests', () => {
   describe('Admin Endpoint Protection', () => {
     let app;
 
-    beforeEach(() => {
-      app = createTestApp(mockPlatformConfigAnonymousDisabled);
+    beforeEach(async () => {
+      app = await createTestApp(mockPlatformConfigAnonymousDisabled);
     });
 
     test('should block regular user from accessing admin endpoints', async () => {
@@ -465,8 +465,8 @@ describe('Authentication & Authorization Security Tests', () => {
   describe('JWT Token Validation', () => {
     let app;
 
-    beforeEach(() => {
-      app = createTestApp(mockPlatformConfigAnonymousDisabled);
+    beforeEach(async () => {
+      app = await createTestApp(mockPlatformConfigAnonymousDisabled);
     });
 
     test('should reject invalid JWT tokens', async () => {
@@ -504,8 +504,8 @@ describe('Authentication & Authorization Security Tests', () => {
   describe('Edge Cases and Security Validation', () => {
     let app;
 
-    beforeEach(() => {
-      app = createTestApp(mockPlatformConfigAnonymousDisabled);
+    beforeEach(async () => {
+      app = await createTestApp(mockPlatformConfigAnonymousDisabled);
     });
 
     test('should handle malformed authorization headers', async () => {
@@ -569,8 +569,8 @@ describe('Authentication & Authorization Security Tests', () => {
   describe('Authentication Bypass Prevention', () => {
     let app;
 
-    beforeEach(() => {
-      app = createTestApp(mockPlatformConfigAnonymousDisabled);
+    beforeEach(async () => {
+      app = await createTestApp(mockPlatformConfigAnonymousDisabled);
     });
 
     test('should not allow bypassing auth with header manipulation', async () => {

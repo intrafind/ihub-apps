@@ -20,9 +20,12 @@
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
   "preferredTemperature": 0.7,
-  "imageUpload": {
+  "upload": {
     "enabled": true,
-    "resizeImages": true
+    "imageUpload": {
+      "enabled": true,
+      "resizeImages": true
+    }
   },
   "enabled": true
 }
