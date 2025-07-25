@@ -16,6 +16,7 @@ The codebase has three main categories of data persistence:
 ### 1. Configuration Data (`configCache.js` + `/contents/config/`)
 
 **Current Implementation:**
+
 - Platform, apps, models, groups, UI settings stored in JSON files
 - In-memory cache with 5-minute TTL in production, 1-minute in development
 - Environment variable resolution and group inheritance at load time
@@ -23,6 +24,7 @@ The codebase has three main categories of data persistence:
 - ETag generation for HTTP caching using MD5 hash
 
 **Key Files:**
+
 - `server/configCache.js` - Main caching system
 - `contents/config/*.json` - Configuration files
 - `server/utils/authorization.js` - Group inheritance resolution
@@ -30,11 +32,13 @@ The codebase has three main categories of data persistence:
 ### 2. Runtime Analytics Data (High-frequency writes with batching)
 
 **Current Implementation:**
+
 - **Usage tracking** (`usageTracker.js` → `contents/data/usage.json`): Token usage, message counts per user/app/model with 10-second write batching
 - **Feedback storage** (`feedbackStorage.js` → `contents/data/feedback.jsonl`): User feedback in append-only JSONL format with 10-second flush intervals
 - **Short links** (`shortLinkManager.js` → `contents/data/shortlinks.json`): URL shortener with usage tracking and 10-second persistence intervals
 
 **Key Files:**
+
 - `server/usageTracker.js` - Usage analytics
 - `server/feedbackStorage.js` - User feedback
 - `server/shortLinkManager.js` - URL shortening
@@ -42,11 +46,13 @@ The codebase has three main categories of data persistence:
 ### 3. Ephemeral State (In-memory only, process-bound)
 
 **Current Implementation:**
+
 - **SSE connections** (`sse.js`): Real-time chat connections in `Map` data structure (`clients`, `activeRequests`)
 - **JWT authentication**: Stateless tokens, no server-side session storage
 - **Action tracking**: In-memory event handling for real-time features
 
 **Key Files:**
+
 - `server/sse.js` - Server-sent events
 - `server/actionTracker.js` - Action tracking
 
@@ -191,17 +197,20 @@ class SessionProvider {
 ### Phase 2: Alternative Implementations (Medium Risk)
 
 #### For High-Frequency Data (Usage, Feedback, Short Links):
+
 - **RedisStateStorageProvider**: Use Redis Hash, Sets, and Lists
   - Usage tracking: Redis Hashes with `HINCRBY` for atomic increments
-  - Feedback: Redis Lists with `LPUSH` for append-only logging  
+  - Feedback: Redis Lists with `LPUSH` for append-only logging
   - Short links: Redis Hashes with TTL support
 
 #### For Configuration Data:
+
 - **RedisConfigurationProvider**: Use Redis with pub/sub for change notifications
 - **S3ConfigurationProvider**: Store JSON in S3 with CloudFront for global caching
 - **DatabaseConfigurationProvider**: PostgreSQL/MongoDB with read replicas
 
 #### For Session State:
+
 - **RedisSessionProvider**: Use Redis pub/sub for cross-instance SSE broadcasting
 
 ### Phase 3: Full Pluggability (Higher Risk)
@@ -224,7 +233,7 @@ Add provider configuration to `contents/config/platform.json`:
       "config": { "cacheTTL": 300000 }
     },
     "state": {
-      "provider": "filesystem", 
+      "provider": "filesystem",
       "config": { "batchInterval": 10000 }
     },
     "sessions": {
@@ -246,18 +255,21 @@ Add provider configuration to `contents/config/platform.json`:
 ### Step 3: Implement Alternative Providers
 
 **Example Redis Implementation Priority:**
+
 1. `RedisStateStorageProvider` (highest impact for scaling)
-2. `RedisSessionProvider` (enables sticky session elimination) 
+2. `RedisSessionProvider` (enables sticky session elimination)
 3. `RedisConfigurationProvider` (lowest priority, filesystem works fine for config)
 
 ### Step 4: Deployment Strategy
 
 #### For Horizontal Scaling:
+
 - **Configuration**: Can stay filesystem with shared storage (NFS/EFS) or move to S3
 - **State Data**: Move to Redis for cross-instance sharing and atomic operations
 - **Sessions**: Use Redis pub/sub to eliminate sticky sessions
 
 #### Performance Considerations:
+
 - **Current filesystem**: ~0ms access time (in-memory cache)
 - **Redis**: ~1-3ms access time but enables horizontal scaling
 - **Maintain batching**: Critical for performance with network-based providers
@@ -289,19 +301,22 @@ Add provider configuration to `contents/config/platform.json`:
 ## Implementation Files to Modify
 
 ### Core Infrastructure
+
 - `server/configCache.js` - Abstract to use ConfigurationProvider
-- `server/usageTracker.js` - Abstract to use StateStorageProvider  
+- `server/usageTracker.js` - Abstract to use StateStorageProvider
 - `server/feedbackStorage.js` - Abstract to use StateStorageProvider
 - `server/shortLinkManager.js` - Abstract to use StateStorageProvider
 - `server/sse.js` - Abstract to use SessionProvider
 
 ### New Provider Implementations
+
 - `server/providers/` - New directory for provider implementations
 - `server/providers/filesystem/` - Filesystem-based providers
 - `server/providers/redis/` - Redis-based providers
 - `server/providers/database/` - Database-based providers
 
 ### Configuration
+
 - `contents/config/platform.json` - Add persistence configuration section
 
 ## Benefits
