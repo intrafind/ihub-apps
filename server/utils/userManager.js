@@ -3,6 +3,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
+import configCache from '../configCache.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,6 +15,23 @@ const __dirname = path.dirname(__filename);
  */
 export function loadUsers(usersFilePath) {
   try {
+    // Convert file path to cache key format
+    const cacheKey = usersFilePath.startsWith('contents/')
+      ? usersFilePath
+      : path.relative(
+          path.join(__dirname, '../../'),
+          path.isAbsolute(usersFilePath)
+            ? usersFilePath
+            : path.join(__dirname, '../../', usersFilePath)
+        );
+
+    // Try to get from cache first
+    const cached = configCache.get(cacheKey);
+    if (cached && cached.data) {
+      return cached.data;
+    }
+
+    // Fallback to direct file loading if not in cache
     const fullPath = path.isAbsolute(usersFilePath)
       ? usersFilePath
       : path.join(__dirname, '../../', usersFilePath);
@@ -24,6 +42,10 @@ export function loadUsers(usersFilePath) {
     }
 
     const config = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+
+    // Cache the loaded data for future use
+    configCache.setCacheEntry(cacheKey, config);
+
     return config;
   } catch (error) {
     console.warn('Could not load users configuration:', error.message);
@@ -48,7 +70,15 @@ export async function saveUsers(usersConfig, usersFilePath) {
     }
     usersConfig.metadata.lastUpdated = new Date().toISOString();
 
+    // Write to file atomically
     await atomicWriteJSON(fullPath, usersConfig);
+
+    // Update cache with the new data
+    const cacheKey = usersFilePath.startsWith('contents/')
+      ? usersFilePath
+      : path.relative(path.join(__dirname, '../../'), fullPath);
+
+    configCache.setCacheEntry(cacheKey, usersConfig);
   } catch (error) {
     console.error('Could not save users configuration:', error.message);
     throw error;
