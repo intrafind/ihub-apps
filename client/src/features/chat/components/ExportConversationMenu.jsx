@@ -4,11 +4,15 @@ import Icon from '../../../shared/components/Icon';
 import TurndownService from 'turndown';
 import { markdownToHtml, htmlToMarkdown, isMarkdown } from '../../../utils/markdownUtils';
 import { exportChatToFormat } from '../../../api/endpoints/apps';
+import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 
 const turndownService = new TurndownService();
 
 const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, chatId }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { uiConfig } = useUIConfig();
+  const currentLanguage = i18n.language || 'en';
   const [showPdfOptions, setShowPdfOptions] = useState(false);
   const [pdfConfig, setPdfConfig] = useState({
     template: 'default',
@@ -71,7 +75,7 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
       }
 
       // Get app name for better file naming
-      const appName = 'AI Hub Apps'; // Could be passed as prop or fetched
+      const appName = uiConfig?.title ? getLocalizedContent(uiConfig.title, currentLanguage) : 'AI Hub Apps';
 
       await exportChatToFormat(appId, chatId, exportData, format, appName);
       onClose?.();
