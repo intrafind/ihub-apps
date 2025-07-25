@@ -3,27 +3,27 @@
 
 # Global settings
 global:
-  imageRegistry: ""
+  imageRegistry: ''
   imagePullSecrets: []
 
 # Image configuration
 image:
   registry: ghcr.io
   repository: intrafind/ai-hub-apps
-  tag: "latest"
+  tag: 'latest'
   pullPolicy: Always
 
 # Deployment configuration
 replicaCount: 3
 
-nameOverride: ""
-fullnameOverride: ""
+nameOverride: ''
+fullnameOverride: ''
 
 # Service account
 serviceAccount:
   create: true
   annotations: {}
-  name: ""
+  name: ''
 
 # Pod annotations and labels
 podAnnotations: {}
@@ -41,7 +41,7 @@ securityContext:
   readOnlyRootFilesystem: true
   capabilities:
     drop:
-    - ALL
+      - ALL
 
 # Service configuration
 service:
@@ -53,11 +53,11 @@ service:
 # Ingress configuration
 ingress:
   enabled: true
-  className: "nginx"
+  className: 'nginx'
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+    nginx.ingress.kubernetes.io/proxy-body-size: '50m'
+    cert-manager.io/cluster-issuer: 'letsencrypt-prod'
   hosts:
     - host: ai-hub.local
       paths:
@@ -93,7 +93,7 @@ affinity: {}
 # Persistent storage
 persistence:
   enabled: true
-  storageClass: ""  # Use default storage class
+  storageClass: '' # Use default storage class
   accessMode: ReadWriteOnce
   size: 10Gi
 
@@ -102,7 +102,7 @@ config:
   nodeEnv: production
   port: 3000
   logLevel: info
-  
+
   # Directories
   configDir: /app/config
   dataDir: /app/data
@@ -111,18 +111,18 @@ config:
 # Secrets for API keys
 secrets:
   # Set these values or create the secret externally
-  openaiApiKey: ""
-  anthropicApiKey: ""
-  googleApiKey: ""
-  mistralApiKey: ""
-  jwtSecret: ""
+  openaiApiKey: ''
+  anthropicApiKey: ''
+  googleApiKey: ''
+  mistralApiKey: ''
+  jwtSecret: ''
 
 # External secrets (if using external-secrets operator)
 externalSecrets:
   enabled: false
   secretStore:
-    name: ""
-    kind: SecretStore  # or ClusterSecretStore
+    name: ''
+    kind: SecretStore # or ClusterSecretStore
 
 # Health checks
 healthcheck:
@@ -159,32 +159,32 @@ monitoring:
     enabled: false
     port: 9090
     path: /metrics
-  
+
 # ConfigMap for application configuration
 configMap:
   platform:
     server:
       port: 3000
-      host: "0.0.0.0"
+      host: '0.0.0.0'
       clustering: false
     security:
       cors:
         enabled: true
-        origin: "*"
+        origin: '*'
       rateLimiting:
         enabled: true
         windowMs: 900000
         max: 100
     auth:
-      mode: "local"
+      mode: 'local'
       anonymousAuth:
         enabled: true
-        defaultGroups: ["anonymous"]
+        defaultGroups: ['anonymous']
       jwt:
-        expiresIn: "24h"
+        expiresIn: '24h'
     logging:
-      level: "info"
-      format: "json"
+      level: 'info'
+      format: 'json'
 
   # Custom configuration override
   customConfig: {}

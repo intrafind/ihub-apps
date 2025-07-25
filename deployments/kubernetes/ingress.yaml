@@ -8,37 +8,37 @@ metadata:
   annotations:
     # NGINX Ingress Controller annotations
     nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-    
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+    nginx.ingress.kubernetes.io/force-ssl-redirect: 'true'
+    nginx.ingress.kubernetes.io/proxy-body-size: '50m'
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '300'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '300'
+
     # AWS Load Balancer Controller annotations (if using AWS)
     # alb.ingress.kubernetes.io/scheme: internet-facing
     # alb.ingress.kubernetes.io/target-type: ip
     # alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS-1-2-2017-01
-    
+
     # Cert-manager annotations for automatic SSL
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    
+    cert-manager.io/cluster-issuer: 'letsencrypt-prod'
+
 spec:
-  ingressClassName: nginx  # Change to 'alb' if using AWS Load Balancer Controller
+  ingressClassName: nginx # Change to 'alb' if using AWS Load Balancer Controller
   tls:
-  - hosts:
-    - ai-hub.your-domain.com  # Replace with your domain
-    secretName: ai-hub-tls
+    - hosts:
+        - ai-hub.your-domain.com # Replace with your domain
+      secretName: ai-hub-tls
   rules:
-  - host: ai-hub.your-domain.com  # Replace with your domain
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: ai-hub-apps-service
-            port:
-              number: 80
+    - host: ai-hub.your-domain.com # Replace with your domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-hub-apps-service
+                port:
+                  number: 80
 ---
 # Alternative Ingress for AWS Application Load Balancer
 apiVersion: networking.k8s.io/v1
@@ -63,13 +63,13 @@ metadata:
     alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
 spec:
   rules:
-  - host: ai-hub.your-domain.com  # Replace with your domain
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: ai-hub-apps-service
-            port:
-              number: 80
+    - host: ai-hub.your-domain.com # Replace with your domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-hub-apps-service
+                port:
+                  number: 80

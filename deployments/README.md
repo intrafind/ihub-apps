@@ -14,15 +14,17 @@ This directory contains deployment configurations for AI Hub Apps across differe
 ### Docker Deployment
 
 1. **Build the Docker image:**
+
    ```bash
    docker build -t ai-hub-apps:latest .
    ```
 
 2. **Run with Docker Compose:**
+
    ```bash
    # Copy and edit environment variables
    cp .env.example .env
-   
+
    # Start the application
    docker-compose up -d
    ```
@@ -35,11 +37,12 @@ This directory contains deployment configurations for AI Hub Apps across differe
 ### Kubernetes Deployment
 
 1. **Apply the manifests:**
+
    ```bash
    # Create namespace and basic resources
    kubectl apply -f deployments/kubernetes/secrets-and-storage.yaml
    kubectl apply -f deployments/kubernetes/configmap.yaml
-   
+
    # Deploy the application
    kubectl apply -f deployments/kubernetes/deployment.yaml
    kubectl apply -f deployments/kubernetes/ingress.yaml
@@ -61,6 +64,7 @@ This directory contains deployment configurations for AI Hub Apps across differe
 ### 1. Docker Standalone
 
 **Basic Docker Run:**
+
 ```bash
 docker run -d \
   --name ai-hub-apps \
@@ -74,6 +78,7 @@ docker run -d \
 ```
 
 **With External Configuration:**
+
 ```bash
 # Create configuration directory
 mkdir -p ./docker/config
@@ -95,6 +100,7 @@ docker run -d \
 ### 2. Docker Compose
 
 The `docker-compose.yml` file provides a complete setup with:
+
 - External configuration mapping
 - Persistent data volumes
 - Log aggregation
@@ -102,11 +108,13 @@ The `docker-compose.yml` file provides a complete setup with:
 - Security hardening
 
 **Development Mode:**
+
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
 **Production Mode:**
+
 ```bash
 docker-compose up -d
 ```
@@ -128,6 +136,7 @@ kubectl apply -f deployments/kubernetes/
 #### Environment-Specific Examples
 
 **AWS EKS:**
+
 ```bash
 # Use AWS Load Balancer Controller
 kubectl apply -f deployments/kubernetes/deployment.yaml
@@ -135,6 +144,7 @@ kubectl apply -f deployments/kubernetes/ingress.yaml  # Uses ALB annotations
 ```
 
 **Google GKE:**
+
 ```bash
 # Use Google Cloud Load Balancer
 kubectl apply -f deployments/kubernetes/
@@ -142,6 +152,7 @@ kubectl apply -f deployments/kubernetes/
 ```
 
 **Azure AKS:**
+
 ```bash
 # Use Azure Application Gateway
 kubectl apply -f deployments/kubernetes/
@@ -183,19 +194,19 @@ helm upgrade ai-hub-apps deployments/helm/ai-hub-apps/ \
 
 ### Environment Variables
 
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `NODE_ENV` | Runtime environment | No | `production` |
-| `PORT` | Application port | No | `3000` |
-| `LOG_LEVEL` | Logging level | No | `info` |
-| `OPENAI_API_KEY` | OpenAI API key | No | - |
-| `ANTHROPIC_API_KEY` | Anthropic API key | No | - |
-| `GOOGLE_API_KEY` | Google API key | No | - |
-| `MISTRAL_API_KEY` | Mistral API key | No | - |
-| `JWT_SECRET` | JWT signing secret | Yes | - |
-| `CONFIG_DIR` | Configuration directory | No | `/app/config` |
-| `DATA_DIR` | Data directory | No | `/app/data` |
-| `LOG_DIR` | Log directory | No | `/app/logs` |
+| Variable            | Description             | Required | Default       |
+| ------------------- | ----------------------- | -------- | ------------- |
+| `NODE_ENV`          | Runtime environment     | No       | `production`  |
+| `PORT`              | Application port        | No       | `3000`        |
+| `LOG_LEVEL`         | Logging level           | No       | `info`        |
+| `OPENAI_API_KEY`    | OpenAI API key          | No       | -             |
+| `ANTHROPIC_API_KEY` | Anthropic API key       | No       | -             |
+| `GOOGLE_API_KEY`    | Google API key          | No       | -             |
+| `MISTRAL_API_KEY`   | Mistral API key         | No       | -             |
+| `JWT_SECRET`        | JWT signing secret      | Yes      | -             |
+| `CONFIG_DIR`        | Configuration directory | No       | `/app/config` |
+| `DATA_DIR`          | Data directory          | No       | `/app/data`   |
+| `LOG_DIR`           | Log directory           | No       | `/app/logs`   |
 
 ### External Configuration
 
@@ -234,6 +245,7 @@ Override default configurations by mounting files to `/app/config/`:
 ### Secret Management
 
 **Kubernetes Secrets:**
+
 ```bash
 # Create secrets from literal values
 kubectl create secret generic ai-hub-secrets \
@@ -246,6 +258,7 @@ kubectl create secret generic ai-hub-secrets \
 ```
 
 **External Secrets (recommended for production):**
+
 ```yaml
 # Using external-secrets operator
 apiVersion: external-secrets.io/v1beta1
@@ -259,9 +272,9 @@ spec:
   target:
     name: ai-hub-secrets
   data:
-  - secretKey: openai-api-key
-    remoteRef:
-      key: ai-hub/openai-api-key
+    - secretKey: openai-api-key
+      remoteRef:
+        key: ai-hub/openai-api-key
 ```
 
 ## Monitoring and Observability
@@ -269,18 +282,21 @@ spec:
 ### Health Checks
 
 The application provides health endpoints:
+
 - `GET /api/health` - Basic health check
 - Container health checks configured in all deployment options
 
 ### Logging
 
 Structured JSON logging is enabled by default. Logs are written to:
+
 - **Console**: For container log aggregation
 - **Files**: `/app/logs/` directory (if mounted)
 
 ### Metrics
 
 Enable Prometheus metrics by setting environment variables:
+
 ```bash
 ENABLE_METRICS=true
 METRICS_PORT=9090
@@ -291,6 +307,7 @@ METRICS_PORT=9090
 ### Horizontal Scaling
 
 **Kubernetes:**
+
 ```bash
 # Scale manually
 kubectl scale deployment ai-hub-apps --replicas=5
@@ -303,6 +320,7 @@ kubectl autoscale deployment ai-hub-apps \
 ```
 
 **Docker Swarm:**
+
 ```bash
 docker service scale ai-hub-apps=5
 ```
@@ -310,14 +328,17 @@ docker service scale ai-hub-apps=5
 ### Resource Requirements
 
 **Minimum:**
+
 - CPU: 250m
 - Memory: 512Mi
 
 **Recommended:**
+
 - CPU: 500m
 - Memory: 1Gi
 
 **High Load:**
+
 - CPU: 1000m
 - Memory: 2Gi
 
@@ -326,6 +347,7 @@ docker service scale ai-hub-apps=5
 ### Common Issues
 
 1. **Container won't start:**
+
    ```bash
    # Check logs
    docker logs ai-hub-apps
@@ -333,6 +355,7 @@ docker service scale ai-hub-apps=5
    ```
 
 2. **Permission errors:**
+
    ```bash
    # Ensure proper ownership
    chown -R 1000:1000 /path/to/data
@@ -347,6 +370,7 @@ docker service scale ai-hub-apps=5
 ### Debug Mode
 
 Enable debug logging:
+
 ```bash
 # Docker
 docker run -e LOG_LEVEL=debug ...
@@ -358,6 +382,7 @@ kubectl set env deployment/ai-hub-apps LOG_LEVEL=debug
 ## Support
 
 For deployment issues:
+
 1. Check the logs for error messages
 2. Verify configuration files are valid JSON
 3. Ensure all required environment variables are set
@@ -367,6 +392,7 @@ For deployment issues:
 ## Migration from Previous Versions
 
 When upgrading:
+
 1. Backup your configuration and data volumes
 2. Update the image tag
 3. Apply any new configuration changes
@@ -375,21 +401,25 @@ When upgrading:
 ## Platform-Specific Notes
 
 ### AWS EKS
+
 - Use `gp2` or `gp3` storage classes
 - Configure ALB ingress controller
 - Consider using IAM roles for service accounts (IRSA)
 
 ### Google GKE
+
 - Use `standard` or `ssd` storage classes
 - Enable workload identity for secret access
 - Configure GCE ingress controller
 
 ### Azure AKS
+
 - Use `managed-premium` storage class
 - Configure Application Gateway ingress
 - Use Azure Key Vault for secrets
 
 ### OpenShift
+
 - Uses Routes instead of Ingress
 - Automatic security context assignment
 - Built-in image registry support
