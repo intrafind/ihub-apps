@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+  issues: write         # ← allow creating issue and PR comments
+  pull-requests: write # ← allow updating PRs
+  actions: read        # ← allow reading CI results on PRs
 
 jobs:
   auto-lint-format:

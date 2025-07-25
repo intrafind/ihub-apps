@@ -28,7 +28,9 @@ const ChatHeader = ({
   currentLanguage,
   isMobile = false,
   messages = [],
-  exportSettings = {}
+  exportSettings = {},
+  appId,
+  chatId
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -144,6 +146,8 @@ const ChatHeader = ({
             onToggleParameters={onToggleParameters}
             showParametersButton={showParametersButton}
             parametersVisible={parametersVisible}
+            appId={appId}
+            chatId={chatId}
           />
         </div>
       </div>

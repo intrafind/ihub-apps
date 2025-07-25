@@ -916,6 +916,7 @@ const AppChat = () => {
       <SharedAppHeader
         app={app}
         appId={appId}
+        chatId={chatId.current}
         mode="chat"
         messages={messages}
         variables={variables}
