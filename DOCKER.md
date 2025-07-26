@@ -26,7 +26,6 @@ This document provides comprehensive guidance for running AI Hub Apps in contain
 3. **Access the application:**
    - Open http://localhost:3000
 
-
 ## Docker Image
 
 ### Base Image
@@ -126,7 +125,6 @@ docker run -v /host/config:/app/contents/config:ro ai-hub-apps
 echo "your-api-key" | docker secret create openai_key -
 docker service create --secret openai_key ai-hub-apps
 ```
-
 
 ## Monitoring and Observability
 
