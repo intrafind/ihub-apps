@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: ai-hub-apps
     app.kubernetes.io/component: application
-    app.kubernetes.io/version: "1.0.5"
+    app.kubernetes.io/version: '1.0.5'
 spec:
   replicas: 2
   strategy:
@@ -23,9 +23,9 @@ spec:
         app.kubernetes.io/name: ai-hub-apps
         app.kubernetes.io/component: application
       annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "3000"
-        prometheus.io/path: "/metrics"
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '3000'
+        prometheus.io/path: '/metrics'
     spec:
       serviceAccountName: ai-hub-apps
       securityContext:
@@ -34,95 +34,95 @@ spec:
         runAsGroup: 1000
         fsGroup: 1000
       containers:
-      - name: ai-hub-apps
-        image: ghcr.io/intrafind/ai-hub-apps:latest
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 3000
-          name: http
-          protocol: TCP
-        
-        # Environment variables from ConfigMap
-        envFrom:
-        - configMapRef:
-            name: ai-hub-apps-config
-        - secretRef:
-            name: ai-hub-apps-secrets
-            
-        # Resource limits and requests
-        resources:
-          limits:
-            cpu: 2000m
-            memory: 2Gi
-          requests:
-            cpu: 500m
-            memory: 512Mi
-            
-        # Health checks
-        livenessProbe:
-          httpGet:
-            path: /api/health
-            port: 3000
-          initialDelaySeconds: 30
-          periodSeconds: 30
-          timeoutSeconds: 10
-          successThreshold: 1
-          failureThreshold: 3
-          
-        readinessProbe:
-          httpGet:
-            path: /api/health
-            port: 3000
-          initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 5
-          successThreshold: 1
-          failureThreshold: 3
-          
-        # Volume mounts
-        volumeMounts:
-        - name: config-volume
-          mountPath: /app/contents/config
-          readOnly: true
-        - name: platform-config
-          mountPath: /app/contents/config/platform.json
-          subPath: platform.json
-          readOnly: true
-        - name: logs-volume
-          mountPath: /app/logs
-        - name: data-volume
-          mountPath: /app/data
-          
-        # Security context
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: false
-          runAsNonRoot: true
-          runAsUser: 1000
-          runAsGroup: 1000
-          capabilities:
-            drop:
-            - ALL
-            
+        - name: ai-hub-apps
+          image: ghcr.io/intrafind/ai-hub-apps:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+              protocol: TCP
+
+          # Environment variables from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: ai-hub-apps-config
+            - secretRef:
+                name: ai-hub-apps-secrets
+
+          # Resource limits and requests
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+            requests:
+              cpu: 500m
+              memory: 512Mi
+
+          # Health checks
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+
+          # Volume mounts
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/contents/config
+              readOnly: true
+            - name: platform-config
+              mountPath: /app/contents/config/platform.json
+              subPath: platform.json
+              readOnly: true
+            - name: logs-volume
+              mountPath: /app/logs
+            - name: data-volume
+              mountPath: /app/data
+
+          # Security context
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            capabilities:
+              drop:
+                - ALL
+
       # Volumes
       volumes:
-      - name: config-volume
-        persistentVolumeClaim:
-          claimName: ai-hub-apps-config
-      - name: platform-config
-        configMap:
-          name: ai-hub-apps-platform-config
-      - name: logs-volume
-        persistentVolumeClaim:
-          claimName: ai-hub-apps-logs
-      - name: data-volume
-        persistentVolumeClaim:
-          claimName: ai-hub-apps-data
-          
+        - name: config-volume
+          persistentVolumeClaim:
+            claimName: ai-hub-apps-config
+        - name: platform-config
+          configMap:
+            name: ai-hub-apps-platform-config
+        - name: logs-volume
+          persistentVolumeClaim:
+            claimName: ai-hub-apps-logs
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: ai-hub-apps-data
+
       # Node selection (optional)
       # nodeSelector:
       #   kubernetes.io/os: linux
-      
+
       # Tolerations (optional)
       # tolerations:
       # - key: "app"

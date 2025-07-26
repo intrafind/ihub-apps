@@ -8,8 +8,8 @@ services:
     container_name: ai-hub-apps
     restart: unless-stopped
     ports:
-      - "3000:3000"
-    
+      - '3000:3000'
+
     # Environment variables for API keys
     environment:
       - NODE_ENV=production
@@ -18,7 +18,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
-      
+
     # Volume mounts for external configuration, logs, and data
     volumes:
       # Configuration files
@@ -26,28 +26,28 @@ services:
       - ./contents/models:/app/contents/models:ro
       - ./contents/apps:/app/contents/apps:ro
       - ./contents/pages:/app/contents/pages:ro
-      
+
       # Persistent data and logs
       - ai-hub-logs:/app/logs
       - ai-hub-data:/app/data
-      
+
       # Optional: Mount custom contents for development
       # - ./contents:/app/contents:ro
-      
+
     # Health check
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-      
+
     # Security settings
-    user: "1000:1000"  # Run as non-root user
+    user: '1000:1000' # Run as non-root user
     security_opt:
       - no-new-privileges
-    read_only: false  # Set to true if the app doesn't need to write to filesystem
-    
+    read_only: false # Set to true if the app doesn't need to write to filesystem
+
     # Resource limits (adjust as needed)
     deploy:
       resources:

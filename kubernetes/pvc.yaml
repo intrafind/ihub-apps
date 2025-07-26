@@ -22,7 +22,7 @@ metadata:
   namespace: ai-hub-apps
   labels:
     app.kubernetes.io/name: ai-hub-apps
-    app.kubernetes.io/component: storage  
+    app.kubernetes.io/component: storage
 spec:
   accessModes:
     - ReadWriteOnce
@@ -42,7 +42,7 @@ metadata:
     app.kubernetes.io/component: config-storage
 spec:
   accessModes:
-    - ReadWriteMany  # Allow multiple pods to read configuration
+    - ReadWriteMany # Allow multiple pods to read configuration
   resources:
     requests:
       storage: 1Gi

@@ -10,14 +10,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: development  # Use development stage if multi-stage build is added later
-      
+      target: development # Use development stage if multi-stage build is added later
+
     # Development environment variables
     environment:
       - NODE_ENV=development
       - DEBUG=*
       - LOG_LEVEL=debug
-      
+
     # Development volume mounts for live reloading
     volumes:
       # Override config volumes to be read-write for development
@@ -25,23 +25,23 @@ services:
       - ./contents/models:/app/contents/models:rw
       - ./contents/apps:/app/contents/apps:rw
       - ./contents/pages:/app/contents/pages:rw
-      
+
       # Mount source code for development (if needed)
       # - ./server:/app/server:ro
       # - ./client:/app/client:ro
-      
+
       # Development logs and data (local directories)
       - ./logs:/app/logs:rw
       - ./data:/app/data:rw
-      
+
     # Development ports (expose additional debug ports if needed)
     ports:
-      - "3000:3000"
+      - '3000:3000'
       # - "9229:9229"  # Node.js debug port
-      
+
     # Development command override (if needed for debug mode)
     # command: ["node", "--inspect=0.0.0.0:9229", "server/server.js"]
-    
+
     # Remove resource limits for development
     deploy:
       resources:

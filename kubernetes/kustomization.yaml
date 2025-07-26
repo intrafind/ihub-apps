@@ -3,29 +3,29 @@ kind: Kustomization
 
 metadata:
   name: ai-hub-apps
-  
+
 # Common labels applied to all resources
 commonLabels:
   app.kubernetes.io/name: ai-hub-apps
   app.kubernetes.io/instance: ai-hub-apps
-  app.kubernetes.io/version: "1.0.5"
+  app.kubernetes.io/version: '1.0.5'
   app.kubernetes.io/managed-by: kustomize
 
 # Resources to include
 resources:
-- namespace.yaml
-- configmap.yaml
-- secret.yaml
-- pvc.yaml
-- service.yaml
-- deployment.yaml
-- ingress.yaml
-- hpa.yaml
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - pvc.yaml
+  - service.yaml
+  - deployment.yaml
+  - ingress.yaml
+  - hpa.yaml
 
 # Image configurations
 images:
-- name: ghcr.io/intrafind/ai-hub-apps
-  newTag: latest
+  - name: ghcr.io/intrafind/ai-hub-apps
+    newTag: latest
 
 # ConfigMap generators (optional - can be used instead of static configmaps)
 # configMapGenerator:

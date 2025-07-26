@@ -9,45 +9,45 @@ metadata:
   annotations:
     # Nginx Ingress Controller annotations
     nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+    nginx.ingress.kubernetes.io/force-ssl-redirect: 'true'
+
     # Rate limiting (adjust as needed)
-    nginx.ingress.kubernetes.io/limit-rps: "100"
-    nginx.ingress.kubernetes.io/limit-connections: "10"
-    
+    nginx.ingress.kubernetes.io/limit-rps: '100'
+    nginx.ingress.kubernetes.io/limit-connections: '10'
+
     # CORS headers for web app integration
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"
-    
+    nginx.ingress.kubernetes.io/enable-cors: 'true'
+    nginx.ingress.kubernetes.io/cors-allow-origin: '*'
+    nginx.ingress.kubernetes.io/cors-allow-methods: 'GET, POST, PUT, DELETE, OPTIONS'
+    nginx.ingress.kubernetes.io/cors-allow-headers: 'DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization'
+
     # Connection settings
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
-    
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: '60'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '60'
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '60'
+
     # For cert-manager (uncomment if using)
     # cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    
+
 spec:
   # TLS configuration (uncomment if using TLS)
   # tls:
   # - hosts:
   #   - ai-hub-apps.example.com
   #   secretName: ai-hub-apps-tls
-  
+
   rules:
-  - host: ai-hub-apps.example.com  # Replace with your actual domain
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: ai-hub-apps
-            port:
-              number: 80
+    - host: ai-hub-apps.example.com # Replace with your actual domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-hub-apps
+                port:
+                  number: 80
 
 ---
 # Alternative Ingress for OpenShift Route
@@ -60,7 +60,7 @@ metadata:
     app.kubernetes.io/name: ai-hub-apps
     app.kubernetes.io/component: route
 spec:
-  host: ai-hub-apps.apps.cluster.example.com  # Replace with your OpenShift cluster domain
+  host: ai-hub-apps.apps.cluster.example.com # Replace with your OpenShift cluster domain
   to:
     kind: Service
     name: ai-hub-apps

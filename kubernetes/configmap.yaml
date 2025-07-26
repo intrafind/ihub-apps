@@ -7,12 +7,12 @@ metadata:
     app.kubernetes.io/name: ai-hub-apps
     app.kubernetes.io/component: configmap
 data:
-  PORT: "3000"
-  NODE_ENV: "production"
-  CONFIG_PATH: "/app/contents/config"
-  LOGS_PATH: "/app/logs"
-  DATA_PATH: "/app/data"
-  
+  PORT: '3000'
+  NODE_ENV: 'production'
+  CONFIG_PATH: '/app/contents/config'
+  LOGS_PATH: '/app/logs'
+  DATA_PATH: '/app/data'
+
 ---
 apiVersion: v1
 kind: ConfigMap

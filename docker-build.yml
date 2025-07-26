@@ -43,7 +43,7 @@ jobs:
 
       - name: Run tests
         run: npm run test:all
-        continue-on-error: true  # Don't fail build if tests fail
+        continue-on-error: true # Don't fail build if tests fail
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
@@ -107,7 +107,7 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
-    
+
     steps:
       - name: Test Docker image
         run: |
@@ -121,11 +121,11 @@ jobs:
             --health-retries=3 \
             -p 3000:3000 \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.version }} &
-          
+
           # Wait for container to start
           sleep 30
-          
+
           # Test health endpoint
           curl -f http://localhost:3000/api/health || exit 1
-          
+
           echo "Docker image test completed successfully!"
