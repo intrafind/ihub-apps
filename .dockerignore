@@ -1,0 +1,80 @@
+# Dependencies
+node_modules/
+*/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs (will be created during docker build)
+dist/
+dist-bin/
+client/dist/
+docs/book/
+
+# Development files
+.git/
+.gitignore
+.github/
+*.md
+README*
+CHANGELOG*
+.eslintrc*
+.prettierrc*
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment files (should be provided at runtime)
+.env*
+config.env*
+
+# Test files
+**/*.test.js
+**/tests/
+test/
+coverage/
+
+# Development scripts
+dev.sh
+concatenate-code.sh
+setup.sh
+test-authentication.sh
+
+# Documentation source (built docs will be included)
+docs/
+concepts/
+book.toml
+
+# Examples (can be excluded to reduce size)
+examples/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.pid
+*.swp
+*.swo
+*~
+
+# Package manager files
+.npm
+.yarn/
+yarn.lock
+package-lock.json
+
+# IDE files
+*.sublime-project
+*.sublime-workspace
+
+# Build artifacts that aren't needed
+*.tgz
+*.tar.gz

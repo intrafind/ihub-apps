@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  ai-hub-apps:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-hub-apps
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    
+    # Environment variables for API keys
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      
+    # Volume mounts for external configuration, logs, and data
+    volumes:
+      # Configuration files
+      - ./contents/config:/app/contents/config:ro
+      - ./contents/models:/app/contents/models:ro
+      - ./contents/apps:/app/contents/apps:ro
+      - ./contents/pages:/app/contents/pages:ro
+      
+      # Persistent data and logs
+      - ai-hub-logs:/app/logs
+      - ai-hub-data:/app/data
+      
+      # Optional: Mount custom contents for development
+      # - ./contents:/app/contents:ro
+      
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      
+    # Security settings
+    user: "1000:1000"  # Run as non-root user
+    security_opt:
+      - no-new-privileges
+    read_only: false  # Set to true if the app doesn't need to write to filesystem
+    
+    # Resource limits (adjust as needed)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+# Named volumes for persistent data
+volumes:
+  ai-hub-logs:
+    driver: local
+  ai-hub-data:
+    driver: local
+
+# Networks (optional for multi-service setups)
+networks:
+  default:
+    name: ai-hub-network

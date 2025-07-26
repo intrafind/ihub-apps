@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-hub-apps
+  labels:
+    name: ai-hub-apps
+    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/component: namespace
