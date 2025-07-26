@@ -30,7 +30,6 @@ export default function registerToolRoutes(app) {
       const { data: configuredTools, etag: toolsEtag } = configCache.getTools();
 
       // Get user language from query parameters or platform default
-      const platformConfig = req.app.get('platform') || {};
       const defaultLang = platformConfig?.defaultLanguage || 'en';
       const userLanguage = req.query.language || req.query.lang || defaultLang;
 
@@ -39,14 +38,12 @@ export default function registerToolRoutes(app) {
 
       // Force permission enhancement if not already done
       if (req.user && !req.user.permissions) {
-        const platformConfig = req.app.get('platform') || {};
         const authConfig = platformConfig.auth || {};
         req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
       }
 
       // Create anonymous user if none exists and anonymous access is allowed
       if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-        const platformConfig = req.app.get('platform') || {};
         const authConfig = platformConfig.auth || {};
         req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
       }
