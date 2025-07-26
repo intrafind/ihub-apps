@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
@@ -25,28 +24,15 @@ export function loadUsers(usersFilePath) {
             : path.join(__dirname, '../../', usersFilePath)
         );
 
-    // Try to get from cache first
+    // Get from cache only - no fallback
     const cached = configCache.get(cacheKey);
     if (cached && cached.data) {
       return cached.data;
     }
 
-    // Fallback to direct file loading if not in cache
-    const fullPath = path.isAbsolute(usersFilePath)
-      ? usersFilePath
-      : path.join(__dirname, '../../', usersFilePath);
-
-    if (!fs.existsSync(fullPath)) {
-      console.warn(`Users file not found: ${fullPath}`);
-      return { users: {}, metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() } };
-    }
-
-    const config = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
-
-    // Cache the loaded data for future use
-    configCache.setCacheEntry(cacheKey, config);
-
-    return config;
+    // Return empty structure if not in cache
+    console.warn(`Users configuration not found in cache for: ${cacheKey}`);
+    return { users: {}, metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() } };
   } catch (error) {
     console.warn('Could not load users configuration:', error.message);
     return { users: {}, metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() } };

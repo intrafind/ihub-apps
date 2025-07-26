@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
-import { fetchData } from '../../api/api';
+import { fetchTools } from '../../api/api';
 
 const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
   const { t } = useTranslation();
@@ -14,10 +14,10 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
 
   // Fetch tools from API
   useEffect(() => {
-    const fetchTools = async () => {
+    const loadTools = async () => {
       try {
         setIsLoading(true);
-        const tools = await fetchData('/api/tools');
+        const tools = await fetchTools();
         setAvailableTools(tools || []);
       } catch (error) {
         console.error('Failed to fetch tools:', error);
@@ -27,7 +27,7 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
       }
     };
 
-    fetchTools();
+    loadTools();
   }, []);
 
   // Filter tools based on search term and exclude already selected
