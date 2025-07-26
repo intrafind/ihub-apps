@@ -16,6 +16,7 @@ const SearchModal = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef(null);
   const fuseRef = useRef(null);
+  const listRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -51,6 +52,18 @@ const SearchModal = ({
     setResults(searchResults.slice(0, 5));
     setSelectedIndex(0);
   }, [query, isOpen]);
+
+  useEffect(() => {
+    if (!listRef.current || results.length === 0) return;
+
+    const selectedElement = listRef.current.children[selectedIndex];
+    if (selectedElement) {
+      selectedElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest'
+      });
+    }
+  }, [selectedIndex, results]);
 
   const handleKeyNav = e => {
     if (e.key === 'ArrowDown') {
@@ -99,7 +112,7 @@ const SearchModal = ({
             </button>
           )}
         </div>
-        <ul className="max-h-64 overflow-y-auto">
+        <ul ref={listRef} className="max-h-64 overflow-y-auto">
           {results.map((item, idx) => (
             <li
               key={idx}
