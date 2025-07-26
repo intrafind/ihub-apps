@@ -55,7 +55,7 @@ const SearchModal = ({
 
   useEffect(() => {
     if (!listRef.current || results.length === 0) return;
-    
+
     const selectedElement = listRef.current.children[selectedIndex];
     if (selectedElement) {
       selectedElement.scrollIntoView({
