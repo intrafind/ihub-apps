@@ -26,6 +26,7 @@ services:
       - ./contents/models:/app/contents/models:ro
       - ./contents/apps:/app/contents/apps:ro
       - ./contents/pages:/app/contents/pages:ro
+      - ./client/public:/app/public:ro
 
       # Persistent data and logs
       - ai-hub-logs:/app/logs

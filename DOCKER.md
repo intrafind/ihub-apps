@@ -1,6 +1,6 @@
 # Docker Support for AI Hub Apps
 
-This document provides comprehensive guidance for running AI Hub Apps in containerized environments including Docker, Kubernetes, and OpenShift.
+This document provides comprehensive guidance for running AI Hub Apps in containerized Docker environments.
 
 ## Quick Start
 
@@ -26,23 +26,6 @@ This document provides comprehensive guidance for running AI Hub Apps in contain
 3. **Access the application:**
    - Open http://localhost:3000
 
-### Kubernetes
-
-1. **Deploy to Kubernetes:**
-
-   ```bash
-   # Apply all manifests
-   kubectl apply -k kubernetes/
-
-   # Or apply individually
-   kubectl apply -f kubernetes/
-   ```
-
-2. **Configure secrets:**
-   ```bash
-   # Update the secret with your API keys
-   kubectl edit secret ai-hub-apps-secrets -n ai-hub-apps
-   ```
 
 ## Docker Image
 
@@ -84,6 +67,7 @@ This document provides comprehensive guidance for running AI Hub Apps in contain
 | `/app/contents/models` | LLM model configurations        | Read-only  |
 | `/app/contents/apps`   | App definitions                 | Read-only  |
 | `/app/contents/pages`  | Custom pages                    | Read-only  |
+| `/app/public`          | Static frontend assets          | Read-only  |
 | `/app/logs`            | Application logs                | Read-write |
 | `/app/data`            | Persistent application data     | Read-write |
 
@@ -110,57 +94,17 @@ volumes:
   data-volume:
 ```
 
-### 2. Kubernetes (Production)
+### 2. Docker Compose (Production)
 
 ```bash
-# Deploy all resources
-kubectl apply -k kubernetes/
+# Start services in production mode
+docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
 
-# Check deployment status
-kubectl get pods -n ai-hub-apps
+# Check service status
+docker-compose ps
 
-# Access via port-forward (for testing)
-kubectl port-forward svc/ai-hub-apps 3000:80 -n ai-hub-apps
-```
-
-### 3. OpenShift
-
-```bash
-# Create new project
-oc new-project ai-hub-apps
-
-# Apply manifests (OpenShift Route is included)
-oc apply -f kubernetes/
-
-# Get route URL
-oc get route ai-hub-apps -n ai-hub-apps
-```
-
-### 4. Amazon EKS
-
-```bash
-# Use AWS Load Balancer Controller for ingress
-kubectl apply -f kubernetes/
-kubectl annotate service ai-hub-apps -n ai-hub-apps \
-  service.beta.kubernetes.io/aws-load-balancer-type=nlb
-```
-
-### 5. Google GKE
-
-```bash
-# Deploy with GKE ingress
-kubectl apply -f kubernetes/
-kubectl annotate ingress ai-hub-apps -n ai-hub-apps \
-  kubernetes.io/ingress.class=gce
-```
-
-### 6. Azure AKS
-
-```bash
-# Use Azure Application Gateway
-kubectl apply -f kubernetes/
-kubectl annotate ingress ai-hub-apps -n ai-hub-apps \
-  kubernetes.io/ingress.class=azure/application-gateway
+# View logs
+docker-compose logs -f ai-hub-apps
 ```
 
 ## Configuration Management
@@ -172,9 +116,6 @@ Mount your configuration files externally to customize the application:
 ```bash
 # Docker
 docker run -v /host/config:/app/contents/config:ro ai-hub-apps
-
-# Kubernetes ConfigMap
-kubectl create configmap ai-hub-config --from-file=./config/
 ```
 
 ### Secrets Management
@@ -186,21 +127,6 @@ echo "your-api-key" | docker secret create openai_key -
 docker service create --secret openai_key ai-hub-apps
 ```
 
-#### Kubernetes Secrets
-
-```bash
-kubectl create secret generic ai-hub-apps-secrets \
-  --from-literal=OPENAI_API_KEY=your-key \
-  --from-literal=ANTHROPIC_API_KEY=your-key \
-  -n ai-hub-apps
-```
-
-#### External Secret Operators
-
-- AWS Secrets Manager
-- Azure Key Vault
-- Google Secret Manager
-- HashiCorp Vault
 
 ## Monitoring and Observability
 
@@ -208,7 +134,7 @@ kubectl create secret generic ai-hub-apps-secrets \
 
 - **Endpoint**: `GET /api/health`
 - **Response**: `200 OK` when healthy
-- **Kubernetes**: Automatically configured liveness/readiness probes
+- **Docker**: Built-in health check configured
 
 ### Logging
 
@@ -220,7 +146,7 @@ kubectl create secret generic ai-hub-apps-secrets \
 
 - **Endpoint**: `/metrics` (if enabled)
 - **Format**: Prometheus format
-- **Kubernetes**: Annotated for automatic scraping
+- **Docker**: Available for monitoring systems
 
 ## Security Considerations
 
@@ -241,22 +167,15 @@ kubectl create secret generic ai-hub-apps-secrets \
 
 - **Secrets**: External secret management recommended
 - **Encryption**: TLS in transit, volume encryption at rest
-- **Access control**: Kubernetes RBAC policies
+- **Access control**: Container-level security policies
 
 ## Scaling and Performance
 
-### Horizontal Pod Autoscaler (HPA)
-
-```yaml
-# Scales between 2-10 pods based on CPU/memory
-kubectl apply -f kubernetes/hpa.yaml
-```
-
-### Vertical Pod Autoscaler (VPA)
+### Docker Scaling
 
 ```bash
-# Automatically adjusts resource requests/limits
-kubectl apply -f https://github.com/kubernetes/autoscaler/releases/download/vertical-pod-autoscaler-0.13.0/vpa-release.yaml
+# Scale with Docker Compose
+docker-compose up -d --scale ai-hub-apps=3
 ```
 
 ### Resource Recommendations
@@ -274,7 +193,7 @@ kubectl apply -f https://github.com/kubernetes/autoscaler/releases/download/vert
    ```bash
    # Check logs
    docker logs ai-hub-apps
-   kubectl logs -f deployment/ai-hub-apps -n ai-hub-apps
+   docker-compose logs -f ai-hub-apps
    ```
 
 2. **Health check failures**
@@ -293,8 +212,8 @@ kubectl apply -f https://github.com/kubernetes/autoscaler/releases/download/vert
 
 4. **API key errors**
    ```bash
-   # Verify secrets
-   kubectl get secret ai-hub-apps-secrets -o yaml -n ai-hub-apps
+   # Verify environment variables
+   docker exec ai-hub-apps env | grep API_KEY
    ```
 
 ### Debug Mode

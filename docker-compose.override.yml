@@ -25,6 +25,7 @@ services:
       - ./contents/models:/app/contents/models:rw
       - ./contents/apps:/app/contents/apps:rw
       - ./contents/pages:/app/contents/pages:rw
+      - ./client/public:/app/public:rw
 
       # Mount source code for development (if needed)
       # - ./server:/app/server:ro

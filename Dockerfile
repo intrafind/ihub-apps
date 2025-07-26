@@ -4,7 +4,6 @@ FROM public.ecr.aws/amazonlinux/amazonlinux:2023
 # Set metadata
 LABEL maintainer="AI Hub Apps Team"
 LABEL description="AI Hub Apps - AI-powered applications platform"
-LABEL version="1.0.5"
 
 # Install required packages (curl-minimal is already available)
 RUN dnf update -y && \
@@ -33,6 +32,7 @@ RUN mkdir -p /app/contents/config \
              /app/contents/models \
              /app/contents/apps \
              /app/contents/pages \
+             /app/public \
              /app/logs \
              /app/data && \
     chown -R aihub:aihub /app
@@ -40,10 +40,12 @@ RUN mkdir -p /app/contents/config \
 # Copy package files for dependency installation
 COPY --chown=aihub:aihub package*.json ./
 COPY --chown=aihub:aihub server/package*.json ./server/
+COPY --chown=aihub:aihub client/package*.json ./client/
 
 # Install dependencies
 RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi && \
     cd server && if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi && \
+    cd ../client && if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi && \
     npm cache clean --force
 
 # Copy application files
@@ -52,8 +54,8 @@ COPY --chown=aihub:aihub . .
 # Build the application
 RUN npm run prod:build
 
-# Try to build binary if Node.js version supports it
-RUN ./build.sh --binary || echo "Binary build failed, will use standard Node.js execution"
+# Build binary using version from package.json
+RUN export VERSION=$(node -p "require('./package.json').version") && ./build.sh --binary
 
 # Switch to non-root user
 USER aihub
@@ -75,12 +77,12 @@ ENV OPENAI_API_KEY= \
 # Expose port
 EXPOSE 3000
 
-# Create volume mount points
-VOLUME ["/app/contents/config", "/app/contents/models", "/app/contents/apps", "/app/contents/pages", "/app/logs", "/app/data"]
+# Create volume mount points  
+VOLUME ["/app/contents/config", "/app/contents/models", "/app/contents/apps", "/app/contents/pages", "/app/public", "/app/logs", "/app/data"]
 
 # Health check (curl should be available from installation above)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3000/api/health || exit 1
 
-# Start command - try binary first, fallback to Node.js
-CMD ["/bin/bash", "-c", "if [ -f \"/app/dist-bin/ai-hub-apps-v1.0.5-linux\" ]; then echo \"Starting with binary executable...\"; chmod +x /app/dist-bin/ai-hub-apps-v1.0.5-linux; /app/dist-bin/ai-hub-apps-v1.0.5-linux; else echo \"Starting with Node.js...\"; cd /app/dist && node server/server.js; fi"]
+# Start command - use binary with dynamic version
+CMD ["/bin/bash", "-c", "export VERSION=$(node -p \"require('./package.json').version\") && echo \"Starting with binary executable...\" && chmod +x /app/dist-bin/ai-hub-apps-v${VERSION}-linux && /app/dist-bin/ai-hub-apps-v${VERSION}-linux"]
