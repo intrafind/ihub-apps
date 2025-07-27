@@ -91,7 +91,10 @@ const AdminGroupsPage = () => {
                   {t('admin.groups.management', 'Group Management')}
                 </h1>
                 <p className="text-gray-600 mt-1">
-                  {t('admin.groups.subtitle', 'Manage user groups, permissions, and external group mappings')}
+                  {t(
+                    'admin.groups.subtitle',
+                    'Manage user groups, permissions, and external group mappings'
+                  )}
                 </p>
               </div>
               <button
@@ -191,7 +194,9 @@ const AdminGroupsPage = () => {
                         <td className="px-6 py-4">
                           <div className="space-y-1">
                             <div className="flex flex-wrap gap-1">
-                              <span className="text-xs text-gray-500">{t('admin.groups.apps', 'Apps:')}</span>
+                              <span className="text-xs text-gray-500">
+                                {t('admin.groups.apps', 'Apps:')}
+                              </span>
                               {group.permissions?.apps?.includes('*') ? (
                                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                   All Apps (*)
@@ -234,7 +239,9 @@ const AdminGroupsPage = () => {
                               </span>
                             ))}
                             {(!group.mappings || group.mappings.length === 0) && (
-                              <span className="text-sm text-gray-400">{t('admin.groups.noMappings', 'No mappings')}</span>
+                              <span className="text-sm text-gray-400">
+                                {t('admin.groups.noMappings', 'No mappings')}
+                              </span>
                             )}
                           </div>
                         </td>
