@@ -27,7 +27,8 @@ class ChatService {
       bypassAppPrompts,
       res,
       clientRes,
-      user
+      user,
+      chatId
     } = params;
 
     return await this.requestBuilder.prepareChatRequest({
@@ -43,7 +44,8 @@ class ChatService {
       processMessageTemplates,
       res,
       clientRes,
-      user
+      user,
+      chatId
     });
   }
 

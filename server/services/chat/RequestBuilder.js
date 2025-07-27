@@ -33,7 +33,8 @@ class RequestBuilder {
     processMessageTemplates,
     res,
     clientRes,
-    user
+    user,
+    chatId
   }) {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps();
@@ -84,6 +85,7 @@ class RequestBuilder {
         language,
         app.outputSchema,
         user,
+        chatId,
         modelName
       );
       llmMessages = preprocessMessagesWithFileData(llmMessages);

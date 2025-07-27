@@ -16,6 +16,7 @@ import config from './config.js';
 import configCache from './configCache.js';
 import ErrorHandler from './utils/ErrorHandler.js';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
+import { createSourceManager } from './sources/index.js';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.
@@ -212,6 +213,7 @@ export async function processMessageTemplates(
   language,
   outputSchema = null,
   user = null,
+  chatId = null,
   modelName = null
 ) {
   const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
@@ -283,18 +285,64 @@ export async function processMessageTemplates(
         systemPrompt = systemPrompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), strValue);
       }
     }
-    if (app.sourcePath && systemPrompt.includes('{{source}}')) {
-      const sourcePath = userVariables.source_path || app.sourcePath;
-      console.log(`Loading source content from file: ${sourcePath}`);
-      try {
-        const sourceContent = await loadText(sourcePath.replace(/^\//, ''));
-        systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');
-        console.log(`Loaded source content (${sourceContent?.length || 0} characters)`);
-      } catch (error) {
-        console.error(`Error loading source content from ${sourcePath}:`, error);
+    // Process sources using new source handler system
+    try {
+      const sourceManager = createSourceManager();
+      let sourceContent = '';
+
+      // Handle new sources system
+      if (app.sources && Array.isArray(app.sources) && app.sources.length > 0) {
+        console.log(`Loading content from ${app.sources.length} configured sources`);
+
+        const context = {
+          user: user,
+          chatId: chatId,
+          userVariables: userVariables
+        };
+
+        const result = await sourceManager.processAppSources(app, context);
+        sourceContent = result.content;
+
+        console.log(
+          `Loaded sources: ${result.metadata.loadedSources}/${result.metadata.totalSources} successful`
+        );
+        if (result.metadata.errors.length > 0) {
+          console.warn('Source loading errors:', result.metadata.errors);
+        }
+
+        // Replace {{sources}} template with combined content
+        if (systemPrompt.includes('{{sources}}')) {
+          systemPrompt = systemPrompt.replace('{{sources}}', sourceContent || '');
+        }
+        // Also support legacy {{source}} template
+        if (systemPrompt.includes('{{source}}')) {
+          systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');
+        }
+      }
+      // Handle legacy sourcePath for backward compatibility
+      else if (app.sourcePath && systemPrompt.includes('{{source}}')) {
+        const sourcePath = userVariables.source_path || app.sourcePath;
+        console.log(`Loading legacy source content from file: ${sourcePath}`);
+
+        try {
+          const sourceContent = await loadText(sourcePath.replace(/^\//, ''));
+          systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');
+          console.log(`Loaded legacy source content (${sourceContent?.length || 0} characters)`);
+        } catch (error) {
+          console.error(`Error loading legacy source content from ${sourcePath}:`, error);
+          systemPrompt = systemPrompt.replace(
+            '{{source}}',
+            `Error loading content from ${sourcePath}: ${error.message}. Please check the file path and try again.`
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error in source processing system:', error);
+      // Fallback to legacy behavior if source system fails
+      if (app.sourcePath && systemPrompt.includes('{{source}}')) {
         systemPrompt = systemPrompt.replace(
           '{{source}}',
-          `Error loading content from ${sourcePath}: ${error.message}. Please check the file path and try again.`
+          `Error in source processing: ${error.message}. Please check your source configuration.`
         );
       }
     }
