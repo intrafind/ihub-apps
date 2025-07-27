@@ -262,18 +262,28 @@ const ChatWidget = ({
   const getPlaceholderText = () => {
     const language = getUserLanguage();
     return (
-      widgetConfig.placeholder?.[language] || widgetConfig.placeholder?.en || t('widget.fallback.startConversation', 'Type your message...')
+      widgetConfig.placeholder?.[language] ||
+      widgetConfig.placeholder?.en ||
+      t('widget.fallback.startConversation', 'Type your message...')
     );
   };
 
   const getButtonText = () => {
     const language = getUserLanguage();
-    return widgetConfig.sendButtonText?.[language] || widgetConfig.sendButtonText?.en || t('common.send', 'Send');
+    return (
+      widgetConfig.sendButtonText?.[language] ||
+      widgetConfig.sendButtonText?.en ||
+      t('common.send', 'Send')
+    );
   };
 
   const getWidgetTitle = () => {
     const language = getUserLanguage();
-    return widgetConfig.title?.[language] || widgetConfig.title?.en || t('widget.fallback.title', 'AI Assistant');
+    return (
+      widgetConfig.title?.[language] ||
+      widgetConfig.title?.en ||
+      t('widget.fallback.title', 'AI Assistant')
+    );
   };
 
   // Handle toggle open/closed
