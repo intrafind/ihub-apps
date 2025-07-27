@@ -3,18 +3,21 @@
 ## Design Principles
 
 ### Teams-Native Experience
+
 - Follow Microsoft Teams design language and patterns
 - Respect Teams themes (default, dark, high contrast)
 - Use Fluent UI components where applicable
 - Maintain consistency with Teams interactions
 
 ### Progressive Disclosure
+
 - Start simple with basic commands
 - Reveal advanced features as users engage
 - Provide contextual help and suggestions
 - Avoid overwhelming new users
 
 ### Conversational by Default
+
 - Natural language interactions over complex UIs
 - Intelligent command interpretation
 - Helpful error messages and suggestions
@@ -25,6 +28,7 @@
 ### Command Structure
 
 #### Natural Language Commands
+
 ```
 @AI Hub help
 @AI Hub analyze this document
@@ -33,6 +37,7 @@
 ```
 
 #### Structured Commands
+
 ```
 @AI Hub /app CodeReview
 @AI Hub /list apps
@@ -43,9 +48,10 @@
 ### Conversation Flow
 
 #### Initial Interaction
+
 ```
 User: @AI Hub
-Bot: 👋 Hi! I'm AI Hub, your AI assistant in Teams. 
+Bot: 👋 Hi! I'm AI Hub, your AI assistant in Teams.
 
 I can help you with:
 • Document analysis and summarization
@@ -58,6 +64,7 @@ Just describe what you need, or type 'help' for more options.
 ```
 
 #### App Selection
+
 ```
 User: I need help reviewing some code
 Bot: I'll use the Code Review app for this. Please share your code or describe what you'd like me to review.
@@ -69,6 +76,7 @@ Bot: I'll use the Code Review app for this. Please share your code or describe w
 ```
 
 #### Multi-turn Conversation
+
 ```
 User: Can you analyze our sales data?
 Bot: I'll help you analyze your sales data. What would you like to know?
@@ -91,6 +99,7 @@ To: [Date Picker]
 ### Adaptive Cards Design
 
 #### Response Card Template
+
 ```
 ┌─────────────────────────────────┐
 │ 🤖 AI Hub Apps                  │
@@ -105,6 +114,7 @@ To: [Date Picker]
 ```
 
 #### Rich Content Card
+
 ```
 ┌─────────────────────────────────┐
 │ 📊 Sales Analysis               │
@@ -123,12 +133,14 @@ To: [Date Picker]
 ### Error Handling
 
 #### User-Friendly Error Messages
+
 ```
 User: @AI Hub analize the document
 Bot: I think you meant "analyze" 😊. I'll help you analyze the document. Please share the file you'd like me to review.
 ```
 
 #### Graceful Failures
+
 ```
 Bot: I'm having trouble accessing that feature right now. Here's what you can try:
 • Check if the file is accessible
@@ -141,6 +153,7 @@ Need help? Type 'support' for assistance.
 ## Personal Tab Design
 
 ### Tab Configuration
+
 ```
 ┌─────────────────────────────────┐
 │ Configure AI Hub Apps Tab       │
@@ -160,12 +173,14 @@ Need help? Type 'support' for assistance.
 ```
 
 ### Tab Interface
+
 - Embedded responsive web app
 - Teams-aware navigation (no duplicate headers)
 - Simplified UI for Teams context
 - Deep linking support for sharing
 
 ### Mobile Optimization
+
 - Touch-friendly interface
 - Simplified navigation
 - Optimized card layouts
@@ -174,6 +189,7 @@ Need help? Type 'support' for assistance.
 ## Message Extensions
 
 ### Compose Extension
+
 ```
 ┌─────────────────────────────────┐
 │ 🔍 Search AI Hub Apps           │
@@ -191,7 +207,9 @@ Need help? Type 'support' for assistance.
 ```
 
 ### Message Actions
+
 Right-click on any message → AI Hub Apps →
+
 - Summarize Thread
 - Extract Action Items
 - Translate
@@ -201,6 +219,7 @@ Right-click on any message → AI Hub Apps →
 ## Meeting Integration
 
 ### Pre-Meeting Tab
+
 ```
 ┌─────────────────────────────────┐
 │ AI Meeting Assistant            │
@@ -217,12 +236,14 @@ Right-click on any message → AI Hub Apps →
 ```
 
 ### In-Meeting Experience
+
 - Minimal, non-intrusive UI
 - Real-time insights panel
 - Quick action buttons
 - Meeting notes capture
 
 ### Post-Meeting Summary
+
 ```
 ┌─────────────────────────────────┐
 │ Meeting Summary                 │
@@ -244,24 +265,28 @@ Right-click on any message → AI Hub Apps →
 ## Visual Design System
 
 ### Color Palette
+
 - Primary: AI Hub Apps brand colors
 - Secondary: Teams theme colors
 - Semantic: Success (green), Warning (yellow), Error (red)
 - Ensure WCAG AA compliance
 
 ### Typography
+
 - Use Teams default fonts
 - Clear hierarchy with sizes
 - Appropriate line spacing
 - Support for RTL languages
 
 ### Iconography
+
 - Fluent UI icons for Teams elements
 - Custom icons for AI Hub Apps features
 - Consistent icon size and style
 - Meaningful and intuitive
 
 ### Motion and Feedback
+
 - Subtle animations for state changes
 - Loading indicators for AI processing
 - Success/error animations
@@ -270,18 +295,21 @@ Right-click on any message → AI Hub Apps →
 ## Accessibility
 
 ### Keyboard Navigation
+
 - Full keyboard support
 - Clear focus indicators
 - Logical tab order
 - Keyboard shortcuts documentation
 
 ### Screen Reader Support
+
 - Proper ARIA labels
 - Meaningful alt text
 - Status announcements
 - Structured headings
 
 ### Visual Accessibility
+
 - High contrast mode support
 - Color-blind friendly design
 - Sufficient text contrast
@@ -290,12 +318,14 @@ Right-click on any message → AI Hub Apps →
 ## Localization
 
 ### Language Support
+
 - Detect Teams language setting
 - Localized bot responses
 - RTL layout support
 - Cultural considerations
 
 ### Content Strategy
+
 - Clear, simple language
 - Avoid idioms and slang
 - Consistent terminology
@@ -304,18 +334,21 @@ Right-click on any message → AI Hub Apps →
 ## Success Metrics
 
 ### Usability Metrics
+
 - Task completion rate > 90%
 - Error rate < 5%
 - Time to first success < 2 minutes
 - User satisfaction > 4.5/5
 
 ### Engagement Metrics
+
 - Daily active users
 - Messages per conversation
 - Feature adoption rates
 - Return user rate
 
 ### Performance Metrics
+
 - Response time < 2 seconds
 - Smooth scrolling (60 fps)
 - Minimal memory usage

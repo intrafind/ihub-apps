@@ -7,7 +7,7 @@ import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js'
 import config from '../config.js';
 
 // JWKS client for Microsoft public keys
-const createJwksClient = (tenantId) => {
+const createJwksClient = tenantId => {
   return jwksClient({
     jwksUri: `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`,
     cache: true,
@@ -41,7 +41,7 @@ async function verifyTeamsToken(token, teamsConfig) {
     }
 
     const { header, payload } = decoded;
-    
+
     // Get the tenant ID from the token
     const tenantId = payload.tid || teamsConfig.tenantId;
     if (!tenantId) {
@@ -133,7 +133,8 @@ async function getUserGroups(accessToken) {
 function normalizeTeamsUser(tokenData, profile, groups, teamsConfig) {
   // Extract user information
   const userId = tokenData.oid || tokenData.sub || profile?.id;
-  const email = tokenData.email || tokenData.preferred_username || profile?.mail || profile?.userPrincipalName;
+  const email =
+    tokenData.email || tokenData.preferred_username || profile?.mail || profile?.userPrincipalName;
   const name = tokenData.name || profile?.displayName || email;
 
   // Map external groups to internal groups
@@ -157,7 +158,7 @@ function normalizeTeamsUser(tokenData, profile, groups, teamsConfig) {
   // Enhance user with authenticated group and provider-specific groups
   const platform = configCache.getPlatform() || {};
   const authConfig = platform.auth || {};
-  
+
   user = enhanceUserGroups(user, authConfig, teamsConfig);
 
   return user;
@@ -236,11 +237,11 @@ export async function teamsAuthMiddleware(req, res, next) {
     // Get user profile and groups if we have an access token
     let profile = null;
     let groups = [];
-    
+
     // Note: The SSO token is an ID token, not an access token
     // To get user profile and groups, we would need to implement the On-Behalf-Of flow
     // For now, we'll use the information from the ID token
-    
+
     // Extract groups from token if present
     if (tokenData.groups) {
       groups = tokenData.groups;
@@ -260,7 +261,7 @@ export async function teamsAuthMiddleware(req, res, next) {
     next();
   } catch (error) {
     console.error('Teams authentication failed:', error);
-    
+
     // Don't fail the request, just continue without Teams auth
     // This allows fallback to other auth methods
     next();
@@ -273,7 +274,7 @@ export async function teamsAuthMiddleware(req, res, next) {
 export async function teamsTokenExchange(req, res) {
   try {
     const { ssoToken } = req.body;
-    
+
     if (!ssoToken) {
       return res.status(400).json({
         success: false,

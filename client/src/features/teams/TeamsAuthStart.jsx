@@ -11,16 +11,16 @@ function TeamsAuthStart() {
     microsoftTeams.initialize();
 
     // Get the authentication parameters from Teams
-    microsoftTeams.getContext((context) => {
+    microsoftTeams.getContext(context => {
       // Build the Azure AD login URL
       const authUrl = buildAuthUrl(context);
-      
+
       // Redirect to Azure AD for authentication
       window.location.href = authUrl;
     });
   }, []);
 
-  const buildAuthUrl = (context) => {
+  const buildAuthUrl = context => {
     const params = new URLSearchParams({
       client_id: process.env.REACT_APP_AAD_CLIENT_ID || context.clientId,
       response_type: 'token',

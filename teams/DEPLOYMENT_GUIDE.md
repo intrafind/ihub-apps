@@ -92,7 +92,7 @@ Update your `contents/config/platform.json`:
     "providers": [
       {
         "name": "azure-ad",
-        "displayName": "Microsoft Azure AD", 
+        "displayName": "Microsoft Azure AD",
         "clientId": "your-azure-ad-client-id",
         "clientSecret": "${AZURE_AD_CLIENT_SECRET}",
         "tenantId": "your-tenant-id",
@@ -139,7 +139,7 @@ Update `contents/config/groups.json` to include Teams users:
       "mappings": ["Global Admins", "IT-Admin"]
     },
     "teams-users": {
-      "id": "teams-users", 
+      "id": "teams-users",
       "name": "Teams Users",
       "description": "Standard Teams users",
       "inherits": ["authenticated"],
@@ -182,6 +182,7 @@ cd teams/
 ```
 
 Follow the prompts to enter:
+
 - Teams App ID (generate a new GUID)
 - Your AI Hub Apps URL
 - Azure AD Client ID
@@ -298,6 +299,7 @@ If the script doesn't work, create manually:
 ### Support
 
 For additional support:
+
 1. Check the main AI Hub Apps documentation
 2. Review Teams development documentation
 3. Check Azure AD troubleshooting guides
@@ -308,6 +310,7 @@ For additional support:
 ### Custom Branding
 
 Update the manifest to customize:
+
 - App name and description
 - Color scheme (accentColor)
 - Additional metadata
@@ -315,6 +318,7 @@ Update the manifest to customize:
 ### Bot Integration (Future)
 
 The current implementation focuses on tab functionality. Bot capabilities can be added later by:
+
 - Registering a bot in Azure
 - Adding bot configuration to manifest
 - Implementing bot message handlers
@@ -322,6 +326,7 @@ The current implementation focuses on tab functionality. Bot capabilities can be
 ### Message Extensions (Future)
 
 Add message extension capabilities by:
+
 - Configuring compose extensions in manifest
 - Implementing message extension handlers
 - Adding search and action commands

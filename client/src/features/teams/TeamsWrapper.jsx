@@ -17,24 +17,26 @@ function TeamsWrapper({ children }) {
     const checkTeamsContext = () => {
       // Check URL parameters
       const urlParams = new URLSearchParams(window.location.search);
-      const isTeamsTab = urlParams.has('loginHint') || urlParams.has('userObjectId') || urlParams.has('theme');
-      
+      const isTeamsTab =
+        urlParams.has('loginHint') || urlParams.has('userObjectId') || urlParams.has('theme');
+
       // Check if running in Teams desktop/mobile client
-      const isTeamsClient = window.name === 'embedded' || 
-                          window.location.hostname === 'teams.microsoft.com' ||
-                          urlParams.has('isTeams');
-      
+      const isTeamsClient =
+        window.name === 'embedded' ||
+        window.location.hostname === 'teams.microsoft.com' ||
+        urlParams.has('isTeams');
+
       // Check if Teams SDK is available
       const hasTeamsSDK = typeof microsoftTeams !== 'undefined';
-      
+
       if ((isTeamsTab || isTeamsClient) && hasTeamsSDK) {
         setIsInTeams(true);
-        
+
         // Initialize Teams SDK
         microsoftTeams.initialize(() => {
           console.log('Teams SDK initialized');
           setIsTeamsReady(true);
-          
+
           // Set app to full height in Teams
           microsoftTeams.appInitialization.notifyAppLoaded();
           microsoftTeams.appInitialization.notifySuccess();
@@ -56,9 +58,7 @@ function TeamsWrapper({ children }) {
   // If we're in Teams, apply Teams-specific styling
   if (isInTeams) {
     return (
-      <div className="teams-container min-h-screen bg-[var(--teams-bg,#f5f5f5)]">
-        {children}
-      </div>
+      <div className="teams-container min-h-screen bg-[var(--teams-bg,#f5f5f5)]">{children}</div>
     );
   }
 

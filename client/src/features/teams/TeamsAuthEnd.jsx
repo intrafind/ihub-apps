@@ -28,7 +28,7 @@ function TeamsAuthEnd() {
       // Authentication failed
       setError(errorDescription || error);
       setStatus('Authentication failed');
-      
+
       // Notify Teams of the failure
       setTimeout(() => {
         microsoftTeams.authentication.notifyFailure(errorDescription || error);
@@ -36,7 +36,7 @@ function TeamsAuthEnd() {
     } else if (accessToken) {
       // Authentication successful
       setStatus('Authentication successful!');
-      
+
       // Pass the token back to Teams
       // In a real implementation, you might want to exchange this for an app-specific token
       setTimeout(() => {
@@ -46,7 +46,7 @@ function TeamsAuthEnd() {
       // No token or error in the response
       setError('No authentication response received');
       setStatus('Authentication failed');
-      
+
       setTimeout(() => {
         microsoftTeams.authentication.notifyFailure('No authentication response');
       }, 2000);
@@ -59,9 +59,18 @@ function TeamsAuthEnd() {
         {error ? (
           <>
             <div className="text-red-600 mb-4">
-              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                className="w-16 h-16 mx-auto"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </div>
             <h2 className="text-xl font-semibold mb-2">{status}</h2>
@@ -71,9 +80,18 @@ function TeamsAuthEnd() {
         ) : (
           <>
             <div className="text-green-600 mb-4">
-              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                className="w-16 h-16 mx-auto"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </div>
             <h2 className="text-xl font-semibold mb-2">{status}</h2>

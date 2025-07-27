@@ -24,20 +24,20 @@ function TeamsTab() {
   const initializeTeams = async () => {
     try {
       await microsoftTeams.initialize();
-      
+
       // Get Teams context
-      microsoftTeams.getContext((context) => {
+      microsoftTeams.getContext(context => {
         setTeamsContext(context);
         console.log('Teams context:', context);
-        
+
         // Apply Teams theme
         applyTeamsTheme(context.theme);
-        
+
         // Register theme change handler
         microsoftTeams.registerOnThemeChangeHandler(applyTeamsTheme);
-        
+
         setIsInitialized(true);
-        
+
         // Start authentication if not already authenticated
         if (!isAuthenticated) {
           authenticateWithTeams();
@@ -51,9 +51,9 @@ function TeamsTab() {
   };
 
   // Apply Teams theme to the app
-  const applyTeamsTheme = (theme) => {
+  const applyTeamsTheme = theme => {
     const root = document.documentElement;
-    
+
     switch (theme) {
       case 'dark':
         root.classList.add('dark');
@@ -75,7 +75,7 @@ function TeamsTab() {
   // Authenticate with Teams SSO
   const authenticateWithTeams = async () => {
     if (isAuthenticating) return;
-    
+
     setIsAuthenticating(true);
     setError(null);
 
@@ -83,8 +83,8 @@ function TeamsTab() {
       // Request an SSO token from Teams
       const token = await new Promise((resolve, reject) => {
         microsoftTeams.authentication.getAuthToken({
-          successCallback: (token) => resolve(token),
-          failureCallback: (error) => reject(error),
+          successCallback: token => resolve(token),
+          failureCallback: error => reject(error),
           resources: [] // Add specific resources if needed
         });
       });
@@ -97,7 +97,7 @@ function TeamsTab() {
       if (response.data.success && response.data.token) {
         // Login with the received token
         await loginWithToken(response.data.token);
-        
+
         // Notify Teams that authentication is complete
         microsoftTeams.authentication.notifySuccess();
       } else {
@@ -106,9 +106,12 @@ function TeamsTab() {
     } catch (error) {
       console.error('Teams authentication error:', error);
       setError(error.message || 'Authentication failed');
-      
+
       // If SSO fails, we might need to trigger interactive authentication
-      if (error.message?.includes('consent_required') || error.message?.includes('interaction_required')) {
+      if (
+        error.message?.includes('consent_required') ||
+        error.message?.includes('interaction_required')
+      ) {
         handleInteractiveAuth();
       }
     } finally {
@@ -122,12 +125,12 @@ function TeamsTab() {
       url: `${window.location.origin}/teams/auth-start`,
       width: 600,
       height: 535,
-      successCallback: (result) => {
+      successCallback: result => {
         console.log('Interactive auth success:', result);
         // Try authentication again after interactive consent
         authenticateWithTeams();
       },
-      failureCallback: (error) => {
+      failureCallback: error => {
         console.error('Interactive auth failed:', error);
         setError('Interactive authentication failed');
       }
@@ -154,9 +157,18 @@ function TeamsTab() {
       <div className="flex items-center justify-center h-screen bg-[var(--teams-bg,#f5f5f5)]">
         <div className="text-center max-w-md p-6">
           <div className="text-red-600 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <svg
+              className="w-16 h-16 mx-auto"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
           </div>
           <h2 className="text-xl font-semibold mb-2 text-[var(--teams-text,#323130)]">

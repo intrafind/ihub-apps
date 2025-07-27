@@ -4,7 +4,7 @@
 .teams-container {
   /* Ensure full height utilization in Teams */
   min-height: 100vh;
-  
+
   /* Teams-specific background color support */
   background-color: var(--teams-bg, #f5f5f5);
   color: var(--teams-text, #323130);
@@ -119,8 +119,12 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* Responsive adjustments for Teams mobile */
@@ -128,11 +132,11 @@
   .teams-container {
     padding: 0.5rem;
   }
-  
+
   .teams-container .text-lg {
     font-size: 1rem;
   }
-  
+
   .teams-container .text-xl {
     font-size: 1.125rem;
   }

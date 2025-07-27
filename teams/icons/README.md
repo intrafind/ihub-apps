@@ -5,17 +5,19 @@ This directory should contain the required icon files for the Microsoft Teams ap
 ## Required Files
 
 ### color.png
+
 - **Size**: 192x192 pixels
 - **Format**: PNG with transparent background
 - **Description**: Full color icon displayed in the Teams app catalog and tab headers
-- **Requirements**: 
+- **Requirements**:
   - Must be exactly 192x192 pixels
   - PNG format with transparency support
   - Maximum file size: 64KB
   - Should represent your AI Hub Apps branding
 
 ### outline.png
-- **Size**: 32x32 pixels  
+
+- **Size**: 32x32 pixels
 - **Format**: PNG with transparent background
 - **Description**: Monochromatic outline icon used in Teams UI chrome
 - **Requirements**:
@@ -43,6 +45,7 @@ This directory should contain the required icon files for the Microsoft Teams ap
 ## Tools
 
 You can use various tools to create these icons:
+
 - Adobe Photoshop/Illustrator
 - GIMP (free)
 - Canva
@@ -52,6 +55,7 @@ You can use various tools to create these icons:
 ## Validation
 
 Before submitting your Teams app:
+
 1. Verify exact pixel dimensions
 2. Check file sizes are under 64KB
 3. Test visibility on different backgrounds
@@ -60,6 +64,7 @@ Before submitting your Teams app:
 ## Example Files
 
 If you don't have custom icons ready, you can temporarily use:
+
 - Simple geometric shapes
 - Letter-based logos (like "AI" or your company initials)
 - Generic app icons from icon libraries
