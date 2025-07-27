@@ -698,5 +698,48 @@
     "code": "Code",
     "link": "Link",
     "redo": "Wiederholen"
+  },
+  "teams": {
+    "status": {
+      "initializing": "Initialisierung...",
+      "authenticating": "Authentifizierung mit Microsoft Teams..."
+    },
+    "errors": {
+      "initializationFailed": "Fehler beim Initialisieren von Microsoft Teams",
+      "authenticationFailed": "Authentifizierung fehlgeschlagen",
+      "authenticationError": "Authentifizierungsfehler",
+      "interactiveAuthFailed": "Interaktive Authentifizierung fehlgeschlagen"
+    },
+    "auth": {
+      "redirecting": "Weiterleitung zu Microsoft-Anmeldung...",
+      "processing": "Authentifizierung wird verarbeitet...",
+      "successful": "Authentifizierung erfolgreich!",
+      "failed": "Authentifizierung fehlgeschlagen",
+      "noResponse": "Keine Authentifizierungsantwort erhalten",
+      "canCloseWindow": "Sie können dieses Fenster jetzt schließen.",
+      "windowWillClose": "Dieses Fenster schließt sich automatisch..."
+    },
+    "serverErrors": {
+      "TEAMS_INVALID_TOKEN_FORMAT": "Ungültiges Token-Format",
+      "TEAMS_NO_TENANT_ID": "Keine Mandanten-ID im Token oder der Konfiguration gefunden",
+      "TEAMS_JWT_SECRET_NOT_CONFIGURED": "JWT-Geheimnis für Teams-Authentifizierung nicht konfiguriert",
+      "TEAMS_SSO_TOKEN_REQUIRED": "SSO-Token ist erforderlich",
+      "TEAMS_AUTH_NOT_ENABLED": "Teams-Authentifizierung ist nicht aktiviert",
+      "TEAMS_INVALID_OR_EXPIRED_TOKEN": "Ungültiges oder abgelaufenes Teams-Token",
+      "TEAMS_TAB_CONFIG_SAVED": "Tab-Konfiguration gespeichert"
+    },
+    "manifest": {
+      "name": {
+        "short": "AI Hub Apps",
+        "full": "AI Hub Apps - Enterprise KI-Assistent"
+      },
+      "description": {
+        "short": "Zugriff auf KI-basierte Anwendungen direkt in Microsoft Teams",
+        "full": "AI Hub Apps bietet eine umfassende Suite von KI-basierten Anwendungen für Unternehmensbenutzer. Greifen Sie auf Chat-Assistenten, Dokumentanalysatoren und spezialisierte KI-Tools direkt in Microsoft Teams zu."
+      },
+      "staticTabs": {
+        "name": "AI Hub Apps"
+      }
+    }
   }
 }

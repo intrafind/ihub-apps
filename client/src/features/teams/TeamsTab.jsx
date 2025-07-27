@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18next from 'i18next';
 import * as microsoftTeams from '@microsoft/teams-js';
 import { apiClient } from '../../api/client';
 import { useAuth } from '../auth';
@@ -9,6 +11,7 @@ import LoadingSpinner from '../../shared/components/LoadingSpinner';
  * Handles Microsoft Teams integration and SSO authentication
  */
 function TeamsTab() {
+  const { t } = useTranslation();
   const [isInitialized, setIsInitialized] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState(null);
@@ -32,6 +35,9 @@ function TeamsTab() {
 
         // Apply Teams theme
         applyTeamsTheme(context.theme);
+        
+        // Apply Teams language preference
+        applyTeamsLanguage(context.locale);
 
         // Register theme change handler
         microsoftTeams.registerOnThemeChangeHandler(applyTeamsTheme);
@@ -45,8 +51,35 @@ function TeamsTab() {
       });
     } catch (error) {
       console.error('Failed to initialize Teams:', error);
-      setError('Failed to initialize Microsoft Teams');
+      setError(t('teams.errors.initializationFailed'));
       setIsInitialized(true);
+    }
+  };
+
+  // Apply Teams language preference
+  const applyTeamsLanguage = (locale) => {
+    if (!locale) return;
+    
+    // Map Teams locale to supported languages
+    const languageMap = {
+      'en-US': 'en',
+      'en-GB': 'en',
+      'en': 'en',
+      'de-DE': 'de',
+      'de-AT': 'de',
+      'de-CH': 'de',
+      'de': 'de'
+    };
+    
+    // Extract language code (first part before hyphen)
+    const langCode = locale.split('-')[0];
+    const targetLanguage = languageMap[locale] || languageMap[langCode] || 'en';
+    
+    // Change i18next language if different from current
+    if (i18next.language !== targetLanguage) {
+      i18next.changeLanguage(targetLanguage).catch(err => {
+        console.warn('Failed to change language to', targetLanguage, err);
+      });
     }
   };
 
@@ -101,11 +134,11 @@ function TeamsTab() {
         // Notify Teams that authentication is complete
         microsoftTeams.authentication.notifySuccess();
       } else {
-        throw new Error(response.data.error || 'Authentication failed');
+        throw new Error(response.data.error || t('teams.errors.authenticationFailed'));
       }
     } catch (error) {
       console.error('Teams authentication error:', error);
-      setError(error.message || 'Authentication failed');
+      setError(error.message || t('teams.errors.authenticationFailed'));
 
       // If SSO fails, we might need to trigger interactive authentication
       if (
@@ -132,7 +165,7 @@ function TeamsTab() {
       },
       failureCallback: error => {
         console.error('Interactive auth failed:', error);
-        setError('Interactive authentication failed');
+        setError(t('teams.errors.interactiveAuthFailed'));
       }
     });
   };
@@ -144,7 +177,7 @@ function TeamsTab() {
         <div className="text-center">
           <LoadingSpinner />
           <p className="mt-4 text-[var(--teams-text,#323130)]">
-            {isAuthenticating ? 'Authenticating with Microsoft Teams...' : 'Initializing...'}
+            {isAuthenticating ? t('teams.status.authenticating') : t('teams.status.initializing')}
           </p>
         </div>
       </div>
@@ -172,14 +205,14 @@ function TeamsTab() {
             </svg>
           </div>
           <h2 className="text-xl font-semibold mb-2 text-[var(--teams-text,#323130)]">
-            Authentication Error
+            {t('teams.errors.authenticationError')}
           </h2>
           <p className="text-[var(--teams-text,#323130)] opacity-75 mb-4">{error}</p>
           <button
             onClick={authenticateWithTeams}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
           >
-            Try Again
+            {t('common.retry')}
           </button>
         </div>
       </div>
