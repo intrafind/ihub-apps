@@ -105,7 +105,7 @@ export function AdminAuthProvider({ children }) {
         const data = await response.json();
         return { success: false, error: data.message || 'Authentication failed' };
       }
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Network error during authentication' };
     }
   };

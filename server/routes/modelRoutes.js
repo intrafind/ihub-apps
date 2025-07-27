@@ -6,6 +6,12 @@ import {
 } from '../utils/authorization.js';
 import { authRequired, authOptional, modelAccessRequired } from '../middleware/authRequired.js';
 import crypto from 'crypto';
+import {
+  sendAuthRequired,
+  sendFailedOperationError,
+  sendNotFound,
+  sendInternalError
+} from '../utils/responseHelpers.js';
 
 export default function registerModelRoutes(app, { getLocalizedError }) {
   app.get('/api/models', authOptional, async (req, res) => {
@@ -15,18 +21,14 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
 
       // Check if anonymous access is allowed
       if (!isAnonymousAccessAllowed(platformConfig) && (!req.user || req.user.id === 'anonymous')) {
-        return res.status(401).json({
-          error: 'Authentication required',
-          code: 'AUTH_REQUIRED',
-          message: 'You must be logged in to access this resource'
-        });
+        return sendAuthRequired(res);
       }
 
       // Try to get models from cache first
       let { data: models = [], etag: modelsEtag } = configCache.getModels();
 
       if (!models) {
-        return res.status(500).json({ error: 'Failed to load models configuration' });
+        return sendFailedOperationError(res, 'load models configuration');
       }
 
       // Force permission enhancement if not already done
@@ -75,8 +77,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       res.setHeader('ETag', userSpecificEtag);
       res.json(models);
     } catch (error) {
-      console.error('Error fetching models:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      sendInternalError(res, error, 'fetching models');
     }
   });
 
@@ -91,12 +92,12 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       const { data: models, etag: modelsEtag } = configCache.getModels();
 
       if (!models) {
-        return res.status(500).json({ error: 'Failed to load models configuration' });
+        return sendFailedOperationError(res, 'load models configuration');
       }
       const model = models.find(m => m.id === modelId);
       if (!model) {
         const errorMessage = await getLocalizedError('modelNotFound', {}, language);
-        return res.status(404).json({ error: errorMessage });
+        return sendNotFound(res, errorMessage);
       }
 
       // Check if user has permission to access this model
@@ -104,14 +105,13 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
         const allowedModels = req.user.permissions.models || new Set();
         if (!allowedModels.has('*') && !allowedModels.has(modelId)) {
           const errorMessage = await getLocalizedError('modelNotFound', {}, language);
-          return res.status(404).json({ error: errorMessage });
+          return sendNotFound(res, errorMessage);
         }
       }
 
       res.json(model);
     } catch (error) {
-      console.error('Error fetching model details:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      sendInternalError(res, error, 'fetching model details');
     }
   });
 }

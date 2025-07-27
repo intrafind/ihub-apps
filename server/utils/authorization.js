@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { sendAuthRequired, sendInsufficientPermissions } from './responseHelpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -422,20 +423,20 @@ export function createAuthorizationMiddleware(options = {}) {
     // Check if authentication is required
     if (requireAuth && (!req.user || req.user.id === 'anonymous')) {
       if (!isAnonymousAccessAllowed(platform)) {
-        return res.status(401).json({ error: 'Authentication required' });
+        return sendAuthRequired(res);
       }
     }
 
     // Check admin access
     if (requireAdmin && !req.user?.isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
+      return sendInsufficientPermissions(res, 'Admin access');
     }
 
     // Check group-based access
     if (allowedGroups.length > 0 && req.user?.groups) {
       const hasAllowedGroup = req.user.groups.some(group => allowedGroups.includes(group));
       if (!hasAllowedGroup) {
-        return res.status(403).json({ error: 'Insufficient permissions' });
+        return sendInsufficientPermissions(res);
       }
     }
 

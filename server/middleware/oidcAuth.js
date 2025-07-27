@@ -5,6 +5,14 @@ import fetch from 'node-fetch';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
+import {
+  loadUsers,
+  findUserByIdentifier,
+  createOrUpdateOidcUser,
+  isUserActive,
+  mergeUserGroups,
+  updateUserActivity
+} from '../utils/userManager.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -58,12 +66,15 @@ export function configureOidcProviders() {
             // Get user info from OIDC provider
             const userInfo = await fetchUserInfo(provider.userInfoURL, accessToken);
 
-            // Normalize user data
-            const user = normalizeOidcUser(userInfo, provider);
+            // Normalize user data from OIDC provider
+            const oidcUser = normalizeOidcUser(userInfo, provider);
 
-            return done(null, user);
+            // Validate and persist user based on platform configuration
+            const validatedUser = await validateAndPersistOidcUser(oidcUser, provider);
+
+            return done(null, validatedUser);
           } catch (error) {
-            console.error(`OIDC user info fetch error for provider ${provider.name}:`, error);
+            console.error(`OIDC user validation error for provider ${provider.name}:`, error);
             return done(error, null);
           }
         }
@@ -131,25 +142,15 @@ function normalizeOidcUser(userInfo, provider) {
     }
   }
 
-  // Apply group mapping
-  const groupMap = configCache.getGroupMap();
-  const mappedGroups = new Set();
-
-  for (const group of groups) {
-    const mapped = groupMap[group] || group;
-    if (Array.isArray(mapped)) {
-      mapped.forEach(g => mappedGroups.add(g));
-    } else {
-      mappedGroups.add(mapped);
-    }
-  }
+  // Apply group mapping using the new groups.json format
+  const mappedGroups = mapExternalGroups(groups);
 
   // Create user object
   let user = {
     id: userId,
     name: name,
     email: email,
-    groups: Array.from(mappedGroups),
+    groups: mappedGroups,
     provider: provider.name,
     authMethod: 'oidc',
     authenticated: true,
@@ -163,6 +164,78 @@ function normalizeOidcUser(userInfo, provider) {
   user = enhanceUserGroups(user, authConfig, provider);
 
   return user;
+}
+
+/**
+ * Validate and persist OIDC user based on platform configuration
+ */
+async function validateAndPersistOidcUser(oidcUser, provider) {
+  const platform = configCache.getPlatform() || {};
+  const oidcConfig = platform.oidcAuth || {};
+  const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+
+  // Check if user exists in users.json
+  const usersConfig = loadUsers(usersFilePath);
+  const existingUser =
+    findUserByIdentifier(usersConfig, oidcUser.email, 'oidc') ||
+    findUserByIdentifier(usersConfig, oidcUser.id, 'oidc');
+
+  // If user exists, check if they are active
+  if (existingUser) {
+    if (!isUserActive(existingUser)) {
+      throw new Error(
+        `User account is disabled. User ID: ${existingUser.id}, Email: ${existingUser.email}. Please contact your administrator.`
+      );
+    }
+
+    // Update existing user and merge groups
+    const persistedUser = await createOrUpdateOidcUser(oidcUser, usersFilePath);
+
+    // Update activity tracking
+    await updateUserActivity(persistedUser.id, usersFilePath);
+
+    // Merge groups: external groups (from OIDC) + additional groups (from users.json)
+    const mergedGroups = mergeUserGroups(
+      oidcUser.groups || [],
+      persistedUser.additionalGroups || []
+    );
+
+    return {
+      ...oidcUser,
+      id: persistedUser.id,
+      groups: mergedGroups,
+      active: persistedUser.active,
+      authMethods: persistedUser.authMethods || ['oidc'],
+      lastActiveDate: persistedUser.lastActiveDate,
+      persistedUser: true
+    };
+  }
+
+  // User doesn't exist - check self-signup settings
+  if (!oidcConfig.allowSelfSignup) {
+    throw new Error(
+      `New user registration is not allowed. User ID: ${oidcUser.id}, Email: ${oidcUser.email}. Please contact your administrator.`
+    );
+  }
+
+  // Create new user (self-signup allowed)
+  const persistedUser = await createOrUpdateOidcUser(oidcUser, usersFilePath);
+
+  // Combine external groups from OIDC with additional groups from users.json
+  const combinedGroups = mergeUserGroups(
+    oidcUser.groups || [],
+    persistedUser.additionalGroups || []
+  );
+
+  return {
+    ...oidcUser,
+    id: persistedUser.id,
+    groups: combinedGroups,
+    active: true,
+    authMethods: ['oidc'],
+    lastActiveDate: persistedUser.lastActiveDate,
+    persistedUser: true
+  };
 }
 
 /**
@@ -184,6 +257,9 @@ function generateJwtToken(user) {
     provider: user.provider,
     authMode: 'oidc', // Include auth mode in token
     authProvider: user.provider, // Include specific provider for validation
+    authMethods: user.authMethods || ['oidc'], // Include supported auth methods
+    active: user.active !== false, // Include active status
+    persistedUser: user.persistedUser || false, // Indicate if user is persisted
     iat: Math.floor(Date.now() / 1000)
   };
 

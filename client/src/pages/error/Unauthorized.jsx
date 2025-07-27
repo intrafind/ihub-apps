@@ -10,13 +10,15 @@ const Unauthorized = () => {
       <div className="text-indigo-600 mb-4">
         <Icon name="lock" size="2xl" className="w-24 h-24" />
       </div>
-      <h1 className="text-4xl font-bold mb-2">{t('error.unauthorized.title')}</h1>
-      <p className="text-xl mb-6 text-center">{t('error.unauthorized.message')}</p>
+      <h1 className="text-4xl font-bold mb-2">{t('errors.unauthorized.title', 'Unauthorized')}</h1>
+      <p className="text-xl mb-6 text-center">
+        {t('errors.unauthorized.message', "You don't have permission to access this page.")}
+      </p>
       <Link
         to="/"
         className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
       >
-        {t('error.backToHome')}
+        {t('errors.unauthorized.goBack', 'Go Back')}
       </Link>
     </div>
   );

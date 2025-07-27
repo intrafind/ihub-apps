@@ -263,7 +263,7 @@ const AdminAppsPage = () => {
               <button
                 onClick={clearSearch}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-                aria-label="Clear search"
+                aria-label={t('common.clearSearch', 'Clear search')}
               >
                 <Icon name="x" className="h-5 w-5" />
               </button>

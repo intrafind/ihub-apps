@@ -62,7 +62,7 @@ const LanguageSelector = () => {
   }, [uiConfig, t]);
 
   if (isLoading) {
-    return <div className="language-selector-loading">Loading...</div>;
+    return <div className="language-selector-loading">{t('common.loading', 'Loading...')}</div>;
   }
 
   return (

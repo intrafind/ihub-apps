@@ -134,13 +134,23 @@ const AdminPageEditPage = () => {
               onChange={e => setPage(prev => ({ ...prev, contentType: e.target.value }))}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             >
-              <option value="markdown">Markdown (.md)</option>
-              <option value="react">React Component (.jsx)</option>
+              <option value="markdown">
+                {t('admin.pages.contentTypes.markdown', 'Markdown (.md)')}
+              </option>
+              <option value="react">
+                {t('admin.pages.contentTypes.reactComponent', 'React Component (.jsx)')}
+              </option>
             </select>
             <p className="mt-1 text-xs text-gray-500">
               {page.contentType === 'react'
-                ? 'Write JSX code that will be compiled and rendered as a React component'
-                : 'Write standard markdown content with syntax highlighting support'}
+                ? t(
+                    'admin.pages.contentTypes.jsxDescription',
+                    'Write JSX code that will be compiled and rendered as a React component'
+                  )
+                : t(
+                    'admin.pages.contentTypes.markdownDescription',
+                    'Write standard markdown content with syntax highlighting support'
+                  )}
             </p>
           </div>
           <div className="flex items-center">

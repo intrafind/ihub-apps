@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { v4 as uuidv4 } from 'uuid';
 import { sendAppChatMessage } from '../../../api/api';
@@ -25,6 +26,7 @@ const ChatWidget = ({
   position = 'right',
   isIframe = false
 }) => {
+  const { t } = useTranslation();
   const { uiConfig, isLoading } = useUIConfig();
   const [isOpen, setIsOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -260,18 +262,28 @@ const ChatWidget = ({
   const getPlaceholderText = () => {
     const language = getUserLanguage();
     return (
-      widgetConfig.placeholder?.[language] || widgetConfig.placeholder?.en || 'Type your message...'
+      widgetConfig.placeholder?.[language] ||
+      widgetConfig.placeholder?.en ||
+      t('widget.fallback.startConversation', 'Type your message...')
     );
   };
 
   const getButtonText = () => {
     const language = getUserLanguage();
-    return widgetConfig.sendButtonText?.[language] || widgetConfig.sendButtonText?.en || 'Send';
+    return (
+      widgetConfig.sendButtonText?.[language] ||
+      widgetConfig.sendButtonText?.en ||
+      t('common.send', 'Send')
+    );
   };
 
   const getWidgetTitle = () => {
     const language = getUserLanguage();
-    return widgetConfig.title?.[language] || widgetConfig.title?.en || 'Chat';
+    return (
+      widgetConfig.title?.[language] ||
+      widgetConfig.title?.en ||
+      t('widget.fallback.title', 'AI Assistant')
+    );
   };
 
   // Handle toggle open/closed
@@ -431,7 +443,9 @@ const ChatWidget = ({
         <button
           className="chat-widget-toggle"
           onClick={toggleWidget}
-          aria-label={isOpen ? 'Close chat' : 'Open chat'}
+          aria-label={
+            isOpen ? t('common.closeChat', 'Close chat') : t('common.openChat', 'Open chat')
+          }
         >
           {isOpen ? <Icon name="close" size="lg" /> : <Icon name="chat" size="lg" />}
         </button>
@@ -461,7 +475,11 @@ const ChatWidget = ({
             <h3>{getWidgetTitle()}</h3>
           </div>
           <div className="chat-widget-header-right">
-            <button className="chat-widget-close" onClick={toggleWidget} aria-label="Close chat">
+            <button
+              className="chat-widget-close"
+              onClick={toggleWidget}
+              aria-label={t('common.closeChat', 'Close chat')}
+            >
               <Icon name="close" size="md" />
             </button>
           </div>
@@ -539,7 +557,7 @@ const ChatWidget = ({
           <button
             onClick={handleSubmit}
             disabled={!input.trim() || processing}
-            aria-label="Send message"
+            aria-label={t('common.sendMessage', 'Send message')}
           >
             {getButtonText()}
           </button>

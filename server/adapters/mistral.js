@@ -4,8 +4,9 @@
  * Mistral "La Plateforme" API adapter
  */
 import { formatToolsForOpenAI } from './toolFormatter.js';
+import { BaseAdapter } from './BaseAdapter.js';
 
-const MistralAdapter = {
+class MistralAdapterClass extends BaseAdapter {
   /**
    * Format messages for Mistral API, including handling image data
    * @param {Array} messages - Messages to format
@@ -20,7 +21,7 @@ const MistralAdapter = {
       if (message.tool_call_id) base.tool_call_id = message.tool_call_id;
       if (message.name) base.name = message.name;
 
-      if (!message.imageData) {
+      if (!this.hasImageData(message)) {
         return { ...base, content };
       }
 
@@ -40,32 +41,24 @@ const MistralAdapter = {
     });
 
     return formattedMessages;
-  },
+  }
 
   /**
    * Create a completion request for Mistral
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const {
-      temperature = 0.7,
-      stream = true,
-      tools = null,
-      toolChoice = undefined,
-      responseFormat = null,
-      responseSchema = null
-    } = options;
+    const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
+      this.extractRequestOptions(options);
 
-    console.log(
-      'Original messages:',
-      JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData })))
-    );
+    const formattedMessages = this.formatMessages(messages);
+    this.debugLogMessages(messages, formattedMessages, 'Mistral');
 
     const body = {
       model: model.modelId,
-      messages: this.formatMessages(messages),
+      messages: formattedMessages,
       stream,
       temperature: parseFloat(temperature),
-      max_tokens: options.maxTokens || 1024
+      max_tokens: maxTokens
     };
 
     if (tools && tools.length > 0) body.tools = formatToolsForOpenAI(tools);
@@ -88,13 +81,10 @@ const MistralAdapter = {
     return {
       url: model.url,
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
+      headers: this.createRequestHeaders(apiKey),
       body
     };
-  },
+  }
 
   /**
    * Process streaming response from Mistral
@@ -194,6 +184,7 @@ const MistralAdapter = {
 
     return result;
   }
-};
+}
 
+const MistralAdapter = new MistralAdapterClass();
 export default MistralAdapter;

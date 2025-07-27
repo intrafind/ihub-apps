@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import LoginForm from './LoginForm';
@@ -7,6 +8,7 @@ import Icon from '../../../shared/components/Icon';
 import { Link } from 'react-router-dom';
 
 const UserAuthMenu = () => {
+  const { t } = useTranslation();
   const { user, isAuthenticated, logout } = useAuth();
   const { platformConfig } = usePlatformConfig();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -161,7 +163,7 @@ const UserAuthMenu = () => {
                   }}
                 >
                   <Icon name="settings" size="sm" className="mr-3 text-gray-400" />
-                  Admin Panel
+                  {t('auth.menu.adminPanel', 'Admin Panel')}
                 </Link>
               )}
 
@@ -170,7 +172,7 @@ const UserAuthMenu = () => {
                 className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
               >
                 <Icon name="logout" size="sm" className="mr-3 text-gray-400" />
-                Sign Out
+                {t('auth.menu.signOut', 'Sign Out')}
               </button>
             </>
           ) : (
@@ -193,7 +195,7 @@ const UserAuthMenu = () => {
                 className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
               >
                 <Icon name="login" size="sm" className="mr-3 text-gray-400" />
-                Sign In
+                {t('auth.menu.signIn', 'Sign In')}
               </button>
             </>
           )}
@@ -209,7 +211,9 @@ const UserAuthMenu = () => {
           >
             <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Sign In</h3>
+                <h3 className="text-lg font-medium text-gray-900">
+                  {t('auth.menu.signIn', 'Sign In')}
+                </h3>
                 <button
                   onClick={() => setShowLoginModal(false)}
                   className="text-gray-400 hover:text-gray-600"

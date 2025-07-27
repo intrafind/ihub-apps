@@ -14,7 +14,7 @@ export const feedbackSchema = {
     appId: z.string().min(1),
     chatId: z.string().min(1),
     messageContent: z.string().optional(),
-    rating: z.string().min(1),
+    rating: z.number().min(1).max(5),
     feedback: z.string().optional(),
     modelId: z.string().optional()
   })

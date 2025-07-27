@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext.jsx';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext.jsx';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner.jsx';
 
 const LoginForm = ({ onSuccess, onCancel }) => {
+  const { t } = useTranslation();
   const { login, loginWithOidc, isLoading, error, authConfig } = useAuth();
   const { platformConfig } = usePlatformConfig();
   const [formData, setFormData] = useState({
@@ -70,7 +72,9 @@ const LoginForm = ({ onSuccess, onCancel }) => {
 
   return (
     <div className="max-w-md mx-auto bg-white shadow-lg rounded-lg p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Sign In</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+        {t('errors.signIn', 'Sign In')}
+      </h2>
 
       {error && (
         <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
@@ -81,7 +85,9 @@ const LoginForm = ({ onSuccess, onCancel }) => {
       {/* OIDC Providers */}
       {hasOidcProviders && (
         <div className="mb-6">
-          <div className="text-sm text-gray-600 text-center mb-3">Sign in with:</div>
+          <div className="text-sm text-gray-600 text-center mb-3">
+            {t('auth.login.signInWith', 'Sign in with:')}
+          </div>
           <div className="space-y-2">
             {oidcProviders.map(provider => (
               <button
@@ -100,7 +106,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
           {hasLocalAuth && (
             <div className="my-4 flex items-center">
               <div className="flex-grow border-t border-gray-300"></div>
-              <span className="px-3 text-sm text-gray-500">or</span>
+              <span className="px-3 text-sm text-gray-500">{t('auth.login.or', 'or')}</span>
               <div className="flex-grow border-t border-gray-300"></div>
             </div>
           )}
@@ -112,7 +118,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-              Username or Email
+              {t('auth.login.username', 'Username or Email')}
             </label>
             <input
               type="text"
@@ -123,13 +129,13 @@ const LoginForm = ({ onSuccess, onCancel }) => {
               required
               disabled={isFormLoading}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
-              placeholder="Enter your username or email"
+              placeholder={t('auth.login.usernamePlaceholder', 'Enter your username or email')}
             />
           </div>
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
+              {t('auth.login.password', 'Password')}
             </label>
             <input
               type="password"
@@ -140,7 +146,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
               required
               disabled={isFormLoading}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
-              placeholder="Enter your password"
+              placeholder={t('auth.login.passwordPlaceholder', 'Enter your password')}
             />
           </div>
 
@@ -153,10 +159,10 @@ const LoginForm = ({ onSuccess, onCancel }) => {
               {isFormLoading ? (
                 <>
                   <LoadingSpinner size="sm" className="mr-2" />
-                  Signing In...
+                  {t('auth.login.signingIn', 'Signing In...')}
                 </>
               ) : (
-                'Sign In'
+                t('auth.menu.signIn', 'Sign In')
               )}
             </button>
 

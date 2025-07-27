@@ -29,19 +29,21 @@ export default function registerToolRoutes(app) {
       // Get tools with ETag from cache
       const { data: configuredTools, etag: toolsEtag } = configCache.getTools();
 
-      // Load all tools (including MCP discovered ones)
-      let tools = await loadTools();
+      // Get user language from query parameters or platform default
+      const defaultLang = platformConfig?.defaultLanguage || 'en';
+      const userLanguage = req.query.language || req.query.lang || defaultLang;
+
+      // Load all tools (including MCP discovered ones) with localization
+      let tools = await loadTools(userLanguage);
 
       // Force permission enhancement if not already done
       if (req.user && !req.user.permissions) {
-        const platformConfig = req.app.get('platform') || {};
         const authConfig = platformConfig.auth || {};
         req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
       }
 
       // Create anonymous user if none exists and anonymous access is allowed
       if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-        const platformConfig = req.app.get('platform') || {};
         const authConfig = platformConfig.auth || {};
         req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
       }
@@ -61,7 +63,7 @@ export default function registerToolRoutes(app) {
 
       // Create ETag based on the actual filtered tools content
       // This ensures users with the same permissions share cache, but different permissions get different ETags
-      const originalToolsCount = (await loadTools()).length || 0;
+      const originalToolsCount = (await loadTools(userLanguage)).length || 0;
       if (tools.length < originalToolsCount) {
         // Tools were filtered - create content-based ETag from filtered tool IDs
         const toolIds = tools.map(tool => tool.id).sort();

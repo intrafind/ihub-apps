@@ -18,7 +18,9 @@ const ErrorFallback = ({ error, resetErrorBoundary }) => (
           d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
         ></path>
       </svg>
-      <h3 className="text-red-800 font-semibold">Component Error</h3>
+      <h3 className="text-red-800 font-semibold">
+        {t('errors.componentError', 'Component Error')}
+      </h3>
     </div>
     <pre className="text-sm text-red-700 bg-red-100 p-3 rounded mb-4 overflow-auto">
       {error.message}
@@ -36,7 +38,7 @@ const ErrorFallback = ({ error, resetErrorBoundary }) => (
 const LoadingComponent = () => (
   <div className="flex items-center justify-center p-8">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-    <span className="ml-3 text-gray-600">Compiling component...</span>
+    <span className="ml-3 text-gray-600">{t('common.compiling', 'Compiling component...')}</span>
   </div>
 );
 
@@ -277,7 +279,9 @@ UserComponent;
               d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.082 16.5c-.77.833.192 2.5 1.732 2.5z"
             ></path>
           </svg>
-          <h3 className="text-yellow-800 font-semibold">Compilation Error</h3>
+          <h3 className="text-yellow-800 font-semibold">
+            {t('errors.compilationError', 'Compilation Error')}
+          </h3>
         </div>
         <pre className="text-sm text-yellow-700 bg-yellow-100 p-3 rounded overflow-auto">
           {compileError}
@@ -287,7 +291,11 @@ UserComponent;
   }
 
   if (!CompiledComponent) {
-    return <div className="text-center py-8 text-gray-500">No component to render</div>;
+    return (
+      <div className="text-center py-8 text-gray-500">
+        {t('errors.noComponentToRender', 'No component to render')}
+      </div>
+    );
   }
 
   return (

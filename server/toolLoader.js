@@ -4,16 +4,101 @@ import configCache from './configCache.js';
 import { throttledFetch } from './requestThrottler.js';
 
 /**
- * Load tools defined locally in config/tools.json
+ * Extract language-specific value from a multilingual object or return the value as-is
+ * @param {any} value - Value that might be a multilingual object {en: "...", de: "..."}
+ * @param {string} language - Target language (e.g., 'en', 'de')
+ * @param {string} fallbackLanguage - Fallback language (default: 'en')
+ * @returns {any} - Language-specific value or original value
  */
-export async function loadConfiguredTools() {
+function extractLanguageValue(value, language = 'en', fallbackLanguage = null) {
+  // Get platform default language if not provided
+  if (!fallbackLanguage) {
+    const platformConfig = configCache.getPlatform() || {};
+    fallbackLanguage = platformConfig?.defaultLanguage || 'en';
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    // Check if this looks like a multilingual object
+    if (value[language] !== undefined) {
+      return value[language];
+    }
+    if (value[fallbackLanguage] !== undefined) {
+      return value[fallbackLanguage];
+    }
+    // If it has language keys but not the requested one, try first available
+    const availableLanguages = Object.keys(value).filter(
+      key => typeof value[key] === 'string' && key.length === 2
+    );
+    if (availableLanguages.length > 0) {
+      return value[availableLanguages[0]];
+    }
+  }
+
+  return value;
+}
+
+/**
+ * Recursively extract language-specific values from multilingual objects
+ * @param {any} obj - Object to process
+ * @param {string} language - Target language
+ * @param {string} fallbackLanguage - Fallback language
+ * @returns {any} - Object with language-specific values
+ */
+function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = null) {
+  // Get platform default language if not provided
+  if (!fallbackLanguage) {
+    const platformConfig = configCache.getPlatform() || {};
+    fallbackLanguage = platformConfig?.defaultLanguage || 'en';
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => extractLanguageFromObject(item, language, fallbackLanguage));
+  }
+
+  if (obj && typeof obj === 'object') {
+    const result = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (key === 'description' || key === 'name') {
+        // These are typically multilingual fields
+        result[key] = extractLanguageValue(value, language, fallbackLanguage);
+      } else {
+        result[key] = extractLanguageFromObject(value, language, fallbackLanguage);
+      }
+    }
+    return result;
+  }
+
+  return obj;
+}
+
+/**
+ * Localize tools based on user language by extracting language-specific values from multilingual objects
+ * @param {Array} tools - Array of tool objects
+ * @param {string} language - User language (e.g., 'en', 'de')
+ * @returns {Array} - Localized tools
+ */
+function localizeTools(tools, language = 'en') {
+  const platformConfig = configCache.getPlatform() || {};
+  const fallbackLanguage = platformConfig?.defaultLanguage || 'en';
+  return tools.map(tool => extractLanguageFromObject(tool, language, fallbackLanguage));
+}
+
+/**
+ * Load tools defined locally in config/tools.json
+ * @param {string} language - Optional language for localization
+ */
+export async function loadConfiguredTools(language = null) {
   // Try to get tools from cache first
   const { data: tools, etag: toolsEtag } = configCache.getTools();
   if (!tools) {
     console.warn('Tools could not be loaded');
+    return [];
   }
 
-  return tools || [];
+  // If language is specified, localize the tools
+  if (language) {
+    return localizeTools(tools, language);
+  }
+
+  return tools;
 }
 
 /**
@@ -38,9 +123,10 @@ export async function discoverMcpTools() {
 
 /**
  * Load tools from local configuration and MCP server
+ * @param {string} language - Optional language for localization
  */
-export async function loadTools() {
-  const configured = await loadConfiguredTools();
+export async function loadTools(language = null) {
+  const configured = await loadConfiguredTools(language);
   const discovered = await discoverMcpTools();
   const all = [...configured];
   for (const tool of discovered) {
@@ -54,14 +140,23 @@ export async function loadTools() {
 /**
  * Get tools applicable to a specific app
  * @param {Object} app - app configuration object
+ * @param {string} language - Optional language for localization
  */
-export async function getToolsForApp(app) {
-  const allTools = await loadTools();
+export async function getToolsForApp(app, language = null) {
+  const allTools = await loadTools(language);
   if (Array.isArray(app.tools) && app.tools.length > 0) {
     return allTools.filter(t => app.tools.includes(t.id));
   }
   return [];
 }
+
+/**
+ * Export the localizeTools function for use by other modules
+ * @param {Array} tools - Array of tool objects
+ * @param {string} language - User language (e.g., 'en', 'de')
+ * @returns {Array} - Localized tools
+ */
+export { localizeTools };
 
 /**
  * Dynamically import and run a tool implementation securely.

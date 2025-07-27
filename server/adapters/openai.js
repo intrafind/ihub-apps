@@ -2,8 +2,9 @@
  * OpenAI API adapter
  */
 import { formatToolsForOpenAI } from './toolFormatter.js';
+import { BaseAdapter } from './BaseAdapter.js';
 
-const OpenAIAdapter = {
+class OpenAIAdapterClass extends BaseAdapter {
   /**
    * Format messages for OpenAI API, including handling image data
    * @param {Array} messages - Messages to format
@@ -20,7 +21,7 @@ const OpenAIAdapter = {
       if (message.name) base.name = message.name;
 
       // Handle image data in messages
-      if (!message.imageData) {
+      if (!this.hasImageData(message)) {
         const finalContent =
           base.tool_calls && (content === undefined || content === '') ? null : content;
         return { ...base, content: finalContent };
@@ -43,32 +44,24 @@ const OpenAIAdapter = {
     });
 
     return formattedMessages;
-  },
+  }
 
   /**
    * Create a completion request for OpenAI
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const {
-      temperature = 0.7,
-      stream = true,
-      tools = null,
-      toolChoice = undefined,
-      responseFormat = null,
-      responseSchema = null
-    } = options;
+    const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
+      this.extractRequestOptions(options);
 
-    console.log(
-      'Original messages:',
-      JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData })))
-    );
+    const formattedMessages = this.formatMessages(messages);
+    this.debugLogMessages(messages, formattedMessages, 'OpenAI');
 
     const body = {
       model: model.modelId,
-      messages: this.formatMessages(messages),
+      messages: formattedMessages,
       stream,
       temperature: parseFloat(temperature),
-      max_tokens: options.maxTokens || 1024
+      max_tokens: maxTokens
     };
 
     if (tools && tools.length > 0) body.tools = formatToolsForOpenAI(tools);
@@ -112,13 +105,10 @@ const OpenAIAdapter = {
     return {
       url: model.url,
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
+      headers: this.createRequestHeaders(apiKey),
       body
     };
-  },
+  }
 
   /**
    * Process streaming response from OpenAI
@@ -193,6 +183,7 @@ const OpenAIAdapter = {
 
     return result;
   }
-};
+}
 
+const OpenAIAdapter = new OpenAIAdapterClass();
 export default OpenAIAdapter;

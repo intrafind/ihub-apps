@@ -28,7 +28,9 @@ const ChatHeader = ({
   currentLanguage,
   isMobile = false,
   messages = [],
-  exportSettings = {}
+  exportSettings = {},
+  appId,
+  chatId
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -59,7 +61,7 @@ const ChatHeader = ({
             onClick={handleBack}
             className="mr-3 bg-gray-200 hover:bg-gray-300 text-gray-800 p-2 rounded-full flex items-center justify-center h-10 w-10"
             title={t('pages.appChat.backToApps')}
-            aria-label="Back to apps list"
+            aria-label={t('common.backToAppsList', 'Back to apps list')}
           >
             <Icon name="arrowLeft" size="sm" />
           </button>
@@ -78,7 +80,7 @@ const ChatHeader = ({
                   onClick={() => setShowDescription(prev => !prev)}
                   onMouseEnter={() => setShowDescription(true)}
                   onMouseLeave={() => setShowDescription(false)}
-                  aria-label="App info"
+                  aria-label={t('common.appInfo', 'App info')}
                   title={
                     typeof description === 'object'
                       ? getLocalizedContent(description, currentLanguage)
@@ -144,6 +146,8 @@ const ChatHeader = ({
             onToggleParameters={onToggleParameters}
             showParametersButton={showParametersButton}
             parametersVisible={parametersVisible}
+            appId={appId}
+            chatId={chatId}
           />
         </div>
       </div>
