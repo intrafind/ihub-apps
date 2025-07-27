@@ -35,7 +35,7 @@ function TeamsTab() {
 
         // Apply Teams theme
         applyTeamsTheme(context.theme);
-        
+
         // Apply Teams language preference
         applyTeamsLanguage(context.locale);
 
@@ -57,24 +57,24 @@ function TeamsTab() {
   };
 
   // Apply Teams language preference
-  const applyTeamsLanguage = (locale) => {
+  const applyTeamsLanguage = locale => {
     if (!locale) return;
-    
+
     // Map Teams locale to supported languages
     const languageMap = {
       'en-US': 'en',
       'en-GB': 'en',
-      'en': 'en',
+      en: 'en',
       'de-DE': 'de',
       'de-AT': 'de',
       'de-CH': 'de',
-      'de': 'de'
+      de: 'de'
     };
-    
+
     // Extract language code (first part before hyphen)
     const langCode = locale.split('-')[0];
     const targetLanguage = languageMap[locale] || languageMap[langCode] || 'en';
-    
+
     // Change i18next language if different from current
     if (i18next.language !== targetLanguage) {
       i18next.changeLanguage(targetLanguage).catch(err => {

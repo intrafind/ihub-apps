@@ -48,7 +48,7 @@ function TeamsAuthEnd() {
       // No token or error in the response<<<<<<< ISSUE_209_Microsoft_Teams
       setError(t('teams.auth.noResponse'));
       setStatus(t('teams.auth.failed'));
-      
+
       setTimeout(() => {
         microsoftTeams.authentication.notifyFailure(t('teams.auth.noResponse'));
       }, 2000);

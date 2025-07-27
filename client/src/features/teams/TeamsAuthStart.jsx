@@ -8,7 +8,7 @@ import * as microsoftTeams from '@microsoft/teams-js';
  */
 function TeamsAuthStart() {
   const { t } = useTranslation();
-  
+
   useEffect(() => {
     // Initialize Teams SDK
     microsoftTeams.initialize();

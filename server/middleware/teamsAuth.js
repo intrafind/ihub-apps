@@ -275,12 +275,16 @@ export async function teamsAuthMiddleware(req, res, next) {
 export async function teamsTokenExchange(req, res) {
   const errorHandler = new ErrorHandler();
   const language = req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en';
-  
+
   try {
     const { ssoToken } = req.body;
 
     if (!ssoToken) {
-      const errorMessage = await errorHandler.getLocalizedError('TEAMS_SSO_TOKEN_REQUIRED', {}, language);
+      const errorMessage = await errorHandler.getLocalizedError(
+        'TEAMS_SSO_TOKEN_REQUIRED',
+        {},
+        language
+      );
       return res.status(400).json({
         success: false,
         error: errorMessage,
@@ -292,7 +296,11 @@ export async function teamsTokenExchange(req, res) {
     const teamsConfig = platform.teamsAuth || {};
 
     if (!teamsConfig.enabled) {
-      const errorMessage = await errorHandler.getLocalizedError('TEAMS_AUTH_NOT_ENABLED', {}, language);
+      const errorMessage = await errorHandler.getLocalizedError(
+        'TEAMS_AUTH_NOT_ENABLED',
+        {},
+        language
+      );
       return res.status(400).json({
         success: false,
         error: errorMessage,
@@ -327,7 +335,11 @@ export async function teamsTokenExchange(req, res) {
     });
   } catch (error) {
     console.error('Teams token exchange error:', error);
-    const errorMessage = await errorHandler.getLocalizedError('TEAMS_INVALID_OR_EXPIRED_TOKEN', {}, language);
+    const errorMessage = await errorHandler.getLocalizedError(
+      'TEAMS_INVALID_OR_EXPIRED_TOKEN',
+      {},
+      language
+    );
     res.status(401).json({
       success: false,
       error: errorMessage,
@@ -342,7 +354,7 @@ export async function teamsTokenExchange(req, res) {
 export async function teamsTabConfigSave(req, res) {
   const errorHandler = new ErrorHandler();
   const language = req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en';
-  
+
   // This endpoint is called when a Teams tab is configured
   // For now, we just return success as we don't need to save any configuration
   const message = await errorHandler.getLocalizedError('TEAMS_TAB_CONFIG_SAVED', {}, language);
