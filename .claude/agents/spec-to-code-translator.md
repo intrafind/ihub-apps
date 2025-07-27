@@ -49,6 +49,7 @@ You are a Senior Software Engineer specializing in translating detailed specific
 **Output Requirements:**
 
 Your output must contain ONLY the complete code files needed for the feature implementation. Each file should be:
+
 - Production-ready and fully functional
 - Properly formatted and linted
 - Include all necessary imports and exports
@@ -58,6 +59,7 @@ Your output must contain ONLY the complete code files needed for the feature imp
 **Quality Checklist:**
 
 Before finalizing any code, verify:
+
 - [ ] All acceptance criteria from PRD are met
 - [ ] Architecture follows ADR specifications
 - [ ] No business logic exists in UI components

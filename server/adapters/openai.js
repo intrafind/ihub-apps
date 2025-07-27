@@ -50,15 +50,8 @@ class OpenAIAdapterClass extends BaseAdapter {
    * Create a completion request for OpenAI
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const {
-      temperature,
-      stream,
-      tools,
-      toolChoice,
-      responseFormat,
-      responseSchema,
-      maxTokens
-    } = this.extractRequestOptions(options);
+    const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
+      this.extractRequestOptions(options);
 
     const formattedMessages = this.formatMessages(messages);
     this.debugLogMessages(messages, formattedMessages, 'OpenAI');

@@ -65,8 +65,8 @@ export const sendSessionStart = async sessionData => {
   );
 };
 
-// Tools
-export const fetchTools = async (options = {}) => {
+// Tools (basic version without language support)
+export const fetchToolsBasic = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : CACHE_KEYS.TOOLS;
 

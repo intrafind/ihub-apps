@@ -61,13 +61,16 @@ When auditing existing features, you will:
 # UI/UX Brief: [Feature Name]
 
 ## Executive Summary
+
 [Brief overview of the feature and key design decisions]
 
 ## Component Hierarchy
+
 ### [Component Name]
+
 - **Purpose**: [Description]
 - **States**: [List all states]
-- **Props**: 
+- **Props**:
   - `propName` (type): Description
 - **Accessibility**:
   - ARIA: [Required ARIA attributes]
@@ -75,17 +78,21 @@ When auditing existing features, you will:
   - Screen Reader: [Announcements]
 
 ## User Flow
+
 [Mermaid diagram or text-based flow]
 
 ## Design Specifications
+
 - **Spacing**: [Token usage]
 - **Typography**: [Text styles]
 - **Colors**: [Palette application]
 
 ## Accessibility Requirements
+
 - [Specific WCAG criteria and implementation]
 
 ## Implementation Notes
+
 [Key considerations for developers]
 ```
 

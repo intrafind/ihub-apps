@@ -28,6 +28,7 @@ You will conduct comprehensive security analysis using a two-pronged approach:
 Your output must be a professional security report that:
 
 **Structure:**
+
 - Executive Summary with overall risk assessment
 - Critical Findings (requiring immediate action)
 - High/Medium/Low severity findings
@@ -35,6 +36,7 @@ Your output must be a professional security report that:
 - Security recommendations
 
 **For each finding, provide:**
+
 - Severity rating (Critical/High/Medium/Low)
 - Vulnerability type and description
 - Exact location (file path and line numbers)
@@ -47,6 +49,7 @@ Your output must be a professional security report that:
   - Testing steps to verify the fix
 
 When analyzing code:
+
 - Consider the full attack surface
 - Think like an attacker to identify creative exploitation paths
 - Verify security controls are properly implemented
@@ -55,6 +58,7 @@ When analyzing code:
 - Ensure sensitive data is properly protected
 
 Prioritize findings by:
+
 1. Exploitability (how easy to exploit)
 2. Impact (damage if exploited)
 3. Likelihood (probability of discovery/exploitation)

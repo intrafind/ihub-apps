@@ -65,6 +65,7 @@
   },
   "proxyAuth": {
     "enabled": false,
+    "allowSelfSignup": false,
     "userHeader": "X-Forwarded-User",
     "groupsHeader": "X-Forwarded-Groups",
     "jwtProviders": [
@@ -86,6 +87,7 @@
   },
   "oidcAuth": {
     "enabled": true,
+    "allowSelfSignup": false,
     "providers": [
       {
         "name": "auth.intrafind.cloud",
