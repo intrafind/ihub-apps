@@ -137,7 +137,9 @@ const FeedbackCard = ({ data }) => {
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Feedback Overview</h3>
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        {t('admin.dashboard.feedbackOverview', 'Feedback Overview')}
+      </h3>
 
       {/* Star Rating Summary (if available) */}
       {totalStarRatings > 0 && (
@@ -193,19 +195,23 @@ const FeedbackCard = ({ data }) => {
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="text-center p-4 bg-green-50 rounded-lg">
               <div className="text-3xl font-bold text-green-600">{data.good || 0}</div>
-              <div className="text-sm text-green-600 font-medium">Positive</div>
+              <div className="text-sm text-green-600 font-medium">
+                {t('admin.dashboard.positive', 'Positive')}
+              </div>
               <div className="text-xs text-green-500">{goodPercentage.toFixed(1)}%</div>
             </div>
             <div className="text-center p-4 bg-red-50 rounded-lg">
               <div className="text-3xl font-bold text-red-600">{data.bad || 0}</div>
-              <div className="text-sm text-red-600 font-medium">Negative</div>
+              <div className="text-sm text-red-600 font-medium">
+                {t('admin.dashboard.negative', 'Negative')}
+              </div>
               <div className="text-xs text-red-500">{badPercentage.toFixed(1)}%</div>
             </div>
           </div>
           {/* Visual Progress Bar */}
           <div className="mb-4">
             <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-              <span>Satisfaction Rate</span>
+              <span>{t('admin.dashboard.satisfactionRate', 'Satisfaction Rate')}</span>
               <span>{goodPercentage.toFixed(1)}% positive</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
@@ -418,14 +424,26 @@ const AdminUsageReports = () => {
 
   const renderUsers = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <TopUsersCard title="Top Users by Messages" data={messages.perUser} color="bg-blue-500" />
-      <TopUsersCard title="Top Users by Tokens" data={tokens.perUser} color="bg-green-500" />
       <TopUsersCard
-        title="Top Users by Magic Prompts"
+        title={t('admin.dashboard.topUsersByMessages', 'Top Users by Messages')}
+        data={messages.perUser}
+        color="bg-blue-500"
+      />
+      <TopUsersCard
+        title={t('admin.dashboard.topUsersByTokens', 'Top Users by Tokens')}
+        data={tokens.perUser}
+        color="bg-green-500"
+      />
+      <TopUsersCard
+        title={t('admin.dashboard.topUsersByMagicPrompts', 'Top Users by Magic Prompts')}
         data={magicPrompt.perUser}
         color="bg-purple-500"
       />
-      <TopUsersCard title="User Feedback" data={feedback.perUser} color="bg-amber-500" />
+      <TopUsersCard
+        title={t('admin.dashboard.userFeedback', 'User Feedback')}
+        data={feedback.perUser}
+        color="bg-amber-500"
+      />
     </div>
   );
 
@@ -455,19 +473,19 @@ const AdminUsageReports = () => {
       {/* Magic Prompt Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
-          title="Total Invocations"
+          title={t('admin.dashboard.totalInvocations', 'Total Invocations')}
           value={magicPrompt.total}
           icon={<Icon name="sparkles" size="lg" className="text-white" />}
           color="bg-purple-500"
         />
         <StatCard
-          title="Input Tokens"
+          title={t('admin.dashboard.inputTokens', 'Input Tokens')}
           value={magicPrompt.tokensIn.total}
           icon={<Icon name="document-text" size="lg" className="text-white" />}
           color="bg-blue-500"
         />
         <StatCard
-          title="Output Tokens"
+          title={t('admin.dashboard.outputTokens', 'Output Tokens')}
           value={magicPrompt.tokensOut.total}
           icon={<Icon name="document-text" size="lg" className="text-white" />}
           color="bg-green-500"
@@ -483,7 +501,7 @@ const AdminUsageReports = () => {
         />
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">App Usage</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.usage.sections.appUsage', 'App Usage')}</h3>
           <div className="space-y-4">
             {Object.entries(magicPrompt.perApp || {}).map(([app, count]) => (
               <div
@@ -502,10 +520,10 @@ const AdminUsageReports = () => {
 
       {/* Token Efficiency */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Token Efficiency</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.usage.sections.tokenEfficiency', 'Token Efficiency')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h4 className="font-medium text-gray-700 mb-3">Input Token Distribution</h4>
+            <h4 className="font-medium text-gray-700 mb-3">{t('admin.usage.sections.inputTokenDistribution', 'Input Token Distribution')}</h4>
             <div className="space-y-3">
               {Object.entries(magicPrompt.tokensIn.perUser || {}).map(([user, tokens]) => {
                 const maxTokens = Math.max(...Object.values(magicPrompt.tokensIn.perUser || {}));
@@ -530,7 +548,7 @@ const AdminUsageReports = () => {
           </div>
 
           <div>
-            <h4 className="font-medium text-gray-700 mb-3">Output Token Distribution</h4>
+            <h4 className="font-medium text-gray-700 mb-3">{t('admin.usage.sections.outputTokenDistribution', 'Output Token Distribution')}</h4>
             <div className="space-y-3">
               {Object.entries(magicPrompt.tokensOut.perUser || {}).map(([user, tokens]) => {
                 const maxTokens = Math.max(...Object.values(magicPrompt.tokensOut.perUser || {}));
@@ -565,7 +583,7 @@ const AdminUsageReports = () => {
         <FeedbackCard data={feedback} />
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">User Feedback Activity</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.usage.sections.userFeedbackActivity', 'User Feedback Activity')}</h3>
           <div className="space-y-4">
             {Object.entries(feedback.perUser || {}).map(([user, userFeedback]) => {
               const totalUserFeedback = (userFeedback.good || 0) + (userFeedback.bad || 0);
@@ -601,7 +619,7 @@ const AdminUsageReports = () => {
       {/* App Feedback Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Feedback by Application</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.usage.sections.feedbackByApplication', 'Feedback by Application')}</h3>
           <div className="space-y-4">
             {Object.entries(feedback.perApp || {}).map(([app, appFeedback]) => {
               const totalAppFeedback = (appFeedback.good || 0) + (appFeedback.bad || 0);
@@ -638,7 +656,7 @@ const AdminUsageReports = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Feedback by Model</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.usage.sections.feedbackByModel', 'Feedback by Model')}</h3>
           <div className="space-y-4">
             {Object.entries(feedback.perModel || {}).map(([model, modelFeedback]) => {
               const totalModelFeedback = (modelFeedback.good || 0) + (modelFeedback.bad || 0);
@@ -656,11 +674,15 @@ const AdminUsageReports = () => {
                       <div className="text-lg font-bold text-green-600">
                         {modelFeedback.good || 0}
                       </div>
-                      <div className="text-xs text-green-600">Positive</div>
+                      <div className="text-xs text-green-600">
+                        {t('admin.dashboard.positive', 'Positive')}
+                      </div>
                     </div>
                     <div className="p-2 bg-red-50 rounded">
                       <div className="text-lg font-bold text-red-600">{modelFeedback.bad || 0}</div>
-                      <div className="text-xs text-red-600">Negative</div>
+                      <div className="text-xs text-red-600">
+                        {t('admin.dashboard.negative', 'Negative')}
+                      </div>
                     </div>
                   </div>
                   <div className="mt-2 text-center text-sm text-gray-600">
@@ -760,31 +782,31 @@ const AdminUsageReports = () => {
 
       {/* System Overview */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">System Overview</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.usage.overview.systemOverview', 'System Overview')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="text-center p-4 bg-blue-50 rounded-lg">
             <div className="text-2xl font-bold text-blue-600">
               {Object.keys(messages.perUser || {}).length}
             </div>
-            <div className="text-sm text-blue-600 font-medium">Active Users</div>
+            <div className="text-sm text-blue-600 font-medium">{t('admin.usage.overview.activeUsers', 'Active Users')}</div>
           </div>
           <div className="text-center p-4 bg-green-50 rounded-lg">
             <div className="text-2xl font-bold text-green-600">
               {Object.keys(messages.perApp || {}).length}
             </div>
-            <div className="text-sm text-green-600 font-medium">Active Apps</div>
+            <div className="text-sm text-green-600 font-medium">{t('admin.usage.overview.activeApps', 'Active Apps')}</div>
           </div>
           <div className="text-center p-4 bg-purple-50 rounded-lg">
             <div className="text-2xl font-bold text-purple-600">
               {Object.keys(messages.perModel || {}).length}
             </div>
-            <div className="text-sm text-purple-600 font-medium">Models Used</div>
+            <div className="text-sm text-purple-600 font-medium">{t('admin.usage.overview.modelsUsed', 'Models Used')}</div>
           </div>
           <div className="text-center p-4 bg-amber-50 rounded-lg">
             <div className="text-2xl font-bold text-amber-600">
               {messages.total > 0 ? Math.round(tokens.total / messages.total) : 0}
             </div>
-            <div className="text-sm text-amber-600 font-medium">Avg Tokens/Msg</div>
+            <div className="text-sm text-amber-600 font-medium">{t('admin.usage.overview.avgTokensPerMsg', 'Avg Tokens/Msg')}</div>
           </div>
         </div>
       </div>

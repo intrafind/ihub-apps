@@ -22,6 +22,11 @@
     "error": "Fehler",
     "success": "Erfolg",
     "search": "Suchen",
+    "copy": "Kopieren",
+    "download": "Herunterladen",
+    "copied": "Kopiert!",
+    "downloaded": "Heruntergeladen!",
+    "compiling": "Komponente kompilieren...",
     "notFound": "Nicht gefunden",
     "back": "Zurück",
     "all": "Alle",
@@ -54,7 +59,29 @@
     "none": "Keine",
     "yes": "Ja",
     "no": "Nein",
-    "required": "erforderlich"
+    "required": "erforderlich",
+    "clear": "Löschen",
+    "clearSearch": "Suche löschen",
+    "preview": "Vorschau",
+    "uploadedImage": "Hochgeladenes Bild",
+    "toggleMenu": "Menü umschalten",
+    "openChat": "Chat öffnen",
+    "closeChat": "Chat schließen",
+    "sendMessage": "Nachricht senden",
+    "backToAppsList": "Zurück zur App-Liste",
+    "appInfo": "App-Info",
+    "copyCode": "Code kopieren",
+    "downloadCode": "Code herunterladen",
+    "recent": "Kürzlich verwendet",
+    "bold": "Fett",
+    "italic": "Kursiv",
+    "underline": "Unterstrichen",
+    "bulletList": "Aufzählung",
+    "numberedList": "Nummerierte Liste",
+    "quote": "Zitat",
+    "code": "Code",
+    "link": "Link",
+    "redo": "Wiederholen"
   },
   "pages": {
     "home": {
@@ -179,6 +206,9 @@
     "reset": "Auf Standard zurücksetzen"
   },
   "error": {
+    "title": "Etwas ist schiefgelaufen",
+    "description": "Ein unerwarteter Fehler ist in der Anwendung aufgetreten. Das Entwicklungsteam wurde benachrichtigt.",
+    "errorMessage": "Fehlerdetails:",
     "general": "Ein Fehler ist aufgetreten. Bitte versuche es erneut.",
     "notFound": "Ressource nicht gefunden.",
     "apiKeyMissing": "API-Schlüssel für Modell nicht gefunden",
@@ -216,7 +246,33 @@
     "sendFailed": "Nachricht konnte nicht gesendet werden",
     "configSaveFailed": "Konfiguration konnte nicht gespeichert werden",
     "imageUploadDisabled": "Bild-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell oder laden Sie stattdessen eine Textdatei hoch.",
-    "fileUploadDisabled": "Datei-Upload ist für diese Anwendung deaktiviert."
+    "fileUploadDisabled": "Datei-Upload ist für diese Anwendung deaktiviert.",
+    "componentError": "Komponenten-Fehler",
+    "compilationError": "Kompilierungsfehler",
+    "noComponentToRender": "Keine Komponente zum Rendern",
+    "pageNotFound": "Seite nicht gefunden",
+    "signIn": "Anmelden",
+    "notFound": {
+      "title": "Seite nicht gefunden",
+      "message": "Wir konnten die gesuchte Seite nicht finden.",
+      "returnHome": "Zur Startseite"
+    },
+    "unauthorized": {
+      "title": "Nicht autorisiert",
+      "message": "Sie haben keine Berechtigung, auf diese Seite zuzugreifen.",
+      "goBack": "Zurück"
+    },
+    "forbidden": {
+      "title": "Verboten",
+      "message": "Der Zugriff auf diese Ressource ist verboten.",
+      "goBack": "Zurück"
+    },
+    "serverError": {
+      "title": "Serverfehler",
+      "message": "Auf unserer Seite ist etwas schief gelaufen.",
+      "subtitle": "Bitte versuchen Sie es später erneut.",
+      "retry": "Erneut versuchen"
+    }
   },
   "serverErrors": {
     "appNotFound": "Anwendung nicht gefunden",
@@ -315,12 +371,30 @@
     "format": "Formatieren"
   },
   "admin": {
+    "title": "Administration",
+    "nav": {
+      "home": "Startseite",
+      "apps": "Apps",
+      "models": "Modelle",
+      "prompts": "Prompts",
+      "pages": "Seiten",
+      "groups": "Gruppen",
+      "auth": "Authentifizierung",
+      "logs": "Protokolle",
+      "shortlinks": "Kurze Links",
+      "usage": "Nutzungsberichte",
+      "users": "Benutzer",
+      "system": "System"
+    },
     "translateField": "Übersetzen",
     "common": {
       "enableAll": "Alle aktivieren",
       "disableAll": "Alle deaktivieren"
     },
     "apps": {
+      "title": "Apps-Verwaltung",
+      "subtitle": "Verwalten Sie Ihre AI Hub-Anwendungen",
+      "createApp": "App erstellen",
       "wizard": {
         "ai": {
           "language": "Sprache",
@@ -334,6 +408,27 @@
       }
     },
     "models": {
+      "title": "Modellverwaltung",
+      "subtitle": "AI-Modelle für Ihre Anwendungen konfigurieren und verwalten",
+      "addNew": "Neues Modell hinzufügen",
+      "loadError": "Fehler beim Laden der Modelle",
+      "searchPlaceholder": "Modelle durchsuchen...",
+      "filterAll": "Alle Modelle",
+      "filterEnabled": "Nur aktivierte",
+      "filterDisabled": "Nur deaktivierte",
+      "name": "Name",
+      "provider": "Anbieter",
+      "actions": "Aktionen",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "test": "Testen",
+      "enable": "Aktivieren",
+      "disable": "Deaktivieren",
+      "clone": "Klonen",
+      "delete": "Löschen",
+      "deleteConfirm": "Dieses Modell löschen?",
+      "noModels": "Keine Modelle gefunden",
+      "noModelsDesc": "Beginnen Sie mit der Erstellung eines neuen Modells.",
       "edit": {
         "title": "Modell bearbeiten",
         "titleNew": "Neues Modell erstellen",
@@ -397,9 +492,37 @@
       }
     },
     "prompts": {
+      "title": "Prompt-Verwaltung",
+      "subtitle": "Prompts für Ihre AI-Anwendungen verwalten und organisieren",
+      "createNew": "Neuen Prompt erstellen",
+      "loadError": "Fehler beim Laden der Prompts",
+      "searchPlaceholder": "Prompts durchsuchen...",
+      "filterAll": "Alle Prompts",
+      "filterEnabled": "Nur aktivierte",
+      "filterDisabled": "Nur deaktivierte",
+      "name": "Name",
+      "category": "Kategorie",
+      "description": "Beschreibung",
+      "order": "Reihenfolge",
+      "appId": "App-ID",
+      "status": "Status",
+      "actions": "Aktionen",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "enable": "Aktivieren",
+      "disable": "Deaktivieren",
       "clone": "Klonen",
+      "edit": "Bearbeiten",
       "delete": "Löschen",
-      "edit": "Bearbeiten"
+      "deleteConfirm": "Sind Sie sicher, dass Sie diesen Prompt löschen möchten?",
+      "deleteSuccess": "Prompt erfolgreich gelöscht",
+      "noPrompts": "Keine Prompts gefunden",
+      "noPromptsDesc": "Beginnen Sie mit der Erstellung eines neuen Prompts.",
+      "variableTypes": {
+        "string": "Zeichenkette",
+        "number": "Zahl",
+        "boolean": "Boolean"
+      }
     },
     "pages": {
       "title": "Seitenverwaltung",
@@ -409,13 +532,108 @@
       "access": "Zugriff",
       "fields": {
         "id": "Seiten-ID",
-        "title": "Titel",
+        "pageTitle": "Titel",
         "content": "Inhalt",
         "idRequired": "ID ist erforderlich",
         "authRequired": "Authentifizierung erforderlich",
         "allowedGroups": "Erlaubte Gruppen (kommagetrennt, '*' = alle)"
       },
-      "confirmDelete": "Möchten Sie diese Seite wirklich löschen?"
+      "confirmDelete": "Möchten Sie diese Seite wirklich löschen?",
+      "contentTypes": {
+        "markdown": "Markdown (.md)",
+        "reactComponent": "React-Komponente (.jsx)",
+        "jsxDescription": "Schreiben Sie JSX-Code, der als React-Komponente kompiliert und gerendert wird",
+        "markdownDescription": "Schreiben Sie Standard-Markdown-Inhalte mit Syntaxhervorhebung"
+      }
+    },
+    "prompts": {
+      "variableTypes": {
+        "string": "Zeichenkette",
+        "number": "Zahl",
+        "boolean": "Boolean"
+      }
+    },
+    "dashboard": {
+      "topUsersByMessages": "Top-Benutzer nach Nachrichten",
+      "topUsersByTokens": "Top-Benutzer nach Token",
+      "topUsersByMagicPrompts": "Top-Benutzer nach Magic Prompts",
+      "userFeedback": "Benutzerfeedback",
+      "totalInvocations": "Gesamtaufrufe",
+      "inputTokens": "Eingabe-Token",
+      "outputTokens": "Ausgabe-Token",
+      "positive": "Positiv",
+      "negative": "Negativ",
+      "feedbackOverview": "Feedback-Übersicht",
+      "satisfactionRate": "Zufriedenheitsrate",
+      "aiModel": "KI-Modell",
+      "messages": "Nachrichten",
+      "totalTokens": "Gesamte Token",
+      "promptTokens": "Prompt-Token",
+      "completionTokens": "Antwort-Token",
+      "avgPerMessage": "Durchschn./Nachricht",
+      "tokenDistribution": "Token-Verteilung",
+      "activeUsers": "Aktive Benutzer",
+      "activeApps": "Aktive Apps",
+      "modelsUsed": "Verwendete Modelle",
+      "avgTokensPerMsg": "Durchschn. Token/Nachricht",
+      "modelUsageDetails": "Modellnutzungsdetails",
+      "systemOverview": "Systemübersicht",
+      "appUsage": "App-Nutzung",
+      "tokenEfficiency": "Token-Effizienz",
+      "inputTokenDistribution": "Eingabe-Token-Verteilung",
+      "outputTokenDistribution": "Ausgabe-Token-Verteilung",
+      "userFeedbackActivity": "Benutzer-Feedback-Aktivität",
+      "feedbackByApplication": "Feedback nach Anwendung",
+      "feedbackByModel": "Feedback nach Modell",
+      "averageRating": "Durchschnittsbewertung"
+    },
+    "groups": {
+      "management": "Gruppenverwaltung",
+      "subtitle": "Benutzergruppen, Berechtigungen und externe Gruppenzuordnungen verwalten",
+      "noGroupsFound": "Keine Gruppen gefunden",
+      "createFirstGroup": "Erstellen Sie Ihre erste Gruppe, um zu beginnen",
+      "apps": "Apps:",
+      "noMappings": "Keine Zuordnungen",
+      "error": "Fehler",
+      "basicInformation": "Grundlegende Informationen",
+      "basicGroupConfiguration": "Grundlegende Gruppenkonfiguration und Metadaten",
+      "groupId": "Gruppen-ID",
+      "protectedSystemGroup": "Dies ist eine geschützte Systemgruppe",
+      "groupName": "Gruppenname",
+      "description": "Beschreibung",
+      "adminAccess": "Admin-Zugriff",
+      "permissions": "Berechtigungen"
+    },
+    "usage": {
+      "title": "Admin Dashboard",
+      "subtitle": "Nutzungsanalysen und Systemübersicht",
+      "overview": {
+        "systemOverview": "Systemübersicht",
+        "activeUsers": "Aktive Benutzer",
+        "activeApps": "Aktive Apps",
+        "modelsUsed": "Verwendete Modelle",
+        "avgTokensPerMsg": "Ø Tokens/Nachricht"
+      },
+      "sections": {
+        "appUsage": "App-Nutzung",
+        "tokenEfficiency": "Token-Effizienz",
+        "inputTokenDistribution": "Eingabe-Token-Verteilung",
+        "outputTokenDistribution": "Ausgabe-Token-Verteilung",
+        "userFeedbackActivity": "Benutzer-Feedback-Aktivität",
+        "feedbackByApplication": "Feedback nach Anwendung",
+        "feedbackByModel": "Feedback nach Modell"
+      }
+    },
+    "auth": {
+      "configuration": "Authentifizierungskonfiguration",
+      "methods": "Authentifizierungsmethoden",
+      "dualAuthentication": "Duale Authentifizierung:",
+      "builtInSystem": "Integriertes Benutzername/Passwort-System",
+      "anonymousAccess": "Anonymer Zugriff",
+      "defaultGroups": "Standardgruppen",
+      "jwtProviders": "JWT-Anbieter",
+      "noOidcProviders": "Keine OIDC-Anbieter konfiguriert",
+      "addProvider": "Fügen Sie einen Anbieter hinzu, um OIDC-Authentifizierung zu aktivieren"
     }
   },
   "components": {
@@ -433,5 +651,52 @@
     "rated": "Bewertet",
     "sendFeedback": "Feedback senden",
     "thankYou": "Danke für dein Feedback!"
+  },
+  "errors": {
+    "componentError": "Komponenten-Fehler",
+    "compilationError": "Kompilierungsfehler",
+    "noComponentToRender": "Keine Komponente zum Rendern",
+    "pageNotFound": "Seite nicht gefunden",
+    "signIn": "Anmelden"
+  },
+  "auth": {
+    "login": {
+      "title": "Bei Ihrem Konto anmelden",
+      "username": "Benutzername",
+      "usernamePlaceholder": "Benutzername eingeben",
+      "password": "Passwort",
+      "passwordPlaceholder": "Passwort eingeben",
+      "button": "Anmelden",
+      "error": "Ungültiger Benutzername oder Passwort",
+      "required": "Dieses Feld ist erforderlich",
+      "signInWith": "Anmelden mit:",
+      "or": "oder",
+      "signingIn": "Anmeldung läuft..."
+    },
+    "logout": "Abmelden",
+    "menu": {
+      "profile": "Profil",
+      "adminPanel": "Admin-Panel",
+      "signOut": "Abmelden",
+      "signIn": "Anmelden"
+    }
+  },
+  "widget": {
+    "fallback": {
+      "title": "KI-Assistent",
+      "noMessages": "Noch keine Nachrichten",
+      "startConversation": "Starten Sie eine Unterhaltung, indem Sie eine Nachricht eingeben."
+    }
+  },
+  "toolbar": {
+    "bold": "Fett",
+    "italic": "Kursiv",
+    "underline": "Unterstrichen",
+    "bulletList": "Aufzählung",
+    "numberedList": "Nummerierte Liste",
+    "quote": "Zitat",
+    "code": "Code",
+    "link": "Link",
+    "redo": "Wiederholen"
   }
 }

@@ -516,9 +516,9 @@ const AdminPromptEditPage = () => {
                             onChange={e => handleVariableChange(index, 'type', e.target.value)}
                             className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           >
-                            <option value="string">String</option>
-                            <option value="number">Number</option>
-                            <option value="boolean">Boolean</option>
+                            <option value="string">{t('admin.prompts.variableTypes.string', 'String')}</option>
+                            <option value="number">{t('admin.prompts.variableTypes.number', 'Number')}</option>
+                            <option value="boolean">{t('admin.prompts.variableTypes.boolean', 'Boolean')}</option>
                           </select>
                         </div>
                         <div className="col-span-2">

@@ -75,12 +75,20 @@ const SmartSearch = () => {
                 {getLocalizedContent(app.name, currentLanguage) || app.id}
               </span>
               {favoriteApps.includes(app.id) && (
-                <span className="ml-1" aria-label="Favorite" title="Favorite">
+                <span
+                  className="ml-1"
+                  aria-label={t('common.favorite', 'Favorite')}
+                  title={t('common.favorite', 'Favorite')}
+                >
                   <Icon name="star" size="sm" className="text-yellow-500" solid={true} />
                 </span>
               )}
               {recentAppIds.includes(app.id) && (
-                <span className="ml-1" aria-label="Recent" title="Recent">
+                <span
+                  className="ml-1"
+                  aria-label={t('common.recent', 'Recent')}
+                  title={t('common.recent', 'Recent')}
+                >
                   <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
                 </span>
               )}

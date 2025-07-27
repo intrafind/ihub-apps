@@ -115,6 +115,20 @@
       "secondaryColor": "#f3f4f6",
       "fontFamily": "Inter, system-ui, sans-serif",
       "borderRadius": "8px"
+    },
+    "fallback": {
+      "title": {
+        "en": "AI Assistant",
+        "de": "KI-Assistent"
+      },
+      "noMessages": {
+        "en": "No messages yet",
+        "de": "Noch keine Nachrichten"
+      },
+      "startConversation": {
+        "en": "Start a conversation by typing a message.",
+        "de": "Starten Sie eine Unterhaltung, indem Sie eine Nachricht eingeben."
+      }
     }
   },
   "appsList": {
