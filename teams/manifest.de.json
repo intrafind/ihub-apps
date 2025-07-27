@@ -32,13 +32,8 @@
       "scopes": ["personal"]
     }
   ],
-  "permissions": [
-    "identity",
-    "messageTeamMembers"
-  ],
-  "validDomains": [
-    "{{VALID_DOMAIN}}"
-  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": ["{{VALID_DOMAIN}}"],
   "webApplicationInfo": {
     "id": "{{AAD_CLIENT_ID}}",
     "resource": "api://{{VALID_DOMAIN}}/{{AAD_CLIENT_ID}}"
