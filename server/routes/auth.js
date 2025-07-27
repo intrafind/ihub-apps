@@ -7,6 +7,7 @@ import {
 } from '../middleware/oidcAuth.js';
 import { loginLdapUser, getConfiguredLdapProviders } from '../middleware/ldapAuth.js';
 import { processNtlmLogin, getNtlmConfig } from '../middleware/ntlmAuth.js';
+import { teamsTokenExchange, teamsTabConfigSave } from '../middleware/teamsAuth.js';
 
 export default function registerAuthRoutes(app) {
   /**
@@ -357,4 +358,16 @@ export default function registerAuthRoutes(app) {
     const handler = createOidcCallbackHandler(providerName);
     handler(req, res, next);
   });
+
+  /**
+   * Teams SSO token exchange
+   * POST /api/auth/teams/exchange
+   */
+  app.post('/api/auth/teams/exchange', teamsTokenExchange);
+
+  /**
+   * Teams tab configuration save
+   * POST /api/auth/teams/config
+   */
+  app.post('/api/auth/teams/config', teamsTabConfigSave);
 }

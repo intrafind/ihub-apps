@@ -38,6 +38,9 @@ import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import { configureMarked } from './shared/components/MarkdownRenderer';
+import TeamsWrapper from './features/teams/TeamsWrapper';
+import TeamsAuthStart from './features/teams/TeamsAuthStart';
+import TeamsAuthEnd from './features/teams/TeamsAuthEnd';
 
 // Create safe versions of components that need error boundaries
 const SafeAppsList = withSafeRoute(AppsList);
@@ -80,13 +83,21 @@ function App() {
     <AppProviders>
       <AuthProvider>
         <AdminAuthProvider>
-          <BrowserRouter>
-            {/* Document title management - must be inside Router for useLocation/useParams */}
-            <DocumentTitle />
+          <TeamsWrapper>
+            <BrowserRouter>
+              {/* Document title management - must be inside Router for useLocation/useParams */}
+              <DocumentTitle />
 
-            <Routes>
-              {/* Widget page should be outside of the regular Layout */}
-              <Route path="/widget/chat" element={<SafeWidgetPage />} />
+              <Routes>
+                {/* Teams authentication routes */}
+                <Route path="/teams/auth-start" element={<TeamsAuthStart />} />
+                <Route path="/teams/auth-end" element={<TeamsAuthEnd />} />
+                <Route path="/teams/tab" element={<Layout />}>
+                  <Route index element={<SafeAppsList />} />
+                </Route>
+                
+                {/* Widget page should be outside of the regular Layout */}
+                <Route path="/widget/chat" element={<SafeWidgetPage />} />
 
               {/* Regular application routes */}
               <Route path="/" element={<Layout />}>
@@ -149,6 +160,7 @@ function App() {
               </Route>
             </Routes>
           </BrowserRouter>
+          </TeamsWrapper>
         </AdminAuthProvider>
       </AuthProvider>
     </AppProviders>

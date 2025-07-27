@@ -11,6 +11,7 @@
   "dependencies": {
     "@babel/standalone": "^7.28.1",
     "@heroicons/react": "2.2.0",
+    "@microsoft/teams-js": "^2.19.0",
     "@opendocsg/pdf2md": "^0.2.1",
     "@tailwindcss/typography": "^0.5.16",
     "axios": "^1.11.0",

@@ -1,0 +1,163 @@
+/* Microsoft Teams Integration Styles */
+
+/* Teams container adjustments */
+.teams-container {
+  /* Ensure full height utilization in Teams */
+  min-height: 100vh;
+  
+  /* Teams-specific background color support */
+  background-color: var(--teams-bg, #f5f5f5);
+  color: var(--teams-text, #323130);
+}
+
+/* Teams theme variables */
+:root {
+  --teams-bg: #ffffff;
+  --teams-text: #323130;
+  --teams-accent: #6264a7;
+  --teams-surface: #f5f5f5;
+  --teams-border: #e1dfdd;
+}
+
+/* Dark theme for Teams */
+.dark {
+  --teams-bg: #1e1e1e;
+  --teams-text: #ffffff;
+  --teams-accent: #6264a7;
+  --teams-surface: #2d2c2c;
+  --teams-border: #484644;
+}
+
+/* High contrast theme for Teams */
+.contrast {
+  --teams-bg: #000000;
+  --teams-text: #ffffff;
+  --teams-accent: #ffff00;
+  --teams-surface: #1a1a1a;
+  --teams-border: #ffffff;
+}
+
+/* Teams-specific component overrides */
+.teams-container .bg-white {
+  background-color: var(--teams-bg);
+}
+
+.teams-container .text-gray-900 {
+  color: var(--teams-text);
+}
+
+.teams-container .border-gray-200 {
+  border-color: var(--teams-border);
+}
+
+/* Ensure proper scrolling in Teams tab */
+.teams-container {
+  overflow-y: auto;
+  max-height: 100vh;
+}
+
+/* Teams-specific button styling */
+.teams-container .btn-teams {
+  background-color: var(--teams-accent);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.teams-container .btn-teams:hover {
+  opacity: 0.9;
+}
+
+.teams-container .btn-teams:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Teams authentication loading screen */
+.teams-auth-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background-color: var(--teams-bg);
+  color: var(--teams-text);
+}
+
+.teams-auth-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background-color: var(--teams-bg);
+  color: var(--teams-text);
+}
+
+/* Teams popup window styles */
+.teams-auth-popup {
+  padding: 2rem;
+  text-align: center;
+  background-color: var(--teams-bg);
+  color: var(--teams-text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Loading spinner for Teams */
+.teams-spinner {
+  border: 2px solid var(--teams-border);
+  border-top: 2px solid var(--teams-accent);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments for Teams mobile */
+@media (max-width: 768px) {
+  .teams-container {
+    padding: 0.5rem;
+  }
+  
+  .teams-container .text-lg {
+    font-size: 1rem;
+  }
+  
+  .teams-container .text-xl {
+    font-size: 1.125rem;
+  }
+}
+
+/* Teams-specific focus styles for accessibility */
+.teams-container button:focus,
+.teams-container input:focus,
+.teams-container textarea:focus,
+.teams-container select:focus {
+  outline: 2px solid var(--teams-accent);
+  outline-offset: 2px;
+}
+
+/* Remove default focus styles in favor of Teams styling */
+.teams-container *:focus {
+  outline: none;
+}
+
+/* Apply Teams focus to interactive elements */
+.teams-container button:focus-visible,
+.teams-container input:focus-visible,
+.teams-container textarea:focus-visible,
+.teams-container select:focus-visible,
+.teams-container a:focus-visible {
+  outline: 2px solid var(--teams-accent);
+  outline-offset: 2px;
+}

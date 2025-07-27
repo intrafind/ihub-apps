@@ -3,6 +3,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Microsoft Teams Integration */
+@import './features/teams/teams.css';
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
