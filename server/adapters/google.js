@@ -2,8 +2,9 @@
  * Google Gemini API adapter
  */
 import { formatToolsForGoogle, normalizeName } from './toolFormatter.js';
+import { BaseAdapter } from './BaseAdapter.js';
 
-const GoogleAdapter = {
+class GoogleAdapterClass extends BaseAdapter {
   /**
    * Format messages for Google Gemini API, including handling image data
    */
@@ -27,11 +28,7 @@ const GoogleAdapter = {
     for (const message of messages) {
       if (message.role === 'tool') {
         let responseObj;
-        try {
-          responseObj = JSON.parse(message.content);
-        } catch {
-          responseObj = message.content;
-        }
+        responseObj = this.safeJsonParse(message.content, message.content);
         currentToolResponses.push({
           functionResponse: {
             name: normalizeName(message.name || message.tool_call_id || 'tool'),
@@ -57,11 +54,7 @@ const GoogleAdapter = {
             }
             for (const call of message.tool_calls) {
               let argsObj;
-              try {
-                argsObj = JSON.parse(call.function.arguments || '{}');
-              } catch {
-                argsObj = {};
-              }
+              argsObj = this.safeJsonParse(call.function.arguments, {});
               parts.push({
                 functionCall: {
                   name: normalizeName(call.function.name),
@@ -80,7 +73,7 @@ const GoogleAdapter = {
           const textContent = message.content;
 
           // Check if this message contains image data
-          if (message.imageData && message.imageData.base64) {
+          if (this.hasImageData(message)) {
             // For image messages, we need to create a parts array with both text and image
             const parts = [];
 
@@ -93,7 +86,7 @@ const GoogleAdapter = {
             parts.push({
               inlineData: {
                 mimeType: message.imageData.fileType || 'image/jpeg',
-                data: message.imageData.base64.replace(/^data:image\/[a-z]+;base64,/, '') // Remove data URL prefix if present
+                data: this.cleanBase64Data(message.imageData.base64) // Remove data URL prefix if present
               }
             });
 
@@ -111,16 +104,7 @@ const GoogleAdapter = {
     pushToolResponses();
 
     // Debug logs to trace message transformation
-    console.log(
-      'Original messages:',
-      JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData })))
-    );
-    console.log(
-      'Transformed Gemini contents:',
-      JSON.stringify(
-        geminiContents.map(c => ({ role: c.role, partTypes: c.parts.map(p => Object.keys(p)[0]) }))
-      )
-    );
+    this.debugLogMessages(messages, geminiContents, 'Google');
     console.log('System instruction:', systemInstruction);
 
     // Return both regular messages and the system instruction
@@ -128,19 +112,19 @@ const GoogleAdapter = {
       contents: geminiContents,
       systemInstruction
     };
-  },
+  }
 
   /**
    * Create a completion request for Gemini
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
     const {
-      temperature = 0.7,
-      stream = true,
-      tools = null,
-      responseFormat = null,
-      responseSchema = null
-    } = options;
+      temperature,
+      stream,
+      tools,
+      responseFormat,
+      responseSchema
+    } = this.extractRequestOptions(options);
 
     // Format messages and extract system instruction
     const { contents, systemInstruction } = this.formatMessages(messages);
@@ -194,7 +178,7 @@ const GoogleAdapter = {
       },
       body: requestBody
     };
-  },
+  }
 
   /**
    * Process streaming response from Gemini
@@ -361,6 +345,7 @@ const GoogleAdapter = {
       };
     }
   }
-};
+}
 
+const GoogleAdapter = new GoogleAdapterClass();
 export default GoogleAdapter;
