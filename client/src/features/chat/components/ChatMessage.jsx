@@ -97,13 +97,30 @@ const ChatMessage = ({
     }
   }, [outputFormat, isUser, isEditing, message.content]);
 
+  const extractPlainTextWithLinks = htmlContent => {
+    const temp = document.createElement('div');
+    temp.innerHTML = htmlContent;
+
+    // Find all link elements and replace them with "text (url)" format
+    const links = temp.querySelectorAll('a');
+    links.forEach(link => {
+      const text = link.textContent || link.innerText || '';
+      const href = link.getAttribute('href') || '';
+
+      // Only add URL if it's different from the text and not empty
+      if (href && href !== text && href.trim() !== '') {
+        link.textContent = `${text} (${href})`;
+      }
+    });
+
+    return temp.textContent || temp.innerText || '';
+  };
+
   const handleCopy = (format = 'text') => {
     const raw = typeof message.content === 'string' ? message.content : message.content || '';
     let html = isMarkdown(raw) ? markdownToHtml(raw) : raw;
     let markdown = isMarkdown(raw) ? raw : htmlToMarkdown(raw);
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
-    const plain = temp.textContent || temp.innerText || '';
+    const plain = extractPlainTextWithLinks(html);
 
     let data;
     switch (format) {
