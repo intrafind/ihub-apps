@@ -126,12 +126,12 @@ export default function registerAdminUIRoutes(app) {
           try {
             const filepath = join(assetsDir, filename);
             const stats = fs.statSync(filepath);
-            
+
             // Skip directories
             if (stats.isDirectory()) {
               return null;
             }
-            
+
             const ext = path.extname(filename).toLowerCase();
 
             return {
