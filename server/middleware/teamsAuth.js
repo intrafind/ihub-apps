@@ -5,6 +5,7 @@ import fetch from 'node-fetch';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import config from '../config.js';
+import ErrorHandler from '../utils/ErrorHandler.js';
 
 // JWKS client for Microsoft public keys
 const createJwksClient = tenantId => {
@@ -37,7 +38,7 @@ async function verifyTeamsToken(token, teamsConfig) {
     // Decode token without verification to get header and claims
     const decoded = jwt.decode(token, { complete: true });
     if (!decoded) {
-      throw new Error('Invalid token format');
+      throw new Error('TEAMS_INVALID_TOKEN_FORMAT');
     }
 
     const { header, payload } = decoded;
@@ -45,7 +46,7 @@ async function verifyTeamsToken(token, teamsConfig) {
     // Get the tenant ID from the token
     const tenantId = payload.tid || teamsConfig.tenantId;
     if (!tenantId) {
-      throw new Error('No tenant ID found in token or configuration');
+      throw new Error('TEAMS_NO_TENANT_ID');
     }
 
     // Get JWKS client for this tenant
@@ -172,7 +173,7 @@ function generateJwtToken(user) {
   const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret;
 
   if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
-    throw new Error('JWT secret not configured for Teams authentication');
+    throw new Error('TEAMS_JWT_SECRET_NOT_CONFIGURED');
   }
 
   const tokenPayload = {
@@ -272,13 +273,18 @@ export async function teamsAuthMiddleware(req, res, next) {
  * Teams token exchange endpoint handler
  */
 export async function teamsTokenExchange(req, res) {
+  const errorHandler = new ErrorHandler();
+  const language = req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en';
+  
   try {
     const { ssoToken } = req.body;
 
     if (!ssoToken) {
+      const errorMessage = await errorHandler.getLocalizedError('TEAMS_SSO_TOKEN_REQUIRED', {}, language);
       return res.status(400).json({
         success: false,
-        error: 'SSO token is required'
+        error: errorMessage,
+        errorKey: 'TEAMS_SSO_TOKEN_REQUIRED'
       });
     }
 
@@ -286,9 +292,11 @@ export async function teamsTokenExchange(req, res) {
     const teamsConfig = platform.teamsAuth || {};
 
     if (!teamsConfig.enabled) {
+      const errorMessage = await errorHandler.getLocalizedError('TEAMS_AUTH_NOT_ENABLED', {}, language);
       return res.status(400).json({
         success: false,
-        error: 'Teams authentication is not enabled'
+        error: errorMessage,
+        errorKey: 'TEAMS_AUTH_NOT_ENABLED'
       });
     }
 
@@ -319,9 +327,11 @@ export async function teamsTokenExchange(req, res) {
     });
   } catch (error) {
     console.error('Teams token exchange error:', error);
+    const errorMessage = await errorHandler.getLocalizedError('TEAMS_INVALID_OR_EXPIRED_TOKEN', {}, language);
     res.status(401).json({
       success: false,
-      error: 'Invalid or expired Teams token'
+      error: errorMessage,
+      errorKey: 'TEAMS_INVALID_OR_EXPIRED_TOKEN'
     });
   }
 }
@@ -329,11 +339,16 @@ export async function teamsTokenExchange(req, res) {
 /**
  * Teams tab configuration save handler
  */
-export function teamsTabConfigSave(req, res) {
+export async function teamsTabConfigSave(req, res) {
+  const errorHandler = new ErrorHandler();
+  const language = req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en';
+  
   // This endpoint is called when a Teams tab is configured
   // For now, we just return success as we don't need to save any configuration
+  const message = await errorHandler.getLocalizedError('TEAMS_TAB_CONFIG_SAVED', {}, language);
   res.json({
     success: true,
-    message: 'Tab configuration saved'
+    message: message,
+    messageKey: 'TEAMS_TAB_CONFIG_SAVED'
   });
 }

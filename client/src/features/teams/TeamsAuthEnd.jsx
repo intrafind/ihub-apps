@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as microsoftTeams from '@microsoft/teams-js';
 
 /**
@@ -6,7 +7,8 @@ import * as microsoftTeams from '@microsoft/teams-js';
  * This page handles the redirect from Azure AD after authentication
  */
 function TeamsAuthEnd() {
-  const [status, setStatus] = useState('Processing authentication...');
+  const { t } = useTranslation();
+  const [status, setStatus] = useState(t('teams.auth.processing'));
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -27,16 +29,16 @@ function TeamsAuthEnd() {
     if (error) {
       // Authentication failed
       setError(errorDescription || error);
-      setStatus('Authentication failed');
-
+      setStatus(t('teams.auth.failed'));
+      
       // Notify Teams of the failure
       setTimeout(() => {
         microsoftTeams.authentication.notifyFailure(errorDescription || error);
       }, 2000);
     } else if (accessToken) {
       // Authentication successful
-      setStatus('Authentication successful!');
-
+      setStatus(t('teams.auth.successful'));
+      
       // Pass the token back to Teams
       // In a real implementation, you might want to exchange this for an app-specific token
       setTimeout(() => {
@@ -44,11 +46,11 @@ function TeamsAuthEnd() {
       }, 1000);
     } else {
       // No token or error in the response
-      setError('No authentication response received');
-      setStatus('Authentication failed');
-
+      setError(t('teams.auth.noResponse'));
+      setStatus(t('teams.auth.failed'));
+      
       setTimeout(() => {
-        microsoftTeams.authentication.notifyFailure('No authentication response');
+        microsoftTeams.authentication.notifyFailure(t('teams.auth.noResponse'));
       }, 2000);
     }
   };
@@ -75,7 +77,7 @@ function TeamsAuthEnd() {
             </div>
             <h2 className="text-xl font-semibold mb-2">{status}</h2>
             <p className="text-gray-600">{error}</p>
-            <p className="text-sm text-gray-500 mt-4">This window will close automatically...</p>
+            <p className="text-sm text-gray-500 mt-4">{t('teams.auth.windowWillClose')}</p>
           </>
         ) : (
           <>
@@ -95,7 +97,7 @@ function TeamsAuthEnd() {
               </svg>
             </div>
             <h2 className="text-xl font-semibold mb-2">{status}</h2>
-            <p className="text-gray-600">You can now close this window.</p>
+            <p className="text-gray-600">{t('teams.auth.canCloseWindow')}</p>
           </>
         )}
       </div>
