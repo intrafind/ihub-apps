@@ -110,27 +110,45 @@ export default function registerAdminUIRoutes(app) {
     try {
       const assetsDir = join(getRootDir(), 'contents/uploads/assets');
 
+      // Create directory if it doesn't exist
       if (!fs.existsSync(assetsDir)) {
+        fs.mkdirSync(assetsDir, { recursive: true });
         return res.json({ success: true, assets: [] });
       }
 
       const files = fs.readdirSync(assetsDir);
       const assets = files
-        .map(filename => {
-          const filepath = join(assetsDir, filename);
-          const stats = fs.statSync(filepath);
-          const ext = path.extname(filename).toLowerCase();
-
-          return {
-            id: filename,
-            filename,
-            publicUrl: `/uploads/assets/${filename}`,
-            size: stats.size,
-            mimetype: getMimeType(ext),
-            uploadedAt: stats.mtime.toISOString(),
-            isImage: ['.svg', '.png', '.jpg', '.jpeg', '.ico'].includes(ext)
-          };
+        .filter(filename => {
+          // Filter out hidden files and directories
+          return !filename.startsWith('.') && filename.length > 0;
         })
+        .map(filename => {
+          try {
+            const filepath = join(assetsDir, filename);
+            const stats = fs.statSync(filepath);
+            
+            // Skip directories
+            if (stats.isDirectory()) {
+              return null;
+            }
+            
+            const ext = path.extname(filename).toLowerCase();
+
+            return {
+              id: filename,
+              filename,
+              publicUrl: `/uploads/assets/${filename}`,
+              size: stats.size,
+              mimetype: getMimeType(ext),
+              uploadedAt: stats.mtime.toISOString(),
+              isImage: ['.svg', '.png', '.jpg', '.jpeg', '.ico'].includes(ext)
+            };
+          } catch (statError) {
+            console.warn(`Error reading file stats for ${filename}:`, statError.message);
+            return null;
+          }
+        })
+        .filter(asset => asset !== null)
         .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
       res.json({ success: true, assets });
@@ -138,7 +156,7 @@ export default function registerAdminUIRoutes(app) {
       console.error('Error listing assets:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to list assets',
+        message: 'Failed to load assets',
         error: error.message
       });
     }
@@ -180,11 +198,11 @@ export default function registerAdminUIRoutes(app) {
    */
   app.get('/api/admin/ui/config', adminAuth, (req, res) => {
     try {
-      const uiConfig = configCache.getConfigEntry('config/ui.json');
+      const uiConfig = configCache.getUI();
 
       res.json({
         success: true,
-        config: uiConfig
+        config: uiConfig?.data || {}
       });
     } catch (error) {
       console.error('Error getting UI config:', error);
@@ -241,7 +259,8 @@ export default function registerAdminUIRoutes(app) {
    */
   app.post('/api/admin/ui/backup', adminAuth, async (req, res) => {
     try {
-      const currentConfig = configCache.getConfigEntry('config/ui.json');
+      const uiConfig = configCache.getUI();
+      const currentConfig = uiConfig?.data || {};
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const backupDir = join(getRootDir(), 'contents/backups');
 
