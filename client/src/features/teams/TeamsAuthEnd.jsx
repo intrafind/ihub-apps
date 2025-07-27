@@ -30,7 +30,7 @@ function TeamsAuthEnd() {
       // Authentication failed
       setError(errorDescription || error);
       setStatus(t('teams.auth.failed'));
-      
+
       // Notify Teams of the failure
       setTimeout(() => {
         microsoftTeams.authentication.notifyFailure(errorDescription || error);
@@ -38,14 +38,14 @@ function TeamsAuthEnd() {
     } else if (accessToken) {
       // Authentication successful
       setStatus(t('teams.auth.successful'));
-      
+
       // Pass the token back to Teams
       // In a real implementation, you might want to exchange this for an app-specific token
       setTimeout(() => {
         microsoftTeams.authentication.notifySuccess(accessToken);
       }, 1000);
     } else {
-      // No token or error in the response
+      // No token or error in the response<<<<<<< ISSUE_209_Microsoft_Teams
       setError(t('teams.auth.noResponse'));
       setStatus(t('teams.auth.failed'));
       

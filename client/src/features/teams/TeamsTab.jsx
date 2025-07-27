@@ -38,7 +38,7 @@ function TeamsTab() {
         
         // Apply Teams language preference
         applyTeamsLanguage(context.locale);
-        
+
         // Register theme change handler
         microsoftTeams.registerOnThemeChangeHandler(applyTeamsTheme);
 
@@ -139,7 +139,7 @@ function TeamsTab() {
     } catch (error) {
       console.error('Teams authentication error:', error);
       setError(error.message || t('teams.errors.authenticationFailed'));
-      
+
       // If SSO fails, we might need to trigger interactive authentication
       if (
         error.message?.includes('consent_required') ||
