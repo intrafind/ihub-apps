@@ -3,7 +3,15 @@ import jwt from 'jsonwebtoken';
 import jwkToPem from 'jwk-to-pem';
 import config from '../config.js';
 import configCache from '../configCache.js';
-import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
+import { enhanceUserGroups } from '../utils/authorization.js';
+import {
+  loadUsers,
+  findUserByIdentifier,
+  createOrUpdateOidcUser,
+  isUserActive,
+  mergeUserGroups,
+  updateUserActivity
+} from '../utils/userManager.js';
 
 const jwksCache = new Map();
 
@@ -39,6 +47,107 @@ async function verifyJwt(token, provider) {
     console.error('JWT verification failed', err.message);
     return null;
   }
+}
+
+/**
+ * Validate and persist proxy user based on platform configuration
+ */
+async function validateAndPersistProxyUser(proxyUser, platform) {
+  const proxyConfig = platform.proxyAuth || {};
+  const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+
+  // Check if user exists in users.json
+  const usersConfig = loadUsers(usersFilePath);
+  const existingUser =
+    findUserByIdentifier(usersConfig, proxyUser.email, 'proxy') ||
+    findUserByIdentifier(usersConfig, proxyUser.id, 'proxy');
+
+  // If user exists, check if they are active
+  if (existingUser) {
+    if (!isUserActive(existingUser)) {
+      throw new Error(
+        `User account is disabled. User ID: ${existingUser.id}, Email: ${existingUser.email}. Please contact your administrator.`
+      );
+    }
+
+    // Update existing user and merge groups
+    const proxyUserData = {
+      id: proxyUser.id,
+      email: proxyUser.email,
+      name: proxyUser.name,
+      groups: proxyUser.groups || [],
+      provider: 'proxy'
+    };
+
+    const persistedUser = await createOrUpdateProxyUser(proxyUserData, usersFilePath);
+
+    // Update activity tracking
+    await updateUserActivity(persistedUser.id, usersFilePath);
+
+    // Merge groups: external groups (from proxy) + additional groups (from users.json)
+    const mergedGroups = mergeUserGroups(
+      proxyUser.groups || [],
+      persistedUser.additionalGroups || []
+    );
+
+    return {
+      ...proxyUser,
+      id: persistedUser.id,
+      groups: mergedGroups,
+      active: persistedUser.active,
+      authMethods: persistedUser.authMethods || ['proxy'],
+      lastActiveDate: persistedUser.lastActiveDate,
+      persistedUser: true
+    };
+  }
+
+  // User doesn't exist - check self-signup settings
+  if (!proxyConfig.allowSelfSignup) {
+    throw new Error(
+      `New user registration is not allowed. User ID: ${proxyUser.id}, Email: ${proxyUser.email}. Please contact your administrator.`
+    );
+  }
+
+  // Create new user (self-signup allowed)
+  const proxyUserData = {
+    id: proxyUser.id,
+    email: proxyUser.email,
+    name: proxyUser.name,
+    groups: proxyUser.groups || [],
+    provider: 'proxy'
+  };
+
+  const persistedUser = await createOrUpdateProxyUser(proxyUserData, usersFilePath);
+
+  // Combine external groups from proxy with additional groups from users.json
+  const combinedGroups = mergeUserGroups(
+    proxyUser.groups || [],
+    persistedUser.additionalGroups || []
+  );
+
+  return {
+    ...proxyUser,
+    id: persistedUser.id,
+    groups: combinedGroups,
+    active: true,
+    authMethods: ['proxy'],
+    lastActiveDate: persistedUser.lastActiveDate,
+    persistedUser: true
+  };
+}
+
+/**
+ * Create or update proxy user in users.json
+ */
+async function createOrUpdateProxyUser(proxyUser, usersFilePath) {
+  // Use the existing createOrUpdateOidcUser function but adapt for proxy
+  return await createOrUpdateOidcUser(
+    {
+      ...proxyUser,
+      provider: 'proxy'
+    },
+    usersFilePath
+  );
 }
 
 export async function proxyAuth(req, res, next) {
@@ -170,10 +279,23 @@ export async function proxyAuth(req, res, next) {
     authMethod: 'proxy'
   };
 
-  // Enhance user with authenticated group
-  const authConfig = platform.auth || {};
-  user = enhanceUserGroups(user, authConfig);
+  try {
+    // Validate and persist proxy user based on platform configuration
+    user = await validateAndPersistProxyUser(user, platform);
 
-  req.user = user;
-  next();
+    // Enhance user with authenticated group
+    const authConfig = platform.auth || {};
+    user = enhanceUserGroups(user, authConfig);
+
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('Proxy user validation error:', error.message);
+    // Return a 403 Forbidden with a user-friendly error message
+    res.status(403).json({
+      error: 'Access Denied',
+      message: error.message,
+      code: 'USER_VALIDATION_FAILED'
+    });
+  }
 }

@@ -24,6 +24,7 @@ const AdminAuthPage = () => {
     },
     proxyAuth: {
       enabled: false,
+      allowSelfSignup: false,
       userHeader: 'X-Forwarded-User',
       groupsHeader: 'X-Forwarded-Groups',
       jwtProviders: []
@@ -37,6 +38,7 @@ const AdminAuthPage = () => {
     },
     oidcAuth: {
       enabled: false,
+      allowSelfSignup: false,
       providers: []
     }
   });
@@ -234,7 +236,9 @@ const AdminAuthPage = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">{t('admin.auth.configuration', 'Authentication Configuration')}</h1>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  {t('admin.auth.configuration', 'Authentication Configuration')}
+                </h1>
                 <p className="text-gray-600 mt-1">
                   Configure multiple authentication methods and user access settings. Enable dual
                   authentication for maximum flexibility.
@@ -350,7 +354,9 @@ const AdminAuthPage = () => {
 
             {/* Multiple Authentication Methods */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.auth.methods', 'Authentication Methods')}</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                {t('admin.auth.methods', 'Authentication Methods')}
+              </h3>
               <p className="text-sm text-gray-600 mb-4">
                 Enable multiple authentication methods simultaneously. Users can choose their
                 preferred login method. The system will automatically show available login options
@@ -360,9 +366,10 @@ const AdminAuthPage = () => {
                 <div className="flex">
                   <Icon name="info" size="sm" className="text-blue-500 mt-0.5 mr-2" />
                   <div className="text-sm text-blue-700">
-                    <strong>{t('admin.auth.dualAuthentication', 'Dual Authentication:')}</strong> When multiple methods are enabled, users
-                    will see all available login options. For example, enabling both Local and OIDC
-                    will show username/password fields AND provider login buttons.
+                    <strong>{t('admin.auth.dualAuthentication', 'Dual Authentication:')}</strong>{' '}
+                    When multiple methods are enabled, users will see all available login options.
+                    For example, enabling both Local and OIDC will show username/password fields AND
+                    provider login buttons.
                   </div>
                 </div>
               </div>
@@ -400,7 +407,9 @@ const AdminAuthPage = () => {
                       <label className="text-sm font-medium text-gray-900">
                         Local Authentication
                       </label>
-                      <p className="text-xs text-gray-500">{t('admin.auth.builtInSystem', 'Built-in username/password system')}</p>
+                      <p className="text-xs text-gray-500">
+                        {t('admin.auth.builtInSystem', 'Built-in username/password system')}
+                      </p>
                     </div>
                   </div>
 
@@ -433,7 +442,9 @@ const AdminAuthPage = () => {
                       />
                     </div>
                     <div className="flex-1">
-                      <label className="text-sm font-medium text-gray-900">{t('admin.auth.anonymousAccess', 'Anonymous Access')}</label>
+                      <label className="text-sm font-medium text-gray-900">
+                        {t('admin.auth.anonymousAccess', 'Anonymous Access')}
+                      </label>
                       <p className="text-xs text-gray-500">
                         Allow users to access without authentication
                       </p>
@@ -445,7 +456,9 @@ const AdminAuthPage = () => {
 
             {/* General Authentication Settings */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.auth.defaultGroups', 'Default Groups')}</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                {t('admin.auth.defaultGroups', 'Default Groups')}
+              </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -535,11 +548,32 @@ const AdminAuthPage = () => {
                     </div>
                   </div>
 
+                  {/* Self-signup Setting */}
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={config.proxyAuth.allowSelfSignup || false}
+                        onChange={e =>
+                          updateNestedConfig('proxyAuth', 'allowSelfSignup', e.target.checked)
+                        }
+                        className="mr-2"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Allow Self-Signup</span>
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Allow new users to register automatically through proxy authentication. If
+                      disabled, new users must be added manually by administrators.
+                    </p>
+                  </div>
+
                   {/* JWT Providers */}
                   <div>
                     <div className="flex justify-between items-center mb-4">
                       <div>
-                        <h4 className="text-md font-medium text-gray-900">{t('admin.auth.jwtProviders', 'JWT Providers')}</h4>
+                        <h4 className="text-md font-medium text-gray-900">
+                          {t('admin.auth.jwtProviders', 'JWT Providers')}
+                        </h4>
                         <p className="text-xs text-gray-500">
                           Configure JWT token validation for pure JWT authentication (no headers
                           required)
@@ -698,11 +732,32 @@ const AdminAuthPage = () => {
                   </button>
                 </div>
 
+                {/* Self-signup Setting */}
+                <div className="mb-6">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={config.oidcAuth.allowSelfSignup || false}
+                      onChange={e =>
+                        updateNestedConfig('oidcAuth', 'allowSelfSignup', e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Allow Self-Signup</span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Allow new users to register automatically through OIDC authentication. If
+                    disabled, new users must be added manually by administrators.
+                  </p>
+                </div>
+
                 {config.oidcAuth.providers.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <Icon name="key" size="lg" className="mx-auto mb-4 text-gray-400" />
                     <p>{t('admin.auth.noOidcProviders', 'No OIDC providers configured')}</p>
-                    <p className="text-sm">{t('admin.auth.addProvider', 'Add a provider to enable OIDC authentication')}</p>
+                    <p className="text-sm">
+                      {t('admin.auth.addProvider', 'Add a provider to enable OIDC authentication')}
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-6">

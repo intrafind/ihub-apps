@@ -14,16 +14,16 @@
  */
 export function sendErrorResponse(res, statusCode, message, options = {}) {
   const { error, logPrefix, details } = options;
-  
+
   if (error && logPrefix) {
     console.error(`${logPrefix}:`, error);
   }
-  
+
   const response = { error: message };
   if (details) {
     response.details = details;
   }
-  
+
   return res.status(statusCode).json(response);
 }
 
@@ -67,7 +67,7 @@ export function sendAuthRequired(res) {
  * @param {string} requiredPermission - Optional specific permission required
  */
 export function sendInsufficientPermissions(res, requiredPermission) {
-  const message = requiredPermission 
+  const message = requiredPermission
     ? `Insufficient permissions: ${requiredPermission} required`
     : 'Insufficient permissions';
   return res.status(403).json({ error: message });

@@ -47,15 +47,8 @@ class MistralAdapterClass extends BaseAdapter {
    * Create a completion request for Mistral
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const {
-      temperature,
-      stream,
-      tools,
-      toolChoice,
-      responseFormat,
-      responseSchema,
-      maxTokens
-    } = this.extractRequestOptions(options);
+    const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
+      this.extractRequestOptions(options);
 
     const formattedMessages = this.formatMessages(messages);
     this.debugLogMessages(messages, formattedMessages, 'Mistral');
