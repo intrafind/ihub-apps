@@ -10,13 +10,15 @@ const Forbidden = () => {
       <div className="text-indigo-600 mb-4">
         <Icon name="ban" size="2xl" className="w-24 h-24" />
       </div>
-      <h1 className="text-4xl font-bold mb-2">{t('error.forbidden.title')}</h1>
-      <p className="text-xl mb-6 text-center">{t('error.forbidden.message')}</p>
+      <h1 className="text-4xl font-bold mb-2">{t('errors.forbidden.title', 'Forbidden')}</h1>
+      <p className="text-xl mb-6 text-center">
+        {t('errors.forbidden.message', 'Access to this resource is forbidden.')}
+      </p>
       <Link
         to="/"
         className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
       >
-        {t('error.backToHome')}
+        {t('errors.forbidden.goBack', 'Go Back')}
       </Link>
     </div>
   );

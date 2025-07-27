@@ -295,7 +295,11 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
               {preview.type === 'image' ? (
                 // Image preview
                 <div className="relative rounded-lg overflow-hidden border border-gray-300">
-                  <img src={preview.url} alt="Preview" className="max-w-full max-h-60 mx-auto" />
+                  <img
+                    src={preview.url}
+                    alt={t('common.preview', 'Preview')}
+                    className="max-w-full max-h-60 mx-auto"
+                  />
                   <button
                     type="button"
                     onClick={handleClear}

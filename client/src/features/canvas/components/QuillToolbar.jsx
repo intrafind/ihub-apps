@@ -184,21 +184,21 @@ const QuillToolbar = ({
             <div className="flex items-center">
               <button
                 className={`modern-btn ${currentFormat.bold ? 'ql-active' : ''}`}
-                title="Bold"
+                title={t('toolbar.bold', 'Bold')}
                 onClick={() => applyFormatWithFocus('bold')}
               >
                 <strong>B</strong>
               </button>
               <button
                 className={`modern-btn ${currentFormat.italic ? 'ql-active' : ''}`}
-                title="Italic"
+                title={t('toolbar.italic', 'Italic')}
                 onClick={() => applyFormatWithFocus('italic')}
               >
                 <em>I</em>
               </button>
               <button
                 className={`modern-btn ${currentFormat.underline ? 'ql-active' : ''}`}
-                title="Underline"
+                title={t('toolbar.underline', 'Underline')}
                 onClick={() => applyFormatWithFocus('underline')}
               >
                 <u>U</u>
@@ -211,7 +211,7 @@ const QuillToolbar = ({
             <div className="flex items-center">
               <button
                 className={`modern-btn ${currentFormat.list === 'bullet' ? 'ql-active' : ''}`}
-                title="Bullet List"
+                title={t('toolbar.bulletList', 'Bullet List')}
                 onClick={() => {
                   if (!quillRef?.current) return;
                   const quill = quillRef.current.getEditor();
@@ -226,7 +226,7 @@ const QuillToolbar = ({
               </button>
               <button
                 className={`modern-btn ${currentFormat.list === 'ordered' ? 'ql-active' : ''}`}
-                title="Numbered List"
+                title={t('toolbar.numberedList', 'Numbered List')}
                 onClick={() => {
                   if (!quillRef?.current) return;
                   const quill = quillRef.current.getEditor();
@@ -247,7 +247,7 @@ const QuillToolbar = ({
             <div className="flex items-center">
               <button
                 className={`modern-btn ${currentFormat.blockquote ? 'ql-active' : ''}`}
-                title="Quote"
+                title={t('toolbar.quote', 'Quote')}
                 onClick={() => {
                   if (!quillRef?.current) return;
                   const quill = quillRef.current.getEditor();
@@ -262,7 +262,7 @@ const QuillToolbar = ({
               </button>
               <button
                 className={`modern-btn ${currentFormat['code-block'] ? 'ql-active' : ''}`}
-                title="Code"
+                title={t('toolbar.code', 'Code')}
                 onClick={() => {
                   if (!quillRef?.current) return;
                   const quill = quillRef.current.getEditor();
@@ -277,7 +277,7 @@ const QuillToolbar = ({
               </button>
               <button
                 className={`modern-btn ${currentFormat.link ? 'ql-active' : ''}`}
-                title="Link"
+                title={t('toolbar.link', 'Link')}
                 onClick={() => {
                   if (!quillRef?.current) return;
                   const quill = quillRef.current.getEditor();
@@ -306,7 +306,7 @@ const QuillToolbar = ({
             <div className="flex items-center">
               <button
                 className={`modern-btn ${!canUndo ? 'disabled' : ''}`}
-                title="Undo"
+                title={t('common.undo', 'Undo')}
                 onClick={handleUndo}
                 disabled={!canUndo}
               >
@@ -314,7 +314,7 @@ const QuillToolbar = ({
               </button>
               <button
                 className={`modern-btn ${!canRedo ? 'disabled' : ''}`}
-                title="Redo"
+                title={t('toolbar.redo', 'Redo')}
                 onClick={handleRedo}
                 disabled={!canRedo}
               >

@@ -518,7 +518,7 @@ const AppsList = () => {
               <button
                 onClick={clearSearch}
                 className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
-                aria-label="Clear search"
+                aria-label={t('common.clearSearch', 'Clear search')}
               >
                 <Icon name="x" className="w-5 h-5" />
               </button>

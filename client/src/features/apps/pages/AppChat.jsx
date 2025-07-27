@@ -774,7 +774,7 @@ const AppChat = () => {
 
     if (selectedFile) {
       if (selectedFile.type === 'image') {
-        const imgPreview = `<img src="${selectedFile.base64}" alt="Uploaded image" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
+        const imgPreview = `<img src="${selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
         messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
         messageData = { imageData: selectedFile };
       } else {

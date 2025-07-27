@@ -64,3 +64,11 @@ export const sendSessionStart = async sessionData => {
     false // Don't deduplicate
   );
 };
+
+// Tools
+export const fetchTools = async (options = {}) => {
+  const { skipCache = false } = options;
+  const cacheKey = skipCache ? null : CACHE_KEYS.TOOLS;
+
+  return handleApiResponse(() => apiClient.get('/tools'), cacheKey, DEFAULT_CACHE_TTL.MEDIUM);
+};

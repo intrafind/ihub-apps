@@ -106,7 +106,7 @@ const SearchModal = ({
               type="button"
               onClick={() => setQuery('')}
               className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
-              aria-label="Clear"
+              aria-label={t('common.clear', 'Clear')}
             >
               <Icon name="x" className="w-5 h-5" />
             </button>

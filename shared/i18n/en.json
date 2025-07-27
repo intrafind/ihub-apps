@@ -22,6 +22,11 @@
     "error": "Error",
     "success": "Success",
     "search": "Search",
+    "copy": "Copy",
+    "download": "Download",
+    "copied": "Copied!",
+    "downloaded": "Downloaded!",
+    "compiling": "Compiling component...",
     "notFound": "Not Found",
     "back": "Back",
     "all": "All",
@@ -52,7 +57,29 @@
     "none": "None",
     "yes": "Yes",
     "no": "No",
-    "required": "required"
+    "required": "required",
+    "clear": "Clear",
+    "clearSearch": "Clear search",
+    "preview": "Preview",
+    "uploadedImage": "Uploaded image",
+    "toggleMenu": "Toggle menu",
+    "openChat": "Open chat",
+    "closeChat": "Close chat",
+    "sendMessage": "Send message",
+    "backToAppsList": "Back to apps list",
+    "appInfo": "App info",
+    "copyCode": "Copy code",
+    "downloadCode": "Download code",
+    "recent": "Recent",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "bulletList": "Bullet List",
+    "numberedList": "Numbered List",
+    "quote": "Quote",
+    "code": "Code",
+    "link": "Link",
+    "redo": "Redo"
   },
   "pages": {
     "home": {
@@ -103,12 +130,51 @@
       "relevantPrompts": "Relevant prompts",
       "allPrompts": "All prompts",
       "filterByApp": "Filter by app",
-      "clearApp": "Clear app filter"
+      "clearApp": "Clear app filter",
+      "sharePrompt": "Share prompt",
+      "linkCopied": "Link copied!",
+      "sort": {
+        "label": "Sort by",
+        "nameAsc": "Name A-Z",
+        "nameDesc": "Name Z-A",
+        "relevance": "Relevance"
+      }
     },
     "notFound": {
       "title": "Page Not Found",
       "description": "The page you're looking for doesn't exist.",
       "backHome": "Back to Home"
+    },
+    "appChat": {
+      "messagePlaceholder": "Type your message here...",
+      "send": "Send",
+      "thinking": "Thinking...",
+      "regenerate": "Regenerate response",
+      "clear": "Clear chat",
+      "confirmClear": "Are you sure you want to clear the chat?",
+      "shareConversation": "Share app",
+      "export": {
+        "conversation": "Export conversation",
+        "toJSON": "as JSON",
+        "toJSONL": "as JSONL",
+        "toMarkdown": "as Markdown",
+        "toHTML": "as HTML"
+      },
+      "copyToClipboard": "Copy to clipboard",
+      "copied": "Copied to clipboard!",
+      "showThoughts": "Show thinking analysis",
+      "hideThoughts": "Hide thinking analysis",
+      "configureApp": "Configure",
+      "inputParameters": "Input parameters",
+      "parameters": "Parameters",
+      "startConversation": "Start conversation",
+      "starterPromptsTitle": "Starter prompts",
+      "starterPromptsSubtitle": "Select a prompt below to get started quickly",
+      "welcome": "Welcome",
+      "getStarted": "Get started",
+      "examplePrompts": "Here are some example prompts to get started",
+      "noMessagesTitle": "No messages yet",
+      "noMessagesSubtitle": "Start a conversation by sending a message!"
     },
     "authRequired": {
       "title": "Authentication Required",
@@ -146,12 +212,38 @@
       "passwordPlaceholder": "Enter your password",
       "button": "Sign in",
       "error": "Invalid username or password",
-      "required": "This field is required"
+      "required": "This field is required",
+      "signInWith": "Sign in with:",
+      "or": "or",
+      "signingIn": "Signing In..."
     },
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "menu": {
+      "profile": "Profile",
+      "adminPanel": "Admin Panel",
+      "signOut": "Sign Out",
+      "signIn": "Sign In"
+    }
+  },
+  "widget": {
+    "fallback": {
+      "title": "AI Assistant",
+      "noMessages": "No messages yet",
+      "startConversation": "Start a conversation by typing a message."
+    }
   },
   "admin": {
     "title": "Administration",
+    "nav": {
+      "home": "Home",
+      "apps": "Apps",
+      "models": "Models",
+      "prompts": "Prompts",
+      "pages": "Pages",
+      "groups": "Groups",
+      "auth": "Authentication",
+      "logs": "Logs"
+    },
     "navigation": {
       "overview": "Overview",
       "apps": "Apps",
@@ -162,6 +254,8 @@
     },
     "apps": {
       "title": "Apps Management",
+      "subtitle": "Manage your AI Hub applications",
+      "createApp": "Create App",
       "list": {
         "title": "Applications",
         "addApp": "Add App",
@@ -320,13 +414,157 @@
         "create": "Create Page",
         "id": "Page ID",
         "idPlaceholder": "page-id (used in URL)",
-        "title": "Title",
+        "pageTitle": "Title",
         "content": "Content",
         "idRequired": "ID is required",
         "authRequired": "Authentication Required",
         "allowedGroups": "Allowed Groups (comma separated, '*' = all)"
       },
-      "confirmDelete": "Are you sure you want to delete this page?"
+      "confirmDelete": "Are you sure you want to delete this page?",
+      "contentTypes": {
+        "markdown": "Markdown (.md)",
+        "reactComponent": "React Component (.jsx)",
+        "jsxDescription": "Write JSX code that will be compiled and rendered as a React component",
+        "markdownDescription": "Write standard markdown content with syntax highlighting support"
+      }
+    },
+    "models": {
+      "title": "Model Management",
+      "subtitle": "Configure and manage AI models for your applications",
+      "addNew": "Add New Model",
+      "loadError": "Error loading models",
+      "searchPlaceholder": "Search models...",
+      "filterAll": "All Models",
+      "filterEnabled": "Enabled Only",
+      "filterDisabled": "Disabled Only",
+      "name": "Name",
+      "provider": "Provider",
+      "actions": "Actions",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "test": "Test",
+      "enable": "Enable",
+      "disable": "Disable",
+      "clone": "Clone",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this model?",
+      "noModels": "No models found",
+      "noModelsDesc": "Get started by creating a new model."
+    },
+    "prompts": {
+      "title": "Prompt Management",
+      "subtitle": "Manage and organize prompts for your AI applications",
+      "createNew": "Create New Prompt",
+      "loadError": "Error loading prompts",
+      "searchPlaceholder": "Search prompts...",
+      "filterAll": "All Prompts",
+      "filterEnabled": "Enabled Only",
+      "filterDisabled": "Disabled Only",
+      "name": "Name",
+      "category": "Category",
+      "description": "Description",
+      "order": "Order",
+      "appId": "App ID",
+      "status": "Status",
+      "actions": "Actions",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "enable": "Enable",
+      "disable": "Disable",
+      "clone": "Clone",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Are you sure you want to delete this prompt?",
+      "deleteSuccess": "Prompt deleted successfully",
+      "noPrompts": "No prompts found",
+      "noPromptsDesc": "Get started by creating a new prompt.",
+      "variableTypes": {
+        "string": "String",
+        "number": "Number",
+        "boolean": "Boolean"
+      }
+    },
+    "dashboard": {
+      "topUsersByMessages": "Top Users by Messages",
+      "topUsersByTokens": "Top Users by Tokens",
+      "topUsersByMagicPrompts": "Top Users by Magic Prompts",
+      "userFeedback": "User Feedback",
+      "totalInvocations": "Total Invocations",
+      "inputTokens": "Input Tokens",
+      "outputTokens": "Output Tokens",
+      "positive": "Positive",
+      "negative": "Negative",
+      "feedbackOverview": "Feedback Overview",
+      "satisfactionRate": "Satisfaction Rate",
+      "aiModel": "AI Model",
+      "messages": "messages",
+      "totalTokens": "Total Tokens",
+      "promptTokens": "Prompt Tokens",
+      "completionTokens": "Completion Tokens",
+      "avgPerMessage": "Avg/Message",
+      "tokenDistribution": "Token Distribution",
+      "activeUsers": "Active Users",
+      "activeApps": "Active Apps",
+      "modelsUsed": "Models Used",
+      "avgTokensPerMsg": "Avg Tokens/Msg",
+      "modelUsageDetails": "Model Usage Details",
+      "systemOverview": "System Overview",
+      "appUsage": "App Usage",
+      "tokenEfficiency": "Token Efficiency",
+      "inputTokenDistribution": "Input Token Distribution",
+      "outputTokenDistribution": "Output Token Distribution",
+      "userFeedbackActivity": "User Feedback Activity",
+      "feedbackByApplication": "Feedback by Application",
+      "feedbackByModel": "Feedback by Model",
+      "averageRating": "Average Rating"
+    },
+    "groups": {
+      "management": "Group Management",
+      "subtitle": "Manage user groups, permissions, and external group mappings",
+      "noGroupsFound": "No groups found",
+      "createFirstGroup": "Create your first group to get started",
+      "apps": "Apps:",
+      "noMappings": "No mappings",
+      "error": "Error",
+      "basicInformation": "Basic Information",
+      "basicGroupConfiguration": "Basic group configuration and metadata",
+      "groupId": "Group ID",
+      "protectedSystemGroup": "This is a protected system group",
+      "groupName": "Group Name",
+      "description": "Description",
+      "adminAccess": "Admin Access",
+      "permissions": "Permissions"
+    },
+    "usage": {
+      "title": "Admin Dashboard",
+      "subtitle": "Usage analytics and system overview",
+      "overview": {
+        "systemOverview": "System Overview",
+        "activeUsers": "Active Users",
+        "activeApps": "Active Apps",
+        "modelsUsed": "Models Used",
+        "avgTokensPerMsg": "Avg Tokens/Msg"
+      },
+      "sections": {
+        "appUsage": "App Usage",
+        "tokenEfficiency": "Token Efficiency",
+        "inputTokenDistribution": "Input Token Distribution",
+        "outputTokenDistribution": "Output Token Distribution",
+        "userFeedbackActivity": "User Feedback Activity",
+        "feedbackByApplication": "Feedback by Application",
+        "feedbackByModel": "Feedback by Model"
+      }
+    },
+    "auth": {
+      "configuration": "Authentication Configuration",
+      "methods": "Authentication Methods",
+      "dualAuthentication": "Dual Authentication:",
+      "builtInSystem": "Built-in username/password system",
+      "anonymousAccess": "Anonymous Access",
+      "defaultGroups": "Default Groups",
+      "jwtProviders": "JWT Providers",
+      "noOidcProviders": "No OIDC providers configured",
+      "addProvider": "Add a provider to enable OIDC authentication"
     }
   },
   "components": {
@@ -344,5 +582,215 @@
     "rated": "Rated",
     "sendFeedback": "Send Feedback",
     "thankYou": "Thank you for your feedback!"
+  },
+  "errors": {
+    "componentError": "Component Error",
+    "compilationError": "Compilation Error",
+    "noComponentToRender": "No component to render",
+    "pageNotFound": "Page Not Found",
+    "signIn": "Sign In",
+    "fetchFailed": "Failed to fetch data",
+    "sendFailed": "Failed to send message",
+    "configSaveFailed": "Failed to save configuration",
+    "imageUploadDisabled": "Image upload is not supported by the selected model. Please choose a different model or upload a text file instead.",
+    "fileUploadDisabled": "File upload is disabled for this application.",
+    "notFound": {
+      "title": "Page Not Found",
+      "message": "We couldn't find the page you're looking for.",
+      "returnHome": "Return Home"
+    },
+    "unauthorized": {
+      "title": "Unauthorized",
+      "message": "You don't have permission to access this page.",
+      "goBack": "Go Back"
+    },
+    "forbidden": {
+      "title": "Forbidden",
+      "message": "Access to this resource is forbidden.",
+      "goBack": "Go Back"
+    },
+    "serverError": {
+      "title": "Server Error",
+      "message": "Something went wrong on our end.",
+      "subtitle": "Please try again later.",
+      "retry": "Retry"
+    }
+  },
+  "toolbar": {
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "bulletList": "Bullet List",
+    "numberedList": "Numbered List",
+    "quote": "Quote",
+    "code": "Code",
+    "link": "Link",
+    "redo": "Redo"
+  },
+  "models": {
+    "temperature": "Temperature",
+    "provider": "Provider",
+    "descriptions": {
+      "gpt-3.5-turbo": "Fast and efficient model for most everyday tasks and conversations",
+      "gpt-4": "Advanced model with strong reasoning and knowledge capabilities",
+      "claude-3-opus": "Anthropic's most powerful model with exceptional reasoning capabilities",
+      "claude-3-sonnet": "Balanced performance and value for enterprise and everyday tasks",
+      "gemini-1.5-flash": "Google's versatile model, optimized for text and code tasks",
+      "local-vllm": "Advanced model with strong reasoning and knowledge capabilities"
+    },
+    "outputFormat": "Output format"
+  },
+  "variables": {
+    "content": "Content",
+    "topic": "Topic",
+    "language": "Language",
+    "format": "Format",
+    "tone": "Tone",
+    "length": "Length",
+    "enter": "Enter",
+    "enterLabel": "Enter {{label}}",
+    "selectLabel": "Please select {{label}}"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "lightMode": "Light",
+    "darkMode": "Dark",
+    "apiKeys": "API Keys",
+    "save": "Save settings",
+    "reset": "Reset to default"
+  },
+  "error": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred in the application. The development team has been notified.",
+    "errorMessage": "Error details:",
+    "general": "An error occurred. Please try again.",
+    "notFound": "Resource not found.",
+    "apiKeyMissing": "API key not found for model",
+    "modelNotFound": "Model not found",
+    "appNotFound": "Application not found",
+    "missingRequiredFields": "Missing required fields:"
+  },
+  "languages": {
+    "en": "English",
+    "de": "German"
+  },
+  "appConfig": {
+    "title": "Configuration",
+    "save": "Save",
+    "cancel": "Cancel",
+    "defaultModel": "Default model",
+    "temperature": "Temperature",
+    "temperatureDescription": "Controls randomness: Lower values are more deterministic, higher values are more creative.",
+    "systemPrompt": "System prompt",
+    "systemPromptDescription": "Instructions for the AI at the beginning of the conversation.",
+    "markdown": "Markdown",
+    "plainText": "Plain text",
+    "json": "JSON"
+  },
+  "chatMessage": {
+    "user": "You",
+    "assistant": "Assistant",
+    "system": "System",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "edit": "Edit"
+  },
+  "serverErrors": {
+    "appNotFound": "Application not found",
+    "modelNotFound": "Model not found",
+    "missingRequiredFields": "Missing required fields",
+    "messagesRequired": "Messages array is required",
+    "missingSessionId": "Session ID is required",
+    "chatSessionNotFound": "Chat session not found",
+    "missingFeedbackFields": "Missing required fields: messageId, appId, chatId, and rating are required",
+    "apiKeyNotFound": "API key not found for provider: {provider}",
+    "invalidProvider": "Invalid provider: {provider}",
+    "invalidModel": "Invalid model: {model}",
+    "internalError": "Internal server error",
+    "authenticationFailed": "Authentication failed for {provider} API. Please check your API key.",
+    "rateLimitExceeded": "Rate limit exceeded for {provider} API. Please try again later.",
+    "serviceError": "{provider} API service error. The service might be experiencing issues.",
+    "requestTimeout": "Request timed out after {timeout} seconds. The model might be under high load.",
+    "llmApiError": "LLM API request failed with status {status}",
+    "responseStreamError": "Error processing response stream: {error}",
+    "connectionRefused": "Connection refused when trying to access {provider} API for model {model}. Please check your connection or server configuration.",
+    "unauthorized": "Invalid API key",
+    "modelAccessDenied": "API key is not allowed to use this model"
+  },
+  "toolErrors": {
+    "MISSING_URL": "URL parameter is required.",
+    "INVALID_URL": "Invalid URL.",
+    "UNSUPPORTED_PROTOCOL": "Only HTTP and HTTPS URLs are supported.",
+    "PAGE_NOT_FOUND": "Page was not found.",
+    "AUTH_REQUIRED": "Authentication is required for this page.",
+    "FETCH_ERROR": "Failed to fetch webpage.",
+    "CONTENT_NOT_FOUND": "Could not find page content.",
+    "TIMEOUT": "Timeout while loading webpage.",
+    "TLS_ERROR": "Certificate error occurred. Please contact administrator.",
+    "EXTRACTION_FAILED": "Error extracting content."
+  },
+  "responseStyles": {
+    "title": "Response style",
+    "keep": "Keep original",
+    "normal": "Normal",
+    "concise": "Concise",
+    "formal": "Formal",
+    "explanatory": "Explanatory",
+    "creative": "Creative",
+    "persuasive": "Persuasive",
+    "humorous": "Humorous",
+    "empathetic": "Empathetic",
+    "friendly": "Friendly",
+    "technical": "Technical",
+    "casual": "Casual",
+    "detailed": "Detailed",
+    "analytical": "Analytical",
+    "assertive": "Assertive",
+    "descriptions": {
+      "keep": "Keep the original style of the text.",
+      "normal": "Provide balanced standard responses.",
+      "concise": "Provide shorter and more direct responses. Be brief and precise.",
+      "formal": "Provide clear, professional, and formal responses in elevated language.",
+      "explanatory": "Provide educational responses that clearly explain concepts as if teaching a student.",
+      "creative": "Provide imaginative and artistic responses using metaphors and analogies.",
+      "persuasive": "Provide compelling responses using rhetorical techniques.",
+      "humorous": "Provide entertaining and funny responses with jokes and wordplay.",
+      "empathetic": "Provide compassionate and understanding responses showing empathy and support.",
+      "friendly": "Provide warm and accessible responses in a friendly tone.",
+      "technical": "Provide detailed and precise responses using technical language.",
+      "casual": "Provide relaxed and informal responses in everyday language.",
+      "detailed": "Provide thorough and comprehensive responses covering all aspects of the topic.",
+      "analytical": "Provide logical and critical responses that deeply analyze the topic.",
+      "assertive": "Provide confident and strong responses with a clear position."
+    }
+  },
+  "disclaimer": {
+    "title": "Disclaimer",
+    "accept": "I understand",
+    "versionInfo": "Version {{version}}, Last updated: {{date}}"
+  },
+  "canvas": {
+    "toolbox": {
+      "aiWriting": "AI Writing",
+      "textEditing": "Text Editing",
+      "toneStyle": "Tone & Style",
+      "utilities": "Utilities"
+    },
+    "continue": "Continue writing",
+    "summarize": "Summarize",
+    "outline": "Create outline",
+    "expand": "Expand",
+    "condense": "Condense",
+    "paraphrase": "Paraphrase",
+    "clarify": "Clarify",
+    "formal": "Formal",
+    "casual": "Casual",
+    "professional": "Professional",
+    "creative": "Creative",
+    "translate": "Translate",
+    "grammar": "Grammar",
+    "format": "Format"
   }
 }
