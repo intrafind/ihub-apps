@@ -201,20 +201,20 @@ export const getUIConfig = async () => {
   return response;
 };
 
-export const updateUIConfig = async (config) => {
+export const updateUIConfig = async config => {
   const response = await makeAdminApiCall('/api/admin/ui/config', {
     method: 'POST',
     body: JSON.stringify({ config }),
     headers: {
-      'Content-Type': 'application/json',
-    },
+      'Content-Type': 'application/json'
+    }
   });
   return response;
 };
 
 export const backupUIConfig = async () => {
   const response = await makeAdminApiCall('/api/admin/ui/backup', {
-    method: 'POST',
+    method: 'POST'
   });
   return response;
 };
@@ -224,17 +224,17 @@ export const getUIAssets = async () => {
   return response;
 };
 
-export const uploadUIAsset = async (formData) => {
+export const uploadUIAsset = async formData => {
   const response = await makeAdminApiCall('/api/admin/ui/upload-asset', {
     method: 'POST',
-    body: formData,
+    body: formData
   });
   return response;
 };
 
-export const deleteUIAsset = async (assetId) => {
+export const deleteUIAsset = async assetId => {
   const response = await makeAdminApiCall(`/api/admin/ui/assets/${assetId}`, {
-    method: 'DELETE',
+    method: 'DELETE'
   });
   return response;
 };

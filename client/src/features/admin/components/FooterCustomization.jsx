@@ -29,7 +29,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
     onUpdate({ links: updatedLinks });
   };
 
-  const removeFooterLink = (index) => {
+  const removeFooterLink = index => {
     const updatedLinks = [...(config.links || [])];
     updatedLinks.splice(index, 1);
     onUpdate({ links: updatedLinks });
@@ -50,7 +50,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
             <input
               type="checkbox"
               checked={config.enabled !== false}
-              onChange={(e) => onUpdate({ enabled: e.target.checked })}
+              onChange={e => onUpdate({ enabled: e.target.checked })}
               className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
             />
             <label className="ml-2 block text-sm text-gray-900">
@@ -72,10 +72,12 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
               <div className="space-y-2">
                 {languages.map(lang => (
                   <div key={lang} className="flex items-center space-x-3">
-                    <span className="text-sm font-medium text-gray-600 w-8">{lang.toUpperCase()}</span>
+                    <span className="text-sm font-medium text-gray-600 w-8">
+                      {lang.toUpperCase()}
+                    </span>
                     <textarea
                       value={config.text?.[lang] || ''}
-                      onChange={(e) => handleTextChange(lang, e.target.value)}
+                      onChange={e => handleTextChange(lang, e.target.value)}
                       placeholder={`Footer text (${lang})`}
                       rows={2}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
@@ -84,7 +86,10 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                 ))}
               </div>
               <p className="mt-1 text-sm text-gray-500">
-                {t('admin.ui.footer.textHint', 'This text will appear in the footer. You can use basic HTML tags.')}
+                {t(
+                  'admin.ui.footer.textHint',
+                  'This text will appear in the footer. You can use basic HTML tags.'
+                )}
               </p>
             </div>
 
@@ -129,9 +134,11 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                             <input
                               type="text"
                               value={link.text?.[lang] || ''}
-                              onChange={(e) => updateFooterLink(index, {
-                                text: { ...link.text, [lang]: e.target.value }
-                              })}
+                              onChange={e =>
+                                updateFooterLink(index, {
+                                  text: { ...link.text, [lang]: e.target.value }
+                                })
+                              }
                               placeholder={`Link text (${lang})`}
                               className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
                             />
@@ -147,7 +154,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                         <input
                           type="text"
                           value={link.href || ''}
-                          onChange={(e) => updateFooterLink(index, { href: e.target.value })}
+                          onChange={e => updateFooterLink(index, { href: e.target.value })}
                           placeholder="/page-url or https://external.com"
                           className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                         />
@@ -156,7 +163,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                             <input
                               type="checkbox"
                               checked={link.enabled !== false}
-                              onChange={(e) => updateFooterLink(index, { enabled: e.target.checked })}
+                              onChange={e => updateFooterLink(index, { enabled: e.target.checked })}
                               className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             />
                             <span className="ml-2 text-sm text-gray-600">
@@ -165,11 +172,15 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                           </label>
                           <select
                             value={link.target || '_self'}
-                            onChange={(e) => updateFooterLink(index, { target: e.target.value })}
+                            onChange={e => updateFooterLink(index, { target: e.target.value })}
                             className="text-sm border border-gray-300 rounded px-2 py-1"
                           >
-                            <option value="_self">{t('admin.ui.footer.samePage', 'Same Page')}</option>
-                            <option value="_blank">{t('admin.ui.footer.newPage', 'New Page')}</option>
+                            <option value="_self">
+                              {t('admin.ui.footer.samePage', 'Same Page')}
+                            </option>
+                            <option value="_blank">
+                              {t('admin.ui.footer.newPage', 'New Page')}
+                            </option>
                           </select>
                         </div>
                       </div>
@@ -180,7 +191,9 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                 {(!config.links || config.links.length === 0) && (
                   <div className="text-center py-8 text-gray-500">
                     <p>{t('admin.ui.footer.noLinks', 'No footer links configured')}</p>
-                    <p className="text-sm">{t('admin.ui.footer.addFirstLink', 'Click "Add Link" to get started')}</p>
+                    <p className="text-sm">
+                      {t('admin.ui.footer.addFirstLink', 'Click "Add Link" to get started')}
+                    </p>
                   </div>
                 )}
               </div>

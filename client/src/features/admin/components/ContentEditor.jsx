@@ -14,7 +14,7 @@ const ContentEditor = ({ config, onUpdate, t }) => {
     onUpdate(updatedConfig);
   };
 
-  const updateDisclaimer = (updates) => {
+  const updateDisclaimer = updates => {
     const updatedConfig = {
       ...config,
       disclaimer: {
@@ -39,7 +39,7 @@ const ContentEditor = ({ config, onUpdate, t }) => {
     onUpdate(updatedConfig);
   };
 
-  const updateAppsListConfig = (updates) => {
+  const updateAppsListConfig = updates => {
     const updatedConfig = {
       ...config,
       appsList: {
@@ -79,7 +79,7 @@ const ContentEditor = ({ config, onUpdate, t }) => {
             { id: 'title', label: t('admin.ui.content.siteTitle', 'Site Title'), icon: '📝' },
             { id: 'disclaimer', label: t('admin.ui.content.disclaimer', 'Disclaimer'), icon: '⚠️' },
             { id: 'pages', label: t('admin.ui.content.pageContent', 'Page Content'), icon: '📄' }
-          ].map((section) => (
+          ].map(section => (
             <button
               key={section.id}
               onClick={() => setActiveSection(section.id)}
@@ -100,7 +100,10 @@ const ContentEditor = ({ config, onUpdate, t }) => {
       {activeSection === 'title' && (
         <div className="space-y-6">
           <p className="text-sm text-gray-600">
-            {t('admin.ui.content.titleDescription', 'Configure the main site title displayed in the browser tab and header.')}
+            {t(
+              'admin.ui.content.titleDescription',
+              'Configure the main site title displayed in the browser tab and header.'
+            )}
           </p>
 
           <div>
@@ -110,11 +113,13 @@ const ContentEditor = ({ config, onUpdate, t }) => {
             <div className="space-y-3">
               {languages.map(lang => (
                 <div key={lang} className="flex items-center space-x-3">
-                  <span className="text-sm font-medium text-gray-600 w-12">{lang.toUpperCase()}</span>
+                  <span className="text-sm font-medium text-gray-600 w-12">
+                    {lang.toUpperCase()}
+                  </span>
                   <input
                     type="text"
                     value={config.title?.[lang] || ''}
-                    onChange={(e) => updateTitle(lang, e.target.value)}
+                    onChange={e => updateTitle(lang, e.target.value)}
                     placeholder={`Site title (${lang})`}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   />
@@ -122,7 +127,10 @@ const ContentEditor = ({ config, onUpdate, t }) => {
               ))}
             </div>
             <p className="mt-2 text-sm text-gray-500">
-              {t('admin.ui.content.titleHint', 'This title appears in the browser tab and header. Leave empty to use default.')}
+              {t(
+                'admin.ui.content.titleHint',
+                'This title appears in the browser tab and header. Leave empty to use default.'
+              )}
             </p>
           </div>
 
@@ -134,7 +142,12 @@ const ContentEditor = ({ config, onUpdate, t }) => {
             <div className="bg-white p-3 rounded border">
               <div className="flex items-center space-x-2 text-gray-600 text-sm">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9"
+                  />
                 </svg>
                 <span>{config.title?.en || 'AI Hub Apps'}</span>
               </div>
@@ -147,7 +160,10 @@ const ContentEditor = ({ config, onUpdate, t }) => {
       {activeSection === 'disclaimer' && (
         <div className="space-y-6">
           <p className="text-sm text-gray-600">
-            {t('admin.ui.content.disclaimerDescription', 'Configure the disclaimer popup that appears when users first visit the site.')}
+            {t(
+              'admin.ui.content.disclaimerDescription',
+              'Configure the disclaimer popup that appears when users first visit the site.'
+            )}
           </p>
 
           {/* Disclaimer Enabled */}
@@ -156,7 +172,7 @@ const ContentEditor = ({ config, onUpdate, t }) => {
               <input
                 type="checkbox"
                 checked={config.disclaimer?.enabled !== false}
-                onChange={(e) => updateDisclaimer({ enabled: e.target.checked })}
+                onChange={e => updateDisclaimer({ enabled: e.target.checked })}
                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
               />
               <label className="ml-2 block text-sm text-gray-900">
@@ -164,7 +180,10 @@ const ContentEditor = ({ config, onUpdate, t }) => {
               </label>
             </div>
             <p className="mt-1 text-sm text-gray-500">
-              {t('admin.ui.content.disclaimerEnabledHint', 'Show disclaimer popup to first-time visitors')}
+              {t(
+                'admin.ui.content.disclaimerEnabledHint',
+                'Show disclaimer popup to first-time visitors'
+              )}
             </p>
           </div>
 
@@ -178,11 +197,13 @@ const ContentEditor = ({ config, onUpdate, t }) => {
                 <div className="space-y-2">
                   {languages.map(lang => (
                     <div key={lang} className="flex items-center space-x-3">
-                      <span className="text-sm font-medium text-gray-600 w-8">{lang.toUpperCase()}</span>
+                      <span className="text-sm font-medium text-gray-600 w-8">
+                        {lang.toUpperCase()}
+                      </span>
                       <input
                         type="text"
                         value={config.disclaimer?.title?.[lang] || ''}
-                        onChange={(e) => updateDisclaimerText('title', lang, e.target.value)}
+                        onChange={e => updateDisclaimerText('title', lang, e.target.value)}
                         placeholder={`Disclaimer title (${lang})`}
                         className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                       />
@@ -200,14 +221,16 @@ const ContentEditor = ({ config, onUpdate, t }) => {
                   {languages.map(lang => (
                     <div key={lang}>
                       <div className="flex items-center space-x-3 mb-1">
-                        <span className="text-sm font-medium text-gray-600 w-8">{lang.toUpperCase()}</span>
+                        <span className="text-sm font-medium text-gray-600 w-8">
+                          {lang.toUpperCase()}
+                        </span>
                         <span className="text-sm text-gray-500">
                           {t('admin.ui.content.htmlAllowed', 'HTML allowed')}
                         </span>
                       </div>
                       <textarea
                         value={config.disclaimer?.text?.[lang] || ''}
-                        onChange={(e) => updateDisclaimerText('text', lang, e.target.value)}
+                        onChange={e => updateDisclaimerText('text', lang, e.target.value)}
                         placeholder={`Disclaimer content (${lang})`}
                         rows={4}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
@@ -216,7 +239,10 @@ const ContentEditor = ({ config, onUpdate, t }) => {
                   ))}
                 </div>
                 <p className="mt-1 text-sm text-gray-500">
-                  {t('admin.ui.content.disclaimerTextHint', 'This text appears in the disclaimer popup. HTML tags are allowed for formatting.')}
+                  {t(
+                    'admin.ui.content.disclaimerTextHint',
+                    'This text appears in the disclaimer popup. HTML tags are allowed for formatting.'
+                  )}
                 </p>
               </div>
 
@@ -228,12 +254,15 @@ const ContentEditor = ({ config, onUpdate, t }) => {
                 <input
                   type="text"
                   value={config.disclaimer?.version || ''}
-                  onChange={(e) => updateDisclaimer({ version: e.target.value })}
+                  onChange={e => updateDisclaimer({ version: e.target.value })}
                   placeholder="1.0"
                   className="block w-full max-w-xs px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 />
                 <p className="mt-1 text-sm text-gray-500">
-                  {t('admin.ui.content.disclaimerVersionHint', 'Update this to show the disclaimer again to users who have already seen it')}
+                  {t(
+                    'admin.ui.content.disclaimerVersionHint',
+                    'Update this to show the disclaimer again to users who have already seen it'
+                  )}
                 </p>
               </div>
 
@@ -245,11 +274,14 @@ const ContentEditor = ({ config, onUpdate, t }) => {
                 <input
                   type="date"
                   value={config.disclaimer?.updated || ''}
-                  onChange={(e) => updateDisclaimer({ updated: e.target.value })}
+                  onChange={e => updateDisclaimer({ updated: e.target.value })}
                   className="block w-full max-w-xs px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 />
                 <p className="mt-1 text-sm text-gray-500">
-                  {t('admin.ui.content.disclaimerUpdatedHint', 'Date when the disclaimer was last updated')}
+                  {t(
+                    'admin.ui.content.disclaimerUpdatedHint',
+                    'Date when the disclaimer was last updated'
+                  )}
                 </p>
               </div>
             </>
@@ -261,7 +293,10 @@ const ContentEditor = ({ config, onUpdate, t }) => {
       {activeSection === 'pages' && (
         <div className="space-y-6">
           <p className="text-sm text-gray-600">
-            {t('admin.ui.content.pagesDescription', 'Configure content for main application pages like the apps list.')}
+            {t(
+              'admin.ui.content.pagesDescription',
+              'Configure content for main application pages like the apps list.'
+            )}
           </p>
 
           {/* Apps List Page */}
@@ -278,11 +313,13 @@ const ContentEditor = ({ config, onUpdate, t }) => {
               <div className="space-y-2">
                 {languages.map(lang => (
                   <div key={lang} className="flex items-center space-x-3">
-                    <span className="text-sm font-medium text-gray-600 w-8">{lang.toUpperCase()}</span>
+                    <span className="text-sm font-medium text-gray-600 w-8">
+                      {lang.toUpperCase()}
+                    </span>
                     <input
                       type="text"
                       value={config.appsList?.title?.[lang] || ''}
-                      onChange={(e) => updateAppsListText('title', lang, e.target.value)}
+                      onChange={e => updateAppsListText('title', lang, e.target.value)}
                       placeholder={`Apps page title (${lang})`}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
@@ -299,10 +336,12 @@ const ContentEditor = ({ config, onUpdate, t }) => {
               <div className="space-y-2">
                 {languages.map(lang => (
                   <div key={lang} className="flex items-center space-x-3">
-                    <span className="text-sm font-medium text-gray-600 w-8">{lang.toUpperCase()}</span>
+                    <span className="text-sm font-medium text-gray-600 w-8">
+                      {lang.toUpperCase()}
+                    </span>
                     <textarea
                       value={config.appsList?.subtitle?.[lang] || ''}
-                      onChange={(e) => updateAppsListText('subtitle', lang, e.target.value)}
+                      onChange={e => updateAppsListText('subtitle', lang, e.target.value)}
                       placeholder={`Apps page subtitle (${lang})`}
                       rows={2}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
@@ -319,9 +358,11 @@ const ContentEditor = ({ config, onUpdate, t }) => {
                   <input
                     type="checkbox"
                     checked={config.appsList?.search?.enabled !== false}
-                    onChange={(e) => updateAppsListConfig({ 
-                      search: { ...config.appsList?.search, enabled: e.target.checked } 
-                    })}
+                    onChange={e =>
+                      updateAppsListConfig({
+                        search: { ...config.appsList?.search, enabled: e.target.checked }
+                      })
+                    }
                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   />
                   <span className="ml-2 text-sm text-gray-900">
@@ -335,9 +376,11 @@ const ContentEditor = ({ config, onUpdate, t }) => {
                   <input
                     type="checkbox"
                     checked={config.appsList?.categories?.enabled !== false}
-                    onChange={(e) => updateAppsListConfig({ 
-                      categories: { ...config.appsList?.categories, enabled: e.target.checked } 
-                    })}
+                    onChange={e =>
+                      updateAppsListConfig({
+                        categories: { ...config.appsList?.categories, enabled: e.target.checked }
+                      })
+                    }
                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   />
                   <span className="ml-2 text-sm text-gray-900">

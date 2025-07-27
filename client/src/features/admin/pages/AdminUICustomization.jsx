@@ -26,7 +26,7 @@ const AdminUICustomization = () => {
       try {
         setLoading(true);
         setError(null);
-        
+
         const response = await makeAdminApiCall('/api/admin/ui/config');
         if (response.success) {
           setConfig(response.config);
@@ -58,15 +58,15 @@ const AdminUICustomization = () => {
         method: 'POST',
         body: JSON.stringify({ config }),
         headers: {
-          'Content-Type': 'application/json',
-        },
+          'Content-Type': 'application/json'
+        }
       });
 
       if (response.success) {
         setSuccessMessage('UI configuration saved successfully');
         // Refresh the UI config context to apply changes immediately
         await refreshUIConfig();
-        
+
         // Clear success message after 3 seconds
         setTimeout(() => setSuccessMessage(''), 3000);
       } else {
@@ -83,7 +83,7 @@ const AdminUICustomization = () => {
   const handleBackup = async () => {
     try {
       const response = await makeAdminApiCall('/api/admin/ui/backup', {
-        method: 'POST',
+        method: 'POST'
       });
 
       if (response.success) {
@@ -123,7 +123,9 @@ const AdminUICustomization = () => {
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-2 text-gray-600">{t('admin.ui.loading', 'Loading UI configuration...')}</p>
+            <p className="mt-2 text-gray-600">
+              {t('admin.ui.loading', 'Loading UI configuration...')}
+            </p>
           </div>
         </div>
       </AdminAuth>
@@ -136,7 +138,9 @@ const AdminUICustomization = () => {
         <AdminNavigation />
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-red-600">{error || t('admin.ui.error', 'Failed to load configuration')}</p>
+            <p className="text-red-600">
+              {error || t('admin.ui.error', 'Failed to load configuration')}
+            </p>
           </div>
         </div>
       </AdminAuth>
@@ -156,7 +160,10 @@ const AdminUICustomization = () => {
                   {t('admin.ui.title', 'UI Customization')}
                 </h1>
                 <p className="text-gray-600 mt-1">
-                  {t('admin.ui.description', 'Customize the appearance and branding of your AI Hub Apps')}
+                  {t(
+                    'admin.ui.description',
+                    'Customize the appearance and branding of your AI Hub Apps'
+                  )}
                 </p>
               </div>
               <div className="mt-4 sm:mt-0 sm:flex sm:space-x-3">
@@ -170,8 +177,8 @@ const AdminUICustomization = () => {
                   onClick={handleSave}
                   disabled={saving}
                   className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                    saving 
-                      ? 'bg-indigo-400 cursor-not-allowed' 
+                    saving
+                      ? 'bg-indigo-400 cursor-not-allowed'
                       : 'bg-indigo-600 hover:bg-indigo-700'
                   } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
                 >
@@ -188,7 +195,11 @@ const AdminUICustomization = () => {
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </div>
               <div className="ml-3">
@@ -201,7 +212,11 @@ const AdminUICustomization = () => {
                 >
                   <span className="sr-only">Dismiss</span>
                   <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    <path
+                      fillRule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                 </button>
               </div>
@@ -214,7 +229,11 @@ const AdminUICustomization = () => {
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </div>
               <div className="ml-3">
@@ -227,7 +246,11 @@ const AdminUICustomization = () => {
                 >
                   <span className="sr-only">Dismiss</span>
                   <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    <path
+                      fillRule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                 </button>
               </div>
@@ -240,7 +263,7 @@ const AdminUICustomization = () => {
           {/* Tab Navigation */}
           <div className="border-b border-gray-200 mb-8">
             <nav className="flex space-x-8" aria-label="Tabs">
-              {tabs.map((tab) => (
+              {tabs.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
@@ -262,33 +285,21 @@ const AdminUICustomization = () => {
             {activeTab === 'header' && (
               <HeaderCustomization
                 config={config.header || {}}
-                onUpdate={(updates) => updateConfig('header', updates)}
+                onUpdate={updates => updateConfig('header', updates)}
                 t={t}
               />
             )}
             {activeTab === 'footer' && (
               <FooterCustomization
                 config={config.footer || {}}
-                onUpdate={(updates) => updateConfig('footer', updates)}
+                onUpdate={updates => updateConfig('footer', updates)}
                 t={t}
               />
             )}
-            {activeTab === 'assets' && (
-              <AssetManager t={t} />
-            )}
-            {activeTab === 'styles' && (
-              <StyleEditor
-                config={config}
-                onUpdate={setConfig}
-                t={t}
-              />
-            )}
+            {activeTab === 'assets' && <AssetManager t={t} />}
+            {activeTab === 'styles' && <StyleEditor config={config} onUpdate={setConfig} t={t} />}
             {activeTab === 'content' && (
-              <ContentEditor
-                config={config}
-                onUpdate={setConfig}
-                t={t}
-              />
+              <ContentEditor config={config} onUpdate={setConfig} t={t} />
             )}
           </div>
         </div>

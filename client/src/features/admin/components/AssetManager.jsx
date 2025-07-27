@@ -13,7 +13,7 @@ const AssetManager = ({ t }) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await makeAdminApiCall('/api/admin/ui/assets');
       if (response.success) {
         setAssets(response.assets || []);
@@ -33,12 +33,19 @@ const AssetManager = ({ t }) => {
     loadAssets();
   }, []);
 
-  const handleFileUpload = async (event) => {
+  const handleFileUpload = async event => {
     const file = event.target.files[0];
     if (!file) return;
 
     // Validate file type
-    const allowedTypes = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/jpg', 'image/x-icon', 'image/vnd.microsoft.icon'];
+    const allowedTypes = [
+      'image/svg+xml',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/x-icon',
+      'image/vnd.microsoft.icon'
+    ];
     if (!allowedTypes.includes(file.type)) {
       setError('Invalid file type. Only SVG, PNG, JPG, and ICO files are allowed.');
       return;
@@ -62,14 +69,14 @@ const AssetManager = ({ t }) => {
 
       const response = await makeAdminApiCall('/api/admin/ui/upload-asset', {
         method: 'POST',
-        body: formData,
+        body: formData
         // Don't set Content-Type header, let the browser set it for multipart/form-data
       });
 
       if (response.success) {
         setSuccessMessage(`Successfully uploaded ${file.name}`);
         await loadAssets(); // Refresh the asset list
-        
+
         // Clear the file input
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
@@ -88,14 +95,16 @@ const AssetManager = ({ t }) => {
     }
   };
 
-  const handleDeleteAsset = async (assetId) => {
-    if (!confirm(t('admin.ui.assets.confirmDelete', 'Are you sure you want to delete this asset?'))) {
+  const handleDeleteAsset = async assetId => {
+    if (
+      !confirm(t('admin.ui.assets.confirmDelete', 'Are you sure you want to delete this asset?'))
+    ) {
       return;
     }
 
     try {
       const response = await makeAdminApiCall(`/api/admin/ui/assets/${assetId}`, {
-        method: 'DELETE',
+        method: 'DELETE'
       });
 
       if (response.success) {
@@ -111,28 +120,31 @@ const AssetManager = ({ t }) => {
     }
   };
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setSuccessMessage('URL copied to clipboard!');
-      setTimeout(() => setSuccessMessage(''), 2000);
-    }).catch(() => {
-      setError('Failed to copy to clipboard');
-    });
+  const copyToClipboard = text => {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setSuccessMessage('URL copied to clipboard!');
+        setTimeout(() => setSuccessMessage(''), 2000);
+      })
+      .catch(() => {
+        setError('Failed to copy to clipboard');
+      });
   };
 
-  const getAssetType = (mimeType) => {
+  const getAssetType = mimeType => {
     if (mimeType === 'image/svg+xml') return 'icon';
     if (mimeType.includes('icon')) return 'favicon';
     return 'image';
   };
 
-  const getFileIcon = (mimeType) => {
+  const getFileIcon = mimeType => {
     if (mimeType === 'image/svg+xml') return '🎨';
     if (mimeType.includes('icon')) return '🔗';
     return '🖼️';
   };
 
-  const formatFileSize = (bytes) => {
+  const formatFileSize = bytes => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB'];
@@ -161,7 +173,11 @@ const AssetManager = ({ t }) => {
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
             <div className="ml-3">
@@ -174,7 +190,11 @@ const AssetManager = ({ t }) => {
               >
                 <span className="sr-only">Dismiss</span>
                 <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </button>
             </div>
@@ -187,7 +207,11 @@ const AssetManager = ({ t }) => {
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
             <div className="ml-3">
@@ -201,16 +225,25 @@ const AssetManager = ({ t }) => {
       <div className="mb-8">
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
           <div className="text-center">
-            <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-              <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <svg
+              className="mx-auto h-12 w-12 text-gray-400"
+              stroke="currentColor"
+              fill="none"
+              viewBox="0 0 48 48"
+            >
+              <path
+                d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
             <div className="mt-4">
               <label htmlFor="file-upload" className="cursor-pointer">
                 <span className="mt-2 block text-sm font-medium text-gray-900">
-                  {uploading 
-                    ? t('admin.ui.assets.uploading', 'Uploading...') 
-                    : t('admin.ui.assets.uploadPrompt', 'Upload a new asset')
-                  }
+                  {uploading
+                    ? t('admin.ui.assets.uploading', 'Uploading...')
+                    : t('admin.ui.assets.uploadPrompt', 'Upload a new asset')}
                 </span>
                 <p className="mt-1 text-sm text-gray-600">
                   {t('admin.ui.assets.supportedFormats', 'SVG, PNG, JPG, ICO files up to 2MB')}
@@ -240,11 +273,13 @@ const AssetManager = ({ t }) => {
         {assets.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <p>{t('admin.ui.assets.noAssets', 'No assets uploaded yet')}</p>
-            <p className="text-sm">{t('admin.ui.assets.uploadFirst', 'Upload your first asset above')}</p>
+            <p className="text-sm">
+              {t('admin.ui.assets.uploadFirst', 'Upload your first asset above')}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {assets.map((asset) => (
+            {assets.map(asset => (
               <div key={asset.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-2">
@@ -260,7 +295,12 @@ const AssetManager = ({ t }) => {
                     title={t('admin.ui.assets.delete', 'Delete asset')}
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
                     </svg>
                   </button>
                 </div>
@@ -287,8 +327,18 @@ const AssetManager = ({ t }) => {
                       className="text-indigo-600 hover:text-indigo-800 flex-shrink-0"
                       title={t('admin.ui.assets.copyUrl', 'Copy URL')}
                     >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
                       </svg>
                     </button>
                   </div>
@@ -296,7 +346,8 @@ const AssetManager = ({ t }) => {
 
                 {/* Upload Date */}
                 <p className="text-xs text-gray-500 mt-2">
-                  {t('admin.ui.assets.uploaded', 'Uploaded')}: {new Date(asset.uploadedAt).toLocaleDateString()}
+                  {t('admin.ui.assets.uploaded', 'Uploaded')}:{' '}
+                  {new Date(asset.uploadedAt).toLocaleDateString()}
                 </p>
               </div>
             ))}

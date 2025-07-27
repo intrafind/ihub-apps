@@ -118,13 +118,8 @@ class GoogleAdapterClass extends BaseAdapter {
    * Create a completion request for Gemini
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const {
-      temperature,
-      stream,
-      tools,
-      responseFormat,
-      responseSchema
-    } = this.extractRequestOptions(options);
+    const { temperature, stream, tools, responseFormat, responseSchema } =
+      this.extractRequestOptions(options);
 
     // Format messages and extract system instruction
     const { contents, systemInstruction } = this.formatMessages(messages);

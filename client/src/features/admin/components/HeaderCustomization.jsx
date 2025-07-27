@@ -3,11 +3,11 @@ import React, { useState } from 'react';
 const HeaderCustomization = ({ config, onUpdate, t }) => {
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
-  const handleColorChange = (color) => {
+  const handleColorChange = color => {
     onUpdate({ defaultColor: color });
   };
 
-  const handleLogoUrlChange = (url) => {
+  const handleLogoUrlChange = url => {
     onUpdate({
       logo: {
         ...config.logo,
@@ -56,7 +56,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
     onUpdate({ links: updatedLinks });
   };
 
-  const removeNavigationLink = (index) => {
+  const removeNavigationLink = index => {
     const updatedLinks = [...(config.links || [])];
     updatedLinks.splice(index, 1);
     onUpdate({ links: updatedLinks });
@@ -87,11 +87,26 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                 <div className="absolute z-10 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
                   <div className="grid grid-cols-6 gap-2 mb-3">
                     {[
-                      '#4f46e5', '#7c3aed', '#db2777', '#dc2626',
-                      '#ea580c', '#d97706', '#ca8a04', '#65a30d',
-                      '#16a34a', '#059669', '#0891b2', '#0284c7',
-                      '#2563eb', '#4338ca', '#6366f1', '#8b5cf6',
-                      '#a855f7', '#c026d3', '#e11d48', '#f43f5e'
+                      '#4f46e5',
+                      '#7c3aed',
+                      '#db2777',
+                      '#dc2626',
+                      '#ea580c',
+                      '#d97706',
+                      '#ca8a04',
+                      '#65a30d',
+                      '#16a34a',
+                      '#059669',
+                      '#0891b2',
+                      '#0284c7',
+                      '#2563eb',
+                      '#4338ca',
+                      '#6366f1',
+                      '#8b5cf6',
+                      '#a855f7',
+                      '#c026d3',
+                      '#e11d48',
+                      '#f43f5e'
                     ].map(color => (
                       <button
                         key={color}
@@ -107,7 +122,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                   <input
                     type="text"
                     value={config.defaultColor || ''}
-                    onChange={(e) => handleColorChange(e.target.value)}
+                    onChange={e => handleColorChange(e.target.value)}
                     placeholder="#4f46e5"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                   />
@@ -120,9 +135,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                 </div>
               )}
             </div>
-            <span className="text-sm text-gray-600">
-              {config.defaultColor || '#4f46e5'}
-            </span>
+            <span className="text-sm text-gray-600">{config.defaultColor || '#4f46e5'}</span>
           </div>
         </div>
 
@@ -134,7 +147,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
           <input
             type="text"
             value={config.logo?.url || ''}
-            onChange={(e) => handleLogoUrlChange(e.target.value)}
+            onChange={e => handleLogoUrlChange(e.target.value)}
             placeholder="/logo.svg"
             className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
           />
@@ -155,7 +168,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                 <input
                   type="text"
                   value={config.logo?.alt?.[lang] || ''}
-                  onChange={(e) => handleLogoAltChange(lang, e.target.value)}
+                  onChange={e => handleLogoAltChange(lang, e.target.value)}
                   placeholder={`Logo alt text (${lang})`}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 />
@@ -176,7 +189,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                 <input
                   type="text"
                   value={config.title?.[lang] || ''}
-                  onChange={(e) => handleTitleChange(lang, e.target.value)}
+                  onChange={e => handleTitleChange(lang, e.target.value)}
                   placeholder={`Site title (${lang})`}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 />
@@ -226,9 +239,11 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                         <input
                           type="text"
                           value={link.text?.[lang] || ''}
-                          onChange={(e) => updateNavigationLink(index, {
-                            text: { ...link.text, [lang]: e.target.value }
-                          })}
+                          onChange={e =>
+                            updateNavigationLink(index, {
+                              text: { ...link.text, [lang]: e.target.value }
+                            })
+                          }
                           placeholder={`Link text (${lang})`}
                           className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
                         />
@@ -244,7 +259,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                     <input
                       type="text"
                       value={link.href || ''}
-                      onChange={(e) => updateNavigationLink(index, { href: e.target.value })}
+                      onChange={e => updateNavigationLink(index, { href: e.target.value })}
                       placeholder="/page-url"
                       className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                     />
@@ -253,7 +268,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                         <input
                           type="checkbox"
                           checked={link.enabled !== false}
-                          onChange={(e) => updateNavigationLink(index, { enabled: e.target.checked })}
+                          onChange={e => updateNavigationLink(index, { enabled: e.target.checked })}
                           className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                         />
                         <span className="ml-2 text-sm text-gray-600">
@@ -262,7 +277,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                       </label>
                       <select
                         value={link.target || '_self'}
-                        onChange={(e) => updateNavigationLink(index, { target: e.target.value })}
+                        onChange={e => updateNavigationLink(index, { target: e.target.value })}
                         className="text-sm border border-gray-300 rounded px-2 py-1"
                       >
                         <option value="_self">{t('admin.ui.header.samePage', 'Same Page')}</option>
@@ -277,7 +292,9 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
             {(!config.links || config.links.length === 0) && (
               <div className="text-center py-8 text-gray-500">
                 <p>{t('admin.ui.header.noLinks', 'No navigation links configured')}</p>
-                <p className="text-sm">{t('admin.ui.header.addFirstLink', 'Click "Add Link" to get started')}</p>
+                <p className="text-sm">
+                  {t('admin.ui.header.addFirstLink', 'Click "Add Link" to get started')}
+                </p>
               </div>
             )}
           </div>
