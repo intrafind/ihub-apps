@@ -1,6 +1,6 @@
 /**
  * Source Handlers Module
- * 
+ *
  * Exports all source-related components for loading content from various sources.
  * This module provides a unified interface for handling different source types
  * including filesystem, URLs, and iFinder document management system.
@@ -18,7 +18,7 @@ export const createSourceManager = (config = {}) => {
 };
 
 // Helper to validate source configurations
-export const validateSourceConfig = (sourceConfig) => {
+export const validateSourceConfig = sourceConfig => {
   const manager = new SourceManager();
   return manager.validateSourceConfig(sourceConfig);
 };
@@ -29,10 +29,4 @@ export const getAvailableHandlerTypes = () => {
 };
 
 // Export all components
-export {
-  SourceHandler,
-  FileSystemHandler,
-  URLHandler,
-  IFinderHandler,
-  SourceManager
-};
+export { SourceHandler, FileSystemHandler, URLHandler, IFinderHandler, SourceManager };

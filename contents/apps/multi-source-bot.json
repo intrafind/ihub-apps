@@ -18,7 +18,7 @@
   "sources": [
     {
       "id": "faq-knowledge",
-      "type": "filesystem", 
+      "type": "filesystem",
       "description": "Frequently asked questions and basic information",
       "config": {
         "path": "/sources/faq.md",
@@ -34,7 +34,7 @@
     {
       "id": "documentation",
       "type": "filesystem",
-      "description": "Technical documentation and guides", 
+      "description": "Technical documentation and guides",
       "config": {
         "path": "/sources/documentation.md",
         "encoding": "utf8"
@@ -70,7 +70,7 @@
   },
   "tokenLimit": 12000,
   "preferredOutputFormat": "markdown",
-  "preferredStyle": "normal", 
+  "preferredStyle": "normal",
   "preferredTemperature": 0.4,
   "sendChatHistory": true,
   "prompt": {

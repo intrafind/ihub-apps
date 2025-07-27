@@ -3,7 +3,7 @@ import iFinder from '../tools/iFinder.js';
 
 /**
  * iFinder Source Handler
- * 
+ *
  * Loads content from iFinder document management system using the existing
  * iFinder tool integration. Supports searching and retrieving documents
  * with user authentication and caching.
@@ -22,11 +22,11 @@ class IFinderHandler extends SourceHandler {
    */
   async loadContent(sourceConfig) {
     const { documentId, query, searchProfile, user, chatId, maxLength = 50000 } = sourceConfig;
-    
+
     if (!user) {
       throw new Error('IFinderHandler requires authenticated user in sourceConfig');
     }
-    
+
     if (!chatId) {
       throw new Error('IFinderHandler requires chatId in sourceConfig');
     }
@@ -107,10 +107,10 @@ class IFinderHandler extends SourceHandler {
    */
   getCacheKey(sourceConfig) {
     const { documentId, query, searchProfile, user } = sourceConfig;
-    
+
     // Create user-specific cache key to avoid permission issues
-    const userKey = user ? (user.email || user.id) : 'anonymous';
-    
+    const userKey = user ? user.email || user.id : 'anonymous';
+
     return JSON.stringify({
       documentId,
       query,
@@ -135,14 +135,14 @@ class IFinderHandler extends SourceHandler {
     if (!sourceConfig || typeof sourceConfig !== 'object') {
       return false;
     }
-    
+
     const { documentId, query, user, chatId } = sourceConfig;
-    
+
     // Must have either documentId or query
     if (!documentId && !query) {
       return false;
     }
-    
+
     // Must have user and chatId
     if (!user || !chatId) {
       return false;
@@ -163,7 +163,7 @@ class IFinderHandler extends SourceHandler {
    */
   async searchDocuments(searchConfig) {
     const { query, user, chatId, maxResults = 10, searchProfile, returnFields } = searchConfig;
-    
+
     if (!this.validateSearchConfig(searchConfig)) {
       throw new Error('Invalid search configuration for iFinder');
     }
@@ -206,13 +206,13 @@ class IFinderHandler extends SourceHandler {
     if (!searchConfig || typeof searchConfig !== 'object') {
       return false;
     }
-    
+
     const { query, user, chatId } = searchConfig;
-    
+
     if (!query || typeof query !== 'string' || query.trim() === '') {
       return false;
     }
-    
+
     if (!user || typeof user !== 'object' || (user.id && user.id === 'anonymous')) {
       return false;
     }
@@ -233,15 +233,15 @@ class IFinderHandler extends SourceHandler {
   async batchLoadDocuments(documentIds, options = {}) {
     const { user, chatId, searchProfile, concurrency = 3, failureMode = 'continue' } = options;
     const results = [];
-    
+
     if (!user || !chatId) {
       throw new Error('batchLoadDocuments requires user and chatId in options');
     }
-    
+
     // Process documents in batches to avoid overwhelming iFinder
     for (let i = 0; i < documentIds.length; i += concurrency) {
       const batch = documentIds.slice(i, i + concurrency);
-      const promises = batch.map(async (documentId) => {
+      const promises = batch.map(async documentId => {
         try {
           return await this.getCachedContent({
             documentId,
@@ -264,11 +264,11 @@ class IFinderHandler extends SourceHandler {
           };
         }
       });
-      
+
       const batchResults = await Promise.all(promises);
       results.push(...batchResults);
     }
-    
+
     return results;
   }
 }

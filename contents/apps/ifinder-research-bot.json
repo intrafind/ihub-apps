@@ -1,5 +1,5 @@
 {
-  "id": "ifinder-research-bot", 
+  "id": "ifinder-research-bot",
   "order": 2,
   "name": {
     "en": "iFinder Research Assistant",
@@ -51,11 +51,11 @@
     },
     {
       "id": "technical-docs",
-      "type": "ifinder", 
+      "type": "ifinder",
       "description": "Technical documentation and manuals",
       "config": {
         "query": "technical documentation manual",
-        "searchProfile": "default", 
+        "searchProfile": "default",
         "maxResults": 5,
         "maxLength": 25000
       },
@@ -81,13 +81,10 @@
     "de": "{{content}}"
   },
   "enabled": true,
-  "tools": [
-    "source_document-search",
-    "source_technical-docs"
-  ],
+  "tools": ["source_document-search", "source_technical-docs"],
   "greeting": {
     "en": {
-      "title": "📚 iFinder Research Assistant", 
+      "title": "📚 iFinder Research Assistant",
       "subtitle": "I can help you search and analyze documents from our knowledge base!"
     },
     "de": {
@@ -101,7 +98,7 @@
       "de": "Suche nach den neuesten Quartalberichten"
     },
     {
-      "en": "Find technical documentation about our products", 
+      "en": "Find technical documentation about our products",
       "de": "Finde technische Dokumentation zu unseren Produkten"
     },
     {

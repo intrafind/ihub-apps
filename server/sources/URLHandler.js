@@ -2,7 +2,7 @@ import SourceHandler from './SourceHandler.js';
 
 /**
  * URL Source Handler
- * 
+ *
  * Loads content from web URLs. Uses the existing webContentExtractor tool
  * to fetch and clean web content for use as source material.
  */
@@ -20,7 +20,7 @@ class URLHandler extends SourceHandler {
    */
   async loadContent(sourceConfig) {
     const { url, options = {} } = sourceConfig;
-    
+
     if (!url) {
       throw new Error('URLHandler requires a url in sourceConfig');
     }
@@ -32,7 +32,7 @@ class URLHandler extends SourceHandler {
     try {
       // Import the webContentExtractor tool dynamically
       const webContentExtractor = await this.getWebContentExtractor();
-      
+
       // Extract content using the existing tool
       const result = await webContentExtractor.extract({
         url,
@@ -88,7 +88,7 @@ class URLHandler extends SourceHandler {
         const response = await fetch(url, {
           headers: {
             'User-Agent': 'AI-Hub-Apps/1.0 (+https://github.com/intrafind/ai-hub-apps)',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
           },
           timeout: 30000,
           follow: 5
@@ -99,7 +99,7 @@ class URLHandler extends SourceHandler {
         }
 
         const content = await response.text();
-        
+
         // Basic HTML content cleaning
         const cleanedContent = content
           .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -150,9 +150,9 @@ class URLHandler extends SourceHandler {
     if (!sourceConfig || typeof sourceConfig !== 'object') {
       return false;
     }
-    
+
     const { url } = sourceConfig;
-    
+
     if (!url || typeof url !== 'string') {
       return false;
     }
@@ -167,12 +167,12 @@ class URLHandler extends SourceHandler {
    */
   getCacheKey(sourceConfig) {
     const { url, options = {} } = sourceConfig;
-    
+
     // Normalize URL for consistent caching
     try {
       const parsedUrl = new URL(url);
       const normalizedUrl = `${parsedUrl.protocol}//${parsedUrl.host}${parsedUrl.pathname}${parsedUrl.search}`;
-      
+
       return JSON.stringify({
         url: normalizedUrl,
         options: {
@@ -195,11 +195,11 @@ class URLHandler extends SourceHandler {
   async batchLoad(urls, options = {}) {
     const { concurrency = 3, failureMode = 'continue' } = options;
     const results = [];
-    
+
     // Process URLs in batches to avoid overwhelming servers
     for (let i = 0; i < urls.length; i += concurrency) {
       const batch = urls.slice(i, i + concurrency);
-      const promises = batch.map(async (urlConfig) => {
+      const promises = batch.map(async urlConfig => {
         try {
           return await this.getCachedContent(urlConfig);
         } catch (error) {
@@ -217,11 +217,11 @@ class URLHandler extends SourceHandler {
           };
         }
       });
-      
+
       const batchResults = await Promise.all(promises);
       results.push(...batchResults);
     }
-    
+
     return results;
   }
 }

@@ -4,7 +4,7 @@ import SourceHandler from './SourceHandler.js';
 
 /**
  * Filesystem Source Handler
- * 
+ *
  * Loads content from local filesystem files. Supports various text-based formats
  * and provides file metadata (size, modification date, etc.).
  */
@@ -21,14 +21,14 @@ class FileSystemHandler extends SourceHandler {
    */
   async loadContent(sourceConfig) {
     const { path: filePath, encoding = 'utf8' } = sourceConfig;
-    
+
     if (!filePath) {
       throw new Error('FileSystemHandler requires a path in sourceConfig');
     }
 
     // Resolve path relative to base path
     const fullPath = path.resolve(this.basePath, filePath.replace(/^\/+/, ''));
-    
+
     // Security check - ensure path is within base directory
     if (!fullPath.startsWith(path.resolve(this.basePath))) {
       throw new Error(`Access denied: path ${filePath} is outside allowed directory`);
@@ -37,14 +37,14 @@ class FileSystemHandler extends SourceHandler {
     try {
       // Get file stats
       const stats = await fs.stat(fullPath);
-      
+
       if (!stats.isFile()) {
         throw new Error(`Path ${filePath} is not a file`);
       }
 
       // Load content
       const content = await fs.readFile(fullPath, encoding);
-      
+
       return {
         content,
         metadata: {
@@ -93,14 +93,14 @@ class FileSystemHandler extends SourceHandler {
   async getCachedContent(sourceConfig) {
     const cacheKey = await this.getEnhancedCacheKey(sourceConfig);
     const cached = this.cache.get(cacheKey);
-    
+
     if (cached && this.isCacheValid(cached)) {
       return cached.data;
     }
 
     // Load fresh content
     const data = await this.loadContent(sourceConfig);
-    
+
     // Cache the result
     this.cache.set(cacheKey, {
       data,
@@ -127,9 +127,9 @@ class FileSystemHandler extends SourceHandler {
     if (!sourceConfig || typeof sourceConfig !== 'object') {
       return false;
     }
-    
+
     const { path: filePath } = sourceConfig;
-    
+
     if (!filePath || typeof filePath !== 'string' || filePath.trim() === '') {
       return false;
     }
@@ -149,7 +149,7 @@ class FileSystemHandler extends SourceHandler {
    */
   async listFiles(dirPath = '') {
     const fullPath = path.resolve(this.basePath, dirPath.replace(/^\/+/, ''));
-    
+
     // Security check
     if (!fullPath.startsWith(path.resolve(this.basePath))) {
       throw new Error(`Access denied: path ${dirPath} is outside allowed directory`);
@@ -158,12 +158,12 @@ class FileSystemHandler extends SourceHandler {
     try {
       const entries = await fs.readdir(fullPath, { withFileTypes: true });
       const files = [];
-      
+
       for (const entry of entries) {
         if (entry.isFile()) {
           const entryPath = path.join(dirPath, entry.name);
           const stats = await fs.stat(path.join(fullPath, entry.name));
-          
+
           files.push({
             name: entry.name,
             path: entryPath,
@@ -173,7 +173,7 @@ class FileSystemHandler extends SourceHandler {
           });
         }
       }
-      
+
       return files.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       throw new Error(`Error listing files in ${dirPath}: ${error.message}`);

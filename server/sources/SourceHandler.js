@@ -1,6 +1,6 @@
 /**
  * Base Source Handler Interface
- * 
+ *
  * This abstract class defines the interface that all source handlers must implement.
  * Source handlers are responsible for loading content from various sources (filesystem,
  * APIs, databases, etc.) and providing caching capabilities.
@@ -30,14 +30,14 @@ class SourceHandler {
   async getCachedContent(sourceConfig) {
     const cacheKey = this.getCacheKey(sourceConfig);
     const cached = this.cache.get(cacheKey);
-    
+
     if (cached && this.isCacheValid(cached)) {
       return cached.data;
     }
 
     // Load fresh content
     const data = await this.loadContent(sourceConfig);
-    
+
     // Cache the result
     this.cache.set(cacheKey, {
       data,
@@ -105,7 +105,7 @@ class SourceHandler {
   getCacheStats() {
     const entries = Array.from(this.cache.values());
     const validEntries = entries.filter(entry => this.isCacheValid(entry));
-    
+
     return {
       totalEntries: this.cache.size,
       validEntries: validEntries.length,

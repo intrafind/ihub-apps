@@ -289,25 +289,27 @@ export async function processMessageTemplates(
     try {
       const sourceManager = createSourceManager();
       let sourceContent = '';
-      
+
       // Handle new sources system
       if (app.sources && Array.isArray(app.sources) && app.sources.length > 0) {
         console.log(`Loading content from ${app.sources.length} configured sources`);
-        
+
         const context = {
           user: user,
           chatId: chatId,
           userVariables: userVariables
         };
-        
+
         const result = await sourceManager.processAppSources(app, context);
         sourceContent = result.content;
-        
-        console.log(`Loaded sources: ${result.metadata.loadedSources}/${result.metadata.totalSources} successful`);
+
+        console.log(
+          `Loaded sources: ${result.metadata.loadedSources}/${result.metadata.totalSources} successful`
+        );
         if (result.metadata.errors.length > 0) {
           console.warn('Source loading errors:', result.metadata.errors);
         }
-        
+
         // Replace {{sources}} template with combined content
         if (systemPrompt.includes('{{sources}}')) {
           systemPrompt = systemPrompt.replace('{{sources}}', sourceContent || '');
@@ -321,7 +323,7 @@ export async function processMessageTemplates(
       else if (app.sourcePath && systemPrompt.includes('{{source}}')) {
         const sourcePath = userVariables.source_path || app.sourcePath;
         console.log(`Loading legacy source content from file: ${sourcePath}`);
-        
+
         try {
           const sourceContent = await loadText(sourcePath.replace(/^\//, ''));
           systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');

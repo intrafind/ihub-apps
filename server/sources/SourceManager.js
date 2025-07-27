@@ -4,7 +4,7 @@ import IFinderHandler from './IFinderHandler.js';
 
 /**
  * Source Manager
- * 
+ *
  * Centralized manager for all source handlers. Provides unified interface
  * for loading content from various sources with caching and tool generation.
  */
@@ -13,7 +13,7 @@ class SourceManager {
     this.config = config;
     this.handlers = new Map();
     this.toolRegistry = new Map();
-    
+
     // Initialize default handlers
     this.initializeHandlers();
   }
@@ -24,10 +24,10 @@ class SourceManager {
   initializeHandlers() {
     // Register filesystem handler
     this.registerHandler('filesystem', new FileSystemHandler(this.config.filesystem || {}));
-    
+
     // Register URL handler
     this.registerHandler('url', new URLHandler(this.config.url || {}));
-    
+
     // Register iFinder handler
     this.registerHandler('ifinder', new IFinderHandler(this.config.ifinder || {}));
   }
@@ -41,11 +41,11 @@ class SourceManager {
     if (!type || typeof type !== 'string') {
       throw new Error('Handler type must be a non-empty string');
     }
-    
+
     if (!handler || typeof handler.loadContent !== 'function') {
       throw new Error('Handler must implement loadContent method');
     }
-    
+
     this.handlers.set(type, handler);
   }
 
@@ -89,7 +89,7 @@ class SourceManager {
         }
 
         const handler = this.getHandler(source.type);
-        
+
         // Merge context into source config
         const sourceConfig = {
           ...source.config,
@@ -98,7 +98,7 @@ class SourceManager {
 
         // Load content
         const result = await handler.getCachedContent(sourceConfig);
-        
+
         results.push({
           id: source.id,
           type: source.type,
@@ -112,7 +112,6 @@ class SourceManager {
         if (source.exposeAs !== 'tool') {
           totalContent += `\n\n--- Source: ${source.id} ---\n${result.content}`;
         }
-
       } catch (error) {
         const errorResult = {
           id: source.id,
@@ -122,7 +121,7 @@ class SourceManager {
           metadata: { error: error.message },
           success: false
         };
-        
+
         results.push(errorResult);
         errors.push(`Source ${source.id}: ${error.message}`);
       }
@@ -149,7 +148,7 @@ class SourceManager {
    */
   generateTools(sources, context = {}) {
     const tools = [];
-    
+
     for (const source of sources) {
       if (source.exposeAs === 'tool') {
         const tool = this.createSourceTool(source, context);
@@ -158,7 +157,7 @@ class SourceManager {
         }
       }
     }
-    
+
     return tools;
   }
 
@@ -175,15 +174,15 @@ class SourceManager {
     }
 
     const toolId = `source_${source.id}`;
-    
+
     // Store tool execution function
-    this.toolRegistry.set(toolId, async (params) => {
+    this.toolRegistry.set(toolId, async params => {
       const sourceConfig = {
         ...source.config,
         ...context,
         ...params
       };
-      
+
       return await handler.getCachedContent(sourceConfig);
     });
 
@@ -217,7 +216,7 @@ class SourceManager {
           description: 'File path to load (optional if configured in source)'
         };
         break;
-        
+
       case 'url':
         baseSchema.properties.url = {
           type: 'string',
@@ -228,7 +227,7 @@ class SourceManager {
           description: 'Maximum content length to fetch'
         };
         break;
-        
+
       case 'ifinder':
         baseSchema.properties.query = {
           type: 'string',
@@ -259,7 +258,7 @@ class SourceManager {
     if (!toolFunction) {
       throw new Error(`Tool not found: ${toolId}`);
     }
-    
+
     return await toolFunction(params);
   }
 
@@ -279,11 +278,11 @@ class SourceManager {
     if (!id || typeof id !== 'string' || id.trim() === '') {
       return false;
     }
-    
+
     if (!type || typeof type !== 'string' || !this.handlers.has(type)) {
       return false;
     }
-    
+
     if (!config || typeof config !== 'object') {
       return false;
     }
@@ -321,11 +320,11 @@ class SourceManager {
    */
   getCacheStats() {
     const stats = {};
-    
+
     for (const [type, handler] of this.handlers.entries()) {
       stats[type] = handler.getCacheStats();
     }
-    
+
     return stats;
   }
 
@@ -347,10 +346,10 @@ class SourceManager {
 
     // Load sources
     const sourcesResult = await this.loadSources(app.sources, context);
-    
+
     // Generate tools
     const tools = this.generateTools(app.sources, context);
-    
+
     return {
       sources: sourcesResult.sources,
       content: sourcesResult.content,
