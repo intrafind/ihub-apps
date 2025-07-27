@@ -58,9 +58,7 @@ async function rehashUserPasswords() {
       version: '2.0.0',
       description:
         'Local user database for AI Hub Apps - Updated with user-specific password hashing',
-      lastUpdated: new Date().toISOString(),
-      passwordHashingMethod: 'bcrypt + userId salt',
-      note: "Passwords are now hashed with user ID for unique hashes. Demo users still use 'password123'."
+      lastUpdated: new Date().toISOString()
     };
 
     // Write updated file

@@ -90,7 +90,6 @@ describe('Authentication Integration Tests', () => {
       metadata: {
         version: '2.0.0',
         description: 'Test user database',
-        passwordHashingMethod: 'bcrypt + userId salt',
         lastUpdated: new Date().toISOString()
       }
     };

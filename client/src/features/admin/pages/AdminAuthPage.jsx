@@ -733,7 +733,7 @@ const AdminAuthPage = () => {
                 </div>
 
                 {/* Self-signup Setting */}
-                <div className="mb-6">
+                <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
                   <label className="flex items-center">
                     <input
                       type="checkbox"

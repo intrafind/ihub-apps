@@ -14,27 +14,49 @@ const __dirname = path.dirname(__filename);
  */
 export function loadUsers(usersFilePath) {
   try {
+    console.log(`[DEBUG] loadUsers called with path: ${usersFilePath}`);
+    
+    // Debug: List all cache keys
+    const cacheStats = configCache.getStats();
+    console.log(`[DEBUG] Available cache keys:`, Object.keys(cacheStats.entries));
+    
     // Convert file path to cache key format
-    const cacheKey = usersFilePath.startsWith('contents/')
-      ? usersFilePath
-      : path.relative(
-          path.join(__dirname, '../../'),
-          path.isAbsolute(usersFilePath)
-            ? usersFilePath
-            : path.join(__dirname, '../../', usersFilePath)
-        );
+    // The cache stores keys without 'contents/' prefix, so we need to strip it
+    let cacheKey;
+    if (usersFilePath.startsWith('contents/')) {
+      // Remove 'contents/' prefix to match cache key format
+      cacheKey = usersFilePath.substring('contents/'.length);
+    } else {
+      cacheKey = path.relative(
+        path.join(__dirname, '../../'),
+        path.isAbsolute(usersFilePath)
+          ? usersFilePath
+          : path.join(__dirname, '../../', usersFilePath)
+      );
+      // Also remove contents/ prefix if it exists after path.relative
+      if (cacheKey.startsWith('contents/')) {
+        cacheKey = cacheKey.substring('contents/'.length);
+      }
+    }
+
+    console.log(`[DEBUG] Cache key: ${cacheKey}`);
 
     // Get from cache only - no fallback
     const cached = configCache.get(cacheKey);
+    console.log(`[DEBUG] Cache result:`, cached ? `found with ${Object.keys(cached.data?.users || {}).length} users` : 'not found');
+    
     if (cached && cached.data) {
+      console.log(`[DEBUG] Returning cached users: ${Object.keys(cached.data.users || {}).length} users`);
       return cached.data;
     }
 
     // Return empty structure if not in cache
-    console.warn(`Users configuration not found in cache for: ${cacheKey}`);
+    console.warn(`[WARN] Users configuration not found in cache for: ${cacheKey}`);
+    console.warn(`[WARN] Available keys:`, Object.keys(cacheStats.entries));
+    console.warn(`[WARN] Returning empty users structure - THIS WILL WIPE EXISTING USERS!`);
     return { users: {}, metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() } };
   } catch (error) {
-    console.warn('Could not load users configuration:', error.message);
+    console.error(`[ERROR] Could not load users configuration:`, error.message);
     return { users: {}, metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() } };
   }
 }
@@ -46,6 +68,9 @@ export function loadUsers(usersFilePath) {
  */
 export async function saveUsers(usersConfig, usersFilePath) {
   try {
+    console.log(`[DEBUG] saveUsers called with ${Object.keys(usersConfig.users || {}).length} users`);
+    console.log(`[DEBUG] Users being saved:`, Object.keys(usersConfig.users || {}));
+    
     const fullPath = path.isAbsolute(usersFilePath)
       ? usersFilePath
       : path.join(__dirname, '../../', usersFilePath);
@@ -60,10 +85,20 @@ export async function saveUsers(usersConfig, usersFilePath) {
     await atomicWriteJSON(fullPath, usersConfig);
 
     // Update cache with the new data
-    const cacheKey = usersFilePath.startsWith('contents/')
-      ? usersFilePath
-      : path.relative(path.join(__dirname, '../../'), fullPath);
+    // The cache stores keys without 'contents/' prefix, so we need to strip it
+    let cacheKey;
+    if (usersFilePath.startsWith('contents/')) {
+      // Remove 'contents/' prefix to match cache key format
+      cacheKey = usersFilePath.substring('contents/'.length);
+    } else {
+      cacheKey = path.relative(path.join(__dirname, '../../'), fullPath);
+      // Also remove contents/ prefix if it exists after path.relative
+      if (cacheKey.startsWith('contents/')) {
+        cacheKey = cacheKey.substring('contents/'.length);
+      }
+    }
 
+    console.log(`[DEBUG] Updating cache key ${cacheKey} with ${Object.keys(usersConfig.users || {}).length} users`);
     configCache.setCacheEntry(cacheKey, usersConfig);
   } catch (error) {
     console.error('Could not save users configuration:', error.message);
@@ -109,7 +144,11 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
  * @returns {Object} Created/updated user object
  */
 export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
+  console.log(`[DEBUG] createOrUpdateOidcUser called for user: ${externalUser.email} via ${externalUser.provider}`);
+  
   const usersConfig = loadUsers(usersFilePath);
+  console.log(`[DEBUG] Loaded users config with ${Object.keys(usersConfig.users || {}).length} existing users`);
+  
   const authMethod = externalUser.provider === 'proxy' ? 'proxy' : 'oidc';
 
   // Try to find existing user by email or external subject

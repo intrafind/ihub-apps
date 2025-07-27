@@ -98,7 +98,8 @@ class ConfigCache {
       'config/prompts.json',
       'config/platform.json',
       'config/ui.json',
-      'config/groups.json'
+      'config/groups.json',
+      'config/users.json'
     ];
 
     // Built-in locales that should always be preloaded

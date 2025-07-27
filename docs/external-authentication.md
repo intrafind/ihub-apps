@@ -418,9 +418,7 @@ Users are stored in `contents/config/users.json`:
     }
   },
   "metadata": {
-    "version": "2.0.0",
-    "passwordHashingMethod": "bcrypt + userId salt",
-    "description": "Passwords are hashed with user ID for unique hashes"
+    "version": "2.0.0"
   }
 }
 ```

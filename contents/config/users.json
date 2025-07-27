@@ -5,7 +5,9 @@
       "username": "admin",
       "email": "admin@example.com",
       "name": "Demo Administrator",
-      "groups": ["admin"],
+      "groups": [
+        "admin"
+      ],
       "active": true,
       "passwordHash": "$2b$12$CNq/zTdIoQm34eFbjlMXYO0hBvHaXZNd8p2gYAT5FKISGDbQ8ipHm",
       "createdAt": "2025-07-19T00:00:00.000Z",
@@ -16,7 +18,9 @@
       "username": "user",
       "email": "user@example.com",
       "name": "Demo User",
-      "groups": ["user"],
+      "groups": [
+        "user"
+      ],
       "active": true,
       "passwordHash": "$2b$12$vIxSlOJ3nGH/nv2treLpLeBjimsCuHI3JlztLIc2Yv41VtZKCBhJG",
       "createdAt": "2025-07-19T00:00:00.000Z",
@@ -27,30 +31,38 @@
       "username": "manzked",
       "email": "daniel.manzke@googlemail.com",
       "name": "Daniel Manzke",
-      "groups": ["admin", "user"],
+      "groups": [
+        "admin",
+        "user"
+      ],
       "active": true,
       "passwordHash": "$2b$12$T5m9t4qUGil5BBl.TiYoueuRx6utejTxixr2ZhSiwbgFvMem1xW1O",
       "createdAt": "2025-07-19T21:31:12.521Z",
       "updatedAt": "2025-07-19T21:31:12.521Z"
     },
-    "user_dba2ac10_9c1f_4c1e_9d32_7694ed033d58": {
-      "id": "user_dba2ac10_9c1f_4c1e_9d32_7694ed033d58",
+    "user_cf41e08d_b8cc_4640_8685_12ee08f5fa07": {
+      "id": "user_cf41e08d_b8cc_4640_8685_12ee08f5fa07",
       "username": "daniel.manzke@intrafind.com",
       "email": "daniel.manzke@intrafind.com",
       "name": "Daniel Manzke",
-      "groups": ["users", "user"],
+      "additionalGroups": [],
       "active": true,
-      "passwordHash": "$2b$12$rpaE1sCrVNk5daH/LCV83OOaa/56W5SO1gUnQ6Jds/PQKJhJntaWq",
-      "createdAt": "2025-07-20T08:28:34.729Z",
-      "updatedAt": "2025-07-20T08:43:15.518Z"
+      "authMethods": [
+        "oidc"
+      ],
+      "lastActiveDate": "2025-07-27",
+      "createdAt": "2025-07-27T18:27:03.182Z",
+      "updatedAt": "2025-07-27T18:27:03.182Z",
+      "oidcData": {
+        "subject": "e2263c06-d262-4682-b5ae-a30d8d241bf3",
+        "provider": "auth.intrafind.cloud",
+        "lastProvider": "auth.intrafind.cloud"
+      }
     }
   },
   "metadata": {
     "version": "2.0.0",
     "description": "Local user database for AI Hub Apps - Updated with user-specific password hashing",
-    "defaultPassword": "password123",
-    "note": "Passwords are now hashed with user ID for unique hashes. Demo users still use 'password123'.",
-    "lastUpdated": "2025-07-20T08:43:15.518Z",
-    "passwordHashingMethod": "bcrypt + userId salt"
+    "lastUpdated": "2025-07-27T18:27:03.182Z"
   }
 }

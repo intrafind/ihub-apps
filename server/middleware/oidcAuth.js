@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
 import config from '../config.js';
 import configCache from '../configCache.js';
-import { enhanceUserGroups } from '../utils/authorization.js';
+import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import {
   loadUsers,
   findUserByIdentifier,

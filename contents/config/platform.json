@@ -87,7 +87,7 @@
   },
   "oidcAuth": {
     "enabled": true,
-    "allowSelfSignup": false,
+    "allowSelfSignup": true,
     "providers": [
       {
         "name": "auth.intrafind.cloud",
