@@ -11,7 +11,8 @@ const UIConfigContext = createContext({
   error: null,
   headerColor: FALLBACK_COLOR,
   setHeaderColor: () => {},
-  resetHeaderColor: () => {}
+  resetHeaderColor: () => {},
+  refreshUIConfig: () => {}
 });
 
 export const UIConfigProvider = ({ children }) => {
@@ -23,23 +24,24 @@ export const UIConfigProvider = ({ children }) => {
   const [headerColor, setHeaderColor] = useState(FALLBACK_COLOR);
   const [defaultHeaderColor, setDefaultHeaderColor] = useState(FALLBACK_COLOR);
 
-  // Fetch UI config
-  useEffect(() => {
-    const fetchUiConfig = async () => {
-      try {
-        setIsLoading(true);
-        // Using the exported fetchUIConfig function that uses apiClient
-        const data = await fetchUIConfig();
-        setUiConfig(data);
-        setError(null);
-      } catch (error) {
-        console.error('Error fetching UI configuration:', error);
-        setError('Failed to load UI configuration');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Fetch UI config function
+  const fetchUiConfig = async () => {
+    try {
+      setIsLoading(true);
+      // Using the exported fetchUIConfig function that uses apiClient
+      const data = await fetchUIConfig();
+      setUiConfig(data);
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching UI configuration:', error);
+      setError('Failed to load UI configuration');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  // Initial UI config fetch
+  useEffect(() => {
     fetchUiConfig();
   }, []);
 
@@ -66,7 +68,8 @@ export const UIConfigProvider = ({ children }) => {
         error,
         headerColor,
         setHeaderColor,
-        resetHeaderColor
+        resetHeaderColor,
+        refreshUIConfig: fetchUiConfig
       }}
     >
       {children}

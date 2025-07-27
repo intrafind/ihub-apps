@@ -19,6 +19,11 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir }) {
   console.log(`Serving static files from: ${staticPath}`);
   app.use(express.static(staticPath));
 
+  // Serve uploaded assets
+  const uploadsPath = path.join(rootDir, 'contents/uploads');
+  console.log(`Serving uploaded assets from: ${uploadsPath}`);
+  app.use('/uploads', express.static(uploadsPath));
+
   app.get('*', (req, res) => {
     let indexPath;
     if (isPackaged) {

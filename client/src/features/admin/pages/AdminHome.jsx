@@ -64,6 +64,17 @@ const AdminHome = () => {
       href: '/admin/system',
       //icon: 'none',
       color: 'bg-orange-500'
+    },
+    {
+      key: 'ui',
+      title: t('admin.nav.ui', 'UI Customization'),
+      description: t(
+        'admin.home.sections.uiDesc',
+        'Customize the appearance, branding, and content of your AI Hub Apps'
+      ),
+      href: '/admin/ui',
+      //icon: 'paint-brush',
+      color: 'bg-pink-500'
     }
   ];
 

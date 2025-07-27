@@ -29,6 +29,7 @@ import AdminAuthPage from './features/admin/pages/AdminAuthPage';
 import AdminUsersPage from './features/admin/pages/AdminUsersPage';
 import AdminGroupsPage from './features/admin/pages/AdminGroupsPage';
 import AdminGroupEditPage from './features/admin/pages/AdminGroupEditPage';
+import AdminUICustomization from './features/admin/pages/AdminUICustomization';
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
@@ -65,6 +66,7 @@ const SafeAdminAuth = withSafeRoute(AdminAuthPage);
 const SafeAdminUsers = withSafeRoute(AdminUsersPage);
 const SafeAdminGroups = withSafeRoute(AdminGroupsPage);
 const SafeAdminGroupEdit = withSafeRoute(AdminGroupEditPage);
+const SafeAdminUICustomization = withSafeRoute(AdminUICustomization);
 const SafePromptsList = withSafeRoute(PromptsList);
 
 function App() {
@@ -152,6 +154,9 @@ function App() {
                   )}
                   {showAdminPage('groups') && (
                     <Route path="admin/groups/:groupId" element={<SafeAdminGroupEdit />} />
+                  )}
+                  {showAdminPage('ui') && (
+                    <Route path="admin/ui" element={<SafeAdminUICustomization />} />
                   )}
                   <Route path="unauthorized" element={<Unauthorized />} />
                   <Route path="forbidden" element={<Forbidden />} />

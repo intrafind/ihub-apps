@@ -7,6 +7,7 @@ import registerAdminPromptsRoutes from './admin/prompts.js';
 import registerAdminGroupRoutes from './admin/groups.js';
 import registerAdminTranslateRoute from './admin/translate.js';
 import registerAdminPagesRoutes from './admin/pages.js';
+import registerAdminUIRoutes from './admin/ui.js';
 import registerBackupRoutes from './admin/backup.js';
 
 export default async function registerAdminRoutes(app) {
@@ -19,5 +20,6 @@ export default async function registerAdminRoutes(app) {
   registerAdminGroupRoutes(app);
   registerAdminTranslateRoute(app);
   registerAdminPagesRoutes(app);
-  await registerBackupRoutes(app);
+  registerAdminUIRoutes(app);
+  registerBackupRoutes(app);
 }
