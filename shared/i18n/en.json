@@ -792,5 +792,48 @@
     "translate": "Translate",
     "grammar": "Grammar",
     "format": "Format"
+  },
+  "teams": {
+    "status": {
+      "initializing": "Initializing...",
+      "authenticating": "Authenticating with Microsoft Teams..."
+    },
+    "errors": {
+      "initializationFailed": "Failed to initialize Microsoft Teams",
+      "authenticationFailed": "Authentication failed",
+      "authenticationError": "Authentication Error",
+      "interactiveAuthFailed": "Interactive authentication failed"
+    },
+    "auth": {
+      "redirecting": "Redirecting to Microsoft login...",
+      "processing": "Processing authentication...",
+      "successful": "Authentication successful!",
+      "failed": "Authentication failed",
+      "noResponse": "No authentication response received",
+      "canCloseWindow": "You can now close this window.",
+      "windowWillClose": "This window will close automatically..."
+    },
+    "serverErrors": {
+      "TEAMS_INVALID_TOKEN_FORMAT": "Invalid token format",
+      "TEAMS_NO_TENANT_ID": "No tenant ID found in token or configuration",
+      "TEAMS_JWT_SECRET_NOT_CONFIGURED": "JWT secret not configured for Teams authentication",
+      "TEAMS_SSO_TOKEN_REQUIRED": "SSO token is required",
+      "TEAMS_AUTH_NOT_ENABLED": "Teams authentication is not enabled",
+      "TEAMS_INVALID_OR_EXPIRED_TOKEN": "Invalid or expired Teams token",
+      "TEAMS_TAB_CONFIG_SAVED": "Tab configuration saved"
+    },
+    "manifest": {
+      "name": {
+        "short": "AI Hub Apps",
+        "full": "AI Hub Apps - Enterprise AI Assistant"
+      },
+      "description": {
+        "short": "Access AI-powered applications directly in Microsoft Teams",
+        "full": "AI Hub Apps provides a comprehensive suite of AI-powered applications for enterprise users. Access chat assistants, document analyzers, and specialized AI tools directly within Microsoft Teams."
+      },
+      "staticTabs": {
+        "name": "AI Hub Apps"
+      }
+    }
   }
 }

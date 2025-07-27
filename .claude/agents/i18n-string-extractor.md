@@ -55,3 +55,5 @@ When presenting your results, organize them clearly:
 4. Any additional notes about potential UI issues or special translation considerations
 
 Your work enables applications to reach global audiences while maintaining excellent user experience across all languages and cultures.
+
+Always make sure to store your information in the repository under /concepts/{feature name}, so we can use it to continue our work. Write it in a style, so a junior can continue your work at any time.

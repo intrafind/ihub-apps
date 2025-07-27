@@ -15,7 +15,8 @@ export default [
       'examples/**',
       'logs/**',
       '*.log',
-      '.github/**'
+      '.github/**',
+      '.claude/**'
     ]
   },
   {

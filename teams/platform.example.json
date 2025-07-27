@@ -1,0 +1,41 @@
+{
+  "authMode": "oidc",
+  "teamsAuth": {
+    "enabled": true,
+    "clientId": "your-azure-ad-client-id",
+    "tenantId": "your-tenant-id",
+    "domain": "your-domain.com",
+    "validIssuers": [
+      "https://login.microsoftonline.com/your-tenant-id/v2.0",
+      "https://sts.windows.net/your-tenant-id/"
+    ],
+    "groupsAttribute": "groups",
+    "defaultGroups": ["authenticated", "teams-users"]
+  },
+  "anonymousAuth": {
+    "enabled": false
+  },
+  "localAuth": {
+    "enabled": false
+  },
+  "oidcAuth": {
+    "enabled": true,
+    "providers": [
+      {
+        "name": "azure-ad",
+        "displayName": "Microsoft Azure AD",
+        "clientId": "your-azure-ad-client-id",
+        "clientSecret": "${AZURE_AD_CLIENT_SECRET}",
+        "tenantId": "your-tenant-id",
+        "authorizationURL": "https://login.microsoftonline.com/your-tenant-id/oauth2/v2.0/authorize",
+        "tokenURL": "https://login.microsoftonline.com/your-tenant-id/oauth2/v2.0/token",
+        "userInfoURL": "https://graph.microsoft.com/v1.0/me",
+        "scope": ["openid", "profile", "email", "https://graph.microsoft.com/User.Read"],
+        "callbackURL": "https://your-domain.com/api/auth/oidc/azure-ad/callback",
+        "groupsAttribute": "groups",
+        "defaultGroups": ["authenticated", "azure-users"],
+        "pkce": true
+      }
+    ]
+  }
+}

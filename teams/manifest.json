@@ -1,0 +1,41 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "{{TEAMS_APP_ID}}",
+  "packageName": "com.aihubapps.teams",
+  "developer": {
+    "name": "AI Hub Apps",
+    "websiteUrl": "{{APP_URL}}",
+    "privacyUrl": "{{APP_URL}}/page/privacy",
+    "termsOfUseUrl": "{{APP_URL}}/page/terms"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "AI Hub Apps",
+    "full": "AI Hub Apps - Enterprise AI Assistant"
+  },
+  "description": {
+    "short": "Access AI-powered applications directly in Microsoft Teams",
+    "full": "AI Hub Apps provides a comprehensive suite of AI-powered applications for enterprise users. Access chat assistants, document analyzers, and specialized AI tools directly within Microsoft Teams."
+  },
+  "accentColor": "#3B82F6",
+  "staticTabs": [
+    {
+      "entityId": "ai-hub-apps-tab",
+      "name": "AI Hub Apps",
+      "contentUrl": "{{APP_URL}}/teams/tab?loginHint={loginHint}&userObjectId={userObjectId}&theme={theme}",
+      "websiteUrl": "{{APP_URL}}",
+      "scopes": ["personal"]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": ["{{VALID_DOMAIN}}"],
+  "webApplicationInfo": {
+    "id": "{{AAD_CLIENT_ID}}",
+    "resource": "api://{{VALID_DOMAIN}}/{{AAD_CLIENT_ID}}"
+  }
+}
