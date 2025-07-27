@@ -194,8 +194,11 @@ async function validateAndPersistOidcUser(oidcUser, provider) {
     // Update activity tracking
     await updateUserActivity(persistedUser.id, usersFilePath);
 
-    // Merge groups: JWT groups + configured additional groups
-    const mergedGroups = mergeUserGroups(oidcUser.groups || [], persistedUser.groups || []);
+    // Merge groups: external groups (from OIDC) + additional groups (from users.json)
+    const mergedGroups = mergeUserGroups(
+      oidcUser.groups || [],
+      persistedUser.additionalGroups || []
+    );
 
     return {
       ...oidcUser,
@@ -218,10 +221,16 @@ async function validateAndPersistOidcUser(oidcUser, provider) {
   // Create new user (self-signup allowed)
   const persistedUser = await createOrUpdateOidcUser(oidcUser, usersFilePath);
 
+  // Combine external groups from OIDC with additional groups from users.json
+  const combinedGroups = mergeUserGroups(
+    oidcUser.groups || [],
+    persistedUser.additionalGroups || []
+  );
+
   return {
     ...oidcUser,
     id: persistedUser.id,
-    groups: persistedUser.groups || oidcUser.groups || [],
+    groups: combinedGroups,
     active: true,
     authMethods: ['oidc'],
     lastActiveDate: persistedUser.lastActiveDate,

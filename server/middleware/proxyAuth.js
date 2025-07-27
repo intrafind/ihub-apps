@@ -84,8 +84,11 @@ async function validateAndPersistProxyUser(proxyUser, platform) {
     // Update activity tracking
     await updateUserActivity(persistedUser.id, usersFilePath);
 
-    // Merge groups: proxy groups + configured additional groups
-    const mergedGroups = mergeUserGroups(proxyUser.groups || [], persistedUser.groups || []);
+    // Merge groups: external groups (from proxy) + additional groups (from users.json)
+    const mergedGroups = mergeUserGroups(
+      proxyUser.groups || [],
+      persistedUser.additionalGroups || []
+    );
 
     return {
       ...proxyUser,
@@ -116,10 +119,16 @@ async function validateAndPersistProxyUser(proxyUser, platform) {
 
   const persistedUser = await createOrUpdateProxyUser(proxyUserData, usersFilePath);
 
+  // Combine external groups from proxy with additional groups from users.json
+  const combinedGroups = mergeUserGroups(
+    proxyUser.groups || [],
+    persistedUser.additionalGroups || []
+  );
+
   return {
     ...proxyUser,
     id: persistedUser.id,
-    groups: persistedUser.groups || proxyUser.groups || [],
+    groups: combinedGroups,
     active: true,
     authMethods: ['proxy'],
     lastActiveDate: persistedUser.lastActiveDate,

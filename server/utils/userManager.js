@@ -153,11 +153,13 @@ export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
     user.name = externalUser.name || user.name;
     user.email = externalUser.email || user.email;
 
-    // Merge groups: keep existing groups and add external groups
-    const existingGroups = new Set(user.groups || []);
-    const externalGroups = externalUser.groups || [];
-    externalGroups.forEach(group => existingGroups.add(group));
-    user.groups = Array.from(existingGroups);
+    // DO NOT store external groups - only store additional/manual groups
+    // External groups will be combined at runtime during authentication
+    // Keep existing additionalGroups if they exist, otherwise initialize empty
+    if (!user.additionalGroups) {
+      user.additionalGroups = user.groups || []; // Migrate existing groups to additionalGroups
+      delete user.groups; // Remove old groups field
+    }
 
     // Update activity tracking
     user.lastActiveDate = today;
@@ -174,7 +176,7 @@ export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
       username: externalUser.email, // Use email as username for external users
       email: externalUser.email,
       name: externalUser.name,
-      groups: externalUser.groups || [],
+      additionalGroups: [], // Only store additional/manual groups, not external groups
       active: true,
       authMethods: [authMethod],
       lastActiveDate: today,
@@ -237,18 +239,18 @@ export function isUserActive(user) {
 
 /**
  * Merge user groups from different sources
- * @param {Array} jwtGroups - Groups from JWT/OIDC token
- * @param {Array} configGroups - Additional groups from user config
+ * @param {Array} externalGroups - Groups from external auth provider (OIDC/proxy)
+ * @param {Array} additionalGroups - Additional groups from user config (manually assigned)
  * @returns {Array} Merged and deduplicated groups
  */
-export function mergeUserGroups(jwtGroups = [], configGroups = []) {
+export function mergeUserGroups(externalGroups = [], additionalGroups = []) {
   const allGroups = new Set();
 
-  // Add JWT groups
-  jwtGroups.forEach(group => allGroups.add(group));
+  // Add external groups (from current auth session)
+  externalGroups.forEach(group => allGroups.add(group));
 
-  // Add config groups
-  configGroups.forEach(group => allGroups.add(group));
+  // Add additional groups (from users.json)
+  additionalGroups.forEach(group => allGroups.add(group));
 
   return Array.from(allGroups);
 }
