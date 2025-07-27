@@ -199,7 +199,7 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Update UI configuration
    */
-  router.post('/config', async (req, res) => {
+  app.post('/api/admin/ui/config', adminAuth, async (req, res) => {
     try {
       const { config } = req.body;
 
