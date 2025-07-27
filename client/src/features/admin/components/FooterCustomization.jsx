@@ -1,18 +1,10 @@
 import React from 'react';
+import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
 const FooterCustomization = ({ config, onUpdate, t }) => {
-  const handleTextChange = (lang, text) => {
-    onUpdate({
-      text: {
-        ...config.text,
-        [lang]: text
-      }
-    });
-  };
-
   const addFooterLink = () => {
     const newLink = {
-      text: { en: 'New Link', de: 'Neuer Link' },
+      text: { en: 'New Link' },
       href: '/new-page',
       target: '_self',
       enabled: true
@@ -34,8 +26,6 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
     updatedLinks.splice(index, 1);
     onUpdate({ links: updatedLinks });
   };
-
-  const languages = ['en', 'de']; // Add more languages as needed
 
   return (
     <div className="p-6">
@@ -66,25 +56,18 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
           <>
             {/* Footer Text */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('admin.ui.footer.text', 'Footer Text')}
-              </label>
-              <div className="space-y-2">
-                {languages.map(lang => (
-                  <div key={lang} className="flex items-center space-x-3">
-                    <span className="text-sm font-medium text-gray-600 w-8">
-                      {lang.toUpperCase()}
-                    </span>
-                    <textarea
-                      value={config.text?.[lang] || ''}
-                      onChange={e => handleTextChange(lang, e.target.value)}
-                      placeholder={`Footer text (${lang})`}
-                      rows={2}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                ))}
-              </div>
+              <DynamicLanguageEditor
+                label={t('admin.ui.footer.text', 'Footer Text')}
+                value={config.text || {}}
+                onChange={text => onUpdate({ text })}
+                type="textarea"
+                placeholder={{
+                  en: 'Footer text (en)',
+                  de: 'Footer text (de)',
+                  es: 'Footer text (es)',
+                  fr: 'Footer text (fr)'
+                }}
+              />
               <p className="mt-1 text-sm text-gray-500">
                 {t(
                   'admin.ui.footer.textHint',
@@ -125,25 +108,19 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Link Text */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">
-                          {t('admin.ui.footer.linkText', 'Link Text')}
-                        </label>
-                        {languages.map(lang => (
-                          <div key={lang} className="flex items-center space-x-2 mb-1">
-                            <span className="text-xs text-gray-500 w-6">{lang}</span>
-                            <input
-                              type="text"
-                              value={link.text?.[lang] || ''}
-                              onChange={e =>
-                                updateFooterLink(index, {
-                                  text: { ...link.text, [lang]: e.target.value }
-                                })
-                              }
-                              placeholder={`Link text (${lang})`}
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                            />
-                          </div>
-                        ))}
+                        <DynamicLanguageEditor
+                          label={t('admin.ui.footer.linkText', 'Link Text')}
+                          value={link.text || {}}
+                          onChange={text => updateFooterLink(index, { text })}
+                          type="text"
+                          placeholder={{
+                            en: 'Link text (en)',
+                            de: 'Link text (de)',
+                            es: 'Link text (es)',
+                            fr: 'Link text (fr)'
+                          }}
+                          className="mb-2"
+                        />
                       </div>
 
                       {/* Link URL */}

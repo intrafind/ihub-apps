@@ -1,18 +1,8 @@
 import React, { useState } from 'react';
+import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
 const ContentEditor = ({ config, onUpdate, t }) => {
   const [activeSection, setActiveSection] = useState('title');
-
-  const updateTitle = (lang, title) => {
-    const updatedConfig = {
-      ...config,
-      title: {
-        ...config.title,
-        [lang]: title
-      }
-    };
-    onUpdate(updatedConfig);
-  };
 
   const updateDisclaimer = updates => {
     const updatedConfig = {
@@ -20,20 +10,6 @@ const ContentEditor = ({ config, onUpdate, t }) => {
       disclaimer: {
         ...config.disclaimer,
         ...updates
-      }
-    };
-    onUpdate(updatedConfig);
-  };
-
-  const updateDisclaimerText = (field, lang, text) => {
-    const updatedConfig = {
-      ...config,
-      disclaimer: {
-        ...config.disclaimer,
-        [field]: {
-          ...config.disclaimer?.[field],
-          [lang]: text
-        }
       }
     };
     onUpdate(updatedConfig);
@@ -49,22 +25,6 @@ const ContentEditor = ({ config, onUpdate, t }) => {
     };
     onUpdate(updatedConfig);
   };
-
-  const updateAppsListText = (field, lang, text) => {
-    const updatedConfig = {
-      ...config,
-      appsList: {
-        ...config.appsList,
-        [field]: {
-          ...config.appsList?.[field],
-          [lang]: text
-        }
-      }
-    };
-    onUpdate(updatedConfig);
-  };
-
-  const languages = ['en', 'de']; // Add more languages as needed
 
   return (
     <div className="p-6">
@@ -107,25 +67,18 @@ const ContentEditor = ({ config, onUpdate, t }) => {
           </p>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              {t('admin.ui.content.siteTitleLabel', 'Site Title (Multi-language)')}
-            </label>
-            <div className="space-y-3">
-              {languages.map(lang => (
-                <div key={lang} className="flex items-center space-x-3">
-                  <span className="text-sm font-medium text-gray-600 w-12">
-                    {lang.toUpperCase()}
-                  </span>
-                  <input
-                    type="text"
-                    value={config.title?.[lang] || ''}
-                    onChange={e => updateTitle(lang, e.target.value)}
-                    placeholder={`Site title (${lang})`}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-              ))}
-            </div>
+            <DynamicLanguageEditor
+              label={t('admin.ui.content.siteTitleLabel', 'Site Title (Multi-language)')}
+              value={config.title || {}}
+              onChange={title => onUpdate({ title })}
+              type="text"
+              placeholder={{
+                en: 'Site title (en)',
+                de: 'Site title (de)',
+                es: 'Site title (es)',
+                fr: 'Site title (fr)'
+              }}
+            />
             <p className="mt-2 text-sm text-gray-500">
               {t(
                 'admin.ui.content.titleHint',
@@ -191,53 +144,34 @@ const ContentEditor = ({ config, onUpdate, t }) => {
             <>
               {/* Disclaimer Title */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t('admin.ui.content.disclaimerTitle', 'Disclaimer Title')}
-                </label>
-                <div className="space-y-2">
-                  {languages.map(lang => (
-                    <div key={lang} className="flex items-center space-x-3">
-                      <span className="text-sm font-medium text-gray-600 w-8">
-                        {lang.toUpperCase()}
-                      </span>
-                      <input
-                        type="text"
-                        value={config.disclaimer?.title?.[lang] || ''}
-                        onChange={e => updateDisclaimerText('title', lang, e.target.value)}
-                        placeholder={`Disclaimer title (${lang})`}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    </div>
-                  ))}
-                </div>
+                <DynamicLanguageEditor
+                  label={t('admin.ui.content.disclaimerTitle', 'Disclaimer Title')}
+                  value={config.disclaimer?.title || {}}
+                  onChange={title => updateDisclaimer({ title })}
+                  type="text"
+                  placeholder={{
+                    en: 'Disclaimer title (en)',
+                    de: 'Disclaimer title (de)',
+                    es: 'Disclaimer title (es)',
+                    fr: 'Disclaimer title (fr)'
+                  }}
+                />
               </div>
 
               {/* Disclaimer Text */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t('admin.ui.content.disclaimerText', 'Disclaimer Text')}
-                </label>
-                <div className="space-y-3">
-                  {languages.map(lang => (
-                    <div key={lang}>
-                      <div className="flex items-center space-x-3 mb-1">
-                        <span className="text-sm font-medium text-gray-600 w-8">
-                          {lang.toUpperCase()}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          {t('admin.ui.content.htmlAllowed', 'HTML allowed')}
-                        </span>
-                      </div>
-                      <textarea
-                        value={config.disclaimer?.text?.[lang] || ''}
-                        onChange={e => updateDisclaimerText('text', lang, e.target.value)}
-                        placeholder={`Disclaimer content (${lang})`}
-                        rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    </div>
-                  ))}
-                </div>
+                <DynamicLanguageEditor
+                  label={t('admin.ui.content.disclaimerText', 'Disclaimer Text')}
+                  value={config.disclaimer?.text || {}}
+                  onChange={text => updateDisclaimer({ text })}
+                  type="textarea"
+                  placeholder={{
+                    en: 'Disclaimer content (en)',
+                    de: 'Disclaimer content (de)',
+                    es: 'Disclaimer content (es)',
+                    fr: 'Disclaimer content (fr)'
+                  }}
+                />
                 <p className="mt-1 text-sm text-gray-500">
                   {t(
                     'admin.ui.content.disclaimerTextHint',
@@ -307,48 +241,34 @@ const ContentEditor = ({ config, onUpdate, t }) => {
 
             {/* Apps List Title */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('admin.ui.content.appsListTitle', 'Page Title')}
-              </label>
-              <div className="space-y-2">
-                {languages.map(lang => (
-                  <div key={lang} className="flex items-center space-x-3">
-                    <span className="text-sm font-medium text-gray-600 w-8">
-                      {lang.toUpperCase()}
-                    </span>
-                    <input
-                      type="text"
-                      value={config.appsList?.title?.[lang] || ''}
-                      onChange={e => updateAppsListText('title', lang, e.target.value)}
-                      placeholder={`Apps page title (${lang})`}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                ))}
-              </div>
+              <DynamicLanguageEditor
+                label={t('admin.ui.content.appsListTitle', 'Page Title')}
+                value={config.appsList?.title || {}}
+                onChange={title => updateAppsListConfig({ title })}
+                type="text"
+                placeholder={{
+                  en: 'Apps page title (en)',
+                  de: 'Apps page title (de)',
+                  es: 'Apps page title (es)',
+                  fr: 'Apps page title (fr)'
+                }}
+              />
             </div>
 
             {/* Apps List Subtitle */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('admin.ui.content.appsListSubtitle', 'Page Subtitle')}
-              </label>
-              <div className="space-y-2">
-                {languages.map(lang => (
-                  <div key={lang} className="flex items-center space-x-3">
-                    <span className="text-sm font-medium text-gray-600 w-8">
-                      {lang.toUpperCase()}
-                    </span>
-                    <textarea
-                      value={config.appsList?.subtitle?.[lang] || ''}
-                      onChange={e => updateAppsListText('subtitle', lang, e.target.value)}
-                      placeholder={`Apps page subtitle (${lang})`}
-                      rows={2}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                ))}
-              </div>
+              <DynamicLanguageEditor
+                label={t('admin.ui.content.appsListSubtitle', 'Page Subtitle')}
+                value={config.appsList?.subtitle || {}}
+                onChange={subtitle => updateAppsListConfig({ subtitle })}
+                type="textarea"
+                placeholder={{
+                  en: 'Apps page subtitle (en)',
+                  de: 'Apps page subtitle (de)',
+                  es: 'Apps page subtitle (es)',
+                  fr: 'Apps page subtitle (fr)'
+                }}
+              />
             </div>
 
             {/* Search Configuration */}

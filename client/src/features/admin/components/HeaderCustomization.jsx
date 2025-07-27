@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
 const HeaderCustomization = ({ config, onUpdate, t }) => {
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
@@ -16,30 +17,9 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
     });
   };
 
-  const handleLogoAltChange = (lang, altText) => {
-    onUpdate({
-      logo: {
-        ...config.logo,
-        alt: {
-          ...config.logo?.alt,
-          [lang]: altText
-        }
-      }
-    });
-  };
-
-  const handleTitleChange = (lang, title) => {
-    onUpdate({
-      title: {
-        ...config.title,
-        [lang]: title
-      }
-    });
-  };
-
   const addNavigationLink = () => {
     const newLink = {
-      text: { en: 'New Link', de: 'Neuer Link' },
+      text: { en: 'New Link' },
       href: '/new-page',
       target: '_self',
       enabled: true
@@ -61,8 +41,6 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
     updatedLinks.splice(index, 1);
     onUpdate({ links: updatedLinks });
   };
-
-  const languages = ['en', 'de']; // Add more languages as needed
 
   return (
     <div className="p-6">
@@ -157,46 +135,39 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
         </div>
 
         {/* Logo Alt Text */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {t('admin.ui.header.logoAlt', 'Logo Alt Text')}
-          </label>
-          <div className="space-y-2">
-            {languages.map(lang => (
-              <div key={lang} className="flex items-center space-x-3">
-                <span className="text-sm font-medium text-gray-600 w-8">{lang.toUpperCase()}</span>
-                <input
-                  type="text"
-                  value={config.logo?.alt?.[lang] || ''}
-                  onChange={e => handleLogoAltChange(lang, e.target.value)}
-                  placeholder={`Logo alt text (${lang})`}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
+        <DynamicLanguageEditor
+          label={t('admin.ui.header.logoAlt', 'Logo Alt Text')}
+          value={config.logo?.alt || {}}
+          onChange={alt =>
+            onUpdate({
+              logo: {
+                ...config.logo,
+                alt
+              }
+            })
+          }
+          type="text"
+          placeholder={{
+            en: 'Logo alt text (en)',
+            de: 'Logo alt text (de)',
+            es: 'Logo alt text (es)',
+            fr: 'Logo alt text (fr)'
+          }}
+        />
 
         {/* Site Title */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {t('admin.ui.header.title', 'Site Title')}
-          </label>
-          <div className="space-y-2">
-            {languages.map(lang => (
-              <div key={lang} className="flex items-center space-x-3">
-                <span className="text-sm font-medium text-gray-600 w-8">{lang.toUpperCase()}</span>
-                <input
-                  type="text"
-                  value={config.title?.[lang] || ''}
-                  onChange={e => handleTitleChange(lang, e.target.value)}
-                  placeholder={`Site title (${lang})`}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
+        <DynamicLanguageEditor
+          label={t('admin.ui.header.title', 'Site Title')}
+          value={config.title || {}}
+          onChange={title => onUpdate({ title })}
+          type="text"
+          placeholder={{
+            en: 'Site title (en)',
+            de: 'Site title (de)',
+            es: 'Site title (es)',
+            fr: 'Site title (fr)'
+          }}
+        />
 
         {/* Navigation Links */}
         <div>
@@ -230,25 +201,19 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Link Text */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">
-                      {t('admin.ui.header.linkText', 'Link Text')}
-                    </label>
-                    {languages.map(lang => (
-                      <div key={lang} className="flex items-center space-x-2 mb-1">
-                        <span className="text-xs text-gray-500 w-6">{lang}</span>
-                        <input
-                          type="text"
-                          value={link.text?.[lang] || ''}
-                          onChange={e =>
-                            updateNavigationLink(index, {
-                              text: { ...link.text, [lang]: e.target.value }
-                            })
-                          }
-                          placeholder={`Link text (${lang})`}
-                          className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                        />
-                      </div>
-                    ))}
+                    <DynamicLanguageEditor
+                      label={t('admin.ui.header.linkText', 'Link Text')}
+                      value={link.text || {}}
+                      onChange={text => updateNavigationLink(index, { text })}
+                      type="text"
+                      placeholder={{
+                        en: 'Link text (en)',
+                        de: 'Link text (de)',
+                        es: 'Link text (es)',
+                        fr: 'Link text (fr)'
+                      }}
+                      className="mb-2"
+                    />
                   </div>
 
                   {/* Link URL */}
