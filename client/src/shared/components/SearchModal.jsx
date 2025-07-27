@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Fuse from 'fuse.js';
 import Icon from './Icon';
+import { useTranslation } from 'react-i18next';
 
 const SearchModal = ({
   isOpen,
@@ -17,6 +18,7 @@ const SearchModal = ({
   const inputRef = useRef(null);
   const fuseRef = useRef(null);
   const listRef = useRef(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!isOpen) return;
