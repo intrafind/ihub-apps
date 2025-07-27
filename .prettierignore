@@ -19,6 +19,7 @@ examples/
 
 # GitHub workflows and actions
 .github/
+.claude/
 
 # Other
 *.min.js

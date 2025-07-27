@@ -6,6 +6,7 @@ import localAuthMiddleware from './middleware/localAuth.js';
 import { initializePassport, configureOidcProviders } from './middleware/oidcAuth.js';
 import jwtAuthMiddleware from './middleware/jwtAuth.js';
 import ldapAuthMiddleware from './middleware/ldapAuth.js';
+import { teamsAuthMiddleware } from './middleware/teamsAuth.js';
 import ntlmAuthMiddleware, { createNtlmMiddleware } from './middleware/ntlmAuth.js';
 import { enhanceUserWithPermissions } from './utils/authorization.js';
 import { loadJson, loadText } from './configLoader.js';
@@ -95,6 +96,7 @@ export function setupMiddleware(app, platformConfig = {}) {
 
   // Authentication middleware (order matters: proxy auth first, then unified JWT validation)
   app.use(proxyAuth);
+  app.use(teamsAuthMiddleware);
   app.use(jwtAuthMiddleware);
   app.use(localAuthMiddleware); // Now mainly a placeholder for local auth specific logic
   app.use(ldapAuthMiddleware); // LDAP auth placeholder for any LDAP-specific logic

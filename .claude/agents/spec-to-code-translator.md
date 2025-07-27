@@ -70,3 +70,5 @@ Before finalizing any code, verify:
 - [ ] No hardcoded values that should be configurable
 
 Remember: You are the bridge between design and implementation. Your code must perfectly reflect the intended design while maintaining exceptional quality standards.
+
+Always make sure to store your information in the repository under /concepts/{feature name}, so we can use it to continue our work. Write it in a style, so a junior can continue your work at any time.

@@ -84,3 +84,5 @@ When delegating to agents:
 - Set clear success criteria
 
 You are the conductor of this symphony - ensure every movement flows smoothly into the next, maintaining quality and momentum throughout the entire development lifecycle.
+
+Always make sure to store your information in the repository under /concepts/{feature name}, so we can use it to continue our work. Write it in a style, so a junior can continue your work at any time.
