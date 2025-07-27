@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 const SharedAppHeader = ({
   app,
   appId,
+  chatId,
   mode = 'chat', // 'chat' or 'canvas'
   messages = [],
   editorContent = '',
@@ -117,6 +118,8 @@ const SharedAppHeader = ({
           showShareButton={showShareButton}
           messages={messages}
           exportSettings={exportSettings}
+          appId={appId}
+          chatId={chatId}
         />
       </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
@@ -87,9 +87,11 @@ const AdminGroupsPage = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">Group Management</h1>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  {t('admin.groups.management', 'Group Management')}
+                </h1>
                 <p className="text-gray-600 mt-1">
-                  Manage user groups, permissions, and external group mappings
+                  {t('admin.groups.subtitle', 'Manage user groups, permissions, and external group mappings')}
                 </p>
               </div>
               <button
@@ -160,8 +162,13 @@ const AdminGroupsPage = () => {
                     <tr>
                       <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
                         <Icon name="users" size="lg" className="mx-auto mb-4 text-gray-400" />
-                        <p>No groups found</p>
-                        <p className="text-sm">Create your first group to get started</p>
+                        <p>{t('admin.groups.noGroupsFound', 'No groups found')}</p>
+                        <p className="text-sm">
+                          {t(
+                            'admin.groups.createFirstGroup',
+                            'Create your first group to get started'
+                          )}
+                        </p>
                       </td>
                     </tr>
                   ) : (
@@ -184,7 +191,7 @@ const AdminGroupsPage = () => {
                         <td className="px-6 py-4">
                           <div className="space-y-1">
                             <div className="flex flex-wrap gap-1">
-                              <span className="text-xs text-gray-500">Apps:</span>
+                              <span className="text-xs text-gray-500">{t('admin.groups.apps', 'Apps:')}</span>
                               {group.permissions?.apps?.includes('*') ? (
                                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                   All Apps (*)
@@ -227,7 +234,7 @@ const AdminGroupsPage = () => {
                               </span>
                             ))}
                             {(!group.mappings || group.mappings.length === 0) && (
-                              <span className="text-sm text-gray-400">No mappings</span>
+                              <span className="text-sm text-gray-400">{t('admin.groups.noMappings', 'No mappings')}</span>
                             )}
                           </div>
                         </td>

@@ -58,23 +58,24 @@
       ]
     }
   ],
-  "features": {
-    "fileUpload": true
-  },
-  "fileUpload": {
-    "maxFileSizeMB": 5,
-    "supportedTextFormats": [
-      "text/plain",
-      "text/markdown",
-      "text/csv",
-      "application/json",
-      "text/html",
-      "text/css",
-      "text/javascript",
-      "application/javascript",
-      "text/xml"
-    ],
-    "supportedPdfFormats": ["application/pdf"]
+  "upload": {
+    "enabled": true,
+    "fileUpload": {
+      "enabled": true,
+      "maxFileSizeMB": 5,
+      "supportedTextFormats": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/json",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/xml"
+      ],
+      "supportedPdfFormats": ["application/pdf"]
+    }
   },
   "enabled": true
 }

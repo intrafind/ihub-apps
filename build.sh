@@ -78,9 +78,9 @@ fi
 # Step 9: Install production dependencies
 echo "Installing production dependencies..."
 cd dist
-npm install --production
+npm ci --omit=dev
 cd server
-npm install --production
+npm ci --omit=dev
 cd ../..
 
 echo "Production build completed successfully!"

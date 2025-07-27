@@ -1,34 +1,40 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
+import { fetchTools } from '../../api/api';
 
 const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
   const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [availableTools, setAvailableTools] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
 
-  // Available tools list
-  const availableTools = [
-    'researchPlanner',
-    'deepResearch',
-    'queryRewriter',
-    'evaluator',
-    'braveSearch',
-    'enhancedWebSearch',
-    'tavilySearch',
-    'webContentExtractor',
-    'answerReducer',
-    'finalizer',
-    'playwrightScreenshot',
-    'seleniumScreenshot'
-  ];
+  // Fetch tools from API
+  useEffect(() => {
+    const loadTools = async () => {
+      try {
+        setIsLoading(true);
+        const tools = await fetchTools();
+        setAvailableTools(tools || []);
+      } catch (error) {
+        console.error('Failed to fetch tools:', error);
+        setAvailableTools([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTools();
+  }, []);
 
   // Filter tools based on search term and exclude already selected
   const filteredTools = availableTools.filter(tool => {
-    const matchesSearch = tool.toLowerCase().includes(searchTerm.toLowerCase());
-    const notSelected = !selectedTools.includes(tool);
+    const searchableText = `${tool.name || tool.id} ${tool.description || ''}`.toLowerCase();
+    const matchesSearch = searchableText.includes(searchTerm.toLowerCase());
+    const notSelected = !selectedTools.includes(tool.id);
     return matchesSearch && notSelected;
   });
 
@@ -53,8 +59,9 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
   }, [isDropdownOpen]);
 
   const handleAddTool = tool => {
-    if (!selectedTools.includes(tool)) {
-      onToolsChange([...selectedTools, tool]);
+    const toolId = typeof tool === 'string' ? tool : tool.id;
+    if (!selectedTools.includes(toolId)) {
+      onToolsChange([...selectedTools, toolId]);
     }
     setSearchTerm('');
     setIsDropdownOpen(false);
@@ -83,21 +90,25 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
       {/* Selected Tools */}
       {selectedTools.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {selectedTools.map(tool => (
-            <span
-              key={tool}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800"
-            >
-              {tool}
-              <button
-                onClick={() => handleRemoveTool(tool)}
-                className="ml-1 flex-shrink-0 text-indigo-600 hover:text-indigo-800"
-                aria-label={`Remove ${tool}`}
+          {selectedTools.map(toolId => {
+            const toolInfo = availableTools.find(t => t.id === toolId);
+            const displayName = toolInfo ? toolInfo.name : toolId;
+            return (
+              <span
+                key={toolId}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800"
               >
-                <Icon name="x" className="w-3 h-3" />
-              </button>
-            </span>
-          ))}
+                {displayName}
+                <button
+                  onClick={() => handleRemoveTool(toolId)}
+                  className="ml-1 flex-shrink-0 text-indigo-600 hover:text-indigo-800"
+                  aria-label={`Remove ${displayName}`}
+                >
+                  <Icon name="x" className="w-3 h-3" />
+                </button>
+              </span>
+            );
+          })}
         </div>
       )}
 
@@ -123,23 +134,30 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
         {/* Dropdown */}
         {isDropdownOpen && (
           <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
-            {filteredTools.length > 0 ? (
+            {isLoading ? (
+              <div className="px-3 py-2 text-sm text-gray-500">
+                {t('common.loading', 'Loading...')}
+              </div>
+            ) : filteredTools.length > 0 ? (
               filteredTools.map(tool => (
                 <button
-                  key={tool}
+                  key={tool.id}
                   onClick={() => handleAddTool(tool)}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+                  className="w-full text-left px-3 py-3 text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none border-b border-gray-100 last:border-b-0"
                 >
-                  {tool}
+                  <div className="font-medium text-gray-900">{tool.name}</div>
+                  {tool.description && (
+                    <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                      {tool.description}
+                    </div>
+                  )}
                 </button>
               ))
             ) : (
               <div className="px-3 py-2 text-sm text-gray-500">
                 {searchTerm
-                  ? t('admin.apps.edit.noToolsFound', 'No tools found matching "{{searchTerm}}"', {
-                      searchTerm
-                    })
-                  : t('admin.apps.edit.allToolsSelected', 'All tools are already selected')}
+                  ? t('admin.apps.wizard.tools.noResults', 'No tools match your search')
+                  : t('admin.apps.wizard.tools.noTools', 'No tools available')}
               </div>
             )}
           </div>

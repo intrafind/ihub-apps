@@ -18,8 +18,9 @@ The React component rendering system automatically detects JSX code and compiles
 ### Component Detection
 
 The system identifies React components by looking for these patterns in the content:
+
 - `import` statements
-- `export` statements  
+- `export` statements
 - `function` declarations
 - JSX syntax (`<ComponentName>`)
 - React hooks (`useState`, `useEffect`, etc.)
@@ -30,6 +31,7 @@ The system identifies React components by looking for these patterns in the cont
 ### File Location
 
 Create React component files in the pages directory:
+
 ```
 contents/pages/{language}/{component-name}.jsx
 ```
@@ -50,7 +52,7 @@ function UserComponent(props) {
     <div className="p-4">
       <h1>Interactive Component</h1>
       <p>Count: {count}</p>
-      <button 
+      <button
         onClick={() => setCount(count + 1)}
         className="bg-blue-500 text-white px-4 py-2 rounded"
       >
@@ -66,6 +68,7 @@ function UserComponent(props) {
 Your component automatically receives these props:
 
 #### React Hooks
+
 - `React` - React library
 - `useState` - State hook
 - `useEffect` - Effect hook
@@ -74,6 +77,7 @@ Your component automatically receives these props:
 - `useRef` - Reference hook
 
 #### Application Context
+
 - `t` - Translation function for internationalization
 - `navigate` - Router navigation function
 - `user` - User data object (includes language preference)
@@ -89,12 +93,8 @@ function UserComponent(props) {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="bg-white rounded-lg shadow-lg p-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">
-          My Component
-        </h1>
-        <p className="text-gray-600">
-          Styled with Tailwind CSS
-        </p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">My Component</h1>
+        <p className="text-gray-600">Styled with Tailwind CSS</p>
       </div>
     </div>
   );
@@ -114,13 +114,13 @@ function UserComponent(props) {
     <div className="text-center p-8">
       <h2 className="text-2xl font-bold mb-4">Counter: {count}</h2>
       <div className="space-x-4">
-        <button 
+        <button
           onClick={() => setCount(count - 1)}
           className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
         >
           Decrease
         </button>
-        <button 
+        <button
           onClick={() => setCount(count + 1)}
           className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
         >
@@ -160,7 +160,7 @@ function UserComponent(props) {
         <input
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={e => setName(e.target.value)}
           placeholder="Enter your name"
           className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
@@ -205,11 +205,13 @@ function UserComponent(props) {
         type: 'bar',
         data: {
           labels: ['Red', 'Blue', 'Yellow', 'Green'],
-          datasets: [{
-            label: 'Votes',
-            data: [12, 19, 3, 5],
-            backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0']
-          }]
+          datasets: [
+            {
+              label: 'Votes',
+              data: [12, 19, 3, 5],
+              backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0']
+            }
+          ]
         }
       });
     }
@@ -227,22 +229,26 @@ function UserComponent(props) {
 ## Best Practices
 
 ### Component Structure
+
 - Always name your main component `UserComponent`
 - Destructure needed props at the component top
 - Use functional components with hooks
 - Keep components focused and single-purpose
 
 ### Performance
+
 - Use `useMemo` and `useCallback` for expensive operations
 - Avoid creating objects in render cycles
 - Clean up effects and event listeners in `useEffect` cleanup
 
 ### Error Handling
+
 - Wrap risky operations in try-catch blocks
 - Provide fallback UI for loading states
 - Handle async operations properly
 
 ### Accessibility
+
 - Use semantic HTML elements
 - Include proper ARIA labels
 - Ensure keyboard navigation works
@@ -253,21 +259,25 @@ function UserComponent(props) {
 ### Common Issues
 
 #### Component Not Rendering
+
 - Check that your component is named `UserComponent`
 - Ensure the file has a `.jsx` extension
 - Verify JSX syntax is correct
 
 #### Babel Compilation Errors
+
 - Check for syntax errors in your JSX
 - Ensure you're not using unsupported JavaScript features
 - Avoid `export` statements (these are handled automatically)
 
 #### Missing Dependencies
+
 - External libraries must be loaded dynamically
 - Check browser console for loading errors
 - Verify CDN URLs are accessible
 
 #### State Not Updating
+
 - Ensure you're using the `useState` hook correctly
 - Check that state updates are not mutating existing state
 - Verify event handlers are bound properly
@@ -277,11 +287,13 @@ function UserComponent(props) {
 The system provides detailed error messages:
 
 #### Compilation Errors (Yellow Box)
+
 - Babel transformation failures
 - JSX syntax errors
 - Missing component exports
 
 #### Runtime Errors (Red Box)
+
 - Component execution failures
 - React rendering errors
 - Hook usage violations
@@ -318,10 +330,7 @@ function UserComponent(props) {
   };
 
   return (
-    <button 
-      onClick={handleGoHome}
-      className="bg-blue-500 text-white px-4 py-2 rounded"
-    >
+    <button onClick={handleGoHome} className="bg-blue-500 text-white px-4 py-2 rounded">
       Go Home
     </button>
   );
@@ -348,16 +357,19 @@ function UserComponent(props) {
 ## Security Considerations
 
 ### Safe Environment
+
 - Components run in an isolated execution context
 - No access to sensitive application state
 - Limited to provided props and standard browser APIs
 
 ### Content Security
+
 - All JSX code is compiled and executed client-side
 - No server-side execution or file system access
 - Standard browser security model applies
 
 ### Best Practices
+
 - Validate user inputs
 - Sanitize data before displaying
 - Use secure HTTP requests (HTTPS)
@@ -366,16 +378,19 @@ function UserComponent(props) {
 ## Performance Considerations
 
 ### Babel Loading
+
 - Babel is loaded once and cached
 - Multiple CDN sources ensure reliability
 - Components compile quickly after initial load
 
 ### Component Execution
+
 - Components are memoized to prevent unnecessary recompilation
 - Error boundaries prevent crashes
 - Optimized for real-time development
 
 ### Resource Usage
+
 - External libraries should be loaded conditionally
 - Clean up resources in useEffect cleanup functions
 - Avoid memory leaks with proper event listener removal
@@ -383,12 +398,14 @@ function UserComponent(props) {
 ## Migration Guide
 
 ### From Static Content
+
 1. Create a new `.jsx` file in the pages directory
 2. Convert your content to JSX format
 3. Add interactive elements as needed
 4. Test thoroughly in the browser
 
 ### From External Components
+
 1. Copy your component code into the `UserComponent` structure
 2. Replace imports with prop destructuring
 3. Load external dependencies dynamically

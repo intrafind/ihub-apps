@@ -79,56 +79,28 @@ class StreamingHandler {
       clearTimeout(timeoutId);
 
       if (!llmResponse.ok) {
-        const errorBody = await llmResponse.text();
-        let errorMessage = await getLocalizedError(
-          'llmApiError',
-          { status: llmResponse.status },
+        const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
+          llmResponse,
+          model,
           clientLanguage
         );
-
-        if (llmResponse.status === 401) {
-          errorMessage = await getLocalizedError(
-            'authenticationFailed',
-            { provider: model.provider },
-            clientLanguage
-          );
-        } else if (llmResponse.status === 400) {
-          // Check if it's an API key error based on the error body
-          const errorBodyLower = errorBody.toLowerCase();
-          if (errorBodyLower.includes('api key') || errorBodyLower.includes('api_key')) {
-            errorMessage = await getLocalizedError(
-              'authenticationFailed',
-              { provider: model.provider },
-              clientLanguage
-            );
-          }
-        } else if (llmResponse.status === 429) {
-          errorMessage = await getLocalizedError(
-            'rateLimitExceeded',
-            { provider: model.provider },
-            clientLanguage
-          );
-        } else if (llmResponse.status >= 500) {
-          errorMessage = await getLocalizedError(
-            'serviceError',
-            { provider: model.provider },
-            clientLanguage
-          );
-        }
 
         await logInteraction(
           'chat_error',
           buildLogData(true, {
             responseType: 'error',
             error: {
-              message: errorMessage,
-              code: llmResponse.status.toString(),
-              details: errorBody
+              message: errorInfo.message,
+              code: errorInfo.code,
+              details: errorInfo.details
             }
           })
         );
 
-        actionTracker.trackError(chatId, { message: errorMessage, details: errorBody });
+        actionTracker.trackError(chatId, {
+          message: errorInfo.message,
+          details: errorInfo.details
+        });
 
         if (activeRequests.get(chatId) === controller) {
           activeRequests.delete(chatId);

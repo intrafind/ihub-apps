@@ -196,13 +196,13 @@ const AdminGroupEditPage = () => {
           <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">Basic Information</h3>
-                <p className="mt-1 text-sm text-gray-500">Basic group configuration and metadata</p>
+                <h3 className="text-lg font-medium leading-6 text-gray-900">{t('admin.groups.basicInformation', 'Basic Information')}</h3>
+                <p className="mt-1 text-sm text-gray-500">{t('admin.groups.basicGroupConfiguration', 'Basic group configuration and metadata')}</p>
               </div>
               <div className="mt-5 md:col-span-2 md:mt-0">
                 <div className="grid grid-cols-6 gap-6">
                   <div className="col-span-6 sm:col-span-3">
-                    <label className="block text-sm font-medium text-gray-700">Group ID</label>
+                    <label className="block text-sm font-medium text-gray-700">{t('admin.groups.groupId', 'Group ID')}</label>
                     <input
                       type="text"
                       required
@@ -213,12 +213,12 @@ const AdminGroupEditPage = () => {
                       placeholder="Enter unique group ID"
                     />
                     {isProtectedGroup(group.id) && (
-                      <p className="mt-1 text-xs text-gray-500">This is a protected system group</p>
+                      <p className="mt-1 text-xs text-gray-500">{t('admin.groups.protectedSystemGroup', 'This is a protected system group')}</p>
                     )}
                   </div>
 
                   <div className="col-span-6 sm:col-span-3">
-                    <label className="block text-sm font-medium text-gray-700">Group Name</label>
+                    <label className="block text-sm font-medium text-gray-700">{t('admin.groups.groupName', 'Group Name')}</label>
                     <input
                       type="text"
                       required
@@ -230,7 +230,7 @@ const AdminGroupEditPage = () => {
                   </div>
 
                   <div className="col-span-6">
-                    <label className="block text-sm font-medium text-gray-700">Description</label>
+                    <label className="block text-sm font-medium text-gray-700">{t('admin.groups.description', 'Description')}</label>
                     <textarea
                       value={group.description}
                       onChange={e => handleInputChange('description', e.target.value)}
@@ -248,7 +248,7 @@ const AdminGroupEditPage = () => {
                         onChange={e => handlePermissionChange('adminAccess', e.target.checked)}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
-                      <label className="ml-2 block text-sm text-gray-900">Admin Access</label>
+                      <label className="ml-2 block text-sm text-gray-900">{t('admin.groups.adminAccess', 'Admin Access')}</label>
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
                       Allow members of this group to access administrative functions
@@ -295,7 +295,7 @@ const AdminGroupEditPage = () => {
           <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">Permissions</h3>
+                <h3 className="text-lg font-medium leading-6 text-gray-900">{t('admin.groups.permissions', 'Permissions')}</h3>
                 <p className="mt-1 text-sm text-gray-500">
                   Configure which apps, models, and prompts members of this group can access
                 </p>

@@ -2,8 +2,9 @@
  * Anthropic API adapter
  */
 import { formatToolsForAnthropic } from './toolFormatter.js';
+import { BaseAdapter } from './BaseAdapter.js';
 
-const AnthropicAdapter = {
+class AnthropicAdapterClass extends BaseAdapter {
   /**
    * Format messages for Anthropic API, including handling image data
    */
@@ -41,14 +42,7 @@ const AnthropicAdapter = {
         }
         for (const toolCall of msg.tool_calls) {
           let args = {};
-          try {
-            args = JSON.parse(toolCall.function.arguments);
-          } catch (e) {
-            // ignore if already an object
-            if (typeof toolCall.function.arguments === 'object') {
-              args = toolCall.function.arguments;
-            }
-          }
+          args = this.safeJsonParse(toolCall.function.arguments, {});
           content.push({
             type: 'tool_use',
             id: toolCall.id,
@@ -57,7 +51,7 @@ const AnthropicAdapter = {
           });
         }
         processedMessages.push({ role: 'assistant', content });
-      } else if (msg.imageData) {
+      } else if (this.hasImageData(msg)) {
         const contentArray = [];
         if (msg.content && msg.content.trim()) {
           contentArray.push({
@@ -70,7 +64,7 @@ const AnthropicAdapter = {
           source: {
             type: 'base64',
             media_type: msg.imageData.fileType || 'image/jpeg',
-            data: msg.imageData.base64.replace(/^data:image\/[a-z]+;base64,/, '')
+            data: this.cleanBase64Data(msg.imageData.base64)
           }
         });
         processedMessages.push({
@@ -86,39 +80,26 @@ const AnthropicAdapter = {
     }
 
     // Debug logs
-    console.log(
-      'Original messages:',
-      JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData })))
-    );
-    console.log(
-      'Processed Anthropic messages:',
-      JSON.stringify(
-        processedMessages.map(m => ({
-          role: m.role,
-          contentType: Array.isArray(m.content) ? 'array' : 'string',
-          contentItems: Array.isArray(m.content) ? m.content.map(c => c.type) : null
-        }))
-      )
-    );
+    this.debugLogMessages(messages, processedMessages, 'Anthropic');
 
     return {
       messages: processedMessages,
       systemPrompt: systemMessage?.content || ''
     };
-  },
+  }
 
   /**
    * Create a completion request for Anthropic
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
     const {
-      temperature = 0.7,
-      stream = true,
-      maxTokens = 1024,
-      tools = null,
-      responseFormat = null,
-      responseSchema = null
-    } = options;
+      temperature,
+      stream,
+      maxTokens,
+      tools,
+      responseFormat,
+      responseSchema
+    } = this.extractRequestOptions(options);
 
     // Format messages and extract system prompt
     let { messages: formattedMessages, systemPrompt } = this.formatMessages(messages);
@@ -176,13 +157,14 @@ const AnthropicAdapter = {
       url: model.url,
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey || '', // Provide empty string to avoid undefined
+        ...this.createRequestHeaders(apiKey),
+        'x-api-key': apiKey || '', // Anthropic uses x-api-key instead of Authorization
+        Authorization: undefined, // Remove Authorization header for Anthropic
         'anthropic-version': '2023-06-01' // TODO check if still accurate
       },
       body: requestBody
     };
-  },
+  }
 
   /**
    * Process streaming response from Anthropic
@@ -263,6 +245,7 @@ const AnthropicAdapter = {
 
     return result;
   }
-};
+}
 
+const AnthropicAdapter = new AnthropicAdapterClass();
 export default AnthropicAdapter;

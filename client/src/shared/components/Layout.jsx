@@ -139,7 +139,7 @@ const Layout = () => {
                 <button
                   className="md:hidden text-white"
                   onClick={toggleMobileMenu}
-                  aria-label="Toggle menu"
+                  aria-label={t('common.toggleMenu', 'Toggle menu')}
                 >
                   <Icon name="menu" size="lg" className="text-white" />
                 </button>

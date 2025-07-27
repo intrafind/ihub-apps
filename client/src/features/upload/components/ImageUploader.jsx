@@ -119,7 +119,11 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
           {preview ? (
             <div className="relative mt-2 mb-4">
               <div className="relative rounded-lg overflow-hidden border border-gray-300">
-                <img src={preview} alt="Preview" className="max-w-full max-h-60 mx-auto" />
+                <img
+                  src={preview}
+                  alt={t('common.preview', 'Preview')}
+                  className="max-w-full max-h-60 mx-auto"
+                />
                 <button
                   type="button"
                   onClick={handleClear}

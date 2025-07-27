@@ -104,7 +104,7 @@ describe('Authentication Integration Tests', () => {
 
     // Register routes
     registerAuthRoutes(app);
-    registerAdminRoutes(app);
+    await registerAdminRoutes(app);
   });
 
   afterEach(async () => {

@@ -5,6 +5,7 @@ import { storeFeedback } from '../../feedbackStorage.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import validate from '../../validators/validate.js';
 import { feedbackSchema } from '../../validators/index.js';
+import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
 
 export default function registerFeedbackRoutes(app, { getLocalizedError }) {
   app.post('/api/feedback', authRequired, validate(feedbackSchema), async (req, res) => {
@@ -14,7 +15,7 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
       const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
       if (!messageId || !rating || !appId || !chatId) {
         const errorMessage = await getLocalizedError('missingFeedbackFields', {}, language);
-        return res.status(400).json({ error: errorMessage });
+        return sendBadRequest(res, errorMessage);
       }
       const userSessionId = req.headers['x-session-id'];
       await logInteraction('feedback', {
@@ -49,8 +50,7 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
       console.log(`Feedback received for message ${messageId} in chat ${chatId}: ${rating}`);
       return res.status(200).json({ success: true });
     } catch (error) {
-      console.error('Error processing feedback:', error);
-      return res.status(500).json({ error: 'Internal server error', message: error.message });
+      return sendInternalError(res, error, 'processing feedback');
     }
   });
 }

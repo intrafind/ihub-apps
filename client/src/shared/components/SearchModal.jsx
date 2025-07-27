@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Fuse from 'fuse.js';
 import Icon from './Icon';
+import { useTranslation } from 'react-i18next';
 
 const SearchModal = ({
   isOpen,
@@ -16,6 +17,8 @@ const SearchModal = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef(null);
   const fuseRef = useRef(null);
+  const listRef = useRef(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -51,6 +54,18 @@ const SearchModal = ({
     setResults(searchResults.slice(0, 5));
     setSelectedIndex(0);
   }, [query, isOpen]);
+
+  useEffect(() => {
+    if (!listRef.current || results.length === 0) return;
+
+    const selectedElement = listRef.current.children[selectedIndex];
+    if (selectedElement) {
+      selectedElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest'
+      });
+    }
+  }, [selectedIndex, results]);
 
   const handleKeyNav = e => {
     if (e.key === 'ArrowDown') {
@@ -93,13 +108,13 @@ const SearchModal = ({
               type="button"
               onClick={() => setQuery('')}
               className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
-              aria-label="Clear"
+              aria-label={t('common.clear', 'Clear')}
             >
               <Icon name="x" className="w-5 h-5" />
             </button>
           )}
         </div>
-        <ul className="max-h-64 overflow-y-auto">
+        <ul ref={listRef} className="max-h-64 overflow-y-auto">
           {results.map((item, idx) => (
             <li
               key={idx}

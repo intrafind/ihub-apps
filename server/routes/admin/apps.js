@@ -5,6 +5,12 @@ import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
+import {
+  sendNotFound,
+  sendBadRequest,
+  sendFailedOperationError,
+  createRouteHandler
+} from '../../utils/responseHelpers.js';
 
 export default function registerAdminAppsRoutes(app) {
   app.get('/api/admin/apps', adminAuth, async (req, res) => {
@@ -13,8 +19,7 @@ export default function registerAdminAppsRoutes(app) {
       res.setHeader('ETag', appsEtag);
       res.json(apps);
     } catch (error) {
-      console.error('Error fetching all apps:', error);
-      res.status(500).json({ error: 'Failed to fetch apps' });
+      sendFailedOperationError(res, 'fetch apps', error);
     }
   });
 
@@ -25,8 +30,7 @@ export default function registerAdminAppsRoutes(app) {
       res.setHeader('ETag', appsEtag);
       res.json(templates);
     } catch (error) {
-      console.error('Error fetching template apps:', error);
-      res.status(500).json({ error: 'Failed to fetch template apps' });
+      sendFailedOperationError(res, 'fetch template apps', error);
     }
   });
 
@@ -37,7 +41,7 @@ export default function registerAdminAppsRoutes(app) {
       const app = apps.find(a => a.id === appId);
 
       if (!app) {
-        return res.status(404).json({ error: 'App not found' });
+        return sendNotFound(res, 'App');
       }
 
       const inheritance = {
@@ -52,8 +56,7 @@ export default function registerAdminAppsRoutes(app) {
       inheritance.children = apps.filter(a => a.parentId === appId);
       res.json(inheritance);
     } catch (error) {
-      console.error('Error fetching app inheritance:', error);
-      res.status(500).json({ error: 'Failed to fetch app inheritance' });
+      sendFailedOperationError(res, 'fetch app inheritance', error);
     }
   });
 
@@ -64,13 +67,12 @@ export default function registerAdminAppsRoutes(app) {
       const app = apps.find(a => a.id === appId);
 
       if (!app) {
-        return res.status(404).json({ error: 'App not found' });
+        return sendNotFound(res, 'App');
       }
 
       res.json(app);
     } catch (error) {
-      console.error('Error fetching app:', error);
-      res.status(500).json({ error: 'Failed to fetch app' });
+      sendFailedOperationError(res, 'fetch app', error);
     }
   });
 
@@ -80,10 +82,10 @@ export default function registerAdminAppsRoutes(app) {
       const updatedApp = req.body;
 
       if (!updatedApp.id || !updatedApp.name || !updatedApp.description) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        return sendBadRequest(res, 'Missing required fields');
       }
       if (updatedApp.id !== appId) {
-        return res.status(400).json({ error: 'App ID cannot be changed' });
+        return sendBadRequest(res, 'App ID cannot be changed');
       }
 
       const rootDir = getRootDir();
@@ -92,8 +94,7 @@ export default function registerAdminAppsRoutes(app) {
       await configCache.refreshAppsCache();
       res.json({ message: 'App updated successfully', app: updatedApp });
     } catch (error) {
-      console.error('Error updating app:', error);
-      res.status(500).json({ error: 'Failed to update app' });
+      sendFailedOperationError(res, 'update app', error);
     }
   });
 
@@ -126,7 +127,7 @@ export default function registerAdminAppsRoutes(app) {
       const { data: apps } = configCache.getApps(true);
       const app = apps.find(a => a.id === appId);
       if (!app) {
-        return res.status(404).json({ error: 'App not found' });
+        return sendNotFound(res, 'App');
       }
       const newEnabledState = !app.enabled;
       app.enabled = newEnabledState;

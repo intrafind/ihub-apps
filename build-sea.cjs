@@ -91,28 +91,39 @@ console.log(\`Binary directory: \${binDir}\`);
 // Set APP_ROOT_DIR environment variable for server.js
 process.env.APP_ROOT_DIR = binDir;
 
-// Load config.env if available
+// Load config.env using dotenv if available
 const configPath = path.join(binDir, 'config.env');
 if (fs.existsSync(configPath)) {
   console.log('Found config.env, loading configuration...');
   try {
-    const configContent = fs.readFileSync(configPath, 'utf8');
-    const configLines = configContent.split('\\n');
-    
-    configLines.forEach(line => {
-      if (line.trim().startsWith('#') || !line.trim()) return;
-      
-      const match = line.match(/^\\s*([\\w.-]+)\\s*=\\s*([^#]*)?\s*(?:#.*)?$/);
-      if (match) {
-        const key = match[1];
-        let value = match[2] || '';
-        value = value.trim().replace(/^['"]|['"]$/g, '');
-        process.env[key] = value;
-      }
-    });
-    console.log('Configuration loaded successfully');
+    // Load dotenv from the bundled node_modules
+    const dotenv = require('./server/node_modules/dotenv');
+    dotenv.config({ path: configPath });
+    console.log('Configuration loaded successfully via dotenv');
   } catch (err) {
-    console.error('Error parsing config.env:', err);
+    console.error('Error loading config.env with dotenv:', err);
+    console.log('Falling back to manual parsing...');
+    
+    // Fallback to manual parsing if dotenv is not available
+    try {
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const configLines = configContent.split('\\n');
+      
+      configLines.forEach(line => {
+        if (line.trim().startsWith('#') || !line.trim()) return;
+        
+        const match = line.match(/^\\s*([\\w.-]+)\\s*=\\s*([^#]*)?\s*(?:#.*)?$/);
+        if (match) {
+          const key = match[1];
+          let value = match[2] || '';
+          value = value.trim().replace(/^['"]|['"]$/g, '');
+          process.env[key] = value;
+        }
+      });
+      console.log('Configuration loaded successfully via fallback parsing');
+    } catch (fallbackErr) {
+      console.error('Error with fallback config.env parsing:', fallbackErr);
+    }
   }
 }
 

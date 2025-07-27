@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { VoiceInputComponent } from '../../voice/components';
 import Icon from '../../../shared/components/Icon';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
-import { ImageUploader, FileUploader } from '../../upload/components';
+import { UnifiedUploader } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
@@ -24,14 +24,10 @@ const ChatInput = ({
   allowEmptySubmit = false,
   inputRef = null,
   disabled = false,
-  imageUploadConfig = {},
-  fileUploadConfig = {},
-  selectedImage = null, // Add this prop to pass from parent
+  uploadConfig = {},
   selectedFile = null, // Add this prop to pass from parent
-  showImageUploader: externalShowImageUploader = undefined,
-  showFileUploader: externalShowFileUploader = undefined,
-  onToggleImageUploader = null,
-  onToggleFileUploader = null,
+  showUploader: externalShowUploader = undefined,
+  onToggleUploader = null,
   magicPromptEnabled = false,
   onMagicPrompt = null,
   showUndoMagicPrompt = false,
@@ -42,8 +38,7 @@ const ChatInput = ({
   const { uiConfig } = useUIConfig();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
-  const [internalShowImageUploader, setInternalShowImageUploader] = useState(false);
-  const [internalShowFileUploader, setInternalShowFileUploader] = useState(false);
+  const [internalShowUploader, setInternalShowUploader] = useState(false);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
@@ -54,11 +49,8 @@ const ChatInput = ({
   const inputRows = multilineMode ? inputMode?.rows || 2 : 1;
 
   // Use external state if provided, otherwise use internal state
-  const showImageUploader =
-    externalShowImageUploader !== undefined ? externalShowImageUploader : internalShowImageUploader;
-
-  const showFileUploader =
-    externalShowFileUploader !== undefined ? externalShowFileUploader : internalShowFileUploader;
+  const showUploader =
+    externalShowUploader !== undefined ? externalShowUploader : internalShowUploader;
 
   // First check for direct placeholder prop, then app.messagePlaceholder, then default
   const customPlaceholder = app?.messagePlaceholder
@@ -164,23 +156,13 @@ const ChatInput = ({
     }
   };
 
-  const toggleImageUploader = () => {
-    if (onToggleImageUploader) {
+  const toggleUploader = () => {
+    if (onToggleUploader) {
       // Use the external toggle function if provided
-      onToggleImageUploader();
+      onToggleUploader();
     } else {
       // Otherwise use the internal state
-      setInternalShowImageUploader(prev => !prev);
-    }
-  };
-
-  const toggleFileUploader = () => {
-    if (onToggleFileUploader) {
-      // Use the external toggle function if provided
-      onToggleFileUploader();
-    } else {
-      // Otherwise use the internal state
-      setInternalShowFileUploader(prev => !prev);
+      setInternalShowUploader(prev => !prev);
     }
   };
 
@@ -230,21 +212,12 @@ const ChatInput = ({
           }}
         />
       )}
-      {imageUploadConfig?.enabled === true && showImageUploader && (
-        <ImageUploader
-          onImageSelect={onImageSelect}
-          disabled={disabled || isProcessing}
-          imageData={selectedImage} // Pass the actual selectedImage value from parent
-          config={imageUploadConfig}
-        />
-      )}
-
-      {fileUploadConfig?.enabled === true && showFileUploader && (
-        <FileUploader
+      {uploadConfig?.enabled === true && showUploader && (
+        <UnifiedUploader
           onFileSelect={onFileSelect}
           disabled={disabled || isProcessing}
           fileData={selectedFile} // Pass the actual selectedFile value from parent
-          config={fileUploadConfig}
+          config={uploadConfig}
         />
       )}
 
@@ -289,27 +262,14 @@ const ChatInput = ({
         </div>
 
         <div className="flex flex-col gap-1 justify-start">
-          {imageUploadConfig?.enabled === true && (
+          {uploadConfig?.enabled === true && (
             <button
               type="button"
-              onClick={toggleImageUploader}
+              onClick={toggleUploader}
               disabled={disabled || isProcessing}
-              className={`image-upload-button ${showImageUploader ? 'active' : ''} h-fit`}
-              title={t('common.toggleImageUpload', 'Toggle image upload')}
-              aria-label={t('common.toggleImageUpload', 'Toggle image upload')}
-            >
-              <Icon name="camera" size="md" />
-            </button>
-          )}
-
-          {fileUploadConfig?.enabled === true && (
-            <button
-              type="button"
-              onClick={toggleFileUploader}
-              disabled={disabled || isProcessing}
-              className={`image-upload-button ${showFileUploader ? 'active' : ''} h-fit`}
-              title={t('common.toggleFileUpload', 'Toggle file upload')}
-              aria-label={t('common.toggleFileUpload', 'Toggle file upload')}
+              className={`image-upload-button ${showUploader ? 'active' : ''} h-fit`}
+              title={t('common.toggleUpload', 'Toggle file upload')}
+              aria-label={t('common.toggleUpload', 'Toggle file upload')}
             >
               <Icon name="paper-clip" size="md" />
             </button>
