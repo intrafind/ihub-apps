@@ -553,6 +553,28 @@
         "boolean": "Boolean"
       }
     },
+    "shortlinks": {
+      "title": "Shortlink-Verwaltung",
+      "subtitle": "Shortlinks für Ihre Anwendungen verwalten und überwachen",
+      "addNew": "Neuen Link hinzufügen",
+      "loadError": "Fehler beim Laden der Shortlinks",
+      "filterByAppId": "Nach App-ID filtern",
+      "filterByUser": "Nach Benutzer filtern",
+      "filter": "Filtern",
+      "code": "Code",
+      "appId": "App-ID",
+      "userId": "Benutzer-ID",
+      "usage": "Verwendung",
+      "createdAt": "Erstellt",
+      "expiresAt": "Läuft ab",
+      "actions": "Aktionen",
+      "copyLink": "Link kopieren",
+      "testLink": "Link testen",
+      "delete": "Löschen",
+      "deleteConfirm": "Diesen Link löschen?",
+      "noLinks": "Keine Shortlinks gefunden",
+      "noLinksDesc": "Shortlinks werden hier angezeigt, wenn sie von Benutzern erstellt werden."
+    },
     "dashboard": {
       "topUsersByMessages": "Top-Benutzer nach Nachrichten",
       "topUsersByTokens": "Top-Benutzer nach Token",

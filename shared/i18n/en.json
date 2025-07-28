@@ -484,6 +484,28 @@
         "boolean": "Boolean"
       }
     },
+    "shortlinks": {
+      "title": "Short Links Management",
+      "subtitle": "Manage and monitor short links for your applications",
+      "addNew": "Add New Link",
+      "loadError": "Error loading short links",
+      "filterByAppId": "Filter by App ID",
+      "filterByUser": "Filter by User",
+      "filter": "Filter",
+      "code": "Code",
+      "appId": "App ID",
+      "userId": "User ID",
+      "usage": "Usage",
+      "createdAt": "Created",
+      "expiresAt": "Expires",
+      "actions": "Actions",
+      "copyLink": "Copy link",
+      "testLink": "Test link",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this link?",
+      "noLinks": "No short links found",
+      "noLinksDesc": "Short links will appear here when created by users."
+    },
     "dashboard": {
       "topUsersByMessages": "Top Users by Messages",
       "topUsersByTokens": "Top Users by Tokens",

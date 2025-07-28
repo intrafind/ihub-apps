@@ -6,10 +6,12 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import ShortLinkDetailsPopup from '../../../shared/components/ShortLinkDetailsPopup';
+import { useClipboard } from '../../../shared/hooks/useClipboard';
 
 const AdminShortLinks = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { copyText } = useClipboard();
   const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -19,6 +21,7 @@ const AdminShortLinks = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [sortField, setSortField] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
+  const [copiedLink, setCopiedLink] = useState(null);
 
   const loadLinks = useCallback(async () => {
     try {
@@ -62,6 +65,20 @@ const AdminShortLinks = () => {
       setSortField(field);
       setSortDir('asc');
     }
+  };
+
+  const handleCopyLink = async (code) => {
+    const shortUrl = `${window.location.origin}/s/${code}`;
+    const result = await copyText(shortUrl);
+    if (result.success) {
+      setCopiedLink(code);
+      setTimeout(() => setCopiedLink(null), 2000);
+    }
+  };
+
+  const handleTestLink = (code) => {
+    const shortUrl = `${window.location.origin}/s/${code}`;
+    window.open(shortUrl, '_blank');
   };
 
   const sortedLinks = useMemo(() => {
@@ -301,13 +318,33 @@ const AdminShortLinks = () => {
                             className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"
                             onClick={e => e.stopPropagation()}
                           >
-                            <button
-                              onClick={() => handleDelete(link.code)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-full"
-                              title={t('admin.shortlinks.delete', 'Delete')}
-                            >
-                              <Icon name="trash" className="h-4 w-4" />
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleCopyLink(link.code)}
+                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                                title={t('admin.shortlinks.copyLink', 'Copy link')}
+                              >
+                                {copiedLink === link.code ? (
+                                  <Icon name="check" className="h-4 w-4 text-green-600" />
+                                ) : (
+                                  <Icon name="copy" className="h-4 w-4" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handleTestLink(link.code)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                                title={t('admin.shortlinks.testLink', 'Test link')}
+                              >
+                                <Icon name="external-link" className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(link.code)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                                title={t('admin.shortlinks.delete', 'Delete')}
+                              >
+                                <Icon name="trash" className="h-4 w-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

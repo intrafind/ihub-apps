@@ -54,7 +54,8 @@ import {
   PaintBrushIcon,
   ChevronDownIcon,
   Bars3Icon,
-  FaceFrownIcon as OutlineFaceFrownIcon
+  FaceFrownIcon as OutlineFaceFrownIcon,
+  ArrowTopRightOnSquareIcon
 } from '@heroicons/react/24/outline';
 
 import {
@@ -94,7 +95,8 @@ import {
   BriefcaseIcon as SolidBriefcaseIcon,
   PaintBrushIcon as SolidPaintBrushIcon,
   ChevronDownIcon as SolidChevronDownIcon,
-  FaceFrownIcon as SolidFaceFrownIcon
+  FaceFrownIcon as SolidFaceFrownIcon,
+  ArrowTopRightOnSquareIcon as SolidArrowTopRightOnSquareIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
@@ -173,7 +175,8 @@ const iconMap = {
   clock: { outline: ClockIcon, solid: SolidClockIcon },
   'academic-cap': { outline: OutlineAcademicCapIcon, solid: SolidAcademicCapIcon },
   briefcase: { outline: BriefcaseIcon, solid: SolidBriefcaseIcon },
-  download: { outline: ArrowDownTrayIcon, solid: ArrowDownTrayIcon }
+  download: { outline: ArrowDownTrayIcon, solid: ArrowDownTrayIcon },
+  'external-link': { outline: ArrowTopRightOnSquareIcon, solid: SolidArrowTopRightOnSquareIcon }
 };
 
 const sizeClasses = {

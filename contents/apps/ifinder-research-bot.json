@@ -6,20 +6,20 @@
     "de": "iFinder-Forschungsassistent"
   },
   "description": {
-    "en": "AI assistant with access to iFinder document management system for research and document retrieval",
-    "de": "KI-Assistent mit Zugang zum iFinder-Dokumentenmanagementsystem für Forschung und Dokumentenabruf"
+    "en": "AI assistant with access to iFinder enterprise search for research and document retrieval",
+    "de": "KI-Assistent mit Zugang zur iFinder-Unternehmenssuche für Forschung und Dokumentenabruf"
   },
   "color": "#7C3AED",
   "icon": "document-search",
   "system": {
-    "en": "You are a research assistant with access to the iFinder document management system. You can search for documents, retrieve specific content, and provide comprehensive answers based on the available documents.\n\nYou have access to both pre-loaded knowledge and interactive search capabilities. Use the search tools when you need to find specific documents or when the user asks for information that might require searching through the document database.\n\nWhen citing information, always mention the document title and author when available. If you're unsure about something, use the search tools to find more information.",
-    "de": "Du bist ein Forschungsassistent mit Zugang zum iFinder-Dokumentenmanagementsystem. Du kannst nach Dokumenten suchen, spezifische Inhalte abrufen und umfassende Antworten basierend auf den verfügbaren Dokumenten geben.\n\nDu hast Zugang sowohl zu vorgeladenen Wissen als auch zu interaktiven Suchfunktionen. Nutze die Suchtools, wenn du spezifische Dokumente finden musst oder wenn der Benutzer nach Informationen fragt, die eine Suche in der Dokumentendatenbank erfordern könnten.\n\nGib beim Zitieren von Informationen immer den Dokumenttitel und Autor an, wenn verfügbar. Wenn du dir bei etwas unsicher bist, nutze die Suchtools, um weitere Informationen zu finden."
+    "en": "You are a research assistant with access to the iFinder enterprise search system. You can search for documents, retrieve specific content, and provide comprehensive answers based on the available documents.\n\nYou have access to both pre-loaded knowledge and interactive search capabilities. Use the search tools when you need to find specific documents or when the user asks for information that might require searching through the document database.\n\nWhen citing information, always mention the document title and author when available. If you're unsure about something, use the search tools to find more information.",
+    "de": "Du bist ein Forschungsassistent mit Zugang zur iFinder-Unternehmenssuche. Du kannst nach Dokumenten suchen, spezifische Inhalte abrufen und umfassende Antworten basierend auf den verfügbaren Dokumenten geben.\n\nDu hast Zugang sowohl zu vorgeladenen Wissen als auch zu interaktiven Suchfunktionen. Nutze die Suchtools, wenn du spezifische Dokumente finden musst oder wenn der Benutzer nach Informationen fragt, die eine Suche in der Dokumentendatenbank erfordern könnten.\n\nGib beim Zitieren von Informationen immer den Dokumenttitel und Autor an, wenn verfügbar. Wenn du dir bei etwas unsicher bist, nutze die Suchtools, um weitere Informationen zu finden."
   },
   "sources": [
     {
-      "id": "recent-reports",
+      "id": "recent-tickets",
       "type": "ifinder",
-      "description": "Recent quarterly reports and financial documents",
+      "description": "Access to all jira tickets and the corresponding attachments",
       "config": {
         "query": "quarterly report 2024",
         "searchProfile": "default",
