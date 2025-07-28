@@ -2,7 +2,6 @@ import { useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
-import Icon from '../../../shared/components/Icon';
 import QuillToolbar from './QuillToolbar';
 import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 

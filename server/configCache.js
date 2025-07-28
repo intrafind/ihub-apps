@@ -695,7 +695,7 @@ class ConfigCache {
    * @param {Object} platformConfig - Platform configuration
    * @returns {Promise<Object>} Filtered models with user-specific ETag
    */
-  async getModelsForUser(user, platformConfig) {
+  async getModelsForUser(user) {
     // Get all models from cache
     let { data: models = [], etag: modelsEtag } = this.getModels();
 
@@ -735,7 +735,7 @@ class ConfigCache {
   async getToolsForUser(user, platformConfig, language = 'en') {
     // Get all tools (including MCP discovered ones) with localization
     let tools = await loadTools(language);
-    const { data: configuredTools, etag: toolsEtag } = this.getTools();
+    const { etag: toolsEtag } = this.getTools();
 
     if (!tools) {
       return { data: [], etag: null };

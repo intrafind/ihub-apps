@@ -21,7 +21,7 @@ function useVoiceCommands({
   currentText = '',
   onConfirmClear,
   customCommands = {},
-  setInput = text => {}
+  setInput = () => {}
 }) {
   // Store the latest recognized text in a ref for immediate access outside React's state system
   const currentVoiceTextRef = useRef('');
@@ -29,18 +29,12 @@ function useVoiceCommands({
   /**
    * Update the current voice text
    * @param {string} text - The recognized text
-   * @param {boolean} isCommand - Whether this was triggered by a command
    */
-  const handleVoiceInput = useCallback((text, isCommand = false) => {
-    // Store the clean text in a ref for immediate access
-    if (isCommand) {
-      currentVoiceTextRef.current = text;
-    }
-
+  const handleVoiceInput = useCallback((text) => {
+    currentVoiceTextRef.current = text;
     setInput(text);
-
     return text;
-  }, []);
+  }, [setInput]);
 
   /**
    * Handle voice commands

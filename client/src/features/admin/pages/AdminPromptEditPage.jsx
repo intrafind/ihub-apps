@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -62,27 +62,27 @@ const AdminPromptEditPage = () => {
     if (!isNewPrompt) {
       loadPrompt();
     }
-  }, [promptId]);
+  }, [promptId, isNewPrompt]);
 
-  const loadApps = async () => {
+  const loadApps = useCallback(async () => {
     try {
       const data = await fetchAdminApps();
       setApps(data);
     } catch (err) {
       console.error('Error loading apps:', err);
     }
-  };
+  }, []);
 
-  const loadUIConfig = async () => {
+  const loadUIConfig = useCallback(async () => {
     try {
       const config = await fetchUIConfig();
       setUiConfig(config);
     } catch (err) {
       console.error('Failed to load UI config:', err);
     }
-  };
+  }, []);
 
-  const loadPrompt = async () => {
+  const loadPrompt = useCallback(async () => {
     try {
       setLoading(true);
       const data = await fetchAdminPrompts();
@@ -110,7 +110,7 @@ const AdminPromptEditPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [promptId]);
 
   const handleSubmit = async e => {
     e.preventDefault();

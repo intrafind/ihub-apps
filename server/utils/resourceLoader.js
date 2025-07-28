@@ -29,7 +29,6 @@ export function createResourceLoader({
   resourceName,
   legacyPath,
   individualPath,
-  schema,
   validateItem,
   processItem,
   postProcess,

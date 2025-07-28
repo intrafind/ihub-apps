@@ -73,7 +73,7 @@ export default function registerAdminAuthRoutes(app) {
       try {
         const usersFileData = await fs.readFile(usersFilePath, 'utf8');
         usersData = JSON.parse(usersFileData);
-      } catch (error) {
+      } catch {
         // File doesn't exist or is invalid, return empty users
         console.log('Users file not found or invalid, returning empty list');
       }
@@ -108,7 +108,7 @@ export default function registerAdminAuthRoutes(app) {
       try {
         const usersFileData = await fs.readFile(usersFilePath, 'utf8');
         usersData = JSON.parse(usersFileData);
-      } catch (error) {
+      } catch {
         // File doesn't exist, create new structure
         usersData = {
           users: {},
@@ -152,8 +152,9 @@ export default function registerAdminAuthRoutes(app) {
 
       console.log(`👤 Created new user: ${username} (${userId})`);
 
-      // Return user without password hash
-      const { passwordHash: _, ...userResponse } = newUser;
+      // Return user without password hash  
+      // eslint-disable-next-line no-unused-vars
+      const { passwordHash: _passwordHash, ...userResponse } = newUser;
       res.json({ user: userResponse });
     } catch (error) {
       console.error('Error creating user:', error);
@@ -177,7 +178,7 @@ export default function registerAdminAuthRoutes(app) {
       try {
         const usersFileData = await fs.readFile(usersFilePath, 'utf8');
         usersData = JSON.parse(usersFileData);
-      } catch (error) {
+      } catch {
         return res.status(404).json({ error: 'Users file not found' });
       }
 
@@ -214,7 +215,8 @@ export default function registerAdminAuthRoutes(app) {
       console.log(`👤 Updated user: ${user.username} (${userId})`);
 
       // Return user without password hash
-      const { passwordHash: _, ...userResponse } = user;
+      // eslint-disable-next-line no-unused-vars
+      const { passwordHash, ...userResponse } = user;
       res.json({ user: userResponse });
     } catch (error) {
       console.error('Error updating user:', error);
@@ -237,7 +239,7 @@ export default function registerAdminAuthRoutes(app) {
       try {
         const usersFileData = await fs.readFile(usersFilePath, 'utf8');
         usersData = JSON.parse(usersFileData);
-      } catch (error) {
+      } catch {
         return res.status(404).json({ error: 'Users file not found' });
       }
 

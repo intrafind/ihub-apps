@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as microsoftTeams from '@microsoft/teams-js';
 
@@ -17,9 +17,9 @@ function TeamsAuthEnd() {
 
     // Process the authentication result
     handleAuthResult();
-  }, []);
+  }, [handleAuthResult]);
 
-  const handleAuthResult = () => {
+  const handleAuthResult = useCallback(() => {
     // Parse the URL hash to get the access token
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const accessToken = hashParams.get('access_token');
@@ -53,7 +53,7 @@ function TeamsAuthEnd() {
         microsoftTeams.authentication.notifyFailure(t('teams.auth.noResponse'));
       }, 2000);
     }
-  };
+  }, [t]);
 
   return (
     <div className="flex items-center justify-center h-screen">

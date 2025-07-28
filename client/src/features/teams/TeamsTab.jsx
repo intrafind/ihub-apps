@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
 import * as microsoftTeams from '@microsoft/teams-js';
@@ -15,16 +15,16 @@ function TeamsTab() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState(null);
-  const [teamsContext, setTeamsContext] = useState(null);
-  const { loginWithToken, isAuthenticated, user } = useAuth();
+  const [, setTeamsContext] = useState(null);
+  const { loginWithToken, isAuthenticated } = useAuth();
 
   // Initialize Teams SDK and handle authentication
   useEffect(() => {
     initializeTeams();
-  }, []);
+  }, [initializeTeams]);
 
   // Initialize Microsoft Teams SDK
-  const initializeTeams = async () => {
+  const initializeTeams = useCallback(async () => {
     try {
       await microsoftTeams.initialize();
 
@@ -54,7 +54,7 @@ function TeamsTab() {
       setError(t('teams.errors.initializationFailed'));
       setIsInitialized(true);
     }
-  };
+  }, [t, authenticateWithTeams, isAuthenticated]);
 
   // Apply Teams language preference
   const applyTeamsLanguage = locale => {
@@ -106,7 +106,7 @@ function TeamsTab() {
   };
 
   // Authenticate with Teams SSO
-  const authenticateWithTeams = async () => {
+  const authenticateWithTeams = useCallback(async () => {
     if (isAuthenticating) return;
 
     setIsAuthenticating(true);
@@ -150,10 +150,10 @@ function TeamsTab() {
     } finally {
       setIsAuthenticating(false);
     }
-  };
+  }, [isAuthenticating, loginWithToken, t, handleInteractiveAuth]);
 
   // Handle interactive authentication if SSO fails
-  const handleInteractiveAuth = () => {
+  const handleInteractiveAuth = useCallback(() => {
     microsoftTeams.authentication.authenticate({
       url: `${window.location.origin}/teams/auth-start`,
       width: 600,
@@ -168,7 +168,7 @@ function TeamsTab() {
         setError(t('teams.errors.interactiveAuthFailed'));
       }
     });
-  };
+  }, [authenticateWithTeams, t]);
 
   // Show loading state
   if (!isInitialized || isAuthenticating) {

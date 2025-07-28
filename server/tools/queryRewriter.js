@@ -227,7 +227,7 @@ export default async function queryRewriter({
       actionTracker.trackToolCallEnd(chatId, { toolName: 'queryRewriter', toolOutput: parsed });
       return parsed;
     }
-  } catch (_) {
+  } catch {
     // ignore parse errors
   }
 

@@ -256,7 +256,7 @@ function useChatMessages(chatId = 'default') {
 
     // Strip UI-specific properties that the API doesn't need
     return messagesForApi.map(msg => {
-      const { id, loading, error, isErrorMessage, rawContent, isGreeting, ...apiMsg } = msg;
+      const { rawContent, ...apiMsg } = msg;
       const content = rawContent !== undefined ? rawContent : apiMsg.content;
       return { ...apiMsg, content };
     });

@@ -92,7 +92,7 @@ class AnthropicAdapterClass extends BaseAdapter {
    * Create a completion request for Anthropic
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature, stream, maxTokens, tools, responseFormat, responseSchema } =
+    const { temperature, stream, maxTokens, tools, responseSchema } =
       this.extractRequestOptions(options);
 
     // Format messages and extract system prompt

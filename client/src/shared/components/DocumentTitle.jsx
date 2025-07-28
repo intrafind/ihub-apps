@@ -27,7 +27,7 @@ const DocumentTitle = () => {
         .then(appData => {
           setCurrentApp(appData);
         })
-        .catch(error => {
+        .catch(() => {
           setCurrentApp(null);
         });
     } else {

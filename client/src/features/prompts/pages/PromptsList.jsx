@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { fetchPrompts } from '../../../api/api';
@@ -90,7 +90,7 @@ const PromptsList = () => {
         setLoading(false);
       }
     })();
-  }, [t, i18n.language]);
+  }, [t, i18n.language, getFavoritePrompts]);
 
   // Open modal if id parameter is present
   useEffect(() => {

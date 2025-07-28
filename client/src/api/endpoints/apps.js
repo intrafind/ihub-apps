@@ -63,8 +63,7 @@ export const exportChatToPDF = async (
   settings,
   template = 'default',
   watermark = {},
-  appName = 'AI Hub Apps',
-  appId = null
+  appName = 'AI Hub Apps'
 ) => {
   if (!messages) {
     throw new Error('Missing required parameters');
@@ -539,7 +538,6 @@ export const exportChatToJSONL = async (messages, settings, appId = null) => {
 
 export const exportChatToMarkdown = async (
   messages,
-  settings = null,
   appId = null
 ) => {
   const content = generateMarkdown(messages);
@@ -550,7 +548,7 @@ export const exportChatToMarkdown = async (
   return { success: true, filename };
 };
 
-export const exportChatToHTML = async (messages, settings = null, appId = null) => {
+export const exportChatToHTML = async (messages, appId = null) => {
   const content = generateHTML(messages);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.html`;

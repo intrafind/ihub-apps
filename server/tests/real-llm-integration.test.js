@@ -1,4 +1,4 @@
-import { getAdapter, createCompletionRequest } from '../adapters/index.js';
+import { createCompletionRequest } from '../adapters/index.js';
 import { loadConfiguredTools } from '../toolLoader.js';
 import dotenv from 'dotenv';
 
@@ -189,7 +189,7 @@ async function runRealIntegrationTests() {
   let successCount = 0;
   let toolCallCount = 0;
 
-  Object.entries(results).forEach(([provider, result]) => {
+  Object.entries(results).forEach(([, result]) => {
     if (result?.success) {
       successCount++;
       if (result.toolCalls?.length > 0) {

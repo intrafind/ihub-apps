@@ -1,11 +1,9 @@
 
-import { useTranslation } from 'react-i18next';
 
 /**
  * A component to display message variables such as target language or other metadata
  */
 const MessageVariables = ({ variables }) => {
-  const { t } = useTranslation();
 
   if (!variables || Object.keys(variables).length === 0) {
     return null;

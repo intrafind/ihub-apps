@@ -1,6 +1,5 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { getRootDir } from './pathUtils.js';
 import config from './config.js';
 import { loadJson } from './configLoader.js';

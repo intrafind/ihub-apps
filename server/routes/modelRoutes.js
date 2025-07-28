@@ -1,11 +1,9 @@
 import configCache from '../configCache.js';
 import {
-  filterResourcesByPermissions,
   isAnonymousAccessAllowed,
   enhanceUserWithPermissions
 } from '../utils/authorization.js';
 import { authRequired, authOptional, modelAccessRequired } from '../middleware/authRequired.js';
-import crypto from 'crypto';
 import {
   sendAuthRequired,
   sendFailedOperationError,
@@ -59,7 +57,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
       const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 
       // Try to get models from cache first
-      const { data: models, etag: modelsEtag } = configCache.getModels();
+      const { data: models } = configCache.getModels();
 
       if (!models) {
         return sendFailedOperationError(res, 'load models configuration');

@@ -4,7 +4,6 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import QuickActions from '../components/QuickActions';
 import AdminSectionCard from '../components/AdminSectionCard';
-import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 const AdminHome = () => {

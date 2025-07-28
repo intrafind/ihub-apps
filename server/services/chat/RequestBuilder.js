@@ -37,7 +37,7 @@ class RequestBuilder {
     chatId
   }) {
     try {
-      const { data: apps, etag: appsEtag } = configCache.getApps();
+      const { data: apps } = configCache.getApps();
       if (!apps) {
         const error = new Error('Failed to load apps configuration');
         error.code = 'CONFIG_ERROR';
@@ -51,7 +51,7 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      const { data: models, etag: modelsEtag } = configCache.getModels();
+      const { data: models } = configCache.getModels();
       if (!models) {
         const error = new Error('Failed to load models configuration');
         error.code = 'CONFIG_ERROR';

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AdminAuth from '../components/AdminAuth';
@@ -30,9 +30,9 @@ const AdminPageEditPage = () => {
     } else {
       loadPage();
     }
-  }, [pageId]);
+  }, [pageId, isNew]);
 
-  const loadPage = async () => {
+  const loadPage = useCallback(async () => {
     try {
       setLoading(true);
       const data = await fetchAdminPage(pageId);
@@ -52,7 +52,7 @@ const AdminPageEditPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [pageId]);
 
   const handleSubmit = async e => {
     e.preventDefault();

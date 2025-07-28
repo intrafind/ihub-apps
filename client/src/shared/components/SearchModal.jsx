@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Fuse from 'fuse.js';
 import Icon from './Icon';
 import { useTranslation } from 'react-i18next';

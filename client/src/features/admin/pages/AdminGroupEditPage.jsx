@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -50,7 +50,7 @@ const AdminGroupEditPage = () => {
     }
   };
 
-  const loadGroup = async () => {
+  const loadGroup = useCallback(async () => {
     try {
       setLoading(true);
       const response = await makeAdminApiCall('/admin/groups');
@@ -67,7 +67,7 @@ const AdminGroupEditPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [groupId]);
 
   const handleSave = async e => {
     e.preventDefault();

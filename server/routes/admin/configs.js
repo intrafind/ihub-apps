@@ -18,7 +18,7 @@ export default function registerAdminConfigRoutes(app) {
       try {
         const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
         platformConfig = JSON.parse(platformConfigData);
-      } catch (error) {
+      } catch {
         console.log('Platform config not found, returning default config');
         platformConfig = {
           auth: {
@@ -78,7 +78,7 @@ export default function registerAdminConfigRoutes(app) {
       try {
         const existingConfigData = await fs.readFile(platformConfigPath, 'utf8');
         existingConfig = JSON.parse(existingConfigData);
-      } catch (error) {
+      } catch {
         // File doesn't exist, start with empty config
         console.log('Creating new platform config file');
       }

@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { getOrCreateChatId, resetChatId } from '../../../utils/chatId';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchAppDetails, isTimeoutError, generateMagicPrompt } from '../../../api/api';
+import { fetchAppDetails } from '../../../api/api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -22,9 +21,7 @@ import GreetingView from '../../chat/components/GreetingView';
 import NoMessagesView from '../../chat/components/NoMessagesView';
 import InputVariables from '../../chat/components/InputVariables';
 import SharedAppHeader from '../components/SharedAppHeader';
-import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { recordAppUsage } from '../../../utils/recentApps';
-import { isMarkdown } from '../../../utils/markdownUtils';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
 
 /**
@@ -113,7 +110,7 @@ const AppChat = () => {
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const { uiConfig } = useUIConfig();
+  const [maxTokens, setMaxTokens] = useState(4096);
   const shareEnabled = app?.features?.shortLinks !== false;
 
   // Shared app settings hook
@@ -190,14 +187,12 @@ const AppChat = () => {
       ].forEach(k => newSearch.delete(k));
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
     }
-  }, [app, modelsLoading]);
+  }, [app, modelsLoading, navigate, searchParams, setSelectedModel, setSelectedOutputFormat, setSelectedStyle, setSendChatHistory, setTemperature]);
 
-  const [maxTokens, setMaxTokens] = useState(null);
   const [useMaxTokens, setUseMaxTokens] = useState(false);
 
   // State for managing parameter changes on mobile
   const [tempVariables, setTempVariables] = useState({});
-  const [parametersChanged, setParametersChanged] = useState(false);
 
   // Record recent usage of this app
   useEffect(() => {
@@ -362,9 +357,7 @@ const AppChat = () => {
   });
 
   // Get UI config for fallback to widget greeting
-  const widgetConfig = uiConfig?.widget || {};
 
-  const hasVariablesToSend = app?.variables && Object.keys(variables).length > 0;
 
   useEffect(() => {
     // Store mounted state to prevent state updates after unmount
@@ -472,14 +465,14 @@ const AppChat = () => {
     }
 
     return greeting;
-  }, [app, loading, currentLanguage, messages.length, widgetConfig]);
+  }, [app, loading, currentLanguage, messages.length]);
 
   // Determine if input should be centered (only when showing example prompts)
   const shouldCenterInput = useMemo(() => {
     if (!app || loading || messages.length > 0) return false;
 
     return true;
-  }, [app, loading, messages.length, welcomeMessage]);
+  }, [app, loading, messages.length]);
 
   // Handle magic prompt with hooks
   const handleMagicPrompt = async () => {
@@ -712,33 +705,26 @@ const AppChat = () => {
       // On mobile, prepare temp variables when opening
       if (!showParameters) {
         setTempVariables({ ...variables });
-        setParametersChanged(false);
       }
     }
     setShowParameters(!showParameters);
   };
 
-  const toggleCanvas = () => {
-    navigate(`/apps/${appId}/canvas`);
-  };
 
   const handleParametersOk = () => {
     // Apply temp variables to actual variables
     setVariables({ ...tempVariables });
     setShowParameters(false);
-    setParametersChanged(false);
   };
 
   const handleParametersCancel = () => {
     // Discard changes and close modal
     setTempVariables({});
     setShowParameters(false);
-    setParametersChanged(false);
   };
 
   const handleTempVariableChange = newVariables => {
     setTempVariables(newVariables);
-    setParametersChanged(true);
   };
 
   // Memoize localizedVariables calculation to prevent unnecessary work on every render

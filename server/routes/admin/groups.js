@@ -4,7 +4,6 @@ import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import { v4 as uuidv4 } from 'uuid';
 
 export default function registerAdminGroupRoutes(app) {
   /**
@@ -19,7 +18,7 @@ export default function registerAdminGroupRoutes(app) {
       try {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
-      } catch (error) {
+      } catch {
         console.log('Groups file not found or invalid, returning empty list');
       }
 
@@ -98,7 +97,7 @@ export default function registerAdminGroupRoutes(app) {
             }
           }
         }
-      } catch (error) {
+      } catch {
         console.log('Prompts directory not found or empty');
       }
 
@@ -137,7 +136,7 @@ export default function registerAdminGroupRoutes(app) {
       try {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
-      } catch (error) {
+      } catch {
         // File doesn't exist, create new structure
         groupsData = {
           groups: {},
@@ -202,7 +201,7 @@ export default function registerAdminGroupRoutes(app) {
       try {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
-      } catch (error) {
+      } catch {
         return res.status(404).json({ error: 'Groups file not found' });
       }
 
@@ -273,7 +272,7 @@ export default function registerAdminGroupRoutes(app) {
       try {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
-      } catch (error) {
+      } catch {
         return res.status(404).json({ error: 'Groups file not found' });
       }
 

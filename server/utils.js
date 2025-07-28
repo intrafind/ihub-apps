@@ -1,4 +1,3 @@
-import { loadJson } from './configLoader.js';
 import config from './config.js';
 import { createCompletionRequest, processResponseBuffer } from './adapters/index.js';
 import fs from 'fs/promises';

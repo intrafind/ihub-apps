@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import { Component } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 import Icon from './Icon';
@@ -49,7 +49,7 @@ class ErrorBoundaryComponent extends Component {
 }
 
 // Error fallback display component with reset capability and translation
-const ErrorFallback = ({ error, errorInfo, resetErrorBoundary }) => {
+const ErrorFallback = ({ error, resetErrorBoundary }) => {
   const { t } = useTranslation();
 
   if (error?.status === 401) {

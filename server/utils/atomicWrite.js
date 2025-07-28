@@ -26,7 +26,7 @@ export async function atomicWriteFile(filePath, data, encoding = 'utf8') {
     // Clean up temp file if it exists
     try {
       await fs.unlink(tempPath);
-    } catch (cleanupError) {
+    } catch {
       // Ignore cleanup errors
     }
     throw error;

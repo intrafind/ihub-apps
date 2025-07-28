@@ -10,7 +10,6 @@ import jwt from 'jsonwebtoken';
 import axios from 'axios';
 
 const API_BASE = 'http://localhost:3000/api';
-const JWT_SECRET = 'magic-secret'; // From platform.json
 
 // Test users from users.json
 const testUsers = [
@@ -143,7 +142,7 @@ async function testInvalidToken() {
   console.log('\n🔒 Testing invalid token...');
 
   try {
-    const response = await axios.get(`${API_BASE}/apps`, {
+    await axios.get(`${API_BASE}/apps`, {
       headers: {
         Authorization: 'Bearer invalid-token-here'
       }

@@ -534,15 +534,14 @@ console.log('');
 console.log('To solve all these issues, we recommend creating a unified adapter interface:');
 console.log('');
 
+/* 
 const UnifiedAdapterInterface = {
-  /**
-   * Create a completion request with unified options
-   * @param {Object} model - Model configuration
-   * @param {Array} messages - Standard message format
-   * @param {string} apiKey - API key
-   * @param {Object} options - Unified options
-   * @returns {Object} HTTP request object
-   */
+  // Create a completion request with unified options
+  // @param {Object} model - Model configuration
+  // @param {Array} messages - Standard message format
+  // @param {string} apiKey - API key
+  // @param {Object} options - Unified options
+  // @returns {Object} HTTP request object
   createCompletionRequest(model, messages, apiKey, options = {}) {
     const provider = model.provider;
     const { tools = [], temperature = 0.7, maxTokens = 1024, stream = true } = options;
@@ -573,26 +572,23 @@ const UnifiedAdapterInterface = {
     });
   },
 
-  /**
-   * Process streaming response with unified format
-   * @param {string} chunk - Raw response chunk
-   * @param {string} provider - Provider name
-   * @returns {Object} Processed response
-   */
+  // Process streaming response with unified format
+  // @param {string} chunk - Raw response chunk
+  // @param {string} provider - Provider name
+  // @returns {Object} Processed response
   processStreamingResponse(chunk, provider) {
     return UnifiedResponseProcessor.processStreamChunk(chunk, provider);
   },
 
-  /**
-   * Convert conversation to provider-specific format
-   * @param {Array} conversation - Standard conversation
-   * @param {string} provider - Provider name
-   * @returns {Array} Provider-specific conversation
-   */
+  // Convert conversation to provider-specific format
+  // @param {Array} conversation - Standard conversation
+  // @param {string} provider - Provider name
+  // @returns {Array} Provider-specific conversation
   convertConversation(conversation, provider) {
     return UnifiedConversationManager.convertConversation(conversation, provider);
   }
 };
+*/
 
 console.log('✅ Unified Adapter Interface created');
 console.log('');

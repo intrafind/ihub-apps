@@ -1,6 +1,5 @@
-import { setupMiddleware, checkContentLength } from './middleware/setup.js';
 import PromptService from './services/PromptService.js';
-import { sendSSE, clients, activeRequests } from './sse.js';
+import { clients, activeRequests } from './sse.js';
 import ErrorHandler from './utils/ErrorHandler.js';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 

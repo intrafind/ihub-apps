@@ -15,7 +15,6 @@ class StreamingHandler {
   async executeStreamingResponse({
     request,
     chatId,
-    clientRes,
     buildLogData,
     model,
     llmMessages,

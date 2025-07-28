@@ -11,8 +11,7 @@ import { authRequired } from '../middleware/authRequired.js';
 import {
   sendBadRequest,
   sendNotFound,
-  sendFailedOperationError,
-  createRouteHandler
+  sendFailedOperationError
 } from '../utils/responseHelpers.js';
 
 export default function registerShortLinkRoutes(app) {

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import MarkdownRenderer, { configureMarked } from '../../../shared/components/MarkdownRenderer';
+import { configureMarked } from '../../../shared/components/MarkdownRenderer';
 import { sendMessageFeedback } from '../../../api/api';
 import StarRating from '../../../shared/components/StarRating';
 import MessageVariables from './MessageVariables';
@@ -354,7 +354,7 @@ const ChatMessage = ({
             typeof message.content === 'string'
               ? JSON.stringify(JSON.parse(message.content), null, 2)
               : JSON.stringify(message.content, null, 2);
-        } catch (e) {
+        } catch {
           jsonString =
             typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
         }

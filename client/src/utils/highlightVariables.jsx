@@ -1,4 +1,3 @@
-import React from 'react';
 
 export const highlightVariables = text =>
   text.split(/(\[[^\]]+\])/g).map((part, idx) =>

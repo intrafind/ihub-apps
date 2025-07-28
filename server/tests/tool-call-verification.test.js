@@ -1,4 +1,4 @@
-import { getAdapter, createCompletionRequest } from '../adapters/index.js';
+import { createCompletionRequest } from '../adapters/index.js';
 import dotenv from 'dotenv';
 
 // Load environment variables

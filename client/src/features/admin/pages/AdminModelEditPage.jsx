@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent, DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
@@ -46,7 +46,7 @@ const AdminModelEditPage = () => {
     }
     loadAppsUsingModel();
     loadUsageData();
-  }, [modelId]);
+  }, [modelId, isNewModel]);
 
   useEffect(() => {
     if (isNewModel && location.state?.templateModel) {
@@ -61,7 +61,7 @@ const AdminModelEditPage = () => {
     }
   }, [isNewModel, location.state]);
 
-  const loadModel = async () => {
+  const loadModel = useCallback(async () => {
     try {
       setLoading(true);
       const response = await makeAdminApiCall(`/admin/models/${modelId}`);
@@ -100,9 +100,9 @@ const AdminModelEditPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [modelId]);
 
-  const loadAppsUsingModel = async () => {
+  const loadAppsUsingModel = useCallback(async () => {
     try {
       const response = await makeAdminApiCall('/admin/apps');
       const allApps = response.data;
@@ -111,9 +111,9 @@ const AdminModelEditPage = () => {
     } catch (err) {
       console.error('Error loading apps:', err);
     }
-  };
+  }, [modelId]);
 
-  const loadUsageData = async () => {
+  const loadUsageData = useCallback(async () => {
     try {
       const response = await makeAdminApiCall('/admin/usage');
       const usageData = response.data;
@@ -130,7 +130,7 @@ const AdminModelEditPage = () => {
     } catch (err) {
       console.error('Error loading usage data:', err);
     }
-  };
+  }, [modelId]);
 
   const handleChange = e => {
     const { name, value, type, checked } = e.target;

@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { enhanceUserWithPermissions, enhanceUserGroups } from '../utils/authorization.js';
+import { enhanceUserGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
 import configCache from '../configCache.js';
 
@@ -33,20 +33,6 @@ function loadUsers(usersFilePath) {
   }
 }
 
-/**
- * Verify JWT token
- * @param {string} token - JWT token
- * @param {string} secret - JWT secret
- * @returns {Object|null} Decoded token payload or null
- */
-function verifyToken(token, secret) {
-  try {
-    return jwt.verify(token, secret);
-  } catch (error) {
-    console.warn('JWT verification failed:', error.message);
-    return null;
-  }
-}
 
 /**
  * Hash password with user ID as salt for unique hashes
@@ -56,7 +42,6 @@ function verifyToken(token, secret) {
  */
 export async function hashPasswordWithUserId(password, userId) {
   // Create a deterministic salt from user ID
-  const saltInput = `${userId}_salt_${password}`;
   const salt = await bcrypt.genSalt(12);
 
   // Combine password with user ID for unique hash
@@ -214,6 +199,7 @@ export async function createUser(userData, usersFilePath) {
   fs.writeFileSync(fullPath, JSON.stringify(usersConfig, null, 2));
 
   // Return user without sensitive data
-  const { passwordHash: _, ...userResponse } = newUser;
+  // eslint-disable-next-line no-unused-vars
+  const { passwordHash: _pw, ...userResponse } = newUser;
   return userResponse;
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import { highlightVariables } from '../../../utils/highlightVariables';
@@ -6,7 +6,6 @@ import { highlightVariables } from '../../../utils/highlightVariables';
 const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
   const [copyStatus, setCopyStatus] = useState('idle');
   const [shareStatus, setShareStatus] = useState('idle');
-  if (!prompt) return null;
 
   useEffect(() => {
     const handleKeyDown = e => {
@@ -17,6 +16,8 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
+
+  if (!prompt) return null;
 
   const handleShare = async () => {
     const url = `${window.location.origin}/prompts?id=${encodeURIComponent(prompt.id)}`;

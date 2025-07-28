@@ -101,11 +101,9 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     },
     [
       pendingMessageDataRef,
-      sendAppChatMessage,
       setMessageError,
       updateAssistantMessage,
       onMessageComplete,
-      addSystemMessage,
       t
     ]
   );
@@ -187,7 +185,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       initEventSource,
       addSystemMessage,
       t,
-      appId
+      appId,
+      chatId
     ]
   );
 
@@ -248,7 +247,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       );
     }
     setProcessing(false);
-  }, [cleanupEventSource, updateAssistantMessage, t]);
+  }, [cleanupEventSource, updateAssistantMessage, t, messagesRef]);
 
   return {
     chatId: chatId,

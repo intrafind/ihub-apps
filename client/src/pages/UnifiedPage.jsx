@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../shared/components/LoadingSpinner';
@@ -12,7 +12,7 @@ const UnifiedPage = () => {
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const { pageId } = useParams();
-  const [pageTitle, setPageTitle] = useState('');
+  const [, setPageTitle] = useState('');
   const [pageContent, setPageContent] = useState('');
   const [contentType, setContentType] = useState('markdown'); // 'markdown' or 'react'
   const [loading, setLoading] = useState(true);

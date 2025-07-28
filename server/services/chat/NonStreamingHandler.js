@@ -14,7 +14,6 @@ class NonStreamingHandler {
     buildLogData,
     messageId,
     model,
-    llmMessages,
     DEFAULT_TIMEOUT,
     getLocalizedError,
     clientLanguage

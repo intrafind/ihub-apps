@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from './Icon';
@@ -6,7 +6,6 @@ import { fetchApps } from '../../api/api';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import { createFavoriteItemHelpers } from '../../utils/favoriteItems';
 import { getRecentAppIds } from '../../utils/recentApps';
-import Fuse from 'fuse.js';
 import SearchModal from './SearchModal';
 
 const SmartSearch = () => {
@@ -16,7 +15,7 @@ const SmartSearch = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [apps, setApps] = useState([]);
   const [favoriteApps, setFavoriteApps] = useState([]);
-  const recentAppIds = useMemo(() => getRecentAppIds(), [isOpen]);
+  const recentAppIds = useMemo(() => getRecentAppIds(), []);
 
   // Create favorite apps helpers
   const { getFavorites: getFavoriteApps } = createFavoriteItemHelpers('aihub_favorite_apps');
@@ -43,7 +42,7 @@ const SmartSearch = () => {
           .catch(err => console.error('Failed to load apps', err));
       }
     }
-  }, [isOpen]);
+  }, [isOpen, apps.length, getFavoriteApps]);
 
   const searchItems = apps.map(app => ({
     ...app,

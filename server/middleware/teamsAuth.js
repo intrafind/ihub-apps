@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import { promisify } from 'util';
-import fetch from 'node-fetch';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
@@ -79,54 +78,7 @@ async function verifyTeamsToken(token, teamsConfig) {
   }
 }
 
-/**
- * Get user profile from Microsoft Graph
- */
-async function getUserProfile(accessToken) {
-  try {
-    const response = await fetch('https://graph.microsoft.com/v1.0/me', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json'
-      }
-    });
 
-    if (!response.ok) {
-      throw new Error(`Graph API error: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Failed to fetch user profile from Graph:', error);
-    return null;
-  }
-}
-
-/**
- * Get user groups from Microsoft Graph
- */
-async function getUserGroups(accessToken) {
-  try {
-    const response = await fetch('https://graph.microsoft.com/v1.0/me/memberOf', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Graph API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.value
-      .filter(group => group['@odata.type'] === '#microsoft.graph.group')
-      .map(group => group.displayName);
-  } catch (error) {
-    console.error('Failed to fetch user groups from Graph:', error);
-    return [];
-  }
-}
 
 /**
  * Normalize Teams user data
@@ -192,7 +144,7 @@ export async function teamsAuthMiddleware(req, res, next) {
       // Not a Teams token, continue with normal auth flow
       return next();
     }
-  } catch (error) {
+  } catch {
     return next();
   }
 

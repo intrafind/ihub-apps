@@ -8,8 +8,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import {
   sendNotFound,
   sendBadRequest,
-  sendFailedOperationError,
-  createRouteHandler
+  sendFailedOperationError
 } from '../../utils/responseHelpers.js';
 
 export default function registerAdminAppsRoutes(app) {
@@ -109,7 +108,7 @@ export default function registerAdminAppsRoutes(app) {
       try {
         readFileSync(appFilePath, 'utf8');
         return res.status(400).json({ error: 'App with this ID already exists' });
-      } catch (err) {
+      } catch {
         // file does not exist
       }
       await fs.writeFile(appFilePath, JSON.stringify(newApp, null, 2));

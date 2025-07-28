@@ -71,7 +71,7 @@ class URLHandler extends SourceHandler {
       // Try to load the existing web content extraction functionality
       const webTools = require('../tools/web');
       return webTools.webContentExtractor;
-    } catch (error) {
+    } catch {
       // Fallback implementation if tool not available
       return this.createFallbackExtractor();
     }
@@ -129,7 +129,7 @@ class URLHandler extends SourceHandler {
     try {
       const parsedUrl = new URL(url);
       return ['http:', 'https:'].includes(parsedUrl.protocol);
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -181,7 +181,7 @@ class URLHandler extends SourceHandler {
           followRedirects: options.followRedirects
         }
       });
-    } catch (error) {
+    } catch {
       return JSON.stringify(sourceConfig);
     }
   }

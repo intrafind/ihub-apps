@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import { i18nService } from '../../i18n/i18n';

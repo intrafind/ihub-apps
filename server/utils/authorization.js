@@ -295,7 +295,7 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
  * @param {string} resourceType - Type of resource (apps, models, prompts)
  * @returns {Array} Filtered resources
  */
-export function filterResourcesByPermissions(resources, allowedResources, resourceType = 'apps') {
+export function filterResourcesByPermissions(resources, allowedResources) {
   if (!Array.isArray(resources)) return [];
 
   // If user has wildcard access, return all resources

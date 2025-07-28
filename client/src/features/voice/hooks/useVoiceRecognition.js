@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import AzureSpeechRecognition from '../../../utils/azureRecognitionService';
 
@@ -13,17 +13,33 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
 
   const microphoneMode = app?.inputMode?.microphone?.mode || app?.microphone?.mode || 'automatic';
 
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.error('Error stopping recognition:', e);
+      }
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+    setTranscript('');
+    if (inputRef?.current) {
+      inputRef.current.placeholder = originalPlaceholder.current;
+    }
+  }, [inputRef]);
+
   useEffect(() => {
     return () => {
       stopListening();
     };
-  }, []);
+  }, [stopListening]);
 
   useEffect(() => {
     if (errorMessage && inputRef?.current) {
       inputRef.current.placeholder = errorMessage;
     }
-  }, [errorMessage]);
+  }, [errorMessage, inputRef]);
 
   const getCommandPatterns = () => {
     return {
@@ -104,7 +120,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
-      } catch (err) {
+      } catch {
         showError(
           t('voiceInput.error.permissionDenied', 'Please allow microphone access and try again.')
         );
@@ -171,7 +187,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
         let interimTranscript = '';
         let finalTranscript = '';
 
-        const result = 'text' in event ? event.text : event.results;
+        'text' in event ? event.text : event.results;
 
         if (!isAzure) {
           for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -276,22 +292,6 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       console.error('Error starting speech recognition:', error);
       showError(t('voiceInput.error.startError', 'Error starting voice input. Please try again.'));
       setIsListening(false);
-    }
-  };
-
-  const stopListening = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {
-        console.error('Error stopping recognition:', e);
-      }
-      recognitionRef.current = null;
-    }
-    setIsListening(false);
-    setTranscript('');
-    if (inputRef?.current) {
-      inputRef.current.placeholder = originalPlaceholder.current;
     }
   };
 

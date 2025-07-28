@@ -297,7 +297,7 @@ export const configureMarked = () => {
 };
 
 const MarkdownRenderer = () => {
-  const { t } = useTranslation();
+  useTranslation();
 
   // Note: Translation of hardcoded strings in HTML templates (lines ~193, 207, 321, 340, 391, 409)
   // requires architectural changes to inject translation function into template generation.

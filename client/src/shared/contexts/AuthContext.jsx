@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { apiClient } from '../../api/client.js';
 
 // Auth action types
@@ -85,31 +85,17 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Load authentication status on mount and handle OIDC callback
-  useEffect(() => {
-    // Check if this is an OIDC callback
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('token') && urlParams.get('provider')) {
-      handleOidcCallback();
-    } else {
-      loadAuthStatus();
+  // Get auth headers for API requests
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      return { Authorization: `Bearer ${token}` };
     }
-
-    // Listen for token expiration events from API client
-    const handleTokenExpired = () => {
-      console.log('Token expired, logging out user');
-      dispatch({ type: AUTH_ACTIONS.LOGOUT });
-    };
-
-    window.addEventListener('authTokenExpired', handleTokenExpired);
-
-    return () => {
-      window.removeEventListener('authTokenExpired', handleTokenExpired);
-    };
-  }, []);
+    return {};
+  };
 
   // Load authentication status
-  const loadAuthStatus = async () => {
+  const loadAuthStatus = useCallback(async () => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
 
@@ -177,16 +163,106 @@ export function AuthProvider({ children }) {
       console.error('Failed to load auth status:', error);
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error.message });
     }
+  }, []);
+
+  // Login with external token (proxy auth)
+  const loginWithToken = async token => {
+    try {
+      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
+
+      // Store token
+      localStorage.setItem('authToken', token);
+
+      // Verify token by getting user info
+      const response = await apiClient.get('/auth/user', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const data = response.data;
+
+      if (data.success && data.user) {
+        // Clear any existing cached data to prevent permission leakage
+        try {
+          const { clearApiCache } = await import('../../api/utils/cache');
+          clearApiCache();
+        } catch (error) {
+          // Cache clearing is optional, don't fail login
+          console.warn('Could not clear API cache on token login:', error);
+        }
+
+        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
+        return { success: true };
+      } else {
+        localStorage.removeItem('authToken');
+        const error = 'Invalid token';
+        dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
+        return { success: false, error };
+      }
+    } catch (error) {
+      localStorage.removeItem('authToken');
+      console.error('Token login error:', error);
+      const errorMessage = error.message || 'Token login failed';
+      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
+      return { success: false, error: errorMessage };
+    }
   };
 
-  // Get auth headers for API requests
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      return { Authorization: `Bearer ${token}` };
+  // Handle OIDC callback (extract token from URL)
+  const handleOidcCallback = useCallback(async () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+
+      if (token) {
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        // Login with the token
+        const result = await loginWithToken(token);
+
+        if (result.success) {
+          // Get stored return URL
+          const returnUrl = sessionStorage.getItem('oidcReturnUrl');
+          sessionStorage.removeItem('oidcReturnUrl');
+
+          // Only redirect if it's a different page
+          if (returnUrl && returnUrl !== window.location.href) {
+            window.location.href = returnUrl;
+          }
+        }
+
+        return result;
+      }
+    } catch (error) {
+      console.error('OIDC callback error:', error);
+      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error.message });
+      return { success: false, error: error.message };
     }
-    return {};
-  };
+  }, []);
+
+  // Load authentication status on mount and handle OIDC callback
+  useEffect(() => {
+    // Check if this is an OIDC callback
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('token') && urlParams.get('provider')) {
+      handleOidcCallback();
+    } else {
+      loadAuthStatus();
+    }
+
+    // Listen for token expiration events from API client
+    const handleTokenExpired = () => {
+      console.log('Token expired, logging out user');
+      dispatch({ type: AUTH_ACTIONS.LOGOUT });
+    };
+
+    window.addEventListener('authTokenExpired', handleTokenExpired);
+
+    return () => {
+      window.removeEventListener('authTokenExpired', handleTokenExpired);
+    };
+  }, [handleOidcCallback, loadAuthStatus]);
+
 
   // Login with username/password (local auth)
   const login = async (username, password) => {
@@ -233,47 +309,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Login with external token (proxy auth)
-  const loginWithToken = async token => {
-    try {
-      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
-
-      // Store token
-      localStorage.setItem('authToken', token);
-
-      // Verify token by getting user info
-      const response = await apiClient.get('/auth/user', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      const data = response.data;
-
-      if (data.success && data.user) {
-        // Clear any existing cached data to prevent permission leakage
-        try {
-          const { clearApiCache } = require('../../api/utils/cache');
-          clearApiCache();
-        } catch (error) {
-          // Cache clearing is optional, don't fail login
-          console.warn('Could not clear API cache on token login:', error);
-        }
-
-        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
-        return { success: true };
-      } else {
-        localStorage.removeItem('authToken');
-        const error = 'Invalid token';
-        dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
-        return { success: false, error };
-      }
-    } catch (error) {
-      localStorage.removeItem('authToken');
-      console.error('Token login error:', error);
-      const errorMessage = error.message || 'Token login failed';
-      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
-      return { success: false, error: errorMessage };
-    }
-  };
 
   // OIDC login - redirect to provider
   const loginWithOidc = (providerName, returnUrl = window.location.href) => {
@@ -287,40 +322,6 @@ export function AuthProvider({ children }) {
     } catch (error) {
       console.error('OIDC login error:', error);
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error.message });
-    }
-  };
-
-  // Handle OIDC callback (extract token from URL)
-  const handleOidcCallback = async () => {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const token = urlParams.get('token');
-      const provider = urlParams.get('provider');
-
-      if (token) {
-        // Clean URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-
-        // Login with the token
-        const result = await loginWithToken(token);
-
-        if (result.success) {
-          // Get stored return URL
-          const returnUrl = sessionStorage.getItem('oidcReturnUrl');
-          sessionStorage.removeItem('oidcReturnUrl');
-
-          // Only redirect if it's a different page
-          if (returnUrl && returnUrl !== window.location.href) {
-            window.location.href = returnUrl;
-          }
-        }
-
-        return result;
-      }
-    } catch (error) {
-      console.error('OIDC callback error:', error);
-      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error.message });
-      return { success: false, error: error.message };
     }
   };
 

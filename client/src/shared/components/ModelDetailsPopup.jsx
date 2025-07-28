@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../utils/localizeContent';
@@ -19,7 +19,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
     }
   }, [isOpen, model]);
 
-  const loadModelData = async () => {
+  const loadModelData = useCallback(async () => {
     setLoading(true);
     try {
       // Load usage data
@@ -44,7 +44,7 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [model]);
 
   if (!isOpen || !model) return null;
 

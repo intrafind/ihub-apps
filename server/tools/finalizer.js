@@ -21,8 +21,7 @@ function buildKnowledgeStr(items = []) {
 export default async function finalizer({
   question,
   results = [],
-  model = 'gemini-1.5-flash',
-  language = 'en'
+  model = 'gemini-1.5-flash'
 }) {
   const knowledge = buildKnowledgeStr(results);
   const system = `You are a senior editor with multiple best-selling books and columns published in top magazines. You break conventional thinking, establish unique cross-disciplinary connections, and bring new perspectives to the user.

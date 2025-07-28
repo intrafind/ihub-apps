@@ -161,14 +161,10 @@ class ChatService {
       }
 
       const {
-        app,
         model,
         llmMessages,
         request,
-        tools,
-        apiKey,
-        temperature: finalTemp,
-        maxTokens
+        tools
       } = prepResult.data;
 
       if (!clientRes) {

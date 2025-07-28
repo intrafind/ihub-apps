@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
  * A component to handle user input variables for chat applications
  */
 const InputVariables = ({ variables, setVariables, localizedVariables, className = '' }) => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
 
   if (!localizedVariables || localizedVariables.length === 0) {
     return null;

@@ -3,11 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 // Import components
-import ChatMessageList from '../../chat/components/ChatMessageList';
-import ChatInput from '../../chat/components/ChatInput';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
-import Icon from '../../../shared/components/Icon';
-import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import SharedAppHeader from '../../apps/components/SharedAppHeader';
 
 // Import canvas-specific components
@@ -23,7 +19,6 @@ import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useCanvas from '../hooks/useCanvas';
 import { fetchAppDetails } from '../../../api/api';
-import { getLocalizedContent } from '../../../utils/localizeContent';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 import { getOrCreateChatId, resetChatId } from '../../../utils/chatId';
 
@@ -36,7 +31,6 @@ const AppCanvas = () => {
   const { appId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { uiConfig } = useUIConfig();
 
   // App and loading states
   const [app, setApp] = useState(null);
@@ -112,7 +106,7 @@ const AppCanvas = () => {
       ].forEach(k => newSearch.delete(k));
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
     }
-  }, [app, modelsLoading]);
+  }, [app, modelsLoading, navigate, searchParams, setSelectedModel, setSelectedOutputFormat, setSelectedStyle, setSendChatHistory, setTemperature]);
 
   // Canvas editor states
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -227,11 +221,11 @@ const AppCanvas = () => {
     },
     [
       inputValue,
+      processing,
       selectedText,
       editorContent,
       sendChatMessage,
       addSystemMessage,
-      appId,
       selectedModel,
       selectedStyle,
       temperature,
@@ -243,7 +237,7 @@ const AppCanvas = () => {
   );
 
   // Voice commands setup
-  const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
+  useVoiceCommands({
     messages,
     clearChat: () => {
       clearMessages();
@@ -280,12 +274,7 @@ const AppCanvas = () => {
     content: editorContent,
     setContent: setEditorContent,
     setContentWithConfirmation,
-    appendContent,
     clearContent: clearCanvasContent,
-    hasContent,
-    getTextContent,
-    lastSaved: contentLastSaved,
-    getStorageInfo,
 
     // Selection and editing state
     selection,
@@ -293,13 +282,10 @@ const AppCanvas = () => {
     cursorPosition,
     setSelection,
     setSelectedText,
-    setCursorPosition,
 
     // Editing functions
     handleSelectionChange,
     handleEditAction,
-    applyEditResult,
-    clearPendingEdit
   } = canvasHook;
 
   // Load app data
@@ -425,9 +411,6 @@ const AppCanvas = () => {
   }, [contentModalData]);
 
   // Helper functions
-  const handleBack = () => {
-    navigate('/');
-  };
 
   const clearCanvas = () => {
     if (
@@ -452,7 +435,7 @@ const AppCanvas = () => {
       const quill = quillRef.current.getEditor();
       quill.setSelection(null);
     }
-  }, []);
+  }, [setSelectedText, setSelection]);
 
   const handleInsertAnswer = useCallback(
     text => {
@@ -469,11 +452,11 @@ const AppCanvas = () => {
       setSelection(null);
       setSelectedText('');
     },
-    [quillRef, selection, cursorPosition, setEditorContent]
+    [quillRef, selection, cursorPosition, setEditorContent, setSelectedText, setSelection]
   );
 
   // Handle voice input for canvas editor
-  const handleCanvasVoiceInput = useCallback(text => {
+  const handleCanvasVoiceInput = useCallback(() => {
     // The text is already inserted into the editor by CanvasVoiceInput component
     // We just need to trigger a content update to ensure parent state is synchronized
     if (quillRef.current) {
@@ -481,7 +464,7 @@ const AppCanvas = () => {
       const currentContent = quill.root.innerHTML;
       setEditorContent(currentContent);
     }
-  }, []);
+  }, [setEditorContent]);
 
   // Save canvas-specific settings when they change
   useEffect(() => {

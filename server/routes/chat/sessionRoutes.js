@@ -16,7 +16,7 @@ import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validat
 
 export default function registerSessionRoutes(
   app,
-  { verifyApiKey, processMessageTemplates, getLocalizedError, DEFAULT_TIMEOUT }
+  { verifyApiKey, getLocalizedError, DEFAULT_TIMEOUT }
 ) {
   const chatService = new ChatService();
   app.get(
@@ -160,7 +160,7 @@ export default function registerSessionRoutes(
     clientLanguage,
     user
   }) {
-    const { model, llmMessages } = prep;
+    const {} = prep;
 
     // Log the request
     const requestLog = buildLogData(streaming);

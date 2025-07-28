@@ -10,10 +10,10 @@ class SearchProvider {
   /**
    * Execute a search query
    * @param {string} query - The search query
-   * @param {Object} options - Provider-specific options
    * @returns {Promise<Object>} Search results in standardized format
    */
-  async search(query, options = {}) {
+  // eslint-disable-next-line no-unused-vars
+  async search(query) {
     throw new Error('search() method must be implemented');
   }
 

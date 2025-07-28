@@ -6,12 +6,12 @@ import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { simpleCompletion } from '../utils.js';
 
-export default function registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT }) {
+export default function registerMagicPromptRoutes(app) {
   app.post('/api/magic-prompt', authRequired, validate(magicPromptSchema), async (req, res) => {
     try {
       const { input, prompt, modelId, appId = 'direct' } = req.body;
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-      const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
+      req.headers['accept-language']?.split(',')[0] || defaultLang;
       if (!input) {
         return res.status(400).json({ error: 'Missing input' });
       }

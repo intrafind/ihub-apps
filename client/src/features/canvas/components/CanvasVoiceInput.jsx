@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VoiceFeedback } from '../../voice/components';
 import useVoiceRecognition from '../../voice/hooks/useVoiceRecognition';
@@ -13,7 +13,7 @@ const CanvasVoiceInput = ({ app, onSpeechResult, disabled = false, quillRef }) =
     useVoiceRecognition({
       app,
       inputRef: dummyInputRef,
-      onSpeechResult: (text, skipAppend = false) => {
+      onSpeechResult: (text) => {
         // Insert text directly into the Quill editor
         if (quillRef?.current && text.trim()) {
           const quill = quillRef.current.getEditor();
@@ -48,7 +48,7 @@ const CanvasVoiceInput = ({ app, onSpeechResult, disabled = false, quillRef }) =
     });
 
   // Custom toggle function that resets the dummy input before starting
-  const handleToggleListening = () => {
+  const handleToggleListening = useCallback(() => {
     if (!isListening) {
       // Reset dummy input before starting new voice recognition
       if (dummyInputRef.current) {
@@ -56,7 +56,7 @@ const CanvasVoiceInput = ({ app, onSpeechResult, disabled = false, quillRef }) =
       }
     }
     toggleListening();
-  };
+  }, [isListening, toggleListening]);
 
   // Handle keyboard shortcut for canvas voice input
   useEffect(() => {

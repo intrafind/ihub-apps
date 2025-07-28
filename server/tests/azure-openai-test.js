@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { getAdapter, createCompletionRequest } from '../adapters/index.js';
+import { createCompletionRequest } from '../adapters/index.js';
 
 // Load environment variables
 dotenv.config({ path: '../.env' });

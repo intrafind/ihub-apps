@@ -20,7 +20,6 @@ const AppsList = () => {
   // Create favorite apps helpers
   const {
     getFavorites: getFavoriteApps,
-    isFavorite: isAppFavorite,
     toggleFavorite: toggleFavoriteApp
   } = createFavoriteItemHelpers('aihub_favorite_apps');
 
@@ -62,9 +61,8 @@ const AppsList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [favoriteApps, setFavoriteApps] = useState([]);
   const [displayCount, setDisplayCount] = useState(0);
-  const [translationsLoaded, setTranslationsLoaded] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const recentAppIds = useMemo(() => getRecentAppIds(), [apps]);
+  const recentAppIds = useMemo(() => getRecentAppIds(), []);
   const [sortMethod, setSortMethod] = useState(sortConfig.default || 'relevance');
 
   // Only display categories that contain at least one app, with smart hiding logic
@@ -214,7 +212,7 @@ const AppsList = () => {
     return () => {
       isMounted = false;
     };
-  }, [currentLanguage, calculateVisibleAppCount, user?.id, isAuthenticated]); // Added auth dependencies to reload apps when user changes
+  }, [currentLanguage, user?.id, isAuthenticated, t]); // Added auth dependencies to reload apps when user changes
 
   // Reset display count when search changes
   useEffect(() => {
@@ -223,7 +221,7 @@ const AppsList = () => {
       const visibleCount = calculateVisibleAppCount();
       setDisplayCount(visibleCount);
     }
-  }, [searchTerm, calculateVisibleAppCount, searchConfig.enabled, apps.length]);
+  }, [searchTerm, searchConfig.enabled, apps.length]);
 
   // Language change handler to ensure proper UI updates
   // Only re-render on actual language changes, not on every render
@@ -264,14 +262,14 @@ const AppsList = () => {
     } else {
       setFavoriteApps(prev => prev.filter(id => id !== appId));
     }
-  }, []);
+  }, [toggleFavoriteApp]);
 
   // Load more apps handler
   const handleLoadMore = useCallback(() => {
     // Increase by another viewport's worth of apps
     const increment = calculateVisibleAppCount();
     setDisplayCount(prev => prev + increment);
-  }, [calculateVisibleAppCount]);
+  }, []);
 
   // Category selection handler
   const handleCategorySelect = useCallback(
@@ -281,7 +279,7 @@ const AppsList = () => {
       const visibleCount = calculateVisibleAppCount();
       setDisplayCount(visibleCount);
     },
-    [calculateVisibleAppCount]
+    []
   );
 
   // Memoized filtered apps to avoid recomputing on every render
@@ -418,7 +416,7 @@ const AppsList = () => {
     }
 
     return list.sort(sortByDefault);
-  }, [filteredApps, favoriteApps, recentAppIds, currentLanguage, sortMethod, sortConfig.enabled]);
+  }, [filteredApps, favoriteApps, recentAppIds, currentLanguage, sortMethod]);
 
   // Memoized displayed apps for progressive loading
   const displayedApps = useMemo(() => {

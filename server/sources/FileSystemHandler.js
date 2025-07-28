@@ -88,7 +88,7 @@ class FileSystemHandler extends SourceHandler {
       const fullPath = path.resolve(this.basePath, filePath.replace(/^\/+/, ''));
       const stats = await fs.stat(fullPath);
       return `${JSON.stringify(sourceConfig)}:${stats.mtime.getTime()}`;
-    } catch (error) {
+    } catch {
       // Fallback to basic cache key if file stat fails
       return this.getCacheKey(sourceConfig);
     }
@@ -197,7 +197,7 @@ class FileSystemHandler extends SourceHandler {
       const fullPath = path.resolve(this.basePath, filePath.replace(/^\/+/, ''));
       const stats = await fs.stat(fullPath);
       return stats.isFile();
-    } catch (error) {
+    } catch {
       return false;
     }
   }

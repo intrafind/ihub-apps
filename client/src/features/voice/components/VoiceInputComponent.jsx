@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import VoiceFeedback from './VoiceFeedback';
 import useVoiceRecognition from '../hooks/useVoiceRecognition';
 import VoiceInputButton from './VoiceInputButton';

@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, createContext } from 'react';
+import { useState, useEffect, useContext, createContext, useCallback } from 'react';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { apiClient } from '../../../api/client';
 
@@ -12,7 +12,7 @@ export function AdminAuthProvider({ children }) {
   const { user, isAuthenticated: userIsAuthenticated } = useAuth();
 
   // Check authentication status
-  const checkAuthStatus = async () => {
+  const checkAuthStatus = useCallback(async () => {
     try {
       // Include authentication headers so backend can check current user
       const authToken = localStorage.getItem('authToken');
@@ -53,11 +53,11 @@ export function AdminAuthProvider({ children }) {
     }
 
     setIsLoading(false);
-  };
+  }, [token]);
 
   useEffect(() => {
     checkAuthStatus();
-  }, [token]);
+  }, [token, checkAuthStatus]);
 
   // Refresh admin auth status when user authentication changes
   useEffect(() => {
@@ -79,7 +79,7 @@ export function AdminAuthProvider({ children }) {
       window.removeEventListener('storage', handleAuthChange);
       window.removeEventListener('focus', handleAuthChange);
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, checkAuthStatus]);
 
   // Refresh when user authentication or admin status changes
   // But only if admin is not already authenticated to prevent session resets
@@ -87,7 +87,7 @@ export function AdminAuthProvider({ children }) {
     if (!isAuthenticated) {
       checkAuthStatus();
     }
-  }, [user?.id, user?.isAdmin, userIsAuthenticated, isAuthenticated]);
+  }, [user?.id, user?.isAdmin, userIsAuthenticated, isAuthenticated, checkAuthStatus]);
 
   const login = async adminSecret => {
     try {

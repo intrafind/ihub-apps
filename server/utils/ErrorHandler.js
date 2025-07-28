@@ -1,4 +1,3 @@
-import { getLocalizedContent } from '../../shared/localize.js';
 import configCache from '../configCache.js';
 
 class ChatError extends Error {
@@ -115,7 +114,7 @@ class ErrorHandler {
   }
 
   async createRequestTimeoutError(timeout, language) {
-    const message = await this.getLocalizedError(
+    await this.getLocalizedError(
       'requestTimeout',
       { timeout: timeout / 1000 },
       language

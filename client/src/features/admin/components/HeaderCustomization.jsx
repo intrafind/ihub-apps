@@ -1,3 +1,4 @@
+import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
 const HeaderCustomization = ({ config, onUpdate, t }) => {
   // Map config links to component format

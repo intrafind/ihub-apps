@@ -28,7 +28,7 @@ export default async function researchPlanner({
 
   try {
     return JSON.parse(response);
-  } catch (err) {
+  } catch {
     throw new Error('Failed to parse research plan JSON');
   }
 }

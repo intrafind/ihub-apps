@@ -4,8 +4,7 @@ import { fileURLToPath } from 'url';
 import config from '../config.js';
 
 export default function registerStaticRoutes(app, { isPackaged, rootDir }) {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
+  fileURLToPath(import.meta.url);
 
   let staticPath;
   if (isPackaged) {

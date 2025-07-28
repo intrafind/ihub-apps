@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { saveAppSettings, loadAppSettings } from '../../utils/appSettings';
 import { fetchModels, fetchStyles } from '../../api/api';
 import { useUIConfig } from '../contexts/UIConfigContext';

@@ -18,7 +18,7 @@ class SourceHandler {
    * @param {Object} sourceConfig - Configuration specific to this source
    * @returns {Promise<Object>} - { content: string, metadata: Object }
    */
-  async loadContent(sourceConfig) {
+  async loadContent() {
     throw new Error('loadContent must be implemented by subclass');
   }
 
@@ -94,7 +94,7 @@ class SourceHandler {
    * @param {Object} sourceConfig - Configuration to validate
    * @returns {boolean} - True if valid
    */
-  validateConfig(sourceConfig) {
+  validateConfig() {
     return true; // Override in subclasses
   }
 

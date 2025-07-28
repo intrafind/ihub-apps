@@ -1,4 +1,3 @@
-import { loadJson } from './configLoader.js';
 import config from './config.js';
 import configCache from './configCache.js';
 import { throttledFetch } from './requestThrottler.js';
@@ -87,7 +86,7 @@ function localizeTools(tools, language = 'en') {
  */
 export async function loadConfiguredTools(language = null) {
   // Try to get tools from cache first
-  const { data: tools, etag: toolsEtag } = configCache.getTools();
+  const { data: tools } = configCache.getTools();
   if (!tools) {
     console.warn('Tools could not be loaded');
     return [];

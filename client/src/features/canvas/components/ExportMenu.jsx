@@ -5,7 +5,7 @@ import { useClipboard } from '../../../shared/hooks/useClipboard';
 
 const ExportMenu = ({ content, onClose }) => {
   const { t } = useTranslation();
-  const { copyText, copyMarkdown, copyHTML, isLoading } = useClipboard();
+  const { copyText, copyMarkdown, copyHTML } = useClipboard();
 
   const handleCopyText = async () => {
     await copyText(content);

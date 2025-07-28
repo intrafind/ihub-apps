@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
@@ -20,7 +20,7 @@ const AdminShortLinks = () => {
   const [sortField, setSortField] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
 
-  const loadLinks = async () => {
+  const loadLinks = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -34,11 +34,11 @@ const AdminShortLinks = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [appIdFilter, userFilter]);
 
   useEffect(() => {
     loadLinks();
-  }, []);
+  }, [loadLinks]);
 
   const handleDelete = async code => {
     if (!window.confirm(t('admin.shortlinks.deleteConfirm', 'Delete this link?'))) return;

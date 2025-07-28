@@ -56,9 +56,9 @@
       "name": "Anonymous",
       "description": "Access for anonymous users (default configuration)",
       "permissions": {
-        "apps": ["chat"],
+        "apps": ["*"],
         "prompts": ["*"],
-        "models": ["gemini-2.0-flash"],
+        "models": ["*"],
         "adminAccess": false
       },
       "mappings": ["anonymous", "public"]

@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs/promises';
-import { createReadStream, createWriteStream } from 'fs';
+import { createWriteStream } from 'fs';
 import archiver from 'archiver';
 import yauzl from 'yauzl';
 import { fileURLToPath } from 'url';
@@ -42,7 +42,7 @@ async function getAllFiles(dirPath, arrayOfFiles = []) {
 async function ensureDir(dirPath) {
   try {
     await fs.access(dirPath);
-  } catch (error) {
+  } catch {
     await fs.mkdir(dirPath, { recursive: true });
   }
 }
@@ -203,7 +203,7 @@ export async function importConfig(req, res) {
 
     try {
       await fs.access(extractedContentsPath);
-    } catch (error) {
+    } catch {
       return res.status(400).json({
         error: 'Invalid backup file: No contents directory found'
       });
@@ -216,7 +216,7 @@ export async function importConfig(req, res) {
       const metadataContent = await fs.readFile(metadataPath, 'utf-8');
       metadata = JSON.parse(metadataContent);
       console.log('📋 Backup metadata:', metadata);
-    } catch (error) {
+    } catch {
       console.log('ℹ️  No metadata found in backup (this is normal for manual backups)');
     }
 

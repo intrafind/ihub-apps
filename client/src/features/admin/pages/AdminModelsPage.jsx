@@ -18,12 +18,9 @@ const AdminModelsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
   const [testingModel, setTestingModel] = useState(null);
+  const [testResults, setTestResults] = useState({});
   const [selectedModel, setSelectedModel] = useState(null);
   const [showModelDetails, setShowModelDetails] = useState(false);
-
-  useEffect(() => {
-    loadModels();
-  }, []);
 
   const loadModels = async () => {
     try {
@@ -50,6 +47,10 @@ const AdminModelsPage = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadModels();
+  }, []);
 
   const toggleModel = async modelId => {
     try {

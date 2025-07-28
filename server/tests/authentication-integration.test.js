@@ -112,7 +112,7 @@ describe('Authentication Integration Tests', () => {
       await fs.unlink(testUsersFile);
       await fs.unlink(testPlatformFile);
       await fs.rmdir(path.dirname(testUsersFile));
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors
     }
   });
@@ -397,11 +397,11 @@ describe('Authentication Integration Tests', () => {
 describe('Authorization Edge Cases', () => {
   test('should handle circular group references safely', () => {
     // This would be tested with mock data that has circular references
-    const userWithCircularGroups = {
-      id: 'test',
-      groups: ['group1', 'group2']
-      // Where group1 references group2 and vice versa
-    };
+    // const userWithCircularGroups = {
+    //   id: 'test',
+    //   groups: ['group1', 'group2']
+    //   // Where group1 references group2 and vice versa
+    // };
 
     // Test that the authorization system handles this gracefully
     expect(() => {
@@ -411,12 +411,12 @@ describe('Authorization Edge Cases', () => {
   });
 
   test('should handle extremely large group arrays', () => {
-    const userWithManyGroups = {
-      id: 'test',
-      groups: Array(1000)
-        .fill()
-        .map((_, i) => `group_${i}`)
-    };
+    // const userWithManyGroups = {
+    //   id: 'test',
+    //   groups: Array(1000)
+    //     .fill()
+    //     .map((_, i) => `group_${i}`)
+    // };
 
     // Should handle large arrays without performance issues
     expect(() => {
@@ -425,10 +425,10 @@ describe('Authorization Edge Cases', () => {
   });
 
   test('should sanitize group names', () => {
-    const userWithMaliciousGroups = {
-      id: 'test',
-      groups: ['../../../admin', '<script>alert("xss")</script>', 'normal-group']
-    };
+    // const userWithMaliciousGroups = {
+    //   id: 'test',
+    //   groups: ['../../../admin', '<script>alert("xss")</script>', 'normal-group']
+    // };
 
     // Should sanitize or reject malicious group names
     expect(() => {

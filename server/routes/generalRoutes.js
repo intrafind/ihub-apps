@@ -1,11 +1,9 @@
 import configCache from '../configCache.js';
 import {
-  filterResourcesByPermissions,
   enhanceUserWithPermissions,
   isAnonymousAccessAllowed
 } from '../utils/authorization.js';
 import { authRequired, authOptional, appAccessRequired } from '../middleware/authRequired.js';
-import crypto from 'crypto';
 
 export default function registerGeneralRoutes(app, { getLocalizedError }) {
   app.get('/api/apps', authOptional, async (req, res) => {

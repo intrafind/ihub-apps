@@ -1,5 +1,4 @@
 import { getAdapter, createCompletionRequest } from '../adapters/index.js';
-import { loadConfiguredTools } from '../toolLoader.js';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
@@ -231,7 +230,7 @@ async function documentAPIInteraction(provider, model, messages, tools, scenario
           'Given all this information, what would be your final recommendation for my project?'
       }
     ];
-    const step6Response = await makeAPICall(
+    await makeAPICall(
       provider,
       model,
       step6Messages,
@@ -256,7 +255,7 @@ async function documentAPIInteraction(provider, model, messages, tools, scenario
  * Make an API call and document the interaction
  */
 async function makeAPICall(provider, model, messages, tools, documentation, stepName) {
-  const adapter = getAdapter(provider);
+  getAdapter(provider);
   const requestData = createCompletionRequest(model, messages, apiKeys[provider], {
     temperature: 0.1,
     stream: false,
@@ -535,7 +534,7 @@ function simulateToolResponse(toolName, args) {
   if (typeof args === 'string') {
     try {
       parsedArgs = JSON.parse(args);
-    } catch (e) {
+    } catch {
       parsedArgs = { raw: args };
     }
   }
@@ -623,7 +622,7 @@ function simulateToolResponse(toolName, args) {
           expression,
           unit: expression.includes('month') ? 'months' : 'number'
         };
-      } catch (e) {
+      } catch {
         return {
           error: 'Invalid expression',
           expression: parsedArgs.expression || parsedArgs.raw
@@ -662,7 +661,7 @@ async function generateComparisonReport(allResults) {
       conversation_steps: 0
     };
 
-    Object.entries(results).forEach(([scenario, result]) => {
+    Object.entries(results).forEach(([, result]) => {
       if (result.error) {
         providerSummary.failed_scenarios++;
       } else {

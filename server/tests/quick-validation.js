@@ -8,7 +8,6 @@
 
 import {
   authRequired,
-  chatAuthRequired,
   appAccessRequired,
   modelAccessRequired
 } from '../middleware/authRequired.js';

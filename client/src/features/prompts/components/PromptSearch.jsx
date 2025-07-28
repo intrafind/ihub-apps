@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
-import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import Fuse from 'fuse.js';
 import Icon from '../../../shared/components/Icon';
 import { fetchPrompts } from '../../../api/api';
@@ -15,9 +13,7 @@ const fuseRef = { current: null };
 
 const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
   const { t, i18n } = useTranslation();
-  const { uiConfig } = useUIConfig();
   const [prompts, setPrompts] = useState([]);
-  const [query, setQuery] = useState('');
   const [favoritePromptIds, setFavoritePromptIds] = useState([]);
   const [recentPromptIds, setRecentPromptIds] = useState([]);
 
@@ -29,7 +25,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
       setFavoritePromptIds(getFavoritePrompts());
       setRecentPromptIds(getRecentPromptIds());
     }
-  }, [isOpen]);
+  }, [isOpen, getFavoritePrompts]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -51,7 +47,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
         console.error('Failed to load prompts', err);
       }
     })();
-  }, [isOpen, i18n.language]);
+  }, [isOpen, i18n.language, getFavoritePrompts]);
 
   useEffect(() => {
     if (isOpen) {
@@ -71,7 +67,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
           .catch(err => console.error('Failed to load prompts', err));
       }
     }
-  }, [isOpen, i18n.language]);
+  }, [isOpen, i18n.language, getFavoritePrompts, prompts.length]);
 
   const searchItems = prompts;
 

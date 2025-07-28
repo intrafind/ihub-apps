@@ -1,6 +1,6 @@
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync } from 'fs';
 import { promises as fs } from 'fs';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';

@@ -24,7 +24,7 @@ class ToolExecutor {
       let finalArgs = toolCall.function.arguments.replace(/}{/g, ',');
       try {
         args = JSON.parse(finalArgs);
-      } catch (e) {
+      } catch {
         if (!finalArgs.startsWith('{')) finalArgs = '{' + finalArgs;
         if (!finalArgs.endsWith('}')) finalArgs = finalArgs + '}';
         try {

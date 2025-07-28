@@ -293,7 +293,7 @@ const invalidModel = {
 };
 
 try {
-  const fallbackAdapter = getAdapter('unknown');
+  getAdapter('unknown');
   console.log('✅ Fallback adapter loaded (should default to OpenAI)');
 
   const request = createCompletionRequest(invalidModel, [{ role: 'user', content: 'test' }], {

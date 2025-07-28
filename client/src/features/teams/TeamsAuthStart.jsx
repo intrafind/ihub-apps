@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as microsoftTeams from '@microsoft/teams-js';
 
@@ -21,9 +21,9 @@ function TeamsAuthStart() {
       // Redirect to Azure AD for authentication
       window.location.href = authUrl;
     });
-  }, []);
+  }, [buildAuthUrl]);
 
-  const buildAuthUrl = context => {
+  const buildAuthUrl = useCallback(context => {
     const params = new URLSearchParams({
       client_id: process.env.REACT_APP_AAD_CLIENT_ID || context.clientId,
       response_type: 'token',
@@ -38,7 +38,7 @@ function TeamsAuthStart() {
 
     const tenantId = process.env.REACT_APP_AAD_TENANT_ID || context.tid || 'common';
     return `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?${params.toString()}`;
-  };
+  }, []);
 
   const generateNonce = () => {
     return Math.random().toString(36).substring(2) + Date.now().toString(36);

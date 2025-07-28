@@ -83,7 +83,7 @@ const AdminSystemPage = () => {
     setPasswordChangeMessage('');
 
     try {
-      const response = await makeAdminApiCall('/admin/auth/change-password', {
+      await makeAdminApiCall('/admin/auth/change-password', {
         method: 'POST',
         body: JSON.stringify({
           newPassword: passwordForm.newPassword

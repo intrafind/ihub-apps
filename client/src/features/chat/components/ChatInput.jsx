@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VoiceInputComponent } from '../../voice/components';
 import Icon from '../../../shared/components/Icon';
@@ -19,7 +19,6 @@ const ChatInput = ({
   onCancel,
   onVoiceInput,
   onVoiceCommand,
-  onImageSelect,
   onFileSelect,
   allowEmptySubmit = false,
   inputRef = null,
@@ -83,7 +82,7 @@ const ChatInput = ({
   //   });
   // }, [customPlaceholder, defaultPlaceholder, isProcessing, allowEmptySubmit, i18n.language, app?.messagePlaceholder]);
 
-  const focusInputAtEnd = () => {
+  const focusInputAtEnd = useCallback(() => {
     if (actualInputRef.current) {
       const el = actualInputRef.current;
       el.focus();
@@ -91,14 +90,14 @@ const ChatInput = ({
       // Move cursor to the end so users can continue typing
       el.setSelectionRange(len, len);
     }
-  };
+  }, [actualInputRef]);
 
   // When processing finishes, refocus the input field
   useEffect(() => {
     if (!isProcessing) {
       focusInputAtEnd();
     }
-  }, [isProcessing]);
+  }, [isProcessing, focusInputAtEnd]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -129,7 +128,7 @@ const ChatInput = ({
         textarea.removeEventListener('input', autoResize);
       };
     }
-  }, [value, multilineMode, inputRows]);
+  }, [value, multilineMode, inputRows, actualInputRef]);
 
   const handleSubmit = e => {
     e.preventDefault();

@@ -1,15 +1,13 @@
-import { loadTools, runTool } from '../toolLoader.js';
+import { runTool } from '../toolLoader.js';
 import { logInteraction } from '../utils.js';
 import { authRequired, authOptional } from '../middleware/authRequired.js';
 import validate from '../validators/validate.js';
 import { runToolSchema } from '../validators/index.js';
 import configCache from '../configCache.js';
 import {
-  filterResourcesByPermissions,
   isAnonymousAccessAllowed,
   enhanceUserWithPermissions
 } from '../utils/authorization.js';
-import crypto from 'crypto';
 
 export default function registerToolRoutes(app) {
   app.get('/api/tools', authOptional, async (req, res) => {

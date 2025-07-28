@@ -12,7 +12,7 @@ import registerGeneralRoutes from '../routes/generalRoutes.js';
 import registerModelRoutes from '../routes/modelRoutes.js';
 import registerAdminRoutes from '../routes/adminRoutes.js';
 import registerAuthRoutes from '../routes/auth.js';
-import { verifyApiKey, processMessageTemplates, getLocalizedError } from '../serverHelpers.js';
+import { processMessageTemplates, getLocalizedError } from '../serverHelpers.js';
 import jwt from 'jsonwebtoken';
 
 // Mock configuration for testing
@@ -103,7 +103,7 @@ jest.mock('../configCache.js', () => ({
 
 // Mock authorization utils
 jest.mock('../utils/authorization.js', () => ({
-  enhanceUserWithPermissions: (user, authConfig) => {
+  enhanceUserWithPermissions: (user) => {
     if (!user || user.id === 'anonymous') {
       return {
         id: 'anonymous',
@@ -161,7 +161,7 @@ jest.mock('../utils/authorization.js', () => ({
       isAdmin: permissions.adminAccess
     };
   },
-  filterResourcesByPermissions: (resources, allowedResources, resourceType) => {
+  filterResourcesByPermissions: (resources, allowedResources) => {
     if (allowedResources.has('*')) return resources;
     return resources.filter(resource =>
       allowedResources.has(resource.id || resource.modelId || resource.name)

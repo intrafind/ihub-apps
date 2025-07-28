@@ -31,7 +31,7 @@ const AdminShortLinkEditPage = () => {
       (async () => {
         try {
           const res = await makeAdminApiCall(`/shortlinks/${code}`);
-          const data = await res.json();
+          const data = res.data;
           setLink({
             ...data,
             params: data.params || {},

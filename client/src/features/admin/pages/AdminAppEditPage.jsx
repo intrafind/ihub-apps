@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
@@ -132,9 +132,9 @@ const AdminAppEditPage = () => {
     } else {
       loadApp();
     }
-  }, [appId]);
+  }, [appId, loadApp]);
 
-  const loadApp = async () => {
+  const loadApp = useCallback(async () => {
     try {
       setLoading(true);
       const response = await makeAdminApiCall(`/admin/apps/${appId}`);
@@ -214,7 +214,7 @@ const AdminAppEditPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [appId]);
 
   const handleSave = async e => {
     e.preventDefault();

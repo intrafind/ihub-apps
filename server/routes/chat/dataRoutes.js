@@ -29,7 +29,6 @@ export default function registerDataRoutes(app) {
   app.get('/api/prompts', authOptional, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
-      const authConfig = platformConfig.auth || {};
 
       // Check if anonymous access is allowed
       if (!isAnonymousAccessAllowed(platformConfig) && (!req.user || req.user.id === 'anonymous')) {

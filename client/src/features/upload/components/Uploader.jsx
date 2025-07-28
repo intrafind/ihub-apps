@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 /**
  * Generic uploader component that handles file selection, validation and preview logic.

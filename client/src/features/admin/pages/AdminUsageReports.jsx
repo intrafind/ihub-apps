@@ -126,6 +126,7 @@ const AppUsageCard = ({ data }) => {
 };
 
 const FeedbackCard = ({ data }) => {
+  const { t } = useTranslation();
   const totalFeedback = (data.good || 0) + (data.bad || 0);
   const goodPercentage = totalFeedback > 0 ? ((data.good || 0) / totalFeedback) * 100 : 0;
   const badPercentage = totalFeedback > 0 ? ((data.bad || 0) / totalFeedback) * 100 : 0;
