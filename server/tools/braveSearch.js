@@ -1,6 +1,4 @@
-import { actionTracker } from '../actionTracker.js';
-import config from '../config.js';
-import { throttledFetch } from '../requestThrottler.js';
+import webSearchService from '../services/WebSearchService.js';
 
 export default async function braveSearch({ query, q, chatId }) {
   // Accept both 'query' and 'q' parameters for flexibility
@@ -9,38 +7,12 @@ export default async function braveSearch({ query, q, chatId }) {
   if (!searchQuery) {
     throw new Error('query parameter is required (use "query" or "q")');
   }
-  const apiKey = config.BRAVE_SEARCH_API_KEY;
-  if (!apiKey) {
-    throw new Error('BRAVE_SEARCH_API_KEY is not set');
-  }
-  const endpoint = config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
-  actionTracker.trackAction(chatId, { action: 'search', query: searchQuery });
-  const res = await throttledFetch(
-    'braveSearch',
-    `${endpoint}?q=${encodeURIComponent(searchQuery)}`,
-    {
-      headers: {
-        'X-Subscription-Token': apiKey,
-        Accept: 'application/json'
-      }
-    }
-  );
-  if (!res.ok) {
-    throw new Error(`Brave search failed with status ${res.status}`);
-  }
-  const data = await res.json();
-  const results = [];
-  if (data.web && Array.isArray(data.web.results)) {
-    for (const item of data.web.results) {
-      results.push({
-        title: item.title,
-        url: item.url,
-        description: item.description,
-        language: item.language
-      });
-    }
-  }
-  return { results };
+
+  // Use the unified web search service with brave provider
+  return await webSearchService.search(searchQuery, {
+    provider: 'brave',
+    chatId
+  });
 }
 
 // CLI interface for direct execution

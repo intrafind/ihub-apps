@@ -1,6 +1,4 @@
-import { actionTracker } from '../actionTracker.js';
-import config from '../config.js';
-import { throttledFetch } from '../requestThrottler.js';
+import webSearchService from '../services/WebSearchService.js';
 
 export default async function tavilySearch({
   query,
@@ -13,42 +11,14 @@ export default async function tavilySearch({
   if (!searchQuery) {
     throw new Error('query parameter is required (use "query" or "q")');
   }
-  const apiKey = config.TAVILY_SEARCH_API_KEY;
-  if (!apiKey) {
-    throw new Error('TAVILY_SEARCH_API_KEY is not set');
-  }
-  const endpoint = config.TAVILY_ENDPOINT || 'https://api.tavily.com/search';
-  actionTracker.trackAction(chatId, { action: 'search', query: searchQuery });
-  const res = await throttledFetch('tavilySearch', endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      api_key: apiKey,
-      query: searchQuery,
-      search_depth,
-      max_results
-    })
+
+  // Use the unified web search service with tavily provider
+  return await webSearchService.search(searchQuery, {
+    provider: 'tavily',
+    chatId,
+    search_depth,
+    max_results
   });
-
-  if (!res.ok) {
-    throw new Error(`Tavily search failed with status ${res.status}`);
-  }
-
-  const data = await res.json();
-  const results = [];
-  if (Array.isArray(data.results)) {
-    for (const item of data.results) {
-      results.push({
-        title: item.title,
-        url: item.url,
-        description: item.content,
-        score: item.score
-      });
-    }
-  }
-  return { results };
 }
 
 // CLI interface for direct execution

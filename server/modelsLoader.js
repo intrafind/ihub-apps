@@ -1,21 +1,5 @@
-import { readFileSync, existsSync, readdirSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from './pathUtils.js';
+import { createResourceLoader, createSchemaValidator } from './utils/resourceLoader.js';
 import { modelConfigSchema, knownModelKeys } from './validators/modelConfigSchema.js';
-
-function validateModelConfig(model, source) {
-  const { success, error } = modelConfigSchema.safeParse(model);
-  if (!success && error) {
-    const messages = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
-    console.warn(`⚠️  Validation issues in ${source}: ${messages}`);
-  }
-
-  const unknown = Object.keys(model).filter(key => !knownModelKeys.includes(key));
-  if (unknown.length > 0) {
-    console.warn(`⚠️  Unknown keys in ${source}: ${unknown.join(', ')}`);
-  }
-}
 
 /**
  * Models Loader Service
@@ -23,98 +7,8 @@ function validateModelConfig(model, source) {
  * This service loads models from both individual files in contents/models/
  * and the legacy models.json file for backward compatibility.
  *
- * Features:
- * - Loads individual model files from contents/models/
- * - Backward compatible with contents/config/models.json
- * - Filters out disabled models
- * - Handles missing enabled field (defaults to true)
- * - Ensures exactly one default model
+ * Uses the generic resource loader factory to eliminate code duplication.
  */
-
-/**
- * Load models from individual files in contents/models/
- * @returns {Array} Array of model objects
- */
-export async function loadModelsFromFiles(verbose = true) {
-  const rootDir = getRootDir();
-  const modelsDir = join(rootDir, 'contents', 'models');
-
-  if (!existsSync(modelsDir)) {
-    if (verbose) {
-      console.log('📁 Models directory not found, skipping individual model files');
-    }
-    return [];
-  }
-
-  const models = [];
-  const dirContents = await fs.readdir(modelsDir);
-  const files = dirContents.filter(file => file.endsWith('.json'));
-
-  if (verbose) {
-    console.log(`🤖 Loading ${files.length} individual model files...`);
-  }
-
-  for (const file of files) {
-    try {
-      const filePath = join(modelsDir, file);
-      const fileContent = await fs.readFile(filePath, 'utf8');
-      const model = JSON.parse(fileContent);
-
-      // Add enabled field if it doesn't exist (defaults to true)
-      if (model.enabled === undefined) {
-        model.enabled = true;
-      }
-
-      validateModelConfig(model, filePath);
-      models.push(model);
-      if (verbose) {
-        console.log(`✅ Loaded ${model.id} (${model.enabled ? 'enabled' : 'disabled'})`);
-      }
-    } catch (error) {
-      console.error(`❌ Error loading model from ${file}:`, error.message);
-    }
-  }
-
-  return models;
-}
-
-/**
- * Load models from legacy models.json file
- * @returns {Array} Array of model objects
- */
-export async function loadModelsFromLegacyFile(verbose = true) {
-  const rootDir = getRootDir();
-  const legacyModelsPath = join(rootDir, 'contents', 'config', 'models.json');
-
-  if (!existsSync(legacyModelsPath)) {
-    if (verbose) {
-      console.log('📄 Legacy models.json not found, skipping');
-    }
-    return [];
-  }
-
-  try {
-    const fileContent = await fs.readFile(legacyModelsPath, 'utf8');
-    const models = JSON.parse(fileContent);
-
-    if (verbose) {
-      console.log(`📄 Loading ${models.length} models from legacy models.json...`);
-    }
-
-    // Add enabled field if it doesn't exist (defaults to true)
-    models.forEach((model, idx) => {
-      if (model.enabled === undefined) {
-        model.enabled = true;
-      }
-      validateModelConfig(model, `${legacyModelsPath}[${idx}]`);
-    });
-
-    return models;
-  } catch (error) {
-    console.error('❌ Error loading legacy models.json:', error.message);
-    return [];
-  }
-}
 
 /**
  * Ensure exactly one default model
@@ -142,41 +36,40 @@ function ensureOneDefaultModel(models) {
   return models;
 }
 
+// Create the models resource loader
+const modelsLoader = createResourceLoader({
+  resourceName: 'Models',
+  legacyPath: 'config/models.json',
+  individualPath: 'models',
+  validateItem: createSchemaValidator(modelConfigSchema, knownModelKeys),
+  postProcess: ensureOneDefaultModel
+});
+
+/**
+ * Load models from individual files in contents/models/
+ * @param {boolean} verbose - Whether to log verbose output
+ * @returns {Array} Array of model objects
+ */
+export async function loadModelsFromFiles(verbose = true) {
+  return await modelsLoader.loadFromFiles(verbose);
+}
+
+/**
+ * Load models from legacy models.json file
+ * @param {boolean} verbose - Whether to log verbose output
+ * @returns {Array} Array of model objects
+ */
+export async function loadModelsFromLegacyFile(verbose = true) {
+  return await modelsLoader.loadFromLegacy(verbose);
+}
+
 /**
  * Load all models from both sources
  * Individual files take precedence over legacy models.json
  * @param {boolean} includeDisabled - Whether to include disabled models
+ * @param {boolean} verbose - Whether to log verbose output
  * @returns {Array} Array of model objects
  */
 export async function loadAllModels(includeDisabled = false, verbose = true) {
-  const individualModels = await loadModelsFromFiles(verbose);
-  const legacyModels = await loadModelsFromLegacyFile(verbose);
-
-  // Create a map to track models by ID
-  const modelsMap = new Map();
-
-  // Add legacy models first
-  legacyModels.forEach(model => {
-    modelsMap.set(model.id, model);
-  });
-
-  // Individual files override legacy models
-  individualModels.forEach(model => {
-    modelsMap.set(model.id, model);
-  });
-
-  // Convert map to array and filter models
-  const allModels = Array.from(modelsMap.values());
-  const filteredModels = allModels.filter(model => model.enabled === true || includeDisabled);
-
-  // Ensure exactly one default model
-  const processedModels = ensureOneDefaultModel(filteredModels);
-
-  if (verbose) {
-    console.log(
-      `🤖 Total models loaded: ${allModels.length}, Enabled: ${processedModels.filter(m => m.enabled).length}, Disabled: ${allModels.length - processedModels.filter(m => m.enabled).length}, Include Disabled: ${includeDisabled}`
-    );
-  }
-
-  return processedModels;
+  return await modelsLoader.loadAll(includeDisabled, verbose);
 }
