@@ -42,7 +42,6 @@ async function verifyJwt(token, provider) {
   }
 }
 
-
 export async function proxyAuth(req, res, next) {
   const platform = configCache.getPlatform() || {};
   const proxyCfg = {

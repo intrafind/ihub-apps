@@ -26,9 +26,9 @@ Generated javascript
 // In middleware/authRequired.js
 
 function resourceAccessRequired(resourceType) {
-  return function(req, res, next) {
-    const resourceId = req.params[`${resourceType}Id`]; // e.g., req.params.appId
-    const permissionsKey = `${resourceType}s`; // e.g., 'apps'
+return function(req, res, next) {
+const resourceId = req.params[`${resourceType}Id`]; // e.g., req.params.appId
+const permissionsKey = `${resourceType}s`; // e.g., 'apps'
 
     if (req.user && req.user.permissions) {
       const allowed = req.user.permissions[permissionsKey] || new Set();
@@ -42,7 +42,8 @@ function resourceAccessRequired(resourceType) {
       }
     }
     next();
-  };
+
+};
 }
 
 // Then you can export them like this:

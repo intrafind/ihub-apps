@@ -335,7 +335,9 @@ const AdminPromptsPage = () => {
                           {t('admin.prompts.table.status', 'Status')}
                         </th>
                         <th scope="col" className="relative px-6 py-3">
-                          <span className="sr-only">{t('admin.prompts.table.actions', 'Actions')}</span>
+                          <span className="sr-only">
+                            {t('admin.prompts.table.actions', 'Actions')}
+                          </span>
                         </th>
                       </tr>
                     </thead>

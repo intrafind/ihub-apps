@@ -47,7 +47,7 @@ export function authOptional(req, res, next) {
  * @returns {Function} Express middleware function
  */
 function resourceAccessRequired(resourceType) {
-  return function(req, res, next) {
+  return function (req, res, next) {
     const resourceId = req.params[`${resourceType}Id`]; // e.g., req.params.appId
     const permissionsKey = `${resourceType}s`; // e.g., 'apps'
 

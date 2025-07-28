@@ -61,48 +61,54 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Upload asset file (logo, icon, favicon, etc.)
    */
-  app.post('/api/admin/ui/upload-asset', authRequired, adminAuth, upload.single('asset'), (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({
+  app.post(
+    '/api/admin/ui/upload-asset',
+    authRequired,
+    adminAuth,
+    upload.single('asset'),
+    (req, res) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({
+            success: false,
+            message: 'No file uploaded'
+          });
+        }
+
+        const { assetType = 'general', description = '' } = req.body;
+
+        // Generate public URL for the uploaded file
+        const publicUrl = `/uploads/assets/${req.file.filename}`;
+
+        const assetInfo = {
+          id: req.file.filename,
+          originalName: req.file.originalname,
+          filename: req.file.filename,
+          path: req.file.path,
+          publicUrl,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+          assetType,
+          description,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: req.user?.username || 'admin'
+        };
+
+        res.json({
+          success: true,
+          message: 'Asset uploaded successfully',
+          asset: assetInfo
+        });
+      } catch (error) {
+        console.error('Error uploading asset:', error);
+        res.status(500).json({
           success: false,
-          message: 'No file uploaded'
+          message: 'Failed to upload asset',
+          error: error.message
         });
       }
-
-      const { assetType = 'general', description = '' } = req.body;
-
-      // Generate public URL for the uploaded file
-      const publicUrl = `/uploads/assets/${req.file.filename}`;
-
-      const assetInfo = {
-        id: req.file.filename,
-        originalName: req.file.originalname,
-        filename: req.file.filename,
-        path: req.file.path,
-        publicUrl,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-        assetType,
-        description,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: req.user?.username || 'admin'
-      };
-
-      res.json({
-        success: true,
-        message: 'Asset uploaded successfully',
-        asset: assetInfo
-      });
-    } catch (error) {
-      console.error('Error uploading asset:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to upload asset',
-        error: error.message
-      });
     }
-  });
+  );
 
   /**
    * List uploaded assets

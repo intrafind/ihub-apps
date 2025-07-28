@@ -159,8 +159,6 @@ function normalizeOidcUser(userInfo, provider) {
   return user;
 }
 
-
-
 /**
  * Initialize Passport for OIDC authentication
  */

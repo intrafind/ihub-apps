@@ -79,7 +79,6 @@ async function verifyPasswordWithUserId(password, userId, hash) {
   return await bcrypt.compare(passwordWithUserId, hash);
 }
 
-
 /**
  * Local authentication middleware
  * @param {Object} req - Express request object

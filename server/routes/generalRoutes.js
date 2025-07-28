@@ -22,56 +22,25 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         });
       }
 
-      // Try to get apps from cache first
-      let { data: apps = [], etag: appsEtag } = configCache.getApps();
-
-      if (!apps) {
-        return res.status(500).json({ error: 'Failed to load apps configuration' });
-      }
-
-      // Generate user-specific ETag to prevent cache poisoning between users with different permissions
-      let userSpecificEtag = appsEtag;
-      let allowedApps = new Set();
-
       // Force permission enhancement if not already done
       if (req.user && !req.user.permissions) {
-        const platformConfig = req.app.get('platform') || {};
-        const authConfig = platformConfig.auth || {};
         req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
       }
 
       // Create anonymous user if none exists and anonymous access is allowed
       if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-        const platformConfig = req.app.get('platform') || {};
-        const authConfig = platformConfig.auth || {};
         req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
       }
 
-      // Apply group-based filtering if user is authenticated
-      if (req.user && req.user.permissions) {
-        allowedApps = req.user.permissions.apps || new Set();
-        apps = filterResourcesByPermissions(apps, allowedApps, 'apps');
-      } else if (isAnonymousAccessAllowed(platformConfig)) {
-        // For anonymous users, filter to only anonymous-allowed apps
-        allowedApps = new Set(['chat']); // Match group permissions for anonymous
-        apps = filterResourcesByPermissions(apps, allowedApps, 'apps');
-      }
+      // Use centralized method to get filtered apps with user-specific ETag
+      const { data: apps, etag: userSpecificEtag } = await configCache.getAppsForUser(
+        req.user,
+        platformConfig
+      );
 
-      // Create ETag based on the actual filtered apps content
-      // This ensures users with the same permissions share cache, but different permissions get different ETags
-      const originalAppsCount = configCache.getApps().data?.length || 0;
-      if (apps.length < originalAppsCount) {
-        // Apps were filtered - create content-based ETag from filtered app IDs
-        const appIds = apps.map(app => app.id).sort();
-        const contentHash = crypto
-          .createHash('md5')
-          .update(JSON.stringify(appIds))
-          .digest('hex')
-          .substring(0, 8);
-
-        userSpecificEtag = `${appsEtag}-${contentHash}`;
+      if (!apps) {
+        return res.status(500).json({ error: 'Failed to load apps configuration' });
       }
-      // If apps.length === originalAppsCount, user sees all apps, use original ETag
 
       res.setHeader('ETag', userSpecificEtag);
       res.json(apps);

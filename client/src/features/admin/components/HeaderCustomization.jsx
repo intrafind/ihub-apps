@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
 const HeaderCustomization = ({ config, onUpdate, t }) => {
-
   // Map config links to component format
   const mappedLinks = (config.links || []).map(link => ({
     text: link.name || link.text || { en: '' },
@@ -80,13 +79,13 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             {t('admin.ui.header.color', 'Header Color')}
           </label>
-          
+
           <div className="flex items-center space-x-3">
             <div
               className="w-10 h-10 rounded-md border-2 border-gray-300 shadow-sm"
               style={{ backgroundColor: config.defaultColor || 'rgb(0, 53, 87)' }}
             />
-            
+
             <input
               type="text"
               value={config.defaultColor || ''}
@@ -95,7 +94,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
               placeholder="rgb(0, 53, 87)"
             />
           </div>
-          
+
           {/* Color Presets */}
           <div className="flex flex-wrap gap-1 mt-2">
             {[
@@ -122,9 +121,12 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
               />
             ))}
           </div>
-          
+
           <p className="mt-1 text-sm text-gray-500">
-            {t('admin.ui.header.colorHint', 'Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229))')}
+            {t(
+              'admin.ui.header.colorHint',
+              'Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229))'
+            )}
           </p>
         </div>
 

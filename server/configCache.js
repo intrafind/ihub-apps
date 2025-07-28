@@ -2,7 +2,12 @@ import { loadJson, loadBuiltinLocaleJson } from './configLoader.js';
 import { loadAllApps } from './appsLoader.js';
 import { loadAllModels } from './modelsLoader.js';
 import { loadAllPrompts } from './promptsLoader.js';
-import { resolveGroupInheritance } from './utils/authorization.js';
+import {
+  resolveGroupInheritance,
+  filterResourcesByPermissions,
+  isAnonymousAccessAllowed
+} from './utils/authorization.js';
+import { loadTools } from './toolLoader.js';
 import { createHash } from 'crypto';
 
 /**
@@ -640,6 +645,126 @@ class ConfigCache {
     this.cache.clear();
     this.isInitialized = false;
     console.log('🧹 Configuration cache cleared');
+  }
+
+  /**
+   * Get apps filtered by user permissions with user-specific ETag
+   * @param {Object} user - User object with permissions
+   * @param {Object} platformConfig - Platform configuration
+   * @returns {Promise<Object>} Filtered apps with user-specific ETag
+   */
+  async getAppsForUser(user, platformConfig) {
+    // Get all apps from cache
+    let { data: apps = [], etag: appsEtag } = this.getApps();
+
+    if (!apps) {
+      return { data: [], etag: null };
+    }
+
+    const originalAppsCount = apps.length;
+    let userSpecificEtag = appsEtag;
+
+    // Apply filtering based on user permissions
+    if (user && user.permissions) {
+      const allowedApps = user.permissions.apps || new Set();
+      apps = filterResourcesByPermissions(apps, allowedApps, 'apps');
+    } else {
+      // For anonymous users, apply anonymous filtering
+      if (isAnonymousAccessAllowed(platformConfig)) {
+        const allowedApps = new Set(['chat']); // Default anonymous apps
+        apps = filterResourcesByPermissions(apps, allowedApps, 'apps');
+      }
+    }
+
+    // Generate user-specific ETag if apps were filtered
+    if (apps.length < originalAppsCount) {
+      const appIds = apps.map(app => app.id).sort();
+      const contentHash = createHash('md5')
+        .update(JSON.stringify(appIds))
+        .digest('hex')
+        .substring(0, 8);
+      userSpecificEtag = `${appsEtag}-${contentHash}`;
+    }
+
+    return { data: apps, etag: userSpecificEtag };
+  }
+
+  /**
+   * Get models filtered by user permissions with user-specific ETag
+   * @param {Object} user - User object with permissions
+   * @param {Object} platformConfig - Platform configuration
+   * @returns {Promise<Object>} Filtered models with user-specific ETag
+   */
+  async getModelsForUser(user, platformConfig) {
+    // Get all models from cache
+    let { data: models = [], etag: modelsEtag } = this.getModels();
+
+    if (!models) {
+      return { data: [], etag: null };
+    }
+
+    const originalModelsCount = models.length;
+    let userSpecificEtag = modelsEtag;
+
+    // Apply filtering based on user permissions
+    if (user && user.permissions) {
+      const allowedModels = user.permissions.models || new Set();
+      models = filterResourcesByPermissions(models, allowedModels, 'models');
+    }
+
+    // Generate user-specific ETag if models were filtered
+    if (models.length < originalModelsCount) {
+      const modelIds = models.map(model => model.id || model.modelId || model.name).sort();
+      const contentHash = createHash('md5')
+        .update(JSON.stringify(modelIds))
+        .digest('hex')
+        .substring(0, 8);
+      userSpecificEtag = `${modelsEtag}-${contentHash}`;
+    }
+
+    return { data: models, etag: userSpecificEtag };
+  }
+
+  /**
+   * Get tools filtered by user permissions with user-specific ETag
+   * @param {Object} user - User object with permissions
+   * @param {Object} platformConfig - Platform configuration
+   * @param {string} language - User language for localization
+   * @returns {Promise<Object>} Filtered tools with user-specific ETag
+   */
+  async getToolsForUser(user, platformConfig, language = 'en') {
+    // Get all tools (including MCP discovered ones) with localization
+    let tools = await loadTools(language);
+    const { data: configuredTools, etag: toolsEtag } = this.getTools();
+
+    if (!tools) {
+      return { data: [], etag: null };
+    }
+
+    const originalToolsCount = tools.length;
+    let userSpecificEtag = toolsEtag || 'no-etag';
+
+    // Apply filtering based on user permissions
+    if (user && user.permissions && user.permissions.tools) {
+      const allowedTools = user.permissions.tools;
+      tools = filterResourcesByPermissions(tools, allowedTools, 'tools');
+    } else if (isAnonymousAccessAllowed(platformConfig)) {
+      // For anonymous users, filter to only anonymous-allowed tools
+      const allowedTools = new Set(); // No default tools for anonymous
+      tools = filterResourcesByPermissions(tools, allowedTools, 'tools');
+    }
+
+    // Generate user-specific ETag if tools were filtered
+    if (tools.length < originalToolsCount) {
+      const toolIds = tools.map(tool => tool.id).sort();
+      const contentHash = createHash('md5')
+        .update(JSON.stringify(toolIds))
+        .digest('hex')
+        .substring(0, 8);
+      userSpecificEtag = `${toolsEtag}-${contentHash}`;
+    }
+
+    return { data: tools, etag: userSpecificEtag };
   }
 
   /**

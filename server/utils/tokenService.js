@@ -26,13 +26,14 @@ export function generateJwt(user, options = {}) {
   const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret;
 
   if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
-    throw new Error(`JWT secret not configured for ${options.authMode || 'unknown'} authentication`);
+    throw new Error(
+      `JWT secret not configured for ${options.authMode || 'unknown'} authentication`
+    );
   }
 
   // Default expiration: 8 hours
-  const expiresInMinutes = options.expiresInMinutes || 
-                          platform.localAuth?.sessionTimeoutMinutes || 
-                          480;
+  const expiresInMinutes =
+    options.expiresInMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
   const expiresIn = expiresInMinutes * 60; // Convert to seconds
 
   // Base token payload

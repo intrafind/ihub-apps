@@ -26,56 +26,26 @@ export default function registerToolRoutes(app) {
         });
       }
 
-      // Get tools with ETag from cache
-      const { data: configuredTools, etag: toolsEtag } = configCache.getTools();
-
-      // Get user language from query parameters or platform default
-      const defaultLang = platformConfig?.defaultLanguage || 'en';
-      const userLanguage = req.query.language || req.query.lang || defaultLang;
-
-      // Load all tools (including MCP discovered ones) with localization
-      let tools = await loadTools(userLanguage);
-
       // Force permission enhancement if not already done
       if (req.user && !req.user.permissions) {
-        const authConfig = platformConfig.auth || {};
         req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
       }
 
       // Create anonymous user if none exists and anonymous access is allowed
       if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-        const authConfig = platformConfig.auth || {};
         req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
       }
 
-      // Apply group-based filtering if user has permissions
-      if (req.user && req.user.permissions && req.user.permissions.tools) {
-        const allowedTools = req.user.permissions.tools;
-        tools = filterResourcesByPermissions(tools, allowedTools, 'tools');
-      } else if (isAnonymousAccessAllowed(platformConfig)) {
-        // For anonymous users, filter to only anonymous-allowed tools
-        const allowedTools = new Set(); // No default tools for anonymous
-        tools = filterResourcesByPermissions(tools, allowedTools, 'tools');
-      }
+      // Get user language from query parameters or platform default
+      const defaultLang = platformConfig?.defaultLanguage || 'en';
+      const userLanguage = req.query.language || req.query.lang || defaultLang;
 
-      // Generate user-specific ETag to prevent cache poisoning between users with different permissions
-      let userSpecificEtag = toolsEtag || 'no-etag';
-
-      // Create ETag based on the actual filtered tools content
-      // This ensures users with the same permissions share cache, but different permissions get different ETags
-      const originalToolsCount = (await loadTools(userLanguage)).length || 0;
-      if (tools.length < originalToolsCount) {
-        // Tools were filtered - create content-based ETag from filtered tool IDs
-        const toolIds = tools.map(tool => tool.id).sort();
-        const contentHash = crypto
-          .createHash('md5')
-          .update(JSON.stringify(toolIds))
-          .digest('hex')
-          .substring(0, 8);
-
-        userSpecificEtag = `${toolsEtag}-${contentHash}`;
-      }
-      // If tools.length === originalToolsCount, user sees all tools, use original ETag
+      // Use centralized method to get filtered tools with user-specific ETag
+      const { data: tools, etag: userSpecificEtag } = await configCache.getToolsForUser(
+        req.user,
+        platformConfig,
+        userLanguage
+      );
 
       res.setHeader('ETag', userSpecificEtag);
       res.json(tools);

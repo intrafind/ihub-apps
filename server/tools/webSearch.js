@@ -16,7 +16,7 @@ export default async function webSearch({ query, q, provider, chatId, ...options
 
   // Determine provider from platform config or use specified provider
   let selectedProvider = provider;
-  
+
   if (!selectedProvider) {
     // Auto-select provider based on available API keys
     if (config.BRAVE_SEARCH_API_KEY) {

@@ -41,8 +41,10 @@ export function loadUsers(usersFilePath) {
     }
 
     // Fallback to file system if cache miss or invalid data
-    console.warn(`[WARN] Users configuration not found in cache for: ${cacheKey}, attempting file system fallback`);
-    
+    console.warn(
+      `[WARN] Users configuration not found in cache for: ${cacheKey}, attempting file system fallback`
+    );
+
     const fullPath = path.isAbsolute(usersFilePath)
       ? usersFilePath
       : path.join(__dirname, '../../', usersFilePath);
@@ -50,11 +52,11 @@ export function loadUsers(usersFilePath) {
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
       console.warn(`[WARN] Users file not found: ${fullPath}, creating empty structure`);
-      const emptyConfig = { 
-        users: {}, 
-        metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() } 
+      const emptyConfig = {
+        users: {},
+        metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() }
       };
-      
+
       // Cache the empty structure to prevent repeated file system access
       configCache.setCacheEntry(cacheKey, emptyConfig);
       return emptyConfig;
@@ -63,17 +65,17 @@ export function loadUsers(usersFilePath) {
     // Read from file system
     const fileData = fs.readFileSync(fullPath, 'utf8');
     const usersConfig = JSON.parse(fileData);
-    
+
     // Validate the loaded data
     if (!usersConfig || typeof usersConfig !== 'object') {
       throw new Error('Invalid users configuration format');
     }
-    
+
     // Ensure users object exists
     if (!usersConfig.users || typeof usersConfig.users !== 'object') {
       usersConfig.users = {};
     }
-    
+
     // Ensure metadata exists
     if (!usersConfig.metadata) {
       usersConfig.metadata = { version: '2.0.0', lastUpdated: new Date().toISOString() };
@@ -81,18 +83,18 @@ export function loadUsers(usersFilePath) {
 
     // Update cache with file data
     configCache.setCacheEntry(cacheKey, usersConfig);
-    
+
     return usersConfig;
   } catch (error) {
     console.error(`[ERROR] Could not load users configuration:`, error.message);
     console.error(`[ERROR] Stack trace:`, error.stack);
-    
+
     // Return safe empty structure as last resort
-    const safeConfig = { 
-      users: {}, 
-      metadata: { version: '2.0.0', lastUpdated: new Date().toISOString(), error: error.message } 
+    const safeConfig = {
+      users: {},
+      metadata: { version: '2.0.0', lastUpdated: new Date().toISOString(), error: error.message }
     };
-    
+
     console.warn(`[WARN] Returning safe empty users structure due to error`);
     return safeConfig;
   }
@@ -104,7 +106,7 @@ export function loadUsers(usersFilePath) {
  * @param {string} usersFilePath - Path to users.json file
  */
 export async function saveUsers(usersConfig, usersFilePath) {
-  try {    
+  try {
     const fullPath = path.isAbsolute(usersFilePath)
       ? usersFilePath
       : path.join(__dirname, '../../', usersFilePath);
@@ -178,11 +180,14 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
  */
 export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
   const usersConfig = loadUsers(usersFilePath);
-  
+
   // Determine auth method based on provider
-  const authMethod = externalUser.provider === 'proxy' ? 'proxy' : 
-                    externalUser.provider === 'teams' ? 'teams' :
-                    'oidc';
+  const authMethod =
+    externalUser.provider === 'proxy'
+      ? 'proxy'
+      : externalUser.provider === 'teams'
+        ? 'teams'
+        : 'oidc';
 
   // Try to find existing user by email or external subject
   let existingUser =
@@ -360,10 +365,13 @@ export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
  * @returns {Object} Validated and persisted user object
  */
 export async function validateAndPersistExternalUser(externalUser, platformConfig) {
-  const authMethod = externalUser.provider === 'proxy' ? 'proxy' : 
-                    externalUser.provider === 'teams' ? 'teams' :
-                    'oidc';
-  
+  const authMethod =
+    externalUser.provider === 'proxy'
+      ? 'proxy'
+      : externalUser.provider === 'teams'
+        ? 'teams'
+        : 'oidc';
+
   // Get the appropriate auth config based on auth method
   let authConfig;
   if (authMethod === 'proxy') {
@@ -373,7 +381,7 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
   } else {
     authConfig = platformConfig.oidcAuth || {};
   }
-  
+
   const usersFilePath = platformConfig.localAuth?.usersFile || 'contents/config/users.json';
 
   // Check if user exists in users.json

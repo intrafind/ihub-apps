@@ -11,7 +11,6 @@ import Unauthorized from './pages/error/Unauthorized';
 import Forbidden from './pages/error/Forbidden';
 import ServerError from './pages/error/ServerError';
 import UnifiedPage from './pages/UnifiedPage';
-import WidgetPage from './pages/WidgetPage';
 import AdminHome from './features/admin/pages/AdminHome';
 import AdminUsageReports from './features/admin/pages/AdminUsageReports';
 import AdminSystemPage from './features/admin/pages/AdminSystemPage';
@@ -48,7 +47,6 @@ const SafeAppsList = withSafeRoute(AppsList);
 const SafeAppChat = withSafeRoute(AppChat);
 const SafeAppCanvas = withSafeRoute(AppCanvas);
 const SafeUnifiedPage = withSafeRoute(UnifiedPage);
-const SafeWidgetPage = withSafeRoute(WidgetPage);
 const SafeAdminHome = withSafeRoute(AdminHome);
 const SafeAdminUsage = withSafeRoute(AdminUsageReports);
 const SafeAdminSystem = withSafeRoute(AdminSystemPage);
@@ -97,9 +95,6 @@ function App() {
                 <Route path="/teams/tab" element={<Layout />}>
                   <Route index element={<SafeAppsList />} />
                 </Route>
-
-                {/* Widget page should be outside of the regular Layout */}
-                <Route path="/widget/chat" element={<SafeWidgetPage />} />
 
                 {/* Regular application routes */}
                 <Route path="/" element={<Layout />}>

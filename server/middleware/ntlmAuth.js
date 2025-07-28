@@ -92,7 +92,6 @@ function processNtlmUser(req, ntlmConfig) {
   return user;
 }
 
-
 /**
  * NTLM authentication middleware
  * @param {Object} req - Express request object
@@ -134,7 +133,8 @@ export function ntlmAuthMiddleware(req, res, next) {
     // Optional: Generate JWT token for stateless operation
     if (ntlmAuth.generateJwtToken) {
       try {
-        const sessionTimeout = ntlmAuth.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
+        const sessionTimeout =
+          ntlmAuth.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
         const { token, expiresIn } = generateJwt(user, {
           authMode: 'ntlm',
           authProvider: user.provider,
@@ -196,7 +196,8 @@ export function processNtlmLogin(req, ntlmConfig) {
   user = enhanceUserGroups(user, authConfig, ntlmConfig);
 
   // Generate JWT token using centralized token service
-  const sessionTimeout = ntlmConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
+  const sessionTimeout =
+    ntlmConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
   const { token, expiresIn } = generateJwt(user, {
     authMode: 'ntlm',
     authProvider: user.provider,

@@ -23,8 +23,8 @@ import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
+import { setupMiddleware } from './middleware/setup.js';
 import {
-  setupMiddleware,
   getLocalizedError,
   validateApiKeys,
   verifyApiKey,

@@ -37,27 +37,24 @@ class BraveSearchProvider extends SearchProvider {
   async search(query, options = {}) {
     const { chatId } = options;
     const apiKey = config.BRAVE_SEARCH_API_KEY;
-    
+
     if (!apiKey) {
       throw new Error('BRAVE_SEARCH_API_KEY is not set');
     }
 
-    const endpoint = config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
-    
+    const endpoint =
+      config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
+
     if (chatId) {
       actionTracker.trackAction(chatId, { action: 'search', query, provider: 'brave' });
     }
 
-    const res = await throttledFetch(
-      'braveSearch',
-      `${endpoint}?q=${encodeURIComponent(query)}`,
-      {
-        headers: {
-          'X-Subscription-Token': apiKey,
-          Accept: 'application/json'
-        }
+    const res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(query)}`, {
+      headers: {
+        'X-Subscription-Token': apiKey,
+        Accept: 'application/json'
       }
-    );
+    });
 
     if (!res.ok) {
       throw new Error(`Brave search failed with status ${res.status}`);
@@ -92,13 +89,13 @@ class TavilySearchProvider extends SearchProvider {
   async search(query, options = {}) {
     const { chatId, search_depth = 'basic', max_results = 5 } = options;
     const apiKey = config.TAVILY_SEARCH_API_KEY;
-    
+
     if (!apiKey) {
       throw new Error('TAVILY_SEARCH_API_KEY is not set');
     }
 
     const endpoint = config.TAVILY_ENDPOINT || 'https://api.tavily.com/search';
-    
+
     if (chatId) {
       actionTracker.trackAction(chatId, { action: 'search', query, provider: 'tavily' });
     }
@@ -146,7 +143,7 @@ class WebSearchService {
   constructor() {
     this.providers = new Map();
     this.defaultProvider = null;
-    
+
     // Register built-in providers
     this.registerProvider(new BraveSearchProvider());
     this.registerProvider(new TavilySearchProvider());
@@ -160,9 +157,9 @@ class WebSearchService {
     if (!(provider instanceof SearchProvider)) {
       throw new Error('Provider must extend SearchProvider class');
     }
-    
+
     this.providers.set(provider.getName(), provider);
-    
+
     // Set first registered provider as default
     if (!this.defaultProvider) {
       this.defaultProvider = provider.getName();

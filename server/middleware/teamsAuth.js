@@ -165,7 +165,6 @@ function normalizeTeamsUser(tokenData, profile, groups, teamsConfig) {
   return user;
 }
 
-
 /**
  * Teams authentication middleware
  */

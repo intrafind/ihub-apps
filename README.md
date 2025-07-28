@@ -679,7 +679,7 @@ Custom pages can be added through the `ui.json` configuration in the `pages` sec
    }
    ```
 
-Custom pages are rendered using the `MarkdownPage` component and are accessible at the path `/page/{id}`.
+Custom pages are rendered using the `UnifiedPage` component and are accessible at the path `/page/{id}`.
 
 ## Development Guidelines
 

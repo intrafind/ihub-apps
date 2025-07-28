@@ -24,55 +24,25 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
         return sendAuthRequired(res);
       }
 
-      // Try to get models from cache first
-      let { data: models = [], etag: modelsEtag } = configCache.getModels();
-
-      if (!models) {
-        return sendFailedOperationError(res, 'load models configuration');
-      }
-
       // Force permission enhancement if not already done
       if (req.user && !req.user.permissions) {
-        const platformConfig = req.app.get('platform') || {};
-        const authConfig = platformConfig.auth || {};
         req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
       }
 
       // Create anonymous user if none exists and anonymous access is allowed
       if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-        const platformConfig = req.app.get('platform') || {};
-        const authConfig = platformConfig.auth || {};
         req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
       }
 
-      // Apply group-based filtering if user is authenticated
-      if (req.user && req.user.permissions) {
-        const allowedModels = req.user.permissions.models || new Set();
-        models = filterResourcesByPermissions(models, allowedModels, 'models');
-      } else if (isAnonymousAccessAllowed(platformConfig)) {
-        // For anonymous users, filter to only anonymous-allowed models
-        const allowedModels = new Set(['gpt-4']); // Default anonymous models
-        models = filterResourcesByPermissions(models, allowedModels, 'models');
+      // Use centralized method to get filtered models with user-specific ETag
+      const { data: models, etag: userSpecificEtag } = await configCache.getModelsForUser(
+        req.user,
+        platformConfig
+      );
+
+      if (!models) {
+        return sendFailedOperationError(res, 'load models configuration');
       }
-
-      // Generate user-specific ETag to prevent cache poisoning between users with different permissions
-      let userSpecificEtag = modelsEtag;
-
-      // Create ETag based on the actual filtered models content
-      // This ensures users with the same permissions share cache, but different permissions get different ETags
-      const originalModelsCount = configCache.getModels().data?.length || 0;
-      if (models.length < originalModelsCount) {
-        // Models were filtered - create content-based ETag from filtered model IDs
-        const modelIds = models.map(model => model.id).sort();
-        const contentHash = crypto
-          .createHash('md5')
-          .update(JSON.stringify(modelIds))
-          .digest('hex')
-          .substring(0, 8);
-
-        userSpecificEtag = `${modelsEtag}-${contentHash}`;
-      }
-      // If models.length === originalModelsCount, user sees all models, use original ETag
 
       res.setHeader('ETag', userSpecificEtag);
       res.json(models);

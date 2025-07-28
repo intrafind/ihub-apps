@@ -5,10 +5,10 @@ import { getRootDir } from '../pathUtils.js';
 
 /**
  * Generic Resource Loader Factory
- * 
+ *
  * Creates a resource loader that can load resources from both individual files
  * and legacy JSON array files for backward compatibility.
- * 
+ *
  * This eliminates the duplication between appsLoader, modelsLoader, and promptsLoader.
  */
 
@@ -50,7 +50,9 @@ export function createResourceLoader({
 
     if (!existsSync(resourceDir)) {
       if (verbose) {
-        console.log(`📁 ${resourceName} directory not found, skipping individual ${resourceName.toLowerCase()} files`);
+        console.log(
+          `📁 ${resourceName} directory not found, skipping individual ${resourceName.toLowerCase()} files`
+        );
       }
       return [];
     }
@@ -90,7 +92,10 @@ export function createResourceLoader({
           console.log(`✅ Loaded ${resource.id} (${status})`);
         }
       } catch (error) {
-        console.error(`❌ Error loading ${resourceName.toLowerCase()} from ${file}:`, error.message);
+        console.error(
+          `❌ Error loading ${resourceName.toLowerCase()} from ${file}:`,
+          error.message
+        );
       }
     }
 
@@ -123,7 +128,9 @@ export function createResourceLoader({
       }
 
       if (verbose) {
-        console.log(`📄 Loading ${resources.length} ${resourceName.toLowerCase()}s from legacy ${legacyPath}...`);
+        console.log(
+          `📄 Loading ${resources.length} ${resourceName.toLowerCase()}s from legacy ${legacyPath}...`
+        );
       }
 
       // Process each resource
@@ -169,7 +176,7 @@ export function createResourceLoader({
     }
 
     // Then by name (handle both string and object names)
-    const getNameString = (item) => {
+    const getNameString = item => {
       if (typeof item.name === 'object' && item.name) {
         return item.name.en || item.name[Object.keys(item.name)[0]] || '';
       }
@@ -207,8 +214,8 @@ export function createResourceLoader({
 
     // Convert map to array and filter resources
     const allResources = Array.from(resourcesMap.values());
-    let filteredResources = allResources.filter(resource => 
-      resource.enabled === true || includeDisabled
+    let filteredResources = allResources.filter(
+      resource => resource.enabled === true || includeDisabled
     );
 
     // Apply post-processing if provided
@@ -225,8 +232,8 @@ export function createResourceLoader({
       const disabledCount = allResources.length - enabledCount;
       console.log(
         `🎯 Total ${resourceName.toLowerCase()}s loaded: ${allResources.length}, ` +
-        `Enabled: ${enabledCount}, Disabled: ${disabledCount}, ` +
-        `Include Disabled: ${includeDisabled}`
+          `Enabled: ${enabledCount}, Disabled: ${disabledCount}, ` +
+          `Include Disabled: ${includeDisabled}`
       );
     }
 
@@ -268,7 +275,7 @@ export function createResourceLoader({
  * @returns {Function} Validation function
  */
 export function createValidator(requiredFields = []) {
-  return function(item, source) {
+  return function (item, source) {
     const missing = requiredFields.filter(field => !(field in item) || item[field] == null);
     if (missing.length > 0) {
       console.warn(`⚠️  Missing required fields in ${source}: ${missing.join(', ')}`);
@@ -283,7 +290,7 @@ export function createValidator(requiredFields = []) {
  * @returns {Function} Schema validation function
  */
 export function createSchemaValidator(schema, knownKeys = []) {
-  return function(item, source) {
+  return function (item, source) {
     // Validate with schema if provided
     if (schema) {
       const { success, error } = schema.safeParse(item);

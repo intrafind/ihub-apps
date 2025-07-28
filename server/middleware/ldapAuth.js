@@ -103,7 +103,6 @@ async function authenticateLdapUser(username, password, ldapConfig) {
   }
 }
 
-
 /**
  * Login function for LDAP authentication
  * @param {string} username - Username
@@ -134,7 +133,8 @@ export async function loginLdapUser(username, password, ldapConfig) {
   user = enhanceUserGroups(user, authConfig, ldapConfig);
 
   // Generate JWT token using centralized token service
-  const sessionTimeout = ldapConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
+  const sessionTimeout =
+    ldapConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
   const { token, expiresIn } = generateJwt(user, {
     authMode: 'ldap',
     authProvider: user.provider,

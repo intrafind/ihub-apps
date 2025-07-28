@@ -14,13 +14,13 @@ Generated javascript
 // The key is to ensure that a file read happens if the cache is empty.
 
 export function loadUsers(usersFilePath) {
-  try {
-    // This function seems to have a bug where it only reads from cache.
-    // A better approach is to let the config loader/cache handle the logic.
-    // For now, let's fix it by reading the file directly if cache fails.
-    const fullPath = path.isAbsolute(usersFilePath)
-      ? usersFilePath
-      : path.join(__dirname, '../../', usersFilePath);
+try {
+// This function seems to have a bug where it only reads from cache.
+// A better approach is to let the config loader/cache handle the logic.
+// For now, let's fix it by reading the file directly if cache fails.
+const fullPath = path.isAbsolute(usersFilePath)
+? usersFilePath
+: path.join(\_\_dirname, '../../', usersFilePath);
 
     if (!fs.existsSync(fullPath)) {
       console.warn(`Users file not found: ${fullPath}`);
@@ -29,11 +29,11 @@ export function loadUsers(usersFilePath) {
 
     const config = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
     return config;
-    
-  } catch (error) {
-    console.warn('Could not load users configuration:', error.message);
-    return { users: {} };
-  }
+
+} catch (error) {
+console.warn('Could not load users configuration:', error.message);
+return { users: {} };
+}
 }
 Use code with caution.
 JavaScript

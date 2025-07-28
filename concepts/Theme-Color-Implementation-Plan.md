@@ -18,23 +18,23 @@ Create a standardized naming convention for CSS custom properties:
   --color-primary: #4f46e5;
   --color-primary-hover: #4338ca;
   --color-primary-focus: #3730a3;
-  
+
   --color-secondary: #6b7280;
   --color-secondary-hover: #4b5563;
   --color-secondary-focus: #374151;
-  
+
   --color-accent: #10b981;
   --color-accent-hover: #059669;
   --color-accent-focus: #047857;
-  
+
   --color-background: #ffffff;
   --color-surface: #f9fafb;
   --color-surface-hover: #f3f4f6;
-  
+
   --color-text: #111827;
   --color-text-muted: #6b7280;
   --color-text-light: #9ca3af;
-  
+
   /* Semantic Colors */
   --color-success: #10b981;
   --color-success-hover: #059669;
@@ -44,7 +44,7 @@ Create a standardized naming convention for CSS custom properties:
   --color-error-hover: #dc2626;
   --color-info: #3b82f6;
   --color-info-hover: #2563eb;
-  
+
   /* Border Colors */
   --color-border: #e5e7eb;
   --color-border-focus: #d1d5db;
@@ -62,23 +62,23 @@ Create a standardized naming convention for CSS custom properties:
  */
 
 // Generate hover and focus variants from base colors
-export const generateColorVariants = (baseColor) => {
+export const generateColorVariants = baseColor => {
   // Implementation to generate lighter/darker variants
   // This could use a color manipulation library like chroma-js
   return {
     base: baseColor,
     hover: adjustColorBrightness(baseColor, -10),
-    focus: adjustColorBrightness(baseColor, -20),
+    focus: adjustColorBrightness(baseColor, -20)
   };
 };
 
 // Apply theme colors to document root
-export const applyThemeColors = (themeColors) => {
+export const applyThemeColors = themeColors => {
   const root = document.documentElement;
-  
+
   Object.entries(themeColors).forEach(([key, value]) => {
     const variants = generateColorVariants(value);
-    
+
     root.style.setProperty(`--color-${key}`, variants.base);
     root.style.setProperty(`--color-${key}-hover`, variants.hover);
     root.style.setProperty(`--color-${key}-focus`, variants.focus);
@@ -88,10 +88,8 @@ export const applyThemeColors = (themeColors) => {
 // Remove theme colors (reset to defaults)
 export const resetThemeColors = () => {
   const root = document.documentElement;
-  const themeProperties = Array.from(root.style).filter(prop => 
-    prop.startsWith('--color-')
-  );
-  
+  const themeProperties = Array.from(root.style).filter(prop => prop.startsWith('--color-'));
+
   themeProperties.forEach(prop => {
     root.style.removeProperty(prop);
   });
@@ -125,23 +123,23 @@ class ThemeService {
   // Generate CSS custom properties from theme config
   generateThemeCSS(themeConfig) {
     const colors = { ...this.defaultTheme, ...themeConfig?.colors };
-    
+
     let css = ':root {\n';
-    
+
     Object.entries(colors).forEach(([key, value]) => {
       const variants = this.generateColorVariants(value);
       css += `  --color-${this.kebabCase(key)}: ${variants.base};\n`;
       css += `  --color-${this.kebabCase(key)}-hover: ${variants.hover};\n`;
       css += `  --color-${this.kebabCase(key)}-focus: ${variants.focus};\n`;
     });
-    
+
     css += '}\n';
-    
+
     // Add custom CSS if provided
     if (themeConfig?.customStyles?.css) {
       css += '\n' + themeConfig.customStyles.css;
     }
-    
+
     return css;
   }
 
@@ -183,7 +181,7 @@ router.get('/theme.css', (req, res) => {
   try {
     const uiConfig = getUIConfig();
     const themeCSS = themeService.generateThemeCSS(uiConfig?.theme);
-    
+
     res.setHeader('Content-Type', 'text/css');
     res.setHeader('Cache-Control', 'public, max-age=300'); // 5 minutes cache
     res.send(themeCSS);
@@ -203,21 +201,21 @@ module.exports = router;
 ```html
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Hub Apps</title>
-  
-  <!-- Dynamic theme CSS - loaded before main CSS -->
-  <link rel="stylesheet" href="/api/theme.css" id="theme-styles">
-  
-  <!-- Main application CSS -->
-  <link rel="stylesheet" href="/src/App.css">
-</head>
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.jsx"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Hub Apps</title>
+
+    <!-- Dynamic theme CSS - loaded before main CSS -->
+    <link rel="stylesheet" href="/api/theme.css" id="theme-styles" />
+
+    <!-- Main application CSS -->
+    <link rel="stylesheet" href="/src/App.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
 ```
 
@@ -238,38 +236,38 @@ export default {
         primary: {
           DEFAULT: 'var(--color-primary, #4f46e5)',
           hover: 'var(--color-primary-hover, #4338ca)',
-          focus: 'var(--color-primary-focus, #3730a3)',
+          focus: 'var(--color-primary-focus, #3730a3)'
         },
         secondary: {
           DEFAULT: 'var(--color-secondary, #6b7280)',
           hover: 'var(--color-secondary-hover, #4b5563)',
-          focus: 'var(--color-secondary-focus, #374151)',
+          focus: 'var(--color-secondary-focus, #374151)'
         },
         accent: {
           DEFAULT: 'var(--color-accent, #10b981)',
           hover: 'var(--color-accent-hover, #059669)',
-          focus: 'var(--color-accent-focus, #047857)',
+          focus: 'var(--color-accent-focus, #047857)'
         },
         surface: {
           DEFAULT: 'var(--color-surface, #f9fafb)',
-          hover: 'var(--color-surface-hover, #f3f4f6)',
+          hover: 'var(--color-surface-hover, #f3f4f6)'
         },
         // Semantic colors
         success: {
           DEFAULT: 'var(--color-success, #10b981)',
-          hover: 'var(--color-success-hover, #059669)',
+          hover: 'var(--color-success-hover, #059669)'
         },
         warning: {
           DEFAULT: 'var(--color-warning, #f59e0b)',
-          hover: 'var(--color-warning-hover, #d97706)',
+          hover: 'var(--color-warning-hover, #d97706)'
         },
         error: {
           DEFAULT: 'var(--color-error, #ef4444)',
-          hover: 'var(--color-error-hover, #dc2626)',
+          hover: 'var(--color-error-hover, #dc2626)'
         },
         info: {
           DEFAULT: 'var(--color-info, #3b82f6)',
-          hover: 'var(--color-info-hover, #2563eb)',
+          hover: 'var(--color-info-hover, #2563eb)'
         },
         // Text colors
         'text-primary': 'var(--color-text, #111827)',
@@ -278,12 +276,12 @@ export default {
         // Border colors
         'border-default': 'var(--color-border, #e5e7eb)',
         'border-focus': 'var(--color-border-focus, #d1d5db)',
-        'border-strong': 'var(--color-border-strong, #9ca3af)',
+        'border-strong': 'var(--color-border-strong, #9ca3af)'
       },
       backgroundColor: {
         'theme-background': 'var(--color-background, #ffffff)',
-        'theme-surface': 'var(--color-surface, #f9fafb)',
-      },
+        'theme-surface': 'var(--color-surface, #f9fafb)'
+      }
     }
   },
   plugins: [require('@tailwindcss/typography')]
@@ -303,43 +301,43 @@ export default {
     @apply transition-colors duration-200 ease-in-out;
     @apply focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2;
   }
-  
+
   .btn-secondary {
     @apply bg-secondary hover:bg-secondary-hover focus:bg-secondary-focus text-white;
     @apply transition-colors duration-200 ease-in-out;
     @apply focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2;
   }
-  
+
   .btn-accent {
     @apply bg-accent hover:bg-accent-hover focus:bg-accent-focus text-white;
     @apply transition-colors duration-200 ease-in-out;
     @apply focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2;
   }
-  
+
   /* Cards */
   .card {
     @apply bg-theme-surface border border-border-default rounded-lg shadow-sm;
   }
-  
+
   .card-hover {
     @apply card hover:shadow-md hover:border-border-focus;
     @apply transition-all duration-200 ease-in-out;
   }
-  
+
   /* Headers */
   .header-primary {
     @apply bg-primary text-white;
   }
-  
+
   /* Text utilities */
   .text-theme-primary {
     @apply text-text-primary;
   }
-  
+
   .text-theme-muted {
     @apply text-text-muted;
   }
-  
+
   .text-theme-light {
     @apply text-text-light;
   }
@@ -367,7 +365,7 @@ export const ThemeProvider = ({ children }) => {
     if (!isLoading && uiConfig?.theme?.colors) {
       applyThemeColors(uiConfig.theme.colors);
     }
-    
+
     return () => {
       resetThemeColors();
     };
@@ -388,11 +386,7 @@ export const ThemeProvider = ({ children }) => {
     isLoading
   };
 
-  return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };
 
 export const useTheme = () => useContext(ThemeContext);
@@ -415,9 +409,7 @@ function App() {
           <PlatformConfigProvider>
             <AuthProvider>
               <div className="App bg-theme-background min-h-screen">
-                <Routes>
-                  {/* ... existing routes */}
-                </Routes>
+                <Routes>{/* ... existing routes */}</Routes>
               </div>
             </AuthProvider>
           </PlatformConfigProvider>
@@ -433,6 +425,7 @@ function App() {
 ### Step 5.1: Create Migration Priority Matrix
 
 **High Priority Components** (Most visible/used):
+
 1. Layout.jsx - Header and navigation
 2. AppsList.jsx - Main app grid
 3. AppChat.jsx - Chat interface
@@ -440,12 +433,14 @@ function App() {
 5. Form components
 
 **Medium Priority Components**:
+
 1. Admin interface components
 2. Modal dialogs
 3. Popup menus
 4. Status indicators
 
 **Low Priority Components**:
+
 1. Footer components
 2. Error pages
 3. Loading states
@@ -456,22 +451,21 @@ function App() {
 For each component, follow this pattern:
 
 **Before**:
+
 ```javascript
-<button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">
-  Save
-</button>
+<button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">Save</button>
 ```
 
 **After**:
+
 ```javascript
-<button className="btn-primary px-4 py-2 rounded">
-  Save
-</button>
+<button className="btn-primary px-4 py-2 rounded">Save</button>
 ```
 
 Or with direct CSS variables:
+
 ```javascript
-<button 
+<button
   className="text-white px-4 py-2 rounded hover:opacity-90 transition-opacity"
   style={{ backgroundColor: 'var(--color-primary)' }}
 >
@@ -498,19 +492,19 @@ const colorMappings = {
   'bg-gray-50': 'bg-theme-surface',
   'text-gray-600': 'text-theme-muted',
   'text-gray-900': 'text-theme-primary',
-  'border-gray-300': 'border-border-default',
+  'border-gray-300': 'border-border-default'
   // ... more mappings
 };
 
 // Scan files for hardcoded colors
 function scanForHardcodedColors() {
   const files = glob.sync('client/src/**/*.{js,jsx}');
-  
+
   const results = [];
-  
+
   files.forEach(file => {
     const content = fs.readFileSync(file, 'utf8');
-    
+
     Object.keys(colorMappings).forEach(oldClass => {
       if (content.includes(oldClass)) {
         results.push({
@@ -522,18 +516,18 @@ function scanForHardcodedColors() {
       }
     });
   });
-  
+
   return results;
 }
 
 // Generate migration report
 function generateMigrationReport() {
   const hardcodedColors = scanForHardcodedColors();
-  
+
   console.log('Theme Color Migration Report');
   console.log('==============================');
   console.log(`Found ${hardcodedColors.length} instances to migrate\n`);
-  
+
   hardcodedColors.forEach(item => {
     console.log(`${item.file}:${item.lines.join(',')}`);
     console.log(`  Replace: ${item.oldClass}`);
@@ -559,24 +553,24 @@ if (require.main === module) {
  */
 
 // Test theme color application
-export const testThemeColors = (themeColors) => {
+export const testThemeColors = themeColors => {
   const root = document.documentElement;
   const computedStyle = getComputedStyle(root);
-  
+
   const results = {};
-  
+
   Object.keys(themeColors).forEach(colorKey => {
     const cssVar = `--color-${colorKey}`;
     const computedValue = computedStyle.getPropertyValue(cssVar).trim();
     const expectedValue = themeColors[colorKey];
-    
+
     results[colorKey] = {
       expected: expectedValue,
       actual: computedValue,
       matches: computedValue === expectedValue
     };
   });
-  
+
   return results;
 };
 
@@ -584,7 +578,7 @@ export const testThemeColors = (themeColors) => {
 export const validateCSSVariables = () => {
   const root = document.documentElement;
   const computedStyle = getComputedStyle(root);
-  
+
   const requiredVariables = [
     '--color-primary',
     '--color-secondary',
@@ -594,12 +588,12 @@ export const validateCSSVariables = () => {
     '--color-text',
     '--color-text-muted'
   ];
-  
+
   const missing = requiredVariables.filter(varName => {
     const value = computedStyle.getPropertyValue(varName);
     return !value || value.trim() === '';
   });
-  
+
   return {
     allPresent: missing.length === 0,
     missing
@@ -622,21 +616,21 @@ describe('Theme System', () => {
       secondary: '#6b7280',
       accent: '#10b981'
     };
-    
+
     const results = testThemeColors(testColors);
-    
+
     Object.values(results).forEach(result => {
       expect(result.matches).toBe(true);
     });
   });
-  
+
   test('has all required CSS variables', () => {
     const validation = validateCSSVariables();
-    
+
     expect(validation.allPresent).toBe(true);
     expect(validation.missing).toHaveLength(0);
   });
-  
+
   test('theme changes reflect in UI components', () => {
     // Test that changing theme colors updates component appearance
     // This would involve rendering components and checking computed styles
@@ -647,30 +641,35 @@ describe('Theme System', () => {
 ## Phase 7: Implementation Timeline
 
 ### Week 1-2: Foundation
+
 - [ ] Implement CSS variable architecture
 - [ ] Create theme utilities and services
 - [ ] Set up server-side theme CSS generation
 - [ ] Update Tailwind configuration
 
 ### Week 3-4: Integration
+
 - [ ] Create ThemeContext and provider
 - [ ] Update App.jsx and main layout
 - [ ] Implement theme CSS endpoint
 - [ ] Test basic theme switching
 
 ### Week 5-8: Component Migration
+
 - [ ] Migrate high-priority components (Layout, AppsList, etc.)
 - [ ] Create theme-aware CSS classes
 - [ ] Update button and form components
 - [ ] Migrate admin interface components
 
 ### Week 9-10: Testing and Polish
+
 - [ ] Implement comprehensive testing
 - [ ] Create migration helper scripts
 - [ ] Performance optimization
 - [ ] Documentation and training
 
 ### Week 11-12: Validation and Deployment
+
 - [ ] Visual regression testing
 - [ ] User acceptance testing
 - [ ] Performance testing
