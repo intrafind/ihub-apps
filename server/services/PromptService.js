@@ -57,11 +57,26 @@ class PromptService {
       tone: style || '',
 
       // Location (from user profile if available)
-      location: user?.location || user?.settings?.location || '',
-
-      // Platform context (configurable in platform.json)
-      platform_context: platformConfig.globalPromptVariables?.context || ''
+      location: user?.location || user?.settings?.location || ''
     };
+
+    // Process platform context to resolve nested variables
+    let platformContext = platformConfig.globalPromptVariables?.context || '';
+    if (platformContext) {
+      // Replace variables in platform_context with their resolved values
+      for (const [key, value] of Object.entries(globalPromptVars)) {
+        if (value !== null && value !== undefined && value !== '') {
+          const strValue = String(value);
+          platformContext = platformContext.replace(
+            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
+            strValue
+          );
+        }
+      }
+    }
+
+    // Add processed platform_context to global vars
+    globalPromptVars.platform_context = platformContext;
 
     // Filter out empty values to avoid replacing with empty strings unintentionally
     const filteredVars = {};

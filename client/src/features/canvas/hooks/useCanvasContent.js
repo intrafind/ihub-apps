@@ -30,7 +30,7 @@ function useCanvasContent(appId, onContentChange) {
     try {
       const saved = sessionStorage.getItem(lastSavedKey);
       return saved ? new Date(saved) : null;
-    } catch (error) {
+    } catch {
       return null;
     }
   });

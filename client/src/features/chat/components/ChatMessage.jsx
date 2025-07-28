@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import MarkdownRenderer, { configureMarked } from '../../../shared/components/MarkdownRenderer';
 import { sendMessageFeedback } from '../../../api/api';

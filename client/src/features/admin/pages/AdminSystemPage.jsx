@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
@@ -92,8 +92,6 @@ const AdminSystemPage = () => {
           'Content-Type': 'application/json'
         }
       });
-
-      const data = response.data;
 
       setPasswordChangeMessage({
         type: 'success',

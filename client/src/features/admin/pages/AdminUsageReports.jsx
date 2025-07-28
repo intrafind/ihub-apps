@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchAdminUsageData } from '../../../api/adminApi';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -81,7 +81,7 @@ const TopUsersCard = ({ title, data, color }) => {
 };
 
 const AppUsageCard = ({ data }) => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const apps = Object.entries(data || {});
   const total = apps.reduce(
     (sum, [, value]) =>
@@ -238,7 +238,7 @@ const FeedbackCard = ({ data }) => {
 };
 
 const AdminUsageReports = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');

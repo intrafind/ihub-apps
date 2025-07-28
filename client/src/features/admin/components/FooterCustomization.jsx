@@ -1,5 +1,3 @@
-import React from 'react';
-import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
 const FooterCustomization = ({ config, onUpdate, t }) => {
   // Map config links to component format

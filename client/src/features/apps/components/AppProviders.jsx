@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { UIConfigProvider } from '../../../shared/contexts/UIConfigContext';
 import { PlatformConfigProvider } from '../../../shared/contexts/PlatformConfigContext';
 import ErrorBoundaryFallback from '../../../shared/components/ErrorBoundary';

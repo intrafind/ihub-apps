@@ -18,7 +18,7 @@ export default function jwtAuthMiddleware(req, res, next) {
     return next(); // No token, continue as anonymous
   }
 
-  console.debug('🔐 JWT Auth: Processing Bearer token for', req.url);
+  // console.debug('🔐 JWT Auth: Processing Bearer token for', req.url);
 
   const token = authHeader.substring(7);
 
@@ -81,7 +81,7 @@ export default function jwtAuthMiddleware(req, res, next) {
     }
 
     req.user = user;
-    console.debug('🔐 JWT Auth: Successfully authenticated user:', user.id, 'for', req.url);
+    // console.debug('🔐 JWT Auth: Successfully authenticated user:', user.id, 'for', req.url);
     return next();
   } catch (error) {
     // Invalid token, continue as anonymous

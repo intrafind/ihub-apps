@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 const StyleEditor = ({ config, onUpdate, t }) => {
   const [activeSection, setActiveSection] = useState('css');

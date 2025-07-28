@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ExportMenu from './ExportMenu';
 import Icon from '../../../shared/components/Icon';

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VoiceFeedback } from '../../voice/components';
 import useVoiceRecognition from '../../voice/hooks/useVoiceRecognition';

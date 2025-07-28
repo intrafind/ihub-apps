@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchApps } from '../../../api/api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';

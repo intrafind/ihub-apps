@@ -34,7 +34,7 @@ function useCanvas(appId, onContentChange, refs = {}, handlePromptSubmit) {
     try {
       const saved = sessionStorage.getItem(lastSavedKey);
       return saved ? new Date(saved) : null;
-    } catch (error) {
+    } catch {
       return null;
     }
   });

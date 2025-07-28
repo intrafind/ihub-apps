@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VoiceInputComponent } from '../../voice/components';
 import Icon from '../../../shared/components/Icon';

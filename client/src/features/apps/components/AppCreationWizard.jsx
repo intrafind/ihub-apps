@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
@@ -795,7 +795,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
           const errorMessage =
             errorData.error || errorData.message || 'Failed to generate app configuration';
           setError(errorMessage);
-        } catch (parseError) {
+        } catch {
           setError(
             t('admin.apps.wizard.ai.error.generate', 'Failed to generate app configuration')
           );

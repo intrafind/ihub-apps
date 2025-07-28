@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useState, useRef } from 'react';
+import { useLayoutEffect, useState, useRef } from 'react';
 import { marked } from 'marked';
 import MarkdownRenderer, { configureMarked } from '../../../shared/components/MarkdownRenderer';
 import './StreamingMarkdown.css';

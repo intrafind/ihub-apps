@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import AdminNavigation from '../components/AdminNavigation';
@@ -57,7 +57,7 @@ const AdminShortLinkEditPage = () => {
     if (paramsText.trim()) {
       try {
         parsedParams = JSON.parse(paramsText);
-      } catch (err) {
+      } catch {
         setError(t('admin.shortlinks.invalidParams', 'Invalid params JSON'));
         return;
       }

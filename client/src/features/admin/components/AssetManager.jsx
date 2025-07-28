@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
 const AssetManager = ({ t }) => {
@@ -444,8 +444,6 @@ const AssetManager = ({ t }) => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {assets.map(asset => {
-                      const isImage = asset.mimetype?.startsWith('image/');
-
                       return (
                         <tr key={asset.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4">

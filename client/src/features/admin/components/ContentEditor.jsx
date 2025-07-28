@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import { useState } from 'react';
 
 const ContentEditor = ({ config, onUpdate, t }) => {
   const [activeSection, setActiveSection] = useState('title');

@@ -64,8 +64,7 @@ export const exportChatToPDF = async (
   template = 'default',
   watermark = {},
   appName = 'AI Hub Apps',
-  appId = null,
-  chatId = null
+  appId = null
 ) => {
   if (!messages) {
     throw new Error('Missing required parameters');
@@ -514,7 +513,7 @@ const generateHTML = messages => {
 };
 
 // Client-side export functions
-export const exportChatToJSON = async (messages, settings, appId = null, chatId = null) => {
+export const exportChatToJSON = async (messages, settings, appId = null) => {
   const content = generateJSON(
     messages.filter(m => !m.isGreeting),
     settings
@@ -526,7 +525,7 @@ export const exportChatToJSON = async (messages, settings, appId = null, chatId 
   return { success: true, filename };
 };
 
-export const exportChatToJSONL = async (messages, settings, appId = null, chatId = null) => {
+export const exportChatToJSONL = async (messages, settings, appId = null) => {
   const content = generateJSONL(
     messages.filter(m => !m.isGreeting),
     settings
@@ -541,8 +540,7 @@ export const exportChatToJSONL = async (messages, settings, appId = null, chatId
 export const exportChatToMarkdown = async (
   messages,
   settings = null,
-  appId = null,
-  chatId = null
+  appId = null
 ) => {
   const content = generateMarkdown(messages);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
@@ -552,7 +550,7 @@ export const exportChatToMarkdown = async (
   return { success: true, filename };
 };
 
-export const exportChatToHTML = async (messages, settings = null, appId = null, chatId = null) => {
+export const exportChatToHTML = async (messages, settings = null, appId = null) => {
   const content = generateHTML(messages);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.html`;

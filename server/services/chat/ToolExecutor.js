@@ -214,7 +214,7 @@ class ToolExecutor {
             });
           }
 
-          console.log(`Result for chat ID ${chatId}:`, result);
+          // console.log(`Result for chat ID ${chatId}:`, result);
           if (result.content?.length > 0) {
             for (const text of result.content) {
               assistantContent += text;
@@ -222,7 +222,7 @@ class ToolExecutor {
             }
           }
 
-          console.log(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
+          // console.log(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
           if (result.tool_calls?.length > 0) {
             result.tool_calls.forEach(call => {
               let existingCall = collectedToolCalls.find(c => c.index === call.index);
@@ -251,15 +251,15 @@ class ToolExecutor {
             });
           }
 
-          console.log(`Finish Reason for chat ID ${chatId}:`, finishReason);
+          // console.log(`Finish Reason for chat ID ${chatId}:`, finishReason);
           if (result.finishReason) {
             finishReason = result.finishReason;
           }
 
-          console.log(
-            `Completed processing for chat ID ${chatId} - done? ${done}:`,
-            JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
-          );
+          // console.log(
+          //   `Completed processing for chat ID ${chatId} - done? ${done}:`,
+          //   JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
+          // );
           if (result.complete) {
             done = true;
             break;
@@ -268,9 +268,9 @@ class ToolExecutor {
       }
 
       // --- DEBUG LOGGING START ---
-      console.log('--- Collected Tool Calls from Stream ---');
-      console.log(JSON.stringify(collectedToolCalls, null, 2));
-      console.log('------------------------------------');
+      // console.log('--- Collected Tool Calls from Stream ---');
+      // console.log(JSON.stringify(collectedToolCalls, null, 2));
+      // console.log('------------------------------------');
       // --- DEBUG LOGGING END ---
 
       if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
@@ -309,9 +309,9 @@ class ToolExecutor {
       }
 
       // --- DEBUG LOGGING START ---
-      console.log('--- Messages for Follow-up LLM Call ---');
-      console.log(JSON.stringify(llmMessages, null, 2));
-      console.log('---------------------------------------');
+      // console.log('--- Messages for Follow-up LLM Call ---');
+      // console.log(JSON.stringify(llmMessages, null, 2));
+      // console.log('---------------------------------------');
       // --- DEBUG LOGGING END ---
 
       // Recursively continue with tool execution until we get a final response

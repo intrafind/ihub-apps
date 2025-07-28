@@ -4,7 +4,6 @@ import { useCallback } from 'react';
  * Custom hook for managing canvas text editing actions
  */
 const useCanvasEditing = ({
-  quillRef,
   selection,
   setSelection,
   setSelectedText,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../../../shared/contexts/AuthContext.jsx';
 import LoginForm from './LoginForm.jsx';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner.jsx';
