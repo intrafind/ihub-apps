@@ -25,11 +25,11 @@ const AdminSystemPage = () => {
     setForceRefreshMessage('');
 
     try {
-      const response = await makeAdminApiCall('/api/admin/client/_refresh', {
+      const response = await makeAdminApiCall('/admin/client/_refresh', {
         method: 'POST'
       });
 
-      const data = await response.json();
+      const data = response.data;
 
       setForceRefreshMessage({
         type: 'success',
@@ -83,7 +83,7 @@ const AdminSystemPage = () => {
     setPasswordChangeMessage('');
 
     try {
-      const response = await makeAdminApiCall('/api/admin/auth/change-password', {
+      const response = await makeAdminApiCall('/admin/auth/change-password', {
         method: 'POST',
         body: JSON.stringify({
           newPassword: passwordForm.newPassword
@@ -93,7 +93,7 @@ const AdminSystemPage = () => {
         }
       });
 
-      const data = await response.json();
+      const data = response.data;
 
       setPasswordChangeMessage({
         type: 'success',
@@ -121,7 +121,7 @@ const AdminSystemPage = () => {
     setExportLoading(true);
 
     try {
-      const response = await makeAdminApiCall('/api/admin/backup/export', {
+      const response = await makeAdminApiCall('/admin/backup/export', {
         method: 'GET'
       });
 
@@ -190,12 +190,12 @@ const AdminSystemPage = () => {
       const formData = new FormData();
       formData.append('backup', file);
 
-      const response = await makeAdminApiCall('/api/admin/backup/import', {
+      const response = await makeAdminApiCall('/admin/backup/import', {
         method: 'POST',
         body: formData
       });
 
-      const data = await response.json();
+      const data = response.data;
 
       if (!response.ok) {
         throw new Error(data.message || 'Failed to import configuration');

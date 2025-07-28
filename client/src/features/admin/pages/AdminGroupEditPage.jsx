@@ -42,8 +42,8 @@ const AdminGroupEditPage = () => {
 
   const loadResources = async () => {
     try {
-      const response = await makeAdminApiCall('/api/admin/groups/resources');
-      const data = await response.json();
+      const response = await makeAdminApiCall('/admin/groups/resources');
+      const data = response.data;
       setResources(data);
     } catch (error) {
       console.error('Failed to load resources:', error);
@@ -53,8 +53,8 @@ const AdminGroupEditPage = () => {
   const loadGroup = async () => {
     try {
       setLoading(true);
-      const response = await makeAdminApiCall('/api/admin/groups');
-      const data = await response.json();
+      const response = await makeAdminApiCall('/admin/groups');
+      const data = response.data;
 
       const groupData = data.groups[groupId];
       if (!groupData) {
@@ -80,7 +80,7 @@ const AdminGroupEditPage = () => {
     try {
       setSaving(true);
       const method = groupId === 'new' ? 'POST' : 'PUT';
-      const url = groupId === 'new' ? '/api/admin/groups' : `/api/admin/groups/${groupId}`;
+      const url = groupId === 'new' ? '/admin/groups' : `/admin/groups/${groupId}`;
 
       const response = await makeAdminApiCall(url, {
         method,
@@ -93,7 +93,7 @@ const AdminGroupEditPage = () => {
       if (response.ok) {
         navigate('/admin/groups');
       } else {
-        const errorData = await response.json();
+        const errorData = response.data;
         throw new Error(errorData.error || 'Failed to save group');
       }
     } catch (err) {

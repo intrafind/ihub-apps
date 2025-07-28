@@ -9,6 +9,7 @@ import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import { fetchAdminApps, makeAdminApiCall, toggleApps } from '../../../api/adminApi';
+import { fetchUIConfig } from '../../../api';
 
 const AdminAppsPage = () => {
   const { t, i18n } = useTranslation();
@@ -34,11 +35,8 @@ const AdminAppsPage = () => {
 
   const loadUIConfig = async () => {
     try {
-      const response = await fetch('/api/configs/ui');
-      if (response.ok) {
-        const config = await response.json();
-        setUiConfig(config);
-      }
+      const config = await fetchUIConfig();
+      setUiConfig(config);
     } catch (err) {
       console.error('Failed to load UI config:', err);
     }
@@ -58,11 +56,11 @@ const AdminAppsPage = () => {
 
   const toggleApp = async appId => {
     try {
-      const response = await makeAdminApiCall(`/api/admin/apps/${appId}/toggle`, {
+      const response = await makeAdminApiCall(`/admin/apps/${appId}/toggle`, {
         method: 'POST'
       });
 
-      const result = await response.json();
+      const result = response.data;
 
       // Update the app in the local state
       setApps(prevApps =>
@@ -99,7 +97,7 @@ const AdminAppsPage = () => {
     }
 
     try {
-      await makeAdminApiCall(`/api/admin/apps/${appId}`, {
+      await makeAdminApiCall(`/admin/apps/${appId}`, {
         method: 'DELETE'
       });
 

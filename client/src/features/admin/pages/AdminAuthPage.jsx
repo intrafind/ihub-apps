@@ -49,8 +49,8 @@ const AdminAuthPage = () => {
 
   const loadConfiguration = async () => {
     try {
-      const response = await makeAdminApiCall('/api/admin/configs/platform');
-      const data = await response.json();
+      const response = await makeAdminApiCall('/admin/configs/platform');
+      const data = response.data;
 
       setConfig(prevConfig => ({
         ...prevConfig,
@@ -71,7 +71,7 @@ const AdminAuthPage = () => {
     setMessage('');
 
     try {
-      const response = await makeAdminApiCall('/api/admin/configs/platform', {
+      const response = await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

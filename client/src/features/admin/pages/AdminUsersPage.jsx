@@ -30,8 +30,8 @@ const AdminUsersPage = () => {
 
   const loadUsers = async () => {
     try {
-      const response = await makeAdminApiCall('/api/admin/auth/users');
-      const data = await response.json();
+      const response = await makeAdminApiCall('/admin/auth/users');
+      const data = response.data;
 
       // Convert users object to array
       const usersArray = Object.values(data.users || {});
@@ -72,7 +72,7 @@ const AdminUsersPage = () => {
       .filter(g => g.length > 0);
 
     try {
-      const response = await makeAdminApiCall('/api/admin/auth/users', {
+      const response = await makeAdminApiCall('/admin/auth/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -96,7 +96,7 @@ const AdminUsersPage = () => {
         resetForm();
         loadUsers();
       } else {
-        const error = await response.json();
+        const error = response.data;
         throw new Error(error.error || 'Failed to create user');
       }
     } catch (error) {
@@ -143,7 +143,7 @@ const AdminUsersPage = () => {
         updateData.password = formData.password;
       }
 
-      const response = await makeAdminApiCall(`/api/admin/auth/users/${editingUser.id}`, {
+      const response = await makeAdminApiCall(`/admin/auth/users/${editingUser.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -160,7 +160,7 @@ const AdminUsersPage = () => {
         resetForm();
         loadUsers();
       } else {
-        const error = await response.json();
+        const error = response.data;
         throw new Error(error.error || 'Failed to update user');
       }
     } catch (error) {
@@ -177,7 +177,7 @@ const AdminUsersPage = () => {
     }
 
     try {
-      const response = await makeAdminApiCall(`/api/admin/auth/users/${userId}`, {
+      const response = await makeAdminApiCall(`/admin/auth/users/${userId}`, {
         method: 'DELETE'
       });
 
@@ -188,7 +188,7 @@ const AdminUsersPage = () => {
         });
         loadUsers();
       } else {
-        const error = await response.json();
+        const error = response.data;
         throw new Error(error.error || 'Failed to delete user');
       }
     } catch (error) {
@@ -203,7 +203,7 @@ const AdminUsersPage = () => {
     const newStatus = !user.active;
 
     try {
-      const response = await makeAdminApiCall(`/api/admin/auth/users/${user.id}`, {
+      const response = await makeAdminApiCall(`/admin/auth/users/${user.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -223,7 +223,7 @@ const AdminUsersPage = () => {
         });
         loadUsers();
       } else {
-        const error = await response.json();
+        const error = response.data;
         throw new Error(error.error || 'Failed to update user status');
       }
     } catch (error) {

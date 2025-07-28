@@ -7,6 +7,7 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import PromptDetailsPopup from '../../prompts/components/PromptDetailsPopup';
 import { fetchAdminPrompts, makeAdminApiCall, togglePrompts } from '../../../api/adminApi';
+import { fetchUIConfig } from '../../../api';
 
 const AdminPromptsPage = () => {
   const { t, i18n } = useTranslation();
@@ -29,11 +30,8 @@ const AdminPromptsPage = () => {
 
   const loadUIConfig = async () => {
     try {
-      const response = await fetch('/api/configs/ui');
-      if (response.ok) {
-        const config = await response.json();
-        setUiConfig(config);
-      }
+      const config = await fetchUIConfig();
+      setUiConfig(config);
     } catch (err) {
       console.error('Failed to load UI config:', err);
     }
@@ -66,7 +64,7 @@ const AdminPromptsPage = () => {
 
   const handleTogglePrompt = async promptId => {
     try {
-      await makeAdminApiCall(`/api/admin/prompts/${promptId}/toggle`, {
+      await makeAdminApiCall(`/admin/prompts/${promptId}/toggle`, {
         method: 'POST'
       });
 
@@ -102,7 +100,7 @@ const AdminPromptsPage = () => {
     }
 
     try {
-      await makeAdminApiCall(`/api/admin/prompts/${promptId}`, {
+      await makeAdminApiCall(`/admin/prompts/${promptId}`, {
         method: 'DELETE'
       });
 

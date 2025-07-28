@@ -16,8 +16,8 @@ const AssetManager = ({ t }) => {
       setLoading(true);
       setError(null);
 
-      const response = await makeAdminApiCall('/api/admin/ui/assets');
-      const data = await response.json();
+      const response = await makeAdminApiCall('/admin/ui/assets');
+      const data = response.data;
       if (data.success) {
         setAssets(data.assets || []);
       } else {
@@ -70,12 +70,12 @@ const AssetManager = ({ t }) => {
       formData.append('assetType', getAssetType(file.type));
       formData.append('description', `Uploaded ${file.name}`);
 
-      const response = await makeAdminApiCall('/api/admin/ui/upload-asset', {
+      const response = await makeAdminApiCall('/admin/ui/upload-asset', {
         method: 'POST',
         body: formData
         // Don't set Content-Type header, let the browser set it for multipart/form-data
       });
-      const data = await response.json();
+      const data = response.data;
 
       if (data.success) {
         setSuccessMessage(`Successfully uploaded ${file.name}`);
@@ -108,10 +108,10 @@ const AssetManager = ({ t }) => {
     }
 
     try {
-      const response = await makeAdminApiCall(`/api/admin/ui/assets/${assetId}`, {
+      const response = await makeAdminApiCall(`/admin/ui/assets/${assetId}`, {
         method: 'DELETE'
       });
-      const data = await response.json();
+      const data = response.data;
 
       if (data.success) {
         setSuccessMessage('Asset deleted successfully');

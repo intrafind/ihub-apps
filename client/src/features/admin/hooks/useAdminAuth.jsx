@@ -1,5 +1,6 @@
 import { useState, useEffect, useContext, createContext } from 'react';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import { apiClient } from '../../../api/client';
 
 const AdminAuthContext = createContext();
 
@@ -17,8 +18,8 @@ export function AdminAuthProvider({ children }) {
       const authToken = localStorage.getItem('authToken');
       const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
 
-      const response = await fetch('/api/admin/auth/status', { headers });
-      const data = await response.json();
+      const response = await apiClient.get('/admin/auth/status', { headers });
+      const data = response.data;
 
       setAuthRequired(data.authRequired);
 
@@ -30,13 +31,13 @@ export function AdminAuthProvider({ children }) {
 
       // If auth is required, test the current token
       if (token) {
-        const testResponse = await fetch('/api/admin/auth/test', {
+        const testResponse = await apiClient.get('/admin/auth/test', {
           headers: {
             Authorization: `Bearer ${token}`
           }
         });
 
-        if (testResponse.ok) {
+        if (testResponse.status >= 200 && testResponse.status < 300) {
           setIsAuthenticated(true);
         } else {
           setIsAuthenticated(false);
@@ -90,19 +91,19 @@ export function AdminAuthProvider({ children }) {
 
   const login = async adminSecret => {
     try {
-      const response = await fetch('/api/admin/auth/test', {
+      const response = await apiClient.get('/admin/auth/test', {
         headers: {
           Authorization: `Bearer ${adminSecret}`
         }
       });
 
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         setToken(adminSecret);
         setIsAuthenticated(true);
         localStorage.setItem('adminToken', adminSecret);
         return { success: true };
       } else {
-        const data = await response.json();
+        const data = response.data;
         return { success: false, error: data.message || 'Authentication failed' };
       }
     } catch {

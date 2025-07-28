@@ -65,7 +65,7 @@ const AdminNavigation = () => {
       key: 'auth',
       name: t('admin.nav.auth', 'Authentication'),
       href: '/admin/auth',
-      icon: 'shield-check',
+      // icon: 'shield-check',
       current: location.pathname.startsWith('/admin/auth')
     },
     // Only show Users navigation if local auth is enabled (since users are only managed locally)
@@ -77,7 +77,7 @@ const AdminNavigation = () => {
             key: 'users',
             name: t('admin.nav.users', 'Users'),
             href: '/admin/users',
-            icon: 'user',
+            // icon: 'user',
             current: location.pathname.startsWith('/admin/users')
           }
         ]
@@ -91,7 +91,7 @@ const AdminNavigation = () => {
             key: 'groups',
             name: t('admin.nav.groups', 'Groups'),
             href: '/admin/groups',
-            icon: 'users',
+            // icon: 'users',
             current: location.pathname.startsWith('/admin/groups')
           }
         ]

@@ -26,8 +26,8 @@ const AdminShortLinks = () => {
       const params = new URLSearchParams();
       if (appIdFilter) params.set('appId', appIdFilter);
       if (userFilter) params.set('userId', userFilter);
-      const response = await makeAdminApiCall(`/api/shortlinks?${params.toString()}`);
-      const data = await response.json();
+      const response = await makeAdminApiCall(`/shortlinks?${params.toString()}`);
+      const data = response.data;
       setLinks(data);
     } catch (e) {
       setError(e.message);
@@ -43,7 +43,7 @@ const AdminShortLinks = () => {
   const handleDelete = async code => {
     if (!window.confirm(t('admin.shortlinks.deleteConfirm', 'Delete this link?'))) return;
     try {
-      await makeAdminApiCall(`/api/shortlinks/${code}`, { method: 'DELETE' });
+      await makeAdminApiCall(`/shortlinks/${code}`, { method: 'DELETE' });
       setLinks(l => l.filter(link => link.code !== code));
     } catch (e) {
       setError(e.message);

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { fetchToolsBasic } from '../../../api';
 import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 
 const AppCreationWizard = ({ onClose, templateApp = null }) => {
@@ -1445,11 +1446,8 @@ const ToolsStep = ({ appData, updateAppData }) => {
     // Load available tools
     const loadTools = async () => {
       try {
-        const response = await fetch('/api/tools');
-        if (response.ok) {
-          const tools = await response.json();
-          setAvailableTools(tools);
-        }
+        const tools = await fetchToolsBasic();
+        setAvailableTools(tools);
       } catch (error) {
         console.error('Failed to load tools:', error);
       }

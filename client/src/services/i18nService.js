@@ -2,6 +2,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { fetchTranslations } from '../api/api';
+import { apiClient } from '../api/client';
 
 class I18nService {
   constructor() {
@@ -88,10 +89,10 @@ class I18nService {
 
   async loadPlatformConfig() {
     try {
-      // Use fetch instead of synchronous XHR
-      const response = await fetch('/api/configs/platform');
-      if (response.ok) {
-        this.platformConfig = await response.json();
+      // Use apiClient instead of fetch
+      const response = await apiClient.get('/configs/platform');
+      if (response.status >= 200 && response.status < 300) {
+        this.platformConfig = response.data;
         if (this.platformConfig?.defaultLanguage) {
           this.defaultLanguage = this.platformConfig.defaultLanguage;
         }

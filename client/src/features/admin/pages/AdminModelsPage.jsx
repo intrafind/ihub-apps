@@ -30,8 +30,8 @@ const AdminModelsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await makeAdminApiCall('/api/admin/models');
-      const data = await response.json();
+      const response = await makeAdminApiCall('/admin/models');
+      const data = response.data;
 
       console.log('Models loaded:', data);
       console.log('Models count:', Array.isArray(data) ? data.length : 'Not an array');
@@ -54,11 +54,11 @@ const AdminModelsPage = () => {
 
   const toggleModel = async modelId => {
     try {
-      const response = await makeAdminApiCall(`/api/admin/models/${modelId}/toggle`, {
+      const response = await makeAdminApiCall(`/admin/models/${modelId}/toggle`, {
         method: 'POST'
       });
 
-      const result = await response.json();
+      const result = response.data;
 
       // Update the model in the local state
       setModels(prevModels =>
@@ -92,11 +92,11 @@ const AdminModelsPage = () => {
   const testModel = async modelId => {
     try {
       setTestingModel(modelId);
-      const response = await makeAdminApiCall(`/api/admin/models/${modelId}/test`, {
+      const response = await makeAdminApiCall(`/admin/models/${modelId}/test`, {
         method: 'POST'
       });
 
-      const result = await response.json();
+      const result = response.data;
 
       setTestResults(prevResults => ({
         ...prevResults,
@@ -126,7 +126,7 @@ const AdminModelsPage = () => {
       return;
     }
     try {
-      await makeAdminApiCall(`/api/admin/models/${modelId}`, { method: 'DELETE' });
+      await makeAdminApiCall(`/admin/models/${modelId}`, { method: 'DELETE' });
       setModels(prev => prev.filter(m => m.id !== modelId));
     } catch (err) {
       setError(err.message);

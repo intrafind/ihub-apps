@@ -20,8 +20,8 @@ const AdminGroupsPage = () => {
 
   const loadGroups = async () => {
     try {
-      const response = await makeAdminApiCall('/api/admin/groups');
-      const data = await response.json();
+      const response = await makeAdminApiCall('/admin/groups');
+      const data = response.data;
       setGroups(data.groups || {});
     } catch (error) {
       setMessage({
@@ -39,7 +39,7 @@ const AdminGroupsPage = () => {
     }
 
     try {
-      const response = await makeAdminApiCall(`/api/admin/groups/${groupId}`, {
+      const response = await makeAdminApiCall(`/admin/groups/${groupId}`, {
         method: 'DELETE'
       });
 
@@ -50,7 +50,7 @@ const AdminGroupsPage = () => {
         });
         loadGroups();
       } else {
-        const error = await response.json();
+        const error = response.data;
         throw new Error(error.error || 'Failed to delete group');
       }
     } catch (error) {

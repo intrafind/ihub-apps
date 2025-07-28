@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import Icon from './Icon';
+import { fetchAdminUsageData, fetchAdminApps } from '../../api/adminApi';
 
 const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
   const { t, i18n } = useTranslation();
@@ -22,28 +23,22 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
     setLoading(true);
     try {
       // Load usage data
-      const usageResponse = await fetch('/api/admin/usage');
-      if (usageResponse.ok) {
-        const usageData = await usageResponse.json();
-        if (
-          usageData.messages &&
-          usageData.messages.perModel &&
-          usageData.messages.perModel[model.id]
-        ) {
-          setUsage({
-            messages: usageData.messages.perModel[model.id],
-            tokens: usageData.tokens.perModel[model.id] || 0
-          });
-        }
+      const usageData = await fetchAdminUsageData();
+      if (
+        usageData.messages &&
+        usageData.messages.perModel &&
+        usageData.messages.perModel[model.id]
+      ) {
+        setUsage({
+          messages: usageData.messages.perModel[model.id],
+          tokens: usageData.tokens.perModel[model.id] || 0
+        });
       }
 
       // Load apps using this model
-      const appsResponse = await fetch('/api/admin/apps');
-      if (appsResponse.ok) {
-        const allApps = await appsResponse.json();
-        const appsUsingModel = allApps.filter(app => app.preferredModel === model.id);
-        setApps(appsUsingModel);
-      }
+      const allApps = await fetchAdminApps();
+      const appsUsingModel = allApps.filter(app => app.preferredModel === model.id);
+      setApps(appsUsingModel);
     } catch (error) {
       console.error('Error loading model data:', error);
     } finally {

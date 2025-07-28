@@ -38,8 +38,17 @@ export const makeAdminApiCall = async (url, options = {}) => {
     }
   }
 
-  // Add admin token if available (for anonymous mode)
-  if (adminToken && !localStorage.getItem('authToken')) {
+  // Add authentication headers
+  const authToken = localStorage.getItem('authToken');
+  
+  if (authToken) {
+    // In OIDC/Local/Proxy modes, use the regular auth token
+    axiosConfig.headers = {
+      ...axiosConfig.headers,
+      'Authorization': `Bearer ${authToken}`
+    };
+  } else if (adminToken) {
+    // In anonymous mode, use admin token if available
     axiosConfig.headers = {
       ...axiosConfig.headers,
       'Authorization': `Bearer ${adminToken}`
@@ -76,23 +85,23 @@ export const makeAdminApiCall = async (url, options = {}) => {
 
 // Specific admin API functions
 export const fetchAdminUsageData = async () => {
-  const response = await makeAdminApiCall('/api/admin/usage');
+  const response = await makeAdminApiCall('/admin/usage');
   return response.data;
 };
 
 export const fetchAdminCacheStats = async () => {
-  const response = await makeAdminApiCall('/api/admin/cache/stats');
+  const response = await makeAdminApiCall('/admin/cache/stats');
   return response.data;
 };
 
 export const fetchAdminApps = async () => {
-  const response = await makeAdminApiCall('/api/admin/apps');
+  const response = await makeAdminApiCall('/admin/apps');
   return response.data;
 };
 
 export const fetchAdminModels = async () => {
   try {
-    const response = await makeAdminApiCall('/api/admin/models');
+    const response = await makeAdminApiCall('/admin/models');
     const data = response.data;
 
     // Debug logging
@@ -109,7 +118,7 @@ export const fetchAdminModels = async () => {
 
 export const fetchAdminPrompts = async () => {
   try {
-    const response = await makeAdminApiCall('/api/admin/prompts');
+    const response = await makeAdminApiCall('/admin/prompts');
     const data = response.data;
 
     // Debug logging
@@ -125,17 +134,17 @@ export const fetchAdminPrompts = async () => {
 };
 
 export const fetchAdminAppTemplates = async () => {
-  const response = await makeAdminApiCall('/api/admin/apps/templates');
+  const response = await makeAdminApiCall('/admin/apps/templates');
   return response.data;
 };
 
 export const fetchAppInheritance = async appId => {
-  const response = await makeAdminApiCall(`/api/admin/apps/${appId}/inheritance`);
+  const response = await makeAdminApiCall(`/admin/apps/${appId}/inheritance`);
   return response.data;
 };
 
 export const createPrompt = async promptData => {
-  const response = await makeAdminApiCall('/api/admin/prompts', {
+  const response = await makeAdminApiCall('/admin/prompts', {
     method: 'POST',
     body: promptData
   });
@@ -143,7 +152,7 @@ export const createPrompt = async promptData => {
 };
 
 export const updatePrompt = async (promptId, promptData) => {
-  const response = await makeAdminApiCall(`/api/admin/prompts/${promptId}`, {
+  const response = await makeAdminApiCall(`/admin/prompts/${promptId}`, {
     method: 'PUT',
     body: promptData
   });
@@ -151,7 +160,7 @@ export const updatePrompt = async (promptId, promptData) => {
 };
 
 export const translateText = async ({ text, from, to }) => {
-  const response = await makeAdminApiCall('/api/admin/translate', {
+  const response = await makeAdminApiCall('/admin/translate', {
     method: 'POST',
     body: { text, from, to }
   });
@@ -160,7 +169,7 @@ export const translateText = async ({ text, from, to }) => {
 
 export const toggleApps = async (ids, enabled) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
-  const response = await makeAdminApiCall(`/api/admin/apps/${idParam}/_toggle`, {
+  const response = await makeAdminApiCall(`/admin/apps/${idParam}/_toggle`, {
     method: 'POST',
     body: { enabled }
   });
@@ -168,17 +177,17 @@ export const toggleApps = async (ids, enabled) => {
 };
 
 export const fetchAdminPages = async () => {
-  const response = await makeAdminApiCall('/api/admin/pages');
+  const response = await makeAdminApiCall('/admin/pages');
   return response.data;
 };
 
 export const fetchAdminPage = async pageId => {
-  const response = await makeAdminApiCall(`/api/admin/pages/${pageId}`);
+  const response = await makeAdminApiCall(`/admin/pages/${pageId}`);
   return response.data;
 };
 
 export const createPage = async pageData => {
-  const response = await makeAdminApiCall('/api/admin/pages', {
+  const response = await makeAdminApiCall('/admin/pages', {
     method: 'POST',
     body: pageData
   });
@@ -187,7 +196,7 @@ export const createPage = async pageData => {
 
 export const toggleModels = async (ids, enabled) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
-  const response = await makeAdminApiCall(`/api/admin/models/${idParam}/_toggle`, {
+  const response = await makeAdminApiCall(`/admin/models/${idParam}/_toggle`, {
     method: 'POST',
     body: { enabled }
   });
@@ -195,7 +204,7 @@ export const toggleModels = async (ids, enabled) => {
 };
 
 export const updatePage = async (pageId, pageData) => {
-  const response = await makeAdminApiCall(`/api/admin/pages/${pageId}`, {
+  const response = await makeAdminApiCall(`/admin/pages/${pageId}`, {
     method: 'PUT',
     body: pageData
   });
@@ -204,7 +213,7 @@ export const updatePage = async (pageId, pageData) => {
 
 export const togglePrompts = async (ids, enabled) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
-  const response = await makeAdminApiCall(`/api/admin/prompts/${idParam}/_toggle`, {
+  const response = await makeAdminApiCall(`/admin/prompts/${idParam}/_toggle`, {
     method: 'POST',
     body: { enabled }
   });
@@ -212,7 +221,7 @@ export const togglePrompts = async (ids, enabled) => {
 };
 
 export const deletePage = async pageId => {
-  const response = await makeAdminApiCall(`/api/admin/pages/${pageId}`, {
+  const response = await makeAdminApiCall(`/admin/pages/${pageId}`, {
     method: 'DELETE'
   });
   return response.data;
@@ -220,12 +229,12 @@ export const deletePage = async pageId => {
 
 // UI Customization API functions
 export const getUIConfig = async () => {
-  const response = await makeAdminApiCall('/api/admin/ui/config');
+  const response = await makeAdminApiCall('/admin/ui/config');
   return response;
 };
 
 export const updateUIConfig = async config => {
-  const response = await makeAdminApiCall('/api/admin/ui/config', {
+  const response = await makeAdminApiCall('/admin/ui/config', {
     method: 'POST',
     body: { config }
   });
@@ -233,19 +242,19 @@ export const updateUIConfig = async config => {
 };
 
 export const backupUIConfig = async () => {
-  const response = await makeAdminApiCall('/api/admin/ui/backup', {
+  const response = await makeAdminApiCall('/admin/ui/backup', {
     method: 'POST'
   });
   return response;
 };
 
 export const getUIAssets = async () => {
-  const response = await makeAdminApiCall('/api/admin/ui/assets');
+  const response = await makeAdminApiCall('/admin/ui/assets');
   return response;
 };
 
 export const uploadUIAsset = async formData => {
-  const response = await makeAdminApiCall('/api/admin/ui/upload-asset', {
+  const response = await makeAdminApiCall('/admin/ui/upload-asset', {
     method: 'POST',
     body: formData
   });
@@ -253,7 +262,7 @@ export const uploadUIAsset = async formData => {
 };
 
 export const deleteUIAsset = async assetId => {
-  const response = await makeAdminApiCall(`/api/admin/ui/assets/${assetId}`, {
+  const response = await makeAdminApiCall(`/admin/ui/assets/${assetId}`, {
     method: 'DELETE'
   });
   return response;

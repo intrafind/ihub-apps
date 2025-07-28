@@ -30,7 +30,7 @@ const AdminShortLinkEditPage = () => {
     if (!isNew) {
       (async () => {
         try {
-          const res = await makeAdminApiCall(`/api/shortlinks/${code}`);
+          const res = await makeAdminApiCall(`/shortlinks/${code}`);
           const data = await res.json();
           setLink({
             ...data,
@@ -65,7 +65,7 @@ const AdminShortLinkEditPage = () => {
     setSaving(true);
     try {
       const method = isNew ? 'POST' : 'PUT';
-      const url = isNew ? '/api/shortlinks' : `/api/shortlinks/${code}`;
+      const url = isNew ? '/shortlinks' : `/shortlinks/${code}`;
       await makeAdminApiCall(url, {
         method,
         body: JSON.stringify({

@@ -6,6 +6,7 @@ import ToolsSelector from '../../../shared/components/ToolsSelector';
 import Icon from '../../../shared/components/Icon';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { fetchModels, fetchUIConfig } from '../../../api';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 
@@ -25,11 +26,8 @@ const AdminAppEditPage = () => {
     // Load available models and UI config
     const loadModels = async () => {
       try {
-        const response = await fetch('/api/models');
-        if (response.ok) {
-          const models = await response.json();
-          setAvailableModels(models);
-        }
+        const models = await fetchModels();
+        setAvailableModels(models);
       } catch (err) {
         console.error('Failed to load models:', err);
       }
@@ -37,11 +35,8 @@ const AdminAppEditPage = () => {
 
     const loadUIConfig = async () => {
       try {
-        const response = await fetch('/api/configs/ui');
-        if (response.ok) {
-          const config = await response.json();
-          setUiConfig(config);
-        }
+        const config = await fetchUIConfig();
+        setUiConfig(config);
       } catch (err) {
         console.error('Failed to load UI config:', err);
       }
@@ -142,8 +137,8 @@ const AdminAppEditPage = () => {
   const loadApp = async () => {
     try {
       setLoading(true);
-      const response = await makeAdminApiCall(`/api/admin/apps/${appId}`);
-      const data = await response.json();
+      const response = await makeAdminApiCall(`/admin/apps/${appId}`);
+      const data = response.data;
 
       // Ensure all configuration sections exist with defaults
       const appWithDefaults = {
@@ -232,7 +227,7 @@ const AdminAppEditPage = () => {
     try {
       setSaving(true);
       const method = appId === 'new' ? 'POST' : 'PUT';
-      const url = appId === 'new' ? '/api/admin/apps' : `/api/admin/apps/${appId}`;
+      const url = appId === 'new' ? '/admin/apps' : `/admin/apps/${appId}`;
 
       await makeAdminApiCall(url, {
         method,

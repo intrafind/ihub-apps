@@ -64,8 +64,8 @@ const AdminModelEditPage = () => {
   const loadModel = async () => {
     try {
       setLoading(true);
-      const response = await makeAdminApiCall(`/api/admin/models/${modelId}`);
-      const model = await response.json();
+      const response = await makeAdminApiCall(`/admin/models/${modelId}`);
+      const model = response.data;
       console.log('Model loaded:', model);
       console.log('Model name structure:', model.name);
       console.log('Model description structure:', model.description);
@@ -104,8 +104,8 @@ const AdminModelEditPage = () => {
 
   const loadAppsUsingModel = async () => {
     try {
-      const response = await makeAdminApiCall('/api/admin/apps');
-      const allApps = await response.json();
+      const response = await makeAdminApiCall('/admin/apps');
+      const allApps = response.data;
       const appsUsingModel = allApps.filter(app => app.preferredModel === modelId);
       setApps(appsUsingModel);
     } catch (err) {
@@ -115,8 +115,8 @@ const AdminModelEditPage = () => {
 
   const loadUsageData = async () => {
     try {
-      const response = await makeAdminApiCall('/api/admin/usage');
-      const usageData = await response.json();
+      const response = await makeAdminApiCall('/admin/usage');
+      const usageData = response.data;
       if (
         usageData.messages &&
         usageData.messages.perModel &&
@@ -179,7 +179,7 @@ const AdminModelEditPage = () => {
         }
       });
 
-      const url = isNewModel ? '/api/admin/models' : `/api/admin/models/${modelId}`;
+      const url = isNewModel ? '/admin/models' : `/admin/models/${modelId}`;
       const method = isNewModel ? 'POST' : 'PUT';
 
       await makeAdminApiCall(url, {

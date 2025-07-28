@@ -27,8 +27,8 @@ const AdminUICustomization = () => {
         setLoading(true);
         setError(null);
 
-        const response = await makeAdminApiCall('/api/admin/ui/config');
-        const data = await response.json();
+        const response = await makeAdminApiCall('/admin/ui/config');
+        const data = response.data;
         if (data.success) {
           setConfig(data.config);
         } else {
@@ -55,14 +55,14 @@ const AdminUICustomization = () => {
       setError(null);
       setSuccessMessage('');
 
-      const response = await makeAdminApiCall('/api/admin/ui/config', {
+      const response = await makeAdminApiCall('/admin/ui/config', {
         method: 'POST',
         body: JSON.stringify({ config }),
         headers: {
           'Content-Type': 'application/json'
         }
       });
-      const data = await response.json();
+      const data = response.data;
 
       if (data.success) {
         setSuccessMessage('UI configuration saved successfully');
@@ -84,10 +84,10 @@ const AdminUICustomization = () => {
 
   const handleBackup = async () => {
     try {
-      const response = await makeAdminApiCall('/api/admin/ui/backup', {
+      const response = await makeAdminApiCall('/admin/ui/backup', {
         method: 'POST'
       });
-      const data = await response.json();
+      const data = response.data;
 
       if (data.success) {
         setSuccessMessage(`Configuration backed up to: ${data.backupPath}`);

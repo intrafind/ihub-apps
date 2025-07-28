@@ -13,6 +13,7 @@ import {
   fetchAdminApps
 } from '../../../api/adminApi';
 import { clearApiCache } from '../../../api/api';
+import { fetchUIConfig } from '../../../api';
 
 const AdminPromptEditPage = () => {
   const { t, i18n } = useTranslation();
@@ -74,11 +75,8 @@ const AdminPromptEditPage = () => {
 
   const loadUIConfig = async () => {
     try {
-      const response = await fetch('/api/configs/ui');
-      if (response.ok) {
-        const config = await response.json();
-        setUiConfig(config);
-      }
+      const config = await fetchUIConfig();
+      setUiConfig(config);
     } catch (err) {
       console.error('Failed to load UI config:', err);
     }
