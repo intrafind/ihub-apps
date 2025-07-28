@@ -1,0 +1,117 @@
+# .dockerignore - Optimize Docker builds by excluding unnecessary files
+
+# Node modules (will be installed inside container)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Build outputs (will be generated in container)
+dist/
+dist-bin/
+client/dist/
+build/
+.next/
+.nuxt/
+
+# Runtime data and logs (will be created in container)
+logs/
+*.log
+contents/data/
+contents/uploads/
+
+# Development and test files
+.git/
+.gitignore
+.gitattributes
+.github/
+tests/
+__tests__/
+test/
+spec/
+coverage/
+.nyc_output/
+*.test.js
+*.spec.js
+
+# Environment files (will be provided at runtime)
+.env
+.env.*
+!.env.example
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Package manager files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Temporary directories
+tmp/
+temp/
+.tmp/
+
+# Development tools
+.eslintrc*
+.prettierrc*
+.editorconfig
+.nvmrc
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build tools and configs (keep essential ones)
+webpack.config.js
+rollup.config.js
+.babelrc
+jest.config.js
+tsconfig.json
+
+# Electron specific
+electron/
+*.dmg
+*.exe
+*.deb
+*.rpm
+
+# Docker files (avoid recursive inclusion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Examples and samples (not needed in production)
+examples/
+samples/
+
+# Development scripts
+dev.sh
+test-authentication.sh
+concatenate-code.sh
+
+# Concept documentation
+concepts/
+
+# Binary distributions
+dist-bin/

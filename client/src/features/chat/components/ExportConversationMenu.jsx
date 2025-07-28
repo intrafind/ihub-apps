@@ -1,13 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import TurndownService from 'turndown';
-import { markdownToHtml, htmlToMarkdown, isMarkdown } from '../../../utils/markdownUtils';
 import { exportChatToFormat } from '../../../api/endpoints/apps';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-
-const turndownService = new TurndownService();
 
 const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, chatId }) => {
   const { t, i18n } = useTranslation();
@@ -32,54 +28,34 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
     variables: settings.variables
   });
 
-  const asJSON = () => JSON.stringify({ ...buildMeta(), messages }, null, 2);
-
-  const asJSONL = () => {
-    const lines = [JSON.stringify({ meta: buildMeta() })];
-    messages.forEach(m => lines.push(JSON.stringify(m)));
-    return lines.join('\n');
-  };
-
-  const asMarkdown = () =>
-    messages
-      .map(
-        m => `**${m.role}**: ${isMarkdown(m.content) ? m.content : htmlToMarkdown(m.content || '')}`
-      )
-      .join('\n\n');
-
-  const asHTML = () =>
-    messages
-      .map(m => `<p><strong>${m.role}:</strong> ${markdownToHtml(m.content)}</p>`) // markdownToHtml handles null
-      .join('');
-
   const handleExport = async format => {
-    if (!appId || !chatId) {
-      console.error('Missing appId or chatId for export');
-      return;
-    }
-
     if (format === 'pdf') {
       setIsExporting(true);
     }
 
     try {
-      const exportData = {
-        messages: messages.filter(m => !m.isGreeting),
-        settings: buildMeta()
-      };
-
-      // Add PDF-specific configuration if exporting to PDF
-      if (format === 'pdf') {
-        exportData.template = pdfConfig.template;
-        exportData.watermark = pdfConfig.watermark;
-      }
+      const filteredMessages = messages.filter(m => !m.isGreeting);
+      const exportSettings = buildMeta();
 
       // Get app name for better file naming
       const appName = uiConfig?.title
         ? getLocalizedContent(uiConfig.title, currentLanguage)
         : 'AI Hub Apps';
 
-      await exportChatToFormat(appId, chatId, exportData, format, appName);
+      // Prepare export options
+      const options = {
+        appId,
+        chatId,
+        appName
+      };
+
+      // Add PDF-specific configuration if exporting to PDF
+      if (format === 'pdf') {
+        options.template = pdfConfig.template;
+        options.watermark = pdfConfig.watermark;
+      }
+
+      await exportChatToFormat(filteredMessages, exportSettings, format, options);
       onClose?.();
     } catch (error) {
       console.error(`${format.toUpperCase()} export failed:`, error);

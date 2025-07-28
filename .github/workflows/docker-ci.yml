@@ -1,0 +1,344 @@
+# Docker CI/CD Pipeline for AI Hub Apps
+# Builds and publishes Docker images to GitHub Container Registry
+
+name: Docker CI/CD
+
+on:
+  # Build on releases
+  release:
+    types: [published]
+  
+  # Build on tags
+  push:
+    tags: ['v*']
+  
+  # Manual trigger with comment "@build docker images"
+  issue_comment:
+    types: [created]
+  
+  # Manual workflow dispatch
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: false
+        default: 'development'
+        type: choice
+        options:
+        - development
+        - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Check if workflow should run
+  check-trigger:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - name: Check trigger conditions
+        id: check
+        run: |
+          should_run=false
+          
+          # Always run on releases and tags
+          if [[ "${{ github.event_name }}" == "release" || "${{ github.event_name }}" == "push" ]]; then
+            should_run=true
+          fi
+          
+          # Always run on manual workflow dispatch
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            should_run=true
+          fi
+          
+          # Check for comment trigger
+          if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
+            comment="${{ github.event.comment.body }}"
+            if [[ "$comment" == *"@build docker images"* ]]; then
+              should_run=true
+            fi
+          fi
+          
+          echo "should-run=$should_run" >> $GITHUB_OUTPUT
+          echo "Workflow should run: $should_run"
+
+  # Build and test the Docker image
+  build-and-test:
+    runs-on: ubuntu-latest
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should-run == 'true'
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=AI Hub Apps
+            org.opencontainers.image.description=AI Hub Applications Platform
+            org.opencontainers.image.vendor=IntraFind Software AG
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: production
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+            REVISION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
+
+      - name: Test container startup
+        run: |
+          echo "Testing container startup..."
+          docker run --rm -d --name ai-hub-test \
+            -e JWT_SECRET=test-secret \
+            -e NODE_ENV=production \
+            -p 3000:3000 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          
+          # Wait for container to start
+          timeout 60 bash -c 'until curl -f http://localhost:3000/api/health; do sleep 2; done'
+          
+          # Stop test container
+          docker stop ai-hub-test
+          echo "Container startup test passed!"
+
+  # Security scanning with Trivy
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Trivy scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Check for critical vulnerabilities
+        run: |
+          # Extract critical and high severity issues
+          CRITICAL=$(cat trivy-results.sarif | jq -r '[.runs[].results[] | select(.level == "error")] | length')
+          HIGH=$(cat trivy-results.sarif | jq -r '[.runs[].results[] | select(.level == "warning")] | length')
+          
+          echo "Critical vulnerabilities: $CRITICAL"
+          echo "High vulnerabilities: $HIGH"
+          
+          # Fail if critical vulnerabilities found
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "❌ Critical vulnerabilities found! Build failed."
+            exit 1
+          fi
+          
+          # Warn about high vulnerabilities but don't fail
+          if [ "$HIGH" -gt 0 ]; then
+            echo "⚠️ High severity vulnerabilities found. Consider updating dependencies."
+          else
+            echo "✅ No critical or high severity vulnerabilities found."
+          fi
+
+  # Integration tests
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: aihub_test
+          POSTGRES_USER: aihub
+          POSTGRES_PASSWORD: test123
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create test environment file
+        run: |
+          cat > .env.test << EOF
+          NODE_ENV=test
+          JWT_SECRET=test-jwt-secret-for-ci
+          ADMIN_SECRET=test-admin-secret
+          DB_HOST=localhost
+          DB_PORT=5432
+          DB_NAME=aihub_test
+          DB_USER=aihub
+          DB_PASSWORD=test123
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          OPENAI_API_KEY=test-key
+          ANTHROPIC_API_KEY=test-key
+          GOOGLE_API_KEY=test-key
+          MISTRAL_API_KEY=test-key
+          EOF
+
+      - name: Run integration tests
+        run: |
+          docker run --rm \
+            --network host \
+            --env-file .env.test \
+            -v $(pwd)/contents:/app/contents:ro \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            npm run test:all
+
+  # Deploy to staging (only on main branch)
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [build-and-test, security-scan, integration-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: staging
+    
+    steps:
+      - name: Deploy to staging
+        run: |
+          echo "🚀 Deploying to staging environment..."
+          echo "Image: ${{ needs.build-and-test.outputs.image-tags }}"
+          echo "Digest: ${{ needs.build-and-test.outputs.image-digest }}"
+          
+          # Here you would add actual deployment steps
+          # For example, using kubectl, helm, or docker-compose
+          
+          # Example deployment command (customize for your infrastructure):
+          # kubectl set image deployment/ai-hub-apps ai-hub-apps=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-test.outputs.image-digest }} -n ai-hub-staging
+          
+          echo "✅ Staging deployment completed successfully!"
+
+  # Create GitHub Release for tags
+  create-release:
+    runs-on: ubuntu-latest
+    needs: [build-and-test, security-scan]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract release notes
+        id: release_notes
+        run: |
+          # Extract version from tag
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Create release notes (customize as needed)
+          cat > release_notes.md << EOF
+          ## AI Hub Apps $VERSION
+          
+          ### Docker Images
+          - \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION\`
+          - \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`
+          
+          ### Changes
+          - Updated to version $VERSION
+          - See commit history for detailed changes
+          
+          ### Usage
+          \`\`\`bash
+          docker run -p 3000:3000 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION
+          \`\`\`
+          
+          ### Security
+          - Container scanned for vulnerabilities
+          - Runs as non-root user (UID 1000)
+          - Read-only root filesystem
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: AI Hub Apps ${{ steps.release_notes.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+          generate_release_notes: true
+
+  # Cleanup old images (runs weekly)
+  cleanup:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    permissions:
+      packages: write
+      
+    steps:
+      - name: Delete old container images
+        uses: actions/delete-package-versions@v4
+        with:
+          package-name: ${{ env.IMAGE_NAME }}
+          package-type: 'container'
+          min-versions-to-keep: 10
+          delete-only-untagged-versions: true

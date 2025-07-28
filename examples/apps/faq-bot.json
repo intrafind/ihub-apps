@@ -25,7 +25,6 @@
     "de": "Stelle eine Frage zu unseren häufig gestellten Fragen..."
   },
   "sendChatHistory": true,
-  "sourcePath": "/contents/sources/faq.md",
   "prompt": {
     "en": "{{content}}",
     "de": "{{content}}"

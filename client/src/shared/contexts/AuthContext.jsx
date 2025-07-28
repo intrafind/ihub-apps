@@ -217,9 +217,7 @@ export function AuthProvider({ children }) {
         dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
 
         // Refresh auth status to ensure all components are updated
-        setTimeout(() => {
-          loadAuthStatus();
-        }, 100);
+        await loadAuthStatus();
 
         return { success: true };
       } else {

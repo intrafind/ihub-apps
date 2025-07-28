@@ -17,32 +17,6 @@ contents/
   [other-content].md - Additional content files
 ```
 
-### Using Content in Apps
-
-Content files can be incorporated into apps using the `sourcePath` property in app configurations:
-
-```json
-{
-  "id": "faq-bot",
-  "name": {
-    "en": "FAQ Bot",
-    "de": "FAQ-Bot"
-  },
-  // Other app properties...
-  "sourcePath": "/sources/faq.md",
-  "system": {
-    "en": "You are a helpful FAQ assistant. Your job is to answer user questions based ONLY on the information provided in the sources section...",
-    "de": "Du bist ein hilfreicher FAQ-Assistent..."
-  }
-}
-```
-
-When an app has a `sourcePath` defined:
-
-- The contents of the specified file are loaded when the app is used
-- The content is made available to the app through variables (typically `{{source}}` or `{{content}}`)
-- The app can reference, search, and use this content when generating responses
-
 ### Markdown Content Format
 
 Content files use standard Markdown with some specific conventions:

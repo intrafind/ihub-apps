@@ -1,80 +1,99 @@
+import { apiClient } from './client.js';
+
 // Utility function to make authenticated API calls to admin endpoints
 export const makeAdminApiCall = async (url, options = {}) => {
-  // In local/OIDC/proxy modes, use the regular authToken
-  // In anonymous mode, use the adminToken (admin secret)
-  const authToken = localStorage.getItem('authToken');
+  // Handle admin token for anonymous mode
   const adminToken = localStorage.getItem('adminToken');
-
-  // Prefer authToken (regular authentication) over adminToken (admin secret)
-  const token = authToken || adminToken;
-
-  const headers = {
-    ...options.headers
+  
+  // Create axios config from options
+  const axiosConfig = {
+    url: url.startsWith('/') ? url : `/${url}`,
+    method: options.method || 'GET',
+    ...options
   };
 
-  // Only set Content-Type if not uploading files (FormData)
-  if (!(options.body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers
-  });
-
-  if (response.status === 401 || response.status === 403) {
-    // Clear invalid tokens
-    if (adminToken) {
-      localStorage.removeItem('adminToken');
+  // Handle request body
+  if (options.body) {
+    if (options.body instanceof FormData) {
+      axiosConfig.data = options.body;
+      // Don't set Content-Type for FormData, let axios handle it
+      axiosConfig.headers = {
+        ...axiosConfig.headers,
+        ...options.headers
+      };
+    } else if (typeof options.body === 'string') {
+      axiosConfig.data = JSON.parse(options.body);
+      axiosConfig.headers = {
+        'Content-Type': 'application/json',
+        ...axiosConfig.headers,
+        ...options.headers
+      };
+    } else {
+      axiosConfig.data = options.body;
+      axiosConfig.headers = {
+        'Content-Type': 'application/json',
+        ...axiosConfig.headers,
+        ...options.headers
+      };
     }
+  }
 
-    // For auth failures, redirect appropriately based on the auth mode
-    if (window.location.pathname.startsWith('/admin')) {
-      // If we have a regular auth token, this suggests a permission issue
-      if (authToken) {
-        // User is authenticated but doesn't have admin permissions
-        window.location.href = '/admin'; // Will show appropriate error message
-      } else {
-        // User is not authenticated, redirect to login
-        window.location.href = '/';
+  // Add admin token if available (for anonymous mode)
+  if (adminToken && !localStorage.getItem('authToken')) {
+    axiosConfig.headers = {
+      ...axiosConfig.headers,
+      'Authorization': `Bearer ${adminToken}`
+    };
+  }
+
+  try {
+    const response = await apiClient(axiosConfig);
+    return response;
+  } catch (error) {
+    // Handle admin-specific auth failures
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      // Clear invalid admin tokens
+      if (adminToken) {
+        localStorage.removeItem('adminToken');
+      }
+
+      // For auth failures, redirect appropriately based on the auth mode
+      if (window.location.pathname.startsWith('/admin')) {
+        const authToken = localStorage.getItem('authToken');
+        // If we have a regular auth token, this suggests a permission issue
+        if (authToken) {
+          // User is authenticated but doesn't have admin permissions
+          window.location.href = '/admin'; // Will show appropriate error message
+        } else {
+          // User is not authenticated, redirect to login
+          window.location.href = '/';
+        }
       }
     }
-
-    throw new Error('Authentication required');
+    throw error;
   }
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-  }
-
-  return response;
 };
 
 // Specific admin API functions
 export const fetchAdminUsageData = async () => {
   const response = await makeAdminApiCall('/api/admin/usage');
-  return response.json();
+  return response.data;
 };
 
 export const fetchAdminCacheStats = async () => {
   const response = await makeAdminApiCall('/api/admin/cache/stats');
-  return response.json();
+  return response.data;
 };
 
 export const fetchAdminApps = async () => {
   const response = await makeAdminApiCall('/api/admin/apps');
-  return response.json();
+  return response.data;
 };
 
 export const fetchAdminModels = async () => {
   try {
     const response = await makeAdminApiCall('/api/admin/models');
-    const data = await response.json();
+    const data = response.data;
 
     // Debug logging
     console.log('Admin models API response:', data);
@@ -91,7 +110,7 @@ export const fetchAdminModels = async () => {
 export const fetchAdminPrompts = async () => {
   try {
     const response = await makeAdminApiCall('/api/admin/prompts');
-    const data = await response.json();
+    const data = response.data;
 
     // Debug logging
     console.log('Admin prompts API response:', data);
@@ -107,96 +126,96 @@ export const fetchAdminPrompts = async () => {
 
 export const fetchAdminAppTemplates = async () => {
   const response = await makeAdminApiCall('/api/admin/apps/templates');
-  return response.json();
+  return response.data;
 };
 
 export const fetchAppInheritance = async appId => {
   const response = await makeAdminApiCall(`/api/admin/apps/${appId}/inheritance`);
-  return response.json();
+  return response.data;
 };
 
 export const createPrompt = async promptData => {
   const response = await makeAdminApiCall('/api/admin/prompts', {
     method: 'POST',
-    body: JSON.stringify(promptData)
+    body: promptData
   });
-  return response.json();
+  return response.data;
 };
 
 export const updatePrompt = async (promptId, promptData) => {
   const response = await makeAdminApiCall(`/api/admin/prompts/${promptId}`, {
     method: 'PUT',
-    body: JSON.stringify(promptData)
+    body: promptData
   });
-  return response.json();
+  return response.data;
 };
 
 export const translateText = async ({ text, from, to }) => {
   const response = await makeAdminApiCall('/api/admin/translate', {
     method: 'POST',
-    body: JSON.stringify({ text, from, to })
+    body: { text, from, to }
   });
-  return response.json();
+  return response.data;
 };
 
 export const toggleApps = async (ids, enabled) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
   const response = await makeAdminApiCall(`/api/admin/apps/${idParam}/_toggle`, {
     method: 'POST',
-    body: JSON.stringify({ enabled })
+    body: { enabled }
   });
-  return response.json();
+  return response.data;
 };
 
 export const fetchAdminPages = async () => {
   const response = await makeAdminApiCall('/api/admin/pages');
-  return response.json();
+  return response.data;
 };
 
 export const fetchAdminPage = async pageId => {
   const response = await makeAdminApiCall(`/api/admin/pages/${pageId}`);
-  return response.json();
+  return response.data;
 };
 
 export const createPage = async pageData => {
   const response = await makeAdminApiCall('/api/admin/pages', {
     method: 'POST',
-    body: JSON.stringify(pageData)
+    body: pageData
   });
-  return response.json();
+  return response.data;
 };
 
 export const toggleModels = async (ids, enabled) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
   const response = await makeAdminApiCall(`/api/admin/models/${idParam}/_toggle`, {
     method: 'POST',
-    body: JSON.stringify({ enabled })
+    body: { enabled }
   });
-  return response.json();
+  return response.data;
 };
 
 export const updatePage = async (pageId, pageData) => {
   const response = await makeAdminApiCall(`/api/admin/pages/${pageId}`, {
     method: 'PUT',
-    body: JSON.stringify(pageData)
+    body: pageData
   });
-  return response.json();
+  return response.data;
 };
 
 export const togglePrompts = async (ids, enabled) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
   const response = await makeAdminApiCall(`/api/admin/prompts/${idParam}/_toggle`, {
     method: 'POST',
-    body: JSON.stringify({ enabled })
+    body: { enabled }
   });
-  return response.json();
+  return response.data;
 };
 
 export const deletePage = async pageId => {
   const response = await makeAdminApiCall(`/api/admin/pages/${pageId}`, {
     method: 'DELETE'
   });
-  return response.json();
+  return response.data;
 };
 
 // UI Customization API functions
@@ -208,10 +227,7 @@ export const getUIConfig = async () => {
 export const updateUIConfig = async config => {
   const response = await makeAdminApiCall('/api/admin/ui/config', {
     method: 'POST',
-    body: JSON.stringify({ config }),
-    headers: {
-      'Content-Type': 'application/json'
-    }
+    body: { config }
   });
   return response;
 };

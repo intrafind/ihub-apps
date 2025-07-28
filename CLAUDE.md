@@ -270,7 +270,6 @@ Apps must conform to the Zod schema defined in `server/validators/appConfigSchem
   features: any,                        // Optional: Feature flags
   greeting: any,                        // Optional: Welcome message
   starterPrompts: array,                // Optional: Suggested prompts
-  sourcePath: string,                   // Optional: Source file path
   allowedModels: array,                 // Optional: Restricted model list
   disallowModelSelection: boolean,      // Optional: Hide model selector
   allowEmptyContent: boolean,           // Optional: Allow empty submissions

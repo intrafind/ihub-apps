@@ -13,6 +13,8 @@ import AppShareModal from '../components/AppShareModal';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
+import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
+import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import StarterPromptsView from '../../chat/components/StarterPromptsView';
@@ -202,11 +204,9 @@ const AppChat = () => {
     recordAppUsage(appId);
   }, [appId]);
 
-  // State for unified upload and input configuration
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [showUploader, setShowUploader] = useState(false);
-  const [originalInput, setOriginalInput] = useState(null);
-  const [magicLoading, setMagicLoading] = useState(false);
+  // Custom hooks for complex functionality
+  const fileUploadHandler = useFileUploadHandler();
+  const magicPromptHandler = useMagicPrompt();
 
   const inputRef = useRef(null);
   const chatId = useRef(getOrCreateChatId(appId));
@@ -315,7 +315,7 @@ const AppChat = () => {
       }
 
       // Clear any selected file
-      setSelectedFile(null);
+      fileUploadHandler.clearSelectedFile();
 
       // Hide the file uploader if it's visible
       if (showFileUploader) {
@@ -481,142 +481,18 @@ const AppChat = () => {
     return true;
   }, [app, loading, messages.length, welcomeMessage]);
 
-  // Handle file selection from UnifiedUploader (handles both images and files)
-  const handleFileSelect = fileData => {
-    console.log('AppChat: handleFileSelect called with', fileData);
-    setSelectedFile(fileData);
-  };
-
-  // Toggle uploader visibility
-  const toggleUploader = () => {
-    setShowUploader(prev => !prev);
-  };
-
-  // Create unified upload configuration
-  const createUploadConfig = (app, selectedModel) => {
-    // New unified upload config structure
-    const uploadConfig = app?.upload || {};
-
-    // Backward compatibility with old structure
-    const imageConfig = uploadConfig?.imageUpload || app?.imageUpload || {};
-    const fileConfig = uploadConfig?.fileUpload || app?.fileUpload || {};
-
-    // Check if upload is enabled at all
-    const uploadEnabled =
-      uploadConfig?.enabled !== false &&
-      (imageConfig?.enabled === true ||
-        fileConfig?.enabled === true ||
-        // Legacy check
-        app?.imageUpload?.enabled === true ||
-        app?.fileUpload?.maxFileSizeMB > 0);
-
-    if (!uploadEnabled) {
-      return { enabled: false };
-    }
-
-    // Determine if image upload should be disabled based on model capabilities
-    // Models that don't support vision: check if model name suggests it lacks vision
-    const isVisionModel =
-      selectedModel &&
-      (selectedModel.includes('vision') ||
-        selectedModel.includes('gpt-4') ||
-        selectedModel.includes('claude-3') ||
-        selectedModel.includes('gemini') ||
-        selectedModel.includes('4o'));
-
-    const imageUploadEnabled = imageConfig?.enabled !== false && isVisionModel;
-    const fileUploadEnabled = fileConfig?.enabled !== false;
-
-    return {
-      enabled: true,
-      imageUploadEnabled,
-      fileUploadEnabled,
-      maxFileSizeMB:
-        Math.max(imageConfig?.maxFileSizeMB || 0, fileConfig?.maxFileSizeMB || 0) || 10,
-      // Image-specific settings
-      imageUpload: {
-        enabled: imageUploadEnabled,
-        resizeImages: imageConfig?.resizeImages !== false,
-        maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
-        supportedFormats: imageConfig?.supportedFormats || [
-          'image/jpeg',
-          'image/jpg',
-          'image/png',
-          'image/gif',
-          'image/webp'
-        ],
-        maxFileSizeMB: imageConfig?.maxFileSizeMB || 10
-      },
-      // File-specific settings
-      fileUpload: {
-        enabled: fileUploadEnabled,
-        maxFileSizeMB: fileConfig?.maxFileSizeMB || 5,
-        supportedTextFormats: fileConfig?.supportedTextFormats || [
-          'text/plain',
-          'text/markdown',
-          'text/csv',
-          'application/json',
-          'text/html',
-          'text/css',
-          'text/javascript',
-          'application/javascript'
-        ],
-        supportedPdfFormats: fileConfig?.supportedPdfFormats || ['application/pdf']
-      },
-      // Legacy format for backward compatibility
-      resizeImages: imageConfig?.resizeImages !== false,
-      maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
-      supportedImageFormats: imageUploadEnabled
-        ? imageConfig?.supportedFormats || [
-            'image/jpeg',
-            'image/jpg',
-            'image/png',
-            'image/gif',
-            'image/webp'
-          ]
-        : [],
-      supportedTextFormats: fileUploadEnabled
-        ? fileConfig?.supportedTextFormats || [
-            'text/plain',
-            'text/markdown',
-            'text/csv',
-            'application/json',
-            'text/html',
-            'text/css',
-            'text/javascript',
-            'application/javascript'
-          ]
-        : [],
-      supportedPdfFormats: fileUploadEnabled
-        ? fileConfig?.supportedPdfFormats || ['application/pdf']
-        : []
-    };
-  };
-
+  // Handle magic prompt with hooks
   const handleMagicPrompt = async () => {
-    if (!input.trim()) return;
-    try {
-      setMagicLoading(true);
-      const response = await generateMagicPrompt(input, {
-        prompt: app?.features?.magicPrompt?.prompt,
-        modelId: app?.features?.magicPrompt?.model,
-        appId
-      });
-      if (response && response.prompt) {
-        setOriginalInput(input);
-        setInput(response.prompt);
-      }
-    } catch (err) {
-      console.error('Error generating magic prompt:', err);
-    } finally {
-      setMagicLoading(false);
+    const enhancedPrompt = await magicPromptHandler.handleMagicPrompt(input, app, appId);
+    if (enhancedPrompt) {
+      setInput(enhancedPrompt);
     }
   };
 
   const handleUndoMagicPrompt = () => {
-    if (originalInput !== null) {
-      setInput(originalInput);
-      setOriginalInput(null);
+    const restoredInput = magicPromptHandler.handleUndoMagicPrompt();
+    if (restoredInput !== null) {
+      setInput(restoredInput);
     }
   };
 
@@ -716,7 +592,7 @@ const AppChat = () => {
       }
 
       // Clear any selected file
-      setSelectedFile(null);
+      fileUploadHandler.clearSelectedFile();
 
       // Hide the file uploader if it's visible
       if (showFileUploader) {
@@ -745,7 +621,7 @@ const AppChat = () => {
   const handleSubmit = async e => {
     e.preventDefault();
 
-    if (!input.trim() && !selectedFile && !app?.allowEmptyContent) {
+    if (!input.trim() && !fileUploadHandler.selectedFile && !app?.allowEmptyContent) {
       return;
     }
 
@@ -772,15 +648,15 @@ const AppChat = () => {
     let messageContent = finalInput;
     let messageData = null;
 
-    if (selectedFile) {
-      if (selectedFile.type === 'image') {
-        const imgPreview = `<img src="${selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
+    if (fileUploadHandler.selectedFile) {
+      if (fileUploadHandler.selectedFile.type === 'image') {
+        const imgPreview = `<img src="${fileUploadHandler.selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
         messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
-        messageData = { imageData: selectedFile };
+        messageData = { imageData: fileUploadHandler.selectedFile };
       } else {
-        const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${selectedFile.fileName}</span>\n      </div>`;
+        const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
         messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
-        messageData = { fileData: selectedFile };
+        messageData = { fileData: fileUploadHandler.selectedFile };
       }
     }
 
@@ -797,8 +673,8 @@ const AppChat = () => {
         content: input,
         promptTemplate: app?.prompt || null,
         variables: { ...variables },
-        imageData: selectedFile?.type === 'image' ? selectedFile : null,
-        fileData: selectedFile?.type === 'document' ? selectedFile : null
+        imageData: fileUploadHandler.selectedFile?.type === 'image' ? fileUploadHandler.selectedFile : null,
+        fileData: fileUploadHandler.selectedFile?.type === 'document' ? fileUploadHandler.selectedFile : null
       },
       params: {
         modelId: selectedModel,
@@ -812,11 +688,9 @@ const AppChat = () => {
     });
 
     setInput('');
-    setOriginalInput(null);
-    setSelectedImage(null);
-    setShowImageUploader(false);
-    setSelectedFile(null);
-    setShowFileUploader(false);
+    magicPromptHandler.resetMagicPrompt();
+    fileUploadHandler.clearSelectedFile();
+    fileUploadHandler.hideUploader();
   };
 
   // Function to reload the current app
@@ -1040,18 +914,18 @@ const AppChat = () => {
                           ? handleVoiceCommand
                           : undefined
                       }
-                      onFileSelect={handleFileSelect}
-                      uploadConfig={createUploadConfig(app, selectedModel)}
-                      allowEmptySubmit={app?.allowEmptyContent || selectedFile !== null}
+                      onFileSelect={fileUploadHandler.handleFileSelect}
+                      uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
+                      allowEmptySubmit={app?.allowEmptyContent || fileUploadHandler.selectedFile !== null}
                       inputRef={inputRef}
-                      selectedFile={selectedFile}
-                      showUploader={showUploader}
-                      onToggleUploader={toggleUploader}
+                      selectedFile={fileUploadHandler.selectedFile}
+                      showUploader={fileUploadHandler.showUploader}
+                      onToggleUploader={fileUploadHandler.toggleUploader}
                       magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
                       onMagicPrompt={handleMagicPrompt}
-                      showUndoMagicPrompt={originalInput !== null}
+                      showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
                       onUndoMagicPrompt={handleUndoMagicPrompt}
-                      magicPromptLoading={magicLoading}
+                      magicPromptLoading={magicPromptHandler.magicLoading}
                     />
                   </div>
                 </div>
@@ -1099,18 +973,18 @@ const AppChat = () => {
                           ? handleVoiceCommand
                           : undefined
                       }
-                      onFileSelect={handleFileSelect}
-                      uploadConfig={createUploadConfig(app, selectedModel)}
-                      allowEmptySubmit={app?.allowEmptyContent || selectedFile !== null}
+                      onFileSelect={fileUploadHandler.handleFileSelect}
+                      uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
+                      allowEmptySubmit={app?.allowEmptyContent || fileUploadHandler.selectedFile !== null}
                       inputRef={inputRef}
-                      selectedFile={selectedFile}
-                      showUploader={showUploader}
-                      onToggleUploader={toggleUploader}
+                      selectedFile={fileUploadHandler.selectedFile}
+                      showUploader={fileUploadHandler.showUploader}
+                      onToggleUploader={fileUploadHandler.toggleUploader}
                       magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
                       onMagicPrompt={handleMagicPrompt}
-                      showUndoMagicPrompt={originalInput !== null}
+                      showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
                       onUndoMagicPrompt={handleUndoMagicPrompt}
-                      magicPromptLoading={magicLoading}
+                      magicPromptLoading={magicPromptHandler.magicLoading}
                     />
                   </div>
                 </div>
@@ -1158,18 +1032,18 @@ const AppChat = () => {
                         ? handleVoiceCommand
                         : undefined
                     }
-                    onFileSelect={handleFileSelect}
-                    uploadConfig={createUploadConfig(app, selectedModel)}
-                    allowEmptySubmit={app?.allowEmptyContent || selectedFile !== null}
+                    onFileSelect={fileUploadHandler.handleFileSelect}
+                    uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
+                    allowEmptySubmit={app?.allowEmptyContent || fileUploadHandler.selectedFile !== null}
                     inputRef={inputRef}
-                    selectedFile={selectedFile}
-                    showUploader={showUploader}
-                    onToggleUploader={toggleUploader}
+                    selectedFile={fileUploadHandler.selectedFile}
+                    showUploader={fileUploadHandler.showUploader}
+                    onToggleUploader={fileUploadHandler.toggleUploader}
                     magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
                     onMagicPrompt={handleMagicPrompt}
-                    showUndoMagicPrompt={originalInput !== null}
+                    showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
                     onUndoMagicPrompt={handleUndoMagicPrompt}
-                    magicPromptLoading={magicLoading}
+                    magicPromptLoading={magicPromptHandler.magicLoading}
                   />
                 </div>
               </div>
@@ -1211,18 +1085,18 @@ const AppChat = () => {
                       ? handleVoiceCommand
                       : undefined
                   }
-                  onFileSelect={handleFileSelect}
-                  uploadConfig={createUploadConfig(app)}
-                  allowEmptySubmit={app?.allowEmptyContent || selectedFile !== null}
+                  onFileSelect={fileUploadHandler.handleFileSelect}
+                  uploadConfig={fileUploadHandler.createUploadConfig(app)}
+                  allowEmptySubmit={app?.allowEmptyContent || fileUploadHandler.selectedFile !== null}
                   inputRef={inputRef}
-                  selectedFile={selectedFile}
-                  showUploader={showUploader}
-                  onToggleUploader={toggleUploader}
+                  selectedFile={fileUploadHandler.selectedFile}
+                  showUploader={fileUploadHandler.showUploader}
+                  onToggleUploader={fileUploadHandler.toggleUploader}
                   magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
                   onMagicPrompt={handleMagicPrompt}
-                  showUndoMagicPrompt={originalInput !== null}
+                  showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
                   onUndoMagicPrompt={handleUndoMagicPrompt}
-                  magicPromptLoading={magicLoading}
+                  magicPromptLoading={magicPromptHandler.magicLoading}
                 />
               </div>
             </>

@@ -239,37 +239,6 @@ div .markdown-content .code-block-toolbar > div,
   @apply border border-gray-300 rounded px-3 py-2 mb-2 w-full;
 }
 
-/* Fix for the chat message alignment issue */
-.chat-widget-message.user {
-  align-self: flex-end;
-  align-items: flex-end;
-  justify-content: flex-end;
-  width: 100%; /* Ensures the message container takes full width */
-}
-
-.chat-widget-message.assistant {
-  align-self: flex-start;
-  align-items: flex-start;
-  justify-content: flex-start;
-  width: 100%; /* Ensures the message container takes full width */
-}
-
-/* Ensure the message content width is appropriate */
-.chat-widget-message-content {
-  max-width: 80%; /* Limit width of message bubbles */
-  width: auto; /* Allow content to determine width up to max-width */
-  white-space: normal;
-  display: inline-block;
-  box-sizing: content-box;
-}
-
-.chat-widget-message.user .chat-widget-message-content {
-  margin-left: auto; /* Push user messages to the right */
-}
-
-.chat-widget-message.assistant .chat-widget-message-content {
-  margin-right: auto; /* Push assistant messages to the left */
-}
 
 /* Add specific mobile fixes for the input area */
 @media (max-width: 768px) {

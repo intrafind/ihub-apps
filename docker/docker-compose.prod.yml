@@ -1,0 +1,146 @@
+# docker-compose.prod.yml - Production Environment
+version: '3.8'
+
+services:
+  # Configuration Initialization Container
+  ai-hub-config-init:
+    image: alpine:latest
+    container_name: ai-hub-config-init
+    volumes:
+      # Source configuration files
+      - ../contents/config:/source-config:ro
+      - ../contents/apps:/source-apps:ro
+      - ../contents/models:/source-models:ro
+      - ../contents/locales:/source-locales:ro
+      - ../contents/prompts:/source-prompts:ro
+
+      # Destination volumes
+      - ai-hub-config:/dest-config
+      - ai-hub-apps:/dest-apps
+      - ai-hub-models:/dest-models
+      - ai-hub-locales:/dest-locales
+      - ai-hub-prompts:/dest-prompts
+    command: >
+      sh -c "
+        echo 'Initializing configuration volumes...'
+        
+        # Copy configuration files if destination is empty
+        if [ ! -f /dest-config/platform.json ]; then
+          echo 'Copying config files...'
+          cp -r /source-config/* /dest-config/ 2>/dev/null || true
+        fi
+        
+        if [ ! -f /dest-apps/chat.json ]; then
+          echo 'Copying app files...'
+          cp -r /source-apps/* /dest-apps/ 2>/dev/null || true
+        fi
+        
+        if [ ! -f /dest-models/gpt-4.json ]; then
+          echo 'Copying model files...'
+          cp -r /source-models/* /dest-models/ 2>/dev/null || true
+        fi
+        
+        if [ ! -d /dest-locales/en ]; then
+          echo 'Copying locale files...'
+          cp -r /source-locales/* /dest-locales/ 2>/dev/null || true
+        fi
+        
+        if [ ! -f /dest-prompts/summarize.json ]; then
+          echo 'Copying prompt files...'
+          cp -r /source-prompts/* /dest-prompts/ 2>/dev/null || true
+        fi
+        
+        echo 'Configuration initialization completed'
+      "
+    restart: 'no'
+    networks:
+      - ai-hub-network
+
+  # Main AI Hub Apps Production Container
+  ai-hub-app:
+    image: ${AI_HUB_IMAGE:-ai-hub-apps:latest}
+    container_name: ai-hub-app
+    ports:
+      - '${AI_HUB_PORT:-3000}:3000'
+    volumes:
+      # Configuration volumes (read-only for security)
+      - ai-hub-config:/app/contents/config:ro
+      - ai-hub-apps:/app/contents/apps:ro
+      - ai-hub-models:/app/contents/models:ro
+      - ai-hub-locales:/app/contents/locales:ro
+      - ai-hub-prompts:/app/contents/prompts:ro
+
+      # Content that may be updated via admin interface
+      - ai-hub-pages:/app/contents/pages:rw
+      - ai-hub-sources:/app/contents/sources:rw
+
+      # Persistent data volumes
+      - ai-hub-data:/app/contents/data:rw
+      - ai-hub-uploads:/app/contents/uploads:rw
+      - ai-hub-logs:/app/logs:rw
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - WORKERS=${WORKERS:-4}
+      - PORT=3000
+      - HOST=0.0.0.0
+      - CORS_ORIGIN=${CORS_ORIGIN:-https://yourdomain.com}
+    env_file:
+      - .env.production
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - ai-hub-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+    depends_on:
+      ai-hub-config-init:
+        condition: service_completed_successfully
+
+volumes:
+  # Configuration volumes (semi-static)
+  ai-hub-config:
+    driver: local
+  ai-hub-apps:
+    driver: local
+  ai-hub-models:
+    driver: local
+  ai-hub-locales:
+    driver: local
+  ai-hub-prompts:
+    driver: local
+
+  # Content volumes (editable via admin)
+  ai-hub-pages:
+    driver: local
+  ai-hub-sources:
+    driver: local
+
+  # Persistent data volumes
+  ai-hub-data:
+    driver: local
+  ai-hub-uploads:
+    driver: local
+  ai-hub-logs:
+    driver: local
+
+networks:
+  ai-hub-network:
+    driver: bridge
+    name: ai-hub-prod-network

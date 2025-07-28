@@ -21,7 +21,7 @@
       "type": "filesystem",
       "description": "Frequently asked questions and basic information",
       "config": {
-        "path": "/sources/faq.md",
+        "path": "sources/faq.md",
         "encoding": "utf8"
       },
       "exposeAs": "prompt",
@@ -36,7 +36,7 @@
       "type": "filesystem",
       "description": "Technical documentation and guides",
       "config": {
-        "path": "/sources/documentation.md",
+        "path": "sources/documentation.md",
         "encoding": "utf8"
       },
       "exposeAs": "prompt",
@@ -51,7 +51,7 @@
       "type": "url",
       "description": "Latest information from company website",
       "config": {
-        "url": "https://example.com/about",
+        "url": "https://intrafind.com/",
         "maxContentLength": 10000,
         "cleanContent": true,
         "followRedirects": true

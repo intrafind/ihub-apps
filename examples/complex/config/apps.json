@@ -22,7 +22,6 @@
     "preferredStyle": "keep",
     "preferredTemperature": 0.3,
     "sendChatHistory": true,
-    "sourcePath": "/sources/faq.md",
     "prompt": {
       "en": "{{content}}",
       "de": "{{content}}"

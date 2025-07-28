@@ -1,64 +1,24 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import TurndownService from 'turndown';
+import { useClipboard } from '../../../shared/hooks/useClipboard';
 
 const ExportMenu = ({ content, onClose }) => {
   const { t } = useTranslation();
-  const turndownService = new TurndownService();
+  const { copyText, copyMarkdown, copyHTML, isLoading } = useClipboard();
 
-  const handleCopyText = () => {
-    // Convert HTML to plain text
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = content;
-    const plainText = tempDiv.textContent || tempDiv.innerText || '';
-    navigator.clipboard
-      .writeText(plainText)
-      .then(() => {
-        console.log('✅ Text copied to clipboard');
-        // You could add a toast notification here
-      })
-      .catch(err => {
-        console.error('Failed to copy text:', err);
-      });
+  const handleCopyText = async () => {
+    await copyText(content);
     onClose();
   };
 
-  const handleCopyMarkdown = () => {
-    const markdown = turndownService.turndown(content);
-    navigator.clipboard
-      .writeText(markdown)
-      .then(() => {
-        console.log('✅ Markdown copied to clipboard');
-      })
-      .catch(err => {
-        console.error('Failed to copy markdown:', err);
-      });
+  const handleCopyMarkdown = async () => {
+    await copyMarkdown(content);
     onClose();
   };
 
-  const handleCopyHTML = () => {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = content;
-    const plain = tempDiv.textContent || tempDiv.innerText || '';
-    const hasClipboardWrite = navigator.clipboard && navigator.clipboard.write;
-
-    const item = new ClipboardItem({
-      'text/html': new Blob([content], { type: 'text/html' }),
-      'text/plain': new Blob([plain], { type: 'text/plain' })
-    });
-
-    const copyPromise = hasClipboardWrite
-      ? navigator.clipboard.write([item])
-      : navigator.clipboard.writeText(content);
-
-    copyPromise
-      .then(() => {
-        console.log('✅ HTML copied to clipboard');
-      })
-      .catch(err => {
-        console.error('Failed to copy HTML:', err);
-      });
+  const handleCopyHTML = async () => {
+    await copyHTML(content);
     onClose();
   };
 

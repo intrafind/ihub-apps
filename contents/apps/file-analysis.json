@@ -2,8 +2,8 @@
   "id": "file-analysis",
   "order": 10,
   "name": {
-    "en": "File Analyzer",
-    "de": "Dateianalyse"
+    "en": "File and Image Analyzer",
+    "de": "Datei- und Bildanalyse"
   },
   "description": {
     "en": "Upload and analyze files with AI",
@@ -37,6 +37,10 @@
         "text/xml"
       ],
       "supportedPdfFormats": ["application/pdf"]
+    },
+    "imageUpload": {
+      "enabled": true,
+      "resizeImages": true
     }
   },
   "enabled": true

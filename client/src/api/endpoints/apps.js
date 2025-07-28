@@ -58,12 +58,10 @@ export const checkAppChatStatus = async (appId, chatId) => {
 };
 
 // Client-side PDF generation using browser print functionality
-export const exportChatToPDF = async (appId, chatId, exportData, appName = 'AI Hub Apps') => {
-  if (!exportData) {
+export const exportChatToPDF = async (messages, settings, template = 'default', watermark = {}, appName = 'AI Hub Apps', appId = null, chatId = null) => {
+  if (!messages) {
     throw new Error('Missing required parameters');
   }
-
-  const { messages, settings, template = 'default', watermark = {} } = exportData;
 
   // Generate HTML content for PDF
   const htmlContent = generatePDFHTML(messages, settings, template, watermark, appName);
@@ -508,47 +506,43 @@ const generateHTML = messages => {
 };
 
 // Client-side export functions
-export const exportChatToJSON = async (appId, chatId, exportData) => {
-  const { messages, settings } = exportData;
+export const exportChatToJSON = async (messages, settings, appId = null, chatId = null) => {
   const content = generateJSON(
     messages.filter(m => !m.isGreeting),
     settings
   );
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId}-${timestamp}.json`;
+  const filename = `chat-${appId || 'export'}-${timestamp}.json`;
 
   downloadFile(content, filename, 'application/json');
   return { success: true, filename };
 };
 
-export const exportChatToJSONL = async (appId, chatId, exportData) => {
-  const { messages, settings } = exportData;
+export const exportChatToJSONL = async (messages, settings, appId = null, chatId = null) => {
   const content = generateJSONL(
     messages.filter(m => !m.isGreeting),
     settings
   );
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId}-${timestamp}.jsonl`;
+  const filename = `chat-${appId || 'export'}-${timestamp}.jsonl`;
 
   downloadFile(content, filename, 'application/json');
   return { success: true, filename };
 };
 
-export const exportChatToMarkdown = async (appId, chatId, exportData) => {
-  const { messages } = exportData;
+export const exportChatToMarkdown = async (messages, settings = null, appId = null, chatId = null) => {
   const content = generateMarkdown(messages);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId}-${timestamp}.md`;
+  const filename = `chat-${appId || 'export'}-${timestamp}.md`;
 
   downloadFile(content, filename, 'text/markdown');
   return { success: true, filename };
 };
 
-export const exportChatToHTML = async (appId, chatId, exportData) => {
-  const { messages } = exportData;
+export const exportChatToHTML = async (messages, settings = null, appId = null, chatId = null) => {
   const content = generateHTML(messages);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId}-${timestamp}.html`;
+  const filename = `chat-${appId || 'export'}-${timestamp}.html`;
 
   downloadFile(content, filename, 'text/html');
   return { success: true, filename };
@@ -556,23 +550,24 @@ export const exportChatToHTML = async (appId, chatId, exportData) => {
 
 // Generic export function that handles all formats including PDF
 export const exportChatToFormat = async (
-  appId,
-  chatId,
-  exportData,
+  messages,
+  settings,
   format,
-  appName = 'AI Hub Apps'
+  options = {}
 ) => {
+  const { appId = null, chatId = null, appName = 'AI Hub Apps', template = 'default', watermark = {} } = options;
+  
   switch (format) {
     case 'pdf':
-      return exportChatToPDF(appId, chatId, exportData, appName);
+      return exportChatToPDF(messages, settings, template, watermark, appName, appId, chatId);
     case 'json':
-      return exportChatToJSON(appId, chatId, exportData);
+      return exportChatToJSON(messages, settings, appId, chatId);
     case 'jsonl':
-      return exportChatToJSONL(appId, chatId, exportData);
+      return exportChatToJSONL(messages, settings, appId, chatId);
     case 'markdown':
-      return exportChatToMarkdown(appId, chatId, exportData);
+      return exportChatToMarkdown(messages, settings, appId, chatId);
     case 'html':
-      return exportChatToHTML(appId, chatId, exportData);
+      return exportChatToHTML(messages, settings, appId, chatId);
     default:
       throw new Error(`Unsupported export format: ${format}`);
   }

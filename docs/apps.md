@@ -121,13 +121,6 @@ Administrators can override the automatically generated placeholder for each var
 | `text`     | Multi-line text input            |
 | `dropdown` | Selection from predefined values |
 
-#### Source Path
-
-Some apps can load content from a file:
-
-```json
-"sourcePath": "/contents/faq.md"
-```
 
 #### Settings Configuration
 

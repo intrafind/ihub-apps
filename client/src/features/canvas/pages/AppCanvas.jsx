@@ -20,9 +20,8 @@ import AppShareModal from '../../apps/components/AppShareModal';
 // Import hooks and utilities
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
-import useCanvasEditing from '../hooks/useCanvasEditing';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
-import useCanvasContent from '../hooks/useCanvasContent';
+import useCanvas from '../hooks/useCanvas';
 import { fetchAppDetails } from '../../../api/api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
@@ -116,23 +115,7 @@ const AppCanvas = () => {
   }, [app, modelsLoading]);
 
   // Canvas editor states
-  const [selection, setSelection] = useState(null);
-  const [selectedText, setSelectedText] = useState('');
-  const [cursorPosition, setCursorPosition] = useState(0);
   const [showExportMenu, setShowExportMenu] = useState(false);
-
-  // Canvas content management hook
-  const {
-    content: editorContent,
-    setContent: setEditorContent,
-    setContentWithConfirmation,
-    appendContent,
-    clearContent: clearCanvasContent,
-    hasContent,
-    getTextContent,
-    lastSaved: contentLastSaved,
-    getStorageInfo
-  } = useCanvasContent(appId, null);
 
   // Chat states
   const [inputValue, setInputValue] = useState('');
@@ -288,16 +271,36 @@ const AppCanvas = () => {
     [prepareResend, handlePromptSubmit, app?.allowEmptyContent]
   );
 
-  // Initialize canvas editing after handlePromptSubmit is defined
-  const { handleSelectionChange, handleEditAction } = useCanvasEditing({
-    quillRef,
+  // Initialize unified canvas hook after handlePromptSubmit is defined
+  const canvasHook = useCanvas(appId, null, { quillRef, chatInputRef }, handlePromptSubmit);
+  
+  // Extract all canvas functionality from the unified hook
+  const {
+    // Content management
+    content: editorContent,
+    setContent: setEditorContent,
+    setContentWithConfirmation,
+    appendContent,
+    clearContent: clearCanvasContent,
+    hasContent,
+    getTextContent,
+    lastSaved: contentLastSaved,
+    getStorageInfo,
+    
+    // Selection and editing state
     selection,
+    selectedText,
+    cursorPosition,
     setSelection,
     setSelectedText,
     setCursorPosition,
-    handlePromptSubmit,
-    chatInputRef
-  });
+    
+    // Editing functions
+    handleSelectionChange,
+    handleEditAction,
+    applyEditResult,
+    clearPendingEdit
+  } = canvasHook;
 
   // Load app data
   useEffect(() => {
@@ -396,68 +399,6 @@ const AppCanvas = () => {
     setInputValue(e.target.value);
   }, []);
 
-  // Apply edit result to the canvas
-  const applyEditResult = useCallback(
-    async (content, action) => {
-      if (!content || !quillRef.current) return;
-
-      const quill = quillRef.current.getEditor();
-
-      try {
-        switch (action) {
-          case 'continue':
-          case 'summarize':
-          case 'outline':
-            // For actions that add content, append to the end
-            const currentLength = quill.getLength();
-            quill.insertText(currentLength - 1, '\n\n' + content);
-            break;
-
-          case 'expand':
-          case 'condense':
-          case 'paraphrase':
-          case 'clarify':
-          case 'formal':
-          case 'casual':
-          case 'professional':
-          case 'creative':
-          case 'translate':
-          case 'grammar':
-          case 'format':
-            // For text replacement actions, replace the selected text
-            if (window.pendingEdit && window.pendingEdit.selection) {
-              const { index, length } = window.pendingEdit.selection;
-              quill.deleteText(index, length);
-              quill.insertText(index, content);
-              // Clear selection after replacement
-              quill.setSelection(index + content.length, 0);
-            }
-            break;
-
-          case 'suggest':
-            // For suggestions, just add them to the chat - don't modify the document
-            // This is handled by the chat system
-            break;
-
-          default:
-            // Default behavior: append content
-            const endLength = quill.getLength();
-            quill.insertText(endLength - 1, '\n\n' + content);
-        }
-
-        // Update the editor content state
-        const updatedContent = quill.root.innerHTML;
-        setEditorContent(updatedContent);
-      } catch (error) {
-        console.error('Error applying edit result:', error);
-        addSystemMessage(
-          t('canvas.errorApplyingEdit', 'Error applying edit result. Please try again.'),
-          true
-        );
-      }
-    },
-    [setEditorContent, addSystemMessage, t]
-  );
 
   // Handle content modal actions
   const handleContentModalReplace = useCallback(() => {

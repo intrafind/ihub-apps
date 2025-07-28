@@ -61,10 +61,7 @@ export const appConfigSchema = z
     features: z.any().optional(),
     greeting: z.any().optional(),
     starterPrompts: z.array(z.any()).optional(),
-    // New sources system (replaces sourcePath)
     sources: z.array(sourceConfigSchema).optional(),
-    // Legacy field - will be removed in migration
-    sourcePath: z.string().optional(),
     allowedModels: z.array(z.string()).optional(),
     disallowModelSelection: z.boolean().optional(),
     allowEmptyContent: z.boolean().optional(),

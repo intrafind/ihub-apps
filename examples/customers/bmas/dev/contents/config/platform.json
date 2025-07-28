@@ -58,7 +58,9 @@
   },
   "auth": {
     "mode": "local",
-    "authenticatedGroup": "authenticated"
+    "authenticatedGroup": "authenticated",
+    "sessionTimeoutMinutes": 480,
+    "jwtSecret": "csNOTZ03Fjnvz7ebDvkaOVc"
   },
   "anonymousAuth": {
     "enabled": true,
@@ -70,8 +72,6 @@
   "localAuth": {
     "enabled": true,
     "usersFile": "contents/config/users.json",
-    "sessionTimeoutMinutes": 480,
-    "jwtSecret": "csNOTZ03Fjnvz7ebDvkaOVc",
     "showDemoAccounts": false
   },
   "oidcAuth": {

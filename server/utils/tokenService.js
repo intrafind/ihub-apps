@@ -23,7 +23,7 @@ export function generateJwt(user, options = {}) {
   }
 
   const platform = configCache.getPlatform() || {};
-  const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret;
+  const jwtSecret = config.JWT_SECRET || platform.auth?.jwtSecret;
 
   if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
     throw new Error(
@@ -33,7 +33,7 @@ export function generateJwt(user, options = {}) {
 
   // Default expiration: 8 hours
   const expiresInMinutes =
-    options.expiresInMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
+    options.expiresInMinutes || platform.auth?.sessionTimeoutMinutes || 480;
   const expiresIn = expiresInMinutes * 60; // Convert to seconds
 
   // Base token payload

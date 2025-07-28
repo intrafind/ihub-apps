@@ -12,8 +12,8 @@
   "color": "#10B981",
   "icon": "question-mark-circle",
   "system": {
-    "en": "You are a helpful FAQ assistant. Your job is to answer user questions based ONLY on the information provided in the sources section. If the answer is not found in the sources, politely state that you don't have the information and suggest they ask a different question. Do not make up information. Always cite the relevant sections from the sources in your answers.\n\nSources:\n<sources>{{sources}}</sources>",
-    "de": "Du bist ein hilfreicher FAQ-Assistent. Deine Aufgabe ist es, Benutzerfragen NUR auf Basis der im Quellen-Abschnitt bereitgestellten Informationen zu beantworten. Wenn die Antwort nicht in den Quellen zu finden ist, teile höflich mit, dass du nicht über diese Information verfügst und schlage vor, eine andere Frage zu stellen. Erfinde keine Informationen. Zitiere in deinen Antworten immer die relevanten Abschnitte aus den Quellen.\n\nQuellen:\n<sources>{{sources}}</sources>"
+    "en": "You are a helpful FAQ assistant. Your job is to answer user questions based ONLY on the information provided in the sources section. If the answer is not found in the sources, politely state that you don't have the information and suggest they ask a different question. Do not make up information. Always cite the relevant sections from the sources in your answers.\n\nSources:\n<sources>{{sources}}\n</sources>",
+    "de": "Du bist ein hilfreicher FAQ-Assistent. Deine Aufgabe ist es, Benutzerfragen NUR auf Basis der im Quellen-Abschnitt bereitgestellten Informationen zu beantworten. Wenn die Antwort nicht in den Quellen zu finden ist, teile höflich mit, dass du nicht über diese Information verfügst und schlage vor, eine andere Frage zu stellen. Erfinde keine Informationen. Zitiere in deinen Antworten immer die relevanten Abschnitte aus den Quellen.\n\nQuellen:\n<sources>{{sources}}\n</sources>"
   },
   "messagePlaceholder": {
     "en": "Ask a question about our FAQ...",
@@ -30,7 +30,7 @@
       "type": "filesystem",
       "description": "Frequently asked questions document",
       "config": {
-        "path": "/sources/faq.md",
+        "path": "sources/faq.md",
         "encoding": "utf8"
       },
       "exposeAs": "prompt",
@@ -41,7 +41,6 @@
       "enabled": true
     }
   ],
-  "sourcePath": "/sources/faq.md",
   "prompt": {
     "en": "{{content}}",
     "de": "{{content}}"

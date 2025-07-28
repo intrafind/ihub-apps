@@ -176,9 +176,9 @@ class AnthropicAdapterClass extends BaseAdapter {
     if (!data) return result;
     try {
       const parsed = JSON.parse(data);
-      console.log('--- Anthropic Raw Chunk ---');
-      console.log(JSON.stringify(parsed, null, 2));
-      console.log('--------------------------');
+      // console.log('--- Anthropic Raw Chunk ---');
+      // console.log(JSON.stringify(parsed, null, 2));
+      // console.log('--------------------------');
 
       // Handle full response object (non-streaming)
       if (parsed.content && Array.isArray(parsed.content) && parsed.content[0]?.text) {

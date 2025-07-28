@@ -29,6 +29,13 @@ class FileSystemHandler extends SourceHandler {
     // Resolve path relative to base path
     const fullPath = path.resolve(this.basePath, filePath.replace(/^\/+/, ''));
 
+    // Debug logging
+    console.log(`FileSystemHandler Debug:
+      - basePath: ${this.basePath}
+      - requestedPath: ${filePath}
+      - resolvedFullPath: ${fullPath}
+      - basePathResolved: ${path.resolve(this.basePath)}`);
+
     // Security check - ensure path is within base directory
     if (!fullPath.startsWith(path.resolve(this.basePath))) {
       throw new Error(`Access denied: path ${filePath} is outside allowed directory`);

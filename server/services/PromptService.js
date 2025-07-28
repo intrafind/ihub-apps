@@ -1,7 +1,7 @@
-import { loadText } from '../configLoader.js';
 import { getLocalizedContent } from '../../shared/localize.js';
 import configCache from '../configCache.js';
 import { createSourceManager } from '../sources/index.js';
+import config from '../config.js';
 
 /**
  * Service for handling prompt processing and template resolution
@@ -174,7 +174,11 @@ class PromptService {
 
       // Process sources using new source handler system
       try {
-        const sourceManager = createSourceManager();
+        const sourceManager = createSourceManager({
+          filesystem: {
+            basePath: `../${config.CONTENTS_DIR}`
+          }
+        });
         let sourceContent = '';
 
         // Handle new sources system
@@ -206,32 +210,9 @@ class PromptService {
             systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');
           }
         }
-        // Handle legacy sourcePath for backward compatibility
-        else if (app.sourcePath && systemPrompt.includes('{{source}}')) {
-          const sourcePath = userVariables.source_path || app.sourcePath;
-          console.log(`Loading legacy source content from file: ${sourcePath}`);
-
-          try {
-            const sourceContent = await loadText(sourcePath.replace(/^\//, ''));
-            systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');
-            console.log(`Loaded legacy source content (${sourceContent?.length || 0} characters)`);
-          } catch (error) {
-            console.error(`Error loading legacy source content from ${sourcePath}:`, error);
-            systemPrompt = systemPrompt.replace(
-              '{{source}}',
-              `Error loading content from ${sourcePath}: ${error.message}. Please check the file path and try again.`
-            );
-          }
-        }
       } catch (error) {
         console.error('Error in source processing system:', error);
-        // Fallback to legacy behavior if source system fails
-        if (app.sourcePath && systemPrompt.includes('{{source}}')) {
-          systemPrompt = systemPrompt.replace(
-            '{{source}}',
-            `Error in source processing: ${error.message}. Please check your source configuration.`
-          );
-        }
+        throw new Error(`Failed to process sources: ${error.message}`);
       }
 
       if (style) {

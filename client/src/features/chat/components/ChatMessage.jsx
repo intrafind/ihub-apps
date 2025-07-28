@@ -7,6 +7,7 @@ import MessageVariables from './MessageVariables';
 import Icon from '../../../shared/components/Icon';
 import StreamingMarkdown from './StreamingMarkdown';
 import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
+import './ChatMessage.css';
 
 const ChatMessage = ({
   message,
@@ -48,6 +49,7 @@ const ChatMessage = ({
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState(0); // Track active rating (0-5)
   const [showThoughts, setShowThoughts] = useState(false);
+  const messageRef = useRef(null); // Ref to scope DOM queries to this specific message
   const [showCopyMenu, setShowCopyMenu] = useState(false);
   const copyMenuRef = useRef(null);
 
@@ -69,12 +71,9 @@ const ChatMessage = ({
 
   // Post-process the rendered markdown to add target="_blank" to external links
   useEffect(() => {
-    if (outputFormat === 'markdown' && !isUser && !isEditing) {
-      // Get all links in the rendered markdown
-      const markdownContainer = document.querySelector('.markdown-content');
-      if (!markdownContainer) return;
-
-      const links = markdownContainer.querySelectorAll('a');
+    if (outputFormat === 'markdown' && !isUser && !isEditing && messageRef.current) {
+      // Get all links in this specific message's rendered markdown
+      const links = messageRef.current.querySelectorAll('a');
       const currentDomain = window.location.hostname;
 
       links.forEach(link => {
@@ -376,6 +375,7 @@ const ChatMessage = ({
 
   return (
     <div
+      ref={messageRef}
       className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} chat-widget-message ${isUser ? 'user' : 'assistant'}`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}

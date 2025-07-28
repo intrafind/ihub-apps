@@ -1,0 +1,74 @@
+# docker-compose.yml - Development Environment
+version: '3.8'
+
+services:
+  # Main AI Hub Apps Development Container
+  ai-hub-dev:
+    build:
+      context: ..
+      target: development
+      dockerfile: docker/Dockerfile
+    container_name: ai-hub-dev
+    ports:
+      - '3000:3000' # Server port
+      - '5173:5173' # Vite dev server port
+    volumes:
+      # Source code volumes for hot reload (read-only to prevent accidental changes)
+      - ../server:/app/server:ro
+      - ../client/src:/app/client/src:ro
+      - ../shared:/app/shared:ro
+
+      # Complete contents folder (bind mount for easy editing) - ALWAYS uses local folder
+      - ../contents:/app/contents:rw
+      
+      # Override specific subdirectories with persistent volumes (mounted later = higher priority)
+      - ai-hub-dev-data:/app/contents/data
+      - ai-hub-dev-uploads:/app/contents/uploads
+      - ai-hub-dev-logs:/app/logs
+
+      # Node modules cache (performance optimization)
+      - ai-hub-dev-node-modules:/app/node_modules
+      - ai-hub-dev-client-modules:/app/client/node_modules
+      - ai-hub-dev-server-modules:/app/server/node_modules
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - WORKERS=1
+      - PORT=3000
+      - HOST=0.0.0.0
+      - CORS_ORIGIN=http://localhost:5173
+      - DEBUG_MODE=true
+      - HOT_RELOAD=true
+    env_file:
+      - ../.env
+    restart: unless-stopped
+    networks:
+      - ai-hub-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  # Development persistent volumes
+  ai-hub-dev-data:
+    driver: local
+  ai-hub-dev-uploads:
+    driver: local
+  ai-hub-dev-logs:
+    driver: local
+
+  # Node modules caches for faster rebuilds
+  ai-hub-dev-node-modules:
+    driver: local
+  ai-hub-dev-client-modules:
+    driver: local
+  ai-hub-dev-server-modules:
+    driver: local
+
+networks:
+  ai-hub-network:
+    driver: bridge
+    name: ai-hub-network

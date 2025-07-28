@@ -30,7 +30,7 @@
       "type": "filesystem",
       "description": "Frequently asked questions document",
       "config": {
-        "path": "/sources/faq.md",
+        "path": "sources/faq.md",
         "encoding": "utf8"
       },
       "exposeAs": "prompt",
@@ -41,11 +41,6 @@
       "enabled": true
     }
   ],
-  "sourcePath": "/sources/faq.md",
-  "prompt": {
-    "en": "{{content}}",
-    "de": "{{content}}"
-  },
   "enabled": true,
   "tools": [],
   "greeting": {

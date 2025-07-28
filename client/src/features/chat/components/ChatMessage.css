@@ -1,0 +1,53 @@
+/* Chat Message Bubble Styles */
+
+/* Fix for the chat message alignment issue */
+.chat-widget-message.user {
+  align-self: flex-end;
+  align-items: flex-end;
+  justify-content: flex-end;
+  width: 100%; /* Ensures the message container takes full width */
+}
+
+.chat-widget-message.assistant {
+  align-self: flex-start;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 100%; /* Ensures the message container takes full width */
+}
+
+/* Message bubble content styling */
+.chat-widget-message-content {
+  max-width: 80%; /* Limit width of message bubbles */
+  width: auto; /* Allow content to determine width up to max-width */
+  white-space: normal;
+  display: inline-block;
+  box-sizing: content-box;
+  word-break: break-word;
+  padding: 10px 14px;
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* User message styling */
+.chat-widget-message.user .chat-widget-message-content {
+  margin-left: auto; /* Push user messages to the right */
+  background-color: rgb(79, 70, 229);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+/* Assistant message styling */
+.chat-widget-message.assistant .chat-widget-message-content {
+  margin-right: auto; /* Push assistant messages to the left */
+  background-color: white;
+  color: #1e293b;
+  border: 1px solid #e2e8f0;
+  border-bottom-left-radius: 4px;
+}
+
+/* Error message styling */
+.chat-widget-message-content.error {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-radius: 12px;
+}

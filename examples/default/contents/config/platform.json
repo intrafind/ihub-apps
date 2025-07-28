@@ -35,7 +35,9 @@
   },
   "auth": {
     "mode": "oidc",
-    "authenticatedGroup": "authenticated"
+    "authenticatedGroup": "authenticated",
+    "sessionTimeoutMinutes": 480,
+    "jwtSecret": "magic-secret"
   },
   "anonymousAuth": {
     "enabled": true,
@@ -44,8 +46,6 @@
   "localAuth": {
     "enabled": true,
     "usersFile": "contents/config/users.json",
-    "sessionTimeoutMinutes": 480,
-    "jwtSecret": "magic-secret",
     "showDemoAccounts": false
   },
   "proxyAuth": {

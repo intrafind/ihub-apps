@@ -18,12 +18,15 @@ export default function jwtAuthMiddleware(req, res, next) {
     return next(); // No token, continue as anonymous
   }
 
+  console.debug('🔐 JWT Auth: Processing Bearer token for', req.url);
+
   const token = authHeader.substring(7);
 
   const platform = configCache.getPlatform() || {};
-  const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret;
+  const jwtSecret = config.JWT_SECRET || platform.auth?.jwtSecret;
 
   if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
+    console.warn('🔐 JWT Auth: No JWT secret configured');
     return next(); // No JWT secret configured
   }
 
@@ -46,7 +49,7 @@ export default function jwtAuthMiddleware(req, res, next) {
     if (decoded.authMode === 'local') {
       // Local authentication token
       user = {
-        id: decoded.id,
+        id: decoded.sub || decoded.id,
         name: decoded.name,
         email: decoded.email,
         groups: decoded.groups || [],
@@ -78,10 +81,11 @@ export default function jwtAuthMiddleware(req, res, next) {
     }
 
     req.user = user;
+    console.debug('🔐 JWT Auth: Successfully authenticated user:', user.id, 'for', req.url);
     return next();
   } catch (error) {
     // Invalid token, continue as anonymous
-    console.warn('JWT token validation failed:', error.message);
+    console.warn('🔐 JWT token validation failed:', error.message);
     return next();
   }
 }
