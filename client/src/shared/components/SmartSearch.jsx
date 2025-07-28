@@ -42,7 +42,7 @@ const SmartSearch = () => {
           .catch(err => console.error('Failed to load apps', err));
       }
     }
-  }, [isOpen, apps.length, getFavoriteApps]);
+  }, [isOpen, apps.length]);
 
   const searchItems = apps.map(app => ({
     ...app,

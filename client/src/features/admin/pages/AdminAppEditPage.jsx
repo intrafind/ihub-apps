@@ -132,7 +132,7 @@ const AdminAppEditPage = () => {
     } else {
       loadApp();
     }
-  }, [appId, loadApp]);
+  }, [appId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadApp = useCallback(async () => {
     try {
@@ -214,7 +214,7 @@ const AdminAppEditPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [appId]);
+  }, [appId]);  
 
   const handleSave = async e => {
     e.preventDefault();

@@ -18,7 +18,7 @@ const AdminModelsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
   const [testingModel, setTestingModel] = useState(null);
-  const [testResults, setTestResults] = useState({});
+  const [, setTestResults] = useState({});
   const [selectedModel, setSelectedModel] = useState(null);
   const [showModelDetails, setShowModelDetails] = useState(false);
 

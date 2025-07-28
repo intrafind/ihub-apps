@@ -57,7 +57,7 @@ function expandToolFunctions(tools = []) {
       for (const [fn, cfg] of Object.entries(tool.functions)) {
         expanded.push({
           ...tool,
-          id: `${tool.id}.${fn}`,
+          id: `${tool.id}_${fn}`,
           name: cfg.name || `${tool.name} ${fn}`,
           description: cfg.description || tool.description,
           parameters: cfg.parameters || {},

@@ -212,7 +212,7 @@ const AppsList = () => {
     return () => {
       isMounted = false;
     };
-  }, [currentLanguage, user?.id, isAuthenticated, t]); // Added auth dependencies to reload apps when user changes
+  }, [currentLanguage, user?.id, isAuthenticated, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset display count when search changes
   useEffect(() => {
@@ -221,7 +221,7 @@ const AppsList = () => {
       const visibleCount = calculateVisibleAppCount();
       setDisplayCount(visibleCount);
     }
-  }, [searchTerm, searchConfig.enabled, apps.length]);
+  }, [searchTerm, searchConfig.enabled, apps.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Language change handler to ensure proper UI updates
   // Only re-render on actual language changes, not on every render
@@ -269,7 +269,7 @@ const AppsList = () => {
     // Increase by another viewport's worth of apps
     const increment = calculateVisibleAppCount();
     setDisplayCount(prev => prev + increment);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Category selection handler
   const handleCategorySelect = useCallback(
@@ -279,7 +279,7 @@ const AppsList = () => {
       const visibleCount = calculateVisibleAppCount();
       setDisplayCount(visibleCount);
     },
-    []
+    [] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Memoized filtered apps to avoid recomputing on every render

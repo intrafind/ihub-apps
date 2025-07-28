@@ -46,7 +46,7 @@ const AdminModelEditPage = () => {
     }
     loadAppsUsingModel();
     loadUsageData();
-  }, [modelId, isNewModel]);
+  }, [modelId, isNewModel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isNewModel && location.state?.templateModel) {

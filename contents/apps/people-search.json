@@ -21,12 +21,12 @@
   "preferredTemperature": 0.2,
   "sendChatHistory": true,
   "tools": [
-    "entraPeopleSearch.findUser",
-    "entraPeopleSearch.getAllUserDetails",
-    "entraPeopleSearch.getUserManager",
-    "entraPeopleSearch.getUserGroups",
-    "entraPeopleSearch.getTeamMembers",
-    "entraPeopleSearch.getUserPhotoBase64"
+    "entraPeopleSearch_findUser",
+    "entraPeopleSearch_getAllUserDetails",
+    "entraPeopleSearch_getUserManager",
+    "entraPeopleSearch_getUserGroups",
+    "entraPeopleSearch_getTeamMembers",
+    "entraPeopleSearch_getUserPhotoBase64"
   ],
   "settings": {
     "enabled": true,

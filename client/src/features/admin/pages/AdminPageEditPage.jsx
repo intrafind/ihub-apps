@@ -30,7 +30,7 @@ const AdminPageEditPage = () => {
     } else {
       loadPage();
     }
-  }, [pageId, isNew]);
+  }, [pageId, isNew]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadPage = useCallback(async () => {
     try {

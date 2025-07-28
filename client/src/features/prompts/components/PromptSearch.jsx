@@ -25,7 +25,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
       setFavoritePromptIds(getFavoritePrompts());
       setRecentPromptIds(getRecentPromptIds());
     }
-  }, [isOpen, getFavoritePrompts]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -47,7 +47,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
         console.error('Failed to load prompts', err);
       }
     })();
-  }, [isOpen, i18n.language, getFavoritePrompts]);
+  }, [isOpen, i18n.language]);
 
   useEffect(() => {
     if (isOpen) {
@@ -67,7 +67,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
           .catch(err => console.error('Failed to load prompts', err));
       }
     }
-  }, [isOpen, i18n.language, getFavoritePrompts, prompts.length]);
+  }, [isOpen, i18n.language, prompts.length]);
 
   const searchItems = prompts;
 

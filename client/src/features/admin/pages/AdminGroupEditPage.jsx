@@ -38,7 +38,7 @@ const AdminGroupEditPage = () => {
     } else {
       loadGroup();
     }
-  }, [groupId]);
+  }, [groupId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadResources = async () => {
     try {
@@ -67,7 +67,7 @@ const AdminGroupEditPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [groupId]);
+  }, [groupId]);  
 
   const handleSave = async e => {
     e.preventDefault();

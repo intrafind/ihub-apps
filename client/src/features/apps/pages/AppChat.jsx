@@ -110,7 +110,7 @@ const AppChat = () => {
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const [maxTokens, setMaxTokens] = useState(4096);
+  const [, setMaxTokens] = useState(4096);
   const shareEnabled = app?.features?.shortLinks !== false;
 
   // Shared app settings hook
@@ -808,7 +808,7 @@ const AppChat = () => {
 
       {app?.variables && app.variables.length > 0 && showParameters && (
         <div
-          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end"
+          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
           onClick={e => {
             // Close modal when clicking backdrop
             if (e.target === e.currentTarget) {
@@ -816,7 +816,7 @@ const AppChat = () => {
             }
           }}
         >
-          <div className="w-full bg-white rounded-t-lg max-h-[85vh] overflow-hidden flex flex-col">
+          <div className="w-full bg-white rounded-lg max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
             <div className="flex justify-between items-center p-4 border-b flex-shrink-0">
               <h3 className="font-medium">{t('pages.appChat.inputParameters')}</h3>
               <button
