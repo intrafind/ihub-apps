@@ -673,8 +673,12 @@ const AppChat = () => {
         content: input,
         promptTemplate: app?.prompt || null,
         variables: { ...variables },
-        imageData: fileUploadHandler.selectedFile?.type === 'image' ? fileUploadHandler.selectedFile : null,
-        fileData: fileUploadHandler.selectedFile?.type === 'document' ? fileUploadHandler.selectedFile : null
+        imageData:
+          fileUploadHandler.selectedFile?.type === 'image' ? fileUploadHandler.selectedFile : null,
+        fileData:
+          fileUploadHandler.selectedFile?.type === 'document'
+            ? fileUploadHandler.selectedFile
+            : null
       },
       params: {
         modelId: selectedModel,
@@ -916,7 +920,9 @@ const AppChat = () => {
                       }
                       onFileSelect={fileUploadHandler.handleFileSelect}
                       uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
-                      allowEmptySubmit={app?.allowEmptyContent || fileUploadHandler.selectedFile !== null}
+                      allowEmptySubmit={
+                        app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
+                      }
                       inputRef={inputRef}
                       selectedFile={fileUploadHandler.selectedFile}
                       showUploader={fileUploadHandler.showUploader}
@@ -975,7 +981,9 @@ const AppChat = () => {
                       }
                       onFileSelect={fileUploadHandler.handleFileSelect}
                       uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
-                      allowEmptySubmit={app?.allowEmptyContent || fileUploadHandler.selectedFile !== null}
+                      allowEmptySubmit={
+                        app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
+                      }
                       inputRef={inputRef}
                       selectedFile={fileUploadHandler.selectedFile}
                       showUploader={fileUploadHandler.showUploader}
@@ -1034,7 +1042,9 @@ const AppChat = () => {
                     }
                     onFileSelect={fileUploadHandler.handleFileSelect}
                     uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
-                    allowEmptySubmit={app?.allowEmptyContent || fileUploadHandler.selectedFile !== null}
+                    allowEmptySubmit={
+                      app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
+                    }
                     inputRef={inputRef}
                     selectedFile={fileUploadHandler.selectedFile}
                     showUploader={fileUploadHandler.showUploader}
@@ -1087,7 +1097,9 @@ const AppChat = () => {
                   }
                   onFileSelect={fileUploadHandler.handleFileSelect}
                   uploadConfig={fileUploadHandler.createUploadConfig(app)}
-                  allowEmptySubmit={app?.allowEmptyContent || fileUploadHandler.selectedFile !== null}
+                  allowEmptySubmit={
+                    app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
+                  }
                   inputRef={inputRef}
                   selectedFile={fileUploadHandler.selectedFile}
                   showUploader={fileUploadHandler.showUploader}

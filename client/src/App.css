@@ -239,7 +239,6 @@ div .markdown-content .code-block-toolbar > div,
   @apply border border-gray-300 rounded px-3 py-2 mb-2 w-full;
 }
 
-
 /* Add specific mobile fixes for the input area */
 @media (max-width: 768px) {
   /* Create a sticky positioning for chat input container */

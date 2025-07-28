@@ -4,7 +4,7 @@ import { apiClient } from './client.js';
 export const makeAdminApiCall = async (url, options = {}) => {
   // Handle admin token for anonymous mode
   const adminToken = localStorage.getItem('adminToken');
-  
+
   // Create axios config from options
   const axiosConfig = {
     url: url.startsWith('/') ? url : `/${url}`,
@@ -40,18 +40,18 @@ export const makeAdminApiCall = async (url, options = {}) => {
 
   // Add authentication headers
   const authToken = localStorage.getItem('authToken');
-  
+
   if (authToken) {
     // In OIDC/Local/Proxy modes, use the regular auth token
     axiosConfig.headers = {
       ...axiosConfig.headers,
-      'Authorization': `Bearer ${authToken}`
+      Authorization: `Bearer ${authToken}`
     };
   } else if (adminToken) {
     // In anonymous mode, use admin token if available
     axiosConfig.headers = {
       ...axiosConfig.headers,
-      'Authorization': `Bearer ${adminToken}`
+      Authorization: `Bearer ${adminToken}`
     };
   }
 

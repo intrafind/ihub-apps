@@ -7,14 +7,14 @@ export const useClipboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastCopied, setLastCopied] = useState(null);
 
-  const copyText = async (content) => {
+  const copyText = async content => {
     setIsLoading(true);
     try {
       // Convert HTML to plain text if needed
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = content;
       const plainText = tempDiv.textContent || tempDiv.innerText || '';
-      
+
       await navigator.clipboard.writeText(plainText);
       setLastCopied('text');
       console.log('✅ Text copied to clipboard');
@@ -27,7 +27,7 @@ export const useClipboard = () => {
     }
   };
 
-  const copyMarkdown = async (content) => {
+  const copyMarkdown = async content => {
     setIsLoading(true);
     try {
       const markdown = turndownService.turndown(content);
@@ -43,7 +43,7 @@ export const useClipboard = () => {
     }
   };
 
-  const copyHTML = async (content) => {
+  const copyHTML = async content => {
     setIsLoading(true);
     try {
       const tempDiv = document.createElement('div');
@@ -60,7 +60,7 @@ export const useClipboard = () => {
       } else {
         await navigator.clipboard.writeText(content);
       }
-      
+
       setLastCopied('html');
       console.log('✅ HTML copied to clipboard');
       return { success: true, type: 'html' };
@@ -72,7 +72,7 @@ export const useClipboard = () => {
     }
   };
 
-  const copyJSON = async (data) => {
+  const copyJSON = async data => {
     setIsLoading(true);
     try {
       const jsonString = typeof data === 'string' ? data : JSON.stringify(data, null, 2);

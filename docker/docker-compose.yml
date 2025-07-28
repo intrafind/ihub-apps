@@ -20,7 +20,7 @@ services:
 
       # Complete contents folder (bind mount for easy editing) - ALWAYS uses local folder
       - ../contents:/app/contents:rw
-      
+
       # Override specific subdirectories with persistent volumes (mounted later = higher priority)
       - ai-hub-dev-data:/app/contents/data
       - ai-hub-dev-uploads:/app/contents/uploads

@@ -58,7 +58,15 @@ export const checkAppChatStatus = async (appId, chatId) => {
 };
 
 // Client-side PDF generation using browser print functionality
-export const exportChatToPDF = async (messages, settings, template = 'default', watermark = {}, appName = 'AI Hub Apps', appId = null, chatId = null) => {
+export const exportChatToPDF = async (
+  messages,
+  settings,
+  template = 'default',
+  watermark = {},
+  appName = 'AI Hub Apps',
+  appId = null,
+  chatId = null
+) => {
   if (!messages) {
     throw new Error('Missing required parameters');
   }
@@ -530,7 +538,12 @@ export const exportChatToJSONL = async (messages, settings, appId = null, chatId
   return { success: true, filename };
 };
 
-export const exportChatToMarkdown = async (messages, settings = null, appId = null, chatId = null) => {
+export const exportChatToMarkdown = async (
+  messages,
+  settings = null,
+  appId = null,
+  chatId = null
+) => {
   const content = generateMarkdown(messages);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.md`;
@@ -549,14 +562,15 @@ export const exportChatToHTML = async (messages, settings = null, appId = null, 
 };
 
 // Generic export function that handles all formats including PDF
-export const exportChatToFormat = async (
-  messages,
-  settings,
-  format,
-  options = {}
-) => {
-  const { appId = null, chatId = null, appName = 'AI Hub Apps', template = 'default', watermark = {} } = options;
-  
+export const exportChatToFormat = async (messages, settings, format, options = {}) => {
+  const {
+    appId = null,
+    chatId = null,
+    appName = 'AI Hub Apps',
+    template = 'default',
+    watermark = {}
+  } = options;
+
   switch (format) {
     case 'pdf':
       return exportChatToPDF(messages, settings, template, watermark, appName, appId, chatId);

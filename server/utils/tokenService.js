@@ -32,8 +32,7 @@ export function generateJwt(user, options = {}) {
   }
 
   // Default expiration: 8 hours
-  const expiresInMinutes =
-    options.expiresInMinutes || platform.auth?.sessionTimeoutMinutes || 480;
+  const expiresInMinutes = options.expiresInMinutes || platform.auth?.sessionTimeoutMinutes || 480;
   const expiresIn = expiresInMinutes * 60; // Convert to seconds
 
   // Base token payload

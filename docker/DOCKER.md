@@ -9,16 +9,18 @@ This document provides comprehensive guidance for running AI Hub Apps in Docker 
 The Docker development setup **automatically** uses your local `contents/` folder - no additional configuration needed!
 
 1. **Copy environment file:**
+
    ```bash
    cp .env.example .env
    # Edit .env with your API keys and configuration
    ```
 
 2. **Start development with automatic local contents:**
+
    ```bash
    npm run docker:up
    ```
-   
+
    This **automatically**:
    - ✅ Mounts your **entire local `contents/` folder** into the container
    - ✅ Any changes to files in `contents/` appear immediately in the container
@@ -28,10 +30,11 @@ The Docker development setup **automatically** uses your local `contents/` folde
 3. **Access the application:**
    - **Main app**: http://localhost:3000 (Node.js server + static files)
    - **Vite dev server**: http://localhost:5173 (Hot reload development server)
-   
+
    In development, both the Node.js server and Vite dev server run simultaneously for the best development experience.
 
 **Volume Strategy:**
+
 - **Local contents**: Your entire `contents/` folder is mounted read-write
 - **Persistent data**: `contents/data/`, `contents/uploads/`, and logs use Docker volumes for persistence
 - **Best of both**: Edit configs locally, keep runtime data persistent
@@ -39,12 +42,14 @@ The Docker development setup **automatically** uses your local `contents/` folde
 ### Production Environment
 
 1. **Prepare production environment:**
+
    ```bash
    cp .env.production .env.production
    # Configure with production secrets (use secrets management in real deployment)
    ```
 
 2. **Build and start production:**
+
    ```bash
    npm run docker:build:prod
    npm run docker:prod:up
@@ -52,7 +57,7 @@ The Docker development setup **automatically** uses your local `contents/` folde
 
 3. **Access the production application:**
    - **Main app**: http://localhost:3000 (Node.js server with built client)
-   
+
    In production, the Node.js server serves the pre-built client files directly.
 
 ## Building Docker Images Locally
@@ -124,13 +129,15 @@ docker image inspect ai-hub-apps:prod
 ```
 
 **Expected behavior:**
+
 - **Development**: Both Node.js server (3000) and Vite dev server (5173) should start
 - **Production**: Only Node.js server (3000) should start, serving the built client files
 
 ## Docker Commands Reference
 
 ### Running Containers
-```
+
+````
 
 ### Development Workflow
 
@@ -152,7 +159,7 @@ npm run docker:down
 
 # Stop and remove volumes
 npm run docker:down:volumes
-```
+````
 
 ### Production Deployment
 
@@ -194,6 +201,7 @@ This will automatically start the CI/CD pipeline and publish new images to the r
 ### Published Images
 
 Images are available at:
+
 ```
 ghcr.io/intrafind/ai-hub-apps:latest
 ghcr.io/intrafind/ai-hub-apps:v1.0.0

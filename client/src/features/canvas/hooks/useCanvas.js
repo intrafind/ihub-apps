@@ -3,7 +3,7 @@ import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 
 /**
  * Unified canvas hook that combines content management, editing, and edit result application
- * 
+ *
  * @param {string} appId - The ID of the current app for storage purposes
  * @param {Function} onContentChange - Callback when content changes
  * @param {Object} refs - Object containing quillRef and chatInputRef
@@ -12,7 +12,7 @@ import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
  */
 function useCanvas(appId, onContentChange, refs = {}, handlePromptSubmit) {
   const { quillRef, chatInputRef } = refs;
-  
+
   // Storage keys for persistence
   const storageKey = `ai_hub_canvas_content_${appId}`;
   const lastSavedKey = `ai_hub_canvas_last_saved_${appId}`;
@@ -182,7 +182,8 @@ function useCanvas(appId, onContentChange, refs = {}, handlePromptSubmit) {
       let prompt;
       switch (action) {
         case 'continue':
-          prompt = 'Please continue writing from where the document left off, maintaining the same style and tone.';
+          prompt =
+            'Please continue writing from where the document left off, maintaining the same style and tone.';
           break;
         case 'summarize':
           prompt = 'Please provide a concise summary of the entire document.';
@@ -326,7 +327,7 @@ function useCanvas(appId, onContentChange, refs = {}, handlePromptSubmit) {
     getTextContent,
     lastSaved,
     getStorageInfo,
-    
+
     // Editing state
     selection,
     selectedText,
@@ -334,7 +335,7 @@ function useCanvas(appId, onContentChange, refs = {}, handlePromptSubmit) {
     setSelection,
     setSelectedText,
     setCursorPosition,
-    
+
     // Editing functions
     handleSelectionChange,
     handleEditAction,

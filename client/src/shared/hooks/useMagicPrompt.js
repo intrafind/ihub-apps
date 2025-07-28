@@ -7,7 +7,7 @@ export const useMagicPrompt = () => {
 
   const handleMagicPrompt = async (input, app, appId) => {
     if (!input.trim()) return;
-    
+
     try {
       setMagicLoading(true);
       const response = await generateMagicPrompt(input, {
@@ -15,12 +15,12 @@ export const useMagicPrompt = () => {
         modelId: app?.features?.magicPrompt?.model,
         appId
       });
-      
+
       if (response && response.prompt) {
         setOriginalInput(input);
         return response.prompt;
       }
-      
+
       return null;
     } catch (err) {
       console.error('Error generating magic prompt:', err);

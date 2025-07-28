@@ -273,7 +273,7 @@ const AppCanvas = () => {
 
   // Initialize unified canvas hook after handlePromptSubmit is defined
   const canvasHook = useCanvas(appId, null, { quillRef, chatInputRef }, handlePromptSubmit);
-  
+
   // Extract all canvas functionality from the unified hook
   const {
     // Content management
@@ -286,7 +286,7 @@ const AppCanvas = () => {
     getTextContent,
     lastSaved: contentLastSaved,
     getStorageInfo,
-    
+
     // Selection and editing state
     selection,
     selectedText,
@@ -294,7 +294,7 @@ const AppCanvas = () => {
     setSelection,
     setSelectedText,
     setCursorPosition,
-    
+
     // Editing functions
     handleSelectionChange,
     handleEditAction,
@@ -398,7 +398,6 @@ const AppCanvas = () => {
   const handleInputChange = useCallback(e => {
     setInputValue(e.target.value);
   }, []);
-
 
   // Handle content modal actions
   const handleContentModalReplace = useCallback(() => {
