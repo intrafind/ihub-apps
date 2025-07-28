@@ -1,0 +1,10 @@
+{
+  "id": "local-vllm-intrafind",
+  "modelId": "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
+  "name": "LLama 3.1 8b",
+  "description": "Advanced model with strong reasoning and knowledge capabilities",
+  "url": "http://if6gpu.intrafind.org:1897/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 8192,
+  "default": true
+}

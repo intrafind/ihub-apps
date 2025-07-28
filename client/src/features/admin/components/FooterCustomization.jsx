@@ -2,6 +2,13 @@ import React from 'react';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
 const FooterCustomization = ({ config, onUpdate, t }) => {
+  // Map config links to component format
+  const mappedLinks = (config.links || []).map(link => ({
+    text: link.name || link.text || { en: '' },
+    href: link.url || link.href || '',
+    target: link.target || '_self',
+    enabled: link.enabled !== false
+  }));
   const addFooterLink = () => {
     const newLink = {
       text: { en: 'New Link' },
@@ -10,21 +17,40 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
       enabled: true
     };
 
-    onUpdate({
-      links: [...(config.links || []), newLink]
-    });
+    // Convert back to config format
+    const configLinks = [...mappedLinks, newLink].map(link => ({
+      name: link.text,
+      url: link.href,
+      target: link.target,
+      enabled: link.enabled
+    }));
+    onUpdate({ links: configLinks });
   };
 
   const updateFooterLink = (index, updates) => {
-    const updatedLinks = [...(config.links || [])];
+    const updatedLinks = [...mappedLinks];
     updatedLinks[index] = { ...updatedLinks[index], ...updates };
-    onUpdate({ links: updatedLinks });
+    // Convert back to config format
+    const configLinks = updatedLinks.map(link => ({
+      name: link.text,
+      url: link.href,
+      target: link.target,
+      enabled: link.enabled
+    }));
+    onUpdate({ links: configLinks });
   };
 
   const removeFooterLink = index => {
-    const updatedLinks = [...(config.links || [])];
+    const updatedLinks = [...mappedLinks];
     updatedLinks.splice(index, 1);
-    onUpdate({ links: updatedLinks });
+    // Convert back to config format
+    const configLinks = updatedLinks.map(link => ({
+      name: link.text,
+      url: link.href,
+      target: link.target,
+      enabled: link.enabled
+    }));
+    onUpdate({ links: configLinks });
   };
 
   return (
@@ -91,7 +117,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
               </div>
 
               <div className="space-y-4">
-                {(config.links || []).map((link, index) => (
+                {mappedLinks.map((link, index) => (
                   <div key={index} className="border border-gray-200 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-sm font-medium text-gray-900">
@@ -165,7 +191,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                   </div>
                 ))}
 
-                {(!config.links || config.links.length === 0) && (
+                {(!mappedLinks || mappedLinks.length === 0) && (
                   <div className="text-center py-8 text-gray-500">
                     <p>{t('admin.ui.footer.noLinks', 'No footer links configured')}</p>
                     <p className="text-sm">

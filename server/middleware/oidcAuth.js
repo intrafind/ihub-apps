@@ -1,18 +1,10 @@
 import passport from 'passport';
 import { Strategy as OAuth2Strategy } from 'passport-oauth2';
-import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
-import config from '../config.js';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
-import {
-  loadUsers,
-  findUserByIdentifier,
-  createOrUpdateOidcUser,
-  isUserActive,
-  mergeUserGroups,
-  updateUserActivity
-} from '../utils/userManager.js';
+import { validateAndPersistExternalUser } from '../utils/userManager.js';
+import { generateJwt } from '../utils/tokenService.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -70,7 +62,8 @@ export function configureOidcProviders() {
             const oidcUser = normalizeOidcUser(userInfo, provider);
 
             // Validate and persist user based on platform configuration
-            const validatedUser = await validateAndPersistOidcUser(oidcUser, provider);
+            const platform = configCache.getPlatform() || {};
+            const validatedUser = await validateAndPersistExternalUser(oidcUser, platform);
 
             return done(null, validatedUser);
           } catch (error) {
@@ -166,114 +159,7 @@ function normalizeOidcUser(userInfo, provider) {
   return user;
 }
 
-/**
- * Validate and persist OIDC user based on platform configuration
- */
-async function validateAndPersistOidcUser(oidcUser, provider) {
-  const platform = configCache.getPlatform() || {};
-  const oidcConfig = platform.oidcAuth || {};
-  const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
 
-  // Check if user exists in users.json
-  const usersConfig = loadUsers(usersFilePath);
-  const existingUser =
-    findUserByIdentifier(usersConfig, oidcUser.email, 'oidc') ||
-    findUserByIdentifier(usersConfig, oidcUser.id, 'oidc');
-
-  // If user exists, check if they are active
-  if (existingUser) {
-    if (!isUserActive(existingUser)) {
-      throw new Error(
-        `User account is disabled. User ID: ${existingUser.id}, Email: ${existingUser.email}. Please contact your administrator.`
-      );
-    }
-
-    // Update existing user and merge groups
-    const persistedUser = await createOrUpdateOidcUser(oidcUser, usersFilePath);
-
-    // Update activity tracking
-    await updateUserActivity(persistedUser.id, usersFilePath);
-
-    // Merge groups: external groups (from OIDC) + additional groups (from users.json)
-    const mergedGroups = mergeUserGroups(
-      oidcUser.groups || [],
-      persistedUser.additionalGroups || []
-    );
-
-    return {
-      ...oidcUser,
-      id: persistedUser.id,
-      groups: mergedGroups,
-      active: persistedUser.active,
-      authMethods: persistedUser.authMethods || ['oidc'],
-      lastActiveDate: persistedUser.lastActiveDate,
-      persistedUser: true
-    };
-  }
-
-  // User doesn't exist - check self-signup settings
-  if (!oidcConfig.allowSelfSignup) {
-    throw new Error(
-      `New user registration is not allowed. User ID: ${oidcUser.id}, Email: ${oidcUser.email}. Please contact your administrator.`
-    );
-  }
-
-  // Create new user (self-signup allowed)
-  const persistedUser = await createOrUpdateOidcUser(oidcUser, usersFilePath);
-
-  // Combine external groups from OIDC with additional groups from users.json
-  const combinedGroups = mergeUserGroups(
-    oidcUser.groups || [],
-    persistedUser.additionalGroups || []
-  );
-
-  return {
-    ...oidcUser,
-    id: persistedUser.id,
-    groups: combinedGroups,
-    active: true,
-    authMethods: ['oidc'],
-    lastActiveDate: persistedUser.lastActiveDate,
-    persistedUser: true
-  };
-}
-
-/**
- * Generate JWT token for authenticated user
- */
-function generateJwtToken(user) {
-  const platform = configCache.getPlatform() || {};
-  const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret;
-
-  if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
-    throw new Error('JWT secret not configured for OIDC authentication');
-  }
-
-  const tokenPayload = {
-    sub: user.id,
-    name: user.name,
-    email: user.email,
-    groups: user.groups,
-    provider: user.provider,
-    authMode: 'oidc', // Include auth mode in token
-    authProvider: user.provider, // Include specific provider for validation
-    authMethods: user.authMethods || ['oidc'], // Include supported auth methods
-    active: user.active !== false, // Include active status
-    persistedUser: user.persistedUser || false, // Indicate if user is persisted
-    iat: Math.floor(Date.now() / 1000)
-  };
-
-  const sessionTimeout = platform.localAuth?.sessionTimeoutMinutes || 480; // 8 hours default
-  const expiresIn = sessionTimeout * 60; // Convert to seconds
-
-  const token = jwt.sign(tokenPayload, jwtSecret, {
-    expiresIn: `${expiresIn}s`,
-    issuer: 'ai-hub-apps',
-    audience: 'ai-hub-apps'
-  });
-
-  return { token, expiresIn };
-}
 
 /**
  * Initialize Passport for OIDC authentication
@@ -379,8 +265,16 @@ export function createOidcCallbackHandler(providerName) {
       }
 
       try {
-        // Generate JWT token
-        const { token, expiresIn } = generateJwtToken(user);
+        // Generate JWT token using centralized token service
+        const { token, expiresIn } = generateJwt(user, {
+          authMode: 'oidc',
+          authProvider: user.provider,
+          additionalClaims: {
+            authMethods: user.authMethods || ['oidc'],
+            active: user.active !== false,
+            persistedUser: user.persistedUser || false
+          }
+        });
 
         // Get return URL
         let returnUrl = req.session?.returnUrl || '/';
@@ -437,4 +331,4 @@ export function reconfigureOidcProviders() {
 }
 
 // Export for testing
-export { configuredProviders, normalizeOidcUser, generateJwtToken };
+export { configuredProviders, normalizeOidcUser };

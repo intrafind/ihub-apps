@@ -1,4 +1,5 @@
 import path from 'path';
+import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
@@ -14,12 +15,6 @@ const __dirname = path.dirname(__filename);
  */
 export function loadUsers(usersFilePath) {
   try {
-    console.log(`[DEBUG] loadUsers called with path: ${usersFilePath}`);
-    
-    // Debug: List all cache keys
-    const cacheStats = configCache.getStats();
-    console.log(`[DEBUG] Available cache keys:`, Object.keys(cacheStats.entries));
-    
     // Convert file path to cache key format
     // The cache stores keys without 'contents/' prefix, so we need to strip it
     let cacheKey;
@@ -39,25 +34,67 @@ export function loadUsers(usersFilePath) {
       }
     }
 
-    console.log(`[DEBUG] Cache key: ${cacheKey}`);
-
-    // Get from cache only - no fallback
+    // Try to get from cache first
     const cached = configCache.get(cacheKey);
-    console.log(`[DEBUG] Cache result:`, cached ? `found with ${Object.keys(cached.data?.users || {}).length} users` : 'not found');
-    
-    if (cached && cached.data) {
-      console.log(`[DEBUG] Returning cached users: ${Object.keys(cached.data.users || {}).length} users`);
+    if (cached && cached.data && cached.data.users) {
       return cached.data;
     }
 
-    // Return empty structure if not in cache
-    console.warn(`[WARN] Users configuration not found in cache for: ${cacheKey}`);
-    console.warn(`[WARN] Available keys:`, Object.keys(cacheStats.entries));
-    console.warn(`[WARN] Returning empty users structure - THIS WILL WIPE EXISTING USERS!`);
-    return { users: {}, metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() } };
+    // Fallback to file system if cache miss or invalid data
+    console.warn(`[WARN] Users configuration not found in cache for: ${cacheKey}, attempting file system fallback`);
+    
+    const fullPath = path.isAbsolute(usersFilePath)
+      ? usersFilePath
+      : path.join(__dirname, '../../', usersFilePath);
+
+    // Check if file exists
+    if (!fs.existsSync(fullPath)) {
+      console.warn(`[WARN] Users file not found: ${fullPath}, creating empty structure`);
+      const emptyConfig = { 
+        users: {}, 
+        metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() } 
+      };
+      
+      // Cache the empty structure to prevent repeated file system access
+      configCache.setCacheEntry(cacheKey, emptyConfig);
+      return emptyConfig;
+    }
+
+    // Read from file system
+    const fileData = fs.readFileSync(fullPath, 'utf8');
+    const usersConfig = JSON.parse(fileData);
+    
+    // Validate the loaded data
+    if (!usersConfig || typeof usersConfig !== 'object') {
+      throw new Error('Invalid users configuration format');
+    }
+    
+    // Ensure users object exists
+    if (!usersConfig.users || typeof usersConfig.users !== 'object') {
+      usersConfig.users = {};
+    }
+    
+    // Ensure metadata exists
+    if (!usersConfig.metadata) {
+      usersConfig.metadata = { version: '2.0.0', lastUpdated: new Date().toISOString() };
+    }
+
+    // Update cache with file data
+    configCache.setCacheEntry(cacheKey, usersConfig);
+    
+    return usersConfig;
   } catch (error) {
     console.error(`[ERROR] Could not load users configuration:`, error.message);
-    return { users: {}, metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() } };
+    console.error(`[ERROR] Stack trace:`, error.stack);
+    
+    // Return safe empty structure as last resort
+    const safeConfig = { 
+      users: {}, 
+      metadata: { version: '2.0.0', lastUpdated: new Date().toISOString(), error: error.message } 
+    };
+    
+    console.warn(`[WARN] Returning safe empty users structure due to error`);
+    return safeConfig;
   }
 }
 
@@ -67,10 +104,7 @@ export function loadUsers(usersFilePath) {
  * @param {string} usersFilePath - Path to users.json file
  */
 export async function saveUsers(usersConfig, usersFilePath) {
-  try {
-    console.log(`[DEBUG] saveUsers called with ${Object.keys(usersConfig.users || {}).length} users`);
-    console.log(`[DEBUG] Users being saved:`, Object.keys(usersConfig.users || {}));
-    
+  try {    
     const fullPath = path.isAbsolute(usersFilePath)
       ? usersFilePath
       : path.join(__dirname, '../../', usersFilePath);
@@ -98,7 +132,6 @@ export async function saveUsers(usersConfig, usersFilePath) {
       }
     }
 
-    console.log(`[DEBUG] Updating cache key ${cacheKey} with ${Object.keys(usersConfig.users || {}).length} users`);
     configCache.setCacheEntry(cacheKey, usersConfig);
   } catch (error) {
     console.error('Could not save users configuration:', error.message);
@@ -138,18 +171,18 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
 }
 
 /**
- * Create or update OIDC/Proxy user in users.json
- * @param {Object} externalUser - OIDC/Proxy user data
+ * Create or update external user (OIDC/Proxy) in users.json
+ * @param {Object} externalUser - External user data
  * @param {string} usersFilePath - Path to users.json file
  * @returns {Object} Created/updated user object
  */
-export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
-  console.log(`[DEBUG] createOrUpdateOidcUser called for user: ${externalUser.email} via ${externalUser.provider}`);
-  
+export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
   const usersConfig = loadUsers(usersFilePath);
-  console.log(`[DEBUG] Loaded users config with ${Object.keys(usersConfig.users || {}).length} existing users`);
   
-  const authMethod = externalUser.provider === 'proxy' ? 'proxy' : 'oidc';
+  // Determine auth method based on provider
+  const authMethod = externalUser.provider === 'proxy' ? 'proxy' : 
+                    externalUser.provider === 'teams' ? 'teams' :
+                    'oidc';
 
   // Try to find existing user by email or external subject
   let existingUser =
@@ -171,7 +204,7 @@ export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
       user.authMethods.push(authMethod);
     }
 
-    // Update external auth data
+    // Update external auth data based on auth method
     if (authMethod === 'oidc') {
       user.oidcData = {
         subject: externalUser.id,
@@ -185,6 +218,15 @@ export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
         provider: externalUser.provider,
         lastProvider: externalUser.provider,
         ...user.proxyData
+      };
+    } else if (authMethod === 'teams') {
+      user.teamsData = {
+        subject: externalUser.id,
+        provider: externalUser.provider,
+        lastProvider: externalUser.provider,
+        tenantId: externalUser.teamsData?.tenantId,
+        upn: externalUser.teamsData?.upn,
+        ...user.teamsData
       };
     }
 
@@ -223,7 +265,7 @@ export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
       updatedAt: now
     };
 
-    // Add auth-specific data
+    // Add auth-specific data based on auth method
     if (authMethod === 'oidc') {
       newUser.oidcData = {
         subject: externalUser.id,
@@ -235,6 +277,14 @@ export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
         subject: externalUser.id,
         provider: externalUser.provider,
         lastProvider: externalUser.provider
+      };
+    } else if (authMethod === 'teams') {
+      newUser.teamsData = {
+        subject: externalUser.id,
+        provider: externalUser.provider,
+        lastProvider: externalUser.provider,
+        tenantId: externalUser.teamsData?.tenantId,
+        upn: externalUser.teamsData?.upn
       };
     }
 
@@ -292,4 +342,100 @@ export function mergeUserGroups(externalGroups = [], additionalGroups = []) {
   additionalGroups.forEach(group => allGroups.add(group));
 
   return Array.from(allGroups);
+}
+
+/**
+ * Legacy compatibility function - use createOrUpdateExternalUser instead
+ * @deprecated Use createOrUpdateExternalUser for all external auth methods
+ */
+export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
+  return await createOrUpdateExternalUser(externalUser, usersFilePath);
+}
+
+/**
+ * Validate and persist external user based on platform configuration
+ * Consolidates the validation logic from proxyAuth.js and oidcAuth.js
+ * @param {Object} externalUser - External user data (OIDC/Proxy/Teams)
+ * @param {Object} platformConfig - Platform configuration
+ * @returns {Object} Validated and persisted user object
+ */
+export async function validateAndPersistExternalUser(externalUser, platformConfig) {
+  const authMethod = externalUser.provider === 'proxy' ? 'proxy' : 
+                    externalUser.provider === 'teams' ? 'teams' :
+                    'oidc';
+  
+  // Get the appropriate auth config based on auth method
+  let authConfig;
+  if (authMethod === 'proxy') {
+    authConfig = platformConfig.proxyAuth || {};
+  } else if (authMethod === 'teams') {
+    authConfig = platformConfig.teamsAuth || {};
+  } else {
+    authConfig = platformConfig.oidcAuth || {};
+  }
+  
+  const usersFilePath = platformConfig.localAuth?.usersFile || 'contents/config/users.json';
+
+  // Check if user exists in users.json
+  const usersConfig = loadUsers(usersFilePath);
+  const existingUser =
+    findUserByIdentifier(usersConfig, externalUser.email, authMethod) ||
+    findUserByIdentifier(usersConfig, externalUser.id, authMethod);
+
+  // If user exists, check if they are active
+  if (existingUser) {
+    if (!isUserActive(existingUser)) {
+      throw new Error(
+        `User account is disabled. User ID: ${existingUser.id}, Email: ${existingUser.email}. Please contact your administrator.`
+      );
+    }
+
+    // Update existing user and merge groups
+    const persistedUser = await createOrUpdateExternalUser(externalUser, usersFilePath);
+
+    // Update activity tracking
+    await updateUserActivity(persistedUser.id, usersFilePath);
+
+    // Merge groups: external groups (from auth provider) + additional groups (from users.json)
+    const mergedGroups = mergeUserGroups(
+      externalUser.groups || [],
+      persistedUser.additionalGroups || []
+    );
+
+    return {
+      ...externalUser,
+      id: persistedUser.id,
+      groups: mergedGroups,
+      active: persistedUser.active,
+      authMethods: persistedUser.authMethods || [authMethod],
+      lastActiveDate: persistedUser.lastActiveDate,
+      persistedUser: true
+    };
+  }
+
+  // User doesn't exist - check self-signup settings
+  if (!authConfig.allowSelfSignup) {
+    throw new Error(
+      `New user registration is not allowed. User ID: ${externalUser.id}, Email: ${externalUser.email}. Please contact your administrator.`
+    );
+  }
+
+  // Create new user (self-signup allowed)
+  const persistedUser = await createOrUpdateExternalUser(externalUser, usersFilePath);
+
+  // Combine external groups from auth provider with additional groups from users.json
+  const combinedGroups = mergeUserGroups(
+    externalUser.groups || [],
+    persistedUser.additionalGroups || []
+  );
+
+  return {
+    ...externalUser,
+    id: persistedUser.id,
+    groups: combinedGroups,
+    active: true,
+    authMethods: [authMethod],
+    lastActiveDate: persistedUser.lastActiveDate,
+    persistedUser: true
+  };
 }

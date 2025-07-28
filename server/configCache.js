@@ -343,6 +343,15 @@ class ConfigCache {
       };
     }
 
+    // Validate cache entry structure
+    if (!entry.data || typeof entry.data !== 'object') {
+      console.warn(`Cache entry for ${configPath} has invalid data structure`);
+      return {
+        data: null,
+        etag: null
+      };
+    }
+
     // Check if entry is still valid (extra safety check)
     const age = Date.now() - entry.timestamp;
     if (age > this.cacheTTL * 2) {

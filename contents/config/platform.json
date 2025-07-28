@@ -52,7 +52,8 @@
       "shortlinks": true,
       "pages": true,
       "auth": true,
-      "users": true
+      "users": true,
+      "ui": true
     }
   },
   "auth": {

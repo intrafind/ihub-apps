@@ -41,7 +41,7 @@ exclude_dirs=()
 exclude_files=()
 
 # Add some common default excludes (can be overridden by user)
-default_exclude_dirs=(".git" ".svn" ".hg" "node_modules" ".vscode" ".idea" "__pycache__" ".pytest_cache" "target" "build" "dist" ".next")
+default_exclude_dirs=(".git" ".svn" ".hg" "node_modules" ".vscode" "dist-bin" "logs" ".idea" "__pycache__" ".pytest_cache" "target" "build" "dist" ".next")
 default_exclude_files=("*.log" "*.tmp" "*.swp" "*.swo" "*~" ".DS_Store" "Thumbs.db")
 use_defaults=true
 

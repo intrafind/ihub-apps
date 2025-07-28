@@ -6,6 +6,7 @@ import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
+import { authRequired } from '../../middleware/authRequired.js';
 
 export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
@@ -60,7 +61,7 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Upload asset file (logo, icon, favicon, etc.)
    */
-  app.post('/api/admin/ui/upload-asset', adminAuth, upload.single('asset'), (req, res) => {
+  app.post('/api/admin/ui/upload-asset', authRequired, adminAuth, upload.single('asset'), (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({
@@ -106,7 +107,7 @@ export default function registerAdminUIRoutes(app) {
   /**
    * List uploaded assets
    */
-  app.get('/api/admin/ui/assets', adminAuth, (req, res) => {
+  app.get('/api/admin/ui/assets', authRequired, adminAuth, (req, res) => {
     try {
       const assetsDir = join(getRootDir(), 'contents/uploads/assets');
 
@@ -165,7 +166,7 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Delete asset
    */
-  app.delete('/api/admin/ui/assets/:id', adminAuth, (req, res) => {
+  app.delete('/api/admin/ui/assets/:id', authRequired, adminAuth, (req, res) => {
     try {
       const { id } = req.params;
       const filepath = join(getRootDir(), 'contents/uploads/assets', id);
@@ -196,7 +197,7 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Get UI configuration
    */
-  app.get('/api/admin/ui/config', adminAuth, (req, res) => {
+  app.get('/api/admin/ui/config', authRequired, adminAuth, (req, res) => {
     try {
       const uiConfig = configCache.getUI();
 
@@ -217,7 +218,7 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Update UI configuration
    */
-  app.post('/api/admin/ui/config', adminAuth, async (req, res) => {
+  app.post('/api/admin/ui/config', authRequired, adminAuth, async (req, res) => {
     try {
       const { config } = req.body;
 
@@ -257,7 +258,7 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Backup UI configuration
    */
-  app.post('/api/admin/ui/backup', adminAuth, async (req, res) => {
+  app.post('/api/admin/ui/backup', authRequired, adminAuth, async (req, res) => {
     try {
       const uiConfig = configCache.getUI();
       const currentConfig = uiConfig?.data || {};

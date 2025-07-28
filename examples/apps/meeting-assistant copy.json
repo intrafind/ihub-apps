@@ -1,0 +1,152 @@
+{
+  "id": "meeting-assistant",
+  "name": {
+    "en": "Meeting Assistant",
+    "de": "Besprechungsassistent"
+  },
+  "description": {
+    "en": "Generate agendas, minutes, and action items",
+    "de": "Erstelle Tagesordnungen, Protokolle und Aktionspunkte"
+  },
+  "color": "#8B5CF6",
+  "icon": "calendar",
+  "system": {
+    "en": "You are a meeting assistant. Help users prepare for meetings and document outcomes. Create well-structured agendas, detailed minutes, and clear action items based on the provided information.",
+    "de": "Du bist ein Besprechungsassistent. Hilf Nutzern, sich auf Besprechungen vorzubereiten und Ergebnisse zu dokumentieren. Erstelle gut strukturierte Tagesordnungen, detaillierte Protokolle und klare Aktionspunkte basierend auf den bereitgestellten Informationen."
+  },
+  "tokenLimit": 6000,
+
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "normal",
+  "preferredTemperature": 0.4,
+  "prompt": {
+    "en": "{{action}} for a {{meeting_type}} meeting with the following details:\n\nMeeting Title: {{meeting_title}}\nParticipants: {{participants}}\nDuration: {{duration}}\n\n{{content}}",
+    "de": "{{action}} für eine {{meeting_type}} Besprechung mit den folgenden Details:\n\nBesprechungstitel: {{meeting_title}}\nTeilnehmer: {{participants}}\nDauer: {{duration}}\n\n{{content}}"
+  },
+  "variables": [
+    {
+      "name": "action",
+      "label": {
+        "en": "Task",
+        "de": "Aufgabe"
+      },
+      "type": "string",
+      "required": true,
+      "predefinedValues": [
+        {
+          "label": {
+            "en": "Create an agenda",
+            "de": "Eine Tagesordnung erstellen"
+          },
+          "value": "Create an agenda"
+        },
+        {
+          "label": {
+            "en": "Generate meeting minutes",
+            "de": "Besprechungsprotokoll erstellen"
+          },
+          "value": "Generate detailed meeting minutes"
+        },
+        {
+          "label": {
+            "en": "Extract action items",
+            "de": "Aktionspunkte extrahieren"
+          },
+          "value": "Extract and format action items"
+        },
+        {
+          "label": {
+            "en": "Write a follow-up email",
+            "de": "Eine Nachfass-E-Mail schreiben"
+          },
+          "value": "Write a follow-up email summarizing"
+        }
+      ]
+    },
+    {
+      "name": "meeting_type",
+      "label": {
+        "en": "Meeting Type",
+        "de": "Besprechungstyp"
+      },
+      "type": "string",
+      "required": true,
+      "predefinedValues": [
+        {
+          "label": {
+            "en": "Team",
+            "de": "Team"
+          },
+          "value": "team"
+        },
+        {
+          "label": {
+            "en": "Client",
+            "de": "Kunde"
+          },
+          "value": "client"
+        },
+        {
+          "label": {
+            "en": "Project",
+            "de": "Projekt"
+          },
+          "value": "project"
+        },
+        {
+          "label": {
+            "en": "Board",
+            "de": "Vorstand"
+          },
+          "value": "board"
+        },
+        {
+          "label": {
+            "en": "One-on-one",
+            "de": "Eins-zu-eins"
+          },
+          "value": "one-on-one"
+        },
+        {
+          "label": {
+            "en": "Standup",
+            "de": "Tägliches Standup"
+          },
+          "value": "daily standup"
+        }
+      ]
+    },
+    {
+      "name": "meeting_title",
+      "label": {
+        "en": "Meeting Title",
+        "de": "Besprechungstitel"
+      },
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "participants",
+      "label": {
+        "en": "Participants",
+        "de": "Teilnehmer"
+      },
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "duration",
+      "label": {
+        "en": "Duration",
+        "de": "Dauer"
+      },
+      "type": "string",
+      "required": true,
+      "defaultValue": {
+        "en": "30 minutes",
+        "de": "30 Minuten"
+      }
+    }
+  ],
+  "enabled": true
+}

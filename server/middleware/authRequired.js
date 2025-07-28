@@ -41,30 +41,41 @@ export function authOptional(req, res, next) {
 }
 
 /**
+ * Higher-order function to create resource access middleware
+ * Consolidates the identical logic from appAccessRequired and modelAccessRequired
+ * @param {string} resourceType - The resource type (e.g., 'app', 'model')
+ * @returns {Function} Express middleware function
+ */
+function resourceAccessRequired(resourceType) {
+  return function(req, res, next) {
+    const resourceId = req.params[`${resourceType}Id`]; // e.g., req.params.appId
+    const permissionsKey = `${resourceType}s`; // e.g., 'apps'
+
+    // If user is authenticated, check resource permissions
+    if (req.user && req.user.permissions) {
+      const allowedResources = req.user.permissions[permissionsKey] || new Set();
+
+      // Check if user has wildcard access or specific resource access
+      if (!allowedResources.has('*') && !allowedResources.has(resourceId)) {
+        return res.status(403).json({
+          error: 'Access denied',
+          code: `${resourceType.toUpperCase()}_ACCESS_DENIED`,
+          message: `You do not have permission to access ${resourceType}: ${resourceId}`
+        });
+      }
+    }
+
+    next();
+  };
+}
+
+/**
  * Middleware to check if user has permission to access a specific app
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  * @param {Function} next - Express next function
  */
-export function appAccessRequired(req, res, next) {
-  const { appId } = req.params;
-
-  // If user is authenticated, check app permissions
-  if (req.user && req.user.permissions) {
-    const allowedApps = req.user.permissions.apps || new Set();
-
-    // Check if user has wildcard access or specific app access
-    if (!allowedApps.has('*') && !allowedApps.has(appId)) {
-      return res.status(403).json({
-        error: 'Access denied',
-        code: 'APP_ACCESS_DENIED',
-        message: `You do not have permission to access app: ${appId}`
-      });
-    }
-  }
-
-  next();
-}
+export const appAccessRequired = resourceAccessRequired('app');
 
 /**
  * Middleware to check if user has permission to access a specific model
@@ -72,25 +83,7 @@ export function appAccessRequired(req, res, next) {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next function
  */
-export function modelAccessRequired(req, res, next) {
-  const { modelId } = req.params;
-
-  // If user is authenticated, check model permissions
-  if (req.user && req.user.permissions) {
-    const allowedModels = req.user.permissions.models || new Set();
-
-    // Check if user has wildcard access or specific model access
-    if (!allowedModels.has('*') && !allowedModels.has(modelId)) {
-      return res.status(403).json({
-        error: 'Access denied',
-        code: 'MODEL_ACCESS_DENIED',
-        message: `You do not have permission to access model: ${modelId}`
-      });
-    }
-  }
-
-  next();
-}
+export const modelAccessRequired = resourceAccessRequired('model');
 
 /**
  * Combined middleware for chat endpoints that enforces authentication and app access

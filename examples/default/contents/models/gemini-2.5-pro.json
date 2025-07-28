@@ -1,0 +1,18 @@
+{
+  "id": "gemini-2.5-pro",
+  "modelId": "gemini-2.5-pro",
+  "name": {
+    "en": "Gemini 2.5 Pro",
+    "de": "Gemini 2.5 Pro"
+  },
+  "description": {
+    "en": "Google's versatile model optimized for text and code tasks",
+    "de": "Googles vielseitiges Modell, optimiert für Text- und Code-Aufgaben"
+  },
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:streamGenerateContent",
+  "provider": "google",
+  "tokenLimit": 32768,
+  "default": false,
+  "supportsTools": true,
+  "enabled": true
+}

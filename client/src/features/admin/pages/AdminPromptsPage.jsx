@@ -292,50 +292,50 @@ const AdminPromptsPage = () => {
 
           {/* Prompts Table */}
           <div className="mt-8 flex flex-col">
-            <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-              <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
+            <div className="-my-2 -mx-4 sm:-mx-6 lg:-mx-8">
+              <div className="inline-block w-full py-2 align-middle md:px-6 lg:px-8">
                 <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-300">
+                  <table className="w-full divide-y divide-gray-300">
                     <thead className="bg-gray-50">
                       <tr>
                         <th
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                         >
-                          {t('admin.prompts.name', 'Name')}
+                          {t('admin.prompts.table.name', 'Name')}
                         </th>
                         <th
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                         >
-                          {t('admin.prompts.category', 'Category')}
+                          {t('admin.prompts.table.category', 'Category')}
                         </th>
                         <th
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                         >
-                          {t('admin.prompts.description', 'Description')}
+                          {t('admin.prompts.table.description', 'Description')}
                         </th>
                         <th
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                         >
-                          {t('admin.prompts.order', 'Order')}
+                          {t('admin.prompts.table.order', 'Order')}
                         </th>
                         <th
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                         >
-                          {t('admin.prompts.appId', 'App ID')}
+                          {t('admin.prompts.table.appConnected', 'App Connected')}
                         </th>
                         <th
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                         >
-                          {t('admin.prompts.status', 'Status')}
+                          {t('admin.prompts.table.status', 'Status')}
                         </th>
                         <th scope="col" className="relative px-6 py-3">
-                          <span className="sr-only">{t('admin.prompts.actions', 'Actions')}</span>
+                          <span className="sr-only">{t('admin.prompts.table.actions', 'Actions')}</span>
                         </th>
                       </tr>
                     </thead>
@@ -394,13 +394,15 @@ const AdminPromptsPage = () => {
                           <td className="px-6 py-4  text-sm text-gray-900">
                             {prompt.order !== undefined ? prompt.order : '-'}
                           </td>
-                          <td className="px-6 py-4  text-sm text-gray-900 break-all">
+                          <td className="px-6 py-4  text-sm text-gray-900">
                             {prompt.appId ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                                {prompt.appId}
-                              </span>
+                              <div className="flex items-center justify-center">
+                                <Icon name="check" className="h-5 w-5 text-green-600" />
+                              </div>
                             ) : (
-                              '-'
+                              <div className="flex items-center justify-center">
+                                <span className="text-gray-400">-</span>
+                              </div>
                             )}
                           </td>
                           <td className="px-6 py-4 ">

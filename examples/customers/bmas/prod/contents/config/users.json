@@ -1,0 +1,22 @@
+{
+  "users": {
+    "user_demo_admin": {
+      "id": "user_demo_admin",
+      "username": "admin",
+      "email": "admin@example.com",
+      "name": "Demo Administrator",
+      "groups": [
+        "admin"
+      ],
+      "active": true,
+      "passwordHash": "$2b$12$CNq/zTdIoQm34eFbjlMXYO0hBvHaXZNd8p2gYAT5FKISGDbQ8ipHm",
+      "createdAt": "2025-07-19T00:00:00.000Z",
+      "updatedAt": "2025-07-19T00:00:00.000Z"
+    }
+  },
+  "metadata": {
+    "version": "2.0.0",
+    "description": "Local user database for AI Hub Apps",
+    "lastUpdated": "2025-07-27T18:27:03.182Z"
+  }
+}

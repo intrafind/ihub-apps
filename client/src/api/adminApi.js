@@ -9,9 +9,13 @@ export const makeAdminApiCall = async (url, options = {}) => {
   const token = authToken || adminToken;
 
   const headers = {
-    'Content-Type': 'application/json',
     ...options.headers
   };
+
+  // Only set Content-Type if not uploading files (FormData)
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;

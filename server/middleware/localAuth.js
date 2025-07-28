@@ -1,9 +1,9 @@
-import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { enhanceUserWithPermissions, enhanceUserGroups } from '../utils/authorization.js';
+import { generateJwt } from '../utils/tokenService.js';
 import configCache from '../configCache.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -79,30 +79,6 @@ async function verifyPasswordWithUserId(password, userId, hash) {
   return await bcrypt.compare(passwordWithUserId, hash);
 }
 
-/**
- * Create JWT token for user
- * @param {Object} user - User object
- * @param {string} secret - JWT secret
- * @param {number} expiresIn - Token expiration in seconds
- * @returns {string} JWT token
- */
-function createToken(user, secret, expiresIn = 28800) {
-  // 8 hours default
-  const payload = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    groups: user.groups,
-    authMode: 'local', // Include auth mode in token
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + expiresIn
-  };
-
-  return jwt.sign(payload, secret, {
-    issuer: 'ai-hub-apps',
-    audience: 'ai-hub-apps'
-  });
-}
 
 /**
  * Local authentication middleware
@@ -149,15 +125,6 @@ export async function loginUser(username, password, localAuthConfig) {
     throw new Error('Account is disabled');
   }
 
-  // Create JWT token
-  const jwtSecret = localAuthConfig.jwtSecret;
-  if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
-    throw new Error('JWT secret not configured');
-  }
-
-  const sessionTimeoutSeconds = (localAuthConfig.sessionTimeoutMinutes || 480) * 60;
-  const token = createToken(user, jwtSecret, sessionTimeoutSeconds);
-
   // Create user response object (without sensitive information)
   let userResponse = {
     id: user.id,
@@ -173,6 +140,13 @@ export async function loginUser(username, password, localAuthConfig) {
   const authConfig = platform.auth || {};
 
   userResponse = enhanceUserGroups(userResponse, authConfig);
+
+  // Create JWT token using centralized token service
+  const sessionTimeoutMinutes = localAuthConfig.sessionTimeoutMinutes || 480;
+  const { token, expiresIn: sessionTimeoutSeconds } = generateJwt(userResponse, {
+    authMode: 'local',
+    expiresInMinutes: sessionTimeoutMinutes
+  });
 
   return {
     user: userResponse,

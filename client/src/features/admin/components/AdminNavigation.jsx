@@ -69,7 +69,9 @@ const AdminNavigation = () => {
       current: location.pathname.startsWith('/admin/auth')
     },
     // Only show Users navigation if local auth is enabled (since users are only managed locally)
-    ...(platformConfig?.localAuth?.enabled
+    ...(platformConfig?.localAuth?.enabled ||
+    platformConfig?.oidcAuth?.enabled ||
+    platformConfig?.proxyAuth?.enabled
       ? [
           {
             key: 'users',
@@ -94,6 +96,13 @@ const AdminNavigation = () => {
           }
         ]
       : []),
+    {
+      key: 'ui',
+      name: t('admin.nav.ui', 'UI'),
+      href: '/admin/ui',
+      // icon: 'cog',
+      current: location.pathname === '/admin/ui'
+    },
     {
       key: 'system',
       name: t('admin.nav.system', 'System'),

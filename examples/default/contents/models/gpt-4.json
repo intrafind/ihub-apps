@@ -1,0 +1,18 @@
+{
+  "id": "gpt-4",
+  "modelId": "gpt-4",
+  "name": {
+    "en": "GPT-4",
+    "de": "GPT-4"
+  },
+  "description": {
+    "en": "Advanced model with strong reasoning and knowledge capabilities",
+    "de": "Fortschrittliches Modell mit starken Argumentations- und Wissensfähigkeiten"
+  },
+  "url": "https://api.openai.com/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 8192,
+  "supportsTools": true,
+  "enabled": false,
+  "default": false
+}

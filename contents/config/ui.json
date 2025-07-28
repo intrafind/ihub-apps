@@ -316,7 +316,9 @@
         "de": "pages/en/opensearch-analysis-script.md"
       },
       "authRequired": true,
-      "allowedGroups": ["admin"]
+      "allowedGroups": [
+        "admin"
+      ]
     },
     "qr-generator": {
       "title": {

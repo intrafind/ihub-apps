@@ -1,0 +1,18 @@
+{
+  "id": "local-vllm",
+  "modelId": "stelterlab_Mistral-Small-24B-Instruct-2501-AWQ",
+  "name": {
+    "en": "Local vLLM",
+    "de": "Local vLLM"
+  },
+  "description": {
+    "en": "Advanced model with strong reasoning and knowledge capabilities",
+    "de": "Fortschrittliches Modell mit starken Argumentations- und Wissensfähigkeiten"
+  },
+  "url": "http://localhost:8080/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 8192,
+  "supportsTools": false,
+  "enabled": true,
+  "default": false
+}

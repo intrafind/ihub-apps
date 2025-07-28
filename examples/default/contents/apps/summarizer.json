@@ -1,0 +1,85 @@
+{
+  "id": "summarizer",
+  "order": 4,
+  "category": "analysis",
+  "name": {
+    "en": "Content Summarizer",
+    "de": "Inhaltszusammenfassung"
+  },
+  "description": {
+    "en": "Summarize long documents and articles",
+    "de": "Lange Dokumente und Artikel zusammenfassen"
+  },
+  "color": "#F59E0B",
+  "icon": "document-text",
+  "system": {
+    "en": "You are a summarization assistant. Provide a concise summary of the content while maintaining all key information.",
+    "de": "Du bist ein Assistent für Zusammenfassungen. Erstelle eine prägnante Zusammenfassung des Inhalts und behalte alle wichtigen Informationen bei."
+  },
+  "greeting": {
+    "en": "Ready to summarize your content! Paste your text and choose an action.",
+    "de": "Bereit, Ihren Inhalt zusammenzufassen! Fügen Sie Ihren Text ein und wählen Sie eine Aktion."
+  },
+  "tokenLimit": 8000,
+
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "normal",
+  "preferredTemperature": 0.5,
+  "prompt": {
+    "en": "Please {{action}} the following content: \"{{content}}\"",
+    "de": "Bitte {{action}} den folgenden Inhalt: \"{{content}}\""
+  },
+  "settings": {
+    "chatHistory": {
+      "enabled": false
+    }
+  },
+  "variables": [
+    {
+      "name": "action",
+      "label": {
+        "en": "Action",
+        "de": "Aktion"
+      },
+      "type": "string",
+      "predefinedValues": [
+        {
+          "label": {
+            "en": "Summarize",
+            "de": "Zusammenfassen"
+          },
+          "value": "summarize"
+        },
+        {
+          "label": {
+            "en": "Extract key facts",
+            "de": "Wichtige Fakten extrahieren"
+          },
+          "value": "extract the key facts from"
+        },
+        {
+          "label": {
+            "en": "Highlight action items",
+            "de": "Aktionspunkte hervorheben"
+          },
+          "value": "highlight the action items in"
+        },
+        {
+          "label": {
+            "en": "List decisions",
+            "de": "Entscheidungen auflisten"
+          },
+          "value": "list all decisions mentioned in"
+        },
+        {
+          "label": {
+            "en": "Summarize and recommend",
+            "de": "Zusammenfassen und Empfehlungen geben"
+          },
+          "value": "summarize and provide recommendations based on"
+        }
+      ]
+    }
+  ],
+  "enabled": true
+}

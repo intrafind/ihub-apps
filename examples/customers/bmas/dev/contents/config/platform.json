@@ -1,0 +1,93 @@
+{
+  "features": {
+    "usageTracking": true
+  },
+  "pdfExport": {
+    "defaultTemplate": "default",
+    "watermark": {
+      "enabled": true,
+      "text": "AI Hub Apps",
+      "position": "bottom-right",
+      "opacity": 0.5
+    },
+    "templates": {
+      "default": {
+        "name": "Default",
+        "description": "Standard chat export with colors and branding"
+      },
+      "professional": {
+        "name": "Professional",
+        "description": "Clean professional layout suitable for business"
+      },
+      "minimal": {
+        "name": "Minimal",
+        "description": "Simple minimal design with clean lines"
+      }
+    }
+  },
+  "defaultLanguage": "de",
+  "requestBodyLimitMB": 50,
+  "telemetry": {
+    "enabled": false,
+    "metrics": true,
+    "traces": true,
+    "logs": true,
+    "port": 9464
+  },
+  "requestConcurrency": 2,
+  "refreshSalt": {
+    "salt": 9,
+    "lastUpdated": "2025-07-08T17:00:38.743Z"
+  },
+  "admin": {
+    "secret": "$2b$10$HBpqJ/asLOTZ01Fjnvz4euDvkaOVcfk2TTwaQd6lyh94evW9nSNzW",
+    "encrypted": true,
+    "pages": {
+      "home": true,
+      "usage": true,
+      "system": true,
+      "apps": true,
+      "models": true,
+      "prompts": true,
+      "shortlinks": true,
+      "pages": true,
+      "auth": true,
+      "users": true,
+      "ui": true
+    }
+  },
+  "auth": {
+    "mode": "local",
+    "authenticatedGroup": "authenticated"
+  },
+  "anonymousAuth": {
+    "enabled": true,
+    "defaultGroups": ["anonymous"]
+  },
+  "proxyAuth": {
+    "enabled": false
+  },
+  "localAuth": {
+    "enabled": true,
+    "usersFile": "contents/config/users.json",
+    "sessionTimeoutMinutes": 480,
+    "jwtSecret": "csNOTZ03Fjnvz7ebDvkaOVc",
+    "showDemoAccounts": false
+  },
+  "oidcAuth": {
+    "enabled": false
+  },
+  "iFinder": {
+    "enabled": true,
+    "baseUrl": "${IFINDER_API_URL}",
+    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "algorithm": "RS256",
+    "issuer": "ai-hub-apps",
+    "audience": "ifinder-api",
+    "defaultScope": "",
+    "tokenExpirationSeconds": 3600,
+    "timeout": 30000,
+    "downloadDir": "contents/data/downloads/ifinder-downloads",
+    "defaultSearchProfile": "${IFINDER_SEARCH_PROFILE}"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "summarize",
+  "category": "summarization",
+  "name": { "en": "Summarize Text", "de": "Text zusammenfassen" },
+  "description": {
+    "en": "Quickly summarize a block of text.",
+    "de": "Einen Textabschnitt schnell zusammenfassen."
+  },
+  "icon": "sparkles",
+  "prompt": {
+    "en": "Summarize the following text: [content]",
+    "de": "Fasse den folgenden Text zusammen: [content]"
+  }
+}

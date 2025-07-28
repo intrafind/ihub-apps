@@ -50,7 +50,7 @@ jobs:
           # assignee_trigger: "claude-bot"
 
           # Optional: Allow Claude to run specific commands
-          allowed_tools: 'Bash,Bash(*),Bash(chmod:*),Bash(git:*),Bash(npm install),Bash(npm run dev),Bash(npm run build),Bash(npm run test:*),Bash(npm run lint:*),Bash(npm run format:*),WebFetch,WebSearch,Write,MultiEdit,Edit,Bash(curl:*),mcp__github__create_pull_request,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff'
+          allowed_tools: 'Bash,Bash(*),Bash(chmod:*),Bash(git:*),Bash(npm install),Bash(npm run dev),Bash(npm run build),Bash(npm run test:*),Bash(npm run lint:*),Bash(npm run format:*),WebFetch,WebSearch,Write,MultiEdit,Edit,Bash(curl:*),mcp__github__create_pull_request,mcp__github__create_pending_pull_request_review,mcp__github__add_pull_request_review_comment_to_pending_review,mcp__github__submit_pending_pull_request_review,mcp__github__get_pull_request_diff,mcp__github__update_issue_comment,mcp__github_file_ops__commit_files,mcp__github_file_ops__delete_files'
 
           # Optional: Add custom instructions for Claude to customize its behavior for your project
           # custom_instructions: |

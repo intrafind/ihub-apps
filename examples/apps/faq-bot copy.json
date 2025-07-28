@@ -1,0 +1,120 @@
+{
+  "id": "faq-bot",
+  "order": 0,
+  "name": {
+    "en": "FAQ Bot",
+    "de": "FAQ-Bot"
+  },
+  "description": {
+    "en": "Answer questions using information from a specific FAQ document",
+    "de": "Beantworte Fragen mit Informationen aus einem spezifischen FAQ-Dokument"
+  },
+  "color": "#10B981",
+  "icon": "question-mark-circle",
+  "system": {
+    "en": "You are a helpful FAQ assistant. Your job is to answer user questions based ONLY on the information provided in the sources section. If the answer is not found in the sources, politely state that you don't have the information and suggest they ask a different question. Do not make up information. Always cite the relevant sections from the sources in your answers.\n\nSources:\n<sources>{{sources}}</sources>",
+    "de": "Du bist ein hilfreicher FAQ-Assistent. Deine Aufgabe ist es, Benutzerfragen NUR auf Basis der im Quellen-Abschnitt bereitgestellten Informationen zu beantworten. Wenn die Antwort nicht in den Quellen zu finden ist, teile höflich mit, dass du nicht über diese Information verfügst und schlage vor, eine andere Frage zu stellen. Erfinde keine Informationen. Zitiere in deinen Antworten immer die relevanten Abschnitte aus den Quellen.\n\nQuellen:\n<sources>{{sources}}</sources>"
+  },
+  "messagePlaceholder": {
+    "en": "Ask a question about our FAQ...",
+    "de": "Stelle eine Frage zu unseren häufig gestellten Fragen..."
+  },
+  "tokenLimit": 8000,
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "normal",
+  "preferredTemperature": 0.3,
+  "sendChatHistory": true,
+  "sources": [
+    {
+      "id": "faq-content",
+      "type": "filesystem",
+      "description": "Frequently asked questions document",
+      "config": {
+        "path": "/sources/faq.md",
+        "encoding": "utf8"
+      },
+      "exposeAs": "prompt",
+      "caching": {
+        "ttl": 3600,
+        "strategy": "static"
+      },
+      "enabled": true
+    }
+  ],
+  "sourcePath": "/sources/faq.md",
+  "prompt": {
+    "en": "{{content}}",
+    "de": "{{content}}"
+  },
+  "enabled": true,
+  "tools": [],
+  "greeting": {
+    "en": {
+      "title": "👋 Hello!",
+      "subtitle": "How can I help you today?"
+    }
+  },
+  "allowEmptyContent": false,
+  "features": {
+    "magicPrompt": {
+      "enabled": false,
+      "model": "gpt-4",
+      "prompt": "You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}"
+    }
+  },
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": true
+    },
+    "outputFormat": {
+      "enabled": true
+    },
+    "chatHistory": {
+      "enabled": true
+    },
+    "style": {
+      "enabled": true
+    },
+    "speechRecognition": {
+      "service": "default",
+      "host": ""
+    }
+  },
+  "inputMode": {
+    "type": "singleline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "upload": {
+    "enabled": true,
+    "imageUpload": {
+      "enabled": false,
+      "resizeImages": true,
+      "maxFileSizeMB": 10,
+      "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+    },
+    "fileUpload": {
+      "maxFileSizeMB": 5,
+      "supportedTextFormats": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/json",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/xml"
+      ],
+      "supportedPdfFormats": ["application/pdf"]
+    }
+  }
+}

@@ -1,8 +1,7 @@
-import jwt from 'jsonwebtoken';
 import { authenticate } from 'ldap-authentication';
-import config from '../config.js';
 import configCache from '../configCache.js';
-import { enhanceUserGroups } from '../utils/authorization.js';
+import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
+import { generateJwt } from '../utils/tokenService.js';
 
 /**
  * LDAP authentication configuration and utilities
@@ -72,22 +71,12 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       });
     }
 
-    // Apply group mapping
-    const groupMap = configCache.getGroupMap();
-    const mappedGroups = new Set();
-
-    for (const group of groups) {
-      const mapped = groupMap[group] || group;
-      if (Array.isArray(mapped)) {
-        mapped.forEach(g => mappedGroups.add(g));
-      } else {
-        mappedGroups.add(mapped);
-      }
-    }
+    // Apply group mapping using centralized function
+    const mappedGroups = mapExternalGroups(groups);
 
     // Add default groups if configured
     if (ldapConfig.defaultGroups && Array.isArray(ldapConfig.defaultGroups)) {
-      ldapConfig.defaultGroups.forEach(g => mappedGroups.add(g));
+      ldapConfig.defaultGroups.forEach(g => mappedGroups.push(g));
     }
 
     // Normalize user data
@@ -100,7 +89,7 @@ async function authenticateLdapUser(username, password, ldapConfig) {
         `${user.givenName || ''} ${user.sn || ''}`.trim() ||
         username,
       email: user.mail || user.email || null,
-      groups: Array.from(mappedGroups),
+      groups: mappedGroups,
       authenticated: true,
       authMethod: 'ldap',
       provider: ldapConfig.name || 'ldap',
@@ -114,40 +103,6 @@ async function authenticateLdapUser(username, password, ldapConfig) {
   }
 }
 
-/**
- * Generate JWT token for authenticated LDAP user
- */
-function generateJwtToken(user, ldapConfig) {
-  const platform = configCache.getPlatform() || {};
-  const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret || ldapConfig.jwtSecret;
-
-  if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
-    throw new Error('JWT secret not configured for LDAP authentication');
-  }
-
-  const tokenPayload = {
-    sub: user.id,
-    name: user.name,
-    email: user.email,
-    groups: user.groups,
-    provider: user.provider,
-    authMode: 'ldap',
-    authProvider: user.provider,
-    iat: Math.floor(Date.now() / 1000)
-  };
-
-  const sessionTimeout =
-    ldapConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480; // 8 hours default
-  const expiresIn = sessionTimeout * 60; // Convert to seconds
-
-  const token = jwt.sign(tokenPayload, jwtSecret, {
-    expiresIn: `${expiresIn}s`,
-    issuer: 'ai-hub-apps',
-    audience: 'ai-hub-apps'
-  });
-
-  return { token, expiresIn };
-}
 
 /**
  * Login function for LDAP authentication
@@ -178,8 +133,13 @@ export async function loginLdapUser(username, password, ldapConfig) {
 
   user = enhanceUserGroups(user, authConfig, ldapConfig);
 
-  // Generate JWT token
-  const { token, expiresIn } = generateJwtToken(user, ldapConfig);
+  // Generate JWT token using centralized token service
+  const sessionTimeout = ldapConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
+  const { token, expiresIn } = generateJwt(user, {
+    authMode: 'ldap',
+    authProvider: user.provider,
+    expiresInMinutes: sessionTimeout
+  });
 
   return {
     user: {

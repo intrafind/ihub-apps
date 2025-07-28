@@ -20,6 +20,9 @@ build/
 contents/data/*
 !contents/data/.gitkeep
 
+contents/uploads/*
+contents/uploads
+
 # Logs
 logs/
 *.log

@@ -2,7 +2,14 @@ import React, { useState } from 'react';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
 const HeaderCustomization = ({ config, onUpdate, t }) => {
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+
+  // Map config links to component format
+  const mappedLinks = (config.links || []).map(link => ({
+    text: link.name || link.text || { en: '' },
+    href: link.url || link.href || '',
+    target: link.target || '_self',
+    enabled: link.enabled !== false
+  }));
 
   const handleColorChange = color => {
     onUpdate({ defaultColor: color });
@@ -25,21 +32,40 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
       enabled: true
     };
 
-    onUpdate({
-      links: [...(config.links || []), newLink]
-    });
+    // Convert back to config format
+    const configLinks = [...mappedLinks, newLink].map(link => ({
+      name: link.text,
+      url: link.href,
+      target: link.target,
+      enabled: link.enabled
+    }));
+    onUpdate({ links: configLinks });
   };
 
   const updateNavigationLink = (index, updates) => {
-    const updatedLinks = [...(config.links || [])];
+    const updatedLinks = [...mappedLinks];
     updatedLinks[index] = { ...updatedLinks[index], ...updates };
-    onUpdate({ links: updatedLinks });
+    // Convert back to config format
+    const configLinks = updatedLinks.map(link => ({
+      name: link.text,
+      url: link.href,
+      target: link.target,
+      enabled: link.enabled
+    }));
+    onUpdate({ links: configLinks });
   };
 
   const removeNavigationLink = index => {
-    const updatedLinks = [...(config.links || [])];
+    const updatedLinks = [...mappedLinks];
     updatedLinks.splice(index, 1);
-    onUpdate({ links: updatedLinks });
+    // Convert back to config format
+    const configLinks = updatedLinks.map(link => ({
+      name: link.text,
+      url: link.href,
+      target: link.target,
+      enabled: link.enabled
+    }));
+    onUpdate({ links: configLinks });
   };
 
   return (
@@ -54,67 +80,52 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             {t('admin.ui.header.color', 'Header Color')}
           </label>
+          
           <div className="flex items-center space-x-3">
-            <div className="relative">
-              <button
-                onClick={() => setColorPickerOpen(!colorPickerOpen)}
-                className="w-10 h-10 rounded-md border-2 border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                style={{ backgroundColor: config.defaultColor || '#4f46e5' }}
-              />
-              {colorPickerOpen && (
-                <div className="absolute z-10 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
-                  <div className="grid grid-cols-6 gap-2 mb-3">
-                    {[
-                      '#4f46e5',
-                      '#7c3aed',
-                      '#db2777',
-                      '#dc2626',
-                      '#ea580c',
-                      '#d97706',
-                      '#ca8a04',
-                      '#65a30d',
-                      '#16a34a',
-                      '#059669',
-                      '#0891b2',
-                      '#0284c7',
-                      '#2563eb',
-                      '#4338ca',
-                      '#6366f1',
-                      '#8b5cf6',
-                      '#a855f7',
-                      '#c026d3',
-                      '#e11d48',
-                      '#f43f5e'
-                    ].map(color => (
-                      <button
-                        key={color}
-                        onClick={() => {
-                          handleColorChange(color);
-                          setColorPickerOpen(false);
-                        }}
-                        className="w-8 h-8 rounded-md border border-gray-300 hover:scale-110 transition-transform"
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
-                  <input
-                    type="text"
-                    value={config.defaultColor || ''}
-                    onChange={e => handleColorChange(e.target.value)}
-                    placeholder="#4f46e5"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                  />
-                  <button
-                    onClick={() => setColorPickerOpen(false)}
-                    className="mt-2 w-full px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200"
-                  >
-                    {t('admin.ui.close', 'Close')}
-                  </button>
-                </div>
-              )}
-            </div>
-            <span className="text-sm text-gray-600">{config.defaultColor || '#4f46e5'}</span>
+            <div
+              className="w-10 h-10 rounded-md border-2 border-gray-300 shadow-sm"
+              style={{ backgroundColor: config.defaultColor || 'rgb(0, 53, 87)' }}
+            />
+            
+            <input
+              type="text"
+              value={config.defaultColor || ''}
+              onChange={e => handleColorChange(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              placeholder="rgb(0, 53, 87)"
+            />
           </div>
+          
+          {/* Color Presets */}
+          <div className="flex flex-wrap gap-1 mt-2">
+            {[
+              'rgb(0, 53, 87)',
+              '#4f46e5',
+              '#7c3aed',
+              '#db2777',
+              '#dc2626',
+              '#ea580c',
+              '#d97706',
+              '#16a34a',
+              '#059669',
+              '#0891b2',
+              '#2563eb',
+              '#6366f1',
+              '#e11d48'
+            ].map(color => (
+              <button
+                key={color}
+                onClick={() => handleColorChange(color)}
+                className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+                style={{ backgroundColor: color }}
+                title={color}
+              />
+            ))}
+          </div>
+          
+          <p className="mt-1 text-sm text-gray-500">
+            {t('admin.ui.header.colorHint', 'Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229))')}
+          </p>
         </div>
 
         {/* Logo Configuration */}
@@ -184,7 +195,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
           </div>
 
           <div className="space-y-4">
-            {(config.links || []).map((link, index) => (
+            {mappedLinks.map((link, index) => (
               <div key={index} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-medium text-gray-900">
@@ -254,7 +265,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
               </div>
             ))}
 
-            {(!config.links || config.links.length === 0) && (
+            {(!mappedLinks || mappedLinks.length === 0) && (
               <div className="text-center py-8 text-gray-500">
                 <p>{t('admin.ui.header.noLinks', 'No navigation links configured')}</p>
                 <p className="text-sm">

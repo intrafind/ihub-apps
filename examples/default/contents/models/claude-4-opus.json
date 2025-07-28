@@ -1,0 +1,18 @@
+{
+  "id": "claude-4-opus",
+  "modelId": "claude-opus-4-20250514",
+  "name": {
+    "en": "Claude 4 Opus",
+    "de": "Claude 4 Opus"
+  },
+  "description": {
+    "en": "Anthropic's most capable model with exceptional reasoning abilities",
+    "de": "Anthropics leistungsfähigstes Modell mit außergewöhnlichen Argumentationsfähigkeiten"
+  },
+  "url": "https://api.anthropic.com/v1/messages",
+  "provider": "anthropic",
+  "tokenLimit": 200000,
+  "supportsTools": true,
+  "enabled": true,
+  "default": false
+}

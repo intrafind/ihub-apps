@@ -147,6 +147,9 @@ export default function registerAdminAuthRoutes(app) {
       // Save to file
       await atomicWriteJSON(usersFilePath, usersData);
 
+      // Refresh cache to ensure new user is available in cache
+      await configCache.refreshCacheEntry('config/users.json');
+
       console.log(`👤 Created new user: ${username} (${userId})`);
 
       // Return user without password hash
@@ -205,6 +208,9 @@ export default function registerAdminAuthRoutes(app) {
       // Save to file
       await atomicWriteJSON(usersFilePath, usersData);
 
+      // Refresh cache to ensure updated user data is available in cache
+      await configCache.refreshCacheEntry('config/users.json');
+
       console.log(`👤 Updated user: ${user.username} (${userId})`);
 
       // Return user without password hash
@@ -248,6 +254,9 @@ export default function registerAdminAuthRoutes(app) {
 
       // Save to file
       await atomicWriteJSON(usersFilePath, usersData);
+
+      // Refresh cache to ensure deleted user is removed from cache
+      await configCache.refreshCacheEntry('config/users.json');
 
       console.log(`👤 Deleted user: ${username} (${userId})`);
 

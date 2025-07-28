@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 const StyleEditor = ({ config, onUpdate, t }) => {
-  const [activeSection, setActiveSection] = useState('theme');
+  const [activeSection, setActiveSection] = useState('css');
 
   const handleThemeColorChange = (colorKey, color) => {
     const updatedConfig = {
@@ -135,7 +135,7 @@ const StyleEditor = ({ config, onUpdate, t }) => {
       <div className="border-b border-gray-200 mb-6">
         <nav className="flex space-x-8" aria-label="Tabs">
           {[
-            { id: 'theme', label: t('admin.ui.styles.themeColors', 'Theme Colors'), icon: '🎨' },
+            // { id: 'theme', label: t('admin.ui.styles.themeColors', 'Theme Colors'), icon: '🎨' },
             { id: 'css', label: t('admin.ui.styles.customCss', 'Custom CSS'), icon: '⚙️' },
             {
               id: 'variables',
@@ -159,8 +159,8 @@ const StyleEditor = ({ config, onUpdate, t }) => {
         </nav>
       </div>
 
-      {/* Theme Colors Section */}
-      {activeSection === 'theme' && (
+      {/* Theme Colors Section - Hidden for now */}
+      {false && activeSection === 'theme' && (
         <div className="space-y-6">
           <p className="text-sm text-gray-600">
             {t(

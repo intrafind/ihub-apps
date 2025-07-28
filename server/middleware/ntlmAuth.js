@@ -1,8 +1,7 @@
-import jwt from 'jsonwebtoken';
 import expressNtlm from 'express-ntlm';
-import config from '../config.js';
 import configCache from '../configCache.js';
-import { enhanceUserGroups } from '../utils/authorization.js';
+import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
+import { generateJwt } from '../utils/tokenService.js';
 
 /**
  * NTLM/Windows Authentication middleware and utilities
@@ -68,22 +67,12 @@ function processNtlmUser(req, ntlmConfig) {
     groups = ntlmUser.Groups;
   }
 
-  // Apply group mapping
-  const groupMap = configCache.getGroupMap();
-  const mappedGroups = new Set();
-
-  for (const group of groups) {
-    const mapped = groupMap[group] || group;
-    if (Array.isArray(mapped)) {
-      mapped.forEach(g => mappedGroups.add(g));
-    } else {
-      mappedGroups.add(mapped);
-    }
-  }
+  // Apply group mapping using centralized function
+  const mappedGroups = mapExternalGroups(groups);
 
   // Add default groups if configured
   if (ntlmConfig.defaultGroups && Array.isArray(ntlmConfig.defaultGroups)) {
-    ntlmConfig.defaultGroups.forEach(g => mappedGroups.add(g));
+    ntlmConfig.defaultGroups.forEach(g => mappedGroups.push(g));
   }
 
   // Create normalized user object
@@ -91,7 +80,7 @@ function processNtlmUser(req, ntlmConfig) {
     id: fullUsername,
     name: ntlmUser.DisplayName || ntlmUser.displayName || fullUsername,
     email: ntlmUser.email || ntlmUser.Email || null,
-    groups: Array.from(mappedGroups),
+    groups: mappedGroups,
     authenticated: true,
     authMethod: 'ntlm',
     provider: ntlmConfig.name || 'ntlm',
@@ -103,41 +92,6 @@ function processNtlmUser(req, ntlmConfig) {
   return user;
 }
 
-/**
- * Generate JWT token for authenticated NTLM user
- */
-function generateJwtToken(user, ntlmConfig) {
-  const platform = configCache.getPlatform() || {};
-  const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret || ntlmConfig.jwtSecret;
-
-  if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
-    throw new Error('JWT secret not configured for NTLM authentication');
-  }
-
-  const tokenPayload = {
-    sub: user.id,
-    name: user.name,
-    email: user.email,
-    groups: user.groups,
-    provider: user.provider,
-    authMode: 'ntlm',
-    authProvider: user.provider,
-    domain: user.domain,
-    iat: Math.floor(Date.now() / 1000)
-  };
-
-  const sessionTimeout =
-    ntlmConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480; // 8 hours default
-  const expiresIn = sessionTimeout * 60; // Convert to seconds
-
-  const token = jwt.sign(tokenPayload, jwtSecret, {
-    expiresIn: `${expiresIn}s`,
-    issuer: 'ai-hub-apps',
-    audience: 'ai-hub-apps'
-  });
-
-  return { token, expiresIn };
-}
 
 /**
  * NTLM authentication middleware
@@ -180,7 +134,15 @@ export function ntlmAuthMiddleware(req, res, next) {
     // Optional: Generate JWT token for stateless operation
     if (ntlmAuth.generateJwtToken) {
       try {
-        const { token, expiresIn } = generateJwtToken(user, ntlmAuth);
+        const sessionTimeout = ntlmAuth.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
+        const { token, expiresIn } = generateJwt(user, {
+          authMode: 'ntlm',
+          authProvider: user.provider,
+          expiresInMinutes: sessionTimeout,
+          additionalClaims: {
+            domain: user.domain
+          }
+        });
         req.jwtToken = token;
         req.jwtExpiresIn = expiresIn;
       } catch (tokenError) {
@@ -233,8 +195,16 @@ export function processNtlmLogin(req, ntlmConfig) {
 
   user = enhanceUserGroups(user, authConfig, ntlmConfig);
 
-  // Generate JWT token
-  const { token, expiresIn } = generateJwtToken(user, ntlmConfig);
+  // Generate JWT token using centralized token service
+  const sessionTimeout = ntlmConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
+  const { token, expiresIn } = generateJwt(user, {
+    authMode: 'ntlm',
+    authProvider: user.provider,
+    expiresInMinutes: sessionTimeout,
+    additionalClaims: {
+      domain: user.domain
+    }
+  });
 
   return {
     user: {

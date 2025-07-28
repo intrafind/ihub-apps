@@ -28,10 +28,11 @@ const AdminUICustomization = () => {
         setError(null);
 
         const response = await makeAdminApiCall('/api/admin/ui/config');
-        if (response.success) {
-          setConfig(response.config);
+        const data = await response.json();
+        if (data.success) {
+          setConfig(data.config);
         } else {
-          throw new Error(response.message || 'Failed to load configuration');
+          throw new Error(data.message || 'Failed to load configuration');
         }
       } catch (err) {
         console.error('Failed to load UI config:', err);
@@ -61,8 +62,9 @@ const AdminUICustomization = () => {
           'Content-Type': 'application/json'
         }
       });
+      const data = await response.json();
 
-      if (response.success) {
+      if (data.success) {
         setSuccessMessage('UI configuration saved successfully');
         // Refresh the UI config context to apply changes immediately
         await refreshUIConfig();
@@ -70,7 +72,7 @@ const AdminUICustomization = () => {
         // Clear success message after 3 seconds
         setTimeout(() => setSuccessMessage(''), 3000);
       } else {
-        throw new Error(response.message || 'Failed to save configuration');
+        throw new Error(data.message || 'Failed to save configuration');
       }
     } catch (err) {
       console.error('Failed to save UI config:', err);
@@ -85,12 +87,13 @@ const AdminUICustomization = () => {
       const response = await makeAdminApiCall('/api/admin/ui/backup', {
         method: 'POST'
       });
+      const data = await response.json();
 
-      if (response.success) {
-        setSuccessMessage(`Configuration backed up to: ${response.backupPath}`);
+      if (data.success) {
+        setSuccessMessage(`Configuration backed up to: ${data.backupPath}`);
         setTimeout(() => setSuccessMessage(''), 5000);
       } else {
-        throw new Error(response.message || 'Failed to create backup');
+        throw new Error(data.message || 'Failed to create backup');
       }
     } catch (err) {
       console.error('Failed to backup config:', err);

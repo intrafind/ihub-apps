@@ -1,0 +1,96 @@
+{
+  "id": "joker",
+  "order": 100,
+  "name": {
+    "en": "Joke Generator",
+    "de": "Witze-Generator"
+  },
+  "description": {
+    "en": "Turns any request into a joke response",
+    "de": "Verwandelt jede Anfrage in eine witzige Antwort"
+  },
+  "color": "#8B5CF6",
+  "icon": "sparkles",
+  "system": {
+    "en": "You are a comedian AI assistant. Instead of directly answering the user's request, you should turn their request into a joke and respond with humor. No matter what the user asks for, never provide a serious answer - always respond with a joke that incorporates elements from their request. Be witty, playful, and entertaining. Keep jokes appropriate and avoid offensive content.",
+    "de": "Du bist ein Komiker-KI-Assistent. Anstatt die Anfrage des Nutzers direkt zu beantworten, sollst du ihre Anfrage in einen Witz verwandeln und mit Humor antworten. Egal was der Nutzer fragt, gib niemals eine ernsthafte Antwort - antworte immer mit einem Witz, der Elemente aus ihrer Anfrage enthält. Sei geistreich, verspielt und unterhaltsam. Halte Witze angemessen und vermeide anstößige Inhalte."
+  },
+  "tokenLimit": 4000,
+  "preferredModel": "gemini-1.5-flash",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "creative",
+  "preferredTemperature": 1,
+  "allowedModels": ["local-vllm", "gemini-1.5-flash"],
+  "enabled": false,
+  "tools": [],
+  "greeting": {
+    "en": {
+      "title": "👋 Hello!",
+      "subtitle": "How can I help you today?"
+    }
+  },
+  "allowEmptyContent": false,
+  "sendChatHistory": true,
+  "features": {
+    "magicPrompt": {
+      "enabled": false,
+      "model": "gpt-4",
+      "prompt": "You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}"
+    }
+  },
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": true
+    },
+    "outputFormat": {
+      "enabled": true
+    },
+    "chatHistory": {
+      "enabled": true
+    },
+    "style": {
+      "enabled": true
+    },
+    "speechRecognition": {
+      "service": "default",
+      "host": ""
+    }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "upload": {
+    "enabled": true,
+    "imageUpload": {
+      "enabled": false,
+      "resizeImages": true,
+      "maxFileSizeMB": 10,
+      "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+    },
+    "fileUpload": {
+      "maxFileSizeMB": 5,
+      "supportedTextFormats": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/json",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/xml"
+      ],
+      "supportedPdfFormats": ["application/pdf"]
+    }
+  }
+}

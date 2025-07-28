@@ -4,7 +4,7 @@ import { promisify } from 'util';
 import fetch from 'node-fetch';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
-import config from '../config.js';
+import { generateJwt } from '../utils/tokenService.js';
 import ErrorHandler from '../utils/ErrorHandler.js';
 
 // JWKS client for Microsoft public keys
@@ -165,40 +165,6 @@ function normalizeTeamsUser(tokenData, profile, groups, teamsConfig) {
   return user;
 }
 
-/**
- * Generate JWT token for authenticated Teams user
- */
-function generateJwtToken(user) {
-  const platform = configCache.getPlatform() || {};
-  const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret;
-
-  if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
-    throw new Error('TEAMS_JWT_SECRET_NOT_CONFIGURED');
-  }
-
-  const tokenPayload = {
-    sub: user.id,
-    name: user.name,
-    email: user.email,
-    groups: user.groups,
-    provider: user.provider,
-    authMode: 'teams',
-    authProvider: 'teams',
-    teamsData: user.teamsData,
-    iat: Math.floor(Date.now() / 1000)
-  };
-
-  const sessionTimeout = platform.localAuth?.sessionTimeoutMinutes || 480; // 8 hours default
-  const expiresIn = sessionTimeout * 60; // Convert to seconds
-
-  const token = jwt.sign(tokenPayload, jwtSecret, {
-    expiresIn: `${expiresIn}s`,
-    issuer: 'ai-hub-apps',
-    audience: 'ai-hub-apps'
-  });
-
-  return { token, expiresIn };
-}
 
 /**
  * Teams authentication middleware
@@ -251,8 +217,14 @@ export async function teamsAuthMiddleware(req, res, next) {
     // Normalize user data
     const user = normalizeTeamsUser(tokenData, profile, groups, teamsConfig);
 
-    // Generate our JWT token
-    const { token } = generateJwtToken(user);
+    // Generate our JWT token using centralized token service
+    const { token } = generateJwt(user, {
+      authMode: 'teams',
+      authProvider: 'teams',
+      additionalClaims: {
+        teamsData: user.teamsData
+      }
+    });
 
     // Attach user and token to request
     req.user = user;
@@ -317,8 +289,14 @@ export async function teamsTokenExchange(req, res) {
     // Normalize user data
     const user = normalizeTeamsUser(tokenData, null, groups, teamsConfig);
 
-    // Generate our JWT token
-    const { token, expiresIn } = generateJwtToken(user);
+    // Generate our JWT token using centralized token service
+    const { token, expiresIn } = generateJwt(user, {
+      authMode: 'teams',
+      authProvider: 'teams',
+      additionalClaims: {
+        teamsData: user.teamsData
+      }
+    });
 
     res.json({
       success: true,

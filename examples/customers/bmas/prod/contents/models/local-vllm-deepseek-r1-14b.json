@@ -1,0 +1,9 @@
+{
+  "id": "local-vllm-deepseek-r1-14b",
+  "modelId": "casperhansen/deepseek-r1-distill-qwen-14b-awq",
+  "name": "Deepseek R1 14b",
+  "description": "Advanced model with strong reasoning and knowledge capabilities",
+  "url": "http://llm-api.k8s.rochus.local/models/deepseek/r1/14b/int4/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 16384
+}

@@ -1,4 +1,3 @@
-import { act } from 'react';
 import { simpleCompletion } from '../utils.js';
 import { actionTracker } from '../actionTracker.js';
 

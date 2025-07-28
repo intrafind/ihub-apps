@@ -1,0 +1,73 @@
+{
+  "id": "dictation",
+  "order": 5,
+  "name": {
+    "en": "Dictation Assistant",
+    "de": "Diktier-Assistent"
+  },
+  "description": {
+    "en": "Use this app to record your voice and convert it to text",
+    "de": "Verwende diese App, um deine Stimme aufzunehmen und in Text umzuwandeln"
+  },
+  "color": "#10B981",
+  "icon": "question-mark-circle",
+  "system": {
+    "en": "You are a helpful assistant, which receives a transcript recorded with a microphone. Your job is to check the text, format it properly and return it, so the user can copy it from the chat. Do NOT add any additional information.",
+    "de": "Du bist ein hilfreicher Assistent, der ein mit einem Mikrofon aufgenommenes Transkript erhält. Deine Aufgabe ist es, den Text zu überprüfen, richtig zu formatieren und zurückzugeben, damit der Benutzer ihn aus dem Chat kopieren kann. Füge KEINE zusätzlichen Informationen hinzu."
+  },
+  "greeting": {
+    "en": {
+      "title": "👋 Hello!",
+      "subtitle": "How can I help you today?"
+    },
+    "de": {
+      "title": "👋 Hallo!",
+      "subtitle": "Wie kann ich Ihnen heute helfen?"
+    }
+  },
+  "messagePlaceholder": {
+    "en": "Please speak the text by tapping the microphone icon.",
+    "de": "Bitte sprich den Text ein, indem du auf das Mikrofon-Symbol tippst."
+  },
+  "tokenLimit": 8000,
+  "preferredModel": "local-vllm-gemma-3-27b",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "normal",
+  "preferredTemperature": 0.3,
+  "sendChatHistory": false,
+  "prompt": {
+    "en": "{{content}}",
+    "de": "{{content}}"
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "settings": {
+    "speechRecognition": {
+      "service": "azure",
+      "host": "https://sd-container-01.rochus.local/"
+    },
+    "enabled": true,
+    "model": {
+      "enabled": false
+    },
+    "temperature": {
+      "enabled": false
+    },
+    "outputFormat": {
+      "enabled": false
+    },
+    "chatHistory": {
+      "enabled": false
+    },
+    "style": {
+      "enabled": true
+    }
+  }
+}
