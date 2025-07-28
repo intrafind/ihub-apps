@@ -67,7 +67,7 @@ const AdminGroupEditPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [groupId]);  
+  }, [groupId]);
 
   const handleSave = async e => {
     e.preventDefault();

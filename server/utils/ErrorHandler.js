@@ -114,11 +114,7 @@ class ErrorHandler {
   }
 
   async createRequestTimeoutError(timeout, language) {
-    await this.getLocalizedError(
-      'requestTimeout',
-      { timeout: timeout / 1000 },
-      language
-    );
+    await this.getLocalizedError('requestTimeout', { timeout: timeout / 1000 }, language);
     return new RequestTimeoutError(timeout, 'REQUEST_TIMEOUT');
   }
 

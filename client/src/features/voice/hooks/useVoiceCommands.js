@@ -30,11 +30,14 @@ function useVoiceCommands({
    * Update the current voice text
    * @param {string} text - The recognized text
    */
-  const handleVoiceInput = useCallback((text) => {
-    currentVoiceTextRef.current = text;
-    setInput(text);
-    return text;
-  }, [setInput]);
+  const handleVoiceInput = useCallback(
+    text => {
+      currentVoiceTextRef.current = text;
+      setInput(text);
+      return text;
+    },
+    [setInput]
+  );
 
   /**
    * Handle voice commands

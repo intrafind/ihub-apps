@@ -106,7 +106,17 @@ const AppCanvas = () => {
       ].forEach(k => newSearch.delete(k));
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
     }
-  }, [app, modelsLoading, navigate, searchParams, setSelectedModel, setSelectedOutputFormat, setSelectedStyle, setSendChatHistory, setTemperature]);
+  }, [
+    app,
+    modelsLoading,
+    navigate,
+    searchParams,
+    setSelectedModel,
+    setSelectedOutputFormat,
+    setSelectedStyle,
+    setSendChatHistory,
+    setTemperature
+  ]);
 
   // Canvas editor states
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -285,7 +295,7 @@ const AppCanvas = () => {
 
     // Editing functions
     handleSelectionChange,
-    handleEditAction,
+    handleEditAction
   } = canvasHook;
 
   // Load app data

@@ -18,11 +18,7 @@ function buildKnowledgeStr(items = []) {
  * @param {string} [params.model='gemini-1.5-flash'] - Model ID
  * @param {string} [params.language='en'] - Language code
  */
-export default async function finalizer({
-  question,
-  results = [],
-  model = 'gemini-1.5-flash'
-}) {
+export default async function finalizer({ question, results = [], model = 'gemini-1.5-flash' }) {
   const knowledge = buildKnowledgeStr(results);
   const system = `You are a senior editor with multiple best-selling books and columns published in top magazines. You break conventional thinking, establish unique cross-disciplinary connections, and bring new perspectives to the user.
 \nYour task is to revise the provided markdown content (written by your junior intern) while preserving its original vibe, delivering a polished and professional version.`;

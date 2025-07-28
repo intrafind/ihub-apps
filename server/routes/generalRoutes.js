@@ -1,8 +1,5 @@
 import configCache from '../configCache.js';
-import {
-  enhanceUserWithPermissions,
-  isAnonymousAccessAllowed
-} from '../utils/authorization.js';
+import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { authRequired, authOptional, appAccessRequired } from '../middleware/authRequired.js';
 
 export default function registerGeneralRoutes(app, { getLocalizedError }) {

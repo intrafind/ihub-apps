@@ -1,4 +1,3 @@
-
 import { useTranslation } from 'react-i18next';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';

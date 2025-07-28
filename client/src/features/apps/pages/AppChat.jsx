@@ -187,7 +187,17 @@ const AppChat = () => {
       ].forEach(k => newSearch.delete(k));
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
     }
-  }, [app, modelsLoading, navigate, searchParams, setSelectedModel, setSelectedOutputFormat, setSelectedStyle, setSendChatHistory, setTemperature]);
+  }, [
+    app,
+    modelsLoading,
+    navigate,
+    searchParams,
+    setSelectedModel,
+    setSelectedOutputFormat,
+    setSelectedStyle,
+    setSendChatHistory,
+    setTemperature
+  ]);
 
   const [useMaxTokens, setUseMaxTokens] = useState(false);
 
@@ -357,7 +367,6 @@ const AppChat = () => {
   });
 
   // Get UI config for fallback to widget greeting
-
 
   useEffect(() => {
     // Store mounted state to prevent state updates after unmount
@@ -709,7 +718,6 @@ const AppChat = () => {
     }
     setShowParameters(!showParameters);
   };
-
 
   const handleParametersOk = () => {
     // Apply temp variables to actual variables

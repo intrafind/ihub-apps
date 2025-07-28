@@ -214,7 +214,7 @@ const AdminAppEditPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [appId]);  
+  }, [appId]);
 
   const handleSave = async e => {
     e.preventDefault();

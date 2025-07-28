@@ -33,7 +33,6 @@ function loadUsers(usersFilePath) {
   }
 }
 
-
 /**
  * Hash password with user ID as salt for unique hashes
  * @param {string} password - Plain text password

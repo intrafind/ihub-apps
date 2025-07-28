@@ -78,8 +78,6 @@ async function verifyTeamsToken(token, teamsConfig) {
   }
 }
 
-
-
 /**
  * Normalize Teams user data
  */

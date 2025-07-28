@@ -1,8 +1,5 @@
 import configCache from '../configCache.js';
-import {
-  isAnonymousAccessAllowed,
-  enhanceUserWithPermissions
-} from '../utils/authorization.js';
+import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import { authRequired, authOptional, modelAccessRequired } from '../middleware/authRequired.js';
 import {
   sendAuthRequired,

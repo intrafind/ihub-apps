@@ -99,13 +99,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           console.log('🔍 Unknown event type:', type, data);
       }
     },
-    [
-      pendingMessageDataRef,
-      setMessageError,
-      updateAssistantMessage,
-      onMessageComplete,
-      t
-    ]
+    [pendingMessageDataRef, setMessageError, updateAssistantMessage, onMessageComplete, t]
   );
 
   const { initEventSource, cleanupEventSource } = useEventSource({

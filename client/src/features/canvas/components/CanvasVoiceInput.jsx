@@ -13,7 +13,7 @@ const CanvasVoiceInput = ({ app, onSpeechResult, disabled = false, quillRef }) =
     useVoiceRecognition({
       app,
       inputRef: dummyInputRef,
-      onSpeechResult: (text) => {
+      onSpeechResult: text => {
         // Insert text directly into the Quill editor
         if (quillRef?.current && text.trim()) {
           const quill = quillRef.current.getEditor();

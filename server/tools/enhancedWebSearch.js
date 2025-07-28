@@ -42,7 +42,7 @@ export default async function enhancedWebSearch({
       console.log(`Extracting content from top ${resultsToProcess.length} results...`);
 
       // Extract content from each URL in parallel
-      const contentPromises = resultsToProcess.map(async (result) => {
+      const contentPromises = resultsToProcess.map(async result => {
         try {
           console.log(`Extracting content from: ${result.url}`);
           const content = await webContentExtractor({

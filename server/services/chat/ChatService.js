@@ -160,12 +160,7 @@ class ChatService {
         return { success: false, error: prepResult.error };
       }
 
-      const {
-        model,
-        llmMessages,
-        request,
-        tools
-      } = prepResult.data;
+      const { model, llmMessages, request, tools } = prepResult.data;
 
       if (!clientRes) {
         return await this.processNonStreamingChat({

@@ -4,10 +4,7 @@ import { authRequired, authOptional } from '../middleware/authRequired.js';
 import validate from '../validators/validate.js';
 import { runToolSchema } from '../validators/index.js';
 import configCache from '../configCache.js';
-import {
-  isAnonymousAccessAllowed,
-  enhanceUserWithPermissions
-} from '../utils/authorization.js';
+import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 
 export default function registerToolRoutes(app) {
   app.get('/api/tools', authOptional, async (req, res) => {

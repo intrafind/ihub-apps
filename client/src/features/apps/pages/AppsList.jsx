@@ -18,10 +18,8 @@ const AppsList = () => {
   const { user, isAuthenticated } = useAuth();
 
   // Create favorite apps helpers
-  const {
-    getFavorites: getFavoriteApps,
-    toggleFavorite: toggleFavoriteApp
-  } = createFavoriteItemHelpers('aihub_favorite_apps');
+  const { getFavorites: getFavoriteApps, toggleFavorite: toggleFavoriteApp } =
+    createFavoriteItemHelpers('aihub_favorite_apps');
 
   // Get search configuration from UI config with defaults
   const searchConfig = useMemo(() => {
@@ -251,18 +249,21 @@ const AppsList = () => {
     setSearchTerm('');
   }, []);
 
-  const handleToggleFavorite = useCallback((e, appId) => {
-    e.preventDefault(); // Stop event propagation to avoid navigating to the app
-    e.stopPropagation();
+  const handleToggleFavorite = useCallback(
+    (e, appId) => {
+      e.preventDefault(); // Stop event propagation to avoid navigating to the app
+      e.stopPropagation();
 
-    const newStatus = toggleFavoriteApp(appId);
-    // Update the favorite apps list in state
-    if (newStatus) {
-      setFavoriteApps(prev => [...prev, appId]);
-    } else {
-      setFavoriteApps(prev => prev.filter(id => id !== appId));
-    }
-  }, [toggleFavoriteApp]);
+      const newStatus = toggleFavoriteApp(appId);
+      // Update the favorite apps list in state
+      if (newStatus) {
+        setFavoriteApps(prev => [...prev, appId]);
+      } else {
+        setFavoriteApps(prev => prev.filter(id => id !== appId));
+      }
+    },
+    [toggleFavoriteApp]
+  );
 
   // Load more apps handler
   const handleLoadMore = useCallback(() => {

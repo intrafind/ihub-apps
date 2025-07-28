@@ -55,11 +55,13 @@ function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = null
   if (obj && typeof obj === 'object') {
     const result = {};
     for (const [key, value] of Object.entries(obj)) {
-      if ((key === 'description' || key === 'name') && 
-          value && 
-          typeof value === 'object' && 
-          !Array.isArray(value) &&
-          Object.keys(value).some(k => k.length === 2 && typeof value[k] === 'string')) {
+      if (
+        (key === 'description' || key === 'name') &&
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        Object.keys(value).some(k => k.length === 2 && typeof value[k] === 'string')
+      ) {
         // This is a multilingual field - an object with language codes as keys
         result[key] = extractLanguageValue(value, language, fallbackLanguage);
       } else {

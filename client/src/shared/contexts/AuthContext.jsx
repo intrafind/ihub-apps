@@ -263,7 +263,6 @@ export function AuthProvider({ children }) {
     };
   }, [handleOidcCallback, loadAuthStatus]);
 
-
   // Login with username/password (local auth)
   const login = async (username, password) => {
     try {
@@ -308,7 +307,6 @@ export function AuthProvider({ children }) {
       return { success: false, error: errorMessage };
     }
   };
-
 
   // OIDC login - redirect to provider
   const loginWithOidc = (providerName, returnUrl = window.location.href) => {
