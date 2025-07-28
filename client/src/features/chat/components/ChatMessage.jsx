@@ -545,8 +545,10 @@ const ChatMessage = ({
                   showTooltip={true}
                   className="flex-shrink-0"
                 />
-                {!compact && activeFeedback > 0 && (
-                  <span className="text-sm text-gray-600">{t('feedback.rated', 'Rated')}</span>
+                {!compact && (
+                  <span className="text-sm text-gray-600" style={{ visibility: activeFeedback > 0 ? 'visible' : 'hidden' }}>
+                    {t('feedback.rated', 'Rated')}
+                  </span>
                 )}
               </div>
             </>

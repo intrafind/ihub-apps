@@ -156,9 +156,9 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
           </>
         )}
         <Icon
-          name={showDropdown ? 'chevron-up' : 'chevron-down'}
+          name="chevron-down"
           size="sm"
-          className={variant === 'header' ? 'text-white' : 'text-gray-500'}
+          className={`transition-transform duration-200 ${showDropdown ? 'rotate-180' : ''} ${variant === 'header' ? 'text-white' : 'text-gray-500'}`}
         />
       </button>
 
