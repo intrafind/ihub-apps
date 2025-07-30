@@ -40,7 +40,11 @@ export default function jwtAuthMiddleware(req, res, next) {
     // Check token expiration
     const now = Math.floor(Date.now() / 1000);
     if (decoded.exp && decoded.exp < now) {
-      return next(); // Expired token, continue as anonymous
+      return res.status(401).json({
+        error: 'Token expired',
+        code: 'TOKEN_EXPIRED',
+        message: 'Your session has expired. Please log in again.'
+      });
     }
 
     // Reconstruct user object from token based on auth mode

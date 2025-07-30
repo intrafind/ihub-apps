@@ -6,7 +6,7 @@
 
 import request from 'supertest';
 import express from 'express';
-import { setupMiddleware } from '../serverHelpers.js';
+import { setupMiddleware } from '../middleware/setup.js';
 import registerChatRoutes from '../routes/chat/index.js';
 import registerGeneralRoutes from '../routes/generalRoutes.js';
 import registerModelRoutes from '../routes/modelRoutes.js';
