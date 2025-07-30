@@ -56,7 +56,7 @@ export * as GoogleConverter from './GoogleConverter.js';
 export * as MistralConverter from './MistralConverter.js';
 
 // Export the main converter class for legacy compatibility
-export { ToolCallingConverter } from './ToolCallingConverter.js';
+// Note: ToolCallingConverter class was removed as it was unused and only functions are needed
 
 /**
  * Quick-start factory function to create a converter for a specific provider
