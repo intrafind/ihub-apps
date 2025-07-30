@@ -7,8 +7,6 @@ import { filterResourcesByPermissions } from '../utils/authorization.js';
 import {
   convertResponseToGeneric,
   convertResponseFromGeneric,
-  convertToolsToGeneric,
-  convertToolsFromGeneric,
   convertToolCallsFromGeneric
 } from '../adapters/toolCalling/index.js';
 
@@ -162,11 +160,11 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
         const decoder = new TextDecoder();
         let chunkCount = 0;
         let buffer = '';
-        
+
         // Generate a unique ID for this completion
         const completionId = `chatcmpl-${Date.now()}${Math.random().toString(36).substring(2, 11)}`;
         let isFirstChunk = true;
-        
+
         try {
           while (true) {
             const { done, value } = await reader.read();
@@ -213,13 +211,18 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
                 );
 
                 // Convert generic result to OpenAI format
-                const openAIChunk = convertResponseFromGeneric(
-                  genericResult,
-                  'openai',
-                  { completionId, modelId, isFirstChunk }
-                );
-                
-                if (openAIChunk && (genericResult.content.length > 0 || genericResult.tool_calls.length > 0 || genericResult.complete)) {
+                const openAIChunk = convertResponseFromGeneric(genericResult, 'openai', {
+                  completionId,
+                  modelId,
+                  isFirstChunk
+                });
+
+                if (
+                  openAIChunk &&
+                  (genericResult.content.length > 0 ||
+                    genericResult.tool_calls.length > 0 ||
+                    genericResult.complete)
+                ) {
                   chunkCount++;
                   isFirstChunk = false;
                   console.log(
@@ -257,14 +260,17 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
                     `[OpenAI Proxy] Generic buffer result:`,
                     JSON.stringify(genericResult, null, 2)
                   );
-                  
-                  const openAIChunk = convertResponseFromGeneric(
-                    genericResult,
-                    'openai',
-                    { completionId, modelId, isFirstChunk }
-                  );
-                  
-                  if (openAIChunk && (genericResult.content.length > 0 || genericResult.tool_calls.length > 0)) {
+
+                  const openAIChunk = convertResponseFromGeneric(genericResult, 'openai', {
+                    completionId,
+                    modelId,
+                    isFirstChunk
+                  });
+
+                  if (
+                    openAIChunk &&
+                    (genericResult.content.length > 0 || genericResult.tool_calls.length > 0)
+                  ) {
                     chunkCount++;
                     console.log(
                       `[OpenAI Proxy] Sending buffer chunk to client:`,
@@ -278,15 +284,14 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
               }
             }
           }
-          } finally {
-            reader.releaseLock();
-          }
-
-          console.log(
-            `[OpenAI Proxy] ${model.provider} streaming complete. Total chunks: ${chunkCount}`
-          );
-          res.write('data: [DONE]\n\n');
+        } finally {
+          reader.releaseLock();
         }
+
+        console.log(
+          `[OpenAI Proxy] ${model.provider} streaming complete. Total chunks: ${chunkCount}`
+        );
+        res.write('data: [DONE]\n\n');
         res.end();
       } else {
         const data = await llmResponse.text();
@@ -302,37 +307,36 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
             responseLength: data.length,
             responsePreview: data.substring(0, 200) + '...'
           });
-          
+
           // Convert provider response to generic format, then to OpenAI format
           const genericResult = convertResponseToGeneric(data, model.provider);
-          console.log(
-            `[OpenAI Proxy] Generic result:`,
-            JSON.stringify(genericResult, null, 2)
-          );
-          
+          console.log(`[OpenAI Proxy] Generic result:`, JSON.stringify(genericResult, null, 2));
+
           const completionId = `chatcmpl-${Date.now()}${Math.random().toString(36).substring(2, 11)}`;
-          
+
           // Convert to OpenAI non-streaming format
           const openAIResponse = {
             id: completionId,
             object: 'chat.completion',
             created: Math.floor(Date.now() / 1000),
             model: modelId,
-            choices: [{
-              index: 0,
-              message: {
-                role: 'assistant',
-                content: genericResult.content.join('') || null
-              },
-              finish_reason: genericResult.finishReason || 'stop'
-            }],
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant',
+                  content: genericResult.content.join('') || null
+                },
+                finish_reason: genericResult.finishReason || 'stop'
+              }
+            ],
             usage: {
               prompt_tokens: 0,
               completion_tokens: 0,
               total_tokens: 0
             }
           };
-          
+
           // Add tool calls if present
           if (genericResult.tool_calls && genericResult.tool_calls.length > 0) {
             const openAIToolCalls = convertToolCallsFromGeneric(genericResult.tool_calls, 'openai');
