@@ -106,7 +106,8 @@ export function createGenericToolCall(id, name, arguments_, index = 0, metadata 
   if (arguments_ && arguments_.__raw_arguments) {
     functionArguments = arguments_.__raw_arguments;
   } else {
-    functionArguments = typeof arguments_ === 'string' ? arguments_ : JSON.stringify(arguments_ || {});
+    functionArguments =
+      typeof arguments_ === 'string' ? arguments_ : JSON.stringify(arguments_ || {});
   }
 
   return {
