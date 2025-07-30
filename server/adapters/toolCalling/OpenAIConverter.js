@@ -93,11 +93,21 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
         argString = toolCall.function.arguments;
 
         // For streaming responses, arguments may be partial JSON
-        // Only try to parse if it looks like complete JSON (starts with { and ends with })
         const argsStr = argString.trim();
-        if (!argsStr || argsStr === '{}' || (argsStr.startsWith('{') && argsStr.endsWith('}'))) {
+        
+        // Check if this is an initial tool call with proper ID/name vs streaming delta
+        const hasIdAndName = toolCall.id && toolCall.function?.name;
+        
+        if (!argsStr || argsStr === '{}') {
+          // Empty arguments - initialize with empty string for proper accumulation
+          args = { __raw_arguments: '' };
+        } else if (argsStr.startsWith('{') && argsStr.endsWith('}')) {
+          // Looks like complete JSON - try to parse, but keep as raw for streaming compatibility
           try {
-            args = typeof argsStr === 'string' ? JSON.parse(argsStr || '{}') : argsStr;
+            const parsed = JSON.parse(argsStr);
+            // If this is a complete tool call with ID/name, we can use parsed args
+            // If it's a streaming delta, keep as raw for accumulation
+            args = hasIdAndName && Object.keys(parsed).length > 0 ? parsed : { __raw_arguments: argsStr };
           } catch (error) {
             // If parsing fails, keep as raw string for later accumulation
             console.warn(
