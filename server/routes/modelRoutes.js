@@ -55,7 +55,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
 
       // Transform models to OpenAI API compliant format
       const transformedModels = models.map(transformModelToOpenAIFormat);
-      
+
       // Return in OpenAI ListModelsResponse format
       const response = {
         object: 'list',
