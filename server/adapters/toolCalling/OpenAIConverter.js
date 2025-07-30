@@ -91,7 +91,7 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
       // Handle streaming tool call arguments
       if (toolCall.function?.arguments) {
         argString = toolCall.function.arguments;
-        
+
         // For streaming responses, arguments may be partial JSON
         // Only try to parse if it looks like complete JSON (starts with { and ends with })
         const argsStr = argString.trim();
