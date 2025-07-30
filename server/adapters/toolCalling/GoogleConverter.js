@@ -1,6 +1,6 @@
 /**
  * Google Gemini Tool Calling Converter
- * 
+ *
  * Handles bidirectional conversion between Google Gemini's tool calling format
  * and the generic tool calling format.
  */
@@ -20,13 +20,15 @@ import {
  * @returns {Object[]} Google formatted tools
  */
 export function convertGenericToolsToGoogle(genericTools = []) {
-  return [{
-    functionDeclarations: genericTools.map(tool => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: sanitizeSchemaForProvider(tool.parameters, 'google')
-    }))
-  }];
+  return [
+    {
+      functionDeclarations: genericTools.map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: sanitizeSchemaForProvider(tool.parameters, 'google')
+      }))
+    }
+  ];
 }
 
 /**
@@ -36,21 +38,23 @@ export function convertGenericToolsToGoogle(genericTools = []) {
  */
 export function convertGoogleToolsToGeneric(googleTools = []) {
   const genericTools = [];
-  
+
   for (const toolObj of googleTools) {
     if (toolObj.functionDeclarations && Array.isArray(toolObj.functionDeclarations)) {
       for (const func of toolObj.functionDeclarations) {
-        genericTools.push(createGenericTool(
-          func.name, // Use name as ID
-          func.name,
-          func.description || '',
-          func.parameters || { type: 'object', properties: {} },
-          { originalFormat: 'google' }
-        ));
+        genericTools.push(
+          createGenericTool(
+            func.name, // Use name as ID
+            func.name,
+            func.description || '',
+            func.parameters || { type: 'object', properties: {} },
+            { originalFormat: 'google' }
+          )
+        );
       }
     }
   }
-  
+
   return genericTools;
 }
 
@@ -74,18 +78,20 @@ export function convertGenericToolCallsToGoogle(genericToolCalls = []) {
  * @returns {import('./GenericToolCalling.js').GenericToolCall[]} Generic tool calls
  */
 export function convertGoogleFunctionCallsToGeneric(googleFunctionCalls = []) {
-  return googleFunctionCalls.map((part, index) => {
-    if (part.functionCall) {
-      return createGenericToolCall(
-        `call_${index}_${Date.now()}`, // Generate ID since Google doesn't provide one
-        part.functionCall.name,
-        part.functionCall.args || {},
-        index,
-        { originalFormat: 'google' }
-      );
-    }
-    return null;
-  }).filter(Boolean);
+  return googleFunctionCalls
+    .map((part, index) => {
+      if (part.functionCall) {
+        return createGenericToolCall(
+          `call_${index}_${Date.now()}`, // Generate ID since Google doesn't provide one
+          part.functionCall.name,
+          part.functionCall.args || {},
+          index,
+          { originalFormat: 'google' }
+        );
+      }
+      return null;
+    })
+    .filter(Boolean);
 }
 
 /**
@@ -95,12 +101,12 @@ export function convertGoogleFunctionCallsToGeneric(googleFunctionCalls = []) {
  */
 export function convertGenericToolResultToGoogle(genericResult) {
   let responseObj = genericResult.content;
-  
+
   // Ensure response is an object for Google
   if (typeof responseObj !== 'object' || responseObj === null) {
     responseObj = { result: responseObj };
   }
-  
+
   return {
     functionResponse: {
       name: normalizeToolName(genericResult.name),
@@ -131,7 +137,7 @@ export function convertGoogleFunctionResponseToGeneric(googleResponse) {
  */
 export function convertGoogleResponseToGeneric(data) {
   const result = createGenericStreamingResponse();
-  
+
   if (!data) return result;
 
   try {
@@ -149,13 +155,15 @@ export function convertGoogleResponseToGeneric(data) {
           result.content.push(part.text);
         }
         if (part.functionCall) {
-          result.tool_calls.push(createGenericToolCall(
-            `call_${result.tool_calls.length}_${Date.now()}`,
-            part.functionCall.name,
-            part.functionCall.args || {},
-            result.tool_calls.length,
-            { originalFormat: 'google' }
-          ));
+          result.tool_calls.push(
+            createGenericToolCall(
+              `call_${result.tool_calls.length}_${Date.now()}`,
+              part.functionCall.name,
+              part.functionCall.args || {},
+              result.tool_calls.length,
+              { originalFormat: 'google' }
+            )
+          );
           if (!result.finishReason) result.finishReason = 'tool_calls';
         }
       }
@@ -173,13 +181,15 @@ export function convertGoogleResponseToGeneric(data) {
           result.content.push(part.text);
         }
         if (part.functionCall) {
-          result.tool_calls.push(createGenericToolCall(
-            `call_${result.tool_calls.length}_${Date.now()}`,
-            part.functionCall.name,
-            part.functionCall.args || {},
-            result.tool_calls.length,
-            { originalFormat: 'google' }
-          ));
+          result.tool_calls.push(
+            createGenericToolCall(
+              `call_${result.tool_calls.length}_${Date.now()}`,
+              part.functionCall.name,
+              part.functionCall.args || {},
+              result.tool_calls.length,
+              { originalFormat: 'google' }
+            )
+          );
           if (!result.finishReason) result.finishReason = 'tool_calls';
         }
       }
@@ -200,7 +210,7 @@ export function convertGoogleResponseToGeneric(data) {
     console.error('Failed to parse Google response as JSON:', jsonError.message);
     result.error = true;
     result.errorMessage = `Error parsing Google response: ${jsonError.message}`;
-    
+
     // Try regex fallback for malformed JSON
     const textMatches = data.match(/"text":\s*"([^"]*)"/g);
     if (textMatches) {
@@ -228,7 +238,7 @@ export function convertGoogleResponseToGeneric(data) {
  */
 export function convertGenericResponseToGoogle(genericResponse) {
   const parts = [];
-  
+
   // Add text content
   if (genericResponse.content && genericResponse.content.length > 0) {
     const textContent = genericResponse.content.join('');
@@ -238,7 +248,7 @@ export function convertGenericResponseToGoogle(genericResponse) {
       });
     }
   }
-  
+
   // Add function calls
   if (genericResponse.tool_calls && genericResponse.tool_calls.length > 0) {
     for (const toolCall of genericResponse.tool_calls) {
@@ -250,26 +260,33 @@ export function convertGenericResponseToGoogle(genericResponse) {
       });
     }
   }
-  
+
   const response = {
-    candidates: [{
-      content: {
-        parts,
-        role: 'model'
-      },
-      finishReason: genericResponse.finishReason === 'tool_calls' ? 'FUNCTION_CALL' :
-                    genericResponse.finishReason === 'stop' ? 'STOP' :
-                    genericResponse.finishReason === 'length' ? 'MAX_TOKENS' :
-                    genericResponse.finishReason === 'content_filter' ? 'SAFETY' :
-                    'STOP',
-      index: 0,
-      safetyRatings: []
-    }],
+    candidates: [
+      {
+        content: {
+          parts,
+          role: 'model'
+        },
+        finishReason:
+          genericResponse.finishReason === 'tool_calls'
+            ? 'FUNCTION_CALL'
+            : genericResponse.finishReason === 'stop'
+              ? 'STOP'
+              : genericResponse.finishReason === 'length'
+                ? 'MAX_TOKENS'
+                : genericResponse.finishReason === 'content_filter'
+                  ? 'SAFETY'
+                  : 'STOP',
+        index: 0,
+        safetyRatings: []
+      }
+    ],
     promptFeedback: {
       safetyRatings: []
     }
   };
-  
+
   return response;
 }
 
@@ -283,41 +300,43 @@ export function processMessageForGoogle(message) {
     // Convert tool result to Google format
     let responseObj;
     try {
-      responseObj = typeof message.content === 'string' 
-        ? JSON.parse(message.content) 
-        : message.content;
+      responseObj =
+        typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
     } catch {
       responseObj = { result: message.content };
     }
-    
+
     return {
       role: 'user',
-      parts: [{
-        functionResponse: {
-          name: normalizeToolName(message.name || message.tool_call_id || 'unknown'),
-          response: responseObj
+      parts: [
+        {
+          functionResponse: {
+            name: normalizeToolName(message.name || message.tool_call_id || 'unknown'),
+            response: responseObj
+          }
         }
-      }]
+      ]
     };
   } else if (message.role === 'assistant' && message.tool_calls) {
     // Convert assistant message with tool calls
     const parts = [];
-    
+
     if (message.content) {
       parts.push({ text: message.content });
     }
-    
+
     for (const toolCall of message.tool_calls) {
       let args = {};
       try {
-        args = typeof toolCall.function.arguments === 'string'
-          ? JSON.parse(toolCall.function.arguments)
-          : toolCall.function.arguments;
+        args =
+          typeof toolCall.function.arguments === 'string'
+            ? JSON.parse(toolCall.function.arguments)
+            : toolCall.function.arguments;
       } catch (error) {
         console.warn('Failed to parse tool call arguments:', error);
         args = {};
       }
-      
+
       parts.push({
         functionCall: {
           name: normalizeToolName(toolCall.function.name),
@@ -325,20 +344,20 @@ export function processMessageForGoogle(message) {
         }
       });
     }
-    
+
     return { role: 'model', parts };
   }
-  
+
   // Convert role names for Google
   const googleRole = message.role === 'assistant' ? 'model' : 'user';
-  
+
   if (typeof message.content === 'string') {
     return {
       role: googleRole,
       parts: [{ text: message.content }]
     };
   }
-  
+
   // Return message as-is for other cases
   return { ...message, role: googleRole };
 }

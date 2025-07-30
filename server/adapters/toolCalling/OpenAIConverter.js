@@ -1,6 +1,6 @@
 /**
  * OpenAI Tool Calling Converter
- * 
+ *
  * Handles bidirectional conversion between OpenAI's tool calling format
  * and the generic tool calling format.
  */
@@ -46,7 +46,7 @@ export function convertOpenAIToolsToGeneric(openaiTools = []) {
         { originalFormat: 'openai', type: tool.type }
       );
     }
-    
+
     // Handle flat format (legacy or simplified)
     return createGenericTool(
       tool.name || tool.id || `tool_${index}`,
@@ -69,9 +69,10 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
     type: 'function',
     function: {
       name: toolCall.name,
-      arguments: typeof toolCall.arguments === 'string' 
-        ? toolCall.arguments 
-        : JSON.stringify(toolCall.arguments)
+      arguments:
+        typeof toolCall.arguments === 'string'
+          ? toolCall.arguments
+          : JSON.stringify(toolCall.arguments)
     }
   }));
 }
@@ -85,21 +86,19 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
   return openaiToolCalls.map((toolCall, index) => {
     let args = {};
     try {
-      args = typeof toolCall.function.arguments === 'string'
-        ? JSON.parse(toolCall.function.arguments)
-        : toolCall.function.arguments;
+      args =
+        typeof toolCall.function.arguments === 'string'
+          ? JSON.parse(toolCall.function.arguments)
+          : toolCall.function.arguments;
     } catch (error) {
       console.warn('Failed to parse OpenAI tool call arguments:', error);
       args = {};
     }
-    
-    return createGenericToolCall(
-      toolCall.id,
-      toolCall.function.name,
-      args,
-      index,
-      { originalFormat: 'openai', type: toolCall.type || 'function' }
-    );
+
+    return createGenericToolCall(toolCall.id, toolCall.function.name, args, index, {
+      originalFormat: 'openai',
+      type: toolCall.type || 'function'
+    });
   });
 }
 
@@ -110,7 +109,7 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
  */
 export function convertOpenAIResponseToGeneric(data) {
   const result = createGenericStreamingResponse();
-  
+
   if (!data) return result;
   if (data === '[DONE]') {
     result.complete = true;
@@ -126,7 +125,9 @@ export function convertOpenAIResponseToGeneric(data) {
         result.content.push(parsed.choices[0].message.content);
       }
       if (parsed.choices[0].message.tool_calls) {
-        result.tool_calls.push(...convertOpenAIToolCallsToGeneric(parsed.choices[0].message.tool_calls));
+        result.tool_calls.push(
+          ...convertOpenAIToolCallsToGeneric(parsed.choices[0].message.tool_calls)
+        );
       }
       result.complete = true;
       if (parsed.choices[0].finish_reason) {
@@ -165,19 +166,26 @@ export function convertOpenAIResponseToGeneric(data) {
  * @param {boolean} isFirstChunk - Whether this is the first chunk
  * @returns {Object} OpenAI formatted response chunk
  */
-export function convertGenericResponseToOpenAI(genericResponse, completionId, modelId, isFirstChunk = false) {
+export function convertGenericResponseToOpenAI(
+  genericResponse,
+  completionId,
+  modelId,
+  isFirstChunk = false
+) {
   const chunk = {
     id: completionId,
     object: 'chat.completion.chunk',
     created: Math.floor(Date.now() / 1000),
     model: modelId,
-    choices: [{
-      index: 0,
-      delta: isFirstChunk ? { role: 'assistant' } : {},
-      finish_reason: null
-    }]
+    choices: [
+      {
+        index: 0,
+        delta: isFirstChunk ? { role: 'assistant' } : {},
+        finish_reason: null
+      }
+    ]
   };
-  
+
   // Add content if present
   if (genericResponse.content && genericResponse.content.length > 0) {
     const content = genericResponse.content.join('');
@@ -185,17 +193,17 @@ export function convertGenericResponseToOpenAI(genericResponse, completionId, mo
       chunk.choices[0].delta.content = content;
     }
   }
-  
+
   // Add tool calls if present
   if (genericResponse.tool_calls && genericResponse.tool_calls.length > 0) {
     chunk.choices[0].delta.tool_calls = convertGenericToolCallsToOpenAI(genericResponse.tool_calls);
   }
-  
+
   // Set finish reason if complete
   if (genericResponse.complete) {
     chunk.choices[0].finish_reason = genericResponse.finishReason || 'stop';
   }
-  
+
   return chunk;
 }
 
@@ -212,25 +220,29 @@ export function convertGenericResponseToOpenAINonStreaming(genericResponse, comp
     object: 'chat.completion',
     created: Math.floor(Date.now() / 1000),
     model: modelId,
-    choices: [{
-      index: 0,
-      message: {
-        role: 'assistant',
-        content: genericResponse.content.join('') || null
-      },
-      finish_reason: genericResponse.finishReason || 'stop'
-    }],
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: genericResponse.content.join('') || null
+        },
+        finish_reason: genericResponse.finishReason || 'stop'
+      }
+    ],
     usage: {
       prompt_tokens: 0,
       completion_tokens: 0,
       total_tokens: 0
     }
   };
-  
+
   // Add tool calls if present
   if (genericResponse.tool_calls && genericResponse.tool_calls.length > 0) {
-    response.choices[0].message.tool_calls = convertGenericToolCallsToOpenAI(genericResponse.tool_calls);
+    response.choices[0].message.tool_calls = convertGenericToolCallsToOpenAI(
+      genericResponse.tool_calls
+    );
   }
-  
+
   return response;
 }

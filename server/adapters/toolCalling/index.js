@@ -1,21 +1,21 @@
 /**
  * Generic Tool Calling System - Main Export
- * 
+ *
  * This module provides a unified interface for tool/function calling across
- * different LLM providers. It handles bidirectional conversion between 
+ * different LLM providers. It handles bidirectional conversion between
  * provider-specific formats and a normalized generic format.
- * 
+ *
  * @example
  * // Convert OpenAI tools to work with Anthropic
  * import { convertToolsBetweenProviders } from './toolCalling/index.js';
- * 
+ *
  * const openaiTools = [{ type: 'function', function: { name: 'search', ... } }];
  * const anthropicTools = convertToolsBetweenProviders(openaiTools, 'openai', 'anthropic');
- * 
+ *
  * @example
  * // Process streaming responses uniformly
  * import { convertResponseToGeneric } from './toolCalling/index.js';
- * 
+ *
  * const genericResponse = convertResponseToGeneric(rawResponse, 'anthropic');
  * // Now you have a uniform response format regardless of provider
  */

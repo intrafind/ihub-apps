@@ -1,15 +1,15 @@
 /**
  * Generic Tool Calling System
- * 
+ *
  * This module provides a generic interface for tool/function calling across different
- * LLM providers (OpenAI, Anthropic, Google, Mistral). It handles bidirectional 
+ * LLM providers (OpenAI, Anthropic, Google, Mistral). It handles bidirectional
  * conversion between provider-specific formats and a normalized generic format.
  */
 
 /**
  * Generic tool definition format
  * This is our normalized internal format that can represent tools for any provider
- * 
+ *
  * @typedef {Object} GenericTool
  * @property {string} id - Unique identifier for the tool
  * @property {string} name - Function name (must be valid identifier)
@@ -21,7 +21,7 @@
 /**
  * Generic tool call format
  * This represents a tool call in a normalized way across providers
- * 
+ *
  * @typedef {Object} GenericToolCall
  * @property {string} id - Unique identifier for this tool call
  * @property {string} name - Name of the function being called
@@ -33,7 +33,7 @@
 /**
  * Generic tool result format
  * This represents the result of a tool execution
- * 
+ *
  * @typedef {Object} GenericToolResult
  * @property {string} tool_call_id - ID of the tool call this responds to
  * @property {string} name - Name of the tool that was called
@@ -45,7 +45,7 @@
 /**
  * Generic streaming response format
  * This normalizes streaming responses across providers
- * 
+ *
  * @typedef {Object} GenericStreamingResponse
  * @property {string[]} content - Array of text content chunks
  * @property {GenericToolCall[]} tool_calls - Array of tool calls
@@ -62,12 +62,12 @@
  */
 export function normalizeToolName(name) {
   const normalized = (name || '').replace(/[^A-Za-z0-9_.-]/g, '_');
-  
+
   // Ensure name starts with letter or underscore (Google requirement)
   if (normalized && !/^[A-Za-z_]/.test(normalized)) {
     return `tool_${normalized}`;
   }
-  
+
   // Ensure name is not empty
   return normalized || 'unnamed_tool';
 }
@@ -76,7 +76,7 @@ export function normalizeToolName(name) {
  * Create a generic tool definition
  * @param {string} id - Tool identifier
  * @param {string} name - Tool name
- * @param {string} description - Tool description  
+ * @param {string} description - Tool description
  * @param {Object} parameters - JSON Schema for parameters
  * @param {Object} [metadata] - Provider-specific metadata
  * @returns {GenericTool} Generic tool definition
@@ -119,7 +119,13 @@ export function createGenericToolCall(id, name, arguments_, index = 0, metadata 
  * @param {Object} [metadata] - Provider-specific metadata
  * @returns {GenericToolResult} Generic tool result
  */
-export function createGenericToolResult(tool_call_id, name, content, is_error = false, metadata = {}) {
+export function createGenericToolResult(
+  tool_call_id,
+  name,
+  content,
+  is_error = false,
+  metadata = {}
+) {
   return {
     tool_call_id,
     name: normalizeToolName(name),
@@ -140,11 +146,11 @@ export function createGenericToolResult(tool_call_id, name, content, is_error = 
  * @returns {GenericStreamingResponse} Generic streaming response
  */
 export function createGenericStreamingResponse(
-  content = [], 
-  tool_calls = [], 
-  complete = false, 
-  error = false, 
-  errorMessage = null, 
+  content = [],
+  tool_calls = [],
+  complete = false,
+  error = false,
+  errorMessage = null,
   finishReason = null
 ) {
   return {
@@ -165,15 +171,16 @@ export function createGenericStreamingResponse(
  */
 export function normalizeFinishReason(providerFinishReason, provider) {
   if (!providerFinishReason) return null;
-  
+
   const reason = providerFinishReason.toLowerCase();
-  
+
   // Common mappings
   if (reason === 'stop' || reason === 'end_turn') return 'stop';
   if (reason === 'length' || reason === 'max_tokens') return 'length';
   if (reason === 'tool_calls' || reason === 'tool_use') return 'tool_calls';
-  if (reason === 'content_filter' || reason === 'safety' || reason === 'recitation') return 'content_filter';
-  
+  if (reason === 'content_filter' || reason === 'safety' || reason === 'recitation')
+    return 'content_filter';
+
   // Provider-specific mappings
   switch (provider) {
     case 'google':
@@ -187,7 +194,7 @@ export function normalizeFinishReason(providerFinishReason, provider) {
       if (reason === 'max_tokens') return 'length';
       break;
   }
-  
+
   // Return original if no mapping found
   return providerFinishReason;
 }

@@ -1,6 +1,6 @@
 /**
  * Tool Calling Converter - Main Interface
- * 
+ *
  * This is the main interface for the generic tool calling system.
  * It provides unified methods to convert between any provider format
  * and the generic format, as well as cross-provider conversions.
@@ -11,10 +11,7 @@ import * as AnthropicConverter from './AnthropicConverter.js';
 import * as GoogleConverter from './GoogleConverter.js';
 import * as MistralConverter from './MistralConverter.js';
 
-import {
-  createGenericStreamingResponse,
-  normalizeFinishReason
-} from './GenericToolCalling.js';
+import { createGenericStreamingResponse, normalizeFinishReason } from './GenericToolCalling.js';
 
 /**
  * Provider converter mappings
@@ -37,12 +34,12 @@ export function convertToolsToGeneric(tools, sourceProvider) {
   if (!converter) {
     throw new Error(`Unsupported provider for tool conversion: ${sourceProvider}`);
   }
-  
+
   const converterFunction = converter[`convert${capitalize(sourceProvider)}ToolsToGeneric`];
   if (!converterFunction) {
     throw new Error(`No tool converter found for provider: ${sourceProvider}`);
   }
-  
+
   return converterFunction(tools);
 }
 
@@ -57,12 +54,12 @@ export function convertToolsFromGeneric(genericTools, targetProvider) {
   if (!converter) {
     throw new Error(`Unsupported provider for tool conversion: ${targetProvider}`);
   }
-  
+
   const converterFunction = converter[`convertGenericToolsTo${capitalize(targetProvider)}`];
   if (!converterFunction) {
     throw new Error(`No tool converter found for provider: ${targetProvider}`);
   }
-  
+
   return converterFunction(genericTools);
 }
 
@@ -77,7 +74,7 @@ export function convertToolsBetweenProviders(tools, sourceProvider, targetProvid
   if (sourceProvider === targetProvider) {
     return tools; // No conversion needed
   }
-  
+
   // Convert to generic format first, then to target format
   const genericTools = convertToolsToGeneric(tools, sourceProvider);
   return convertToolsFromGeneric(genericTools, targetProvider);
@@ -94,13 +91,14 @@ export function convertToolCallsToGeneric(toolCalls, sourceProvider) {
   if (!converter) {
     throw new Error(`Unsupported provider for tool call conversion: ${sourceProvider}`);
   }
-  
-  const converterFunction = converter[`convert${capitalize(sourceProvider)}ToolCallsToGeneric`] ||
-                           converter[`convert${capitalize(sourceProvider)}ToolUseToGeneric`]; // For Anthropic
+
+  const converterFunction =
+    converter[`convert${capitalize(sourceProvider)}ToolCallsToGeneric`] ||
+    converter[`convert${capitalize(sourceProvider)}ToolUseToGeneric`]; // For Anthropic
   if (!converterFunction) {
     throw new Error(`No tool call converter found for provider: ${sourceProvider}`);
   }
-  
+
   return converterFunction(toolCalls);
 }
 
@@ -115,12 +113,12 @@ export function convertToolCallsFromGeneric(genericToolCalls, targetProvider) {
   if (!converter) {
     throw new Error(`Unsupported provider for tool call conversion: ${targetProvider}`);
   }
-  
+
   const converterFunction = converter[`convertGenericToolCallsTo${capitalize(targetProvider)}`];
   if (!converterFunction) {
     throw new Error(`No tool call converter found for provider: ${targetProvider}`);
   }
-  
+
   return converterFunction(genericToolCalls);
 }
 
@@ -135,12 +133,12 @@ export function convertResponseToGeneric(data, sourceProvider) {
   if (!converter) {
     throw new Error(`Unsupported provider for response conversion: ${sourceProvider}`);
   }
-  
+
   const converterFunction = converter[`convert${capitalize(sourceProvider)}ResponseToGeneric`];
   if (!converterFunction) {
     throw new Error(`No response converter found for provider: ${sourceProvider}`);
   }
-  
+
   return converterFunction(data);
 }
 
@@ -156,13 +154,18 @@ export function convertResponseFromGeneric(genericResponse, targetProvider, opti
   if (!converter) {
     throw new Error(`Unsupported provider for response conversion: ${targetProvider}`);
   }
-  
+
   const converterFunction = converter[`convertGenericResponseTo${capitalize(targetProvider)}`];
   if (!converterFunction) {
     throw new Error(`No response converter found for provider: ${targetProvider}`);
   }
-  
-  return converterFunction(genericResponse, options.completionId, options.modelId, options.isFirstChunk);
+
+  return converterFunction(
+    genericResponse,
+    options.completionId,
+    options.modelId,
+    options.isFirstChunk
+  );
 }
 
 /**
@@ -173,7 +176,12 @@ export function convertResponseFromGeneric(genericResponse, targetProvider, opti
  * @param {Object} options - Additional options for target format
  * @returns {Object} Response in target provider format
  */
-export function convertResponseBetweenProviders(data, sourceProvider, targetProvider, options = {}) {
+export function convertResponseBetweenProviders(
+  data,
+  sourceProvider,
+  targetProvider,
+  options = {}
+) {
   if (sourceProvider === targetProvider) {
     // Parse and return the data for same provider
     try {
@@ -182,7 +190,7 @@ export function convertResponseBetweenProviders(data, sourceProvider, targetProv
       return data;
     }
   }
-  
+
   // Convert to generic format first, then to target format
   const genericResponse = convertResponseToGeneric(data, sourceProvider);
   return convertResponseFromGeneric(genericResponse, targetProvider, options);
@@ -199,12 +207,12 @@ export function processMessageForProvider(message, provider) {
   if (!converter) {
     return message; // Return as-is if no converter
   }
-  
+
   const processorFunction = converter[`processMessageFor${capitalize(provider)}`];
   if (!processorFunction) {
     return message; // Return as-is if no processor
   }
-  
+
   return processorFunction(message);
 }
 
@@ -267,19 +275,23 @@ export function createUnifiedInterface(provider) {
   if (!isProviderSupported(provider)) {
     throw new Error(`Unsupported provider: ${provider}`);
   }
-  
+
   return {
     provider,
-    convertToolsToGeneric: (tools) => convertToolsToGeneric(tools, provider),
-    convertToolsFromGeneric: (genericTools) => convertToolsFromGeneric(genericTools, provider),
-    convertToolCallsToGeneric: (toolCalls) => convertToolCallsToGeneric(toolCalls, provider),
-    convertToolCallsFromGeneric: (genericToolCalls) => convertToolCallsFromGeneric(genericToolCalls, provider),
-    convertResponseToGeneric: (data) => convertResponseToGeneric(data, provider),
-    convertResponseFromGeneric: (genericResponse, options) => convertResponseFromGeneric(genericResponse, provider, options),
-    processMessage: (message) => processMessageForProvider(message, provider),
-    
+    convertToolsToGeneric: tools => convertToolsToGeneric(tools, provider),
+    convertToolsFromGeneric: genericTools => convertToolsFromGeneric(genericTools, provider),
+    convertToolCallsToGeneric: toolCalls => convertToolCallsToGeneric(toolCalls, provider),
+    convertToolCallsFromGeneric: genericToolCalls =>
+      convertToolCallsFromGeneric(genericToolCalls, provider),
+    convertResponseToGeneric: data => convertResponseToGeneric(data, provider),
+    convertResponseFromGeneric: (genericResponse, options) =>
+      convertResponseFromGeneric(genericResponse, provider, options),
+    processMessage: message => processMessageForProvider(message, provider),
+
     // Convenience methods for cross-provider conversion
-    convertToolsTo: (tools, targetProvider) => convertToolsBetweenProviders(tools, provider, targetProvider),
-    convertResponseTo: (data, targetProvider, options) => convertResponseBetweenProviders(data, provider, targetProvider, options)
+    convertToolsTo: (tools, targetProvider) =>
+      convertToolsBetweenProviders(tools, provider, targetProvider),
+    convertResponseTo: (data, targetProvider, options) =>
+      convertResponseBetweenProviders(data, provider, targetProvider, options)
   };
 }
