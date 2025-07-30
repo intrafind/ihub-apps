@@ -243,12 +243,18 @@ export function getProviderConverter(provider) {
 }
 
 /**
- * Utility function to capitalize first letter
+ * Utility function to capitalize provider names for function name generation
  * @param {string} str - String to capitalize
- * @returns {string} Capitalized string
+ * @returns {string} Capitalized string with proper casing for function names
  */
 function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
+  // Handle special cases for provider naming
+  switch (str.toLowerCase()) {
+    case 'openai':
+      return 'OpenAI';
+    default:
+      return str.charAt(0).toUpperCase() + str.slice(1);
+  }
 }
 
 /**
