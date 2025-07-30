@@ -1,4 +1,5 @@
-import { createCompletionRequest, processResponseBuffer } from '../../adapters/index.js';
+import { createCompletionRequest } from '../../adapters/index.js';
+import { convertResponseToGeneric } from '../../adapters/toolCalling/index.js';
 import { logInteraction, getErrorDetails } from '../../utils.js';
 import { runTool } from '../../toolLoader.js';
 import { normalizeName } from '../../adapters/toolFormatter.js';
@@ -206,7 +207,7 @@ class ToolExecutor {
 
         while (events.length > 0) {
           const evt = events.shift();
-          const result = processResponseBuffer(model.provider, evt.data);
+          const result = convertResponseToGeneric(evt.data, model.provider);
 
           if (result.error) {
             throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
@@ -459,7 +460,7 @@ class ToolExecutor {
 
           while (events.length > 0) {
             const evt = events.shift();
-            const result = processResponseBuffer(model.provider, evt.data);
+            const result = convertResponseToGeneric(evt.data, model.provider);
 
             if (result.error) {
               throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
