@@ -106,7 +106,12 @@ export function createGenericToolCall(id, name, arguments_, index = 0, metadata 
     name: normalizeToolName(name),
     arguments: arguments_ || {},
     index,
-    metadata
+    metadata,
+    // Add OpenAI-compatible format for ToolExecutor compatibility
+    function: {
+      name: normalizeToolName(name),
+      arguments: typeof arguments_ === 'string' ? arguments_ : JSON.stringify(arguments_ || {})
+    }
   };
 }
 
