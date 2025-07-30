@@ -179,19 +179,19 @@ export function convertAnthropicResponseToGeneric(data) {
       );
     } else if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'input_json_delta') {
       // For streaming tool calls, we need to accumulate the arguments
-      // Only create if we have a partial_json to merge.
+      // Instead of creating separate tool calls, let the ToolExecutor handle accumulation
+      // by creating a tool call with the __raw_arguments pattern it expects
       if (parsed.delta.partial_json) {
         result.tool_calls.push(
           createGenericToolCall(
-            `streaming_${parsed.index}`, // Temporary ID for streaming chunks
-            '', // Empty name - will be filtered out or merged later
-            {},
+            '', // Empty ID - will be merged by ToolExecutor
+            '', // Empty name - will be merged by ToolExecutor
+            { __raw_arguments: parsed.delta.partial_json },
             parsed.index,
             {
               originalFormat: 'anthropic',
               type: 'tool_use',
-              streaming: true,
-              partialArguments: parsed.delta.partial_json || ''
+              streaming: true
             }
           )
         );

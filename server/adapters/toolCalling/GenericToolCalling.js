@@ -101,6 +101,14 @@ export function createGenericTool(id, name, description, parameters = {}, metada
  * @returns {GenericToolCall} Generic tool call
  */
 export function createGenericToolCall(id, name, arguments_, index = 0, metadata = {}) {
+  // Handle __raw_arguments pattern for streaming
+  let functionArguments;
+  if (arguments_ && arguments_.__raw_arguments) {
+    functionArguments = arguments_.__raw_arguments;
+  } else {
+    functionArguments = typeof arguments_ === 'string' ? arguments_ : JSON.stringify(arguments_ || {});
+  }
+
   return {
     id,
     name: normalizeToolName(name),
@@ -110,7 +118,7 @@ export function createGenericToolCall(id, name, arguments_, index = 0, metadata 
     // Add OpenAI-compatible format for ToolExecutor compatibility
     function: {
       name: normalizeToolName(name),
-      arguments: typeof arguments_ === 'string' ? arguments_ : JSON.stringify(arguments_ || {})
+      arguments: functionArguments
     }
   };
 }
