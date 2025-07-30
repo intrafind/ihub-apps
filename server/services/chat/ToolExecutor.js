@@ -234,18 +234,30 @@ class ToolExecutor {
                 if (call.type) existingCall.type = call.type;
                 if (call.function) {
                   if (call.function.name) existingCall.function.name = call.function.name;
-                  if (call.function.arguments)
-                    existingCall.function.arguments += call.function.arguments;
+
+                  // Handle arguments accumulation for streaming
+                  let callArgs = call.function.arguments;
+                  if (call.arguments && call.arguments.__raw_arguments) {
+                    callArgs = call.arguments.__raw_arguments;
+                  }
+                  if (callArgs) {
+                    existingCall.function.arguments += callArgs;
+                  }
                 }
               } else if (call.index !== undefined) {
                 // Create a new tool call if it doesn't exist
+                let initialArgs = call.function?.arguments || '';
+                if (call.arguments && call.arguments.__raw_arguments) {
+                  initialArgs = call.arguments.__raw_arguments;
+                }
+
                 collectedToolCalls.push({
                   index: call.index,
                   id: call.id || null,
                   type: call.type || 'function',
                   function: {
                     name: call.function?.name || '',
-                    arguments: call.function?.arguments || ''
+                    arguments: initialArgs
                   }
                 });
               }

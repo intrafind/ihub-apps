@@ -85,14 +85,31 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
 export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
   return openaiToolCalls.map((toolCall, index) => {
     let args = {};
-    try {
-      args =
-        typeof toolCall.function.arguments === 'string'
-          ? JSON.parse(toolCall.function.arguments)
-          : toolCall.function.arguments;
-    } catch (error) {
-      console.warn('Failed to parse OpenAI tool call arguments:', error);
-      args = {};
+
+    // Handle arguments parsing with streaming support
+    if (toolCall.function.arguments) {
+      if (typeof toolCall.function.arguments === 'string') {
+        // For streaming responses, arguments may be partial JSON
+        // Only try to parse if it looks like complete JSON (starts with { and ends with })
+        const argsStr = toolCall.function.arguments.trim();
+        if (argsStr.startsWith('{') && argsStr.endsWith('}')) {
+          try {
+            args = JSON.parse(argsStr);
+          } catch (error) {
+            // If parsing fails, keep as raw string for later accumulation
+            console.warn(
+              'Failed to parse OpenAI tool call arguments (keeping as raw string for streaming):',
+              error.message
+            );
+            args = { __raw_arguments: argsStr };
+          }
+        } else {
+          // Partial JSON during streaming - keep as raw string for accumulation
+          args = { __raw_arguments: argsStr };
+        }
+      } else {
+        args = toolCall.function.arguments;
+      }
     }
 
     return createGenericToolCall(toolCall.id, toolCall.function.name, args, index, {
