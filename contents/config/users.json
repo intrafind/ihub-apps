@@ -5,9 +5,7 @@
       "username": "admin",
       "email": "admin@example.com",
       "name": "Demo Administrator",
-      "groups": [
-        "admin"
-      ],
+      "groups": ["admin"],
       "active": true,
       "passwordHash": "$2b$12$CNq/zTdIoQm34eFbjlMXYO0hBvHaXZNd8p2gYAT5FKISGDbQ8ipHm",
       "createdAt": "2025-07-19T00:00:00.000Z",
@@ -18,9 +16,7 @@
       "username": "user",
       "email": "user@example.com",
       "name": "Demo User",
-      "groups": [
-        "user"
-      ],
+      "groups": ["user"],
       "active": true,
       "passwordHash": "$2b$12$vIxSlOJ3nGH/nv2treLpLeBjimsCuHI3JlztLIc2Yv41VtZKCBhJG",
       "createdAt": "2025-07-19T00:00:00.000Z",
@@ -31,10 +27,7 @@
       "username": "manzked",
       "email": "daniel.manzke@googlemail.com",
       "name": "Daniel Manzke",
-      "groups": [
-        "admin",
-        "user"
-      ],
+      "groups": ["admin", "user"],
       "active": true,
       "passwordHash": "$2b$12$T5m9t4qUGil5BBl.TiYoueuRx6utejTxixr2ZhSiwbgFvMem1xW1O",
       "createdAt": "2025-07-19T21:31:12.521Z",
@@ -47,9 +40,7 @@
       "name": "Daniel Manzke",
       "additionalGroups": [],
       "active": true,
-      "authMethods": [
-        "oidc"
-      ],
+      "authMethods": ["oidc"],
       "lastActiveDate": "2025-07-29",
       "createdAt": "2025-07-27T18:27:03.182Z",
       "updatedAt": "2025-07-29T10:08:17.409Z",

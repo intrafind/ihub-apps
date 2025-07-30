@@ -67,7 +67,7 @@ const AdminShortLinks = () => {
     }
   };
 
-  const handleCopyLink = async (code) => {
+  const handleCopyLink = async code => {
     const shortUrl = `${window.location.origin}/s/${code}`;
     const result = await copyText(shortUrl);
     if (result.success) {
@@ -76,7 +76,7 @@ const AdminShortLinks = () => {
     }
   };
 
-  const handleTestLink = (code) => {
+  const handleTestLink = code => {
     const shortUrl = `${window.location.origin}/s/${code}`;
     window.open(shortUrl, '_blank');
   };

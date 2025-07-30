@@ -76,7 +76,20 @@ class IFinderService {
     user,
     maxResults = 10,
     searchProfile,
-    returnFields = ['id','mediaType','sourceName','title','navigationTree','description_texts','summary_texts','application','url','language','file.name','contentLength'],
+    returnFields = [
+      'id',
+      'mediaType',
+      'sourceName',
+      'title',
+      'navigationTree',
+      'description_texts',
+      'summary_texts',
+      'application',
+      'url',
+      'language',
+      'file.name',
+      'contentLength'
+    ],
     returnFacets,
     sort
   }) {
@@ -91,7 +104,6 @@ class IFinderService {
     console.log(
       `iFinder Search: User ${JSON.stringify(user)}searching for "${query}" in profile "${profileId}"`
     );
-
 
     // Track the action
     actionTracker.trackAction(chatId, {
@@ -199,7 +211,7 @@ class IFinderService {
             lastModified: doc.lastModified || doc.modified,
 
             // Search-specific metadata
-            teasers: metadata.teasers || [],
+            teasers: metadata.teasers || []
 
             // Raw document data for advanced use
             // TODO: we should pass them, but remove the ones we have already extracted, so we save space
