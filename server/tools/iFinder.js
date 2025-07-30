@@ -1,4 +1,3 @@
-// DEPRECATED: This file has been moved to services/integrations/iFinderService.js
 // This wrapper is maintained for backward compatibility
 
 import iFinderService from '../services/integrations/iFinderService.js';
@@ -16,14 +15,9 @@ export async function getMetadata(params) {
   return iFinderService.getMetadata(params);
 }
 
-export async function download(params) {
-  return iFinderService.download(params);
-}
-
 // Export default with all methods
 export default {
   search,
   getContent,
-  getMetadata,
-  download
+  getMetadata
 };

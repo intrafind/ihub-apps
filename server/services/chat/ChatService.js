@@ -135,7 +135,8 @@ class ChatService {
       DEFAULT_TIMEOUT,
       getLocalizedError,
       clientLanguage,
-      hasTools = false
+      hasTools = false,
+      user
     } = params;
 
     try {
@@ -150,7 +151,9 @@ class ChatService {
         useMaxTokens,
         bypassAppPrompts,
         res,
-        clientRes
+        clientRes,
+        user,
+        chatId
       });
 
       if (!prepResult.success) {
@@ -181,7 +184,8 @@ class ChatService {
           buildLogData,
           DEFAULT_TIMEOUT,
           getLocalizedError,
-          clientLanguage
+          clientLanguage,
+          user
         });
       }
 

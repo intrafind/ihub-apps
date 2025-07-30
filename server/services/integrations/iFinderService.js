@@ -76,7 +76,7 @@ class IFinderService {
     user,
     maxResults = 10,
     searchProfile,
-    returnFields,
+    returnFields = ['id','mediaType','sourceName','title','navigationTree','description_texts','summary_texts','application','url','language','file.name','contentLength'],
     returnFacets,
     sort
   }) {
@@ -89,8 +89,9 @@ class IFinderService {
     const profileId = searchProfile || config.defaultSearchProfile;
 
     console.log(
-      `iFinder Search: User ${user.email || user.id} searching for "${query}" in profile "${profileId}"`
+      `iFinder Search: User ${JSON.stringify(user)}searching for "${query}" in profile "${profileId}"`
     );
+
 
     // Track the action
     actionTracker.trackAction(chatId, {
@@ -104,7 +105,7 @@ class IFinderService {
       // Generate JWT token for the user
       const authHeader = getIFinderAuthorizationHeader(user);
 
-      console.log(`iFinder Search: Auth Header for user ${user.email || user.id}:`, authHeader);
+      console.log(`iFinder Search: Auth Header for user ${JSON.stringify(user)}:`, authHeader);
 
       // Construct search URL with profile ID
       const searchEndpoint = config.endpoints.search.replace(
@@ -178,13 +179,20 @@ class IFinderService {
             // Basic document fields
             title: doc.title,
             content: doc.content,
-            url: doc.url,
-            filename: doc.filename,
+            url: doc.url || metadata.url,
+            filename: doc.filename || doc.file?.name,
+            source: doc.source || doc.sourceName || metadata.sourceName,
+            breadcrumbs: doc.navigationTree || metadata.navigationTree || [],
+
+            // Document text fields
+            description_texts: doc.description_texts || [],
+            summary_texts: doc.summary_texts || [],
+            application: doc.application || metadata.application,
 
             // Document metadata fields
             documentType: doc.documentType || doc.type,
-            mimeType: doc.mimeType,
-            language: doc.language,
+            mimeType: doc.mimeType || doc.mediaType,
+            language: doc.language || metadata.language,
             size: doc.size,
             author: doc.author || doc.creator,
             createdDate: doc.createdDate || doc.created,
@@ -194,8 +202,9 @@ class IFinderService {
             teasers: metadata.teasers || [],
 
             // Raw document data for advanced use
-            rawDocument: doc,
-            rawMetadata: metadata
+            // TODO: we should pass them, but remove the ones we have already extracted, so we save space
+            // rawDocument: doc,
+            // rawMetadata: metadata
           };
         });
       }
@@ -203,6 +212,7 @@ class IFinderService {
       console.log(
         `iFinder Search: Found ${results.totalFound} results in ${results.took || 'unknown time'}`
       );
+      // console.log('iFinder Search: Results:', JSON.stringify(results, null, 2));
       return results;
     } catch (error) {
       console.error('iFinder search error:', error);
