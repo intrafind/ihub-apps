@@ -32,7 +32,7 @@ export function convertGenericToolsToAnthropic(genericTools = []) {
  * @returns {import('./GenericToolCalling.js').GenericTool[]} Generic tools
  */
 export function convertAnthropicToolsToGeneric(anthropicTools = []) {
-  return anthropicTools.map((tool, index) =>
+  return anthropicTools.map(tool =>
     createGenericTool(
       tool.name, // Use name as ID
       tool.name,
@@ -179,22 +179,23 @@ export function convertAnthropicResponseToGeneric(data) {
       );
     } else if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'input_json_delta') {
       // For streaming tool calls, we need to accumulate the arguments
-      // This creates a partial tool call that will be merged with the existing one by index
-      const partialJson = parsed.delta.partial_json || '';
-      result.tool_calls.push(
-        createGenericToolCall(
-          '', // Empty ID - will use existing tool call's ID
-          '', // Empty name - will use existing tool call's name
-          partialJson, // Pass partial JSON as string for accumulation
-          parsed.index,
-          {
-            originalFormat: 'anthropic',
-            type: 'tool_use',
-            streaming: true,
-            partialArguments: partialJson
-          }
-        )
-      );
+      // Only create if we have a partial_json to merge.
+      if (parsed.delta.partial_json) {
+        result.tool_calls.push(
+          createGenericToolCall(
+            `streaming_${parsed.index}`, // Temporary ID for streaming chunks
+            '', // Empty name - will be filtered out or merged later
+            {},
+            parsed.index,
+            {
+              originalFormat: 'anthropic',
+              type: 'tool_use',
+              streaming: true,
+              partialArguments: parsed.delta.partial_json || ''
+            }
+          )
+        );
+      }
     }
 
     if (parsed.type === 'message_stop') {

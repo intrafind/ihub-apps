@@ -306,17 +306,39 @@ class ToolExecutor {
         return;
       }
 
-      const toolNames = collectedToolCalls.map(c => c.function.name).join(', ');
+      // Filter out tool calls with empty names (streaming artifacts)
+      const validToolCalls = collectedToolCalls.filter(call => {
+        return call.function?.name && call.function.name.trim().length > 0;
+      });
+
+      if (validToolCalls.length === 0) {
+        console.log(`No valid tool calls to process for chat ID ${chatId} after filtering`);
+        clearTimeout(timeoutId);
+        actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
+        await logInteraction(
+          'chat_response',
+          buildLogData(true, {
+            responseType: 'success',
+            response: assistantContent.substring(0, 1000)
+          })
+        );
+        if (activeRequests.get(chatId) === controller) {
+          activeRequests.delete(chatId);
+        }
+        return;
+      }
+
+      const toolNames = validToolCalls.map(c => c.function.name).join(', ');
       actionTracker.trackAction(chatId, {
         action: 'processing',
         message: `Using tool(s): ${toolNames}...`
       });
 
-      const assistantMessage = { role: 'assistant', tool_calls: collectedToolCalls };
+      const assistantMessage = { role: 'assistant', tool_calls: validToolCalls };
       assistantMessage.content = assistantContent || null;
       llmMessages.push(assistantMessage);
 
-      for (const call of collectedToolCalls) {
+      for (const call of validToolCalls) {
         const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData, user);
         llmMessages.push(toolResult.message);
       }

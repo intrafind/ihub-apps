@@ -83,22 +83,25 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
  * @returns {import('./GenericToolCalling.js').GenericToolCall[]} Generic tool calls
  */
 export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
-  return openaiToolCalls.map((toolCall, index) => {
-    let args = {};
+  return openaiToolCalls
+    .map((toolCall, index) => {
+      let args = {};
+      let argString = '';
 
-    // Handle arguments parsing with streaming support
-    if (toolCall.function.arguments) {
-      if (typeof toolCall.function.arguments === 'string') {
+      // Handle streaming tool call arguments
+      if (toolCall.function?.arguments) {
+        argString = toolCall.function.arguments;
+        
         // For streaming responses, arguments may be partial JSON
         // Only try to parse if it looks like complete JSON (starts with { and ends with })
-        const argsStr = toolCall.function.arguments.trim();
-        if (argsStr.startsWith('{') && argsStr.endsWith('}')) {
+        const argsStr = argString.trim();
+        if (!argsStr || argsStr === '{}' || (argsStr.startsWith('{') && argsStr.endsWith('}'))) {
           try {
-            args = JSON.parse(argsStr);
+            args = typeof argsStr === 'string' ? JSON.parse(argsStr || '{}') : argsStr;
           } catch (error) {
             // If parsing fails, keep as raw string for later accumulation
             console.warn(
-              'Failed to parse OpenAI tool call arguments (keeping as raw string for streaming):',
+              'Failed to parse OpenAI tool call arguments (likely streaming partial JSON):',
               error.message
             );
             args = { __raw_arguments: argsStr };
@@ -107,16 +110,27 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
           // Partial JSON during streaming - keep as raw string for accumulation
           args = { __raw_arguments: argsStr };
         }
-      } else {
-        args = toolCall.function.arguments;
       }
-    }
 
-    return createGenericToolCall(toolCall.id, toolCall.function.name, args, index, {
-      originalFormat: 'openai',
-      type: toolCall.type || 'function'
+      // Handle streaming tool calls where name/id might be missing initially
+      const toolId = toolCall.id || null;
+      const toolName = toolCall.function?.name || '';
+      const toolIndex = toolCall.index !== undefined ? toolCall.index : index;
+
+      return createGenericToolCall(toolId, toolName, args, toolIndex, {
+        originalFormat: 'openai',
+        type: toolCall.type || 'function',
+        // Keep raw arguments for streaming merging
+        rawArguments: argString
+      });
+    })
+    .filter(toolCall => {
+      // Filter out tool calls that are completely empty (likely malformed streaming chunks)
+      // Keep tool calls that have at least a name, ID, or meaningful content
+      return (
+        toolCall.name || toolCall.id || (toolCall.rawArguments && toolCall.rawArguments.length > 0)
+      );
     });
-  });
 }
 
 /**
