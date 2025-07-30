@@ -154,7 +154,8 @@ export function convertGoogleResponseToGeneric(data) {
         if (part.text) {
           result.content.push(part.text);
         }
-        if (part.functionCall) {
+        if (part.functionCall && part.functionCall.name) {
+          // Only create tool call if we have a valid name
           result.tool_calls.push(
             createGenericToolCall(
               `call_${result.tool_calls.length}_${Date.now()}`,
@@ -180,7 +181,9 @@ export function convertGoogleResponseToGeneric(data) {
         if (part.text) {
           result.content.push(part.text);
         }
-        if (part.functionCall) {
+        if (part.functionCall && part.functionCall.name) {
+          // Only create tool call if we have a valid name (non-empty)
+          // This prevents creating tool calls with empty names during streaming
           result.tool_calls.push(
             createGenericToolCall(
               `call_${result.tool_calls.length}_${Date.now()}`,
@@ -191,6 +194,14 @@ export function convertGoogleResponseToGeneric(data) {
             )
           );
           if (!result.finishReason) result.finishReason = 'tool_calls';
+        }
+        // Handle partial function calls during streaming - ignore incomplete ones
+        else if (part.functionCall && !part.functionCall.name) {
+          // Log partial function call for debugging but don't create incomplete tool calls
+          console.log(
+            'Google streaming: Ignoring partial function call without name:',
+            part.functionCall
+          );
         }
       }
     }
