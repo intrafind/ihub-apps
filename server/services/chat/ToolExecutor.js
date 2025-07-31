@@ -2,7 +2,7 @@ import { createCompletionRequest } from '../../adapters/index.js';
 import { convertResponseToGeneric } from '../../adapters/toolCalling/index.js';
 import { logInteraction, getErrorDetails } from '../../utils.js';
 import { runTool } from '../../toolLoader.js';
-import { normalizeName } from '../../adapters/toolFormatter.js';
+import { normalizeToolName } from '../../adapters/toolCalling/index.js';
 import { activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createParser } from 'eventsource-parser';
@@ -18,7 +18,7 @@ class ToolExecutor {
 
   async executeToolCall(toolCall, tools, chatId, buildLogData, user) {
     const toolId =
-      tools.find(t => normalizeName(t.id) === toolCall.function.name)?.id || toolCall.function.name;
+      tools.find(t => normalizeToolName(t.id) === toolCall.function.name)?.id || toolCall.function.name;
     let args = {};
 
     try {

@@ -3,7 +3,7 @@
 /**
  * Mistral "La Plateforme" API adapter
  */
-import { formatToolsForOpenAI } from './toolFormatter.js';
+import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 
 class MistralAdapterClass extends BaseAdapter {
@@ -61,7 +61,7 @@ class MistralAdapterClass extends BaseAdapter {
       max_tokens: maxTokens
     };
 
-    if (tools && tools.length > 0) body.tools = formatToolsForOpenAI(tools);
+    if (tools && tools.length > 0) body.tools = convertToolsFromGeneric(tools, 'mistral');
     if (toolChoice) body.tool_choice = toolChoice;
     if (responseSchema) {
       body.response_format = {
