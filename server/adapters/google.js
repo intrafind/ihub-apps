@@ -1,7 +1,7 @@
 /**
  * Google Gemini API adapter
  */
-import { formatToolsForGoogle, normalizeName } from './toolFormatter.js';
+import { convertToolsFromGeneric, normalizeToolName } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 
 class GoogleAdapterClass extends BaseAdapter {
@@ -31,7 +31,7 @@ class GoogleAdapterClass extends BaseAdapter {
         responseObj = this.safeJsonParse(message.content, message.content);
         currentToolResponses.push({
           functionResponse: {
-            name: normalizeName(message.name || message.tool_call_id || 'tool'),
+            name: normalizeToolName(message.name || message.tool_call_id || 'tool'),
             response: { result: responseObj }
           }
         });
@@ -57,7 +57,7 @@ class GoogleAdapterClass extends BaseAdapter {
               argsObj = this.safeJsonParse(call.function.arguments, {});
               parts.push({
                 functionCall: {
-                  name: normalizeName(call.function.name),
+                  name: normalizeToolName(call.function.name),
                   args: argsObj
                 }
               });
@@ -149,7 +149,7 @@ class GoogleAdapterClass extends BaseAdapter {
     };
 
     if (tools && tools.length > 0) {
-      requestBody.tools = formatToolsForGoogle(tools);
+      requestBody.tools = convertToolsFromGeneric(tools, 'google');
     }
     if ((responseFormat && responseFormat === 'json') || responseSchema) {
       requestBody.generationConfig.responseMimeType = 'application/json';

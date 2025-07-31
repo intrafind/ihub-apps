@@ -1,7 +1,7 @@
 /**
  * Anthropic API adapter
  */
-import { formatToolsForAnthropic } from './toolFormatter.js';
+import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 
 class AnthropicAdapterClass extends BaseAdapter {
@@ -121,7 +121,7 @@ class AnthropicAdapterClass extends BaseAdapter {
     }
 
     if (finalTools.length > 0) {
-      requestBody.tools = formatToolsForAnthropic(finalTools);
+      requestBody.tools = convertToolsFromGeneric(finalTools, 'anthropic');
       // // Anthropic-specific instruction to encourage tool use, especially in multi-turn scenarios.
       // const toolInstruction =
       //   "If you need to use a tool to answer, please do so. After using the tools, provide a final answer to the user's question.";

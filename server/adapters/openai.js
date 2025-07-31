@@ -1,7 +1,7 @@
 /**
  * OpenAI API adapter
  */
-import { formatToolsForOpenAI } from './toolFormatter.js';
+import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 
 class OpenAIAdapterClass extends BaseAdapter {
@@ -64,7 +64,7 @@ class OpenAIAdapterClass extends BaseAdapter {
       max_tokens: maxTokens
     };
 
-    if (tools && tools.length > 0) body.tools = formatToolsForOpenAI(tools);
+    if (tools && tools.length > 0) body.tools = convertToolsFromGeneric(tools, 'openai');
     if (toolChoice) body.tool_choice = toolChoice;
     if (responseSchema) {
       // Deep clone incoming schema and enforce additionalProperties:false on all objects
