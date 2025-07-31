@@ -165,6 +165,14 @@ class GoogleAdapterClass extends BaseAdapter {
       requestBody.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
 
+    // Add thinking configuration if model supports it
+    if (model.thinking?.enabled) {
+      requestBody.thinkingConfig = {
+        thinkingBudget: model.thinking.budget,
+        includeThoughts: model.thinking.thoughts
+      };
+    }
+
     console.log('Google request body:', requestBody);
 
     return {
@@ -185,6 +193,7 @@ class GoogleAdapterClass extends BaseAdapter {
       const result = {
         content: [],
         tool_calls: [],
+        thinking: [],
         complete: false,
         error: false,
         errorMessage: null,
@@ -204,20 +213,25 @@ class GoogleAdapterClass extends BaseAdapter {
           parsed.candidates[0]?.content?.parts?.[0]
         ) {
           // This is a complete non-streaming response
-          const part = parsed.candidates[0].content.parts[0];
-          if (part.text) {
-            result.content.push(part.text);
-          }
-          if (part.functionCall) {
-            result.tool_calls.push({
-              index: 0,
-              id: 'tool_call_1',
-              function: {
-                name: part.functionCall.name,
-                arguments: JSON.stringify(part.functionCall.args || {})
+          for (const part of parsed.candidates[0].content.parts) {
+            if (part.text) {
+              if (part.thought) {
+                result.thinking.push(part.text);
+              } else {
+                result.content.push(part.text);
               }
-            });
-            if (!result.finishReason) result.finishReason = 'tool_calls';
+            }
+            if (part.functionCall) {
+              result.tool_calls.push({
+                index: 0,
+                id: 'tool_call_1',
+                function: {
+                  name: part.functionCall.name,
+                  arguments: JSON.stringify(part.functionCall.args || {})
+                }
+              });
+              if (!result.finishReason) result.finishReason = 'tool_calls';
+            }
           }
           result.complete = true;
           const fr = parsed.candidates[0].finishReason;
@@ -239,7 +253,11 @@ class GoogleAdapterClass extends BaseAdapter {
           let idx = result.tool_calls.length;
           for (const part of parsed.candidates[0].content.parts) {
             if (part.text) {
-              result.content.push(part.text);
+              if (part.thought) {
+                result.thinking.push(part.text);
+              } else {
+                result.content.push(part.text);
+              }
             }
             if (part.functionCall) {
               result.tool_calls.push({
