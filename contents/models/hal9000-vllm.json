@@ -1,6 +1,6 @@
 {
   "id": "hal9000-vllm",
-  "modelId": "Orion-zhen/Qwen3-8B-AWQ",
+  "modelId": "OPEA/phi-4-int4-AutoRound-gptq-sym",
   "name": {
     "en": "Hal 9000 vLLM",
     "de": "Hal 9000 vLLM"

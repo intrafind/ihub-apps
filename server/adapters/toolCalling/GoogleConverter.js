@@ -133,9 +133,10 @@ export function convertGoogleFunctionResponseToGeneric(googleResponse) {
 /**
  * Convert Google streaming response to generic format
  * @param {string} data - Raw Google response data
+ * @param {string} streamId - Stream identifier for stateful processing (unused for Google)
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
-export function convertGoogleResponseToGeneric(data) {
+export function convertGoogleResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
 
   if (!data) return result;

@@ -1,7 +1,7 @@
 /**
  * Google Gemini API adapter
  */
-import { convertToolsFromGeneric } from './toolCalling/index.js';
+import { convertToolsFromGeneric, normalizeToolName } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 
 class GoogleAdapterClass extends BaseAdapter {
@@ -146,7 +146,11 @@ class GoogleAdapterClass extends BaseAdapter {
       contents,
       generationConfig: {
         temperature: parseFloat(temperature),
-        maxOutputTokens: options.maxTokens || 2048
+        maxOutputTokens: options.maxTokens || 2048,
+        thinkingConfig: {
+          thinkingBudget: 8192,
+          includeThoughts: true
+        }
       }
     };
 
@@ -195,6 +199,9 @@ class GoogleAdapterClass extends BaseAdapter {
 
       try {
         const parsed = JSON.parse(data);
+        
+        // Debug: Log the full parsed response to see what metadata we receive
+        console.log('Full Gemini response structure:', JSON.stringify(parsed, null, 2));
 
         // Handle full response object (non-streaming) - detect by presence of finishReason at the top level
         // OR if the response contains all expected fields for a complete response

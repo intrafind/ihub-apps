@@ -10,6 +10,7 @@ import * as OpenAIConverter from './OpenAIConverter.js';
 import * as AnthropicConverter from './AnthropicConverter.js';
 import * as GoogleConverter from './GoogleConverter.js';
 import * as MistralConverter from './MistralConverter.js';
+import * as VLLMConverter from './VLLMConverter.js';
 
 import { createGenericStreamingResponse, normalizeFinishReason } from './GenericToolCalling.js';
 
@@ -20,7 +21,8 @@ const CONVERTERS = {
   openai: OpenAIConverter,
   anthropic: AnthropicConverter,
   google: GoogleConverter,
-  mistral: MistralConverter
+  mistral: MistralConverter,
+  local: VLLMConverter  // vLLM uses dedicated converter with schema sanitization
 };
 
 /**
@@ -47,7 +49,7 @@ export function convertToolsToGeneric(tools, sourceProvider) {
  * Convert tools from generic format to any provider format
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @param {string} targetProvider - Target provider name
- * @returns {Object[]} Tools in provider format
+ * @returns {Object[]|Object} Tools in provider format (or object with tools and toolChoice for vLLM)
  */
 export function convertToolsFromGeneric(genericTools, targetProvider) {
   if (!Array.isArray(genericTools) || genericTools.length === 0) {
@@ -130,9 +132,10 @@ export function convertToolCallsFromGeneric(genericToolCalls, targetProvider) {
  * Convert streaming response from any provider format to generic format
  * @param {string} data - Raw response data
  * @param {string} sourceProvider - Source provider name
+ * @param {string} streamId - Stream identifier for stateful processing
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
-export function convertResponseToGeneric(data, sourceProvider) {
+export function convertResponseToGeneric(data, sourceProvider, streamId = 'default') {
   const converter = CONVERTERS[sourceProvider];
   if (!converter) {
     throw new Error(`Unsupported provider for response conversion: ${sourceProvider}`);
@@ -143,7 +146,7 @@ export function convertResponseToGeneric(data, sourceProvider) {
     throw new Error(`No response converter found for provider: ${sourceProvider}`);
   }
 
-  return converterFunction(data);
+  return converterFunction(data, streamId);
 }
 
 /**
@@ -256,6 +259,8 @@ function capitalize(str) {
   switch (str.toLowerCase()) {
     case 'openai':
       return 'OpenAI';
+    case 'local':
+      return 'VLLM';  // Local uses VLLM converter functions
     default:
       return str.charAt(0).toUpperCase() + str.slice(1);
   }

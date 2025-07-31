@@ -1,9 +1,13 @@
 {
   "title": {
-    "en": "AI Hub Apps",
-    "de": "KI-Hub Apps"
+    "en": "iHub Apps",
+    "de": "iHub Apps"
   },
   "header": {
+    "title": {
+      "en": "iHub Apps",
+      "de": "iHub Apps"
+    },
     "defaultColor": "rgb(0, 53, 87)",
     "logo": {
       "url": "/logo.svg",
@@ -133,8 +137,8 @@
   },
   "appsList": {
     "title": {
-      "en": "AI Hub Apps",
-      "de": "AI Hub Apps"
+      "en": "iHub Apps",
+      "de": "iHub Apps"
     },
     "subtitle": {
       "en": "Choose an application to start a conversation",

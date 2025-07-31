@@ -1,41 +1,82 @@
 /**
- * OpenAI Tool Calling Converter
+ * vLLM Tool Calling Converter
  *
- * Handles bidirectional conversion between OpenAI's tool calling format
- * and the generic tool calling format.
+ * Handles bidirectional conversion between vLLM's tool calling format
+ * and the generic tool calling format. vLLM uses OpenAI-compatible API
+ * but has more restrictive JSON schema support.
  */
 
 import {
   createGenericTool,
   createGenericToolCall,
   createGenericStreamingResponse,
-  normalizeFinishReason,
-  sanitizeSchemaForProvider
+  normalizeFinishReason
 } from './GenericToolCalling.js';
 
 /**
- * Convert generic tools to OpenAI format
- * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
- * @returns {Object[]} OpenAI formatted tools
+ * Sanitize JSON Schema for vLLM compatibility
+ * vLLM has more restrictive JSON schema support than OpenAI
+ * @param {Object} schema - JSON Schema
+ * @returns {Object} Sanitized schema
  */
-export function convertGenericToolsToOpenAI(genericTools = []) {
+function sanitizeSchemaForVLLM(schema) {
+  if (!schema || typeof schema !== 'object') {
+    return { type: 'object', properties: {} };
+  }
+
+  const sanitized = JSON.parse(JSON.stringify(schema)); // Deep clone
+
+  function cleanObject(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+
+    // Remove vLLM-incompatible fields
+    delete obj.format; // vLLM doesn't support format validation like "uri"
+    delete obj.exclusiveMaximum;
+    delete obj.exclusiveMinimum;
+    delete obj.title; // Some vLLM versions don't support title
+    // Keep minLength/maxLength as they're more widely supported
+
+    // Recursively clean nested objects
+    for (const key in obj) {
+      if (obj[key] && typeof obj[key] === 'object') {
+        if (Array.isArray(obj[key])) {
+          obj[key] = obj[key].map(item => cleanObject(item));
+        } else {
+          obj[key] = cleanObject(obj[key]);
+        }
+      }
+    }
+
+    return obj;
+  }
+
+  return cleanObject(sanitized);
+}
+
+/**
+ * Convert generic tools to vLLM format (OpenAI-compatible with restrictions)
+ * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
+ * @param {*} toolChoice - Original tool choice for adjustment
+ * @returns {Object} Object containing tools and adjusted tool choice
+ */
+export function convertGenericToolsToVLLM(genericTools = []) {
   return genericTools.map(tool => ({
     type: 'function',
     function: {
       name: tool.name,
       description: tool.description,
-      parameters: sanitizeSchemaForProvider(tool.parameters, 'openai')
+      parameters: sanitizeSchemaForVLLM(tool.parameters)
     }
   }));
 }
 
 /**
- * Convert OpenAI tools to generic format
- * @param {Object[]} openaiTools - OpenAI formatted tools
+ * Convert vLLM tools to generic format (same as OpenAI)
+ * @param {Object[]} vllmTools - vLLM formatted tools
  * @returns {import('./GenericToolCalling.js').GenericTool[]} Generic tools
  */
-export function convertOpenAIToolsToGeneric(openaiTools = []) {
-  return openaiTools.map((tool, index) => {
+export function convertVLLMToolsToGeneric(vllmTools = []) {
+  return vllmTools.map((tool, index) => {
     // Handle both nested function format and flat format
     if (tool.type === 'function' && tool.function) {
       return createGenericTool(
@@ -43,7 +84,7 @@ export function convertOpenAIToolsToGeneric(openaiTools = []) {
         tool.function.name,
         tool.function.description || '',
         tool.function.parameters || { type: 'object', properties: {} },
-        { originalFormat: 'openai', type: tool.type }
+        { originalFormat: 'vllm', type: tool.type }
       );
     }
 
@@ -53,17 +94,17 @@ export function convertOpenAIToolsToGeneric(openaiTools = []) {
       tool.name || `tool_${index}`,
       tool.description || '',
       tool.parameters || { type: 'object', properties: {} },
-      { originalFormat: 'openai' }
+      { originalFormat: 'vllm' }
     );
   });
 }
 
 /**
- * Convert generic tool calls to OpenAI format
+ * Convert generic tool calls to vLLM format (same as OpenAI)
  * @param {import('./GenericToolCalling.js').GenericToolCall[]} genericToolCalls - Generic tool calls
- * @returns {Object[]} OpenAI formatted tool calls
+ * @returns {Object[]} vLLM formatted tool calls
  */
-export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
+export function convertGenericToolCallsToVLLM(genericToolCalls = []) {
   // Convert to modern tool_calls array format
   return genericToolCalls.map(toolCall => {
     // Handle streaming chunks with __raw_arguments
@@ -80,7 +121,6 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
     return {
       index: toolCall.index || 0,
       id: toolCall.id,
-      type: 'function',
       function: {
         name: toolCall.name,
         arguments: args
@@ -90,12 +130,12 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
 }
 
 /**
- * Convert OpenAI tool calls to generic format
- * @param {Object[]} openaiToolCalls - OpenAI formatted tool calls
+ * Convert vLLM tool calls to generic format (same as OpenAI)
+ * @param {Object[]} vllmToolCalls - vLLM formatted tool calls
  * @returns {import('./GenericToolCalling.js').GenericToolCall[]} Generic tool calls
  */
-export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
-  return openaiToolCalls
+export function convertVLLMToolCallsToGeneric(vllmToolCalls = []) {
+  return vllmToolCalls
     .map((toolCall, index) => {
       let args = {};
       let argString = '';
@@ -105,81 +145,57 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
         argString = toolCall.function.arguments;
 
         // For streaming responses, arguments may be partial JSON
-        // Don't trim here as it removes important whitespace from streaming chunks
         const argsStr = argString;
-
-        // Check if this is an initial tool call with proper ID/name vs streaming delta
         const hasIdAndName = toolCall.id && toolCall.function?.name;
-
-        // Only trim for empty checks, but preserve original spacing in __raw_arguments
         const trimmedForCheck = argsStr.trim();
 
         if (!trimmedForCheck || trimmedForCheck === '{}') {
-          // Empty arguments - initialize with empty string for proper accumulation
           args = { __raw_arguments: '' };
         } else if (trimmedForCheck.startsWith('{') && trimmedForCheck.endsWith('}')) {
-          // Looks like complete JSON - try to parse, but keep as raw for streaming compatibility
           try {
             const parsed = JSON.parse(trimmedForCheck);
-            // If this is a complete tool call with ID/name, we can use parsed args
-            // If it's a streaming delta, keep as raw for accumulation (preserving original spacing)
-            args =
-              hasIdAndName && Object.keys(parsed).length > 0
-                ? parsed
-                : { __raw_arguments: argsStr };
+            args = hasIdAndName && Object.keys(parsed).length > 0
+              ? parsed
+              : { __raw_arguments: argsStr };
           } catch (error) {
-            // If parsing fails, keep as raw string for later accumulation (preserving original spacing)
-            console.warn(
-              'Failed to parse OpenAI tool call arguments (likely streaming partial JSON):',
-              error.message
-            );
+            console.warn('Failed to parse vLLM tool call arguments:', error.message);
             args = { __raw_arguments: argsStr };
           }
         } else {
-          // Partial JSON during streaming - keep as raw string for accumulation (preserving original spacing)
           args = { __raw_arguments: argsStr };
         }
       }
 
-      // Handle streaming tool calls where name/id might be missing initially
       const toolId = toolCall.id || null;
       const toolName = toolCall.function?.name || '';
       const toolIndex = toolCall.index !== undefined ? toolCall.index : index;
 
-      // For streaming chunks with empty names, create minimal objects to avoid overwriting
-      // the tool name during merging in ToolExecutor
       if (!toolName && args.__raw_arguments !== undefined) {
-        // This is a streaming chunk with arguments but no name
-        // Create a minimal object that won't overwrite the existing tool name
         return {
           id: toolId || '',
-          name: '', // Keep empty to avoid overwriting existing name
+          name: '',
           arguments: args,
           index: toolIndex,
           metadata: {
-            originalFormat: 'openai',
+            originalFormat: 'vllm',
             type: toolCall.type || 'function',
             streaming_chunk: true,
             rawArguments: argString
           },
           function: {
-            name: '', // Keep empty so ToolExecutor won't overwrite existing name
+            name: '',
             arguments: argString
           }
         };
       }
 
       return createGenericToolCall(toolId, toolName, args, toolIndex, {
-        originalFormat: 'openai',
+        originalFormat: 'vllm',
         type: toolCall.type || 'function',
-        // Keep raw arguments for streaming merging
         rawArguments: argString
       });
     })
     .filter(toolCall => {
-      // Filter out tool calls that are completely empty (likely malformed streaming chunks)
-      // Keep tool calls that have at least a name, ID, or meaningful content
-      // Also keep streaming chunks that have arguments
       return (
         toolCall.name ||
         toolCall.id ||
@@ -190,14 +206,14 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
 }
 
 /**
- * Convert OpenAI streaming response to generic format
- * @param {string} data - Raw OpenAI response data
+ * Convert vLLM streaming response to generic format (same as OpenAI with error handling)
+ * @param {string} data - Raw vLLM response data
  * @param {string} streamId - Stream identifier for stateful processing
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
 const streamingState = new Map();
 
-export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
+export function convertVLLMResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
   
   if (!streamingState.has(streamId)) {
@@ -212,18 +228,55 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
   if (!data) return result;
   if (data === '[DONE]') {
     result.complete = true;
+    
+    // Finalize any pending tool calls when stream ends without explicit finish reason
+    if (state.pendingToolCalls.size > 0) {
+      console.log(`[vLLM Converter] Stream ended with [DONE], finalizing ${state.pendingToolCalls.size} pending tool calls`);
+      for (const [index, pending] of state.pendingToolCalls.entries()) {
+        if (pending.id && pending.name) {
+          let parsedArgs = {};
+          try {
+            if (pending.arguments.trim()) {
+              parsedArgs = JSON.parse(pending.arguments);
+            }
+          } catch (e) {
+            console.warn('Failed to parse accumulated vLLM tool arguments on [DONE]:', e);
+            parsedArgs = { __raw_arguments: pending.arguments };
+          }
+          
+          console.log(`[vLLM Converter] Adding tool call on [DONE]: ${pending.name} with args:`, parsedArgs);
+          result.tool_calls.push(
+            createGenericToolCall(
+              pending.id,
+              pending.name,
+              parsedArgs,
+              index,
+              {
+                originalFormat: 'vllm',
+                type: 'function'
+              }
+            )
+          );
+          
+          // Set finish reason to tool_calls if we have tool calls
+          result.finishReason = 'tool_calls';
+        }
+      }
+    }
+    
+    streamingState.delete(streamId);
     return result;
   }
 
   try {
     const parsed = JSON.parse(data);
 
-    // Handle error responses
+    // Handle error responses (vLLM specific)
     if (parsed.error) {
       result.error = true;
       result.errorMessage = parsed.error.message || 'Unknown error';
       result.complete = true;
-      console.log(`[OpenAI Converter] Detected error response: ${result.errorMessage}`);
+      console.log(`[vLLM Converter] Detected error response: ${result.errorMessage}`);
       return result;
     }
 
@@ -234,12 +287,12 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
       }
       if (parsed.choices[0].message.tool_calls) {
         result.tool_calls.push(
-          ...convertOpenAIToolCallsToGeneric(parsed.choices[0].message.tool_calls)
+          ...convertVLLMToolCallsToGeneric(parsed.choices[0].message.tool_calls)
         );
       }
       result.complete = true;
       if (parsed.choices[0].finish_reason) {
-        result.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'openai');
+        result.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'vllm');
       }
     }
     // Handle streaming response chunks
@@ -276,21 +329,22 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
         }
         
         // Log accumulation progress for debugging
-        console.log(`[OpenAI Converter] Accumulated tool calls:`, Array.from(state.pendingToolCalls.values()));
+        console.log(`[vLLM Converter] Accumulated tool calls:`, Array.from(state.pendingToolCalls.values()));
       }
     }
 
     // Handle finish reason
     if (parsed.choices && parsed.choices[0]?.finish_reason) {
       result.complete = true;
-      state.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'openai');
+      state.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'vllm');
       result.finishReason = state.finishReason;
       
-      console.log(`[OpenAI Converter] Finish reason: ${state.finishReason}, pending tool calls: ${state.pendingToolCalls.size}`);
+      console.log(`[vLLM Converter] Finish reason: ${state.finishReason}, pending tool calls: ${state.pendingToolCalls.size}`);
       
-      // For OpenAI, finalize tool calls on tool_calls finish reason or if we have pending calls
+      // For vLLM, we need to finalize tool calls on any finish reason if we have pending calls
+      // vLLM might use "stop" instead of "tool_calls" as finish reason
       if (state.pendingToolCalls.size > 0) {
-        console.log(`[OpenAI Converter] Finalizing ${state.pendingToolCalls.size} pending tool calls`);
+        console.log(`[vLLM Converter] Finalizing ${state.pendingToolCalls.size} pending tool calls`);
         for (const [index, pending] of state.pendingToolCalls.entries()) {
           if (pending.id && pending.name) {
             let parsedArgs = {};
@@ -299,11 +353,11 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
                 parsedArgs = JSON.parse(pending.arguments);
               }
             } catch (e) {
-              console.warn('Failed to parse accumulated OpenAI tool arguments:', e);
+              console.warn('Failed to parse accumulated vLLM tool arguments:', e);
               parsedArgs = { __raw_arguments: pending.arguments };
             }
             
-            console.log(`[OpenAI Converter] Adding tool call: ${pending.name} with args:`, parsedArgs);
+            console.log(`[vLLM Converter] Adding tool call: ${pending.name} with args:`, parsedArgs);
             result.tool_calls.push(
               createGenericToolCall(
                 pending.id,
@@ -311,11 +365,14 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
                 parsedArgs,
                 index,
                 {
-                  originalFormat: 'openai',
+                  originalFormat: 'vllm',
                   type: 'function'
                 }
               )
             );
+            
+            // Update finish reason to tool_calls if we have tool calls
+            result.finishReason = 'tool_calls';
           }
         }
       }
@@ -323,23 +380,23 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
       streamingState.delete(streamId);
     }
   } catch (error) {
-    console.error('Error parsing OpenAI response chunk:', error);
+    console.error('Error parsing vLLM response chunk:', error);
     result.error = true;
-    result.errorMessage = `Error parsing OpenAI response: ${error.message}`;
+    result.errorMessage = `Error parsing vLLM response: ${error.message}`;
   }
 
   return result;
 }
 
 /**
- * Convert generic streaming response to OpenAI format
+ * Convert generic streaming response to vLLM format (same as OpenAI)
  * @param {import('./GenericToolCalling.js').GenericStreamingResponse} genericResponse - Generic response
- * @param {string} completionId - Completion ID for OpenAI format
+ * @param {string} completionId - Completion ID for vLLM format
  * @param {string} modelId - Model ID
  * @param {boolean} isFirstChunk - Whether this is the first chunk
- * @returns {Object} OpenAI formatted response chunk
+ * @returns {Object} vLLM formatted response chunk
  */
-export function convertGenericResponseToOpenAI(
+export function convertGenericResponseToVLLM(
   genericResponse,
   completionId,
   modelId,
@@ -362,37 +419,24 @@ export function convertGenericResponseToOpenAI(
   const hasToolCalls = genericResponse.tool_calls && genericResponse.tool_calls.length > 0;
   const hasContent = genericResponse.content && genericResponse.content.length > 0;
   
-  // For streaming, separate role from function calls as OpenAI clients expect
   if (isFirstChunk) {
-    // First chunk should only have role, unless there's also content
     chunk.choices[0].delta.role = 'assistant';
-    
-    // Only add content in first chunk if present, but not function calls
-    if (hasContent && !hasToolCalls) {
-      const content = genericResponse.content.join('');
-      if (content) {
-        chunk.choices[0].delta.content = content;
-      }
+  }
+
+  if (hasContent) {
+    const content = genericResponse.content.join('');
+    if (content) {
+      chunk.choices[0].delta.content = content;
     }
-  } else {
-    // Non-first chunks can have content
-    if (hasContent) {
-      const content = genericResponse.content.join('');
-      if (content) {
-        chunk.choices[0].delta.content = content;
-      }
-    }
-    
-    // Non-first chunks can have tool calls
-    if (hasToolCalls) {
-      const toolCalls = convertGenericToolCallsToOpenAI(genericResponse.tool_calls);
-      if (toolCalls && toolCalls.length > 0) {
-        chunk.choices[0].delta.tool_calls = toolCalls;
-      }
+  }
+  
+  if (hasToolCalls) {
+    const toolCalls = convertGenericToolCallsToVLLM(genericResponse.tool_calls);
+    if (toolCalls && toolCalls.length > 0) {
+      chunk.choices[0].delta.tool_calls = toolCalls;
     }
   }
 
-  // Set finish reason if complete
   if (genericResponse.complete) {
     chunk.choices[0].finish_reason = genericResponse.finishReason || 'stop';
   }
@@ -401,13 +445,13 @@ export function convertGenericResponseToOpenAI(
 }
 
 /**
- * Convert generic streaming response to OpenAI non-streaming format
+ * Convert generic streaming response to vLLM non-streaming format
  * @param {import('./GenericToolCalling.js').GenericStreamingResponse} genericResponse - Generic response
  * @param {string} completionId - Completion ID
  * @param {string} modelId - Model ID
- * @returns {Object} OpenAI formatted complete response
+ * @returns {Object} vLLM formatted complete response
  */
-export function convertGenericResponseToOpenAINonStreaming(genericResponse, completionId, modelId) {
+export function convertGenericResponseToVLLMNonStreaming(genericResponse, completionId, modelId) {
   const response = {
     id: completionId,
     object: 'chat.completion',
@@ -422,7 +466,7 @@ export function convertGenericResponseToOpenAINonStreaming(genericResponse, comp
         },
         finish_reason: genericResponse.finishReason || 'stop'
       }
-    ], //TODO add usage handling / conversion
+    ],
     usage: {
       prompt_tokens: 0,
       completion_tokens: 0,
@@ -430,9 +474,8 @@ export function convertGenericResponseToOpenAINonStreaming(genericResponse, comp
     }
   };
 
-  // Add tool calls if present (modern OpenAI format)
   if (genericResponse.tool_calls && genericResponse.tool_calls.length > 0) {
-    const toolCalls = convertGenericToolCallsToOpenAI(genericResponse.tool_calls);
+    const toolCalls = convertGenericToolCallsToVLLM(genericResponse.tool_calls);
     if (toolCalls && toolCalls.length > 0) {
       response.choices[0].message.tool_calls = toolCalls;
     }
