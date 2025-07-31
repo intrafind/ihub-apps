@@ -165,6 +165,21 @@ class GoogleAdapterClass extends BaseAdapter {
       requestBody.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
 
+    // Add thinking configuration if the model supports it
+    if (model.supportsThinking) {
+      requestBody.thinkingConfig = {};
+      
+      // Set thinking budget if configured (0 = disabled, -1 = dynamic, positive number = specific budget)
+      if (typeof model.thinkingBudget === 'number') {
+        requestBody.thinkingConfig.thinkingBudget = model.thinkingBudget;
+      }
+      
+      // Set whether to include thoughts in response
+      if (typeof model.includeThoughts === 'boolean') {
+        requestBody.thinkingConfig.includeThoughts = model.includeThoughts;
+      }
+    }
+
     console.log('Google request body:', requestBody);
 
     return {
@@ -185,6 +200,7 @@ class GoogleAdapterClass extends BaseAdapter {
       const result = {
         content: [],
         tool_calls: [],
+        thinking: [],
         complete: false,
         error: false,
         errorMessage: null,
@@ -204,20 +220,28 @@ class GoogleAdapterClass extends BaseAdapter {
           parsed.candidates[0]?.content?.parts?.[0]
         ) {
           // This is a complete non-streaming response
-          const part = parsed.candidates[0].content.parts[0];
-          if (part.text) {
-            result.content.push(part.text);
-          }
-          if (part.functionCall) {
-            result.tool_calls.push({
-              index: 0,
-              id: 'tool_call_1',
-              function: {
-                name: part.functionCall.name,
-                arguments: JSON.stringify(part.functionCall.args || {})
+          const parts = parsed.candidates[0].content.parts;
+          for (const part of parts) {
+            if (part.text) {
+              if (part.thought) {
+                // This is thinking content
+                result.thinking.push(part.text);
+              } else {
+                // This is regular content
+                result.content.push(part.text);
               }
-            });
-            if (!result.finishReason) result.finishReason = 'tool_calls';
+            }
+            if (part.functionCall) {
+              result.tool_calls.push({
+                index: 0,
+                id: 'tool_call_1',
+                function: {
+                  name: part.functionCall.name,
+                  arguments: JSON.stringify(part.functionCall.args || {})
+                }
+              });
+              if (!result.finishReason) result.finishReason = 'tool_calls';
+            }
           }
           result.complete = true;
           const fr = parsed.candidates[0].finishReason;
@@ -239,7 +263,13 @@ class GoogleAdapterClass extends BaseAdapter {
           let idx = result.tool_calls.length;
           for (const part of parsed.candidates[0].content.parts) {
             if (part.text) {
-              result.content.push(part.text);
+              if (part.thought) {
+                // This is thinking content
+                result.thinking.push(part.text);
+              } else {
+                // This is regular content
+                result.content.push(part.text);
+              }
             }
             if (part.functionCall) {
               result.tool_calls.push({

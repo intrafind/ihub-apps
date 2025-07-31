@@ -10,5 +10,6 @@ export const UnifiedEvents = {
   TOOL_CALL_PROGRESS: 'tool.call.progress',
   TOOL_CALL_END: 'tool.call.end',
   CITATION: 'citation',
-  SAFETY_WARNING: 'safety.warning'
+  SAFETY_WARNING: 'safety.warning',
+  THINKING: 'thinking'
 };

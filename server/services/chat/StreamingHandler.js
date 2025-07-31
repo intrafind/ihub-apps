@@ -142,6 +142,12 @@ class StreamingHandler {
             }
           }
 
+          if (result && result.thinking && result.thinking.length > 0) {
+            for (const thinkingContent of result.thinking) {
+              actionTracker.trackThinking(chatId, { content: thinkingContent });
+            }
+          }
+
           if (result && result.error) {
             await logInteraction(
               'chat_error',
