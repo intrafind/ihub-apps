@@ -7,7 +7,8 @@ export const fetchModels = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : CACHE_KEYS.MODELS_LIST;
 
-  return handleApiResponse(() => apiClient.get('/models'), cacheKey, DEFAULT_CACHE_TTL.MEDIUM);
+  const response = await handleApiResponse(() => apiClient.get('/models'), cacheKey, DEFAULT_CACHE_TTL.MEDIUM);
+  return response?.data || response || [];
 };
 
 export const fetchModelDetails = async (modelId, options = {}) => {
