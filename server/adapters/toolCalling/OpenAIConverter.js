@@ -93,26 +93,30 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
         argString = toolCall.function.arguments;
 
         // For streaming responses, arguments may be partial JSON
-        const argsStr = argString.trim();
+        // Don't trim here as it removes important whitespace from streaming chunks
+        const argsStr = argString;
 
         // Check if this is an initial tool call with proper ID/name vs streaming delta
         const hasIdAndName = toolCall.id && toolCall.function?.name;
 
-        if (!argsStr || argsStr === '{}') {
+        // Only trim for empty checks, but preserve original spacing in __raw_arguments
+        const trimmedForCheck = argsStr.trim();
+
+        if (!trimmedForCheck || trimmedForCheck === '{}') {
           // Empty arguments - initialize with empty string for proper accumulation
           args = { __raw_arguments: '' };
-        } else if (argsStr.startsWith('{') && argsStr.endsWith('}')) {
+        } else if (trimmedForCheck.startsWith('{') && trimmedForCheck.endsWith('}')) {
           // Looks like complete JSON - try to parse, but keep as raw for streaming compatibility
           try {
-            const parsed = JSON.parse(argsStr);
+            const parsed = JSON.parse(trimmedForCheck);
             // If this is a complete tool call with ID/name, we can use parsed args
-            // If it's a streaming delta, keep as raw for accumulation
+            // If it's a streaming delta, keep as raw for accumulation (preserving original spacing)
             args =
               hasIdAndName && Object.keys(parsed).length > 0
                 ? parsed
                 : { __raw_arguments: argsStr };
           } catch (error) {
-            // If parsing fails, keep as raw string for later accumulation
+            // If parsing fails, keep as raw string for later accumulation (preserving original spacing)
             console.warn(
               'Failed to parse OpenAI tool call arguments (likely streaming partial JSON):',
               error.message
@@ -120,7 +124,7 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
             args = { __raw_arguments: argsStr };
           }
         } else {
-          // Partial JSON during streaming - keep as raw string for accumulation
+          // Partial JSON during streaming - keep as raw string for accumulation (preserving original spacing)
           args = { __raw_arguments: argsStr };
         }
       }
@@ -129,6 +133,29 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
       const toolId = toolCall.id || null;
       const toolName = toolCall.function?.name || '';
       const toolIndex = toolCall.index !== undefined ? toolCall.index : index;
+
+      // For streaming chunks with empty names, create minimal objects to avoid overwriting
+      // the tool name during merging in ToolExecutor
+      if (!toolName && args.__raw_arguments !== undefined) {
+        // This is a streaming chunk with arguments but no name
+        // Create a minimal object that won't overwrite the existing tool name
+        return {
+          id: toolId || '',
+          name: '', // Keep empty to avoid overwriting existing name
+          arguments: args,
+          index: toolIndex,
+          metadata: {
+            originalFormat: 'openai',
+            type: toolCall.type || 'function',
+            streaming_chunk: true,
+            rawArguments: argString
+          },
+          function: {
+            name: '', // Keep empty so ToolExecutor won't overwrite existing name
+            arguments: argString
+          }
+        };
+      }
 
       return createGenericToolCall(toolId, toolName, args, toolIndex, {
         originalFormat: 'openai',
@@ -140,8 +167,12 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
     .filter(toolCall => {
       // Filter out tool calls that are completely empty (likely malformed streaming chunks)
       // Keep tool calls that have at least a name, ID, or meaningful content
+      // Also keep streaming chunks that have arguments
       return (
-        toolCall.name || toolCall.id || (toolCall.rawArguments && toolCall.rawArguments.length > 0)
+        toolCall.name ||
+        toolCall.id ||
+        (toolCall.metadata?.rawArguments && toolCall.metadata.rawArguments.length > 0) ||
+        toolCall.arguments?.__raw_arguments !== undefined
       );
     });
 }

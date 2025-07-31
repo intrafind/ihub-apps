@@ -167,7 +167,7 @@ export function convertAnthropicResponseToGeneric(data) {
         createGenericToolCall(
           parsed.content_block.id,
           parsed.content_block.name,
-          {}, // Arguments will be filled in by subsequent deltas
+          {}, // Empty object - arguments will be filled in by subsequent deltas
           parsed.index,
           {
             originalFormat: 'anthropic',
@@ -178,23 +178,28 @@ export function convertAnthropicResponseToGeneric(data) {
         )
       );
     } else if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'input_json_delta') {
-      // For streaming tool calls, we need to accumulate the arguments
-      // Instead of creating separate tool calls, let the ToolExecutor handle accumulation
-      // by creating a tool call with the __raw_arguments pattern it expects
-      if (parsed.delta.partial_json) {
-        result.tool_calls.push(
-          createGenericToolCall(
-            '', // Empty ID - will be merged by ToolExecutor
-            '', // Empty name - will be merged by ToolExecutor
-            { __raw_arguments: parsed.delta.partial_json },
-            parsed.index,
-            {
-              originalFormat: 'anthropic',
-              type: 'tool_use',
-              streaming: true
-            }
-          )
-        );
+      // For streaming tool calls, accumulate arguments in a tool call with the same index
+      // The ToolExecutor will merge these based on the index
+      if (parsed.delta.partial_json && parsed.index !== undefined) {
+        // Create a minimal tool call for streaming arguments that won't overwrite the name
+        const streamingChunk = {
+          id: '', // Empty ID - will be merged with existing call by ToolExecutor
+          name: '', // Empty name - but don't normalize it to avoid "unnamed_tool"
+          arguments: { __raw_arguments: parsed.delta.partial_json },
+          index: parsed.index, // Use the same index to match with the initial tool call
+          metadata: {
+            originalFormat: 'anthropic',
+            type: 'input_json_delta',
+            streaming: true,
+            streaming_chunk: true
+          },
+          // Create function object without normalizing empty name
+          function: {
+            name: '', // Keep empty so ToolExecutor won't overwrite existing name
+            arguments: parsed.delta.partial_json
+          }
+        };
+        result.tool_calls.push(streamingChunk);
       }
     }
 

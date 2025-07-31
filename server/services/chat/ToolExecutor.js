@@ -241,7 +241,15 @@ class ToolExecutor {
                     callArgs = call.arguments.__raw_arguments;
                   }
                   if (callArgs) {
-                    existingCall.function.arguments += callArgs;
+                    // Smart concatenation: avoid empty {} + real args pattern
+                    const existing = existingCall.function.arguments;
+                    if (!existing || existing === '{}' || existing.trim() === '') {
+                      // If existing is empty or just {}, replace it entirely
+                      existingCall.function.arguments = callArgs;
+                    } else if (callArgs !== '{}' && callArgs.trim() !== '') {
+                      // Only concatenate if new args aren't empty
+                      existingCall.function.arguments += callArgs;
+                    }
                   }
                 }
               } else if (call.index !== undefined) {
@@ -249,6 +257,11 @@ class ToolExecutor {
                 let initialArgs = call.function?.arguments || '';
                 if (call.arguments && call.arguments.__raw_arguments) {
                   initialArgs = call.arguments.__raw_arguments;
+                }
+
+                // Clean up initial args - avoid starting with empty {}
+                if (initialArgs === '{}' || initialArgs.trim() === '') {
+                  initialArgs = '';
                 }
 
                 collectedToolCalls.push({
