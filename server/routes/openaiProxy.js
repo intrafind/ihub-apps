@@ -7,7 +7,8 @@ import { filterResourcesByPermissions } from '../utils/authorization.js';
 import {
   convertResponseToGeneric,
   convertResponseFromGeneric,
-  convertToolCallsFromGeneric
+  convertToolCallsFromGeneric,
+  convertToolsToGeneric
 } from '../adapters/toolCalling/index.js';
 
 export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {}) {
@@ -117,11 +118,25 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
       return res.status(500).json({ error: msg });
     }
 
+    // Convert OpenAI-format tools to generic format for use with our adapters
+    let genericTools = null;
+    if (tools && Array.isArray(tools) && tools.length > 0) {
+      try {
+        console.log(`[OpenAI Proxy] Converting ${tools.length} OpenAI tools to generic format`);
+        genericTools = convertToolsToGeneric(tools, 'openai');
+        console.log(`[OpenAI Proxy] Converted to ${genericTools.length} generic tools:`, 
+                   genericTools.map(t => ({ id: t.id, name: t.name })));
+      } catch (error) {
+        console.error(`[OpenAI Proxy] Error converting tools to generic format:`, error);
+        genericTools = tools; // Fallback to original tools
+      }
+    }
+
     const request = createCompletionRequest(model, messages, apiKey, {
       stream,
       temperature,
       maxTokens,
-      tools,
+      tools: genericTools,
       toolChoice
     });
 
@@ -210,26 +225,66 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
                   JSON.stringify(genericResult, null, 2)
                 );
 
-                // Convert generic result to OpenAI format
-                const openAIChunk = convertResponseFromGeneric(genericResult, 'openai', {
-                  completionId,
-                  modelId,
-                  isFirstChunk
-                });
-
-                if (
-                  openAIChunk &&
-                  (genericResult.content.length > 0 ||
-                    genericResult.tool_calls.length > 0 ||
-                    genericResult.complete)
-                ) {
-                  chunkCount++;
-                  isFirstChunk = false;
-                  console.log(
-                    `[OpenAI Proxy] Sending OpenAI chunk:`,
-                    JSON.stringify(openAIChunk, null, 2)
+                // Handle first chunk with tool calls - need to send separate chunks for OpenAI compatibility
+                const hasToolCalls = genericResult.tool_calls && genericResult.tool_calls.length > 0;
+                const hasContent = genericResult.content && genericResult.content.length > 0;
+                
+                if (isFirstChunk && hasToolCalls) {
+                  // Send role-only chunk first
+                  const roleChunk = convertResponseFromGeneric(
+                    { content: hasContent ? genericResult.content : [], tool_calls: [], complete: false }, 
+                    'openai', 
+                    { completionId, modelId, isFirstChunk: true }
                   );
-                  res.write(`data: ${JSON.stringify(openAIChunk)}\n\n`);
+                  
+                  if (roleChunk) {
+                    chunkCount++;
+                    console.log(
+                      `[OpenAI Proxy] Sending role chunk:`,
+                      JSON.stringify(roleChunk, null, 2)
+                    );
+                    res.write(`data: ${JSON.stringify(roleChunk)}\n\n`);
+                  }
+                  
+                  // Send function call chunk second
+                  const toolChunk = convertResponseFromGeneric(
+                    { content: [], tool_calls: genericResult.tool_calls, complete: genericResult.complete, finishReason: genericResult.finishReason }, 
+                    'openai', 
+                    { completionId, modelId, isFirstChunk: false }
+                  );
+                  
+                  if (toolChunk) {
+                    chunkCount++;
+                    console.log(
+                      `[OpenAI Proxy] Sending tool chunk:`,
+                      JSON.stringify(toolChunk, null, 2)
+                    );
+                    res.write(`data: ${JSON.stringify(toolChunk)}\n\n`);
+                  }
+                  
+                  isFirstChunk = false;
+                } else {
+                  // Normal single chunk processing
+                  const openAIChunk = convertResponseFromGeneric(genericResult, 'openai', {
+                    completionId,
+                    modelId,
+                    isFirstChunk
+                  });
+
+                  if (
+                    openAIChunk &&
+                    (genericResult.content.length > 0 ||
+                      genericResult.tool_calls.length > 0 ||
+                      genericResult.complete)
+                  ) {
+                    chunkCount++;
+                    isFirstChunk = false;
+                    console.log(
+                      `[OpenAI Proxy] Sending OpenAI chunk:`,
+                      JSON.stringify(openAIChunk, null, 2)
+                    );
+                    res.write(`data: ${JSON.stringify(openAIChunk)}\n\n`);
+                  }
                 }
               } catch (error) {
                 console.error(`[OpenAI Proxy] Error processing ${model.provider} chunk:`, error);

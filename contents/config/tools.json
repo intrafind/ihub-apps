@@ -1,7 +1,8 @@
 [
   {
     "id": "braveSearch",
-    "name": {
+    "name": "braveSearch",
+    "title": {
       "en": "Brave Web / Internet Search",
       "de": "Brave Web- / Internetsuche"
     },
@@ -27,7 +28,8 @@
   },
   {
     "id": "tavilySearch",
-    "name": {
+    "name": "tavilySearch",
+    "title": {
       "en": "Tavily Web Search",
       "de": "Tavily Websuche"
     },
@@ -72,7 +74,8 @@
   },
   {
     "id": "webContentExtractor",
-    "name": {
+    "name": "webContentExtractor",
+    "title": {
       "en": "Web Content Extractor",
       "de": "Web-Inhalts-Extraktor"
     },
@@ -116,7 +119,8 @@
   },
   {
     "id": "enhancedWebSearch",
-    "name": {
+    "name": "enhancedWebSearch",
+    "title": {
       "en": "Enhanced Web Search with Content",
       "de": "Erweiterte Websuche mit Inhalten"
     },
@@ -169,7 +173,8 @@
   },
   {
     "id": "deepResearch",
-    "name": {
+    "name": "deepResearch",
+    "title": {
       "en": "Deep Research",
       "de": "Tiefgehende Recherche"
     },
@@ -231,7 +236,8 @@
   },
   {
     "id": "researchPlanner",
-    "name": {
+    "name": "researchPlanner",
+    "title": {
       "en": "Research Planner",
       "de": "Recherche-Planer"
     },
@@ -273,7 +279,8 @@
   },
   {
     "id": "evaluator",
-    "name": {
+    "name": "evaluator",
+    "title": {
       "en": "Answer Evaluator",
       "de": "Antwort-Bewerter"
     },
@@ -313,7 +320,8 @@
   },
   {
     "id": "queryRewriter",
-    "name": {
+    "name": "queryRewriter",
+    "title": {
       "en": "Query Rewriter",
       "de": "Anfragen-Umschreiber"
     },
@@ -360,7 +368,8 @@
   },
   {
     "id": "playwrightScreenshot",
-    "name": {
+    "name": "playwrightScreenshot",
+    "title": {
       "en": "Website Screenshot (Playwright)",
       "de": "Website-Screenshot (Playwright)"
     },
@@ -402,7 +411,8 @@
   },
   {
     "id": "answerReducer",
-    "name": {
+    "name": "answerReducer",
+    "title": {
       "en": "Answer Reducer",
       "de": "Antwort-Reduzierer"
     },
@@ -428,7 +438,8 @@
   },
   {
     "id": "seleniumScreenshot",
-    "name": {
+    "name": "seleniumScreenshot",
+    "title": {
       "en": "Website Screenshot (Selenium)",
       "de": "Website-Screenshot (Selenium)"
     },
@@ -470,7 +481,8 @@
   },
   {
     "id": "entraPeopleSearch",
-    "name": {
+    "name": "entraPeopleSearch",
+    "title": {
       "en": "Entra People Search",
       "de": "Entra Personensuche"
     },
@@ -598,7 +610,8 @@
   },
   {
     "id": "iFinder",
-    "name": {
+    "name": "iFinder",
+    "title": {
       "en": "iFinder Document Management",
       "de": "iFinder Dokumentenverwaltung"
     },

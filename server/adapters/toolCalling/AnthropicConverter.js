@@ -205,6 +205,8 @@ export function convertAnthropicResponseToGeneric(data) {
 
     if (parsed.type === 'message_stop') {
       result.complete = true;
+      // Don't overwrite finishReason if it was already set (e.g., by tool_calls)
+      // The finishReason should be set by message_delta, not message_stop
     }
   } catch (parseError) {
     console.error('Error parsing Anthropic response chunk:', parseError);

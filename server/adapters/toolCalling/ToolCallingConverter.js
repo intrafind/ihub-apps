@@ -50,6 +50,10 @@ export function convertToolsToGeneric(tools, sourceProvider) {
  * @returns {Object[]} Tools in provider format
  */
 export function convertToolsFromGeneric(genericTools, targetProvider) {
+  if (!Array.isArray(genericTools) || genericTools.length === 0) {
+    return [];
+  }
+
   const converter = CONVERTERS[targetProvider];
   if (!converter) {
     throw new Error(`Unsupported provider for tool conversion: ${targetProvider}`);

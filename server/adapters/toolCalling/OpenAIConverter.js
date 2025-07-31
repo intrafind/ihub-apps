@@ -64,17 +64,28 @@ export function convertOpenAIToolsToGeneric(openaiTools = []) {
  * @returns {Object[]} OpenAI formatted tool calls
  */
 export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
-  return genericToolCalls.map(toolCall => ({
-    id: toolCall.id,
-    type: 'function',
-    function: {
-      name: toolCall.name,
-      arguments:
-        typeof toolCall.arguments === 'string'
-          ? toolCall.arguments
-          : JSON.stringify(toolCall.arguments)
+  const filteredToolCalls = genericToolCalls.filter(toolCall => {
+    // Filter out streaming chunks with empty IDs/names - these are meant for server-side merging
+    // and shouldn't be sent to OpenAI clients during streaming
+    if (toolCall.metadata?.streaming_chunk && (!toolCall.id || toolCall.id === '' || !toolCall.name || toolCall.name === '')) {
+      console.log(`[OpenAI Converter] Filtering out streaming chunk with empty ID/name:`, { id: toolCall.id, name: toolCall.name });
+      return false;
     }
-  }));
+    return true;
+  });
+
+  // Convert to legacy function_call format (single function call)
+  if (filteredToolCalls.length > 0) {
+    const toolCall = filteredToolCalls[0]; // Take first tool call for legacy format
+    return {
+      name: toolCall.name,
+      arguments: typeof toolCall.arguments === 'string'
+        ? toolCall.arguments
+        : JSON.stringify(toolCall.arguments)
+    };
+  }
+  
+  return null;
 }
 
 /**
@@ -255,28 +266,52 @@ export function convertGenericResponseToOpenAI(
     choices: [
       {
         index: 0,
-        delta: isFirstChunk ? { role: 'assistant' } : {},
+        delta: {},
         finish_reason: null
       }
     ]
   };
 
-  // Add content if present
-  if (genericResponse.content && genericResponse.content.length > 0) {
-    const content = genericResponse.content.join('');
-    if (content) {
-      chunk.choices[0].delta.content = content;
+  const hasToolCalls = genericResponse.tool_calls && genericResponse.tool_calls.length > 0;
+  const hasContent = genericResponse.content && genericResponse.content.length > 0;
+  
+  // For streaming, separate role from function calls as OpenAI clients expect
+  if (isFirstChunk) {
+    // First chunk should only have role, unless there's also content
+    chunk.choices[0].delta.role = 'assistant';
+    
+    // Only add content in first chunk if present, but not function calls
+    if (hasContent && !hasToolCalls) {
+      const content = genericResponse.content.join('');
+      if (content) {
+        chunk.choices[0].delta.content = content;
+      }
+    }
+  } else {
+    // Non-first chunks can have content
+    if (hasContent) {
+      const content = genericResponse.content.join('');
+      if (content) {
+        chunk.choices[0].delta.content = content;
+      }
+    }
+    
+    // Non-first chunks can have function calls
+    if (hasToolCalls) {
+      const functionCall = convertGenericToolCallsToOpenAI(genericResponse.tool_calls);
+      if (functionCall) {
+        chunk.choices[0].delta.function_call = functionCall;
+      }
     }
   }
 
-  // Add tool calls if present
-  if (genericResponse.tool_calls && genericResponse.tool_calls.length > 0) {
-    chunk.choices[0].delta.tool_calls = convertGenericToolCallsToOpenAI(genericResponse.tool_calls);
-  }
-
-  // Set finish reason if complete
+  // Set finish reason if complete (map tool_calls to function_call for legacy format)
   if (genericResponse.complete) {
-    chunk.choices[0].finish_reason = genericResponse.finishReason || 'stop';
+    let finishReason = genericResponse.finishReason || 'stop';
+    if (finishReason === 'tool_calls') {
+      finishReason = 'function_call';
+    }
+    chunk.choices[0].finish_reason = finishReason;
   }
 
   return chunk;
@@ -302,7 +337,7 @@ export function convertGenericResponseToOpenAINonStreaming(genericResponse, comp
           role: 'assistant',
           content: genericResponse.content.join('') || null
         },
-        finish_reason: genericResponse.finishReason || 'stop'
+        finish_reason: genericResponse.finishReason === 'tool_calls' ? 'function_call' : (genericResponse.finishReason || 'stop')
       }
     ],
     usage: {
@@ -312,11 +347,12 @@ export function convertGenericResponseToOpenAINonStreaming(genericResponse, comp
     }
   };
 
-  // Add tool calls if present
+  // Add function call if present (legacy OpenAI format)
   if (genericResponse.tool_calls && genericResponse.tool_calls.length > 0) {
-    response.choices[0].message.tool_calls = convertGenericToolCallsToOpenAI(
-      genericResponse.tool_calls
-    );
+    const functionCall = convertGenericToolCallsToOpenAI(genericResponse.tool_calls);
+    if (functionCall) {
+      response.choices[0].message.function_call = functionCall;
+    }
   }
 
   return response;

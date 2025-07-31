@@ -23,7 +23,7 @@ export function convertGenericToolsToGoogle(genericTools = []) {
   return [
     {
       functionDeclarations: genericTools.map(tool => ({
-        name: tool.name,
+        name: normalizeToolName(tool.name),
         description: tool.description,
         parameters: sanitizeSchemaForProvider(tool.parameters, 'google')
       }))

@@ -113,6 +113,7 @@ class AnthropicAdapterClass extends BaseAdapter {
     let finalTools = tools ? [...tools] : [];
     if (responseSchema) {
       finalTools.push({
+        id: 'json',
         name: 'json',
         description: 'Respond with a JSON object.',
         parameters: responseSchema
