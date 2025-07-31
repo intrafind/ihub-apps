@@ -18,7 +18,8 @@ class ToolExecutor {
 
   async executeToolCall(toolCall, tools, chatId, buildLogData, user) {
     const toolId =
-      tools.find(t => normalizeToolName(t.id) === toolCall.function.name)?.id || toolCall.function.name;
+      tools.find(t => normalizeToolName(t.id) === toolCall.function.name)?.id ||
+      toolCall.function.name;
     let args = {};
 
     try {
