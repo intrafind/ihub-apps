@@ -1,4 +1,5 @@
-import { createCompletionRequest, processResponseBuffer } from '../../adapters/index.js';
+import { createCompletionRequest } from '../../adapters/index.js';
+import { convertResponseToGeneric } from '../../adapters/toolCalling/index.js';
 import { logInteraction, getErrorDetails } from '../../utils.js';
 import { runTool } from '../../toolLoader.js';
 import { normalizeName } from '../../adapters/toolFormatter.js';
@@ -206,7 +207,7 @@ class ToolExecutor {
 
         while (events.length > 0) {
           const evt = events.shift();
-          const result = processResponseBuffer(model.provider, evt.data);
+          const result = convertResponseToGeneric(evt.data, model.provider);
 
           if (result.error) {
             throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
@@ -233,18 +234,43 @@ class ToolExecutor {
                 if (call.type) existingCall.type = call.type;
                 if (call.function) {
                   if (call.function.name) existingCall.function.name = call.function.name;
-                  if (call.function.arguments)
-                    existingCall.function.arguments += call.function.arguments;
+
+                  // Handle arguments accumulation for streaming
+                  let callArgs = call.function.arguments;
+                  if (call.arguments && call.arguments.__raw_arguments) {
+                    callArgs = call.arguments.__raw_arguments;
+                  }
+                  if (callArgs) {
+                    // Smart concatenation: avoid empty {} + real args pattern
+                    const existing = existingCall.function.arguments;
+                    if (!existing || existing === '{}' || existing.trim() === '') {
+                      // If existing is empty or just {}, replace it entirely
+                      existingCall.function.arguments = callArgs;
+                    } else if (callArgs !== '{}' && callArgs.trim() !== '') {
+                      // Only concatenate if new args aren't empty
+                      existingCall.function.arguments += callArgs;
+                    }
+                  }
                 }
               } else if (call.index !== undefined) {
                 // Create a new tool call if it doesn't exist
+                let initialArgs = call.function?.arguments || '';
+                if (call.arguments && call.arguments.__raw_arguments) {
+                  initialArgs = call.arguments.__raw_arguments;
+                }
+
+                // Clean up initial args - avoid starting with empty {}
+                if (initialArgs === '{}' || initialArgs.trim() === '') {
+                  initialArgs = '';
+                }
+
                 collectedToolCalls.push({
                   index: call.index,
                   id: call.id || null,
                   type: call.type || 'function',
                   function: {
                     name: call.function?.name || '',
-                    arguments: call.function?.arguments || ''
+                    arguments: initialArgs
                   }
                 });
               }
@@ -293,17 +319,39 @@ class ToolExecutor {
         return;
       }
 
-      const toolNames = collectedToolCalls.map(c => c.function.name).join(', ');
+      // Filter out tool calls with empty names (streaming artifacts)
+      const validToolCalls = collectedToolCalls.filter(call => {
+        return call.function?.name && call.function.name.trim().length > 0;
+      });
+
+      if (validToolCalls.length === 0) {
+        console.log(`No valid tool calls to process for chat ID ${chatId} after filtering`);
+        clearTimeout(timeoutId);
+        actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
+        await logInteraction(
+          'chat_response',
+          buildLogData(true, {
+            responseType: 'success',
+            response: assistantContent.substring(0, 1000)
+          })
+        );
+        if (activeRequests.get(chatId) === controller) {
+          activeRequests.delete(chatId);
+        }
+        return;
+      }
+
+      const toolNames = validToolCalls.map(c => c.function.name).join(', ');
       actionTracker.trackAction(chatId, {
         action: 'processing',
         message: `Using tool(s): ${toolNames}...`
       });
 
-      const assistantMessage = { role: 'assistant', tool_calls: collectedToolCalls };
+      const assistantMessage = { role: 'assistant', tool_calls: validToolCalls };
       assistantMessage.content = assistantContent || null;
       llmMessages.push(assistantMessage);
 
-      for (const call of collectedToolCalls) {
+      for (const call of validToolCalls) {
         const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData, user);
         llmMessages.push(toolResult.message);
       }
@@ -459,7 +507,7 @@ class ToolExecutor {
 
           while (events.length > 0) {
             const evt = events.shift();
-            const result = processResponseBuffer(model.provider, evt.data);
+            const result = convertResponseToGeneric(evt.data, model.provider);
 
             if (result.error) {
               throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {

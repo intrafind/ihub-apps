@@ -1,9 +1,14 @@
 import { getApiKeyForModel } from '../utils.js';
-import { createCompletionRequest, processResponseBuffer } from '../adapters/index.js';
+import { createCompletionRequest } from '../adapters/index.js';
 import { throttledFetch } from '../requestThrottler.js';
 import configCache from '../configCache.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { filterResourcesByPermissions } from '../utils/authorization.js';
+import {
+  convertResponseToGeneric,
+  convertResponseFromGeneric,
+  convertToolCallsFromGeneric
+} from '../adapters/toolCalling/index.js';
 
 export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {}) {
   const base = '/api/inference';
@@ -150,243 +155,143 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
       if (stream) {
         console.log(`[OpenAI Proxy] Starting streaming response for provider: ${model.provider}`);
 
-        // For OpenAI provider, pass through directly
-        if (model.provider === 'openai') {
-          const reader = llmResponse.body.getReader();
-          const decoder = new TextDecoder();
-          let chunkCount = 0;
+        // Use generic tool calling system for all providers
+        const reader = llmResponse.body.getReader();
+        const decoder = new TextDecoder();
+        let chunkCount = 0;
+        let buffer = '';
 
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) {
-                console.log(
-                  `[OpenAI Proxy] OpenAI streaming complete. Total chunks: ${chunkCount}`
-                );
-                break;
+        // Generate a unique ID for this completion
+        const completionId = `chatcmpl-${Date.now()}${Math.random().toString(36).substring(2, 11)}`;
+        let isFirstChunk = true;
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+
+            // Process complete lines/events
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              const trimmedLine = line.trim();
+              if (!trimmedLine) continue;
+
+              // Skip SSE event type lines (e.g., "event: message_start")
+              if (trimmedLine.startsWith('event:')) {
+                continue;
               }
-              const chunk = decoder.decode(value, { stream: true });
-              chunkCount++;
-              console.log(`[OpenAI Proxy] OpenAI passthrough chunk:`, chunk);
-              res.write(chunk);
-            }
-          } finally {
-            reader.releaseLock();
-          }
-        } else {
-          // For other providers, transform to OpenAI format
-          const reader = llmResponse.body.getReader();
-          const decoder = new TextDecoder();
 
-          // Generate a unique ID for this completion
-          const completionId = `chatcmpl-${Date.now()}${Math.random().toString(36).substring(2, 11)}`;
-          let isFirstChunk = true;
-          let chunkCount = 0;
-          let buffer = '';
+              let data = trimmedLine;
 
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
+              // Remove SSE data prefix if present
+              if (trimmedLine.startsWith('data: ')) {
+                data = trimmedLine.substring(6);
+              }
 
-              const chunk = decoder.decode(value, { stream: true });
-              buffer += chunk;
-
-              // Try to process complete lines/events
-              const lines = buffer.split('\n');
-              buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-              for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (!trimmedLine) continue;
-
-                // Skip SSE event type lines (e.g., "event: message_start")
-                if (trimmedLine.startsWith('event:')) {
-                  continue;
+              // Skip empty data lines or special SSE markers
+              if (!data || data === '[DONE]') {
+                if (data === '[DONE]') {
+                  res.write('data: [DONE]\n\n');
                 }
+                continue;
+              }
 
-                let data = trimmedLine;
-
-                // Remove SSE data prefix if present
-                if (trimmedLine.startsWith('data: ')) {
-                  data = trimmedLine.substring(6);
-                }
-
-                // Skip empty data lines or special SSE markers
-                if (!data || data === '[DONE]') {
-                  continue;
-                }
-
-                // Process the data through the adapter
+              try {
+                // Use generic tool calling system to normalize response
                 console.log(`[OpenAI Proxy] Raw ${model.provider} data:`, data);
-                const result = processResponseBuffer(model.provider, data);
+                const genericResult = convertResponseToGeneric(data, model.provider);
                 console.log(
-                  `[OpenAI Proxy] Processed ${model.provider} result:`,
-                  JSON.stringify(result, null, 2)
+                  `[OpenAI Proxy] Generic result:`,
+                  JSON.stringify(genericResult, null, 2)
                 );
 
-                if (result && result.content && result.content.length > 0) {
-                  for (const textContent of result.content) {
+                // Convert generic result to OpenAI format
+                const openAIChunk = convertResponseFromGeneric(genericResult, 'openai', {
+                  completionId,
+                  modelId,
+                  isFirstChunk
+                });
+
+                if (
+                  openAIChunk &&
+                  (genericResult.content.length > 0 ||
+                    genericResult.tool_calls.length > 0 ||
+                    genericResult.complete)
+                ) {
+                  chunkCount++;
+                  isFirstChunk = false;
+                  console.log(
+                    `[OpenAI Proxy] Sending OpenAI chunk:`,
+                    JSON.stringify(openAIChunk, null, 2)
+                  );
+                  res.write(`data: ${JSON.stringify(openAIChunk)}\n\n`);
+                }
+              } catch (error) {
+                console.error(`[OpenAI Proxy] Error processing ${model.provider} chunk:`, error);
+                // Continue processing other chunks
+              }
+            }
+          }
+
+          // Process any remaining buffer
+          if (buffer.trim()) {
+            const trimmedBuffer = buffer.trim();
+
+            // Skip if it's an SSE event line
+            if (!trimmedBuffer.startsWith('event:')) {
+              let data = trimmedBuffer;
+
+              // Remove SSE data prefix if present
+              if (trimmedBuffer.startsWith('data: ')) {
+                data = trimmedBuffer.substring(6);
+              }
+
+              // Process if it's not empty or a special marker
+              if (data && data !== '[DONE]') {
+                try {
+                  console.log(`[OpenAI Proxy] Raw ${model.provider} buffer data:`, data);
+                  const genericResult = convertResponseToGeneric(data, model.provider);
+                  console.log(
+                    `[OpenAI Proxy] Generic buffer result:`,
+                    JSON.stringify(genericResult, null, 2)
+                  );
+
+                  const openAIChunk = convertResponseFromGeneric(genericResult, 'openai', {
+                    completionId,
+                    modelId,
+                    isFirstChunk
+                  });
+
+                  if (
+                    openAIChunk &&
+                    (genericResult.content.length > 0 || genericResult.tool_calls.length > 0)
+                  ) {
                     chunkCount++;
-                    const openAIChunk = {
-                      id: completionId,
-                      object: 'chat.completion.chunk',
-                      created: Math.floor(Date.now() / 1000),
-                      model: modelId,
-                      choices: [
-                        {
-                          index: 0,
-                          delta: isFirstChunk
-                            ? { role: 'assistant', content: textContent }
-                            : { content: textContent },
-                          finish_reason: null
-                        }
-                      ]
-                    };
-                    isFirstChunk = false;
                     console.log(
-                      `[OpenAI Proxy] Sending chunk to client:`,
+                      `[OpenAI Proxy] Sending buffer chunk to client:`,
                       JSON.stringify(openAIChunk, null, 2)
                     );
                     res.write(`data: ${JSON.stringify(openAIChunk)}\n\n`);
                   }
-                }
-
-                // Handle tool calls
-                if (result && result.tool_calls && result.tool_calls.length > 0) {
-                  chunkCount++;
-                  const toolCallChunk = {
-                    id: completionId,
-                    object: 'chat.completion.chunk',
-                    created: Math.floor(Date.now() / 1000),
-                    model: modelId,
-                    choices: [
-                      {
-                        index: 0,
-                        delta: isFirstChunk
-                          ? { role: 'assistant', tool_calls: result.tool_calls }
-                          : { tool_calls: result.tool_calls },
-                        finish_reason: null
-                      }
-                    ]
-                  };
-                  isFirstChunk = false;
-                  console.log(
-                    `[OpenAI Proxy] Sending tool call chunk to client:`,
-                    JSON.stringify(toolCallChunk, null, 2)
-                  );
-                  res.write(`data: ${JSON.stringify(toolCallChunk)}\n\n`);
-                }
-
-                if (result && result.complete) {
-                  // Send final chunk with finish_reason
-                  const finalChunk = {
-                    id: completionId,
-                    object: 'chat.completion.chunk',
-                    created: Math.floor(Date.now() / 1000),
-                    model: modelId,
-                    choices: [
-                      {
-                        index: 0,
-                        delta: {},
-                        finish_reason: result.finishReason || 'stop'
-                      }
-                    ]
-                  };
-                  console.log(
-                    `[OpenAI Proxy] Sending final chunk to client:`,
-                    JSON.stringify(finalChunk, null, 2)
-                  );
-                  res.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
+                } catch (error) {
+                  console.error(`[OpenAI Proxy] Error processing ${model.provider} buffer:`, error);
                 }
               }
             }
-
-            // Process any remaining buffer
-            if (buffer.trim()) {
-              const trimmedBuffer = buffer.trim();
-
-              // Skip if it's an SSE event line
-              if (!trimmedBuffer.startsWith('event:')) {
-                let data = trimmedBuffer;
-
-                // Remove SSE data prefix if present
-                if (trimmedBuffer.startsWith('data: ')) {
-                  data = trimmedBuffer.substring(6);
-                }
-
-                // Process if it's not empty or a special marker
-                if (data && data !== '[DONE]') {
-                  console.log(`[OpenAI Proxy] Raw ${model.provider} buffer data:`, data);
-                  const result = processResponseBuffer(model.provider, data);
-                  console.log(
-                    `[OpenAI Proxy] Processed ${model.provider} buffer result:`,
-                    JSON.stringify(result, null, 2)
-                  );
-                  if (result && result.content && result.content.length > 0) {
-                    for (const textContent of result.content) {
-                      chunkCount++;
-                      const openAIChunk = {
-                        id: completionId,
-                        object: 'chat.completion.chunk',
-                        created: Math.floor(Date.now() / 1000),
-                        model: modelId,
-                        choices: [
-                          {
-                            index: 0,
-                            delta: isFirstChunk
-                              ? { role: 'assistant', content: textContent }
-                              : { content: textContent },
-                            finish_reason: null
-                          }
-                        ]
-                      };
-                      isFirstChunk = false;
-                      console.log(
-                        `[OpenAI Proxy] Sending buffer chunk to client:`,
-                        JSON.stringify(openAIChunk, null, 2)
-                      );
-                      res.write(`data: ${JSON.stringify(openAIChunk)}\n\n`);
-                    }
-                  }
-
-                  // Handle tool calls in buffer processing
-                  if (result && result.tool_calls && result.tool_calls.length > 0) {
-                    chunkCount++;
-                    const toolCallChunk = {
-                      id: completionId,
-                      object: 'chat.completion.chunk',
-                      created: Math.floor(Date.now() / 1000),
-                      model: modelId,
-                      choices: [
-                        {
-                          index: 0,
-                          delta: isFirstChunk
-                            ? { role: 'assistant', tool_calls: result.tool_calls }
-                            : { tool_calls: result.tool_calls },
-                          finish_reason: null
-                        }
-                      ]
-                    };
-                    isFirstChunk = false;
-                    console.log(
-                      `[OpenAI Proxy] Sending buffer tool call chunk to client:`,
-                      JSON.stringify(toolCallChunk, null, 2)
-                    );
-                    res.write(`data: ${JSON.stringify(toolCallChunk)}\n\n`);
-                  }
-                }
-              }
-            }
-          } finally {
-            reader.releaseLock();
           }
-
-          console.log(
-            `[OpenAI Proxy] ${model.provider} streaming complete. Total chunks: ${chunkCount}`
-          );
-          res.write('data: [DONE]\n\n');
+        } finally {
+          reader.releaseLock();
         }
+
+        console.log(
+          `[OpenAI Proxy] ${model.provider} streaming complete. Total chunks: ${chunkCount}`
+        );
+        res.write('data: [DONE]\n\n');
         res.end();
       } else {
         const data = await llmResponse.text();
@@ -396,63 +301,61 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
           provider: model.provider
         });
 
-        // For OpenAI provider, pass through directly
-        if (model.provider === 'openai') {
+        // Use generic tool calling system for all providers
+        try {
+          console.log(`[OpenAI Proxy] Non-streaming response from ${model.provider}:`, {
+            responseLength: data.length,
+            responsePreview: data.substring(0, 200) + '...'
+          });
+
+          // Convert provider response to generic format, then to OpenAI format
+          const genericResult = convertResponseToGeneric(data, model.provider);
+          console.log(`[OpenAI Proxy] Generic result:`, JSON.stringify(genericResult, null, 2));
+
+          const completionId = `chatcmpl-${Date.now()}${Math.random().toString(36).substring(2, 11)}`;
+
+          // Convert to OpenAI non-streaming format
+          const openAIResponse = {
+            id: completionId,
+            object: 'chat.completion',
+            created: Math.floor(Date.now() / 1000),
+            model: modelId,
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant',
+                  content: genericResult.content.join('') || null
+                },
+                finish_reason: genericResult.finishReason || 'stop'
+              }
+            ],
+            usage: {
+              prompt_tokens: 0,
+              completion_tokens: 0,
+              total_tokens: 0
+            }
+          };
+
+          // Add tool calls if present
+          if (genericResult.tool_calls && genericResult.tool_calls.length > 0) {
+            const openAIToolCalls = convertToolCallsFromGeneric(genericResult.tool_calls, 'openai');
+            openAIResponse.choices[0].message.tool_calls = openAIToolCalls;
+          }
+
           console.log(
-            `[OpenAI Proxy] OpenAI passthrough response:`,
-            data.substring(0, 1000) + '...'
+            `[OpenAI Proxy] Sending non-streaming response to client:`,
+            JSON.stringify(openAIResponse, null, 2)
           );
-          res.send(data);
-        } else {
-          // For other providers, transform to OpenAI format
+          res.json(openAIResponse);
+        } catch (error) {
+          console.error('[OpenAI Proxy] Error processing non-streaming response:', error);
+          // Fallback: try to parse as JSON and send as-is
           try {
             const parsed = JSON.parse(data);
-            let content = '';
-            let finishReason = 'stop';
-
-            // Handle different provider response formats
-            if (model.provider === 'google' && parsed.candidates) {
-              content = parsed.candidates[0]?.content?.parts?.[0]?.text || '';
-              finishReason = parsed.candidates[0]?.finishReason || 'stop';
-            } else if (model.provider === 'anthropic' && parsed.content) {
-              content = parsed.content[0]?.text || '';
-              finishReason = parsed.stop_reason || 'stop';
-            } else if (model.provider === 'mistral' && parsed.choices) {
-              content = parsed.choices[0]?.message?.content || '';
-              finishReason = parsed.choices[0]?.finish_reason || 'stop';
-            }
-
-            // Create OpenAI-compatible response
-            const openAIResponse = {
-              id: `chatcmpl-${Date.now()}${Math.random().toString(36).substring(2, 11)}`,
-              object: 'chat.completion',
-              created: Math.floor(Date.now() / 1000),
-              model: modelId,
-              choices: [
-                {
-                  index: 0,
-                  message: {
-                    role: 'assistant',
-                    content: content
-                  },
-                  finish_reason: finishReason
-                }
-              ],
-              usage: {
-                prompt_tokens: 0,
-                completion_tokens: 0,
-                total_tokens: 0
-              }
-            };
-
-            console.log(
-              `[OpenAI Proxy] Sending non-streaming response to client:`,
-              JSON.stringify(openAIResponse, null, 2)
-            );
-            res.json(openAIResponse);
-          } catch (error) {
-            console.error('[OpenAI Proxy] Error parsing non-streaming response:', error);
-            res.send(data); // Fallback to original response
+            res.json(parsed);
+          } catch {
+            res.send(data); // Last resort: send raw data
           }
         }
       }

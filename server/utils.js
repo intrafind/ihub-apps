@@ -1,5 +1,6 @@
 import config from './config.js';
-import { createCompletionRequest, processResponseBuffer } from './adapters/index.js';
+import { createCompletionRequest } from './adapters/index.js';
+import { convertResponseToGeneric } from './adapters/toolCalling/index.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -417,7 +418,7 @@ export async function simpleCompletion(
   const responseData = await response.json();
 
   // Use the adapter to parse the response
-  const parsed = processResponseBuffer(modelConfig.provider, JSON.stringify(responseData));
+  const parsed = convertResponseToGeneric(JSON.stringify(responseData), modelConfig.provider);
 
   // Return both content and usage data
   return {

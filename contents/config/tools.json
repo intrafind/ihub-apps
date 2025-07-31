@@ -99,7 +99,7 @@
             "de": "Maximale Länge der extrahierten Inhalte in Zeichen (Standard: 5000)"
           },
           "default": 5000,
-          "minimum": 100,
+          "minimum": 1000,
           "maximum": 50000
         },
         "ignoreSSL": {

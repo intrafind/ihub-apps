@@ -1,4 +1,4 @@
-import { processResponseBuffer } from '../../adapters/index.js';
+import { convertResponseToGeneric } from '../../adapters/toolCalling/index.js';
 import { logInteraction } from '../../utils.js';
 import { estimateTokens, recordChatRequest, recordChatResponse } from '../../usageTracker.js';
 import { activeRequests } from '../../sse.js';
@@ -133,7 +133,7 @@ class StreamingHandler {
 
         while (events.length > 0) {
           const evt = events.shift();
-          const result = processResponseBuffer(model.provider, evt.data);
+          const result = convertResponseToGeneric(evt.data, model.provider);
 
           if (result && result.content && result.content.length > 0) {
             for (const textContent of result.content) {
