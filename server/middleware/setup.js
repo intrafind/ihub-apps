@@ -31,6 +31,51 @@ export function checkContentLength(limit) {
 }
 
 /**
+ * Process CORS origins, replacing environment variables and handling special cases
+ * @param {string|Array} origins - CORS origins configuration
+ * @returns {Array|string|boolean} - Processed origins
+ */
+function processCorsOrigins(origins) {
+  if (!origins) return true; // Allow all if not specified
+  
+  if (typeof origins === 'string') {
+    // Handle environment variable replacement
+    if (origins.includes('${')) {
+      const processed = origins.replace(/\$\{([^}]+)\}/g, (match, envVar) => {
+        return process.env[envVar] || '';
+      });
+      // Split comma-separated values and filter out empty strings
+      return processed.split(',').map(o => o.trim()).filter(Boolean);
+    }
+    return origins;
+  }
+  
+  if (Array.isArray(origins)) {
+    const processed = [];
+    for (const origin of origins) {
+      if (typeof origin === 'string' && origin.includes('${')) {
+        // Handle environment variable replacement
+        const envProcessed = origin.replace(/\$\{([^}]+)\}/g, (match, envVar) => {
+          return process.env[envVar] || '';
+        });
+        if (envProcessed && envProcessed !== origin) {
+          // Split comma-separated values if environment variable contains multiple origins
+          const envOrigins = envProcessed.split(',').map(o => o.trim()).filter(Boolean);
+          processed.push(...envOrigins);
+        } else if (envProcessed) {
+          processed.push(envProcessed);
+        }
+      } else if (origin) {
+        processed.push(origin);
+      }
+    }
+    return processed.length ? processed : true;
+  }
+  
+  return origins;
+}
+
+/**
  * Configure Express middleware.
  * Body parser limits are controlled by the `requestBodyLimitMB` option in
  * `platform.json`.
@@ -42,7 +87,25 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Trust proxy for proper IP and protocol detection
   app.set('trust proxy', 1);
 
-  app.use(cors());
+  // Configure CORS with platform configuration
+  const corsConfig = platformConfig.cors || {};
+  const corsOptions = {
+    origin: processCorsOrigins(corsConfig.origin),
+    methods: corsConfig.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
+    allowedHeaders: corsConfig.allowedHeaders || [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'Accept',
+      'Origin'
+    ],
+    credentials: corsConfig.credentials !== undefined ? corsConfig.credentials : true,
+    optionsSuccessStatus: corsConfig.optionsSuccessStatus || 200,
+    maxAge: corsConfig.maxAge || 86400,
+    preflightContinue: corsConfig.preflightContinue || false
+  };
+
+  app.use(cors(corsOptions));
   // Reject requests with a Content-Length exceeding the configured limit
   app.use(checkContentLength(limit));
   app.use(express.json({ limit: `${limitMb}mb` }));

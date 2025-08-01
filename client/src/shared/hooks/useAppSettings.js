@@ -16,6 +16,9 @@ const useAppSettings = (appId, app) => {
   const [selectedOutputFormat, setSelectedOutputFormat] = useState('markdown');
   const [temperature, setTemperature] = useState(0.7);
   const [sendChatHistory, setSendChatHistory] = useState(true);
+  const [thinkingEnabled, setThinkingEnabled] = useState(null);
+  const [thinkingBudget, setThinkingBudget] = useState(null);
+  const [thinkingThoughts, setThinkingThoughts] = useState(null);
 
   // Models and styles data
   const [models, setModels] = useState([]);
@@ -69,7 +72,10 @@ const useAppSettings = (appId, app) => {
       selectedStyle: app.preferredStyle || 'normal',
       temperature: app.preferredTemperature || 0.7,
       selectedOutputFormat: app.preferredOutputFormat || 'markdown',
-      sendChatHistory: true
+      sendChatHistory: true,
+      thinkingEnabled: app.thinking?.enabled ?? null,
+      thinkingBudget: app.thinking?.budget ?? null,
+      thinkingThoughts: app.thinking?.thoughts ?? null
     };
 
     // Set initial states
@@ -78,6 +84,9 @@ const useAppSettings = (appId, app) => {
     setTemperature(initialState.temperature);
     setSelectedOutputFormat(initialState.selectedOutputFormat);
     setSendChatHistory(initialState.sendChatHistory);
+    setThinkingEnabled(initialState.thinkingEnabled);
+    setThinkingBudget(initialState.thinkingBudget);
+    setThinkingThoughts(initialState.thinkingThoughts);
 
     // Load saved settings and override defaults if available
     const savedSettings = loadAppSettings(appId);
@@ -90,6 +99,12 @@ const useAppSettings = (appId, app) => {
       if (savedSettings.temperature) setTemperature(savedSettings.temperature);
       if (savedSettings.sendChatHistory !== undefined)
         setSendChatHistory(savedSettings.sendChatHistory);
+      if (savedSettings.thinkingEnabled !== undefined)
+        setThinkingEnabled(savedSettings.thinkingEnabled);
+      if (savedSettings.thinkingBudget !== undefined)
+        setThinkingBudget(savedSettings.thinkingBudget);
+      if (savedSettings.thinkingThoughts !== undefined)
+        setThinkingThoughts(savedSettings.thinkingThoughts);
     }
   }, [app, appId, setHeaderColor, models, modelsLoading]);
 
@@ -101,7 +116,10 @@ const useAppSettings = (appId, app) => {
         selectedStyle,
         selectedOutputFormat,
         temperature,
-        sendChatHistory
+        sendChatHistory,
+        thinkingEnabled,
+        thinkingBudget,
+        thinkingThoughts
       });
     }
   }, [
@@ -111,7 +129,10 @@ const useAppSettings = (appId, app) => {
     selectedStyle,
     selectedOutputFormat,
     temperature,
-    sendChatHistory
+    sendChatHistory,
+    thinkingEnabled,
+    thinkingBudget,
+    thinkingThoughts
   ]);
 
   // Settings object for easy passing to components
@@ -120,7 +141,10 @@ const useAppSettings = (appId, app) => {
     selectedStyle,
     selectedOutputFormat,
     temperature,
-    sendChatHistory
+    sendChatHistory,
+    thinkingEnabled,
+    thinkingBudget,
+    thinkingThoughts
   };
 
   // Setters object for easy passing to components
@@ -129,7 +153,10 @@ const useAppSettings = (appId, app) => {
     setSelectedStyle,
     setSelectedOutputFormat,
     setTemperature,
-    setSendChatHistory
+    setSendChatHistory,
+    setThinkingEnabled,
+    setThinkingBudget,
+    setThinkingThoughts
   };
 
   return {

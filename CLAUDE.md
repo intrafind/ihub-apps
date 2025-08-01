@@ -351,14 +351,65 @@ The system uses `anonymousAuth` structure instead of legacy `allowAnonymous`:
 
 #### CORS Configuration
 
-AI Hub Apps has built-in CORS support for embedding and integration with other web applications:
+AI Hub Apps has comprehensive CORS support for embedding and integration with other web applications:
 
-**Current Implementation:**
+**Configuration Location:**
 
-- **Location**: `server/serverHelpers.js:49`
-- **Configuration**: Uses `cors` npm package with default settings
-- **Behavior**: Allows all origins (\*), standard HTTP methods, and basic headers
-- **Usage**: Suitable for development and cross-origin API calls
+- **Platform Config**: `contents/config/platform.json` (cors section)
+- **Middleware**: `server/middleware/setup.js` (processCorsOrigins function)
+
+**Default Configuration:**
+
+```json
+{
+  "cors": {
+    "origin": ["http://localhost:3000", "http://localhost:5173", "${ALLOWED_ORIGINS}"],
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+    "allowedHeaders": [
+      "Content-Type",
+      "Authorization", 
+      "X-Requested-With",
+      "X-Forwarded-User",
+      "X-Forwarded-Groups",
+      "Accept",
+      "Origin",
+      "Cache-Control",
+      "X-File-Name"
+    ],
+    "credentials": true,
+    "optionsSuccessStatus": 200,
+    "maxAge": 86400,
+    "preflightContinue": false
+  }
+}
+```
+
+**Environment Variable Support:**
+
+The CORS configuration supports environment variables for dynamic origin configuration:
+
+```bash
+# Development (automatically includes localhost:3000 and localhost:5173)
+# No environment variables needed
+
+# Production - single domain
+export ALLOWED_ORIGINS="https://yourdomain.com"
+
+# Production - multiple domains (comma-separated)
+export ALLOWED_ORIGINS="https://yourdomain.com,https://app.yourdomain.com,https://admin.yourdomain.com"
+
+# Staging environment
+export ALLOWED_ORIGINS="https://staging.yourdomain.com,https://test.yourdomain.com"
+```
+
+**Features:**
+
+- **Development-Friendly**: Always allows `localhost:3000` and `localhost:5173` for local development
+- **Environment Variables**: Dynamic origin configuration using `${ALLOWED_ORIGINS}`
+- **Comma-Separated Values**: Multiple origins can be specified in a single environment variable
+- **Authentication Headers**: Includes all headers needed for proxy auth, OIDC, and JWT
+- **Credentials Support**: Enables cookies and authentication headers for cross-origin requests
+- **Preflight Optimization**: Configurable preflight caching (24 hours default)
 
 **Integration Example:**
 
@@ -366,21 +417,23 @@ AI Hub Apps has built-in CORS support for embedding and integration with other w
 // Calling AI Hub APIs from another web application
 fetch('https://your-ai-hub-domain.com/api/health', {
   method: 'GET',
+  credentials: 'include', // Important for authenticated requests
   headers: {
     'Content-Type': 'application/json',
-    Authorization: 'Bearer your-jwt-token' // if authentication required
+    Authorization: 'Bearer your-jwt-token'
   }
 })
   .then(response => response.json())
   .then(data => console.log(data));
 ```
 
-**Production Considerations:**
-For production deployments, consider implementing configurable CORS settings in `platform.json`:
+**Security Considerations:**
 
-- Restrict allowed origins to trusted domains
-- Configure specific HTTP methods and headers
-- Enable credentials for authenticated cross-origin requests
+- **Development**: Localhost origins are always allowed for development convenience
+- **Production**: Use `ALLOWED_ORIGINS` environment variable to restrict to trusted domains only
+- **Credentials**: Enabled by default to support authentication workflows
+- **Headers**: Comprehensive header allowlist includes authentication and proxy headers
+- **Methods**: All standard HTTP methods supported for full API access
 
 ### Performance Optimizations
 

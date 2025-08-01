@@ -10,11 +10,17 @@ const AppConfigForm = ({
   selectedOutputFormat,
   sendChatHistory,
   temperature,
+  thinkingEnabled,
+  thinkingBudget,
+  thinkingThoughts,
   onModelChange,
   onStyleChange,
   onOutputFormatChange,
   onSendChatHistoryChange,
   onTemperatureChange,
+  onThinkingEnabledChange,
+  onThinkingBudgetChange,
+  onThinkingThoughtsChange,
   currentLanguage
 }) => {
   const { t } = useTranslation();
@@ -29,6 +35,10 @@ const AppConfigForm = ({
     app?.tools && app.tools.length > 0
       ? availableModels.filter(model => model.supportsTools)
       : availableModels;
+
+  // Check if selected model supports thinking
+  const selectedModelData = models.find(m => m.id === selectedModel);
+  const supportsThinking = selectedModelData?.thinking?.enabled === true;
 
   // Available output formats
   const outputFormats = [
@@ -152,6 +162,66 @@ const AppConfigForm = ({
             {t('appConfig.includeChatHistory', 'Include chat history in requests')}
           </label>
         </div>
+      )}
+
+      {/* Thinking Settings - Only show if selected model supports thinking */}
+      {supportsThinking && app?.settings?.thinking?.enabled !== false && (
+        <>
+          <div className="col-span-1 md:col-span-3 mt-4 mb-2">
+            <h3 className="text-sm font-semibold text-gray-700">
+              {t('appConfig.thinkingSettings', 'Thinking Settings')}
+            </h3>
+          </div>
+
+          {/* Enable Thinking Toggle */}
+          <div className="flex items-center">
+            <label className="flex items-center text-sm font-medium text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={thinkingEnabled ?? app?.thinking?.enabled ?? true}
+                onChange={e => onThinkingEnabledChange?.(e.target.checked)}
+                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
+              />
+              {t('appConfig.enableThinking', 'Enable thinking mode')}
+            </label>
+          </div>
+
+          {/* Thinking Budget */}
+          {(thinkingEnabled ?? app?.thinking?.enabled ?? true) && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('appConfig.thinkingBudget', 'Thinking Budget')}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="32768"
+                  step="1024"
+                  value={thinkingBudget ?? app?.thinking?.budget ?? selectedModelData?.thinking?.budget ?? 8192}
+                  onChange={e => onThinkingBudgetChange?.(parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {t('appConfig.thinkingBudgetHelp', 'Maximum tokens for thinking (0 = unlimited)')}
+                </p>
+              </div>
+
+              {/* Show Thoughts Toggle */}
+              <div className="flex items-center">
+                <label className="flex items-center text-sm font-medium text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={thinkingThoughts ?? app?.thinking?.thoughts ?? selectedModelData?.thinking?.thoughts ?? true}
+                    onChange={e => onThinkingThoughtsChange?.(e.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
+                  />
+                  {t('appConfig.showThoughts', 'Show thinking process')}
+                </label>
+              </div>
+            </>
+          )}
+        </>
       )}
     </div>
   );

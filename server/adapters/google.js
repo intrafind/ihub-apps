@@ -144,11 +144,7 @@ class GoogleAdapterClass extends BaseAdapter {
       contents,
       generationConfig: {
         temperature: parseFloat(temperature),
-        maxOutputTokens: options.maxTokens || 2048,
-        thinkingConfig: {
-          thinkingBudget: 8192,
-          includeThoughts: true
-        }
+        maxOutputTokens: options.maxTokens || 2048
       }
     };
 
@@ -167,12 +163,21 @@ class GoogleAdapterClass extends BaseAdapter {
       requestBody.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
 
-    // Add thinking configuration if model supports it
+    // Add thinking configuration if model supports it and user hasn't disabled it
     if (model.thinking?.enabled) {
-      requestBody.thinkingConfig = {
-        thinkingBudget: model.thinking.budget,
-        includeThoughts: model.thinking.thoughts
-      };
+      // Use options if provided, otherwise fall back to model defaults
+      // If user explicitly set thinkingEnabled to false, don't add thinking config
+      const thinkingEnabled = options.thinkingEnabled ?? true;
+      
+      if (thinkingEnabled) {
+        requestBody.generationConfig.thinkingConfig = {
+          thinkingBudget: options.thinkingBudget ?? model.thinking.budget,
+          includeThoughts: options.thinkingThoughts ?? model.thinking.thoughts
+        };
+        console.log('Thinking enabled - added thinkingConfig with budget:', requestBody.generationConfig.thinkingConfig.thinkingBudget);
+      } else {
+        console.log('Thinking disabled - not adding thinkingConfig');
+      }
     }
 
     console.log('Google request body:', requestBody);

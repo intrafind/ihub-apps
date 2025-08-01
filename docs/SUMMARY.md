@@ -21,6 +21,5 @@
     - [Web Tools](web-tools.md)
     - [Magic Prompt](magic-prompt-feature.md)
     - [Image Upload Feature](image-upload-feature.md)
-    - [Image Generation](image-generation-feature.md)
     - [Server Configuration](server-config.md)
     - [Electron Desktop Application](electron-app.md)

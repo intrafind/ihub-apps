@@ -50,6 +50,11 @@ export const appConfigSchema = z
     preferredStyle: z.string().optional(),
     preferredTemperature: z.number().optional(),
     sendChatHistory: z.boolean().optional(),
+    thinking: z.object({
+      enabled: z.boolean().optional(),
+      budget: z.number().optional(),
+      thoughts: z.boolean().optional()
+    }).optional(),
     messagePlaceholder: z.record(z.string()).optional(),
     prompt: z.record(z.string()).optional(),
     variables: z.array(z.any()).optional(),

@@ -4,7 +4,7 @@
       "id": "admin",
       "name": "Admin",
       "description": "Full administrative access to all resources",
-      "inherits": ["users"],
+      "inherits": ["user"],
       "permissions": {
         "apps": ["*"],
         "prompts": ["*"],
@@ -16,6 +16,7 @@
     "user": {
       "id": "user",
       "name": "User",
+      "inherits": ["authenticated"],
       "description": "Standard user access to common applications and models",
       "permissions": {
         "apps": ["*"],
@@ -43,9 +44,9 @@
       "description": "Base permissions for all authenticated users",
       "inherits": ["anonymous"],
       "permissions": {
-        "apps": ["*"],
-        "prompts": ["*"],
-        "models": ["gpt-4.1", "hal9000-vllm", "mistral-small", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+        "apps": [],
+        "prompts": [],
+        "models": [],
         "adminAccess": false
       },
       "mappings": []

@@ -29,11 +29,17 @@ const SharedAppHeader = ({
   selectedOutputFormat,
   sendChatHistory,
   temperature,
+  thinkingEnabled,
+  thinkingBudget,
+  thinkingThoughts,
   onModelChange,
   onStyleChange,
   onOutputFormatChange,
   onSendChatHistoryChange,
   onTemperatureChange,
+  onThinkingEnabledChange,
+  onThinkingBudgetChange,
+  onThinkingThoughtsChange,
 
   // Config panel state
   showConfig,
@@ -146,11 +152,17 @@ const SharedAppHeader = ({
             selectedOutputFormat={selectedOutputFormat}
             sendChatHistory={sendChatHistory}
             temperature={temperature}
+            thinkingEnabled={thinkingEnabled}
+            thinkingBudget={thinkingBudget}
+            thinkingThoughts={thinkingThoughts}
             onModelChange={onModelChange}
             onStyleChange={onStyleChange}
             onOutputFormatChange={onOutputFormatChange}
             onSendChatHistoryChange={onSendChatHistoryChange}
             onTemperatureChange={onTemperatureChange}
+            onThinkingEnabledChange={onThinkingEnabledChange}
+            onThinkingBudgetChange={onThinkingBudgetChange}
+            onThinkingThoughtsChange={onThinkingThoughtsChange}
             currentLanguage={currentLanguage}
           />
         </div>

@@ -34,7 +34,7 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir }) {
   }
   console.log(`SPA will be served from: ${indexPath}`);
 
-  app.get('*', (req, res) => {
+  app.get('*', (_, res) => {
     res.sendFile(indexPath);
   });
 }

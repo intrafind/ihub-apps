@@ -14,5 +14,10 @@
   "tokenLimit": 32768,
   "default": false,
   "supportsTools": true,
-  "enabled": true
+  "enabled": true,
+  "thinking": {
+    "enabled": true,
+    "budget": -1,
+    "thoughts": true
+  }
 }

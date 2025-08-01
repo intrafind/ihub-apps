@@ -30,6 +30,9 @@ class RequestBuilder {
     language,
     useMaxTokens = false,
     bypassAppPrompts = false,
+    thinkingEnabled,
+    thinkingBudget,
+    thinkingThoughts,
     processMessageTemplates,
     res,
     clientRes,
@@ -108,7 +111,10 @@ class RequestBuilder {
         responseFormat: outputFormat,
         responseSchema: app.outputSchema,
         user,
-        chatId
+        chatId,
+        thinkingEnabled,
+        thinkingBudget,
+        thinkingThoughts
       });
 
       return {

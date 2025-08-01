@@ -1,5 +1,5 @@
 # =============================================================================
-# AI Hub Apps - Multi-Stage Docker Build
+# iHub Apps - Multi-Stage Docker Build
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -64,6 +64,9 @@ CMD ["npm", "run", "dev"]
 # Stage 4: Production Runtime
 # -----------------------------------------------------------------------------
 FROM node:20-alpine AS production
+
+# Set production environment
+ENV NODE_ENV=production
 
 # Install runtime dependencies
 RUN apk add --update --no-cache \

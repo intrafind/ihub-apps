@@ -120,6 +120,9 @@ const AppChat = () => {
     selectedOutputFormat,
     temperature,
     sendChatHistory,
+    thinkingEnabled,
+    thinkingBudget,
+    thinkingThoughts,
     models,
     styles,
     setSelectedModel,
@@ -127,6 +130,9 @@ const AppChat = () => {
     setSelectedOutputFormat,
     setTemperature,
     setSendChatHistory,
+    setThinkingEnabled,
+    setThinkingBudget,
+    setThinkingThoughts,
     modelsLoading
   } = useAppSettings(appId, app);
 
@@ -688,7 +694,10 @@ const AppChat = () => {
         temperature,
         outputFormat: selectedOutputFormat,
         language: currentLanguage,
-        ...(useMaxTokens ? { useMaxTokens: true } : {})
+        ...(useMaxTokens ? { useMaxTokens: true } : {}),
+        ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
+        ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+        ...(thinkingThoughts !== null ? { thinkingThoughts } : {})
       },
       sendChatHistory
     });
@@ -801,11 +810,17 @@ const AppChat = () => {
         selectedOutputFormat={selectedOutputFormat}
         sendChatHistory={sendChatHistory}
         temperature={temperature}
+        thinkingEnabled={thinkingEnabled}
+        thinkingBudget={thinkingBudget}
+        thinkingThoughts={thinkingThoughts}
         onModelChange={setSelectedModel}
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
         onSendChatHistoryChange={setSendChatHistory}
         onTemperatureChange={setTemperature}
+        onThinkingEnabledChange={setThinkingEnabled}
+        onThinkingBudgetChange={setThinkingBudget}
+        onThinkingThoughtsChange={setThinkingThoughts}
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}
