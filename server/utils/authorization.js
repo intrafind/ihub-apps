@@ -389,9 +389,16 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
     user.groups = getDefaultAnonymousGroups(platform);
   }
 
-  // Map external groups to internal groups if needed
+  // Handle external groups mapping and merging with internal groups
   if (user.externalGroups && Array.isArray(user.externalGroups)) {
-    user.groups = mapExternalGroups(user.externalGroups);
+    // Map external groups to internal groups
+    const mappedExternalGroups = mapExternalGroups(user.externalGroups);
+    
+    // Merge with any internal groups (from users.json)
+    const internalGroups = user.internalGroups || [];
+    const allGroups = new Set([...mappedExternalGroups, ...internalGroups]);
+    
+    user.groups = Array.from(allGroups);
   }
 
   // Get permissions for user

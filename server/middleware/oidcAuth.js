@@ -2,7 +2,7 @@ import passport from 'passport';
 import { Strategy as OAuth2Strategy } from 'passport-oauth2';
 import fetch from 'node-fetch';
 import configCache from '../configCache.js';
-import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
+import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { generateJwt } from '../utils/tokenService.js';
 
@@ -135,15 +135,13 @@ function normalizeOidcUser(userInfo, provider) {
     }
   }
 
-  // Apply group mapping using the new groups.json format
-  const mappedGroups = mapExternalGroups(groups);
-
-  // Create user object
+  // Create user object with external groups
   let user = {
     id: userId,
     name: name,
     email: email,
-    groups: mappedGroups,
+    groups: [], // Will be populated by merging external and internal groups
+    externalGroups: groups, // Store raw external groups for mapping and merging
     provider: provider.name,
     authMethod: 'oidc',
     authenticated: true,

@@ -90,7 +90,7 @@ export default function registerAdminAuthRoutes(app) {
    */
   app.post('/api/admin/auth/users', adminAuth, async (req, res) => {
     try {
-      const { username, email, name, password, groups = [], active = true } = req.body;
+      const { username, email, name, password, internalGroups = [], active = true } = req.body;
 
       if (!username || !password) {
         return res.status(400).json({ error: 'Username and password are required' });
@@ -134,7 +134,7 @@ export default function registerAdminAuthRoutes(app) {
         username,
         email: email || '',
         name: name || '',
-        groups: Array.isArray(groups) ? groups : [],
+        internalGroups: Array.isArray(internalGroups) ? internalGroups : [],
         active,
         passwordHash,
         createdAt: new Date().toISOString(),
@@ -168,7 +168,7 @@ export default function registerAdminAuthRoutes(app) {
   app.put('/api/admin/auth/users/:userId', adminAuth, async (req, res) => {
     try {
       const { userId } = req.params;
-      const { email, name, password, groups, active } = req.body;
+      const { email, name, password, internalGroups, active } = req.body;
 
       const rootDir = getRootDir();
       const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
@@ -192,7 +192,7 @@ export default function registerAdminAuthRoutes(app) {
       // Update fields
       if (email !== undefined) user.email = email;
       if (name !== undefined) user.name = name;
-      if (groups !== undefined) user.groups = Array.isArray(groups) ? groups : [];
+      if (internalGroups !== undefined) user.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
       if (active !== undefined) user.active = active;
 
       // Update password if provided

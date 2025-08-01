@@ -17,7 +17,7 @@ const AdminUsersPage = () => {
     name: '',
     password: '',
     confirmPassword: '',
-    groups: [],
+    internalGroups: [],
     groupsString: '', // Add separate field for groups input string
     active: true
   });
@@ -80,7 +80,7 @@ const AdminUsersPage = () => {
           email: formData.email,
           name: formData.name,
           password: formData.password,
-          groups: groupsArray,
+          internalGroups: groupsArray,
           active: formData.active
         })
       });
@@ -209,7 +209,7 @@ const AdminUsersPage = () => {
         body: JSON.stringify({
           email: user.email,
           name: user.name,
-          groups: user.groups || [],
+          internalGroups: user.internalGroups || [],
           active: newStatus
         })
       });
@@ -239,7 +239,7 @@ const AdminUsersPage = () => {
       name: '',
       password: '',
       confirmPassword: '',
-      groups: [],
+      internalGroups: [],
       groupsString: '',
       active: true
     });
@@ -253,8 +253,8 @@ const AdminUsersPage = () => {
       name: user.name || '',
       password: '',
       confirmPassword: '',
-      groups: user.groups || [],
-      groupsString: (user.groups || []).join(', '),
+      internalGroups: user.internalGroups || [],
+      groupsString: (user.internalGroups || []).join(', '),
       active: user.active !== false
     });
   };
