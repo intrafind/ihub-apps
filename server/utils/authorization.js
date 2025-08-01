@@ -393,11 +393,11 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
   if (user.externalGroups && Array.isArray(user.externalGroups)) {
     // Map external groups to internal groups
     const mappedExternalGroups = mapExternalGroups(user.externalGroups);
-    
+
     // Merge with any internal groups (from users.json)
     const internalGroups = user.internalGroups || [];
     const allGroups = new Set([...mappedExternalGroups, ...internalGroups]);
-    
+
     user.groups = Array.from(allGroups);
   }
 

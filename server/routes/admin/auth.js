@@ -192,7 +192,8 @@ export default function registerAdminAuthRoutes(app) {
       // Update fields
       if (email !== undefined) user.email = email;
       if (name !== undefined) user.name = name;
-      if (internalGroups !== undefined) user.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
+      if (internalGroups !== undefined)
+        user.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
       if (active !== undefined) user.active = active;
 
       // Update password if provided
