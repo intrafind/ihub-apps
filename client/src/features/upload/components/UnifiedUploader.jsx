@@ -3,7 +3,8 @@ import Icon from '../../../shared/components/Icon';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
 import Uploader from './Uploader';
 import '../components/ImageUpload.css';
 
@@ -199,14 +200,14 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
       let textContent = '';
-      
+
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContentPage = await page.getTextContent();
         const textItems = textContentPage.items.map(item => item.str).join(' ');
         textContent += textItems + '\n';
       }
-      
+
       processedContent = textContent.trim();
       content = processedContent;
     } else if (isTextFile(file.type)) {

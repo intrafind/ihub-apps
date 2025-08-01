@@ -367,7 +367,7 @@ AI Hub Apps has comprehensive CORS support for embedding and integration with ot
     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     "allowedHeaders": [
       "Content-Type",
-      "Authorization", 
+      "Authorization",
       "X-Requested-With",
       "X-Forwarded-User",
       "X-Forwarded-Groups",

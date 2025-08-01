@@ -198,7 +198,12 @@ const AppConfigForm = ({
                   min="0"
                   max="32768"
                   step="1024"
-                  value={thinkingBudget ?? app?.thinking?.budget ?? selectedModelData?.thinking?.budget ?? 8192}
+                  value={
+                    thinkingBudget ??
+                    app?.thinking?.budget ??
+                    selectedModelData?.thinking?.budget ??
+                    8192
+                  }
                   onChange={e => onThinkingBudgetChange?.(parseInt(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
@@ -212,7 +217,12 @@ const AppConfigForm = ({
                 <label className="flex items-center text-sm font-medium text-gray-700 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={thinkingThoughts ?? app?.thinking?.thoughts ?? selectedModelData?.thinking?.thoughts ?? true}
+                    checked={
+                      thinkingThoughts ??
+                      app?.thinking?.thoughts ??
+                      selectedModelData?.thinking?.thoughts ??
+                      true
+                    }
                     onChange={e => onThinkingThoughtsChange?.(e.target.checked)}
                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
                   />

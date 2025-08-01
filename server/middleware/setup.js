@@ -37,7 +37,7 @@ export function checkContentLength(limit) {
  */
 function processCorsOrigins(origins) {
   if (!origins) return true; // Allow all if not specified
-  
+
   if (typeof origins === 'string') {
     // Handle environment variable replacement
     if (origins.includes('${')) {
@@ -45,11 +45,14 @@ function processCorsOrigins(origins) {
         return process.env[envVar] || '';
       });
       // Split comma-separated values and filter out empty strings
-      return processed.split(',').map(o => o.trim()).filter(Boolean);
+      return processed
+        .split(',')
+        .map(o => o.trim())
+        .filter(Boolean);
     }
     return origins;
   }
-  
+
   if (Array.isArray(origins)) {
     const processed = [];
     for (const origin of origins) {
@@ -60,7 +63,10 @@ function processCorsOrigins(origins) {
         });
         if (envProcessed && envProcessed !== origin) {
           // Split comma-separated values if environment variable contains multiple origins
-          const envOrigins = envProcessed.split(',').map(o => o.trim()).filter(Boolean);
+          const envOrigins = envProcessed
+            .split(',')
+            .map(o => o.trim())
+            .filter(Boolean);
           processed.push(...envOrigins);
         } else if (envProcessed) {
           processed.push(envProcessed);
@@ -71,7 +77,7 @@ function processCorsOrigins(origins) {
     }
     return processed.length ? processed : true;
   }
-  
+
   return origins;
 }
 

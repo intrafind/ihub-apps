@@ -168,13 +168,16 @@ class GoogleAdapterClass extends BaseAdapter {
       // Use options if provided, otherwise fall back to model defaults
       // If user explicitly set thinkingEnabled to false, don't add thinking config
       const thinkingEnabled = options.thinkingEnabled ?? true;
-      
+
       if (thinkingEnabled) {
         requestBody.generationConfig.thinkingConfig = {
           thinkingBudget: options.thinkingBudget ?? model.thinking.budget,
           includeThoughts: options.thinkingThoughts ?? model.thinking.thoughts
         };
-        console.log('Thinking enabled - added thinkingConfig with budget:', requestBody.generationConfig.thinkingConfig.thinkingBudget);
+        console.log(
+          'Thinking enabled - added thinkingConfig with budget:',
+          requestBody.generationConfig.thinkingConfig.thinkingBudget
+        );
       } else {
         console.log('Thinking disabled - not adding thinkingConfig');
       }
