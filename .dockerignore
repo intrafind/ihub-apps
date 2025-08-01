@@ -36,8 +36,9 @@ coverage/
 *.spec.js
 
 # Environment files (will be provided at runtime)
-.env
-.env.*
+**/.env.production
+*/.env
+*/.env.*
 !.env.example
 
 # IDE and editor files

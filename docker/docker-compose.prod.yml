@@ -53,12 +53,13 @@ services:
         echo 'Configuration initialization completed'
       "
     restart: 'no'
+    # network_mode: host
     networks:
       - ai-hub-network
 
   # Main AI Hub Apps Production Container
   ai-hub-app:
-    image: ai-hub-apps:prod #${AI_HUB_IMAGE:-ai-hub-apps:latest}
+    image: ${AI_HUB_IMAGE:-ai-hub-apps:latest}
     container_name: ai-hub-app
     ports:
       - '${AI_HUB_PORT:-3000}:3000'
@@ -98,6 +99,7 @@ services:
           memory: 512M
     networks:
       - ai-hub-network
+    # network_mode: host
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
       interval: 30s
@@ -144,3 +146,6 @@ networks:
   ai-hub-network:
     driver: bridge
     name: ai-hub-prod-network
+  # ai-hub-init-network:
+  #   driver: host
+  #   name: ai-hub-prod-init-network
