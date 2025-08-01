@@ -242,10 +242,7 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
     // Store internal groups - groups manually assigned to users in the admin interface
     // External groups from auth providers are handled at runtime, not persisted
     if (!user.internalGroups) {
-      // Migrate from old structure if needed
-      user.internalGroups = user.additionalGroups || user.groups || [];
-      delete user.additionalGroups; // Remove old field
-      delete user.groups; // Remove old field
+      user.internalGroups = [];
     }
 
     // Update activity tracking
@@ -350,13 +347,6 @@ export function mergeUserGroups(externalGroups = [], internalGroups = []) {
   return Array.from(allGroups);
 }
 
-/**
- * Legacy compatibility function - use createOrUpdateExternalUser instead
- * @deprecated Use createOrUpdateExternalUser for all external auth methods
- */
-export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
-  return await createOrUpdateExternalUser(externalUser, usersFilePath);
-}
 
 /**
  * Validate and persist external user based on platform configuration
