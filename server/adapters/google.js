@@ -5,8 +5,6 @@ import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 
 class GoogleAdapterClass extends BaseAdapter {
-  
-
   /**
    * Format messages for Google Gemini API, including handling image data
    */

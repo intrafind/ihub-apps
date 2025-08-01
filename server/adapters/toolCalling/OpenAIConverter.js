@@ -67,8 +67,14 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
   const filteredToolCalls = genericToolCalls.filter(toolCall => {
     // Filter out streaming chunks with empty IDs/names - these are meant for server-side merging
     // and shouldn't be sent to OpenAI clients during streaming
-    if (toolCall.metadata?.streaming_chunk && (!toolCall.id || toolCall.id === '' || !toolCall.name || toolCall.name === '')) {
-      console.log(`[OpenAI Converter] Filtering out streaming chunk with empty ID/name:`, { id: toolCall.id, name: toolCall.name });
+    if (
+      toolCall.metadata?.streaming_chunk &&
+      (!toolCall.id || toolCall.id === '' || !toolCall.name || toolCall.name === '')
+    ) {
+      console.log(`[OpenAI Converter] Filtering out streaming chunk with empty ID/name:`, {
+        id: toolCall.id,
+        name: toolCall.name
+      });
       return false;
     }
     return true;
@@ -79,12 +85,13 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
     const toolCall = filteredToolCalls[0]; // Take first tool call for legacy format
     return {
       name: toolCall.name,
-      arguments: typeof toolCall.arguments === 'string'
-        ? toolCall.arguments
-        : JSON.stringify(toolCall.arguments)
+      arguments:
+        typeof toolCall.arguments === 'string'
+          ? toolCall.arguments
+          : JSON.stringify(toolCall.arguments)
     };
   }
-  
+
   return null;
 }
 
@@ -274,12 +281,12 @@ export function convertGenericResponseToOpenAI(
 
   const hasToolCalls = genericResponse.tool_calls && genericResponse.tool_calls.length > 0;
   const hasContent = genericResponse.content && genericResponse.content.length > 0;
-  
+
   // For streaming, separate role from function calls as OpenAI clients expect
   if (isFirstChunk) {
     // First chunk should only have role, unless there's also content
     chunk.choices[0].delta.role = 'assistant';
-    
+
     // Only add content in first chunk if present, but not function calls
     if (hasContent && !hasToolCalls) {
       const content = genericResponse.content.join('');
@@ -295,7 +302,7 @@ export function convertGenericResponseToOpenAI(
         chunk.choices[0].delta.content = content;
       }
     }
-    
+
     // Non-first chunks can have function calls
     if (hasToolCalls) {
       const functionCall = convertGenericToolCallsToOpenAI(genericResponse.tool_calls);
@@ -337,7 +344,10 @@ export function convertGenericResponseToOpenAINonStreaming(genericResponse, comp
           role: 'assistant',
           content: genericResponse.content.join('') || null
         },
-        finish_reason: genericResponse.finishReason === 'tool_calls' ? 'function_call' : (genericResponse.finishReason || 'stop')
+        finish_reason:
+          genericResponse.finishReason === 'tool_calls'
+            ? 'function_call'
+            : genericResponse.finishReason || 'stop'
       }
     ],
     usage: {
