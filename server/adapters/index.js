@@ -11,7 +11,7 @@ const adapters = {
   anthropic: AnthropicAdapter,
   google: GoogleAdapter,
   mistral: MistralAdapter,
-  local: VLLMAdapter  // vLLM uses dedicated adapter with schema sanitization
+  local: VLLMAdapter // vLLM uses dedicated adapter with schema sanitization
 };
 
 /**

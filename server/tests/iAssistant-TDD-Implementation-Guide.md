@@ -7,18 +7,23 @@ This guide documents the test-driven development (TDD) approach for integrating 
 ## Key Design Decisions
 
 ### 1. No System Instructions in API
+
 The iAssistant API doesn't support passing system instructions separately. Instead:
+
 - Conversation context is combined into a single prompt
 - The `question` field contains the current user query
 - Previous conversation context is passed as additional context
 
 ### 2. Non-Conversational Nature
+
 iAssistant doesn't maintain conversation state, so we:
+
 - Combine all previous messages into a context string
 - Pass this context along with the current question
 - Each request is independent
 
 ### 3. User Authentication Required
+
 - All requests must be made with authenticated users
 - Anonymous access is not supported
 - JWT tokens are generated per-request using the existing iFinder JWT utilities
@@ -28,6 +33,7 @@ iAssistant doesn't maintain conversation state, so we:
 ### 1. Unit Tests (`iassistantAdapter.test.js`)
 
 Tests the core adapter functionality:
+
 - Message formatting for non-conversational API
 - Authentication requirements
 - Request creation with proper headers
@@ -36,13 +42,14 @@ Tests the core adapter functionality:
 - Error handling scenarios
 
 **Key Test Cases:**
+
 ```javascript
 // Single message formatting
 { question: "What is X?", conversationContext: "" }
 
 // Multi-turn formatting
-{ 
-  question: "Tell me more", 
+{
+  question: "Tell me more",
   conversationContext: "Previous conversation:\nuser: What is X?\nassistant: X is..."
 }
 ```
@@ -50,6 +57,7 @@ Tests the core adapter functionality:
 ### 2. Tool Tests (`iassistantTool.test.js`)
 
 Tests the tool interface for use by other LLMs:
+
 - `askQuestion` functionality with all parameters
 - `getDocumentContext` for specific document retrieval
 - Authentication and parameter validation
@@ -58,26 +66,28 @@ Tests the tool interface for use by other LLMs:
 - Tool metadata structure
 
 **Key Functions:**
+
 ```javascript
 // Ask a question
 await iAssistantTool.askQuestion({
-  query: "What is the policy?",
+  query: 'What is the policy?',
   user: authenticatedUser,
-  chatId: "chat-123",
-  profileId: "searchprofile-hr" // optional
+  chatId: 'chat-123',
+  profileId: 'searchprofile-hr' // optional
 });
 
 // Get specific documents
 await iAssistantTool.getDocumentContext({
-  documentIds: ["doc1", "doc2"],
+  documentIds: ['doc1', 'doc2'],
   user: authenticatedUser,
-  chatId: "chat-123"
+  chatId: 'chat-123'
 });
 ```
 
 ### 3. Integration Tests (`iassistantIntegration.test.js`)
 
 Tests the full end-to-end flow:
+
 - Mock RAG API server setup
 - Streaming SSE event handling
 - Adapter registration and retrieval
@@ -89,6 +99,7 @@ Tests the full end-to-end flow:
 Based on the tests, here's what needs to be implemented:
 
 ### Phase 1: Core Adapter Implementation
+
 - [ ] Create `server/adapters/iassistant.js`
   - [ ] Extend BaseAdapter
   - [ ] Implement `formatMessages()` for context combination
@@ -97,6 +108,7 @@ Based on the tests, here's what needs to be implemented:
   - [ ] Add authentication checks
 
 ### Phase 2: Custom Request Handler
+
 - [ ] Create `server/services/chat/IAssistantHandler.js`
   - [ ] Handle RAG API client registration
   - [ ] Manage SSE connections
@@ -104,6 +116,7 @@ Based on the tests, here's what needs to be implemented:
   - [ ] Implement cleanup on disconnect
 
 ### Phase 3: Tool Implementation
+
 - [ ] Create `server/tools/iAssistant.js`
   - [ ] Implement `askQuestion` function
   - [ ] Implement `getDocumentContext` function
@@ -111,12 +124,14 @@ Based on the tests, here's what needs to be implemented:
   - [ ] Handle authentication and validation
 
 ### Phase 4: Configuration
+
 - [ ] Add to `server/adapters/index.js` registry
 - [ ] Create `contents/models/iassistant-enterprise.json`
 - [ ] Update `contents/config/platform.json` with iAssistant settings
 - [ ] Add to `contents/config/tools.json`
 
 ### Phase 5: Applications
+
 - [ ] Create enterprise knowledge app
 - [ ] Create document research app
 - [ ] Test with real iAssistant instance
@@ -124,11 +139,12 @@ Based on the tests, here's what needs to be implemented:
 ## Running the Tests
 
 ### Individual Tests
+
 ```bash
 # Run adapter tests
 node server/tests/iassistantAdapter.test.js
 
-# Run tool tests  
+# Run tool tests
 node server/tests/iassistantTool.test.js
 
 # Run integration tests
@@ -136,6 +152,7 @@ node server/tests/iassistantIntegration.test.js
 ```
 
 ### All Tests
+
 ```bash
 # Run complete test suite
 node server/tests/runIAssistantTests.js
@@ -147,6 +164,7 @@ npm run test:iassistant
 ## Expected Test Output
 
 When all tests pass, you should see:
+
 ```
 🚀 Running iAssistant Tests Suite
 ==================================================
@@ -206,6 +224,7 @@ When all tests pass, you should see:
 ## Next Steps
 
 1. Add the test script to package.json:
+
 ```json
 "test:iassistant": "node server/tests/runIAssistantTests.js"
 ```

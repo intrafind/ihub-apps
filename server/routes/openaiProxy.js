@@ -179,7 +179,8 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
         });
         const lang =
           req.headers['accept-language']?.split(',')[0] ||
-          configCache.getPlatform()?.defaultLanguage || 'en';
+          configCache.getPlatform()?.defaultLanguage ||
+          'en';
         const msg = getLocalizedError
           ? await getLocalizedError('providerError', { provider: model.provider }, lang)
           : 'Provider error';

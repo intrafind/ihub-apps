@@ -68,11 +68,13 @@ class VLLMAdapterClass extends BaseAdapter {
       const result = convertToolsFromGeneric(tools, 'local', toolChoice);
       body.tools = result.tools;
       body.tool_choice = result.toolChoice;
-      console.log(`[vLLM Adapter] Converted ${tools.length} tools with schema sanitization and adjusted tool choice`);
+      console.log(
+        `[vLLM Adapter] Converted ${tools.length} tools with schema sanitization and adjusted tool choice`
+      );
     } else if (toolChoice) {
       body.tool_choice = toolChoice;
     }
-    
+
     // vLLM has limited response format support
     if (responseFormat === 'json') {
       body.response_format = { type: 'json_object' };

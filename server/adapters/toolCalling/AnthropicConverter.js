@@ -124,7 +124,7 @@ const streamingState = new Map();
 
 export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
-  
+
   // Get or create state for this stream
   if (!streamingState.has(streamId)) {
     streamingState.set(streamId, {
@@ -204,7 +204,7 @@ export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
         console.warn('Failed to parse tool arguments:', e);
         parsedArgs = { __raw_arguments: toolCall.arguments };
       }
-      
+
       result.tool_calls.push(
         createGenericToolCall(
           toolCall.id,
@@ -217,7 +217,7 @@ export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
           }
         )
       );
-      
+
       // Clear the pending tool call from state
       state.pendingToolCall = null;
     }
@@ -226,7 +226,7 @@ export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
       result.complete = true;
       // Use the finish reason from state (set by message_delta)
       result.finishReason = state.finishReason || 'stop';
-      
+
       // Clean up the state for this stream
       streamingState.delete(streamId);
     }

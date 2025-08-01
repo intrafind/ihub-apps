@@ -31,12 +31,12 @@ class NonStreamingHandler {
         method: request.method || 'POST',
         headers: request.headers
       };
-      
+
       // Only add body for POST requests
       if (fetchOptions.method === 'POST' && request.body) {
         fetchOptions.body = JSON.stringify(request.body);
       }
-      
+
       const responsePromise = throttledFetch(model.id, request.url, fetchOptions);
 
       const llmResponse = await Promise.race([responsePromise, timeoutPromise]);

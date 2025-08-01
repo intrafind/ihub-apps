@@ -12,12 +12,14 @@ This document provides a comprehensive implementation plan for integrating iFind
 ## Business Value and Objectives
 
 ### Primary Objectives
+
 1. **Dual Integration**: Expose iAssistant as both an LLM model option AND as a tool for other LLMs to use
 2. **Enterprise Knowledge Access**: Enable direct access to corporate knowledge through iAssistant's RAG capabilities
 3. **Seamless User Experience**: Maintain consistent UI/UX patterns while accommodating iAssistant's unique characteristics
 4. **Authentication Integration**: Ensure all requests are made in the authenticated user's context
 
 ### Business Value
+
 - **Knowledge Democratization**: Users can access corporate knowledge directly through natural language
 - **Reduced Knowledge Silos**: Break down barriers between different information systems
 - **Enhanced Decision Making**: Provide contextual, enterprise-specific responses
@@ -30,12 +32,14 @@ This document provides a comprehensive implementation plan for integrating iFind
 The AI Hub Apps uses a standardized adapter pattern for LLM integration:
 
 **Base Structure:**
+
 - `BaseAdapter.js`: Common functionality and utilities
 - Provider-specific adapters: `openai.js`, `anthropic.js`, `google.js`, `mistral.js`, `vllm.js`
 - Centralized registration in `adapters/index.js`
 - Model configurations in `contents/models/*.json`
 
 **Key Adapter Methods:**
+
 ```javascript
 class ProviderAdapter extends BaseAdapter {
   formatMessages(messages)           // Format messages for provider API
@@ -47,12 +51,14 @@ class ProviderAdapter extends BaseAdapter {
 ### Existing iFinder Integration
 
 **Current Components:**
+
 - `iFinderService.js`: Comprehensive service with search, content, metadata operations
 - `iFinderJwt.js`: JWT token generation for user authentication
 - `iFinder.js`: Tool wrapper with search, getContent, getMetadata functions
 - Tool configuration in `tools.json` with multi-function support
 
 **Key Capabilities:**
+
 - User-context authentication via JWT
 - Document search, content retrieval, metadata fetching
 - Proper error handling and request throttling
@@ -61,6 +67,7 @@ class ProviderAdapter extends BaseAdapter {
 ### RAG API Sample Analysis
 
 The `rag-api-sample.txt` shows an advanced RAG implementation with:
+
 - Client registration and SSE streaming
 - Question/answer processing with telemetry
 - Related questions generation
@@ -70,6 +77,7 @@ The `rag-api-sample.txt` shows an advanced RAG implementation with:
 ## iAssistant Characteristics and Constraints
 
 ### Key Characteristics
+
 1. **Non-conversational**: Each request is independent, no multi-turn conversation support
 2. **RAG-enabled**: Returns responses based on indexed document corpus
 3. **User-context**: All requests must be made on behalf of authenticated user
@@ -77,6 +85,7 @@ The `rag-api-sample.txt` shows an advanced RAG implementation with:
 5. **Streaming capable**: Can provide real-time response streaming
 
 ### Technical Constraints
+
 1. **No conversation history**: Cannot maintain context between requests
 2. **Authentication required**: Anonymous access not supported
 3. **Limited customization**: System prompts become context/guidance
@@ -105,13 +114,13 @@ class IAssistantAdapterClass extends BaseAdapter {
     const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
     const userMessages = messages.filter(m => m.role === 'user');
     const lastUserMessage = userMessages[userMessages.length - 1]?.content || '';
-    
+
     // Combine system prompt as context with the latest user question
     let contextualQuestion = lastUserMessage;
     if (systemPrompt) {
       contextualQuestion = `Context: ${systemPrompt}\n\nQuestion: ${lastUserMessage}`;
     }
-    
+
     return contextualQuestion;
   }
 
@@ -121,13 +130,13 @@ class IAssistantAdapterClass extends BaseAdapter {
    */
   async createCompletionRequest(model, messages, apiKey, options = {}) {
     const { temperature = 0.7, stream = true, user, chatId } = options;
-    
+
     if (!user || user.id === 'anonymous') {
       throw new Error('iAssistant requires authenticated user');
     }
-    
+
     const question = this.formatMessages(messages);
-    
+
     // Return a special request object that will be handled differently
     return {
       type: 'iassistant',
@@ -214,7 +223,7 @@ const adapters = {
   google: GoogleAdapter,
   mistral: MistralAdapter,
   local: VLLMAdapter,
-  iassistant: IAssistantAdapter  // Add iAssistant adapter
+  iassistant: IAssistantAdapter // Add iAssistant adapter
 };
 ```
 
@@ -270,46 +279,50 @@ export class IAssistantHandler {
    */
   async handleCompletionRequest(request, res) {
     const { question, user, chatId, stream, model } = request;
-    
+
     try {
       if (stream) {
         // Set up SSE streaming for iAssistant responses
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
-        
+
         // Create unique client ID for this request
         const clientId = `iassistant-${Date.now()}-${Math.random()}`;
-        
+
         // Initialize RAG client (reusing existing RAG infrastructure)
-        const ragApi = createRAGApi('http', process.env.IASSISTANT_BASE_URL || 'http://localhost:8080');
+        const ragApi = createRAGApi(
+          'http',
+          process.env.IASSISTANT_BASE_URL || 'http://localhost:8080'
+        );
         const eventSource = await ragApi.registerClient(clientId);
-        
+
         // Set up event forwarding
         this.setupEventForwarding(eventSource, res, clientId);
-        
+
         // Send the question to iAssistant
         await ragApi.askQuestion(clientId, question, {
           profileId: model.searchProfile,
           searchMode: 'multiword'
         });
-        
+
         // Handle cleanup on client disconnect
         req.on('close', async () => {
           await ragApi.stopClient(clientId);
         });
-        
       } else {
         // Non-streaming request - collect full response
         const response = await this.getNonStreamingResponse(question, user, chatId, model);
         res.json({
-          choices: [{
-            message: {
-              role: 'assistant',
-              content: response.content
-            },
-            finish_reason: 'stop'
-          }]
+          choices: [
+            {
+              message: {
+                role: 'assistant',
+                content: response.content
+              },
+              finish_reason: 'stop'
+            }
+          ]
         });
       }
     } catch (error) {
@@ -326,30 +339,34 @@ export class IAssistantHandler {
    * Set up event forwarding from iAssistant to client
    */
   setupEventForwarding(eventSource, res, clientId) {
-    eventSource.addEventListener('answer', (event) => {
+    eventSource.addEventListener('answer', event => {
       const data = `data: ${JSON.stringify({
-        choices: [{
-          delta: {
-            content: JSON.parse(event.data).answer
+        choices: [
+          {
+            delta: {
+              content: JSON.parse(event.data).answer
+            }
           }
-        }]
+        ]
       })}\n\n`;
       res.write(data);
     });
 
     eventSource.addEventListener('complete', () => {
       const data = `data: ${JSON.stringify({
-        choices: [{
-          delta: {},
-          finish_reason: 'stop'
-        }]
+        choices: [
+          {
+            delta: {},
+            finish_reason: 'stop'
+          }
+        ]
       })}\n\n`;
       res.write(data);
       res.write('data: [DONE]\n\n');
       res.end();
     });
 
-    eventSource.addEventListener('error', (event) => {
+    eventSource.addEventListener('error', event => {
       const data = `data: ${JSON.stringify({
         error: { message: event.data }
       })}\n\n`;
@@ -467,7 +484,7 @@ export async function askQuestion({
     // Create RAG client for iAssistant communication
     const clientId = `tool-${Date.now()}-${Math.random()}`;
     const ragApi = createRAGApi('http', process.env.IASSISTANT_BASE_URL || 'http://localhost:8080');
-    
+
     // For tool usage, we need to collect the full response
     const response = await new Promise((resolve, reject) => {
       let fullResponse = '';
@@ -475,59 +492,64 @@ export async function askQuestion({
       let telemetry = {};
       let relatedQuestions = [];
 
-      ragApi.registerClient(clientId).then(eventSource => {
-        const timeout = setTimeout(() => {
-          eventSource.close();
-          reject(new Error('iAssistant request timeout'));
-        }, 30000);
+      ragApi
+        .registerClient(clientId)
+        .then(eventSource => {
+          const timeout = setTimeout(() => {
+            eventSource.close();
+            reject(new Error('iAssistant request timeout'));
+          }, 30000);
 
-        eventSource.addEventListener('answer', (event) => {
-          const data = JSON.parse(event.data);
-          fullResponse += data.answer || '';
-        });
-
-        eventSource.addEventListener('passages', (event) => {
-          if (includePassages) {
+          eventSource.addEventListener('answer', event => {
             const data = JSON.parse(event.data);
-            passages = data.passages || [];
-          }
-        });
-
-        eventSource.addEventListener('telemetry', (event) => {
-          const data = JSON.parse(event.data);
-          telemetry = { ...telemetry, ...data };
-        });
-
-        eventSource.addEventListener('related', (event) => {
-          const data = JSON.parse(event.data);
-          relatedQuestions = data.questions?.related_questions || [];
-        });
-
-        eventSource.addEventListener('complete', () => {
-          clearTimeout(timeout);
-          eventSource.close();
-          resolve({
-            answer: fullResponse.trim(),
-            passages,
-            telemetry,
-            relatedQuestions
+            fullResponse += data.answer || '';
           });
-        });
 
-        eventSource.addEventListener('error', (event) => {
-          clearTimeout(timeout);
-          eventSource.close();
-          reject(new Error(`iAssistant error: ${event.data}`));
-        });
+          eventSource.addEventListener('passages', event => {
+            if (includePassages) {
+              const data = JSON.parse(event.data);
+              passages = data.passages || [];
+            }
+          });
 
-        // Send the question
-        ragApi.askQuestion(clientId, question, {
-          profileId: searchProfile,
-          searchMode: 'multiword',
-          metaData: true,
-          telemetry: true
-        }).catch(reject);
-      }).catch(reject);
+          eventSource.addEventListener('telemetry', event => {
+            const data = JSON.parse(event.data);
+            telemetry = { ...telemetry, ...data };
+          });
+
+          eventSource.addEventListener('related', event => {
+            const data = JSON.parse(event.data);
+            relatedQuestions = data.questions?.related_questions || [];
+          });
+
+          eventSource.addEventListener('complete', () => {
+            clearTimeout(timeout);
+            eventSource.close();
+            resolve({
+              answer: fullResponse.trim(),
+              passages,
+              telemetry,
+              relatedQuestions
+            });
+          });
+
+          eventSource.addEventListener('error', event => {
+            clearTimeout(timeout);
+            eventSource.close();
+            reject(new Error(`iAssistant error: ${event.data}`));
+          });
+
+          // Send the question
+          ragApi
+            .askQuestion(clientId, question, {
+              profileId: searchProfile,
+              searchMode: 'multiword',
+              metaData: true,
+              telemetry: true
+            })
+            .catch(reject);
+        })
+        .catch(reject);
     });
 
     const result = {
@@ -557,9 +579,10 @@ export async function askQuestion({
       result.relatedQuestions = response.relatedQuestions;
     }
 
-    console.log(`iAssistant Tool: Generated response with ${result.metadata.relevantPassages} passages in ${result.metadata.processingTime}s`);
+    console.log(
+      `iAssistant Tool: Generated response with ${result.metadata.relevantPassages} passages in ${result.metadata.processingTime}s`
+    );
     return result;
-
   } catch (error) {
     console.error('iAssistant tool error:', error);
     throw new Error(`iAssistant question failed: ${error.message}`);
@@ -637,7 +660,6 @@ export async function getDocumentContext({
         url: doc.url
       }))
     };
-
   } catch (error) {
     console.error('iAssistant document context error:', error);
     throw new Error(`Failed to get document context: ${error.message}`);
@@ -938,21 +960,25 @@ IFINDER_TIMEOUT=30000
 ## Error Handling and Edge Cases
 
 ### Authentication Errors
+
 - **Invalid User**: Clear error message when anonymous users try to access iAssistant
 - **JWT Failures**: Proper error handling for token generation/validation failures
 - **Permission Denied**: Handle cases where user lacks access to specific search profiles
 
 ### API Connectivity Issues
+
 - **Timeout Handling**: Graceful timeout for iAssistant requests (30s default)
 - **Connection Failures**: Fallback error messages and retry logic
 - **Rate Limiting**: Respect iAssistant API rate limits with proper backoff
 
 ### Response Processing
+
 - **Malformed Responses**: Handle unexpected response formats gracefully
 - **Empty Results**: Appropriate messaging when no knowledge is found
 - **Streaming Interruptions**: Handle SSE connection drops and reconnection
 
 ### Configuration Errors
+
 - **Missing Configuration**: Clear setup instructions when iAssistant config is missing
 - **Invalid Search Profiles**: Validation and fallback to default profiles
 - **Model Registration**: Proper error handling if iAssistant models aren't properly registered
@@ -960,16 +986,19 @@ IFINDER_TIMEOUT=30000
 ## Security Considerations
 
 ### User Authentication
+
 - All iAssistant requests must include valid user authentication
 - JWT tokens are generated per-request with proper expiration
 - User permissions are enforced at the iAssistant API level
 
 ### Data Privacy
+
 - No conversation history is stored for iAssistant interactions
 - All requests are made in the authenticated user's context
 - Audit logging tracks all iAssistant usage for compliance
 
 ### API Security
+
 - Private keys for JWT signing are stored securely
 - HTTPS is enforced for all iAssistant communications
 - Rate limiting prevents abuse of enterprise knowledge access
@@ -977,16 +1006,19 @@ IFINDER_TIMEOUT=30000
 ## Performance Optimizations
 
 ### Caching Strategy
+
 - No response caching due to user-specific and time-sensitive nature of enterprise knowledge
 - JWT token caching for duration of chat session
 - Connection pooling for iAssistant API requests
 
 ### Resource Management
+
 - Concurrent request limiting (3 max concurrent iAssistant requests per user)
 - Timeout management to prevent resource leaks
 - Proper cleanup of SSE connections and RAG clients
 
 ### Monitoring and Metrics
+
 - Track iAssistant usage patterns and response times
 - Monitor authentication success/failure rates
 - Alert on API connectivity issues or high error rates
@@ -994,21 +1026,25 @@ IFINDER_TIMEOUT=30000
 ## Testing Strategy
 
 ### Unit Tests
+
 - Test iAssistant adapter message formatting
 - Test JWT token generation and validation
 - Test error handling for various failure scenarios
 
 ### Integration Tests
+
 - Test full iAssistant LLM workflow (non-streaming)
 - Test iAssistant tool functionality
 - Test authentication flow with real iFinder API
 
 ### End-to-End Tests
+
 - Test complete user workflow from UI to iAssistant response
 - Test streaming responses and SSE handling
 - Test tool usage within larger conversation contexts
 
 ### Manual Testing Scenarios
+
 1. **iAssistant as LLM**: Direct chat with iAssistant model
 2. **iAssistant as Tool**: Other LLMs using iAssistant tool
 3. **Authentication**: Anonymous vs authenticated user scenarios
@@ -1018,11 +1054,13 @@ IFINDER_TIMEOUT=30000
 ## Deployment and Configuration
 
 ### Prerequisites
+
 - iFinder API access with appropriate search profiles configured
 - Private key for JWT signing (RS256)
 - Network connectivity from AI Hub Apps to iFinder/iAssistant APIs
 
 ### Deployment Steps
+
 1. **Backend Deployment**:
    - Deploy new adapter and handler code
    - Update configuration files
@@ -1044,6 +1082,7 @@ IFINDER_TIMEOUT=30000
    - Configure starter prompts and guidance
 
 ### Configuration Validation
+
 - Test JWT token generation with real private key
 - Validate iAssistant API connectivity
 - Confirm search profile access permissions
@@ -1052,16 +1091,19 @@ IFINDER_TIMEOUT=30000
 ## Success Metrics and KPIs
 
 ### Usage Metrics
+
 - Number of iAssistant interactions per day/week/month
 - Ratio of direct iAssistant usage vs tool usage
 - User adoption rate for iAssistant-enabled apps
 
 ### Performance Metrics
+
 - Average response time for iAssistant queries
 - Success rate of iAssistant API calls
 - User satisfaction ratings for enterprise knowledge responses
 
 ### Business Impact
+
 - Reduction in support tickets for information requests
 - Increased self-service for enterprise knowledge
 - User feedback on knowledge accessibility improvements
@@ -1069,16 +1111,19 @@ IFINDER_TIMEOUT=30000
 ## Future Enhancements
 
 ### Phase 2 Enhancements
+
 - **Conversation Context**: Implement context preservation across iAssistant interactions
 - **Advanced Search**: Support for complex search filters and faceted search
 - **Document Annotations**: Allow users to annotate and bookmark relevant documents
 
 ### Integration Improvements
+
 - **Semantic Search**: Enhanced search capabilities with semantic understanding
 - **Multi-modal Support**: Support for document images and multimedia content
 - **Real-time Updates**: Push notifications for updated enterprise knowledge
 
 ### User Experience
+
 - **Knowledge Graphs**: Visual representation of enterprise knowledge relationships
 - **Personalization**: User-specific knowledge preferences and shortcuts
 - **Collaborative Features**: Share knowledge discoveries with team members

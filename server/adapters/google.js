@@ -206,7 +206,7 @@ class GoogleAdapterClass extends BaseAdapter {
 
       try {
         const parsed = JSON.parse(data);
-        
+
         // Debug: Log the full parsed response to see what metadata we receive
         console.log('Full Gemini response structure:', JSON.stringify(parsed, null, 2));
 

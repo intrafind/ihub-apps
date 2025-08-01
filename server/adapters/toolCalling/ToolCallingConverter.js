@@ -22,7 +22,7 @@ const CONVERTERS = {
   anthropic: AnthropicConverter,
   google: GoogleConverter,
   mistral: MistralConverter,
-  local: VLLMConverter  // vLLM uses dedicated converter with schema sanitization
+  local: VLLMConverter // vLLM uses dedicated converter with schema sanitization
 };
 
 /**
@@ -260,7 +260,7 @@ function capitalize(str) {
     case 'openai':
       return 'OpenAI';
     case 'local':
-      return 'VLLM';  // Local uses VLLM converter functions
+      return 'VLLM'; // Local uses VLLM converter functions
     default:
       return str.charAt(0).toUpperCase() + str.slice(1);
   }

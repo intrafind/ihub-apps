@@ -76,9 +76,8 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
     } else {
       args = JSON.stringify(toolCall.arguments);
     }
-    
-    return {
 
+    return {
       index: toolCall.index || 0,
       id: toolCall.id,
       type: 'function',
@@ -200,7 +199,7 @@ const streamingState = new Map();
 
 export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
-  
+
   if (!streamingState.has(streamId)) {
     streamingState.set(streamId, {
       finishReason: null,
@@ -253,7 +252,7 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
         // Process each tool call delta - accumulate in state
         for (const toolCall of delta.tool_calls) {
           const index = toolCall.index || 0;
-          
+
           if (!state.pendingToolCalls.has(index)) {
             state.pendingToolCalls.set(index, {
               id: '',
@@ -262,9 +261,9 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
               index: index
             });
           }
-          
+
           const pending = state.pendingToolCalls.get(index);
-          
+
           if (toolCall.id) {
             pending.id = toolCall.id;
           }
@@ -275,9 +274,12 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
             pending.arguments += toolCall.function.arguments;
           }
         }
-        
+
         // Log accumulation progress for debugging
-        console.log(`[OpenAI Converter] Accumulated tool calls:`, Array.from(state.pendingToolCalls.values()));
+        console.log(
+          `[OpenAI Converter] Accumulated tool calls:`,
+          Array.from(state.pendingToolCalls.values())
+        );
       }
     }
 
@@ -286,12 +288,16 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
       result.complete = true;
       state.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'openai');
       result.finishReason = state.finishReason;
-      
-      console.log(`[OpenAI Converter] Finish reason: ${state.finishReason}, pending tool calls: ${state.pendingToolCalls.size}`);
-      
+
+      console.log(
+        `[OpenAI Converter] Finish reason: ${state.finishReason}, pending tool calls: ${state.pendingToolCalls.size}`
+      );
+
       // For OpenAI, finalize tool calls on tool_calls finish reason or if we have pending calls
       if (state.pendingToolCalls.size > 0) {
-        console.log(`[OpenAI Converter] Finalizing ${state.pendingToolCalls.size} pending tool calls`);
+        console.log(
+          `[OpenAI Converter] Finalizing ${state.pendingToolCalls.size} pending tool calls`
+        );
         for (const [index, pending] of state.pendingToolCalls.entries()) {
           if (pending.id && pending.name) {
             let parsedArgs = {};
@@ -303,24 +309,21 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
               console.warn('Failed to parse accumulated OpenAI tool arguments:', e);
               parsedArgs = { __raw_arguments: pending.arguments };
             }
-            
-            console.log(`[OpenAI Converter] Adding tool call: ${pending.name} with args:`, parsedArgs);
+
+            console.log(
+              `[OpenAI Converter] Adding tool call: ${pending.name} with args:`,
+              parsedArgs
+            );
             result.tool_calls.push(
-              createGenericToolCall(
-                pending.id,
-                pending.name,
-                parsedArgs,
-                index,
-                {
-                  originalFormat: 'openai',
-                  type: 'function'
-                }
-              )
+              createGenericToolCall(pending.id, pending.name, parsedArgs, index, {
+                originalFormat: 'openai',
+                type: 'function'
+              })
             );
           }
         }
       }
-      
+
       streamingState.delete(streamId);
     }
   } catch (error) {

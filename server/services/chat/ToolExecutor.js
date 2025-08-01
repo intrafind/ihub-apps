@@ -472,12 +472,12 @@ class ToolExecutor {
           headers: followRequest.headers,
           signal: controller.signal
         };
-        
+
         // Only add body for POST requests
         if (fetchOptions.method === 'POST' && followRequest.body) {
           fetchOptions.body = JSON.stringify(followRequest.body);
         }
-        
+
         const llmResponse = await throttledFetch(model.id, followRequest.url, fetchOptions);
 
         clearTimeout(timeoutId);
