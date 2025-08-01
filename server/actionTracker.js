@@ -61,6 +61,10 @@ export class ActionTracker extends EventEmitter {
   trackSafetyWarning(chatId, data = {}) {
     this.emit('fire-sse', { event: UnifiedEvents.SAFETY_WARNING, chatId, ...data });
   }
+
+  trackThinking(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.THINKING, chatId, ...data });
+  }
 }
 
 export const actionTracker = new ActionTracker();

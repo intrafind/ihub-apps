@@ -78,6 +78,7 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
     }
     
     return {
+
       index: toolCall.index || 0,
       id: toolCall.id,
       type: 'function',
@@ -361,12 +362,12 @@ export function convertGenericResponseToOpenAI(
 
   const hasToolCalls = genericResponse.tool_calls && genericResponse.tool_calls.length > 0;
   const hasContent = genericResponse.content && genericResponse.content.length > 0;
-  
+
   // For streaming, separate role from function calls as OpenAI clients expect
   if (isFirstChunk) {
     // First chunk should only have role, unless there's also content
     chunk.choices[0].delta.role = 'assistant';
-    
+
     // Only add content in first chunk if present, but not function calls
     if (hasContent && !hasToolCalls) {
       const content = genericResponse.content.join('');
@@ -382,7 +383,7 @@ export function convertGenericResponseToOpenAI(
         chunk.choices[0].delta.content = content;
       }
     }
-    
+
     // Non-first chunks can have tool calls
     if (hasToolCalls) {
       const toolCalls = convertGenericToolCallsToOpenAI(genericResponse.tool_calls);

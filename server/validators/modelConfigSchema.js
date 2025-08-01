@@ -13,7 +13,14 @@ export const modelConfigSchema = z
     supportsTools: z.boolean().optional(),
     concurrency: z.number().optional(),
     requestDelayMs: z.number().optional(),
-    enabled: z.boolean().optional()
+    enabled: z.boolean().optional(),
+    thinking: z
+      .object({
+        enabled: z.boolean(),
+        budget: z.number(), // 0=disabled, -1=dynamic, positive=specific budget
+        thoughts: z.boolean() // whether to include thoughts in response
+      })
+      .optional()
   })
   .passthrough();
 
