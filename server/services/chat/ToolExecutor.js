@@ -437,7 +437,9 @@ class ToolExecutor {
         stream: true,
         tools,
         responseFormat: responseFormat,
-        responseSchema: responseSchema
+        responseSchema: responseSchema,
+        user,
+        chatId
       });
 
       const controller = new AbortController();
@@ -464,12 +466,19 @@ class ToolExecutor {
       }, DEFAULT_TIMEOUT);
 
       try {
-        const llmResponse = await throttledFetch(model.id, followRequest.url, {
-          method: 'POST',
+        // Determine HTTP method and body based on adapter requirements
+        const fetchOptions = {
+          method: followRequest.method || 'POST',
           headers: followRequest.headers,
-          body: JSON.stringify(followRequest.body),
           signal: controller.signal
-        });
+        };
+        
+        // Only add body for POST requests
+        if (fetchOptions.method === 'POST' && followRequest.body) {
+          fetchOptions.body = JSON.stringify(followRequest.body);
+        }
+        
+        const llmResponse = await throttledFetch(model.id, followRequest.url, fetchOptions);
 
         clearTimeout(timeoutId);
 

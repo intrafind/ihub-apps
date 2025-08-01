@@ -20,6 +20,8 @@ build/
 contents/data/*
 !contents/data/.gitkeep
 
+temp/
+
 contents/uploads/*
 contents/uploads
 

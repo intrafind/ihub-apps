@@ -26,11 +26,18 @@ class NonStreamingHandler {
     });
 
     try {
-      const responsePromise = throttledFetch(model.id, request.url, {
-        method: 'POST',
-        headers: request.headers,
-        body: JSON.stringify(request.body)
-      });
+      // Determine HTTP method and body based on adapter requirements
+      const fetchOptions = {
+        method: request.method || 'POST',
+        headers: request.headers
+      };
+      
+      // Only add body for POST requests
+      if (fetchOptions.method === 'POST' && request.body) {
+        fetchOptions.body = JSON.stringify(request.body);
+      }
+      
+      const responsePromise = throttledFetch(model.id, request.url, fetchOptions);
 
       const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
       clearTimeout(timeoutId);

@@ -106,7 +106,9 @@ class RequestBuilder {
         stream: !!clientRes,
         tools,
         responseFormat: outputFormat,
-        responseSchema: app.outputSchema
+        responseSchema: app.outputSchema,
+        user,
+        chatId
       });
 
       return {
