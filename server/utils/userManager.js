@@ -347,7 +347,6 @@ export function mergeUserGroups(externalGroups = [], internalGroups = []) {
   return Array.from(allGroups);
 }
 
-
 /**
  * Validate and persist external user based on platform configuration
  * Consolidates the validation logic from proxyAuth.js and oidcAuth.js
