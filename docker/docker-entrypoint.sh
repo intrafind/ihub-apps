@@ -137,23 +137,6 @@ init_config() {
     log_success "Configuration check completed"
 }
 
-# Function to wait for external services
-wait_for_external_services() {
-    log_info "Checking external service dependencies..."
-    
-    # Wait for database if configured
-    if [ -n "$DATABASE_HOST" ]; then
-        wait_for_service "$DATABASE_HOST" "${DATABASE_PORT:-5432}" 60 "PostgreSQL Database"
-    fi
-    
-    # Wait for Redis if configured
-    if [ -n "$REDIS_HOST" ]; then
-        wait_for_service "$REDIS_HOST" "${REDIS_PORT:-6379}" 30 "Redis Cache"
-    fi
-    
-    log_success "External service checks completed"
-}
-
 # Function to display startup information
 display_startup_info() {
     log_info "=== AI Hub Apps Container Starting ==="
@@ -174,7 +157,6 @@ main() {
     validate_env_vars
     init_directories
     init_config
-    wait_for_external_services
     
     log_success "Container initialization completed successfully"
     log_info "Starting AI Hub Apps with command: $*"

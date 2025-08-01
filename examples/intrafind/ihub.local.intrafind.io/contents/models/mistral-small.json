@@ -1,0 +1,20 @@
+{
+  "id": "mistral-small",
+  "modelId": "mistral-small-latest",
+  "name": {
+    "en": "Mistral Small",
+    "de": "Mistral Small"
+  },
+  "description": {
+    "en": "Mistral's fast model for general tasks",
+    "de": "Schnelles Mistral-Modell für allgemeine Aufgaben"
+  },
+  "url": "https://api.mistral.ai/v1/chat/completions",
+  "provider": "mistral",
+  "tokenLimit": 32000,
+  "supportsTools": true,
+  "concurrency": 1,
+  "requestDelayMs": 1000,
+  "enabled": true,
+  "default": false
+}

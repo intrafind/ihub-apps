@@ -58,7 +58,7 @@ services:
 
   # Main AI Hub Apps Production Container
   ai-hub-app:
-    image: ${AI_HUB_IMAGE:-ai-hub-apps:latest}
+    image: ai-hub-apps:prod #${AI_HUB_IMAGE:-ai-hub-apps:latest}
     container_name: ai-hub-app
     ports:
       - '${AI_HUB_PORT:-3000}:3000'

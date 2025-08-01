@@ -153,7 +153,15 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
       // This is a complete non-streaming response
       for (const part of parsed.candidates[0].content.parts) {
         if (part.text) {
-          result.content.push(part.text);
+          // Check if this is thinking content
+          if (part.thought === true) {
+            // This is thinking content, add to thinking array
+            if (!result.thinking) result.thinking = [];
+            result.thinking.push(part.text);
+          } else {
+            // Regular content
+            result.content.push(part.text);
+          }
         }
         if (part.functionCall && part.functionCall.name) {
           // Only create tool call if we have a valid name
@@ -180,7 +188,15 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
     else if (parsed.candidates && parsed.candidates[0]?.content?.parts) {
       for (const part of parsed.candidates[0].content.parts) {
         if (part.text) {
-          result.content.push(part.text);
+          // Check if this is thinking content
+          if (part.thought === true) {
+            // This is thinking content, add to thinking array
+            if (!result.thinking) result.thinking = [];
+            result.thinking.push(part.text);
+          } else {
+            // Regular content
+            result.content.push(part.text);
+          }
         }
         if (part.functionCall && part.functionCall.name) {
           // Only create tool call if we have a valid name (non-empty)

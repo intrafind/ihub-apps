@@ -48,6 +48,7 @@
  *
  * @typedef {Object} GenericStreamingResponse
  * @property {string[]} content - Array of text content chunks
+ * @property {string[]} thinking - Array of thinking content chunks (for models with reasoning support)
  * @property {GenericToolCall[]} tool_calls - Array of tool calls
  * @property {boolean} complete - Whether the response is complete
  * @property {boolean} error - Whether there was an error
@@ -153,6 +154,7 @@ export function createGenericToolResult(
 /**
  * Create a generic streaming response
  * @param {string[]} content - Content chunks
+ * @param {string[]} thinking - Thinking chunks
  * @param {GenericToolCall[]} tool_calls - Tool calls
  * @param {boolean} complete - Whether complete
  * @param {boolean} error - Whether error occurred
@@ -162,6 +164,7 @@ export function createGenericToolResult(
  */
 export function createGenericStreamingResponse(
   content = [],
+  thinking = [],
   tool_calls = [],
   complete = false,
   error = false,
@@ -171,6 +174,7 @@ export function createGenericStreamingResponse(
 ) {
   return {
     content,
+    thinking,
     tool_calls,
     complete,
     error,
