@@ -169,6 +169,22 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
           res.setHeader(key, value);
         }
       }
+      //TODO check response status and handle errors
+      if (!llmResponse.ok) {
+        const errorText = await llmResponse.text();
+        console.error(`[OpenAI Proxy] Error response from ${model.provider}:`, {
+          status: llmResponse.status,
+          statusText: llmResponse.statusText,
+          errorText: errorText
+        });
+        const lang =
+          req.headers['accept-language']?.split(',')[0] ||
+          configCache.getPlatform()?.defaultLanguage || 'en';
+        const msg = getLocalizedError
+          ? await getLocalizedError('providerError', { provider: model.provider }, lang)
+          : 'Provider error';
+        return res.status(llmResponse.status).json({ error: msg, details: errorText });
+      }
       if (stream) {
         console.log(`[OpenAI Proxy] Starting streaming response for provider: ${model.provider}`);
 
@@ -180,6 +196,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
 
         // Generate a unique ID for this completion
         const completionId = `chatcmpl-${Date.now()}${Math.random().toString(36).substring(2, 11)}`;
+        const streamId = completionId; // Use completion ID as stream ID for state isolation
         let isFirstChunk = true;
 
         try {
@@ -221,7 +238,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
               try {
                 // Use generic tool calling system to normalize response
                 console.log(`[OpenAI Proxy] Raw ${model.provider} data:`, data);
-                const genericResult = convertResponseToGeneric(data, model.provider);
+                const genericResult = convertResponseToGeneric(data, model.provider, streamId);
                 console.log(
                   `[OpenAI Proxy] Generic result:`,
                   JSON.stringify(genericResult, null, 2)
@@ -322,7 +339,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
               if (data && data !== '[DONE]') {
                 try {
                   console.log(`[OpenAI Proxy] Raw ${model.provider} buffer data:`, data);
-                  const genericResult = convertResponseToGeneric(data, model.provider);
+                  const genericResult = convertResponseToGeneric(data, model.provider, streamId);
                   console.log(
                     `[OpenAI Proxy] Generic buffer result:`,
                     JSON.stringify(genericResult, null, 2)

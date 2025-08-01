@@ -3,13 +3,15 @@ import OpenAIAdapter from './openai.js';
 import AnthropicAdapter from './anthropic.js';
 import GoogleAdapter from './google.js';
 import MistralAdapter from './mistral.js';
+import VLLMAdapter from './vllm.js';
 
 // Adapter registry
 const adapters = {
   openai: OpenAIAdapter,
   anthropic: AnthropicAdapter,
   google: GoogleAdapter,
-  mistral: MistralAdapter
+  mistral: MistralAdapter,
+  local: VLLMAdapter  // vLLM uses dedicated adapter with schema sanitization
 };
 
 /**

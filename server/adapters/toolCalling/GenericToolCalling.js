@@ -53,6 +53,7 @@
  * @property {boolean} error - Whether there was an error
  * @property {string|null} errorMessage - Error message if error occurred
  * @property {string|null} finishReason - Normalized finish reason ('stop', 'length', 'tool_calls', 'content_filter')
+ * @property {Object} [metadata] - Provider-specific metadata for handling streaming state
  */
 
 /**
@@ -165,7 +166,8 @@ export function createGenericStreamingResponse(
   complete = false,
   error = false,
   errorMessage = null,
-  finishReason = null
+  finishReason = null,
+  metadata = {}
 ) {
   return {
     content,
@@ -173,7 +175,8 @@ export function createGenericStreamingResponse(
     complete,
     error,
     errorMessage,
-    finishReason
+    finishReason,
+    metadata
   };
 }
 
@@ -183,6 +186,7 @@ export function createGenericStreamingResponse(
  * @param {string} provider - Provider name
  * @returns {string} Normalized finish reason
  */
+//FIXME: This function is used to normalize finish reasons from different providers. the specific handling should be done in the provider-specific adapters.
 export function normalizeFinishReason(providerFinishReason, provider) {
   if (!providerFinishReason) return null;
 
@@ -219,6 +223,7 @@ export function normalizeFinishReason(providerFinishReason, provider) {
  * @param {string} provider - Target provider
  * @returns {Object} Sanitized schema
  */
+//FIXME: This function is used to normalize finish reasons from different providers. the specific handling should be done in the provider-specific adapters.
 export function sanitizeSchemaForProvider(schema, provider) {
   if (!schema || typeof schema !== 'object') {
     return { type: 'object', properties: {} };

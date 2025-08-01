@@ -8,20 +8,6 @@ import {
   sendInternalError
 } from '../utils/responseHelpers.js';
 
-/**
- * Transform internal model format to OpenAI API compliant format
- * @param {Object} model - Internal model object
- * @returns {Object} OpenAI API compliant model object
- */
-function transformModelToOpenAIFormat(model) {
-  return {
-    id: model.id || model.modelId,
-    object: 'model',
-    created: Math.floor(Date.now() / 1000), // Current timestamp as fallback
-    owned_by: model.provider || 'organization'
-  };
-}
-
 export default function registerModelRoutes(app, { getLocalizedError }) {
   app.get('/api/models', authOptional, async (req, res) => {
     try {
@@ -53,17 +39,8 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
         return sendFailedOperationError(res, 'load models configuration');
       }
 
-      // Transform models to OpenAI API compliant format
-      const transformedModels = models.map(transformModelToOpenAIFormat);
-
-      // Return in OpenAI ListModelsResponse format
-      const response = {
-        object: 'list',
-        data: transformedModels
-      };
-
       res.setHeader('ETag', userSpecificEtag);
-      res.json(response);
+      res.json(models);
     } catch (error) {
       sendInternalError(res, error, 'fetching models');
     }

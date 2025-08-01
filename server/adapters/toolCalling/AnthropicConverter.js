@@ -119,8 +119,21 @@ export function convertAnthropicToolResultToGeneric(anthropicResult) {
  * @param {string} data - Raw Anthropic response data
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
-export function convertAnthropicResponseToGeneric(data) {
+// Store state across streaming chunks for proper handling
+const streamingState = new Map();
+
+export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
+  
+  // Get or create state for this stream
+  if (!streamingState.has(streamId)) {
+    streamingState.set(streamId, {
+      finishReason: null,
+      pendingToolCall: null,
+      toolCallIndex: 0
+    });
+  }
+  const state = streamingState.get(streamId);
 
   if (!data) return result;
 
@@ -157,56 +170,65 @@ export function convertAnthropicResponseToGeneric(data) {
         result.content.push(parsed.delta.content);
       }
       if (parsed.delta.stop_reason) {
-        result.finishReason = normalizeFinishReason(parsed.delta.stop_reason, 'anthropic');
+        // Store the finish reason in state so we can use it when message_stop arrives
+        state.finishReason = normalizeFinishReason(parsed.delta.stop_reason, 'anthropic');
+        result.finishReason = state.finishReason;
       }
     }
 
     // Tool streaming events
     if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'tool_use') {
+      // Store the tool call info in state for later when we have complete arguments
+      state.pendingToolCall = {
+        id: parsed.content_block.id,
+        name: parsed.content_block.name,
+        index: parsed.index,
+        arguments: ''
+      };
+      // Track if this is the first tool call
+      if (!state.toolCallIndex) {
+        state.toolCallIndex = 0;
+      }
+    } else if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'input_json_delta') {
+      // Accumulate arguments in state
+      if (state.pendingToolCall && parsed.delta.partial_json) {
+        state.pendingToolCall.arguments += parsed.delta.partial_json;
+      }
+    } else if (parsed.type === 'content_block_stop' && state.pendingToolCall) {
+      // Now we have the complete tool call with all arguments
+      const toolCall = state.pendingToolCall;
+      let parsedArgs = {};
+      try {
+        parsedArgs = JSON.parse(toolCall.arguments);
+      } catch (e) {
+        console.warn('Failed to parse tool arguments:', e);
+        parsedArgs = { __raw_arguments: toolCall.arguments };
+      }
+      
       result.tool_calls.push(
         createGenericToolCall(
-          parsed.content_block.id,
-          parsed.content_block.name,
-          {}, // Empty object - arguments will be filled in by subsequent deltas
-          parsed.index,
+          toolCall.id,
+          toolCall.name,
+          parsedArgs,
+          state.toolCallIndex++, // Use our own index counter starting at 0
           {
             originalFormat: 'anthropic',
-            type: 'tool_use',
-            streaming: true,
-            arguments: '' // Initialize empty arguments string for streaming
+            type: 'tool_use'
           }
         )
       );
-    } else if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'input_json_delta') {
-      // For streaming tool calls, accumulate arguments in a tool call with the same index
-      // The ToolExecutor will merge these based on the index
-      if (parsed.delta.partial_json && parsed.index !== undefined) {
-        // Create a minimal tool call for streaming arguments that won't overwrite the name
-        const streamingChunk = {
-          id: '', // Empty ID - will be merged with existing call by ToolExecutor
-          name: '', // Empty name - but don't normalize it to avoid "unnamed_tool"
-          arguments: { __raw_arguments: parsed.delta.partial_json },
-          index: parsed.index, // Use the same index to match with the initial tool call
-          metadata: {
-            originalFormat: 'anthropic',
-            type: 'input_json_delta',
-            streaming: true,
-            streaming_chunk: true
-          },
-          // Create function object without normalizing empty name
-          function: {
-            name: '', // Keep empty so ToolExecutor won't overwrite existing name
-            arguments: parsed.delta.partial_json
-          }
-        };
-        result.tool_calls.push(streamingChunk);
-      }
+      
+      // Clear the pending tool call from state
+      state.pendingToolCall = null;
     }
 
     if (parsed.type === 'message_stop') {
       result.complete = true;
-      // Don't overwrite finishReason if it was already set (e.g., by tool_calls)
-      // The finishReason should be set by message_delta, not message_stop
+      // Use the finish reason from state (set by message_delta)
+      result.finishReason = state.finishReason || 'stop';
+      
+      // Clean up the state for this stream
+      streamingState.delete(streamId);
     }
   } catch (parseError) {
     console.error('Error parsing Anthropic response chunk:', parseError);
