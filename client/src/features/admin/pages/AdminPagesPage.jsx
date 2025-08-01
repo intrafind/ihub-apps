@@ -121,6 +121,13 @@ const AdminPagesPage = () => {
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap text-right text-sm font-medium space-x-2">
                           <button
+                            onClick={() => window.open(`/pages/${page.id}`, '_blank')}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-full"
+                            title={t('common.view', 'View')}
+                          >
+                            <Icon name="eye" className="h-4 w-4" />
+                          </button>
+                          <button
                             onClick={() => navigate(`/admin/pages/${page.id}`)}
                             className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
                             title={t('common.edit', 'Edit')}
