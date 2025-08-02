@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { checkAppChatStatus, stopAppChatStream } from '../../api/api';
+import { useNetworkStatus } from '../contexts/NetworkStatusContext';
 
 /**
  * Hook for handling Server Sent Events.
@@ -10,6 +11,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 10000, onEvent, onPro
   const connectionTimeoutRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);
   const fullContentRef = useRef('');
+  const { isOnline, isBackendOffline, getErrorMessage } = useNetworkStatus();
 
   const cleanupEventSource = useCallback(async () => {
     if (eventSourceRef.current) {
@@ -79,6 +81,20 @@ function useEventSource({ appId, chatId, timeoutDuration = 10000, onEvent, onPro
 
   const initEventSource = useCallback(
     url => {
+      // Don't attempt to connect if user is offline
+      if (!isOnline) {
+        console.warn('Cannot establish SSE connection: user is offline');
+        if (onEvent) {
+          const offlineError = { code: 'ERR_NETWORK', message: 'User is offline' };
+          onEvent({ 
+            type: 'error', 
+            data: { message: getErrorMessage(offlineError, (key, fallback) => fallback) } 
+          });
+        }
+        if (onProcessingChange) onProcessingChange(false);
+        return null;
+      }
+
       cleanupEventSource();
       fullContentRef.current = '';
       if (onProcessingChange) onProcessingChange(true);
@@ -91,8 +107,14 @@ function useEventSource({ appId, chatId, timeoutDuration = 10000, onEvent, onPro
         if (!connectionEstablished) {
           console.error('SSE connection timeout');
           eventSource.close();
-          if (onEvent)
-            onEvent({ type: 'error', data: { message: 'Connection timeout. Please try again.' } });
+          if (onEvent) {
+            // Use network-aware error message
+            const timeoutError = { code: 'TIMEOUT', message: 'Connection timeout' };
+            const errorMessage = isBackendOffline 
+              ? getErrorMessage(timeoutError, (key, fallback) => fallback)
+              : 'Connection timeout. Please try again.';
+            onEvent({ type: 'error', data: { message: errorMessage } });
+          }
           if (onProcessingChange) onProcessingChange(false);
         }
       }, timeoutDuration);
@@ -149,7 +171,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 10000, onEvent, onPro
       startHeartbeat();
       return eventSource;
     },
-    [cleanupEventSource, onProcessingChange, onEvent, startHeartbeat, timeoutDuration]
+    [cleanupEventSource, onProcessingChange, onEvent, startHeartbeat, timeoutDuration, isOnline, isBackendOffline, getErrorMessage]
   );
 
   useEffect(() => {

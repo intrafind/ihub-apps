@@ -37,6 +37,8 @@ import { usePlatformConfig } from './shared/contexts/PlatformConfigContext';
 import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
 import { AuthProvider } from './shared/contexts/AuthContext';
+import { NetworkStatusProvider } from './shared/contexts/NetworkStatusContext';
+import NetworkStatusSetup from './shared/components/NetworkStatusSetup';
 import { configureMarked } from './shared/components/MarkdownRenderer';
 import TeamsWrapper from './features/teams/TeamsWrapper';
 import TeamsAuthStart from './features/teams/TeamsAuthStart';
@@ -81,10 +83,12 @@ function App() {
 
   return (
     <AppProviders>
-      <AuthProvider>
-        <AdminAuthProvider>
-          <TeamsWrapper>
-            <BrowserRouter>
+      <NetworkStatusProvider>
+        <NetworkStatusSetup>
+          <AuthProvider>
+            <AdminAuthProvider>
+              <TeamsWrapper>
+                <BrowserRouter>
               {/* Document title management - must be inside Router for useLocation/useParams */}
               <DocumentTitle />
 
@@ -159,10 +163,12 @@ function App() {
                   <Route path="*" element={<NotFound />} />
                 </Route>
               </Routes>
-            </BrowserRouter>
-          </TeamsWrapper>
-        </AdminAuthProvider>
-      </AuthProvider>
+                </BrowserRouter>
+              </TeamsWrapper>
+            </AdminAuthProvider>
+          </AuthProvider>
+        </NetworkStatusSetup>
+      </NetworkStatusProvider>
     </AppProviders>
   );
 }

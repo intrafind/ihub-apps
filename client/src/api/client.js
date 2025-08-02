@@ -1,6 +1,14 @@
 import axios from 'axios';
 import { getSessionId, shouldRenewSession, renewSession } from '../utils/sessionManager';
 
+// Network status utilities
+let networkStatusContext = null;
+
+// Function to set the network status context (called from App.jsx)
+export const setNetworkStatusContext = (context) => {
+  networkStatusContext = context;
+};
+
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 const API_REQUEST_TIMEOUT = 30000; // 30 seconds timeout
 const STREAMING_REQUEST_TIMEOUT = 120000; // 2 minutes for streaming requests
@@ -59,6 +67,23 @@ const addRequestInterceptor = client => {
 addRequestInterceptor(apiClient);
 addRequestInterceptor(streamingApiClient);
 
+// Enhanced retry logic with exponential backoff
+const retryRequest = async (client, originalRequest, retryCount = 0) => {
+  const maxRetries = 3;
+  const baseDelay = 1000; // 1 second
+  
+  if (retryCount >= maxRetries) {
+    throw new Error('Max retries exceeded');
+  }
+
+  // Exponential backoff: 1s, 2s, 4s
+  const delay = baseDelay * Math.pow(2, retryCount);
+  await new Promise(resolve => setTimeout(resolve, delay));
+  
+  originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
+  return client(originalRequest);
+};
+
 // Shared response interceptor function
 const addResponseInterceptor = client => {
   client.interceptors.response.use(
@@ -67,6 +92,16 @@ const addResponseInterceptor = client => {
       if (response.status === 304) {
         response.isNotModified = true;
       }
+      
+      // If we successfully get a response and network status context is available,
+      // trigger a connection state update to mark as online
+      if (networkStatusContext?.updateConnectionState && response.status < 300) {
+        // Only update if we were previously offline/checking
+        if (!networkStatusContext.isOnline) {
+          networkStatusContext.updateConnectionState();
+        }
+      }
+      
       return response;
     },
     async error => {
@@ -88,14 +123,40 @@ const addResponseInterceptor = client => {
         return Promise.reject(error);
       }
 
-      // Only retry GET requests, and only once
-      if (originalRequest.method === 'get' && !originalRequest._retry && !error.response) {
-        originalRequest._retry = true;
-        console.log('Network error, retrying request once:', originalRequest.url);
+      // Skip retry for health checks and explicitly marked requests
+      if (originalRequest._skipRetry || originalRequest.url?.includes('/health')) {
+        return Promise.reject(error);
+      }
 
-        // Wait a moment before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        return client(originalRequest);
+      // Check if we should retry based on network status
+      const shouldRetry = networkStatusContext?.shouldRetryRequest 
+        ? networkStatusContext.shouldRetryRequest(error)
+        : !error.response; // Fallback to original logic
+
+      // Only retry if network conditions allow and we haven't exceeded retry limit
+      if (shouldRetry && !originalRequest._retry && (originalRequest._retryCount || 0) < 3) {
+        originalRequest._retry = true;
+        
+        // Use network-aware error messages if available
+        const errorType = networkStatusContext?.classifyError(error) || 'unknown';
+        console.log(`Network error (${errorType}), retrying request:`, originalRequest.url);
+
+        try {
+          return await retryRequest(client, originalRequest, originalRequest._retryCount || 0);
+        } catch {
+          // If retry fails, return original error
+          console.error('Retry failed for request:', originalRequest.url);
+          return Promise.reject(error);
+        }
+      }
+
+      // Enhance error with network context if available
+      if (networkStatusContext) {
+        error.networkStatus = {
+          connectionState: networkStatusContext.connectionState,
+          isOnline: networkStatusContext.isOnline,
+          errorType: networkStatusContext.classifyError(error)
+        };
       }
 
       return Promise.reject(error);
