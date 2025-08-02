@@ -10,6 +10,7 @@ import { updateSettingsFromUrl, saveIntegrationSettings } from '../../utils/inte
 import Icon from './Icon';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import OfflineIndicator from './OfflineIndicator';
 
 const Layout = () => {
   const { t, i18n } = useTranslation();
@@ -68,6 +69,9 @@ const Layout = () => {
 
   return (
     <div className="flex flex-col min-h-screen h-full w-full">
+      {/* Offline/Connection Status Indicator */}
+      <OfflineIndicator />
+
       {/* Disclaimer Popup - Only render if enabled (defaults to true) */}
       {uiConfig?.disclaimer && uiConfig.disclaimer.enabled !== false && (
         <DisclaimerPopup disclaimer={uiConfig.disclaimer} currentLanguage={currentLanguage} />
