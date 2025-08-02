@@ -41,6 +41,9 @@
       "appSpecific": "app",
       "viewAll": "View all prompts"
     },
+    "slashCommands": {
+      "placeholder": "Search commands..."
+    },
     "magicPrompt": "Magic prompt",
     "undo": "Undo",
     "share": "Share",

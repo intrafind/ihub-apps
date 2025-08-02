@@ -5,6 +5,7 @@ import Icon from '../../../shared/components/Icon';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import { UnifiedUploader } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
+import SlashCommandHandler from './SlashCommandHandler';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
 /**
@@ -39,6 +40,8 @@ const ChatInput = ({
   const actualInputRef = inputRef || localInputRef;
   const [internalShowUploader, setInternalShowUploader] = useState(false);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
+  const [showSlashCommands, setShowSlashCommands] = useState(false);
+  const [slashQuery, setSlashQuery] = useState('');
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
 
@@ -167,7 +170,30 @@ const ChatInput = ({
 
   // Handle key events for the textarea
   const handleKeyDown = e => {
-    if (promptsListEnabled && !showPromptSearch && e.key === '/' && value === '') {
+    // Handle slash commands first - check if input starts with '/' 
+    if (e.key === '/' && value === '') {
+      e.preventDefault();
+      setShowSlashCommands(true);
+      setSlashQuery('');
+      return;
+    }
+
+    // Handle typing in slash command mode
+    if (showSlashCommands) {
+      if (e.key === 'Escape') {
+        setShowSlashCommands(false);
+        setSlashQuery('');
+        return;
+      }
+      if (e.key === 'Backspace' && slashQuery === '') {
+        setShowSlashCommands(false);
+        return;
+      }
+      return;
+    }
+
+    // Handle traditional prompt search (fallback if slash commands don't match)
+    if (promptsListEnabled && !showPromptSearch && e.key === '/' && value === '' && !showSlashCommands) {
       e.preventDefault();
       setShowPromptSearch(true);
       return;
@@ -195,8 +221,32 @@ const ChatInput = ({
     }
   };
 
+  // Handle slash command selection
+  const handleSlashCommandSelect = command => {
+    if (command.action === 'summarize') {
+      onChange({ target: { value: command.prompt } });
+    } else {
+      // For other commands that might have different behaviors
+      onChange({ target: { value: command.prompt || command.command } });
+    }
+    setShowSlashCommands(false);
+    setSlashQuery('');
+    setTimeout(() => {
+      focusInputAtEnd();
+    }, 0);
+  };
+
   return (
     <div className="chat-input-container">
+      <SlashCommandHandler
+        isOpen={showSlashCommands}
+        onClose={() => {
+          setShowSlashCommands(false);
+          setSlashQuery('');
+        }}
+        onSelect={handleSlashCommandSelect}
+        query={slashQuery}
+      />
       {promptsListEnabled && (
         <PromptSearch
           isOpen={showPromptSearch}
@@ -227,7 +277,19 @@ const ChatInput = ({
           data-1p-ignore="true"
           type="text"
           value={value}
-          onChange={onChange}
+          onChange={e => {
+            // Handle slash command query tracking
+            if (showSlashCommands) {
+              const newValue = e.target.value;
+              if (newValue.startsWith('/')) {
+                setSlashQuery(newValue.slice(1));
+              } else if (newValue === '') {
+                setShowSlashCommands(false);
+                setSlashQuery('');
+              }
+            }
+            onChange(e);
+          }}
           onKeyDown={handleKeyDown}
           disabled={disabled || isProcessing}
           className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 pr-10"

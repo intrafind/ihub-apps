@@ -10,7 +10,8 @@ const SearchModal = ({
   items = [],
   fuseKeys = [],
   placeholder = '',
-  renderResult
+  renderResult,
+  query: externalQuery = null
 }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -23,10 +24,12 @@ const SearchModal = ({
   useEffect(() => {
     if (!isOpen) return;
     fuseRef.current = new Fuse(items, { keys: fuseKeys, threshold: 0.4 });
-    setQuery('');
+    if (externalQuery === null) {
+      setQuery('');
+    }
     setResults([]);
     setSelectedIndex(0);
-  }, [isOpen, items, fuseKeys]);
+  }, [isOpen, items, fuseKeys, externalQuery]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -45,15 +48,26 @@ const SearchModal = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  // Use external query when provided, otherwise use internal query
+  const activeQuery = externalQuery !== null ? externalQuery : query;
+
   useEffect(() => {
-    if (!isOpen || !query.trim() || !fuseRef.current) {
+    if (!isOpen || !fuseRef.current) {
       setResults([]);
       return;
     }
-    const searchResults = fuseRef.current.search(query).map(r => r.item || r);
+    
+    if (!activeQuery.trim()) {
+      // Show all items when no query
+      setResults(items.slice(0, 5));
+      setSelectedIndex(0);
+      return;
+    }
+    
+    const searchResults = fuseRef.current.search(activeQuery).map(r => r.item || r);
     setResults(searchResults.slice(0, 5));
     setSelectedIndex(0);
-  }, [query, isOpen]);
+  }, [activeQuery, isOpen, items]);
 
   useEffect(() => {
     if (!listRef.current || results.length === 0) return;
@@ -94,9 +108,10 @@ const SearchModal = ({
           <input
             ref={inputRef}
             type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
+            value={externalQuery !== null ? externalQuery : query}
+            onChange={e => externalQuery === null && setQuery(e.target.value)}
             onKeyDown={handleKeyNav}
+            readOnly={externalQuery !== null}
             placeholder={placeholder}
             className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             autoComplete="off"
