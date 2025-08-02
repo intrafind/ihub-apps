@@ -191,7 +191,7 @@ class PromptService {
       try {
         const sourceManager = createSourceManager({
           filesystem: {
-            basePath: `../${config.CONTENTS_DIR}`
+            basePath: config.CONTENTS_DIR
           }
         });
         let sourceContent = '';
