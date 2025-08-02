@@ -89,80 +89,84 @@ function App() {
             <AdminAuthProvider>
               <TeamsWrapper>
                 <BrowserRouter>
-              {/* Document title management - must be inside Router for useLocation/useParams */}
-              <DocumentTitle />
+                  {/* Document title management - must be inside Router for useLocation/useParams */}
+                  <DocumentTitle />
 
-              <Routes>
-                {/* Teams authentication routes */}
-                <Route path="/teams/auth-start" element={<TeamsAuthStart />} />
-                <Route path="/teams/auth-end" element={<TeamsAuthEnd />} />
-                <Route path="/teams/tab" element={<Layout />}>
-                  <Route index element={<SafeAppsList />} />
-                </Route>
+                  <Routes>
+                    {/* Teams authentication routes */}
+                    <Route path="/teams/auth-start" element={<TeamsAuthStart />} />
+                    <Route path="/teams/auth-end" element={<TeamsAuthEnd />} />
+                    <Route path="/teams/tab" element={<Layout />}>
+                      <Route index element={<SafeAppsList />} />
+                    </Route>
 
-                {/* Regular application routes */}
-                <Route path="/" element={<Layout />}>
-                  <Route index element={<SafeAppsList />} />
-                  {uiConfig?.promptsList?.enabled !== false && (
-                    <Route path="prompts" element={<SafePromptsList />} />
-                  )}
-                  <Route path="apps/:appId" element={<SafeAppChat />} />
-                  <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
-                  <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
-                  {showAdminPage('home') && <Route path="admin" element={<SafeAdminHome />} />}
-                  {showAdminPage('usage') && (
-                    <Route path="admin/usage" element={<SafeAdminUsage />} />
-                  )}
-                  {showAdminPage('system') && (
-                    <Route path="admin/system" element={<SafeAdminSystem />} />
-                  )}
-                  {showAdminPage('apps') && <Route path="admin/apps" element={<SafeAdminApps />} />}
-                  {showAdminPage('apps') && (
-                    <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
-                  )}
-                  {showAdminPage('shortlinks') && (
-                    <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
-                  )}
-                  {showAdminPage('shortlinks') && (
-                    <Route path="admin/shortlinks/:code" element={<SafeAdminShortLinkEdit />} />
-                  )}
-                  {showAdminPage('models') && (
-                    <Route path="admin/models" element={<SafeAdminModels />} />
-                  )}
-                  {showAdminPage('models') && (
-                    <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
-                  )}
-                  {showAdminPage('pages') && (
-                    <Route path="admin/pages" element={<SafeAdminPages />} />
-                  )}
-                  {showAdminPage('pages') && (
-                    <Route path="admin/pages/:pageId" element={<SafeAdminPageEdit />} />
-                  )}
-                  {showAdminPage('prompts') && (
-                    <Route path="admin/prompts" element={<SafeAdminPrompts />} />
-                  )}
-                  {showAdminPage('prompts') && (
-                    <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
-                  )}
-                  {showAdminPage('auth') && <Route path="admin/auth" element={<SafeAdminAuth />} />}
-                  {showAdminPage('users') && (
-                    <Route path="admin/users" element={<SafeAdminUsers />} />
-                  )}
-                  {showAdminPage('groups') && (
-                    <Route path="admin/groups" element={<SafeAdminGroups />} />
-                  )}
-                  {showAdminPage('groups') && (
-                    <Route path="admin/groups/:groupId" element={<SafeAdminGroupEdit />} />
-                  )}
-                  {showAdminPage('ui') && (
-                    <Route path="admin/ui" element={<SafeAdminUICustomization />} />
-                  )}
-                  <Route path="unauthorized" element={<Unauthorized />} />
-                  <Route path="forbidden" element={<Forbidden />} />
-                  <Route path="server-error" element={<ServerError />} />
-                  <Route path="*" element={<NotFound />} />
-                </Route>
-              </Routes>
+                    {/* Regular application routes */}
+                    <Route path="/" element={<Layout />}>
+                      <Route index element={<SafeAppsList />} />
+                      {uiConfig?.promptsList?.enabled !== false && (
+                        <Route path="prompts" element={<SafePromptsList />} />
+                      )}
+                      <Route path="apps/:appId" element={<SafeAppChat />} />
+                      <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
+                      <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
+                      {showAdminPage('home') && <Route path="admin" element={<SafeAdminHome />} />}
+                      {showAdminPage('usage') && (
+                        <Route path="admin/usage" element={<SafeAdminUsage />} />
+                      )}
+                      {showAdminPage('system') && (
+                        <Route path="admin/system" element={<SafeAdminSystem />} />
+                      )}
+                      {showAdminPage('apps') && (
+                        <Route path="admin/apps" element={<SafeAdminApps />} />
+                      )}
+                      {showAdminPage('apps') && (
+                        <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
+                      )}
+                      {showAdminPage('shortlinks') && (
+                        <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
+                      )}
+                      {showAdminPage('shortlinks') && (
+                        <Route path="admin/shortlinks/:code" element={<SafeAdminShortLinkEdit />} />
+                      )}
+                      {showAdminPage('models') && (
+                        <Route path="admin/models" element={<SafeAdminModels />} />
+                      )}
+                      {showAdminPage('models') && (
+                        <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
+                      )}
+                      {showAdminPage('pages') && (
+                        <Route path="admin/pages" element={<SafeAdminPages />} />
+                      )}
+                      {showAdminPage('pages') && (
+                        <Route path="admin/pages/:pageId" element={<SafeAdminPageEdit />} />
+                      )}
+                      {showAdminPage('prompts') && (
+                        <Route path="admin/prompts" element={<SafeAdminPrompts />} />
+                      )}
+                      {showAdminPage('prompts') && (
+                        <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
+                      )}
+                      {showAdminPage('auth') && (
+                        <Route path="admin/auth" element={<SafeAdminAuth />} />
+                      )}
+                      {showAdminPage('users') && (
+                        <Route path="admin/users" element={<SafeAdminUsers />} />
+                      )}
+                      {showAdminPage('groups') && (
+                        <Route path="admin/groups" element={<SafeAdminGroups />} />
+                      )}
+                      {showAdminPage('groups') && (
+                        <Route path="admin/groups/:groupId" element={<SafeAdminGroupEdit />} />
+                      )}
+                      {showAdminPage('ui') && (
+                        <Route path="admin/ui" element={<SafeAdminUICustomization />} />
+                      )}
+                      <Route path="unauthorized" element={<Unauthorized />} />
+                      <Route path="forbidden" element={<Forbidden />} />
+                      <Route path="server-error" element={<ServerError />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Route>
+                  </Routes>
                 </BrowserRouter>
               </TeamsWrapper>
             </AdminAuthProvider>

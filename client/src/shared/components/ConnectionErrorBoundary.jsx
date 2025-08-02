@@ -20,7 +20,9 @@ class ConnectionErrorBoundaryClass extends Component {
 
   render() {
     if (this.state.hasError) {
-      return this.props.fallback(this.state.error, () => this.setState({ hasError: false, error: null }));
+      return this.props.fallback(this.state.error, () =>
+        this.setState({ hasError: false, error: null })
+      );
     }
 
     return this.props.children;
@@ -38,9 +40,7 @@ const ConnectionErrorBoundary = ({ children, fallback }) => {
       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
         {t('error.connection.title', 'Connection Problem')}
       </h3>
-      <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">
-        {getErrorMessage(error, t)}
-      </p>
+      <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">{getErrorMessage(error, t)}</p>
       <div className="flex space-x-3">
         <button
           onClick={() => {
@@ -52,10 +52,9 @@ const ConnectionErrorBoundary = ({ children, fallback }) => {
         >
           {isRetrying && <Icon name="refresh" className="w-4 h-4 animate-spin" />}
           <span>
-            {isRetrying 
-              ? t('error.connection.retrying', 'Retrying...') 
-              : t('error.connection.retry', 'Try Again')
-            }
+            {isRetrying
+              ? t('error.connection.retrying', 'Retrying...')
+              : t('error.connection.retry', 'Try Again')}
           </span>
         </button>
         <button

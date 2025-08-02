@@ -86,9 +86,9 @@ function useEventSource({ appId, chatId, timeoutDuration = 10000, onEvent, onPro
         console.warn('Cannot establish SSE connection: user is offline');
         if (onEvent) {
           const offlineError = { code: 'ERR_NETWORK', message: 'User is offline' };
-          onEvent({ 
-            type: 'error', 
-            data: { message: getErrorMessage(offlineError, (key, fallback) => fallback) } 
+          onEvent({
+            type: 'error',
+            data: { message: getErrorMessage(offlineError, (key, fallback) => fallback) }
           });
         }
         if (onProcessingChange) onProcessingChange(false);
@@ -110,7 +110,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 10000, onEvent, onPro
           if (onEvent) {
             // Use network-aware error message
             const timeoutError = { code: 'TIMEOUT', message: 'Connection timeout' };
-            const errorMessage = isBackendOffline 
+            const errorMessage = isBackendOffline
               ? getErrorMessage(timeoutError, (key, fallback) => fallback)
               : 'Connection timeout. Please try again.';
             onEvent({ type: 'error', data: { message: errorMessage } });
@@ -171,7 +171,16 @@ function useEventSource({ appId, chatId, timeoutDuration = 10000, onEvent, onPro
       startHeartbeat();
       return eventSource;
     },
-    [cleanupEventSource, onProcessingChange, onEvent, startHeartbeat, timeoutDuration, isOnline, isBackendOffline, getErrorMessage]
+    [
+      cleanupEventSource,
+      onProcessingChange,
+      onEvent,
+      startHeartbeat,
+      timeoutDuration,
+      isOnline,
+      isBackendOffline,
+      getErrorMessage
+    ]
   );
 
   useEffect(() => {

@@ -5,18 +5,18 @@ const NetworkStatusContext = createContext();
 
 // Connection states
 export const CONNECTION_STATES = {
-  ONLINE: 'online',           // User online, backend reachable
-  OFFLINE: 'offline',         // User offline (no internet)
+  ONLINE: 'online', // User online, backend reachable
+  OFFLINE: 'offline', // User offline (no internet)
   BACKEND_OFFLINE: 'backend_offline', // User online, backend unreachable
-  CHECKING: 'checking'        // Checking connection status
+  CHECKING: 'checking' // Checking connection status
 };
 
 // Error types for better categorization
 export const ERROR_TYPES = {
-  NETWORK: 'network',         // User connectivity issues
-  BACKEND: 'backend',         // Backend server issues
-  TIMEOUT: 'timeout',         // Request timeout
-  UNKNOWN: 'unknown'          // Other errors
+  NETWORK: 'network', // User connectivity issues
+  BACKEND: 'backend', // Backend server issues
+  TIMEOUT: 'timeout', // Request timeout
+  UNKNOWN: 'unknown' // Other errors
 };
 
 export function NetworkStatusProvider({ children }) {
@@ -24,7 +24,7 @@ export function NetworkStatusProvider({ children }) {
   const [lastBackendCheck, setLastBackendCheck] = useState(null);
   const [retryAttempts, setRetryAttempts] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
-  
+
   const checkInterval = useRef(null);
   const retryTimeout = useRef(null);
 
@@ -41,10 +41,10 @@ export function NetworkStatusProvider({ children }) {
 
     try {
       // Use a lightweight health check endpoint
-      const response = await apiClient.get('/health', { 
+      const response = await apiClient.get('/health', {
         timeout: 5000,
         // Don't retry health checks
-        _skipRetry: true 
+        _skipRetry: true
       });
       return response.status >= 200 && response.status < 300;
     } catch (error) {
@@ -56,7 +56,7 @@ export function NetworkStatusProvider({ children }) {
   // Determine connection state based on user online status and backend reachability
   const updateConnectionState = useCallback(async () => {
     const userOnline = checkUserOnline();
-    
+
     if (!userOnline) {
       setConnectionState(CONNECTION_STATES.OFFLINE);
       setLastBackendCheck(null);
@@ -68,10 +68,10 @@ export function NetworkStatusProvider({ children }) {
     const now = Date.now();
     setLastBackendCheck(now);
 
-    const newState = backendReachable 
-      ? CONNECTION_STATES.ONLINE 
+    const newState = backendReachable
+      ? CONNECTION_STATES.ONLINE
       : CONNECTION_STATES.BACKEND_OFFLINE;
-    
+
     setConnectionState(newState);
     return newState;
   }, [checkUserOnline, checkBackendStatus]);
@@ -82,7 +82,7 @@ export function NetworkStatusProvider({ children }) {
 
     setIsRetrying(true);
     const newState = await updateConnectionState();
-    
+
     if (newState === CONNECTION_STATES.ONLINE) {
       setRetryAttempts(0);
       setIsRetrying(false);
@@ -93,10 +93,10 @@ export function NetworkStatusProvider({ children }) {
     if (newState === CONNECTION_STATES.BACKEND_OFFLINE) {
       const nextAttempt = retryAttempts + 1;
       setRetryAttempts(nextAttempt);
-      
+
       // Exponential backoff: 2s, 4s, 8s, 16s, max 30s
       const delay = Math.min(Math.pow(2, nextAttempt) * 1000, 30000);
-      
+
       retryTimeout.current = setTimeout(() => {
         setIsRetrying(false);
         retryConnection();
@@ -109,54 +109,69 @@ export function NetworkStatusProvider({ children }) {
   }, [isRetrying, retryAttempts, updateConnectionState]);
 
   // Classify error types for better handling
-  const classifyError = useCallback((error) => {
-    if (!checkUserOnline()) {
-      return ERROR_TYPES.NETWORK;
-    }
+  const classifyError = useCallback(
+    error => {
+      if (!checkUserOnline()) {
+        return ERROR_TYPES.NETWORK;
+      }
 
-    if (error?.code === 'ERR_NETWORK' || error?.message?.includes('Network Error')) {
-      return ERROR_TYPES.BACKEND;
-    }
+      if (error?.code === 'ERR_NETWORK' || error?.message?.includes('Network Error')) {
+        return ERROR_TYPES.BACKEND;
+      }
 
-    if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-      return ERROR_TYPES.TIMEOUT;
-    }
+      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        return ERROR_TYPES.TIMEOUT;
+      }
 
-    if (error?.code === 'ERR_CONNECTION_REFUSED') {
-      return ERROR_TYPES.BACKEND;
-    }
+      if (error?.code === 'ERR_CONNECTION_REFUSED') {
+        return ERROR_TYPES.BACKEND;
+      }
 
-    return ERROR_TYPES.UNKNOWN;
-  }, [checkUserOnline]);
+      return ERROR_TYPES.UNKNOWN;
+    },
+    [checkUserOnline]
+  );
 
   // Get user-friendly error message
-  const getErrorMessage = useCallback((error, t) => {
-    const errorType = classifyError(error);
-    
-    switch (errorType) {
-      case ERROR_TYPES.NETWORK:
-        return t('network.errors.offline', 'You appear to be offline. Please check your internet connection.');
-      case ERROR_TYPES.BACKEND:
-        return t('network.errors.backend', 'Unable to connect to the server. Please try again in a moment.');
-      case ERROR_TYPES.TIMEOUT:
-        return t('network.errors.timeout', 'Request timed out. Please try again.');
-      default:
-        return t('network.errors.unknown', 'An unexpected error occurred. Please try again.');
-    }
-  }, [classifyError]);
+  const getErrorMessage = useCallback(
+    (error, t) => {
+      const errorType = classifyError(error);
+
+      switch (errorType) {
+        case ERROR_TYPES.NETWORK:
+          return t(
+            'network.errors.offline',
+            'You appear to be offline. Please check your internet connection.'
+          );
+        case ERROR_TYPES.BACKEND:
+          return t(
+            'network.errors.backend',
+            'Unable to connect to the server. Please try again in a moment.'
+          );
+        case ERROR_TYPES.TIMEOUT:
+          return t('network.errors.timeout', 'Request timed out. Please try again.');
+        default:
+          return t('network.errors.unknown', 'An unexpected error occurred. Please try again.');
+      }
+    },
+    [classifyError]
+  );
 
   // Check if we should retry a request based on error type
-  const shouldRetryRequest = useCallback((error) => {
-    const errorType = classifyError(error);
-    
-    // Don't retry if user is offline
-    if (errorType === ERROR_TYPES.NETWORK) {
-      return false;
-    }
+  const shouldRetryRequest = useCallback(
+    error => {
+      const errorType = classifyError(error);
 
-    // Retry backend and timeout errors
-    return errorType === ERROR_TYPES.BACKEND || errorType === ERROR_TYPES.TIMEOUT;
-  }, [classifyError]);
+      // Don't retry if user is offline
+      if (errorType === ERROR_TYPES.NETWORK) {
+        return false;
+      }
+
+      // Retry backend and timeout errors
+      return errorType === ERROR_TYPES.BACKEND || errorType === ERROR_TYPES.TIMEOUT;
+    },
+    [classifyError]
+  );
 
   // Setup event listeners and periodic checks
   useEffect(() => {
@@ -193,7 +208,8 @@ export function NetworkStatusProvider({ children }) {
       if (connectionState === CONNECTION_STATES.ONLINE) {
         // Less frequent checks when everything is working
         const timeSinceLastCheck = lastBackendCheck ? Date.now() - lastBackendCheck : Infinity;
-        if (timeSinceLastCheck > 60000) { // Check every minute when online
+        if (timeSinceLastCheck > 60000) {
+          // Check every minute when online
           updateConnectionState();
         }
       }
@@ -203,7 +219,7 @@ export function NetworkStatusProvider({ children }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('focus', handleFocus);
-      
+
       if (checkInterval.current) {
         clearInterval(checkInterval.current);
       }
@@ -222,22 +238,18 @@ export function NetworkStatusProvider({ children }) {
     isRetrying,
     retryAttempts,
     lastBackendCheck,
-    
+
     // Actions
     retryConnection,
     updateConnectionState,
-    
+
     // Utilities
     classifyError,
     getErrorMessage,
     shouldRetryRequest
   };
 
-  return (
-    <NetworkStatusContext.Provider value={value}>
-      {children}
-    </NetworkStatusContext.Provider>
-  );
+  return <NetworkStatusContext.Provider value={value}>{children}</NetworkStatusContext.Provider>;
 }
 
 export function useNetworkStatus() {

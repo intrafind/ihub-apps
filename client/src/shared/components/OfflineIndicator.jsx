@@ -23,23 +23,23 @@ const OfflineIndicator = () => {
           icon: 'exclamation-triangle',
           bgColor: 'bg-gray-600',
           textColor: 'text-white',
-          title: t('network.status.offline.title', 'You\'re offline'),
+          title: t('network.status.offline.title', "You're offline"),
           message: t('network.status.offline.message', 'Check your internet connection'),
           showRetry: false
         };
-      
+
       case CONNECTION_STATES.BACKEND_OFFLINE:
         return {
           icon: 'globe',
           bgColor: 'bg-orange-600',
           textColor: 'text-white',
           title: t('network.status.backend_offline.title', 'Server unavailable'),
-          message: isRetrying 
+          message: isRetrying
             ? t('network.status.backend_offline.retrying', 'Attempting to reconnect...')
             : t('network.status.backend_offline.message', 'Unable to reach the server'),
           showRetry: !isRetrying
         };
-      
+
       case CONNECTION_STATES.CHECKING:
         return {
           icon: 'refresh',
@@ -49,7 +49,7 @@ const OfflineIndicator = () => {
           message: t('network.status.checking.message', 'Please wait...'),
           showRetry: false
         };
-      
+
       default:
         return null;
     }
@@ -59,24 +59,28 @@ const OfflineIndicator = () => {
   if (!config) return null;
 
   return (
-    <div className={`fixed top-0 left-0 right-0 z-50 ${config.bgColor} ${config.textColor} px-4 py-2 shadow-lg`}>
+    <div
+      className={`fixed top-0 left-0 right-0 z-50 ${config.bgColor} ${config.textColor} px-4 py-2 shadow-lg`}
+    >
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         <div className="flex items-center space-x-3">
-          <Icon 
-            name={config.icon} 
-            className={`w-5 h-5 ${isRetrying || connectionState === CONNECTION_STATES.CHECKING ? 'animate-spin' : ''}`} 
+          <Icon
+            name={config.icon}
+            className={`w-5 h-5 ${isRetrying || connectionState === CONNECTION_STATES.CHECKING ? 'animate-spin' : ''}`}
           />
           <div className="flex-1">
             <p className="font-medium text-sm">{config.title}</p>
             <p className="text-xs opacity-90">{config.message}</p>
             {retryAttempts > 0 && connectionState === CONNECTION_STATES.BACKEND_OFFLINE && (
               <p className="text-xs opacity-75">
-                {t('network.status.retry_attempt', 'Retry attempt {{count}}', { count: retryAttempts })}
+                {t('network.status.retry_attempt', 'Retry attempt {{count}}', {
+                  count: retryAttempts
+                })}
               </p>
             )}
           </div>
         </div>
-        
+
         {config.showRetry && (
           <button
             onClick={retryConnection}
