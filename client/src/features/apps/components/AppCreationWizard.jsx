@@ -517,7 +517,7 @@ const CreationMethodStep = ({
   const [fieldErrors, setFieldErrors] = useState({});
 
   // Check for validation errors
-  React.useEffect(() => {
+  useEffect(() => {
     if (error && error.includes('required fields')) {
       const missingFields = validateCurrentStep();
       const newFieldErrors = {};
@@ -944,7 +944,7 @@ const BasicInfoStep = ({
   };
 
   // Check for validation errors and highlight fields
-  React.useEffect(() => {
+  useEffect(() => {
     if (error && error.includes('required fields')) {
       const missingFields = validateCurrentStep();
       const newFieldErrors = {};
@@ -1165,7 +1165,7 @@ const SystemPromptStep = ({
   };
 
   // Check for validation errors and highlight fields
-  React.useEffect(() => {
+  useEffect(() => {
     if (error && error.includes('required fields')) {
       const missingFields = validateCurrentStep();
       const newFieldErrors = {};
