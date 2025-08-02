@@ -56,14 +56,14 @@ const SearchModal = ({
       setResults([]);
       return;
     }
-    
+
     if (!activeQuery.trim()) {
       // Show all items when no query
       setResults(items.slice(0, 5));
       setSelectedIndex(0);
       return;
     }
-    
+
     const searchResults = fuseRef.current.search(activeQuery).map(r => r.item || r);
     setResults(searchResults.slice(0, 5));
     setSelectedIndex(0);

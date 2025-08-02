@@ -24,10 +24,11 @@ const SlashCommandHandler = ({ isOpen, onClose, onSelect, query = '' }) => {
 
   useEffect(() => {
     if (query) {
-      const filtered = BUILT_IN_COMMANDS.filter(cmd => 
-        cmd.command.toLowerCase().includes(query.toLowerCase()) ||
-        cmd.name.toLowerCase().includes(query.toLowerCase()) ||
-        cmd.description.toLowerCase().includes(query.toLowerCase())
+      const filtered = BUILT_IN_COMMANDS.filter(
+        cmd =>
+          cmd.command.toLowerCase().includes(query.toLowerCase()) ||
+          cmd.name.toLowerCase().includes(query.toLowerCase()) ||
+          cmd.description.toLowerCase().includes(query.toLowerCase())
       );
       setFilteredCommands(filtered);
     } else {
@@ -57,7 +58,9 @@ const SlashCommandHandler = ({ isOpen, onClose, onSelect, query = '' }) => {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center flex-wrap mb-1">
-              <span className="font-mono text-blue-600 text-sm font-medium mr-2">{cmd.command}</span>
+              <span className="font-mono text-blue-600 text-sm font-medium mr-2">
+                {cmd.command}
+              </span>
               <span className="font-medium text-gray-900 text-sm">{cmd.name}</span>
             </div>
             <p

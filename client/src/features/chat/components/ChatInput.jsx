@@ -170,7 +170,7 @@ const ChatInput = ({
 
   // Handle key events for the textarea
   const handleKeyDown = e => {
-    // Handle slash commands first - check if input starts with '/' 
+    // Handle slash commands first - check if input starts with '/'
     if (e.key === '/' && value === '') {
       e.preventDefault();
       setShowSlashCommands(true);
@@ -193,7 +193,13 @@ const ChatInput = ({
     }
 
     // Handle traditional prompt search (fallback if slash commands don't match)
-    if (promptsListEnabled && !showPromptSearch && e.key === '/' && value === '' && !showSlashCommands) {
+    if (
+      promptsListEnabled &&
+      !showPromptSearch &&
+      e.key === '/' &&
+      value === '' &&
+      !showSlashCommands
+    ) {
       e.preventDefault();
       setShowPromptSearch(true);
       return;
