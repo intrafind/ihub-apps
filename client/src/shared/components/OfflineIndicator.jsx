@@ -71,7 +71,6 @@ const OfflineIndicator = () => {
             <p className="text-xs opacity-90">{config.message}</p>
           </div>
         </div>
-
       </div>
     </div>
   );

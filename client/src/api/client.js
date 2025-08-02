@@ -67,7 +67,6 @@ const addRequestInterceptor = client => {
 addRequestInterceptor(apiClient);
 addRequestInterceptor(streamingApiClient);
 
-
 // Shared response interceptor function
 const addResponseInterceptor = client => {
   client.interceptors.response.use(
@@ -104,7 +103,6 @@ const addResponseInterceptor = client => {
         // Don't retry auth requests to avoid infinite loops
         return Promise.reject(error);
       }
-
 
       // Enhance error with network context if available
       if (networkStatusContext) {

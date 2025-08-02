@@ -73,7 +73,6 @@ export function NetworkStatusProvider({ children }) {
     return newState;
   }, [checkUserOnline, checkBackendStatus]);
 
-
   // Classify error types for better handling
   const classifyError = useCallback(
     error => {
@@ -122,7 +121,6 @@ export function NetworkStatusProvider({ children }) {
     },
     [classifyError]
   );
-
 
   // Setup event listeners and periodic checks
   useEffect(() => {

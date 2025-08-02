@@ -11,11 +11,7 @@ export function useApiError() {
 
   const handleApiError = useCallback(
     (error, options = {}) => {
-      const {
-        showNotification = true,
-        fallbackMessage = null,
-        context = 'general'
-      } = options;
+      const { showNotification = true, fallbackMessage = null, context = 'general' } = options;
 
       // Get user-friendly error message
       const userMessage =
