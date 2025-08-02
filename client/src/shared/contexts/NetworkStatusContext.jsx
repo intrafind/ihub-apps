@@ -22,11 +22,8 @@ export const ERROR_TYPES = {
 export function NetworkStatusProvider({ children }) {
   const [connectionState, setConnectionState] = useState(CONNECTION_STATES.CHECKING);
   const [lastBackendCheck, setLastBackendCheck] = useState(null);
-  const [retryAttempts, setRetryAttempts] = useState(0);
-  const [isRetrying, setIsRetrying] = useState(false);
 
   const checkInterval = useRef(null);
-  const retryTimeout = useRef(null);
 
   // Check if user is online
   const checkUserOnline = useCallback(() => {
@@ -76,37 +73,6 @@ export function NetworkStatusProvider({ children }) {
     return newState;
   }, [checkUserOnline, checkBackendStatus]);
 
-  // Retry connection with exponential backoff
-  const retryConnection = useCallback(async () => {
-    if (isRetrying) return;
-
-    setIsRetrying(true);
-    const newState = await updateConnectionState();
-
-    if (newState === CONNECTION_STATES.ONLINE) {
-      setRetryAttempts(0);
-      setIsRetrying(false);
-      return true;
-    }
-
-    // Only retry if user is online but backend is unreachable
-    if (newState === CONNECTION_STATES.BACKEND_OFFLINE) {
-      const nextAttempt = retryAttempts + 1;
-      setRetryAttempts(nextAttempt);
-
-      // Exponential backoff: 2s, 4s, 8s, 16s, max 30s
-      const delay = Math.min(Math.pow(2, nextAttempt) * 1000, 30000);
-
-      retryTimeout.current = setTimeout(() => {
-        setIsRetrying(false);
-        retryConnection();
-      }, delay);
-    } else {
-      setIsRetrying(false);
-    }
-
-    return false;
-  }, [isRetrying, retryAttempts, updateConnectionState]);
 
   // Classify error types for better handling
   const classifyError = useCallback(
@@ -157,21 +123,6 @@ export function NetworkStatusProvider({ children }) {
     [classifyError]
   );
 
-  // Check if we should retry a request based on error type
-  const shouldRetryRequest = useCallback(
-    error => {
-      const errorType = classifyError(error);
-
-      // Don't retry if user is offline
-      if (errorType === ERROR_TYPES.NETWORK) {
-        return false;
-      }
-
-      // Retry backend and timeout errors
-      return errorType === ERROR_TYPES.BACKEND || errorType === ERROR_TYPES.TIMEOUT;
-    },
-    [classifyError]
-  );
 
   // Setup event listeners and periodic checks
   useEffect(() => {
@@ -180,14 +131,12 @@ export function NetworkStatusProvider({ children }) {
 
     // Listen for online/offline events
     const handleOnline = () => {
-      setRetryAttempts(0);
       updateConnectionState();
     };
 
     const handleOffline = () => {
       setConnectionState(CONNECTION_STATES.OFFLINE);
       setLastBackendCheck(null);
-      setRetryAttempts(0);
     };
 
     // Listen for focus events to re-check connection
@@ -223,9 +172,6 @@ export function NetworkStatusProvider({ children }) {
       if (checkInterval.current) {
         clearInterval(checkInterval.current);
       }
-      if (retryTimeout.current) {
-        clearTimeout(retryTimeout.current);
-      }
     };
   }, [connectionState, lastBackendCheck, updateConnectionState]);
 
@@ -235,18 +181,14 @@ export function NetworkStatusProvider({ children }) {
     isOffline: connectionState === CONNECTION_STATES.OFFLINE,
     isBackendOffline: connectionState === CONNECTION_STATES.BACKEND_OFFLINE,
     isChecking: connectionState === CONNECTION_STATES.CHECKING,
-    isRetrying,
-    retryAttempts,
     lastBackendCheck,
 
     // Actions
-    retryConnection,
     updateConnectionState,
 
     // Utilities
     classifyError,
-    getErrorMessage,
-    shouldRetryRequest
+    getErrorMessage
   };
 
   return <NetworkStatusContext.Provider value={value}>{children}</NetworkStatusContext.Provider>;

@@ -14,7 +14,6 @@ export function useApiError() {
       const {
         showNotification = true,
         fallbackMessage = null,
-        onRetry = null,
         context = 'general'
       } = options;
 
@@ -33,7 +32,6 @@ export function useApiError() {
         userMessage,
         errorType,
         context,
-        canRetry: isOnline && errorType !== 'network',
         networkStatus: error.networkStatus || {
           isOnline,
           errorType
@@ -52,9 +50,7 @@ export function useApiError() {
       // Show notification if requested
       if (showNotification && window.showErrorNotification) {
         window.showErrorNotification(userMessage, {
-          type: errorType,
-          canRetry: enhancedError.canRetry,
-          onRetry
+          type: errorType
         });
       }
 
