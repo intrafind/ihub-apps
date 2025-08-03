@@ -134,16 +134,22 @@ jobs:
       - name: Test container startup
         run: |
           echo "Testing container startup..."
+          # Use first tag from metadata instead of github.sha
+          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
           docker run --rm -d --name ai-hub-test \
             -e JWT_SECRET=test-secret \
             -e NODE_ENV=production \
             -p 3000:3000 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            "$IMAGE_TAG"
           
-          # Wait for container to start
-          timeout 60 bash -c 'until curl -f http://localhost:3000/api/health; do sleep 2; done'
+          # Wait for container to start with better error handling
+          if ! timeout 60 bash -c 'until curl -f http://localhost:3000/api/health; do sleep 2; done'; then
+            echo "Container startup failed"
+            docker logs ai-hub-test
+            docker stop ai-hub-test || true
+            exit 1
+          fi
           
-          # Stop test container
           docker stop ai-hub-test
           echo "Container startup test passed!"
 
@@ -159,7 +165,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-test.outputs.image-digest }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
@@ -251,7 +257,7 @@ jobs:
             --network host \
             --env-file .env.test \
             -v $(pwd)/contents:/app/contents:ro \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-test.outputs.image-digest }} \
             npm run test:all
 
   # Deploy to staging (only on main branch)
