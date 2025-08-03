@@ -327,10 +327,8 @@ export function hasAdminAccess(userGroups) {
       return group?.permissions?.adminAccess === true;
     });
   } catch (error) {
-    console.warn('Failed to load groups configuration for admin check:', error);
-    // Fallback to default admin groups if groups config fails
-    const defaultAdminGroups = ['admin', 'admins'];
-    return userGroups.some(group => defaultAdminGroups.includes(group));
+    console.error('Failed to load groups configuration for admin check:', error);
+    throw new Error('Groups configuration required for admin access check');
   }
 }
 
@@ -349,17 +347,11 @@ export function isAnonymousAccessAllowed(platform) {
  * @returns {string[]} Default group names
  */
 export function getDefaultAnonymousGroups(platform) {
-  // Support both old defaultGroup and new defaultGroups format
   const anonymousAuth = platform?.anonymousAuth;
   if (!anonymousAuth) return ['anonymous'];
 
   if (Array.isArray(anonymousAuth.defaultGroups)) {
     return anonymousAuth.defaultGroups;
-  }
-
-  // Backward compatibility with defaultGroup
-  if (anonymousAuth.defaultGroup) {
-    return [anonymousAuth.defaultGroup];
   }
 
   return ['anonymous'];
@@ -389,9 +381,16 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
     user.groups = getDefaultAnonymousGroups(platform);
   }
 
-  // Map external groups to internal groups if needed
+  // Handle external groups mapping and merging with internal groups
   if (user.externalGroups && Array.isArray(user.externalGroups)) {
-    user.groups = mapExternalGroups(user.externalGroups);
+    // Map external groups to internal groups
+    const mappedExternalGroups = mapExternalGroups(user.externalGroups);
+
+    // Merge with any internal groups (from users.json)
+    const internalGroups = user.internalGroups || [];
+    const allGroups = new Set([...mappedExternalGroups, ...internalGroups]);
+
+    user.groups = Array.from(allGroups);
   }
 
   // Get permissions for user

@@ -239,12 +239,10 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
     user.name = externalUser.name || user.name;
     user.email = externalUser.email || user.email;
 
-    // DO NOT store external groups - only store additional/manual groups
-    // External groups will be combined at runtime during authentication
-    // Keep existing additionalGroups if they exist, otherwise initialize empty
-    if (!user.additionalGroups) {
-      user.additionalGroups = user.groups || []; // Migrate existing groups to additionalGroups
-      delete user.groups; // Remove old groups field
+    // Store internal groups - groups manually assigned to users in the admin interface
+    // External groups from auth providers are handled at runtime, not persisted
+    if (!user.internalGroups) {
+      user.internalGroups = [];
     }
 
     // Update activity tracking
@@ -262,7 +260,7 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
       username: externalUser.email, // Use email as username for external users
       email: externalUser.email,
       name: externalUser.name,
-      additionalGroups: [], // Only store additional/manual groups, not external groups
+      internalGroups: [], // Only store internal/manual groups, not external groups
       active: true,
       authMethods: [authMethod],
       lastActiveDate: today,
@@ -334,27 +332,19 @@ export function isUserActive(user) {
 /**
  * Merge user groups from different sources
  * @param {Array} externalGroups - Groups from external auth provider (OIDC/proxy)
- * @param {Array} additionalGroups - Additional groups from user config (manually assigned)
+ * @param {Array} internalGroups - Internal groups from user config (manually assigned)
  * @returns {Array} Merged and deduplicated groups
  */
-export function mergeUserGroups(externalGroups = [], additionalGroups = []) {
+export function mergeUserGroups(externalGroups = [], internalGroups = []) {
   const allGroups = new Set();
 
   // Add external groups (from current auth session)
   externalGroups.forEach(group => allGroups.add(group));
 
-  // Add additional groups (from users.json)
-  additionalGroups.forEach(group => allGroups.add(group));
+  // Add internal groups (from users.json)
+  internalGroups.forEach(group => allGroups.add(group));
 
   return Array.from(allGroups);
-}
-
-/**
- * Legacy compatibility function - use createOrUpdateExternalUser instead
- * @deprecated Use createOrUpdateExternalUser for all external auth methods
- */
-export async function createOrUpdateOidcUser(externalUser, usersFilePath) {
-  return await createOrUpdateExternalUser(externalUser, usersFilePath);
 }
 
 /**
@@ -404,10 +394,10 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     // Update activity tracking
     await updateUserActivity(persistedUser.id, usersFilePath);
 
-    // Merge groups: external groups (from auth provider) + additional groups (from users.json)
+    // Merge groups: external groups (from auth provider) + internal groups (from users.json)
     const mergedGroups = mergeUserGroups(
       externalUser.groups || [],
-      persistedUser.additionalGroups || []
+      persistedUser.internalGroups || []
     );
 
     return {
@@ -431,10 +421,10 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
   // Create new user (self-signup allowed)
   const persistedUser = await createOrUpdateExternalUser(externalUser, usersFilePath);
 
-  // Combine external groups from auth provider with additional groups from users.json
+  // Combine external groups from auth provider with internal groups from users.json
   const combinedGroups = mergeUserGroups(
     externalUser.groups || [],
-    persistedUser.additionalGroups || []
+    persistedUser.internalGroups || []
   );
 
   return {
