@@ -277,24 +277,28 @@ Failure Path:
 Following the established patterns of `iFinder` and `entraPeopleSearch`, the JIRA connector uses a **unified tool architecture** with the following benefits:
 
 #### **1. Simplified Tool Management**
+
 - **Single Entry Point**: One tool definition instead of multiple separate tools
 - **Consistent Authentication**: Single auth flow for all JIRA operations
 - **Unified Configuration**: Single point of configuration and maintenance
 - **Reduced Complexity**: Less tool definitions to manage in apps and permissions
 
 #### **2. Better User Experience**
+
 - **Contextual Operations**: Related JIRA functions grouped together logically
 - **Seamless Workflow**: Users can search, view, comment, and transition tickets without switching tools
 - **Consistent Behavior**: Same authentication and error handling across all functions
 - **Intelligent Suggestions**: LLM can suggest related functions within the same tool
 
 #### **3. Improved Maintainability**
+
 - **Centralized Logic**: All JIRA operations in one service class
 - **Shared Dependencies**: Common utilities and authentication shared across functions
 - **Easier Updates**: Changes to JIRA API integration affect one service
 - **Consistent Testing**: Single test suite for all JIRA functionality
 
 #### **4. Following AI Hub Apps Patterns**
+
 - **Established Convention**: Matches existing `entraPeopleSearch` and `iFinder` patterns
 - **Service Layer Architecture**: Clean separation between tool wrapper and service implementation
 - **Function-Based Design**: Using `functions` property for multiple operations
