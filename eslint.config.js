@@ -16,6 +16,7 @@ export default [
       'client/dist/**',
       'docs/**',
       'examples/**',
+      'concepts/**',
       'logs/**',
       '*.log',
       '.github/**',

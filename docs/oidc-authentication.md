@@ -133,6 +133,61 @@ Each OIDC provider requires the following configuration:
    - Microsoft Graph: `User.Read`, `openid`, `profile`, `email`
 5. Copy Application (client) ID and create client secret
 
+#### Microsoft Apps Integration
+
+To enable direct launching from Microsoft Apps (Office 365 / Microsoft 365 app launcher):
+
+**Configuration Steps:**
+
+1. **In Azure Entra ID (Azure AD)**:
+   - Go to your app registration created above
+   - Navigate to **Authentication** section
+   - Under **Web** platform configuration:
+     - Set **Home page URL** to: `https://yourdomain.com/api/auth/oidc/microsoft`
+     - Set **Sign-on URL** to: `https://yourdomain.com/api/auth/oidc/microsoft`
+   - Ensure **Redirect URIs** includes: `https://yourdomain.com/api/auth/oidc/microsoft/callback`
+
+2. **In Microsoft 365 Admin Center** (for organization-wide app deployment):
+   - Navigate to **Settings** > **Integrated apps**
+   - Add your app registration
+   - Configure the app to appear in the Microsoft Apps launcher
+
+3. **Optional: Deep Linking**:
+   - You can include a `returnUrl` parameter to redirect users to specific pages after authentication:
+   - Example: `https://yourdomain.com/api/auth/oidc/microsoft?returnUrl=/dashboard`
+
+**How It Works:**
+
+- When users click your app icon in Microsoft Apps, they are redirected to the OIDC authentication endpoint
+- The existing authentication flow handles the Microsoft Entra ID handshake automatically
+- Users are authenticated and redirected back to your application
+- No additional code changes needed - uses the same OIDC flow as the manual login
+
+**Example Configuration:**
+
+```json
+{
+  "name": "microsoft",
+  "displayName": "Microsoft",
+  "clientId": "${MICROSOFT_CLIENT_ID}",
+  "clientSecret": "${MICROSOFT_CLIENT_SECRET}",
+  "authorizationURL": "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize",
+  "tokenURL": "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
+  "userInfoURL": "https://graph.microsoft.com/v1.0/me",
+  "scope": ["openid", "profile", "email", "User.Read"],
+  "callbackURL": "/api/auth/oidc/microsoft/callback",
+  "groupsAttribute": "groups",
+  "pkce": true
+}
+```
+
+**Testing:**
+
+1. Test the direct URL: `https://yourdomain.com/api/auth/oidc/microsoft`
+2. Verify it initiates the Microsoft authentication flow
+3. Confirm successful redirect back to your application
+4. Test from Microsoft Apps launcher once configured
+
 ### Auth0
 
 1. Go to [Auth0 Dashboard](https://manage.auth0.com/)
