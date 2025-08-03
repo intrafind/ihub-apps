@@ -12,7 +12,9 @@ const AdminNavigation = () => {
   const isEnabled = key => pageConfig[key] !== false;
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const [windowWidth, setWindowWidth] = useState(
+    typeof window !== 'undefined' ? window.innerWidth : 1024
+  );
   const moreMenuRef = useRef(null);
 
   // Close dropdown when clicking outside
@@ -144,7 +146,7 @@ const AdminNavigation = () => {
 
   // Filter enabled items
   const enabledItems = navItems.filter(item => isEnabled(item.key));
-  
+
   // Define how many tabs to show before "More" button - responsive to screen size
   // On smaller screens, show fewer tabs to prevent overflow
   const maxVisibleTabs = windowWidth < 768 ? 3 : windowWidth < 1024 ? 4 : 6;
@@ -157,9 +159,7 @@ const AdminNavigation = () => {
       className={
         isDropdownItem
           ? `flex items-center w-full px-4 py-2 text-sm hover:bg-gray-100 ${
-              item.current
-                ? 'bg-indigo-50 text-indigo-600 font-medium'
-                : 'text-gray-700'
+              item.current ? 'bg-indigo-50 text-indigo-600 font-medium' : 'text-gray-700'
             }`
           : `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
               item.current
@@ -182,7 +182,7 @@ const AdminNavigation = () => {
           {visibleItems.map(item => (
             <TabItem key={item.name} item={item} />
           ))}
-          
+
           {/* More button and dropdown */}
           {hiddenItems.length > 0 && (
             <div className="relative" ref={moreMenuRef}>
