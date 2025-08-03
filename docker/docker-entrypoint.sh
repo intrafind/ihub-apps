@@ -92,7 +92,7 @@ init_directories() {
     # Set proper permissions for writable directories
     if [ "$(id -u)" = "0" ]; then
         # Running as root, set ownership to aihub user
-        chown -R aihub:nodejs \
+        chown -R aihub:aihub \
             /app/contents/data \
             /app/contents/uploads \
             /app/contents/pages \

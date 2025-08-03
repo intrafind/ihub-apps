@@ -72,7 +72,8 @@ ENV NODE_ENV=production
 RUN apk add --update --no-cache \
     dumb-init \
     curl \
-    tini
+    tini \
+    netcat-openbsd
 
 # Create non-root user for security
 RUN addgroup -S aihub && \
