@@ -9,10 +9,10 @@ export { configureMarked };
 
 const MarkdownRenderer = () => {
   const { t } = useTranslation();
-  
+
   // Custom hook for copy/download buttons on standard code blocks
   useCodeBlockInteractions();
-  
+
   // Custom hook for all Mermaid-related logic
   useMermaidRenderer({ t });
 

@@ -1,10 +1,15 @@
 import { marked } from 'marked';
-import { getLanguageDisplayName, isMermaidLanguage, generateId, detectDiagramType } from '../utils/markdownHelpers';
+import {
+  getLanguageDisplayName,
+  isMermaidLanguage,
+  generateId,
+  detectDiagramType
+} from '../utils/markdownHelpers';
 
 const renderMermaidPlaceholder = (code, language) => {
   const diagramId = `mermaid-${generateId()}`;
   const detectedType = detectDiagramType(code);
-  
+
   return `
     <div class="mermaid-diagram-container" id="${diagramId}" data-code="${encodeURIComponent(code)}" data-language="${language || 'mermaid'}" data-diagram-type="${detectedType}">
       <div class="mermaid-diagram-placeholder">
@@ -22,7 +27,7 @@ const renderMermaidPlaceholder = (code, language) => {
   `;
 };
 
-export const configureMarked = (t) => {
+export const configureMarked = t => {
   const renderer = new marked.Renderer();
 
   // --- Code Renderer ---
@@ -30,13 +35,13 @@ export const configureMarked = (t) => {
     // Extract actual code string and language from the parameters
     let actualCode = code;
     let actualLanguage = language;
-    
+
     // Handle different parameter structures (marked.js versions may vary)
     if (typeof code === 'object' && code !== null) {
       actualCode = code.text || code.raw || code.code || code;
       actualLanguage = language || code.lang || code.language;
     }
-    
+
     // Ensure we have strings
     if (typeof actualCode !== 'string') {
       actualCode = String(actualCode);
@@ -47,15 +52,15 @@ export const configureMarked = (t) => {
     if (isMermaidLanguage(lang)) {
       return renderMermaidPlaceholder(actualCode, lang);
     }
-    
+
     // Fallback for regular code blocks
     const displayLanguage = getLanguageDisplayName(lang);
-    
+
     // Use the original highlighted code from marked
-    const highlightedCode = marked.defaults.highlight ? 
-      marked.defaults.highlight(actualCode, lang) : 
-      actualCode.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    
+    const highlightedCode = marked.defaults.highlight
+      ? marked.defaults.highlight(actualCode, lang)
+      : actualCode.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
     return `
       <div class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-sm">
         <pre class="bg-gray-900 text-gray-100 rounded-t-lg p-4 overflow-x-auto"><code class="language-${lang}">${highlightedCode}</code></pre>
@@ -157,7 +162,7 @@ export const configureMarked = (t) => {
         }
       }
       // Fallback to no highlighting
-      return code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    },
+      return code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
   });
 };

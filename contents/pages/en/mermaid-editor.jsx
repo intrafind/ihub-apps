@@ -1,6 +1,6 @@
 function UserComponent(props) {
   const { React, useState, useEffect, useRef, useId } = props;
-  
+
   // Main state
   const [mermaidCode, setMermaidCode] = useState(`graph TD
     A[Start] --> B{Is it working?}
@@ -123,7 +123,7 @@ function UserComponent(props) {
       setError(new Error('Failed to load Mermaid library'));
       setIsLoading(false);
     };
-    
+
     document.head.appendChild(script);
   }, []);
 
@@ -133,7 +133,7 @@ function UserComponent(props) {
 
     try {
       // Apply theme before rendering
-      window.mermaid.initialize({ 
+      window.mermaid.initialize({
         theme: theme === 'dark' ? 'dark' : 'default',
         securityLevel: 'loose',
         flowchart: {
@@ -146,14 +146,13 @@ function UserComponent(props) {
       if (diagramRef.current) {
         diagramRef.current.innerHTML = '';
       }
-      
+
       const diagramId = `mermaid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const { svg } = await window.mermaid.render(diagramId, mermaidCode);
       setError(null);
       if (diagramRef.current) {
         diagramRef.current.innerHTML = svg;
       }
-      
     } catch (err) {
       console.error('Diagram render error:', err);
       setError(err);
@@ -222,51 +221,76 @@ function UserComponent(props) {
               className="flex items-center text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M15 19l-7-7 7-7"
+                />
               </svg>
               Back
             </button>
             <h1 className="text-xl font-bold text-slate-900 dark:text-white">Mermaid Editor</h1>
           </div>
           <div className="flex items-center gap-2">
-            <button 
-              onClick={handleCopyCode} 
-              title="Copy Code" 
+            <button
+              onClick={handleCopyCode}
+              title="Copy Code"
               className="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
               </svg>
             </button>
-            <button 
-              onClick={handleExportSVG} 
-              title="Export as SVG" 
+            <button
+              onClick={handleExportSVG}
+              title="Export as SVG"
               className="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
               </svg>
             </button>
             <div className="w-px h-6 bg-slate-300 dark:bg-slate-600 mx-1"></div>
-            <button 
-              onClick={toggleTheme} 
-              title="Toggle Theme" 
+            <button
+              onClick={toggleTheme}
+              title="Toggle Theme"
               className="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               {theme === 'light' ? (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                  />
                 </svg>
               ) : (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"
+                  />
                 </svg>
               )}
             </button>
           </div>
         </div>
       </header>
-      
+
       {/* Main Content */}
       <div className="flex-1 flex min-h-0">
         {/* Left Panel: Code Editor and Examples */}
@@ -274,7 +298,7 @@ function UserComponent(props) {
           <div className="p-3 border-b border-slate-200 dark:border-slate-700">
             <h2 className="font-semibold mb-2 text-sm">Examples</h2>
             <div className="flex flex-wrap gap-2">
-              {examples.map((ex) => (
+              {examples.map(ex => (
                 <button
                   key={ex.name}
                   onClick={() => setMermaidCode(ex.code)}
@@ -285,22 +309,22 @@ function UserComponent(props) {
               ))}
             </div>
           </div>
-          
+
           {/* Simple Textarea Editor */}
           <div className="flex-1 relative">
             <textarea
               value={mermaidCode}
-              onChange={(e) => setMermaidCode(e.target.value)}
+              onChange={e => setMermaidCode(e.target.value)}
               placeholder="Enter your Mermaid diagram code here..."
               className="w-full h-full p-4 font-mono text-sm resize-none border-none outline-none bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
-              style={{ 
+              style={{
                 fontFamily: 'Menlo, Monaco, "Courier New", monospace',
                 lineHeight: '1.5'
               }}
             />
           </div>
         </div>
-        
+
         {/* Right Panel: Diagram Preview */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="p-3 border-b border-slate-200 dark:border-slate-700">
@@ -326,10 +350,7 @@ function UserComponent(props) {
                 </div>
               </div>
             ) : (
-              <div 
-                ref={diagramRef}
-                className="flex justify-center items-start min-h-full"
-              />
+              <div ref={diagramRef} className="flex justify-center items-start min-h-full" />
             )}
           </div>
         </div>
@@ -338,7 +359,17 @@ function UserComponent(props) {
       {/* Footer / Status Bar */}
       <footer className="flex-shrink-0 text-xs px-4 py-1 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400">
         <div className="flex justify-between items-center">
-          <span>Powered by <a href="https://mermaid.js.org" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Mermaid.js</a></span>
+          <span>
+            Powered by{' '}
+            <a
+              href="https://mermaid.js.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:underline"
+            >
+              Mermaid.js
+            </a>
+          </span>
           <span>Auto-updates in real-time</span>
         </div>
       </footer>
