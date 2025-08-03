@@ -217,12 +217,12 @@ const AdminNavigation = () => {
   // Helper function to get groups with items that should be in dropdown
   const getGroupedDropdownItems = () => {
     const result = [];
-    
+
     navGroups.forEach(group => {
-      const groupItems = group.items.filter(item => 
-        isEnabled(item.key) && hiddenItems.some(hiddenItem => hiddenItem.key === item.key)
+      const groupItems = group.items.filter(
+        item => isEnabled(item.key) && hiddenItems.some(hiddenItem => hiddenItem.key === item.key)
       );
-      
+
       if (groupItems.length > 0) {
         result.push({
           type: 'group',
@@ -231,7 +231,7 @@ const AdminNavigation = () => {
         });
       }
     });
-    
+
     return result;
   };
 
