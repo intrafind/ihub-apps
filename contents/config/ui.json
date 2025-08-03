@@ -331,6 +331,16 @@
         "en": "pages/en/qr-generator.jsx"
       },
       "contentType": "react"
+    },
+    "mermaid-editor": {
+      "title": {
+        "en": "Mermaid Diagram Editor",
+        "de": "Mermaid-Diagramm-Editor"
+      },
+      "filePath": {
+        "en": "pages/en/mermaid-editor.jsx"
+      },
+      "contentType": "react"
     }
   }
 }

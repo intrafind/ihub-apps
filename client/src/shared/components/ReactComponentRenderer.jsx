@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 
 // Error fallback component
-const ErrorFallback = ({ error, resetErrorBoundary }) => (
+const ErrorFallback = ({ error, resetErrorBoundary, t }) => (
   <div className="border-2 border-red-200 rounded-lg p-6 bg-red-50">
     <div className="flex items-center mb-4">
       <svg
@@ -19,7 +19,7 @@ const ErrorFallback = ({ error, resetErrorBoundary }) => (
         ></path>
       </svg>
       <h3 className="text-red-800 font-semibold">
-        {t('errors.componentError', 'Component Error')}
+        {t ? t('errors.componentError', 'Component Error') : 'Component Error'}
       </h3>
     </div>
     <pre className="text-sm text-red-700 bg-red-100 p-3 rounded mb-4 overflow-auto">
@@ -35,10 +35,10 @@ const ErrorFallback = ({ error, resetErrorBoundary }) => (
 );
 
 // Loading component
-const LoadingComponent = () => (
+const LoadingComponent = ({ t }) => (
   <div className="flex items-center justify-center p-8">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-    <span className="ml-3 text-gray-600">{t('common.compiling', 'Compiling component...')}</span>
+    <span className="ml-3 text-gray-600">{t ? t('common.compiling', 'Compiling component...') : 'Compiling component...'}</span>
   </div>
 );
 
@@ -46,6 +46,9 @@ const ReactComponentRenderer = ({ jsxCode, componentProps = {}, className = '' }
   const [CompiledComponent, setCompiledComponent] = useState(null);
   const [compileError, setCompileError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Extract t function for internal components
+  const { t } = componentProps;
 
   // Memoize the JSX code to prevent unnecessary recompilation
   const memoizedJsxCode = useMemo(() => jsxCode, [jsxCode]);
@@ -138,7 +141,7 @@ const ReactComponentRenderer = ({ jsxCode, componentProps = {}, className = '' }
           // Wrap standalone JSX in a functional component
           fullCode = `
 function UserComponent(props) {
-  const { React, useState, useEffect, useMemo, useCallback, useRef } = props;
+  const { React, useState, useEffect, useMemo, useCallback, useRef, useId } = props;
   
   return (
     ${fullCode}
@@ -189,6 +192,7 @@ UserComponent;
           'useMemo',
           'useCallback',
           'useRef',
+          'useId',
           'props',
           `
           try {
@@ -211,6 +215,7 @@ UserComponent;
           React.useMemo,
           React.useCallback,
           React.useRef,
+          React.useId,
           componentProps
         );
 
@@ -228,7 +233,8 @@ UserComponent;
             useEffect: React.useEffect,
             useMemo: React.useMemo,
             useCallback: React.useCallback,
-            useRef: React.useRef
+            useRef: React.useRef,
+            useId: React.useId
           };
 
           return React.createElement(ComponentFunction, combinedProps);
@@ -259,7 +265,7 @@ UserComponent;
   }, [memoizedJsxCode, componentProps]);
 
   if (isLoading) {
-    return <LoadingComponent />;
+    return <LoadingComponent t={t} />;
   }
 
   if (compileError) {
@@ -301,7 +307,7 @@ UserComponent;
   return (
     <div className={`react-component-container ${className}`}>
       <ErrorBoundary
-        FallbackComponent={ErrorFallback}
+        FallbackComponent={(props) => <ErrorFallback {...props} t={t} />}
         onReset={() => {
           // Force recompilation on reset
           setCompiledComponent(null);

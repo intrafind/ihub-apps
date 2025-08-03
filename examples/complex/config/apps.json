@@ -1073,5 +1073,116 @@
       }
     ],
     "allowEmptyContent": true
+  },
+  {
+    "id": "mermaid-diagrams",
+    "order": 10,
+    "name": {
+      "en": "Diagram Generator",
+      "de": "Diagramm-Generator"
+    },
+    "description": {
+      "en": "Generate interactive diagrams, flowcharts, and visualizations using MermaidJS",
+      "de": "Erstelle interaktive Diagramme, Flussdiagramme und Visualisierungen mit MermaidJS"
+    },
+    "color": "#059669",
+    "icon": "chart-bar",
+    "system": {
+      "en": "You are a diagram generation specialist. Create clear, well-structured diagrams using MermaidJS syntax. Always respond with Mermaid code blocks using ```mermaid syntax. Consider the diagram type requested and use appropriate Mermaid diagram types:\n\n- flowchart: For processes and workflows\n- sequenceDiagram: For interactions between entities\n- classDiagram: For object relationships\n- erDiagram: For database schemas\n- gantt: For project timelines\n- gitgraph: For version control flows\n- journey: For user experience flows\n- pie: For data distribution\n- quadrantChart: For categorization\n- timeline: For chronological events\n\nEnsure diagrams are:\n- Clear and readable\n- Properly structured with logical flow\n- Use concise, descriptive labels\n- Include relevant connections and relationships\n- Follow Mermaid syntax best practices",
+      "de": "Du bist ein Spezialist für Diagrammerstellung. Erstelle klare, gut strukturierte Diagramme mit MermaidJS-Syntax. Antworte immer mit Mermaid-Codeblöcken mit ```mermaid-Syntax. Berücksichtige den angeforderten Diagrammtyp und verwende geeignete Mermaid-Diagrammtypen:\n\n- flowchart: Für Prozesse und Arbeitsabläufe\n- sequenceDiagram: Für Interaktionen zwischen Entitäten\n- classDiagram: Für Objektbeziehungen\n- erDiagram: Für Datenbankschemas\n- gantt: Für Projektzeitpläne\n- gitgraph: Für Versionskontrollabläufe\n- journey: Für Benutzererfahrungsabläufe\n- pie: Für Datenverteilung\n- quadrantChart: Für Kategorisierung\n- timeline: Für chronologische Ereignisse\n\nStelle sicher, dass Diagramme:\n- Klar und lesbar sind\n- Richtig strukturiert mit logischem Ablauf\n- Prägnante, aussagekräftige Beschriftungen verwenden\n- Relevante Verbindungen und Beziehungen enthalten\n- MermaidJS-Syntax-Best-Practices befolgen"
+    },
+    "tokenLimit": 6000,
+    "preferredModel": "gpt-4o",
+    "preferredOutputFormat": "markdown",
+    "preferredStyle": "normal",
+    "preferredTemperature": 0.3,
+    "sendChatHistory": true,
+    "messagePlaceholder": {
+      "en": "Describe the diagram you want to create (e.g., 'Create a flowchart for user authentication process')",
+      "de": "Beschreibe das Diagramm, das du erstellen möchtest (z.B. 'Erstelle ein Flussdiagramm für den Benutzeranmeldeprozess')"
+    },
+    "prompt": {
+      "en": "Create a {{diagramType}} diagram for: {{description}}\n\n{{additionalRequirements}}",
+      "de": "Erstelle ein {{diagramType}}-Diagramm für: {{description}}\n\n{{additionalRequirements}}"
+    },
+    "variables": [
+      {
+        "name": "diagramType",
+        "label": {
+          "en": "Diagram Type",
+          "de": "Diagrammtyp"
+        },
+        "type": "string",
+        "predefinedValues": [
+          { "label": { "en": "Flowchart", "de": "Flussdiagramm" }, "value": "flowchart" },
+          { "label": { "en": "Sequence Diagram", "de": "Sequenzdiagramm" }, "value": "sequence" },
+          { "label": { "en": "Class Diagram", "de": "Klassendiagramm" }, "value": "class" },
+          { "label": { "en": "Entity Relationship", "de": "Entitäts-Beziehung" }, "value": "entity relationship" },
+          { "label": { "en": "Gantt Chart", "de": "Gantt-Diagramm" }, "value": "Gantt" },
+          { "label": { "en": "Git Flow", "de": "Git-Ablauf" }, "value": "git flow" },
+          { "label": { "en": "User Journey", "de": "Benutzerreise" }, "value": "user journey" },
+          { "label": { "en": "Pie Chart", "de": "Kreisdiagramm" }, "value": "pie" },
+          { "label": { "en": "Quadrant Chart", "de": "Quadranten-Diagramm" }, "value": "quadrant" },
+          { "label": { "en": "Timeline", "de": "Zeitstrahl" }, "value": "timeline" },
+          { "label": { "en": "Mind Map", "de": "Mind Map" }, "value": "mind map" },
+          { "label": { "en": "State Diagram", "de": "Zustandsdiagramm" }, "value": "state" }
+        ]
+      },
+      {
+        "name": "description",
+        "label": {
+          "en": "Description",
+          "de": "Beschreibung"
+        },
+        "type": "text",
+        "required": true,
+        "placeholder": {
+          "en": "Describe what you want to visualize (e.g., 'user authentication process', 'database schema for e-commerce')",
+          "de": "Beschreibe, was du visualisieren möchtest (z.B. 'Benutzeranmeldeprozess', 'Datenbankschema für E-Commerce')"
+        }
+      },
+      {
+        "name": "additionalRequirements",
+        "label": {
+          "en": "Additional Requirements",
+          "de": "Zusätzliche Anforderungen"
+        },
+        "type": "text",
+        "required": false,
+        "placeholder": {
+          "en": "Any specific details, colors, or styling preferences (optional)",
+          "de": "Spezifische Details, Farben oder Stil-Präferenzen (optional)"
+        }
+      }
+    ],
+    "starterPrompts": [
+      {
+        "en": "Create a flowchart showing the software development lifecycle",
+        "de": "Erstelle ein Flussdiagramm für den Software-Entwicklungszyklus"
+      },
+      {
+        "en": "Design a sequence diagram for user login process",
+        "de": "Entwerfe ein Sequenzdiagramm für den Benutzeranmeldeprozess"
+      },
+      {
+        "en": "Generate a class diagram for a basic e-commerce system",
+        "de": "Generiere ein Klassendiagramm für ein einfaches E-Commerce-System"
+      },
+      {
+        "en": "Create a Gantt chart for a website development project",
+        "de": "Erstelle ein Gantt-Diagramm für ein Website-Entwicklungsprojekt"
+      },
+      {
+        "en": "Design an entity relationship diagram for a blog database",
+        "de": "Entwerfe ein Entitäts-Beziehungsdiagramm für eine Blog-Datenbank"
+      }
+    ],
+    "features": {
+      "enableMermaidRendering": true,
+      "exportFormats": ["svg", "png", "pdf"],
+      "allowFullscreen": true
+    },
+    "category": "productivity",
+    "enabled": true
   }
 ]
