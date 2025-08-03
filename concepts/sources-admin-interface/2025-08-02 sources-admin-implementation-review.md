@@ -14,12 +14,14 @@ This is a comprehensive review of the 568-line implementation plan for adding so
 ## Positive Highlights
 
 ### Architecture Alignment ✨
+
 - **Excellent pattern consistency**: Follows existing AI Hub Apps conventions (file-based storage, ConfigCache integration, admin route patterns)
 - **Source Manager integration**: Leverages existing SourceManager class effectively
 - **RESTful API design**: Proposed endpoints follow established patterns in `/server/routes/admin/`
 - **Authorization integration**: Properly extends existing group-based permission system
 
 ### Technical Design Strengths ✨
+
 - **Hybrid compatibility approach**: Maintains backward compatibility while enabling new features
 - **Caching strategy**: Aligns with existing ConfigCache patterns with TTL and memory management
 - **Schema validation**: Extends existing Zod validation patterns
@@ -30,6 +32,7 @@ This is a comprehensive review of the 568-line implementation plan for adding so
 ### 1. Architecture & Integration Issues 🚨
 
 **Missing ConfigCache Integration Pattern**
+
 ```javascript
 // ISSUE: Plan lacks specific ConfigCache methods for sources
 // NEEDED: Add to configCache.js similar to existing patterns:
@@ -39,9 +42,9 @@ getSources(includeDisabled = false) {
   if (!sources || !sources.data) {
     return { data: [], etag: null };
   }
-  
+
   if (includeDisabled) return sources;
-  
+
   return {
     data: sources.data.filter(source => source.enabled !== false),
     etag: sources.etag
@@ -54,6 +57,7 @@ async refreshSourcesCache() {
 ```
 
 **Critical ConfigCache Registration Missing**
+
 ```javascript
 // ISSUE: sources.json not added to criticalConfigs array in configCache.js
 // NEEDED: Add to line 107 in configCache.js:
@@ -67,13 +71,14 @@ this.criticalConfigs = [
   'config/ui.json',
   'config/groups.json',
   'config/users.json',
-  'config/sources.json'  // ADD THIS
+  'config/sources.json' // ADD THIS
 ];
 ```
 
 ### 2. Security & Authorization Gaps 🚨
 
 **Insufficient Permission Granularity**
+
 ```javascript
 // ISSUE: Plan only mentions basic adminAccess check
 // NEEDED: Specific source management permissions in groups.json:
@@ -90,6 +95,7 @@ this.criticalConfigs = [
 ```
 
 **Missing Input Validation**
+
 ```javascript
 // ISSUE: No Zod schema for sources configuration
 // NEEDED: Create sourceConfigSchema.js similar to appConfigSchema.js
@@ -107,6 +113,7 @@ const sourceConfigSchema = z.object({
 ```
 
 **Path Traversal Prevention Missing**
+
 ```javascript
 // ISSUE: No validation for filesystem paths
 // NEEDED: Add to SourceConfigService:
@@ -121,6 +128,7 @@ validateFilesystemPath(path) {
 ### 3. Performance & Scalability Concerns 🚨
 
 **Memory Management Strategy Incomplete**
+
 ```javascript
 // ISSUE: No memory limits for source content caching
 // NEEDED: Enhanced cache management:
@@ -130,7 +138,7 @@ class SourceCache {
     this.maxEntriesPerHandler = 500;
     this.compressionEnabled = true;
   }
-  
+
   checkMemoryUsage() {
     // Implement memory monitoring and cleanup
   }
@@ -138,6 +146,7 @@ class SourceCache {
 ```
 
 **Missing Lazy Loading Implementation**
+
 ```javascript
 // ISSUE: No pagination strategy for large source lists
 // NEEDED: Add pagination to API endpoints:
@@ -152,6 +161,7 @@ app.get('/api/admin/sources', adminAuth, async (req, res) => {
 ### 1. Enhanced API Design 🔧
 
 **Batch Operations Missing**
+
 ```javascript
 // SUGGESTED: Add batch operations following existing patterns
 app.post('/api/admin/sources/_toggle', adminAuth, async (req, res) => {
@@ -164,6 +174,7 @@ app.delete('/api/admin/sources/_bulk', adminAuth, async (req, res) => {
 ```
 
 **Testing Endpoint Enhancement**
+
 ```javascript
 // CURRENT: Basic test endpoint proposed
 // IMPROVED: Comprehensive testing with metrics
@@ -175,7 +186,7 @@ app.post('/api/admin/sources/:id/test', adminAuth, async (req, res) => {
     latency: 0,
     errors: []
   };
-  
+
   try {
     const result = await sourceConfigService.testSource(id, { metrics });
     res.json({ success: true, result, metrics });
@@ -189,12 +200,13 @@ app.post('/api/admin/sources/:id/test', adminAuth, async (req, res) => {
 ### 2. Frontend Architecture Improvements 🔧
 
 **Dynamic Form Component Enhancement**
+
 ```jsx
 // ISSUE: Basic dynamic forms proposed
 // IMPROVED: Reusable form components following existing patterns
 const SourceConfigForm = ({ sourceType, initialData, onSubmit }) => {
   const { formData, errors, handleChange, validate } = useSourceForm(sourceType);
-  
+
   return (
     <DynamicFormRenderer
       schema={getSchemaForSourceType(sourceType)}
@@ -212,13 +224,14 @@ const SourceConfigForm = ({ sourceType, initialData, onSubmit }) => {
 ```
 
 **State Management Pattern**
+
 ```jsx
 // FOLLOW: Existing admin page patterns from AdminAppsPage.jsx
 const useSourcesState = () => {
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedSources, setSelectedSources] = useState(new Set());
-  
+
   // Follow established patterns from other admin pages
 };
 ```
@@ -226,6 +239,7 @@ const useSourcesState = () => {
 ### 3. Migration Strategy Refinement 🔧
 
 **Simplified Migration Phases**
+
 ```javascript
 // CURRENT: 4-phase migration plan
 // IMPROVED: 3-phase plan with clearer boundaries
@@ -234,7 +248,7 @@ Phase 1: Global Sources (Weeks 1-2)
 - Add backward compatibility layer
 - No changes to app configurations
 
-Phase 2: App Integration (Weeks 3-4)  
+Phase 2: App Integration (Weeks 3-4)
 - Add source references to apps
 - Enhanced app editor
 - Migration tool for converting inline sources
@@ -248,29 +262,31 @@ Phase 3: Cleanup (Week 5)
 ## Suggestions (Nice-to-Have) 💡
 
 ### 1. Enhanced User Experience
+
 ```jsx
 // Real-time source validation with debouncing
 const useSourceValidation = (config, type) => {
   const [validationState, setValidationState] = useState({});
-  
+
   const debouncedValidate = useCallback(
-    debounce(async (cfg) => {
+    debounce(async cfg => {
       const result = await validateSourceConfig(cfg, type);
       setValidationState(result);
     }, 500),
     [type]
   );
-  
+
   return { validationState, validate: debouncedValidate };
 };
 ```
 
 ### 2. Advanced Monitoring
+
 ```javascript
 // Source performance dashboard
 const SourceMetricsDashboard = () => {
   const metrics = useSourceMetrics();
-  
+
   return (
     <MetricsGrid>
       <CacheHitRateChart data={metrics.cacheStats} />
@@ -282,6 +298,7 @@ const SourceMetricsDashboard = () => {
 ```
 
 ### 3. Advanced Features
+
 ```javascript
 // Source templates for common configurations
 const SOURCE_TEMPLATES = {
@@ -301,30 +318,33 @@ const SOURCE_TEMPLATES = {
 ## Implementation Risks & Mitigation
 
 ### Technical Risks (High Priority)
+
 1. **Cache Memory Bloat**
-   - *Risk*: Large source files consuming excessive memory
-   - *Mitigation*: Implement memory limits and compression in SourceCache
+   - _Risk_: Large source files consuming excessive memory
+   - _Mitigation_: Implement memory limits and compression in SourceCache
 
 2. **Configuration Complexity**
-   - *Risk*: Complex source configurations causing user errors
-   - *Mitigation*: Comprehensive validation and intuitive UI forms
+   - _Risk_: Complex source configurations causing user errors
+   - _Mitigation_: Comprehensive validation and intuitive UI forms
 
 3. **Migration Data Loss**
-   - *Risk*: Converting app sources incorrectly
-   - *Mitigation*: Atomic migration with rollback capability
+   - _Risk_: Converting app sources incorrectly
+   - _Mitigation_: Atomic migration with rollback capability
 
 ### Operational Risks (Medium Priority)
+
 1. **Performance Degradation**
-   - *Risk*: Source loading impacting chat response times
-   - *Mitigation*: Async loading with timeout handling
+   - _Risk_: Source loading impacting chat response times
+   - _Mitigation_: Async loading with timeout handling
 
 2. **Support Complexity**
-   - *Risk*: Additional configuration increasing support burden
-   - *Mitigation*: Comprehensive logging and diagnostic tools
+   - _Risk_: Additional configuration increasing support burden
+   - _Mitigation_: Comprehensive logging and diagnostic tools
 
 ## Missing Considerations
 
 ### 1. Observability
+
 ```javascript
 // MISSING: Comprehensive logging strategy
 // NEEDED: Add to SourceManager
@@ -342,6 +362,7 @@ logSourceOperation(operation, sourceId, duration, success, error = null) {
 ```
 
 ### 2. Backup Integration
+
 ```javascript
 // MISSING: sources.json backup integration
 // NEEDED: Add to backup routes in /server/routes/admin/backup.js
@@ -353,11 +374,12 @@ const backupItems = [
   'config/users.json',
   'config/ui.json',
   'config/platform.json',
-  'config/sources.json'  // ADD THIS
+  'config/sources.json' // ADD THIS
 ];
 ```
 
 ### 3. Testing Strategy
+
 ```javascript
 // MISSING: Comprehensive test coverage
 // NEEDED: Add integration tests
@@ -365,7 +387,7 @@ describe('Sources Admin Integration', () => {
   test('creates global source and references from app', async () => {
     // End-to-end workflow testing
   });
-  
+
   test('handles migration from app sources to global references', async () => {
     // Migration testing
   });
@@ -375,12 +397,14 @@ describe('Sources Admin Integration', () => {
 ## Recommendations for Implementation
 
 ### Immediate Actions (Before Starting)
+
 1. **Create Zod schema** for source configuration validation
 2. **Add sources.json to ConfigCache** critical configs list
 3. **Define granular permissions** for source operations in groups.json
 4. **Implement memory limits** in caching strategy
 
 ### Implementation Order (Revised)
+
 1. **Week 1**: Backend foundation (schemas, ConfigCache, basic APIs)
 2. **Week 2**: Source management service and validation
 3. **Week 3**: Admin interface (forms, testing, management)
@@ -388,6 +412,7 @@ describe('Sources Admin Integration', () => {
 5. **Week 5**: Performance optimization and documentation
 
 ### Success Criteria
+
 - [ ] All existing functionality remains unchanged
 - [ ] Source management interface intuitive for administrators
 - [ ] Memory usage remains under 200MB for typical configurations
@@ -399,7 +424,7 @@ describe('Sources Admin Integration', () => {
 The implementation plan demonstrates strong architectural thinking and aligns well with AI Hub Apps patterns. However, several critical gaps must be addressed before implementation:
 
 1. **ConfigCache integration** needs specific implementation details
-2. **Security validation** requires Zod schema and permission granularity  
+2. **Security validation** requires Zod schema and permission granularity
 3. **Performance monitoring** needs memory management and metrics
 4. **Migration strategy** should be simplified to 3 phases
 
