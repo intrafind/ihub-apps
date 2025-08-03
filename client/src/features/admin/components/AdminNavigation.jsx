@@ -43,106 +43,140 @@ const AdminNavigation = () => {
     };
   }, []);
 
-  const navItems = [
+  // Define logical groups for admin navigation
+  const navGroups = [
     {
-      key: 'home',
-      name: t('admin.nav.home', 'Home'),
-      href: '/admin',
-      // icon: 'home',
-      current: location.pathname === '/admin'
+      id: 'overview',
+      name: t('admin.groups.overview', 'Overview'),
+      items: [
+        {
+          key: 'home',
+          name: t('admin.nav.home', 'Home'),
+          href: '/admin',
+          // icon: 'home',
+          current: location.pathname === '/admin'
+        }
+      ]
     },
     {
-      key: 'apps',
-      name: t('admin.nav.apps', 'Apps'),
-      href: '/admin/apps',
-      // icon: 'collection',
-      current: location.pathname.startsWith('/admin/apps')
+      id: 'content',
+      name: t('admin.groups.content', 'Content Management'),
+      items: [
+        {
+          key: 'apps',
+          name: t('admin.nav.apps', 'Apps'),
+          href: '/admin/apps',
+          // icon: 'collection',
+          current: location.pathname.startsWith('/admin/apps')
+        },
+        {
+          key: 'models',
+          name: t('admin.nav.models', 'Models'),
+          href: '/admin/models',
+          // icon: 'cpu-chip',
+          current: location.pathname.startsWith('/admin/models')
+        },
+        {
+          key: 'prompts',
+          name: t('admin.nav.prompts', 'Prompts'),
+          href: '/admin/prompts',
+          // icon: 'clipboard-document-list',
+          current: location.pathname.startsWith('/admin/prompts')
+        },
+        {
+          key: 'pages',
+          name: t('admin.nav.pages', 'Pages'),
+          href: '/admin/pages',
+          // icon: 'document',
+          current: location.pathname.startsWith('/admin/pages')
+        },
+        {
+          key: 'shortlinks',
+          name: t('admin.nav.shortlinks', 'Short Links'),
+          href: '/admin/shortlinks',
+          // icon: 'link',
+          current: location.pathname.startsWith('/admin/shortlinks')
+        }
+      ]
     },
     {
-      key: 'models',
-      name: t('admin.nav.models', 'Models'),
-      href: '/admin/models',
-      // icon: 'cpu-chip',
-      current: location.pathname.startsWith('/admin/models')
+      id: 'analytics',
+      name: t('admin.groups.analytics', 'Analytics'),
+      items: [
+        {
+          key: 'usage',
+          name: t('admin.nav.usage', 'Usage Reports'),
+          href: '/admin/usage',
+          // icon: 'chart-bar',
+          current: location.pathname === '/admin/usage'
+        }
+      ]
     },
     {
-      key: 'prompts',
-      name: t('admin.nav.prompts', 'Prompts'),
-      href: '/admin/prompts',
-      // icon: 'clipboard-document-list',
-      current: location.pathname.startsWith('/admin/prompts')
+      id: 'security',
+      name: t('admin.groups.security', 'Security & Access'),
+      items: [
+        {
+          key: 'auth',
+          name: t('admin.nav.auth', 'Authentication'),
+          href: '/admin/auth',
+          // icon: 'shield-check',
+          current: location.pathname.startsWith('/admin/auth')
+        },
+        // Only show Users navigation if authentication is enabled
+        ...(platformConfig?.localAuth?.enabled ||
+        platformConfig?.oidcAuth?.enabled ||
+        platformConfig?.proxyAuth?.enabled
+          ? [
+              {
+                key: 'users',
+                name: t('admin.nav.users', 'Users'),
+                href: '/admin/users',
+                // icon: 'user',
+                current: location.pathname.startsWith('/admin/users')
+              }
+            ]
+          : []),
+        // Only show Groups navigation if authentication is enabled
+        ...(platformConfig?.localAuth?.enabled ||
+        platformConfig?.oidcAuth?.enabled ||
+        platformConfig?.proxyAuth?.enabled
+          ? [
+              {
+                key: 'groups',
+                name: t('admin.nav.groups', 'Groups'),
+                href: '/admin/groups',
+                // icon: 'users',
+                current: location.pathname.startsWith('/admin/groups')
+              }
+            ]
+          : [])
+      ]
     },
     {
-      key: 'pages',
-      name: t('admin.nav.pages', 'Pages'),
-      href: '/admin/pages',
-      // icon: 'document',
-      current: location.pathname.startsWith('/admin/pages')
-    },
-    {
-      key: 'shortlinks',
-      name: t('admin.nav.shortlinks', 'Short Links'),
-      href: '/admin/shortlinks',
-      // icon: 'link',
-      current: location.pathname.startsWith('/admin/shortlinks')
-    },
-    {
-      key: 'usage',
-      name: t('admin.nav.usage', 'Usage Reports'),
-      href: '/admin/usage',
-      // icon: 'chart-bar',
-      current: location.pathname === '/admin/usage'
-    },
-    {
-      key: 'auth',
-      name: t('admin.nav.auth', 'Authentication'),
-      href: '/admin/auth',
-      // icon: 'shield-check',
-      current: location.pathname.startsWith('/admin/auth')
-    },
-    // Only show Users navigation if local auth is enabled (since users are only managed locally)
-    ...(platformConfig?.localAuth?.enabled ||
-    platformConfig?.oidcAuth?.enabled ||
-    platformConfig?.proxyAuth?.enabled
-      ? [
-          {
-            key: 'users',
-            name: t('admin.nav.users', 'Users'),
-            href: '/admin/users',
-            // icon: 'user',
-            current: location.pathname.startsWith('/admin/users')
-          }
-        ]
-      : []),
-    // Only show Groups navigation if authentication is enabled (not anonymous-only mode)
-    ...(platformConfig?.localAuth?.enabled ||
-    platformConfig?.oidcAuth?.enabled ||
-    platformConfig?.proxyAuth?.enabled
-      ? [
-          {
-            key: 'groups',
-            name: t('admin.nav.groups', 'Groups'),
-            href: '/admin/groups',
-            // icon: 'users',
-            current: location.pathname.startsWith('/admin/groups')
-          }
-        ]
-      : []),
-    {
-      key: 'ui',
-      name: t('admin.nav.ui', 'UI'),
-      href: '/admin/ui',
-      // icon: 'cog',
-      current: location.pathname === '/admin/ui'
-    },
-    {
-      key: 'system',
-      name: t('admin.nav.system', 'System'),
-      href: '/admin/system',
-      // icon: 'cog',
-      current: location.pathname === '/admin/system'
+      id: 'configuration',
+      name: t('admin.groups.configuration', 'Configuration'),
+      items: [
+        {
+          key: 'ui',
+          name: t('admin.nav.ui', 'UI'),
+          href: '/admin/ui',
+          // icon: 'cog',
+          current: location.pathname === '/admin/ui'
+        },
+        {
+          key: 'system',
+          name: t('admin.nav.system', 'System'),
+          href: '/admin/system',
+          // icon: 'cog',
+          current: location.pathname === '/admin/system'
+        }
+      ]
     }
   ];
+
+  // Flatten nav items for compatibility with existing overflow logic
+  const navItems = navGroups.flatMap(group => group.items);
 
   // Filter enabled items
   const enabledItems = navItems.filter(item => isEnabled(item.key));
@@ -173,6 +207,33 @@ const AdminNavigation = () => {
       {item.name}
     </Link>
   );
+
+  const GroupHeader = ({ groupName }) => (
+    <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+      {groupName}
+    </div>
+  );
+
+  // Helper function to get groups with items that should be in dropdown
+  const getGroupedDropdownItems = () => {
+    const result = [];
+    
+    navGroups.forEach(group => {
+      const groupItems = group.items.filter(item => 
+        isEnabled(item.key) && hiddenItems.some(hiddenItem => hiddenItem.key === item.key)
+      );
+      
+      if (groupItems.length > 0) {
+        result.push({
+          type: 'group',
+          group: group,
+          items: groupItems
+        });
+      }
+    });
+    
+    return result;
+  };
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
@@ -209,9 +270,15 @@ const AdminNavigation = () => {
 
               {/* Dropdown menu */}
               {showMoreMenu && (
-                <div className="absolute left-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-                  {hiddenItems.map(item => (
-                    <TabItem key={item.name} item={item} isDropdownItem />
+                <div className="absolute left-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                  {getGroupedDropdownItems().map((groupData, groupIndex) => (
+                    <div key={groupData.group.id}>
+                      {groupIndex > 0 && <div className="border-t border-gray-200 my-1" />}
+                      <GroupHeader groupName={groupData.group.name} />
+                      {groupData.items.map(item => (
+                        <TabItem key={item.key} item={item} isDropdownItem />
+                      ))}
+                    </div>
                   ))}
                 </div>
               )}
