@@ -113,7 +113,7 @@ export async function loginUser(username, password, localAuthConfig) {
     id: user.id,
     name: user.name,
     email: user.email,
-    groups: user.groups || ['user'],
+    groups: user.internalGroups || ['user'],
     authenticated: true,
     authMethod: 'local'
   };
