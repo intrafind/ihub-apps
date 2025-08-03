@@ -46,19 +46,8 @@ class ToolExecutor {
 
     actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
 
-    // --- DEBUG LOGGING START ---
-    console.log(`--- Executing Tool: ${toolId} ---`);
-    console.log('Arguments:', JSON.stringify(args, null, 2));
-    console.log('---------------------------------');
-    // --- DEBUG LOGGING END ---
-
     try {
       const result = await runTool(toolId, { ...args, chatId, user });
-      // --- DEBUG LOGGING START ---
-      console.log(`--- Tool Result: ${toolId} ---`);
-      console.log(JSON.stringify(result, null, 2));
-      console.log('-----------------------------');
-      // --- DEBUG LOGGING END ---
       actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: result });
 
       await logInteraction(
@@ -294,12 +283,6 @@ class ToolExecutor {
         }
       }
 
-      // --- DEBUG LOGGING START ---
-      // console.log('--- Collected Tool Calls from Stream ---');
-      // console.log(JSON.stringify(collectedToolCalls, null, 2));
-      // console.log('------------------------------------');
-      // --- DEBUG LOGGING END ---
-
       if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
         console.log(
           `No tool calls to process for chat ID ${chatId}:`,
@@ -356,12 +339,6 @@ class ToolExecutor {
         const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData, user);
         llmMessages.push(toolResult.message);
       }
-
-      // --- DEBUG LOGGING START ---
-      // console.log('--- Messages for Follow-up LLM Call ---');
-      // console.log(JSON.stringify(llmMessages, null, 2));
-      // console.log('---------------------------------------');
-      // --- DEBUG LOGGING END ---
 
       // Recursively continue with tool execution until we get a final response
       await this.continueWithToolExecution({

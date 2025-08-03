@@ -37,7 +37,7 @@ import { usePlatformConfig } from './shared/contexts/PlatformConfigContext';
 import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
 import { AuthProvider } from './shared/contexts/AuthContext';
-import { configureMarked } from './shared/components/MarkdownRenderer';
+import MarkdownRenderer from './shared/components/MarkdownRenderer';
 import TeamsWrapper from './features/teams/TeamsWrapper';
 import TeamsAuthStart from './features/teams/TeamsAuthStart';
 import TeamsAuthEnd from './features/teams/TeamsAuthEnd';
@@ -75,16 +75,14 @@ function App() {
   const adminPages = platformConfig?.admin?.pages || {};
   const showAdminPage = key => adminPages[key] !== false;
 
-  React.useEffect(() => {
-    configureMarked();
-  }, []);
-
   return (
     <AppProviders>
       <AuthProvider>
         <AdminAuthProvider>
           <TeamsWrapper>
             <BrowserRouter>
+              {/* Global markdown renderer for Mermaid diagrams and other markdown features */}
+              <MarkdownRenderer />
               {/* Document title management - must be inside Router for useLocation/useParams */}
               <DocumentTitle />
 

@@ -40,15 +40,10 @@ const showMermaidButtonFeedback = (btn, message, colorClass, iconType) => {
 export const useMermaidRenderer = ({ t }) => {
   useEffect(() => {
     let mermaid;
+    let mermaidReady = false;
 
-    const initializeMermaidDiagrams = async () => {
-      const containers = document.querySelectorAll(
-        '.mermaid-diagram-container:not([data-processed="true"])'
-      );
-
-      if (containers.length === 0) return;
-
-      // Dynamically import Mermaid only when needed
+    // Pre-load Mermaid immediately when hook initializes
+    const loadMermaid = async () => {
       if (!mermaid) {
         try {
           const mermaidModule = await import('mermaid');
@@ -58,25 +53,42 @@ export const useMermaidRenderer = ({ t }) => {
             theme: 'default',
             securityLevel: 'loose', // Avoids sandboxed iframes, simplifying rendering & cleanup
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-            flowchart: { useMaxWidth: true, htmlLabels: true },
-            sequence: { useMaxWidth: true, htmlLabels: false },
-            gantt: { useMaxWidth: true, htmlLabels: false },
-            journey: { useMaxWidth: true, htmlLabels: false },
-            class: { useMaxWidth: true, htmlLabels: false },
-            state: { useMaxWidth: true, htmlLabels: false },
-            er: { useMaxWidth: true, htmlLabels: false },
-            pie: { useMaxWidth: true, htmlLabels: false },
-            quadrantChart: { useMaxWidth: true, htmlLabels: false },
-            timeline: { useMaxWidth: true, htmlLabels: false },
-            gitgraph: { useMaxWidth: true, htmlLabels: false },
-            mindmap: { useMaxWidth: true, htmlLabels: true },
+            // Disable useMaxWidth to allow diagrams to render at their natural size
+            flowchart: { useMaxWidth: false, htmlLabels: true },
+            sequence: { useMaxWidth: false, htmlLabels: false },
+            gantt: { useMaxWidth: false, htmlLabels: false },
+            journey: { useMaxWidth: false, htmlLabels: false },
+            class: { useMaxWidth: false, htmlLabels: false },
+            state: { useMaxWidth: false, htmlLabels: false },
+            er: { useMaxWidth: false, htmlLabels: false },
+            pie: { useMaxWidth: false, htmlLabels: false },
+            quadrantChart: { useMaxWidth: false, htmlLabels: false },
+            timeline: { useMaxWidth: false, htmlLabels: false },
+            gitgraph: { useMaxWidth: false, htmlLabels: false },
+            mindmap: { useMaxWidth: false, htmlLabels: true },
             maxTextSize: 50000,
             maxEdges: 500
           });
+          mermaidReady = true;
+
+          // Process any existing diagrams now that Mermaid is ready
+          initializeMermaidDiagrams();
         } catch (err) {
           console.error('Failed to load or initialize Mermaid:', err);
-          return;
         }
+      }
+    };
+
+    const initializeMermaidDiagrams = async () => {
+      const containers = document.querySelectorAll(
+        '.mermaid-diagram-container:not([data-processed="true"])'
+      );
+
+      if (containers.length === 0) return;
+
+      // Wait for Mermaid to be ready
+      if (!mermaidReady) {
+        return; // Mermaid will call this function once it's loaded
       }
 
       for (const container of containers) {
@@ -128,7 +140,7 @@ export const useMermaidRenderer = ({ t }) => {
           container.innerHTML = `
             <div class="mermaid-container code-block-container relative group border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
               <div class="mermaid-diagram p-4 bg-white overflow-x-auto" style="min-height: 200px; width: 100%; max-width: none;">
-                <div class="mermaid-svg-container" style="display: flex; justify-content: center; width: 100%;">
+                <div class="mermaid-svg-container" style="display: flex; justify-content: flex-start; width: 100%; min-width: 100%;">
                   ${svg}
                 </div>
               </div>
@@ -158,6 +170,13 @@ export const useMermaidRenderer = ({ t }) => {
                     </svg>
                     <span class="hidden md:inline">PNG</span>
                   </button>
+                  <button class="mermaid-download-pdf p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
+                          data-svg="${encodeURIComponent(svg)}" data-id="${container.id}" type="button" title="${t ? t('common.downloadPDF', 'Download PDF') : 'Download PDF'}">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h8.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <span class="hidden md:inline">PDF</span>
+                  </button>
                   <button class="mermaid-fullscreen p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-svg="${encodeURIComponent(svg)}" type="button" title="${t ? t('common.viewFullscreen', 'View Fullscreen') : 'View Fullscreen'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -170,23 +189,14 @@ export const useMermaidRenderer = ({ t }) => {
             </div>
           `;
 
-          // Make SVG responsive and wider
+          // Make SVG responsive with simple width handling
           const svgElement = container.querySelector('svg');
           if (svgElement) {
-            const originalWidth = svgElement.getAttribute('width');
-            const originalHeight = svgElement.getAttribute('height');
-
-            // Set responsive sizing
-            if (originalWidth && originalHeight) {
-              const width = Math.max(400, parseInt(originalWidth));
-              svgElement.style.width = width + 'px';
-              svgElement.style.maxWidth = '100%';
-              svgElement.style.height = 'auto';
-            } else {
-              svgElement.style.width = '100%';
-              svgElement.style.minWidth = '400px';
-              svgElement.style.height = 'auto';
-            }
+            // Simple, reliable width handling without dynamic calculations
+            svgElement.style.width = 'auto';
+            svgElement.style.maxWidth = 'none'; // Allow horizontal overflow
+            svgElement.style.minWidth = '600px'; // Ensure minimum readable width
+            svgElement.style.height = 'auto';
 
             // Remove width/height attributes to prevent conflicts
             svgElement.removeAttribute('width');
@@ -267,8 +277,35 @@ export const useMermaidRenderer = ({ t }) => {
       }
     });
 
-    // Initial run + observer setup
-    initializeMermaidDiagrams();
+    // Store timeout IDs for cleanup
+    const timeouts = [];
+
+    // Initial run with retry mechanism for diagrams that are already in the DOM
+    const initialRun = () => {
+      initializeMermaidDiagrams();
+
+      // Retry after a delay to catch diagrams that might be rendered after initial mount
+      timeouts.push(
+        setTimeout(() => {
+          initializeMermaidDiagrams();
+        }, 500)
+      );
+
+      // One more retry for slower rendering
+      timeouts.push(
+        setTimeout(() => {
+          initializeMermaidDiagrams();
+        }, 1500)
+      );
+    };
+
+    // Start loading Mermaid immediately
+    loadMermaid();
+
+    // Run initial processing (will be called again once Mermaid loads)
+    initialRun();
+
+    // Set up observer for future DOM changes
     observer.observe(document.body, { childList: true, subtree: true });
 
     // Mermaid interaction handler
@@ -451,6 +488,177 @@ export const useMermaidRenderer = ({ t }) => {
           img.src = svgDataUrl;
         } catch (err) {
           console.error('PNG download error:', err);
+          showMermaidButtonFeedback(button, 'Error', 'text-red-600', 'error');
+        }
+      }
+
+      // Download PDF
+      if (button.classList.contains('mermaid-download-pdf')) {
+        const id = button.dataset.id;
+        try {
+          // Find the actual diagram SVG element (not the button SVG)
+          const containerElement = button.closest('.mermaid-container');
+          let actualSvg = null;
+
+          if (containerElement) {
+            // Try multiple selectors to find the diagram SVG
+            actualSvg =
+              containerElement.querySelector('.mermaid-diagram svg') ||
+              containerElement.querySelector('.mermaid-svg-container svg') ||
+              containerElement.querySelector('.mermaid-container > div > svg');
+
+            // If still not found, try to find any SVG that's not a button icon
+            if (!actualSvg) {
+              const allSvgs = containerElement.querySelectorAll('svg');
+              for (const svg of allSvgs) {
+                // Skip SVGs that are inside buttons (button icons)
+                if (!svg.closest('button')) {
+                  actualSvg = svg;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!actualSvg) {
+            throw new Error('Could not find SVG element in the diagram');
+          }
+
+          // Get the SVG content directly from the DOM
+          const svgClone = actualSvg.cloneNode(true);
+
+          // Ensure SVG has proper namespace
+          if (!svgClone.getAttribute('xmlns')) {
+            svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+          }
+
+          // Get dimensions from the actual SVG
+          const rect = actualSvg.getBoundingClientRect();
+          const width = Math.max(rect.width || 800, 400);
+          const height = Math.max(rect.height || 600, 300);
+
+          // Set explicit width/height on the clone for PDF
+          svgClone.setAttribute('width', width);
+          svgClone.setAttribute('height', height);
+
+          // Get the SVG string
+          const svgString = new XMLSerializer().serializeToString(svgClone);
+
+          // Create canvas for PDF generation
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const img = new Image();
+
+          img.onload = () => {
+            // Use higher scaling for better PDF quality - 4x for large diagrams, minimum 3x
+            const scaleFactor = Math.max(3, width > 1000 || height > 800 ? 4 : 3);
+            canvas.width = width * scaleFactor;
+            canvas.height = height * scaleFactor;
+
+            // Set highest quality rendering
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
+            // Fill with white background
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Scale and draw the image with high quality
+            ctx.scale(scaleFactor, scaleFactor);
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Convert canvas to blob and create PDF with high quality
+            canvas.toBlob(
+              async blob => {
+                if (blob) {
+                  try {
+                    // Dynamically import jsPDF
+                    const { jsPDF } = await import('https://cdn.skypack.dev/jspdf@2.5.1');
+
+                    // Calculate PDF dimensions based on actual diagram size with better scaling
+                    // Use points (pt) for better precision (1 pt = 0.352778 mm)
+                    const pointsPerMM = 2.834645669; // 72 DPI to mm conversion
+                    const margin = 10; // 10mm margin
+
+                    // Calculate dimensions in mm, ensuring minimum readable size
+                    let pdfWidthMM = Math.max(width * 0.26458, 100); // Convert px to mm (96 DPI assumption)
+                    let pdfHeightMM = Math.max(height * 0.26458, 70);
+
+                    // Add margins
+                    pdfWidthMM += margin * 2;
+                    pdfHeightMM += margin * 2;
+
+                    // Limit maximum size to reasonable bounds
+                    const maxWidthMM = 420; // A3 width
+                    const maxHeightMM = 297; // A3 height
+
+                    if (pdfWidthMM > maxWidthMM || pdfHeightMM > maxHeightMM) {
+                      const scaleRatio = Math.min(
+                        maxWidthMM / pdfWidthMM,
+                        maxHeightMM / pdfHeightMM
+                      );
+                      pdfWidthMM *= scaleRatio;
+                      pdfHeightMM *= scaleRatio;
+                    }
+
+                    const pdf = new jsPDF({
+                      orientation: pdfWidthMM > pdfHeightMM ? 'landscape' : 'portrait',
+                      unit: 'mm',
+                      format: [pdfWidthMM, pdfHeightMM],
+                      compress: false // Disable compression for better quality
+                    });
+
+                    // Convert blob to data URL
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      // Add image to PDF with margins, using high quality settings
+                      const imageWidth = pdfWidthMM - margin * 2;
+                      const imageHeight = pdfHeightMM - margin * 2;
+
+                      pdf.addImage(
+                        reader.result,
+                        'PNG',
+                        margin,
+                        margin,
+                        imageWidth,
+                        imageHeight,
+                        undefined,
+                        'MEDIUM' // Use MEDIUM compression for balance of quality and size
+                      );
+
+                      // Save the PDF
+                      pdf.save(`${id}.pdf`);
+                      showMermaidButtonFeedback(
+                        button,
+                        'Downloaded!',
+                        'text-green-600',
+                        'checkmark'
+                      );
+                    };
+                    reader.readAsDataURL(blob);
+                  } catch (pdfError) {
+                    console.error('PDF library error:', pdfError);
+                    showMermaidButtonFeedback(button, 'Error', 'text-red-600', 'error');
+                  }
+                } else {
+                  showMermaidButtonFeedback(button, 'Error', 'text-red-600', 'error');
+                }
+              },
+              'image/png',
+              1.0 // Maximum quality
+            );
+          };
+
+          img.onerror = error => {
+            console.error('Image load error for PDF:', error);
+            showMermaidButtonFeedback(button, 'Error', 'text-red-600', 'error');
+          };
+
+          // Create SVG data URL with proper encoding
+          const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+          img.src = svgDataUrl;
+        } catch (err) {
+          console.error('PDF download error:', err);
           showMermaidButtonFeedback(button, 'Error', 'text-red-600', 'error');
         }
       }
@@ -667,6 +875,8 @@ export const useMermaidRenderer = ({ t }) => {
     document.addEventListener('click', handleMermaidInteraction);
 
     return () => {
+      // Clear any pending timeouts
+      timeouts.forEach(clearTimeout);
       observer.disconnect();
       document.removeEventListener('click', handleMermaidInteraction);
     };

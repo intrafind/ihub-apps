@@ -1,6 +1,6 @@
 import { useLayoutEffect, useState, useRef } from 'react';
 import { marked } from 'marked';
-import MarkdownRenderer, { configureMarked } from '../../../shared/components/MarkdownRenderer';
+import { configureMarked } from '../../../shared/components/MarkdownRenderer';
 import './StreamingMarkdown.css';
 
 /**
@@ -39,15 +39,12 @@ const StreamingMarkdown = ({ content }) => {
   }, [content]);
 
   return (
-    <>
-      <MarkdownRenderer />
-      <div
-        key={renderKey}
-        ref={containerRef}
-        className="markdown-content break-words whitespace-normal streaming-markdown"
-        dangerouslySetInnerHTML={{ __html: htmlContent }}
-      />
-    </>
+    <div
+      key={renderKey}
+      ref={containerRef}
+      className="markdown-content break-words whitespace-normal streaming-markdown"
+      dangerouslySetInnerHTML={{ __html: htmlContent }}
+    />
   );
 };
 

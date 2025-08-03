@@ -43,9 +43,6 @@ const AdminPromptsPage = () => {
       setError(null);
       const data = await fetchAdminPrompts();
 
-      console.log('Prompts loaded:', data);
-      console.log('Prompts count:', Array.isArray(data) ? data.length : 'Not an array');
-
       // Ensure we have an array
       const promptsArray = Array.isArray(data) ? data : [];
       setPrompts(promptsArray);

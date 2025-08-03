@@ -4,13 +4,9 @@
 name: Docker CI/CD
 
 on:
-  # Build on releases
+  # Build on releases and prereleases
   release:
-    types: [published]
-  
-  # Build on tags
-  push:
-    tags: ['v*']
+    types: [published, prereleased]
   
   # Manual trigger with comment "@build docker images"
   issue_comment:
@@ -44,8 +40,8 @@ jobs:
         run: |
           should_run=false
           
-          # Always run on releases and tags
-          if [[ "${{ github.event_name }}" == "release" || "${{ github.event_name }}" == "push" ]]; then
+          # Always run on releases
+          if [[ "${{ github.event_name }}" == "release" ]]; then
             should_run=true
           fi
           
@@ -282,11 +278,11 @@ jobs:
           
           echo "✅ Staging deployment completed successfully!"
 
-  # Create GitHub Release for tags
+  # Create GitHub Release for releases
   create-release:
     runs-on: ubuntu-latest
     needs: [build-and-test, security-scan]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'release'
     permissions:
       contents: write
       
@@ -297,8 +293,8 @@ jobs:
       - name: Extract release notes
         id: release_notes
         run: |
-          # Extract version from tag
-          VERSION=${GITHUB_REF#refs/tags/}
+          # Extract version from release
+          VERSION=${{ github.event.release.tag_name }}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
           # Create release notes (customize as needed)

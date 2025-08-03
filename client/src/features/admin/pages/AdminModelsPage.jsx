@@ -29,9 +29,6 @@ const AdminModelsPage = () => {
       const response = await makeAdminApiCall('/admin/models');
       const data = response.data;
 
-      console.log('Models loaded:', data);
-      console.log('Models count:', Array.isArray(data) ? data.length : 'Not an array');
-
       // Ensure we have an array
       const modelsArray = Array.isArray(data) ? data : [];
       setModels(modelsArray);

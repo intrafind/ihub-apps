@@ -104,10 +104,6 @@ export const fetchAdminModels = async () => {
     const response = await makeAdminApiCall('/admin/models');
     const data = response.data;
 
-    // Debug logging
-    console.log('Admin models API response:', data);
-    console.log('Is array:', Array.isArray(data));
-
     // Ensure we return an array
     return Array.isArray(data) ? data : [];
   } catch (error) {
@@ -120,10 +116,6 @@ export const fetchAdminPrompts = async () => {
   try {
     const response = await makeAdminApiCall('/admin/prompts');
     const data = response.data;
-
-    // Debug logging
-    console.log('Admin prompts API response:', data);
-    console.log('Is array:', Array.isArray(data));
 
     // Ensure we return an array
     return Array.isArray(data) ? data : [];

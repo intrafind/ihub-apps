@@ -66,22 +66,6 @@ const ChatInput = ({
         ? t('pages.appChat.optionalMessagePlaceholder', 'Type here (optional)...')
         : t('pages.appChat.messagePlaceholder', 'Type here...');
 
-  // Store the current placeholder in a ref to ensure it persists
-
-  // Debug logging
-  // useEffect(() => {
-  //   console.log("ChatInput placeholder state:", {
-  //     customPlaceholder,
-  //     defaultPlaceholder,
-  //     placeholderRef: placeholderRef.current,
-  //     appPlaceholder: app?.messagePlaceholder,
-  //     currentLanguage: i18n.language,
-  //     isUsingCustom: Boolean(customPlaceholder),
-  //     isProcessing,
-  //     allowEmptySubmit
-  //   });
-  // }, [customPlaceholder, defaultPlaceholder, isProcessing, allowEmptySubmit, i18n.language, app?.messagePlaceholder]);
-
   const focusInputAtEnd = useCallback(() => {
     if (actualInputRef.current) {
       const el = actualInputRef.current;
