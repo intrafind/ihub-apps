@@ -85,18 +85,14 @@ const AdminUsersPage = () => {
         })
       });
 
-      if (response.ok) {
-        setMessage({
-          type: 'success',
-          text: 'User created successfully!'
-        });
-        setShowCreateModal(false);
-        resetForm();
-        loadUsers();
-      } else {
-        const error = response.data;
-        throw new Error(error.error || 'Failed to create user');
-      }
+      // Axios returns successful responses directly, errors are thrown
+      setMessage({
+        type: 'success',
+        text: 'User created successfully!'
+      });
+      setShowCreateModal(false);
+      resetForm();
+      loadUsers();
     } catch (error) {
       setMessage({
         type: 'error',
@@ -118,7 +114,7 @@ const AdminUsersPage = () => {
       const updateData = {
         email: formData.email,
         name: formData.name,
-        groups: groupsArray,
+        internalGroups: groupsArray,
         active: formData.active
       };
 
@@ -149,18 +145,14 @@ const AdminUsersPage = () => {
         body: JSON.stringify(updateData)
       });
 
-      if (response.ok) {
-        setMessage({
-          type: 'success',
-          text: 'User updated successfully!'
-        });
-        setEditingUser(null);
-        resetForm();
-        loadUsers();
-      } else {
-        const error = response.data;
-        throw new Error(error.error || 'Failed to update user');
-      }
+      // Axios returns successful responses directly, errors are thrown
+      setMessage({
+        type: 'success',
+        text: 'User updated successfully!'
+      });
+      setEditingUser(null);
+      resetForm();
+      loadUsers();
     } catch (error) {
       setMessage({
         type: 'error',
@@ -179,16 +171,12 @@ const AdminUsersPage = () => {
         method: 'DELETE'
       });
 
-      if (response.ok) {
-        setMessage({
-          type: 'success',
-          text: 'User deleted successfully!'
-        });
-        loadUsers();
-      } else {
-        const error = response.data;
-        throw new Error(error.error || 'Failed to delete user');
-      }
+      // Axios returns successful responses directly, errors are thrown
+      setMessage({
+        type: 'success',
+        text: 'User deleted successfully!'
+      });
+      loadUsers();
     } catch (error) {
       setMessage({
         type: 'error',
@@ -214,16 +202,12 @@ const AdminUsersPage = () => {
         })
       });
 
-      if (response.ok) {
-        setMessage({
-          type: 'success',
-          text: `User ${newStatus ? 'enabled' : 'disabled'} successfully!`
-        });
-        loadUsers();
-      } else {
-        const error = response.data;
-        throw new Error(error.error || 'Failed to update user status');
-      }
+      // Axios returns successful responses directly, errors are thrown
+      setMessage({
+        type: 'success',
+        text: `User ${newStatus ? 'enabled' : 'disabled'} successfully!`
+      });
+      loadUsers();
     } catch (error) {
       setMessage({
         type: 'error',
@@ -430,7 +414,7 @@ const AdminUsersPage = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex flex-wrap gap-1">
-                            {(user.groups || []).map((group, index) => (
+                            {(user.internalGroups || []).map((group, index) => (
                               <span
                                 key={index}
                                 className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
@@ -438,7 +422,7 @@ const AdminUsersPage = () => {
                                 {group}
                               </span>
                             ))}
-                            {(!user.groups || user.groups.length === 0) && (
+                            {(!user.internalGroups || user.internalGroups.length === 0) && (
                               <span className="text-sm text-gray-400">No groups</span>
                             )}
                           </div>

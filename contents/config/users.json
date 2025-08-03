@@ -51,19 +51,21 @@
       ],
       "lastActiveDate": "2025-08-03",
       "createdAt": "2025-07-27T18:27:03.182Z",
-      "updatedAt": "2025-08-03T12:49:12.084Z",
+      "updatedAt": "2025-08-03T14:50:57.818Z",
       "oidcData": {
         "subject": "e2263c06-d262-4682-b5ae-a30d8d241bf3",
         "provider": "auth.intrafind.cloud",
         "lastProvider": "auth.intrafind.cloud"
       },
-      "internalGroups": []
+      "internalGroups": [
+        "admin"
+      ]
     }
   },
   "metadata": {
     "version": "2.0.0",
     "description": "Local user database for AI Hub Apps - Updated with user-specific password hashing",
-    "lastUpdated": "2025-08-03T12:49:12.084Z",
+    "lastUpdated": "2025-08-03T14:50:57.818Z",
     "migrationDate": "2025-08-01T21:02:54.174Z",
     "migratedFrom": "2.0.0"
   }

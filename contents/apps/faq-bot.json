@@ -41,10 +41,6 @@
       "enabled": true
     }
   ],
-  "prompt": {
-    "en": "{{content}}",
-    "de": "{{content}}"
-  },
   "enabled": true,
   "tools": [],
   "greeting": {

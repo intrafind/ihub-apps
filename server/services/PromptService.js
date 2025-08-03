@@ -2,6 +2,8 @@ import { getLocalizedContent } from '../../shared/localize.js';
 import configCache from '../configCache.js';
 import { createSourceManager } from '../sources/index.js';
 import config from '../config.js';
+import { getRootDir } from '../pathUtils.js';
+import path from 'path';
 
 /**
  * Service for handling prompt processing and template resolution
@@ -191,7 +193,7 @@ class PromptService {
       try {
         const sourceManager = createSourceManager({
           filesystem: {
-            basePath: config.CONTENTS_DIR
+            basePath: path.resolve(getRootDir(), config.CONTENTS_DIR)
           }
         });
         let sourceContent = '';
