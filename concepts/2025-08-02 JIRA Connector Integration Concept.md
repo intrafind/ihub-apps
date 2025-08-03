@@ -12,6 +12,7 @@ This document outlines a comprehensive concept for implementing a JIRA connector
 ## 1. Business Requirements
 
 ### Core Functionality
+
 - **List Tickets**: Search and list JIRA tickets using JQL queries
 - **Read Tickets**: Get detailed ticket information including comments and history
 - **Answer Tickets**: Add comments to tickets with user confirmation
@@ -21,6 +22,7 @@ This document outlines a comprehensive concept for implementing a JIRA connector
 - **Audit Trail**: All actions performed in the user's name for compliance
 
 ### Security Requirements
+
 - User authentication and authorization through JIRA's native permission system
 - No privilege escalation - users maintain their exact JIRA permissions
 - Secure token storage with encryption at rest
@@ -34,6 +36,7 @@ This document outlines a comprehensive concept for implementing a JIRA connector
 Based on analysis of the existing codebase, AI Hub Apps provides a robust framework for tool integration:
 
 #### **Tool Integration Framework**
+
 - **Tool Definition**: JSON schema specifications in `/contents/config/tools.json`
 - **Tool Implementation**: JavaScript modules in `/server/tools/`
 - **Tool Execution**: `ToolExecutor` class handles tool calls with user context
@@ -41,6 +44,7 @@ Based on analysis of the existing codebase, AI Hub Apps provides a robust framew
 - **User Context**: Tools receive `chatId` and `user` object during execution
 
 #### **Existing Integration Examples**
+
 1. **External APIs**: `braveSearch`, `tavilySearch` demonstrate API key-based authentication
 2. **Enterprise Integration**: `EntraService` shows OAuth2 with Microsoft Graph API
 3. **Service Pattern**: Integration services organized in `/server/services/integrations/`
@@ -49,12 +53,14 @@ Based on analysis of the existing codebase, AI Hub Apps provides a robust framew
 ### JIRA API Research
 
 #### **Authentication Methods Available**
+
 1. **API Tokens with Basic Auth**: Email + API token (simple but user-scoped)
 2. **Personal Access Tokens (PATs)**: Data Center licenses only, bearer token authentication
 3. **OAuth 2.0 (3LO)**: Full OAuth flow for user-scoped access (recommended)
 4. **OAuth Consumer**: Application-level integration with RSA-SHA1 signing
 
 #### **Core JIRA REST API Endpoints**
+
 ```
 GET  /rest/api/2/search?jql=<query>              # Search/List Issues
 GET  /rest/api/2/issue/{issueIdOrKey}            # Get Issue Details
@@ -71,12 +77,14 @@ GET  /rest/api/2/mypermissions                   # Check Permissions
 ### Approach 1: User-Scoped OAuth2 Authentication (Recommended)
 
 #### **Implementation Strategy**
+
 1. **OAuth 2.0 with PKCE**: Use JIRA's OAuth 2.0 (3LO) for user authentication
 2. **Encrypted Token Storage**: Store user OAuth tokens securely in AI Hub Apps
 3. **Permission Inheritance**: API calls use individual user tokens, respecting JIRA permissions
 4. **Automatic Token Management**: Handle token refresh and expiration transparently
 
 #### **Security Benefits**
+
 - ✅ All operations performed in user's name with exact permissions
 - ✅ Native JIRA audit trail shows actual user performing actions
 - ✅ No privilege escalation - users limited to their normal JIRA access
@@ -84,6 +92,7 @@ GET  /rest/api/2/mypermissions                   # Check Permissions
 - ✅ Compliance-ready with clear audit trails
 
 #### **Technical Requirements**
+
 - OAuth 2.0 application registration in JIRA
 - Secure token storage with encryption (AES-256-GCM)
 - Token refresh mechanism for long-lived sessions
@@ -93,18 +102,21 @@ GET  /rest/api/2/mypermissions                   # Check Permissions
 ### Approach 2: Technical User with Impersonation (Alternative)
 
 #### **Implementation Strategy**
+
 1. **Service Account**: Dedicated JIRA service account with broad permissions
 2. **User Mapping**: Map AI Hub Apps users to JIRA users by email/username
 3. **Permission Simulation**: Custom permission checking before API calls
 4. **Audit Logging**: Custom audit trail showing actual user vs technical user
 
 #### **Security Considerations**
+
 - ⚠️ Technical user requires elevated permissions for impersonation
 - ⚠️ Custom permission logic required - potential security gaps
 - ⚠️ Complex user mapping and synchronization needed
 - ⚠️ Risk of privilege escalation if permission logic has bugs
 
 #### **When to Use**
+
 - JIRA instance doesn't support OAuth 2.0
 - Users don't have individual JIRA accounts
 - Need to operate on behalf of users without explicit consent
@@ -114,6 +126,7 @@ GET  /rest/api/2/mypermissions                   # Check Permissions
 ### OAuth2 Flow with Enhanced Security
 
 #### **When Authentication is Triggered**
+
 1. **First JIRA Tool Use**: User attempts to use any JIRA tool without connection
 2. **Settings Management**: User proactively links account in integrations settings
 3. **Token Expiration**: Automatic re-authentication when tokens expire
@@ -141,6 +154,7 @@ User Action → JIRA Tool Request → Connection Check → OAuth Flow → Tool E
 #### **Token Expiration Handling**
 
 **Automatic Refresh Flow:**
+
 ```
 Token Expiration Detection → Refresh Attempt → Success/Failure → User Action
 
@@ -163,8 +177,9 @@ Failure Path:
 ### Connection Status Components
 
 #### **Connection Indicator**
+
 ```jsx
-<JiraConnectionStatus 
+<JiraConnectionStatus
   connected={user.integrations?.jira?.connected}
   lastSync={user.integrations?.jira?.lastSync}
   onConnect={() => initializeJiraAuth()}
@@ -174,19 +189,18 @@ Failure Path:
 ```
 
 #### **Authentication Prompt**
+
 ```jsx
 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
   <div className="flex items-center">
     <Icon name="jira" className="text-blue-600 mr-3" />
     <div className="flex-1">
-      <h3 className="text-sm font-medium text-blue-900">
-        Connect to JIRA
-      </h3>
+      <h3 className="text-sm font-medium text-blue-900">Connect to JIRA</h3>
       <p className="text-sm text-blue-700 mt-1">
         Link your JIRA account to search issues and manage tasks
       </p>
     </div>
-    <button 
+    <button
       onClick={handleJiraConnect}
       className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
     >
@@ -199,6 +213,7 @@ Failure Path:
 ### Settings Integration
 
 #### **Integrations Settings Page**
+
 ```jsx
 <div className="space-y-6">
   <div className="bg-white shadow rounded-lg p-6">
@@ -207,19 +222,14 @@ Failure Path:
         <Icon name="jira" className="text-blue-600 mr-3" size="lg" />
         <div>
           <h3 className="text-lg font-medium text-gray-900">JIRA</h3>
-          <p className="text-sm text-gray-500">
-            Manage issues, projects, and workflows
-          </p>
+          <p className="text-sm text-gray-500">Manage issues, projects, and workflows</p>
         </div>
       </div>
-      <ConnectionStatus 
-        status={jiraConnection.status}
-        lastSync={jiraConnection.lastSync}
-      />
+      <ConnectionStatus status={jiraConnection.status} lastSync={jiraConnection.lastSync} />
     </div>
-    
+
     {jiraConnection.connected ? (
-      <JiraAccountDetails 
+      <JiraAccountDetails
         account={jiraConnection.account}
         permissions={jiraConnection.permissions}
         onDisconnect={handleDisconnect}
@@ -235,6 +245,7 @@ Failure Path:
 ### Error Handling UI
 
 #### **Token Expiration Notification**
+
 ```jsx
 <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
   <div className="flex">
@@ -242,7 +253,7 @@ Failure Path:
     <div className="flex-1">
       <p className="text-sm text-yellow-700">
         Your JIRA connection has expired.
-        <button 
+        <button
           onClick={handleReconnect}
           className="font-medium underline ml-1 hover:text-yellow-800"
         >
@@ -250,10 +261,7 @@ Failure Path:
         </button>
       </p>
     </div>
-    <button 
-      onClick={dismissNotification}
-      className="text-yellow-400 hover:text-yellow-500"
-    >
+    <button onClick={dismissNotification} className="text-yellow-400 hover:text-yellow-500">
       <Icon name="close" size="sm" />
     </button>
   </div>
@@ -269,34 +277,35 @@ Failure Path:
 ```javascript
 class JiraService {
   // OAuth 2.0 token management
-  static async acquireToken(authCode, codeVerifier) { }
-  static async refreshToken(refreshToken) { }
-  static async validateToken(accessToken) { }
-  static async revokeToken(refreshToken) { }
-  
+  static async acquireToken(authCode, codeVerifier) {}
+  static async refreshToken(refreshToken) {}
+  static async validateToken(accessToken) {}
+  static async revokeToken(refreshToken) {}
+
   // Token storage with encryption
-  static async storeUserTokens(userId, tokens) { }
-  static async getStoredTokens(userId) { }
-  static async deleteStoredTokens(userId) { }
-  
+  static async storeUserTokens(userId, tokens) {}
+  static async getStoredTokens(userId) {}
+  static async deleteStoredTokens(userId) {}
+
   // JIRA API client
-  static async makeApiCall(endpoint, method, data, userTokens) { }
-  static async searchIssues(jql, userTokens) { }
-  static async getIssue(issueKey, userTokens) { }
-  static async addComment(issueKey, comment, userTokens) { }
-  static async transitionIssue(issueKey, transitionId, userTokens) { }
-  static async getAttachment(attachmentId, userTokens) { }
+  static async makeApiCall(endpoint, method, data, userTokens) {}
+  static async searchIssues(jql, userTokens) {}
+  static async getIssue(issueKey, userTokens) {}
+  static async addComment(issueKey, comment, userTokens) {}
+  static async transitionIssue(issueKey, transitionId, userTokens) {}
+  static async getAttachment(attachmentId, userTokens) {}
 }
 ```
 
 #### **2. JIRA Tools (`/server/tools/jira*.js`)**
 
 **`jiraListTickets.js`**
+
 ```javascript
 async function execute(parameters, context) {
   const { jql, maxResults = 50 } = parameters;
   const { user } = context;
-  
+
   const userTokens = await JiraService.getStoredTokens(user.id);
   if (!userTokens) {
     return {
@@ -305,12 +314,13 @@ async function execute(parameters, context) {
       authUrl: '/settings/integrations#jira'
     };
   }
-  
+
   return await JiraService.searchIssues(jql, userTokens);
 }
 ```
 
 **`jiraGetTicket.js`**
+
 ```javascript
 async function execute(parameters, context) {
   const { issueKey, includeComments = true } = parameters;
@@ -319,6 +329,7 @@ async function execute(parameters, context) {
 ```
 
 **`jiraAddComment.js`**
+
 ```javascript
 async function execute(parameters, context) {
   const { issueKey, comment, requireConfirmation = true } = parameters;
@@ -333,14 +344,12 @@ async function execute(parameters, context) {
 router.get('/auth', async (req, res) => {
   const state = crypto.randomBytes(32).toString('hex');
   const codeVerifier = crypto.randomBytes(32).toString('base64url');
-  const codeChallenge = crypto
-    .createHash('sha256')
-    .update(codeVerifier)
-    .digest('base64url');
+  const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
 
   req.session.jiraAuth = { state, codeVerifier };
 
-  const authUrl = `${jiraBaseUrl}/oauth/authorize?` +
+  const authUrl =
+    `${jiraBaseUrl}/oauth/authorize?` +
     `response_type=code&` +
     `client_id=${clientId}&` +
     `redirect_uri=${redirectUri}&` +
@@ -494,6 +503,7 @@ const refreshJiraConnection = async () => {
 ### Critical Security Enhancements
 
 #### **1. Encrypted Token Storage**
+
 ```javascript
 const crypto = require('crypto');
 
@@ -502,22 +512,22 @@ class TokenEncryption {
     const algorithm = 'aes-256-gcm';
     const key = Buffer.from(process.env.TOKEN_ENCRYPTION_KEY, 'hex');
     const iv = crypto.randomBytes(16);
-    
+
     const cipher = crypto.createCipher(algorithm, key);
     cipher.setAAD(Buffer.from('jira-token'));
-    
+
     let encrypted = cipher.update(token, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    
+
     const authTag = cipher.getAuthTag();
-    
+
     return {
       encrypted,
       iv: iv.toString('hex'),
       authTag: authTag.toString('hex')
     };
   }
-  
+
   static decrypt(encryptedData) {
     // Decryption implementation with integrity verification
   }
@@ -525,22 +535,24 @@ class TokenEncryption {
 ```
 
 #### **2. Rate Limiting**
+
 ```javascript
 const rateLimit = require('express-rate-limit');
 
 const jiraRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each user to 100 JIRA requests per window
-  keyGenerator: (req) => `jira:${req.user.id}`,
+  keyGenerator: req => `jira:${req.user.id}`,
   message: 'Too many JIRA requests, please try again later',
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders: false
 });
 ```
 
 #### **3. Token Revocation**
+
 ```javascript
-const disconnectJira = async (userId) => {
+const disconnectJira = async userId => {
   const tokens = await getStoredTokens(userId);
   if (tokens) {
     // Revoke tokens with JIRA
@@ -558,8 +570,9 @@ const disconnectJira = async (userId) => {
 ```
 
 #### **4. Comprehensive Audit Logging**
+
 ```javascript
-const auditJiraOperation = async (operation) => {
+const auditJiraOperation = async operation => {
   const auditLog = {
     userId: operation.user.id,
     action: `jira.${operation.action}`,
@@ -571,7 +584,7 @@ const auditJiraOperation = async (operation) => {
     success: operation.success,
     errorMessage: operation.error?.message
   };
-  
+
   await AuditLogger.log(auditLog);
 };
 ```
@@ -579,6 +592,7 @@ const auditJiraOperation = async (operation) => {
 ## 8. Configuration Requirements
 
 ### Environment Variables
+
 ```bash
 # JIRA OAuth Configuration
 JIRA_BASE_URL=https://your-company.atlassian.net
@@ -597,6 +611,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 ```
 
 ### Platform Configuration
+
 ```json
 {
   "integrations": {
@@ -627,6 +642,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 ## 9. User Experience Scenarios
 
 ### Scenario 1: First-Time User
+
 1. **Initial Request**: User opens AI chat and asks "Show me my JIRA issues"
 2. **Authentication Prompt**: AI responds with connection card
 3. **OAuth Flow**: User clicks "Connect to JIRA" and goes through OAuth
@@ -634,6 +650,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 5. **Results Display**: Shows "Found 12 issues assigned to you" with formatted results
 
 ### Scenario 2: Token Expiration During Use
+
 1. **Normal Operation**: User working normally with JIRA integration
 2. **Background Detection**: Token expires during background refresh attempt
 3. **Graceful Handling**: Next JIRA operation shows reconnection prompt
@@ -641,6 +658,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 5. **Continuation**: Returns to original operation, continues seamlessly
 
 ### Scenario 3: Settings Management
+
 1. **Settings Access**: User goes to Settings → Integrations
 2. **Status Display**: Sees JIRA card showing "Connected" with green status
 3. **Account Details**: Shows connected account email and accessible projects
@@ -648,6 +666,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 5. **Real-time Updates**: Status updates immediately when changes occur
 
 ### Scenario 4: Permission-Limited Access
+
 1. **Restricted Query**: User asks "Show me all issues in the SECURITY project"
 2. **Permission Check**: System attempts query with user's permissions
 3. **Graceful Degradation**: Returns accessible results with note about limitations
@@ -656,6 +675,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 ## 10. Implementation Roadmap
 
 ### Phase 1: Foundation (Week 1-2)
+
 - [ ] Create `JiraService` with OAuth2 PKCE implementation
 - [ ] Add encrypted token storage with database schema
 - [ ] Implement rate limiting and security middleware
@@ -663,6 +683,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 - [ ] Set up basic error handling and logging
 
 ### Phase 2: UI Integration (Week 3)
+
 - [ ] Extend `AuthContext` with integration state management
 - [ ] Create `JiraConnectionManager` React components
 - [ ] Build integrations settings page
@@ -670,6 +691,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 - [ ] Add token expiration handling UI
 
 ### Phase 3: Core Tools (Week 4)
+
 - [ ] Implement `jiraListTickets` tool with JQL support
 - [ ] Implement `jiraGetTicket` tool with full details
 - [ ] Implement `jiraAddComment` tool with confirmation
@@ -677,6 +699,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 - [ ] Add intelligent error handling and auth prompts
 
 ### Phase 4: Advanced Features (Week 5)
+
 - [ ] Implement `jiraUpdateStatus` with transition management
 - [ ] Implement `jiraGetAttachment` with file handling
 - [ ] Add user confirmation dialogs for destructive operations
@@ -684,6 +707,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 - [ ] Add comprehensive audit logging
 
 ### Phase 5: Production Hardening (Week 6-7)
+
 - [ ] Security audit and penetration testing
 - [ ] Performance optimization and caching strategies
 - [ ] Comprehensive error handling and recovery mechanisms
@@ -691,6 +715,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 - [ ] Documentation and deployment guides
 
 ### Phase 6: Testing & Documentation (Week 8)
+
 - [ ] Unit tests for all JIRA service components
 - [ ] Integration tests for OAuth flow
 - [ ] End-to-end tests for tool functionality
@@ -699,16 +724,16 @@ REDIS_URL=redis://localhost:6379  # For session storage
 
 ## 11. Approach Comparison
 
-| Aspect | User-Scoped OAuth2 | Technical User |
-|--------|-------------------|----------------|
-| **Security** | ✅ Excellent - Native JIRA permissions | ⚠️ Good - Custom permission logic |
-| **Audit Trail** | ✅ Shows actual user in JIRA logs | ⚠️ Shows technical user + custom logging |
-| **Implementation** | ⚠️ Complex - OAuth flow required | ✅ Simple - Basic auth with API key |
-| **User Experience** | ⚠️ Initial OAuth consent required | ✅ Transparent to users |
-| **Maintenance** | ✅ JIRA handles permissions automatically | ⚠️ Must sync permissions manually |
-| **Risk Level** | ✅ Low - No privilege escalation possible | ⚠️ Medium - Potential security gaps |
-| **Compliance** | ✅ Native audit trails | ⚠️ Custom audit implementation required |
-| **Scalability** | ✅ Distributed token management | ⚠️ Centralized service account bottleneck |
+| Aspect              | User-Scoped OAuth2                        | Technical User                            |
+| ------------------- | ----------------------------------------- | ----------------------------------------- |
+| **Security**        | ✅ Excellent - Native JIRA permissions    | ⚠️ Good - Custom permission logic         |
+| **Audit Trail**     | ✅ Shows actual user in JIRA logs         | ⚠️ Shows technical user + custom logging  |
+| **Implementation**  | ⚠️ Complex - OAuth flow required          | ✅ Simple - Basic auth with API key       |
+| **User Experience** | ⚠️ Initial OAuth consent required         | ✅ Transparent to users                   |
+| **Maintenance**     | ✅ JIRA handles permissions automatically | ⚠️ Must sync permissions manually         |
+| **Risk Level**      | ✅ Low - No privilege escalation possible | ⚠️ Medium - Potential security gaps       |
+| **Compliance**      | ✅ Native audit trails                    | ⚠️ Custom audit implementation required   |
+| **Scalability**     | ✅ Distributed token management           | ⚠️ Centralized service account bottleneck |
 
 ## 12. Recommended Decision
 
@@ -725,7 +750,9 @@ We **strongly recommend the User-Scoped OAuth2 approach** for the following crit
 The initial implementation complexity is offset by significant long-term benefits in security, maintainability, and compliance. The OAuth flow is a one-time setup per user and integrates well with modern enterprise security practices.
 
 ### Fallback Option
+
 If OAuth2 implementation faces insurmountable technical or organizational obstacles, the Technical User approach can serve as a fallback with enhanced security measures:
+
 - Implement comprehensive permission synchronization
 - Add detailed custom audit logging
 - Use service account with minimal required permissions
