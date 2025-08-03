@@ -17,6 +17,9 @@ docs/
 # Examples
 examples/
 
+# Concepts and documentation
+concepts/
+
 # GitHub workflows and actions
 .github/
 .claude/
