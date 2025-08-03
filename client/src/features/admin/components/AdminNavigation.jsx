@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -9,6 +10,36 @@ const AdminNavigation = () => {
   const { platformConfig } = usePlatformConfig();
   const pageConfig = platformConfig?.admin?.pages || {};
   const isEnabled = key => pageConfig[key] !== false;
+
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const moreMenuRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = event => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+        setShowMoreMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Handle window resize for responsive tab count
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   const navItems = [
     {
@@ -111,29 +142,81 @@ const AdminNavigation = () => {
     }
   ];
 
+  // Filter enabled items
+  const enabledItems = navItems.filter(item => isEnabled(item.key));
+  
+  // Define how many tabs to show before "More" button - responsive to screen size
+  // On smaller screens, show fewer tabs to prevent overflow
+  const maxVisibleTabs = windowWidth < 768 ? 3 : windowWidth < 1024 ? 4 : 6;
+  const visibleItems = enabledItems.slice(0, maxVisibleTabs);
+  const hiddenItems = enabledItems.slice(maxVisibleTabs);
+
+  const TabItem = ({ item, isDropdownItem = false }) => (
+    <Link
+      to={item.href}
+      className={
+        isDropdownItem
+          ? `flex items-center w-full px-4 py-2 text-sm hover:bg-gray-100 ${
+              item.current
+                ? 'bg-indigo-50 text-indigo-600 font-medium'
+                : 'text-gray-700'
+            }`
+          : `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+              item.current
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`
+      }
+      onClick={() => isDropdownItem && setShowMoreMenu(false)}
+    >
+      <Icon name={item.icon} className="w-4 h-4 mr-2" />
+      {item.name}
+    </Link>
+  );
+
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex space-x-8">
-          {navItems
-            .filter(item => isEnabled(item.key))
-            .map(item => (
-              <Link
-                key={item.name}
-                to={item.href}
+        <div className="flex items-center space-x-8">
+          {/* Visible tabs */}
+          {visibleItems.map(item => (
+            <TabItem key={item.name} item={item} />
+          ))}
+          
+          {/* More button and dropdown */}
+          {hiddenItems.length > 0 && (
+            <div className="relative" ref={moreMenuRef}>
+              <button
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
                 className={`
-                inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
-                ${
-                  item.current
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }
-              `}
+                  inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
+                  ${
+                    hiddenItems.some(item => item.current)
+                      ? 'border-indigo-500 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }
+                `}
+                aria-expanded={showMoreMenu}
+                aria-haspopup="true"
               >
-                <Icon name={item.icon} className="w-4 h-4 mr-2" />
-                {item.name}
-              </Link>
-            ))}
+                <Icon name="menu" className="w-4 h-4 mr-2" />
+                {t('admin.nav.more', 'More')}
+                <Icon
+                  name="chevron-down"
+                  className={`w-4 h-4 ml-1 transition-transform duration-200 ${showMoreMenu ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {/* Dropdown menu */}
+              {showMoreMenu && (
+                <div className="absolute left-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                  {hiddenItems.map(item => (
+                    <TabItem key={item.name} item={item} isDropdownItem />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </nav>
