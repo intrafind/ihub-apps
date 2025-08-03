@@ -7,17 +7,19 @@
 
 ## Executive Summary
 
-This document outlines a comprehensive concept for implementing a JIRA connector tool within the AI Hub Apps ecosystem. The connector will enable LLM-powered AI assistants to interact with JIRA instances, allowing users to list tickets, read ticket details, add comments, manage status transitions, and access attachments - all within the security context of their individual JIRA permissions.
+This document outlines a comprehensive concept for implementing a unified JIRA connector tool within the AI Hub Apps ecosystem. Following the established patterns of `iFinder` and `entraPeopleSearch`, the connector provides a single tool with multiple functions that enable LLM-powered AI assistants to interact with JIRA instances. Users can search tickets, read details, add comments, manage status transitions, and access attachments - all within the security context of their individual JIRA permissions through a seamless, integrated experience.
 
 ## 1. Business Requirements
 
 ### Core Functionality
 
-- **List Tickets**: Search and list JIRA tickets using JQL queries
-- **Read Tickets**: Get detailed ticket information including comments and history
-- **Answer Tickets**: Add comments to tickets with user confirmation
-- **Status Management**: Get current status and available transitions, change status with user confirmation
-- **Attachment Access**: Download and access ticket attachments
+The unified JIRA tool provides comprehensive ticket management through multiple functions:
+
+- **Search Tickets**: Search and list JIRA tickets using JQL queries (`searchTickets`)
+- **Get Ticket Details**: Retrieve detailed ticket information including comments and history (`getTicket`)
+- **Add Comments**: Add comments to tickets with user confirmation (`addComment`)
+- **Status Management**: Get available transitions and change ticket status with confirmation (`getTransitions`, `transitionTicket`)
+- **Attachment Access**: Download and access ticket attachments (`getAttachment`)
 - **User-Scoped Access**: Ensure users can only access tickets they have permissions for
 - **Audit Trail**: All actions performed in the user's name for compliance
 
@@ -268,7 +270,37 @@ Failure Path:
 </div>
 ```
 
-## 6. Technical Implementation Architecture
+## 6. Unified Tool Architecture
+
+### Benefits of Single Tool Approach
+
+Following the established patterns of `iFinder` and `entraPeopleSearch`, the JIRA connector uses a **unified tool architecture** with the following benefits:
+
+#### **1. Simplified Tool Management**
+- **Single Entry Point**: One tool definition instead of multiple separate tools
+- **Consistent Authentication**: Single auth flow for all JIRA operations
+- **Unified Configuration**: Single point of configuration and maintenance
+- **Reduced Complexity**: Less tool definitions to manage in apps and permissions
+
+#### **2. Better User Experience**
+- **Contextual Operations**: Related JIRA functions grouped together logically
+- **Seamless Workflow**: Users can search, view, comment, and transition tickets without switching tools
+- **Consistent Behavior**: Same authentication and error handling across all functions
+- **Intelligent Suggestions**: LLM can suggest related functions within the same tool
+
+#### **3. Improved Maintainability**
+- **Centralized Logic**: All JIRA operations in one service class
+- **Shared Dependencies**: Common utilities and authentication shared across functions
+- **Easier Updates**: Changes to JIRA API integration affect one service
+- **Consistent Testing**: Single test suite for all JIRA functionality
+
+#### **4. Following AI Hub Apps Patterns**
+- **Established Convention**: Matches existing `entraPeopleSearch` and `iFinder` patterns
+- **Service Layer Architecture**: Clean separation between tool wrapper and service implementation
+- **Function-Based Design**: Using `functions` property for multiple operations
+- **Backward Compatibility**: Tool wrapper maintains clean interface
+
+## 7. Technical Implementation Architecture
 
 ### Component Architecture
 
@@ -289,52 +321,61 @@ class JiraService {
 
   // JIRA API client
   static async makeApiCall(endpoint, method, data, userTokens) {}
-  static async searchIssues(jql, userTokens) {}
-  static async getIssue(issueKey, userTokens) {}
-  static async addComment(issueKey, comment, userTokens) {}
-  static async transitionIssue(issueKey, transitionId, userTokens) {}
-  static async getAttachment(attachmentId, userTokens) {}
+  static async searchTickets(params) {}
+  static async getTicket(params) {}
+  static async addComment(params) {}
+  static async getTransitions(params) {}
+  static async transitionTicket(params) {}
+  static async getAttachment(params) {}
 }
 ```
 
-#### **2. JIRA Tools (`/server/tools/jira*.js`)**
-
-**`jiraListTickets.js`**
+#### **2. JIRA Tool (`/server/tools/jira.js`)**
 
 ```javascript
-async function execute(parameters, context) {
-  const { jql, maxResults = 50 } = parameters;
-  const { user } = context;
+// This wrapper is maintained for backward compatibility
 
-  const userTokens = await JiraService.getStoredTokens(user.id);
-  if (!userTokens) {
-    return {
-      type: 'auth_required',
-      message: 'Please connect your JIRA account',
-      authUrl: '/settings/integrations#jira'
-    };
-  }
+import JiraService from '../services/integrations/JiraService.js';
 
-  return await JiraService.searchIssues(jql, userTokens);
+// Search and list JIRA tickets using JQL queries
+export async function searchTickets(params) {
+  return JiraService.searchTickets(params);
 }
-```
 
-**`jiraGetTicket.js`**
-
-```javascript
-async function execute(parameters, context) {
-  const { issueKey, includeComments = true } = parameters;
-  // Implementation details...
+// Get detailed information about a specific JIRA ticket
+export async function getTicket(params) {
+  return JiraService.getTicket(params);
 }
-```
 
-**`jiraAddComment.js`**
-
-```javascript
-async function execute(parameters, context) {
-  const { issueKey, comment, requireConfirmation = true } = parameters;
-  // Implementation with user confirmation flow...
+// Add a comment to a JIRA ticket
+export async function addComment(params) {
+  return JiraService.addComment(params);
 }
+
+// Get available transitions for a ticket
+export async function getTransitions(params) {
+  return JiraService.getTransitions(params);
+}
+
+// Transition a ticket to a new status
+export async function transitionTicket(params) {
+  return JiraService.transitionTicket(params);
+}
+
+// Get attachment content
+export async function getAttachment(params) {
+  return JiraService.getAttachment(params);
+}
+
+// Export default with all methods
+export default {
+  searchTickets,
+  getTicket,
+  addComment,
+  getTransitions,
+  transitionTicket,
+  getAttachment
+};
 ```
 
 #### **3. OAuth Integration Routes (`/server/routes/integrations/jira.js`)**
@@ -408,97 +449,156 @@ const refreshJiraConnection = async () => {
 {
   "tools": [
     {
-      "id": "jiraListTickets",
-      "name": "jiraListTickets",
+      "id": "jira",
+      "name": "jira",
       "title": {
-        "en": "Search JIRA Tickets",
-        "de": "JIRA-Tickets durchsuchen"
+        "en": "JIRA Integration",
+        "de": "JIRA-Integration"
       },
       "description": {
-        "en": "Search and list JIRA tickets using JQL queries",
-        "de": "JIRA-Tickets mit JQL-Abfragen suchen und auflisten"
+        "en": "Comprehensive JIRA integration for ticket management, search, and collaboration",
+        "de": "Umfassende JIRA-Integration für Ticket-Management, Suche und Zusammenarbeit"
       },
-      "script": "jiraListTickets.js",
+      "script": "jira.js",
       "requiresAuth": true,
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "jql": {
-            "type": "string",
-            "description": "JQL query to search tickets (e.g., 'assignee = currentUser() AND status = Open')"
+      "functions": {
+        "searchTickets": {
+          "description": {
+            "en": "Search and list JIRA tickets using JQL queries",
+            "de": "JIRA-Tickets mit JQL-Abfragen suchen und auflisten"
           },
-          "maxResults": {
-            "type": "integer",
-            "default": 50,
-            "maximum": 100,
-            "description": "Maximum number of results to return"
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "jql": {
+                "type": "string",
+                "description": "JQL query to search tickets (e.g., 'assignee = currentUser() AND status = Open')"
+              },
+              "maxResults": {
+                "type": "integer",
+                "default": 50,
+                "maximum": 100,
+                "description": "Maximum number of results to return"
+              }
+            },
+            "required": ["jql"]
           }
         },
-        "required": ["jql"]
-      }
-    },
-    {
-      "id": "jiraGetTicket",
-      "name": "jiraGetTicket",
-      "title": {
-        "en": "Get JIRA Ticket Details",
-        "de": "JIRA-Ticket Details abrufen"
-      },
-      "description": {
-        "en": "Get detailed information about a specific JIRA ticket",
-        "de": "Detaillierte Informationen zu einem spezifischen JIRA-Ticket abrufen"
-      },
-      "script": "jiraGetTicket.js",
-      "requiresAuth": true,
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "issueKey": {
-            "type": "string",
-            "description": "JIRA issue key (e.g., 'PROJ-123')"
+        "getTicket": {
+          "description": {
+            "en": "Get detailed information about a specific JIRA ticket",
+            "de": "Detaillierte Informationen zu einem spezifischen JIRA-Ticket abrufen"
           },
-          "includeComments": {
-            "type": "boolean",
-            "default": true,
-            "description": "Include comments in the response"
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "issueKey": {
+                "type": "string",
+                "description": "JIRA issue key (e.g., 'PROJ-123')"
+              },
+              "includeComments": {
+                "type": "boolean",
+                "default": true,
+                "description": "Include comments in the response"
+              }
+            },
+            "required": ["issueKey"]
           }
         },
-        "required": ["issueKey"]
-      }
-    },
-    {
-      "id": "jiraAddComment",
-      "name": "jiraAddComment",
-      "title": {
-        "en": "Add Comment to JIRA Ticket",
-        "de": "Kommentar zu JIRA-Ticket hinzufügen"
-      },
-      "description": {
-        "en": "Add a comment to a JIRA ticket",
-        "de": "Einen Kommentar zu einem JIRA-Ticket hinzufügen"
-      },
-      "script": "jiraAddComment.js",
-      "requiresAuth": true,
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "issueKey": {
-            "type": "string",
-            "description": "JIRA issue key (e.g., 'PROJ-123')"
+        "addComment": {
+          "description": {
+            "en": "Add a comment to a JIRA ticket",
+            "de": "Einen Kommentar zu einem JIRA-Ticket hinzufügen"
           },
-          "comment": {
-            "type": "string",
-            "description": "Comment text to add"
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "issueKey": {
+                "type": "string",
+                "description": "JIRA issue key (e.g., 'PROJ-123')"
+              },
+              "comment": {
+                "type": "string",
+                "description": "Comment text to add"
+              },
+              "requireConfirmation": {
+                "type": "boolean",
+                "default": true,
+                "description": "Require user confirmation before adding comment"
+              }
+            },
+            "required": ["issueKey", "comment"]
           }
         },
-        "required": ["issueKey", "comment"]
+        "getTransitions": {
+          "description": {
+            "en": "Get available status transitions for a ticket",
+            "de": "Verfügbare Statusübergänge für ein Ticket abrufen"
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "issueKey": {
+                "type": "string",
+                "description": "JIRA issue key (e.g., 'PROJ-123')"
+              }
+            },
+            "required": ["issueKey"]
+          }
+        },
+        "transitionTicket": {
+          "description": {
+            "en": "Change the status of a JIRA ticket",
+            "de": "Status eines JIRA-Tickets ändern"
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "issueKey": {
+                "type": "string",
+                "description": "JIRA issue key (e.g., 'PROJ-123')"
+              },
+              "transitionId": {
+                "type": "string",
+                "description": "ID of the transition to perform"
+              },
+              "requireConfirmation": {
+                "type": "boolean",
+                "default": true,
+                "description": "Require user confirmation before changing status"
+              }
+            },
+            "required": ["issueKey", "transitionId"]
+          }
+        },
+        "getAttachment": {
+          "description": {
+            "en": "Download and access ticket attachments",
+            "de": "Ticket-Anhänge herunterladen und darauf zugreifen"
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "attachmentId": {
+                "type": "string",
+                "description": "JIRA attachment ID"
+              },
+              "returnBase64": {
+                "type": "boolean",
+                "default": false,
+                "description": "Return attachment content as Base64 encoded string"
+              }
+            },
+            "required": ["attachmentId"]
+          }
+        }
       }
     }
   ]
 }
 ```
 
-## 7. Security Implementation Details
+## 8. Security Implementation Details
 
 ### Critical Security Enhancements
 
@@ -589,7 +689,7 @@ const auditJiraOperation = async operation => {
 };
 ```
 
-## 8. Configuration Requirements
+## 9. Configuration Requirements
 
 ### Environment Variables
 
@@ -639,7 +739,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 }
 ```
 
-## 9. User Experience Scenarios
+## 10. User Experience Scenarios
 
 ### Scenario 1: First-Time User
 
@@ -672,7 +772,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 3. **Graceful Degradation**: Returns accessible results with note about limitations
 4. **Clear Communication**: "Showing 8 of potentially more issues (limited by your JIRA permissions)"
 
-## 10. Implementation Roadmap
+## 11. Implementation Roadmap
 
 ### Phase 1: Foundation (Week 1-2)
 
@@ -692,16 +792,19 @@ REDIS_URL=redis://localhost:6379  # For session storage
 
 ### Phase 3: Core Tools (Week 4)
 
-- [ ] Implement `jiraListTickets` tool with JQL support
-- [ ] Implement `jiraGetTicket` tool with full details
-- [ ] Implement `jiraAddComment` tool with confirmation
-- [ ] Configure tools in `/contents/config/tools.json`
+- [ ] Implement unified `jira` tool with multiple functions:
+  - [ ] `searchTickets` function with JQL support
+  - [ ] `getTicket` function with full details
+  - [ ] `addComment` function with confirmation
+  - [ ] `getTransitions` function for status management
+- [ ] Configure unified tool in `/contents/config/tools.json`
 - [ ] Add intelligent error handling and auth prompts
 
 ### Phase 4: Advanced Features (Week 5)
 
-- [ ] Implement `jiraUpdateStatus` with transition management
-- [ ] Implement `jiraGetAttachment` with file handling
+- [ ] Complete remaining JIRA tool functions:
+  - [ ] `transitionTicket` function with status management
+  - [ ] `getAttachment` function with file handling
 - [ ] Add user confirmation dialogs for destructive operations
 - [ ] Implement background token refresh service
 - [ ] Add comprehensive audit logging
@@ -722,7 +825,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 - [ ] Security testing and vulnerability assessment
 - [ ] User documentation and admin guides
 
-## 11. Approach Comparison
+## 12. Approach Comparison
 
 | Aspect              | User-Scoped OAuth2                        | Technical User                            |
 | ------------------- | ----------------------------------------- | ----------------------------------------- |
@@ -735,7 +838,7 @@ REDIS_URL=redis://localhost:6379  # For session storage
 | **Compliance**      | ✅ Native audit trails                    | ⚠️ Custom audit implementation required   |
 | **Scalability**     | ✅ Distributed token management           | ⚠️ Centralized service account bottleneck |
 
-## 12. Recommended Decision
+## 13. Recommended Decision
 
 ### Primary Recommendation: User-Scoped OAuth2
 
@@ -758,7 +861,7 @@ If OAuth2 implementation faces insurmountable technical or organizational obstac
 - Use service account with minimal required permissions
 - Implement regular permission validation
 
-## 13. Next Steps
+## 14. Next Steps
 
 1. **Stakeholder Approval**: Get approval for OAuth2 approach and resource allocation
 2. **JIRA Configuration**: Register OAuth2 application in target JIRA instance(s)
