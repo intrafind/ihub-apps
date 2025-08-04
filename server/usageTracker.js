@@ -12,6 +12,7 @@ const now = () => new Date().toISOString();
 
 let usage = null;
 let trackingEnabled = true;
+let configLoaded = false;
 let dirty = false;
 let saveTimer = null;
 
@@ -51,12 +52,14 @@ function createDefaultUsage() {
 }
 
 async function loadConfig() {
+  if (configLoaded) return;
   try {
     const cfg = await loadJson('config/platform.json');
     trackingEnabled = cfg?.features?.usageTracking !== false;
   } catch {
     trackingEnabled = true;
   }
+  configLoaded = true;
 }
 
 async function loadUsage() {
@@ -145,6 +148,7 @@ export function estimateTokens(text) {
 }
 
 export async function recordChatRequest({ userId, appId, modelId, tokens = 0 }) {
+  await loadConfig();
   if (!trackingEnabled) return;
   const data = await loadUsage();
   data.messages.total += 1;
@@ -166,6 +170,7 @@ export async function recordChatRequest({ userId, appId, modelId, tokens = 0 }) 
 }
 
 export async function recordChatResponse({ userId, appId, modelId, tokens = 0 }) {
+  await loadConfig();
   if (!trackingEnabled) return;
   const data = await loadUsage();
   data.messages.total += 1;
@@ -187,6 +192,7 @@ export async function recordChatResponse({ userId, appId, modelId, tokens = 0 })
 }
 
 export async function recordFeedback({ userId, appId, modelId, rating }) {
+  await loadConfig();
   if (!trackingEnabled) return;
   const data = await loadUsage();
 
@@ -237,6 +243,7 @@ export async function recordMagicPrompt({
   inputTokens = 0,
   outputTokens = 0
 }) {
+  await loadConfig();
   if (!trackingEnabled) return;
   const data = await loadUsage();
   data.magicPrompt.total += 1;
@@ -261,27 +268,29 @@ export async function recordMagicPrompt({
 }
 
 export async function getUsage() {
+  await loadConfig();
   return loadUsage();
 }
 
-export function isTrackingEnabled() {
+export async function isTrackingEnabled() {
+  await loadConfig();
   return trackingEnabled;
 }
 
 export async function resetUsage() {
+  await loadConfig();
   usage = createDefaultUsage();
   usage.lastReset = now();
   dirty = true;
   await saveUsage();
 }
 
-// Initialize configuration and load existing usage data
-loadConfig();
-loadUsage();
+export async function reloadConfig() {
+  configLoaded = false;
+  await loadConfig();
+}
+
+// Start periodic save interval
 setInterval(() => {
   if (dirty) saveUsage().catch(e => console.error('Usage save error:', e));
 }, SAVE_INTERVAL_MS);
-
-export async function reloadConfig() {
-  await loadConfig();
-}

@@ -47,11 +47,7 @@ COPY . .
 
 # Create required directories with proper permissions
 RUN mkdir -p \
-    /app/contents/data \
-    /app/contents/uploads \
-    /app/contents/config \
-    /app/contents/pages \
-    /app/contents/sources \
+    /app/contents \
     /app/logs
 
 # Expose ports for development (server + vite)
@@ -87,11 +83,7 @@ COPY --from=builder --chown=aihub:aihub /app/dist ./
 
 # Create required directories with proper permissions (these will be mounted from volumes)
 RUN mkdir -p \
-    /app/contents/data \
-    /app/contents/uploads \
-    /app/contents/config \
-    /app/contents/pages \
-    /app/contents/sources \
+    /app/contents/ \
     /app/logs && \
     chown -R aihub:aihub /app/contents /app/logs
 
@@ -144,7 +136,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 EXPOSE 3000
 
 # Define volumes for data persistence
-VOLUME ["/app/contents/data", "/app/contents/uploads", "/app/logs"]
+VOLUME ["/app/contents/", "/app/logs"]
 
 # Use tini as PID 1 to handle signals properly
 ENTRYPOINT ["/sbin/tini", "--", "/app/docker-entrypoint.sh"]

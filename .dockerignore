@@ -18,14 +18,17 @@ build/
 # Runtime data and logs (will be created in container)
 logs/
 *.log
-contents/data/
-contents/uploads/
+contents/
+concepts/
+electron/
+docker/docker-compose.*
 
 # Development and test files
 .git/
 .gitignore
 .gitattributes
 .github/
+.claude/
 tests/
 __tests__/
 test/

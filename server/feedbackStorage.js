@@ -9,16 +9,19 @@ const dataFile = path.join(getRootDir(), contentsDir, 'data', 'feedback.jsonl');
 const SAVE_INTERVAL_MS = 10000;
 
 let trackingEnabled = true;
+let configLoaded = false;
 let queue = [];
 let saveTimer = null;
 
 async function loadConfig() {
+  if (configLoaded) return;
   try {
     const cfg = await loadJson('config/platform.json');
     trackingEnabled = cfg?.features?.feedbackTracking !== false;
   } catch {
     trackingEnabled = true;
   }
+  configLoaded = true;
 }
 
 async function flushQueue() {
@@ -50,6 +53,11 @@ export function storeFeedback({
   comment = '',
   contentSnippet = ''
 }) {
+  // Load config asynchronously if not loaded yet
+  if (!configLoaded) {
+    loadConfig().catch(e => console.error('Failed to load feedback config:', e));
+  }
+
   if (!trackingEnabled || !messageId) return;
   const entry = {
     timestamp: new Date().toISOString(),
@@ -65,13 +73,14 @@ export function storeFeedback({
   scheduleFlush();
 }
 
-loadConfig();
+export async function reloadConfig() {
+  configLoaded = false;
+  await loadConfig();
+}
+
+// Start periodic flush interval
 setInterval(() => {
   if (queue.length > 0) {
     flushQueue().catch(e => console.error('Feedback save error:', e));
   }
 }, SAVE_INTERVAL_MS);
-
-export async function reloadConfig() {
-  await loadConfig();
-}
