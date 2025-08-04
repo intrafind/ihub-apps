@@ -21,6 +21,7 @@ const AdminModelsPage = () => {
   const [, setTestResults] = useState({});
   const [selectedModel, setSelectedModel] = useState(null);
   const [showModelDetails, setShowModelDetails] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const loadModels = async () => {
     try {
@@ -130,6 +131,79 @@ const AdminModelsPage = () => {
     }
   };
 
+  const downloadModelConfig = async modelId => {
+    try {
+      const response = await makeAdminApiCall(`/admin/models/${modelId}`);
+      const model = response.data;
+
+      // Create a clean config object for download
+      const configData = JSON.stringify(model, null, 2);
+      const blob = new Blob([configData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      // Create download link
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `model-${modelId}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(`Failed to download model config: ${err.message}`);
+    }
+  };
+
+  const handleUploadConfig = async event => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.json')) {
+      setError('Please select a JSON file');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileContent = await file.text();
+      const modelConfig = JSON.parse(fileContent);
+
+      // Validate required fields
+      if (
+        !modelConfig.id ||
+        !modelConfig.name ||
+        !modelConfig.description ||
+        !modelConfig.provider
+      ) {
+        throw new Error(
+          'Invalid model config: missing required fields (id, name, description, provider)'
+        );
+      }
+
+      // Upload the config
+      await makeAdminApiCall('/admin/models', {
+        method: 'POST',
+        body: modelConfig
+      });
+
+      // Reload models to show the new one
+      await loadModels();
+
+      // Clear the file input
+      event.target.value = '';
+    } catch (err) {
+      if (err.message.includes('already exists')) {
+        setError(`Model with ID "${JSON.parse(await file.text()).id}" already exists`);
+      } else if (err instanceof SyntaxError) {
+        setError('Invalid JSON file format');
+      } else {
+        setError(`Failed to upload model config: ${err.message}`);
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const filteredModels = models.filter(model => {
     const matchesSearch =
       searchTerm === '' ||
@@ -202,6 +276,29 @@ const AdminModelsPage = () => {
                   <Icon name="plus" className="h-4 w-4 mr-2" />
                   {t('admin.models.addNew', 'Add New Model')}
                 </button>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleUploadConfig}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={uploading}
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={uploading}
+                    title={t('admin.models.uploadConfig', 'Upload Model Config')}
+                  >
+                    <Icon
+                      name={uploading ? 'refresh' : 'upload'}
+                      className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
+                    />
+                    {uploading
+                      ? t('admin.models.uploading', 'Uploading...')
+                      : t('admin.models.uploadConfig', 'Upload Config')}
+                  </button>
+                </div>
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
@@ -373,6 +470,16 @@ const AdminModelsPage = () => {
                                 title={t('admin.models.clone', 'Clone')}
                               >
                                 <Icon name="copy" className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  downloadModelConfig(model.id);
+                                }}
+                                className="p-2 text-green-600 hover:bg-green-50 rounded-full"
+                                title={t('admin.models.download', 'Download Config')}
+                              >
+                                <Icon name="download" className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={e => {

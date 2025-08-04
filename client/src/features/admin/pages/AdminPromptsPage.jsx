@@ -22,6 +22,7 @@ const AdminPromptsPage = () => {
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [showPromptDetails, setShowPromptDetails] = useState(false);
   const [uiConfig, setUiConfig] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     loadPrompts();
@@ -119,6 +120,72 @@ const AdminPromptsPage = () => {
     setShowPromptDetails(true);
   };
 
+  const downloadPromptConfig = async promptId => {
+    try {
+      const response = await makeAdminApiCall(`/admin/prompts/${promptId}`);
+      const prompt = response.data;
+
+      // Create a clean config object for download
+      const configData = JSON.stringify(prompt, null, 2);
+      const blob = new Blob([configData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      // Create download link
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `prompt-${promptId}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(`Failed to download prompt config: ${err.message}`);
+    }
+  };
+
+  const handleUploadConfig = async event => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.json')) {
+      setError('Please select a JSON file');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileContent = await file.text();
+      const promptConfig = JSON.parse(fileContent);
+
+      // Validate required fields
+      if (!promptConfig.id || !promptConfig.name || !promptConfig.prompt) {
+        throw new Error('Invalid prompt config: missing required fields (id, name, prompt)');
+      }
+
+      // Upload the config
+      await makeAdminApiCall('/admin/prompts', {
+        method: 'POST',
+        body: promptConfig
+      });
+
+      // Reload prompts to show the new one
+      await loadPrompts();
+
+      // Clear the file input
+      event.target.value = '';
+    } catch (err) {
+      if (err.message.includes('already exists')) {
+        setError(`Prompt with ID "${JSON.parse(await file.text()).id}" already exists`);
+      } else if (err instanceof SyntaxError) {
+        setError('Invalid JSON file format');
+      } else {
+        setError(`Failed to upload prompt config: ${err.message}`);
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const filteredPrompts = prompts.filter(prompt => {
     const matchesSearch =
       searchTerm === '' ||
@@ -214,6 +281,29 @@ const AdminPromptsPage = () => {
                   <Icon name="plus" className="h-4 w-4 mr-2" />
                   {t('admin.prompts.createNew', 'Create New Prompt')}
                 </button>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleUploadConfig}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={uploading}
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={uploading}
+                    title={t('admin.prompts.uploadConfig', 'Upload Prompt Config')}
+                  >
+                    <Icon
+                      name={uploading ? 'refresh' : 'upload'}
+                      className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
+                    />
+                    {uploading
+                      ? t('admin.prompts.uploading', 'Uploading...')
+                      : t('admin.prompts.uploadConfig', 'Upload Config')}
+                  </button>
+                </div>
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
@@ -447,6 +537,16 @@ const AdminPromptsPage = () => {
                                 title={t('admin.prompts.clone', 'Clone')}
                               >
                                 <Icon name="copy" className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  downloadPromptConfig(prompt.id);
+                                }}
+                                className="p-2 text-green-600 hover:bg-green-50 rounded-full"
+                                title={t('admin.prompts.download', 'Download Config')}
+                              >
+                                <Icon name="download" className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={e => {
