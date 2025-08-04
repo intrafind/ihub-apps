@@ -237,6 +237,9 @@ export function AuthProvider({ children }) {
         const result = await loginWithToken(token);
 
         if (result.success) {
+          // Refresh auth status to ensure all components are updated
+          await loadAuthStatus();
+
           // Get stored return URL
           const returnUrl = sessionStorage.getItem('oidcReturnUrl');
           sessionStorage.removeItem('oidcReturnUrl');

@@ -40,6 +40,30 @@ const AdminAuthPage = () => {
       enabled: false,
       allowSelfSignup: false,
       providers: []
+    },
+    authDebug: {
+      enabled: false,
+      maskTokens: true,
+      redactPasswords: true,
+      consoleLogging: false,
+      includeRawData: false,
+      providers: {
+        oidc: {
+          enabled: true
+        },
+        local: {
+          enabled: true
+        },
+        proxy: {
+          enabled: true
+        },
+        ldap: {
+          enabled: true
+        },
+        ntlm: {
+          enabled: true
+        }
+      }
     }
   });
 
@@ -210,6 +234,32 @@ const AdminAuthPage = () => {
       proxyAuth: {
         ...prev.proxyAuth,
         jwtProviders: prev.proxyAuth.jwtProviders.filter((_, i) => i !== index)
+      }
+    }));
+  };
+
+  const updateAuthDebugConfig = (field, value) => {
+    setConfig(prev => ({
+      ...prev,
+      authDebug: {
+        ...prev.authDebug,
+        [field]: value
+      }
+    }));
+  };
+
+  const updateAuthDebugProvider = (provider, field, value) => {
+    setConfig(prev => ({
+      ...prev,
+      authDebug: {
+        ...prev.authDebug,
+        providers: {
+          ...prev.authDebug.providers,
+          [provider]: {
+            ...prev.authDebug.providers[provider],
+            [field]: value
+          }
+        }
       }
     }));
   };
@@ -975,23 +1025,14 @@ const AdminAuthPage = () => {
 
             {/* Authentication Debug Settings */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Debug Settings</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Enable detailed logging for authentication providers to troubleshoot issues.
-                    <span className="text-amber-600 font-medium ml-1">
-                      Warning: This may log sensitive information.
-                    </span>
-                  </p>
-                </div>
-                <a
-                  href="/admin/auth/debug"
-                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <Icon name="eye" size="sm" className="mr-1" />
-                  View Debug Logs
-                </a>
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Debug Settings</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Enable detailed logging for authentication providers to troubleshoot issues.
+                  <span className="text-amber-600 font-medium ml-1">
+                    Warning: This may log sensitive information.
+                  </span>
+                </p>
               </div>
 
               <div className="space-y-4">
@@ -1000,7 +1041,7 @@ const AdminAuthPage = () => {
                     <input
                       type="checkbox"
                       checked={config.authDebug?.enabled || false}
-                      onChange={e => updateNestedConfig('authDebug', 'enabled', e.target.checked)}
+                      onChange={e => updateAuthDebugConfig('enabled', e.target.checked)}
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
                   </div>
@@ -1022,16 +1063,14 @@ const AdminAuthPage = () => {
                         <label className="flex items-center">
                           <input
                             type="checkbox"
-                            checked={config.authDebug?.includeTokens || false}
-                            onChange={e =>
-                              updateNestedConfig('authDebug', 'includeTokens', e.target.checked)
-                            }
+                            checked={config.authDebug?.maskTokens !== false}
+                            onChange={e => updateAuthDebugConfig('maskTokens', e.target.checked)}
                             className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                           />
-                          <span className="text-sm font-medium text-gray-700">Include Tokens</span>
+                          <span className="text-sm font-medium text-gray-700">Mask Tokens</span>
                         </label>
                         <p className="text-xs text-gray-500 mt-1 ml-6">
-                          Log access tokens and refresh tokens (security risk)
+                          Hide sensitive parts of access tokens and secrets
                         </p>
                       </div>
 
@@ -1039,18 +1078,18 @@ const AdminAuthPage = () => {
                         <label className="flex items-center">
                           <input
                             type="checkbox"
-                            checked={config.authDebug?.includeUserInfo !== false}
+                            checked={config.authDebug?.redactPasswords !== false}
                             onChange={e =>
-                              updateNestedConfig('authDebug', 'includeUserInfo', e.target.checked)
+                              updateAuthDebugConfig('redactPasswords', e.target.checked)
                             }
                             className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                           />
                           <span className="text-sm font-medium text-gray-700">
-                            Include User Info
+                            Redact Passwords
                           </span>
                         </label>
                         <p className="text-xs text-gray-500 mt-1 ml-6">
-                          Log user profile information from providers
+                          Remove passwords and credentials from logs
                         </p>
                       </div>
 
@@ -1058,18 +1097,16 @@ const AdminAuthPage = () => {
                         <label className="flex items-center">
                           <input
                             type="checkbox"
-                            checked={config.authDebug?.includeHeaders !== false}
+                            checked={config.authDebug?.consoleLogging || false}
                             onChange={e =>
-                              updateNestedConfig('authDebug', 'includeHeaders', e.target.checked)
+                              updateAuthDebugConfig('consoleLogging', e.target.checked)
                             }
                             className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                           />
-                          <span className="text-sm font-medium text-gray-700">
-                            Include HTTP Headers
-                          </span>
+                          <span className="text-sm font-medium text-gray-700">Console Logging</span>
                         </label>
                         <p className="text-xs text-gray-500 mt-1 ml-6">
-                          Log HTTP request and response headers
+                          Also output debug logs to console
                         </p>
                       </div>
 
@@ -1077,74 +1114,46 @@ const AdminAuthPage = () => {
                         <label className="flex items-center">
                           <input
                             type="checkbox"
-                            checked={config.authDebug?.includeExchangeDetails !== false}
+                            checked={config.authDebug?.includeRawData || false}
                             onChange={e =>
-                              updateNestedConfig(
-                                'authDebug',
-                                'includeExchangeDetails',
-                                e.target.checked
-                              )
+                              updateAuthDebugConfig('includeRawData', e.target.checked)
                             }
                             className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                           />
                           <span className="text-sm font-medium text-gray-700">
-                            Include Exchange Details
+                            Include Raw Data
                           </span>
                         </label>
                         <p className="text-xs text-gray-500 mt-1 ml-6">
-                          Log detailed authentication flow information
+                          Include unsanitized raw data (security risk)
                         </p>
                       </div>
                     </div>
 
-                    <div className="pt-2">
-                      <div className="flex items-center space-x-4">
-                        <div className="flex-1">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Log Retention (hours)
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            max="168"
-                            value={config.authDebug?.retentionHours || 24}
-                            onChange={e =>
-                              updateNestedConfig(
-                                'authDebug',
-                                'retentionHours',
-                                parseInt(e.target.value) || 24
-                              )
-                            }
-                            className="w-20 px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">
-                            How long to keep debug logs (1-168 hours)
-                          </p>
-                        </div>
-
-                        <div className="flex-1">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Max Log Entries
-                          </label>
-                          <input
-                            type="number"
-                            min="100"
-                            max="10000"
-                            value={config.authDebug?.maxEntries || 1000}
-                            onChange={e =>
-                              updateNestedConfig(
-                                'authDebug',
-                                'maxEntries',
-                                parseInt(e.target.value) || 1000
-                              )
-                            }
-                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">
-                            Maximum number of logs to keep in memory
-                          </p>
-                        </div>
+                    {/* Provider-specific settings */}
+                    <div className="pt-4 border-t border-gray-200">
+                      <h4 className="text-sm font-medium text-gray-900 mb-3">Provider Settings</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {['oidc', 'local', 'proxy', 'ldap', 'ntlm'].map(provider => (
+                          <div key={provider} className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id={`debug-${provider}`}
+                              checked={config.authDebug?.providers?.[provider]?.enabled !== false}
+                              onChange={e =>
+                                updateAuthDebugProvider(provider, 'enabled', e.target.checked)
+                              }
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            />
+                            <label htmlFor={`debug-${provider}`} className="text-sm text-gray-700">
+                              {provider.toUpperCase()}
+                            </label>
+                          </div>
+                        ))}
                       </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Enable debug logging per authentication provider
+                      </p>
                     </div>
                   </div>
                 )}

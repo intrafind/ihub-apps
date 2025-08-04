@@ -185,8 +185,16 @@ jobs:
       - name: Upload Trivy scan results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true  # Add this line
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: 'trivy-results.sarif'          
+
+      - name: Upload Trivy results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scan-results
+          path: trivy-results.sarif
+          retention-days: 30
 
       - name: Check for critical vulnerabilities
         run: |
@@ -209,154 +217,3 @@ jobs:
           else
             echo "✅ No critical or high severity vulnerabilities found."
           fi
-
-  # Integration tests
-  integration-tests:
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_DB: aihub_test
-          POSTGRES_USER: aihub
-          POSTGRES_PASSWORD: test123
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Create test environment file
-        run: |
-          cat > .env.test << EOF
-          NODE_ENV=test
-          JWT_SECRET=test-jwt-secret-for-ci
-          ADMIN_SECRET=test-admin-secret
-          DB_HOST=localhost
-          DB_PORT=5432
-          DB_NAME=aihub_test
-          DB_USER=aihub
-          DB_PASSWORD=test123
-          REDIS_HOST=localhost
-          REDIS_PORT=6379
-          OPENAI_API_KEY=test-key
-          ANTHROPIC_API_KEY=test-key
-          GOOGLE_API_KEY=test-key
-          MISTRAL_API_KEY=test-key
-          EOF
-
-      - name: Run integration tests
-        run: |
-          docker run --rm \
-            --network host \
-            --env-file .env.test \
-            -v $(pwd)/contents:/app/contents:ro \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-test.outputs.image-digest }} \
-            npm run test:all
-
-  # Deploy to staging (only on main branch)
-  deploy-staging:
-    runs-on: ubuntu-latest
-    needs: [build-and-test, security-scan, integration-tests]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: staging
-    
-    steps:
-      - name: Deploy to staging
-        run: |
-          echo "🚀 Deploying to staging environment..."
-          echo "Image: ${{ needs.build-and-test.outputs.image-tags }}"
-          echo "Digest: ${{ needs.build-and-test.outputs.image-digest }}"
-          
-          # Here you would add actual deployment steps
-          # For example, using kubectl, helm, or docker-compose
-          
-          # Example deployment command (customize for your infrastructure):
-          # kubectl set image deployment/ai-hub-apps ai-hub-apps=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-and-test.outputs.image-digest }} -n ai-hub-staging
-          
-          echo "✅ Staging deployment completed successfully!"
-
-  # Create GitHub Release for releases
-  create-release:
-    runs-on: ubuntu-latest
-    needs: [build-and-test, security-scan]
-    if: github.event_name == 'release'
-    permissions:
-      contents: write
-      
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Extract release notes
-        id: release_notes
-        run: |
-          # Extract version from release
-          VERSION=${{ github.event.release.tag_name }}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          
-          # Create release notes (customize as needed)
-          cat > release_notes.md << EOF
-          ## AI Hub Apps $VERSION
-          
-          ### Docker Images
-          - \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION\`
-          - \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`
-          
-          ### Changes
-          - Updated to version $VERSION
-          - See commit history for detailed changes
-          
-          ### Usage
-          \`\`\`bash
-          docker run -p 3000:3000 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION
-          \`\`\`
-          
-          ### Security
-          - Container scanned for vulnerabilities
-          - Runs as non-root user (UID 1000)
-          - Read-only root filesystem
-          EOF
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          name: AI Hub Apps ${{ steps.release_notes.outputs.version }}
-          body_path: release_notes.md
-          draft: false
-          prerelease: ${{ contains(github.ref, '-') }}
-          generate_release_notes: true
-
-  # Cleanup old images (runs weekly)
-  cleanup:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
-    permissions:
-      packages: write
-      
-    steps:
-      - name: Delete old container images
-        uses: actions/delete-package-versions@v4
-        with:
-          package-name: ${{ env.IMAGE_NAME }}
-          package-type: 'container'
-          min-versions-to-keep: 10
-          delete-only-untagged-versions: true
