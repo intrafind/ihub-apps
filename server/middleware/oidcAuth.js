@@ -55,7 +55,6 @@ export function configureOidcProviders() {
         },
         async (accessToken, _refreshToken, _profile, done) => {
           try {
-
             // Get user info from OIDC provider
             const userInfo = await fetchUserInfo(provider.userInfoURL, accessToken);
 
@@ -68,7 +67,6 @@ export function configureOidcProviders() {
 
             return done(null, validatedUser);
           } catch (error) {
-
             console.error(`OIDC user validation error for provider ${provider.name}:`, error);
             return done(error, null);
           }
@@ -95,7 +93,6 @@ export function configureOidcProviders() {
  * Fetch user information from OIDC provider
  */
 async function fetchUserInfo(userInfoURL, accessToken) {
-
   try {
     const response = await fetch(userInfoURL, {
       headers: {
@@ -112,7 +109,6 @@ async function fetchUserInfo(userInfoURL, accessToken) {
 
     return userInfo;
   } catch (error) {
-
     throw error;
   }
 }
@@ -202,7 +198,6 @@ export function createOidcAuthHandler(providerName) {
   return (req, res, next) => {
     const provider = configuredProviders.get(providerName);
     if (!provider) {
-
       return res.status(404).json({ error: `OIDC provider '${providerName}' not found` });
     }
 
@@ -211,10 +206,8 @@ export function createOidcAuthHandler(providerName) {
     if (returnUrl) {
       // Ensure session exists
       if (!req.session) {
-        
       } else {
         req.session.returnUrl = returnUrl;
-        
       }
     }
 
@@ -238,7 +231,6 @@ export function createOidcCallbackHandler(providerName) {
 
     passport.authenticate(provider.strategyName, (err, user, info) => {
       if (err) {
-
         // Special handling for state verification errors
         if (err.message && err.message.includes('Failed to verify request state')) {
           console.error(
@@ -259,7 +251,6 @@ export function createOidcCallbackHandler(providerName) {
       }
 
       if (!user) {
-
         console.warn(`OIDC authentication failed for provider ${providerName}:`, info);
 
         // Redirect back to the app with error message
@@ -268,7 +259,6 @@ export function createOidcCallbackHandler(providerName) {
       }
 
       try {
-
         // Generate JWT token using centralized token service
         const { token, expiresIn } = generateJwt(user, {
           authMode: 'oidc',
@@ -319,7 +309,6 @@ export function createOidcCallbackHandler(providerName) {
           expiresIn
         });
       } catch (tokenError) {
-
         console.error(`JWT token generation error for provider ${providerName}:`, tokenError);
 
         // Redirect back to the app with error message
