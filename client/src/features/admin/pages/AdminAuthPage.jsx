@@ -785,7 +785,9 @@ const AdminAuthPage = () => {
                             <Icon name="trash" size="sm" />
                           </button>
                         </div>
-                        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${provider.enabled === false ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <div
+                          className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${provider.enabled === false ? 'opacity-50 pointer-events-none' : ''}`}
+                        >
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               Provider Name
