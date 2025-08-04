@@ -25,6 +25,12 @@ export function configureOidcProviders() {
 
   // Configure each OIDC provider
   for (const provider of oidcConfig.providers) {
+    // Skip disabled providers
+    if (provider.enabled === false) {
+      console.log(`OIDC provider ${provider.name} is disabled, skipping configuration`);
+      continue;
+    }
+
     if (
       !provider.name ||
       !provider.clientId ||
@@ -187,7 +193,9 @@ export function getConfiguredProviders() {
     name: provider.name,
     displayName: provider.displayName || provider.name,
     authURL: `/api/auth/oidc/${provider.name}`,
-    callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`
+    callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`,
+    autoRedirect: provider.autoRedirect || false,
+    enabled: provider.enabled
   }));
 }
 

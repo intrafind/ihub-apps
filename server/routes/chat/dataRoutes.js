@@ -347,15 +347,17 @@ export default function registerDataRoutes(app) {
         ? {
             enabled: oidcAuthConfig.enabled,
             providers:
-              oidcAuthConfig.providers?.map(provider => ({
-                name: provider.name,
-                displayName: provider.displayName,
-                authorizationURL: provider.authorizationURL,
-                callbackURL: provider.callbackURL,
-                scope: provider.scope,
-                pkce: provider.pkce
-                // Exclude clientSecret, clientId, tokenURL, userInfoURL
-              })) || []
+              oidcAuthConfig.providers
+                ?.filter(provider => provider.enabled !== false) // Only include enabled providers
+                ?.map(provider => ({
+                  name: provider.name,
+                  displayName: provider.displayName,
+                  authorizationURL: provider.authorizationURL,
+                  callbackURL: provider.callbackURL,
+                  scope: provider.scope,
+                  pkce: provider.pkce
+                  // Exclude clientSecret, clientId, tokenURL, userInfoURL
+                })) || []
           }
         : { enabled: false };
 
