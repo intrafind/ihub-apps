@@ -25,7 +25,8 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
 
   const auth = platformConfig?.auth || {};
   const authMode = authConfig?.authMode || auth.mode || 'anonymous';
-  const allowAnonymous = authConfig?.anonymousAuth?.enabled ?? platformConfig?.anonymousAuth?.enabled !== false;
+  const allowAnonymous =
+    authConfig?.anonymousAuth?.enabled ?? platformConfig?.anonymousAuth?.enabled !== false;
 
   // Calculate user initials for sidebar variant
   const displayName = user?.name || user?.email || user?.username || user?.id || 'User';
