@@ -93,38 +93,36 @@ export const configureMarked = t => {
   };
 
   // --- Link Renderer ---
-  renderer.link = (href, title, text) => {
-    // Extract the actual URL and title from href - handle both string and object cases
-    let actualHref;
-    let actualTitle = title;
+  renderer.link = token => {
+    // In marked v5+, the renderer receives a token object instead of separate parameters
+    // Extract href, title, and text from the token
+    let actualHref = token.href;
+    let actualTitle = token.title;
+    let text = token.text;
 
-    if (typeof href === 'string') {
-      // Check if the href is a stringified JSON object
-      if (href.startsWith('{') && href.endsWith('}')) {
-        try {
-          const parsed = JSON.parse(href);
-          actualHref = parsed.href || parsed.url || href;
-          if (!actualTitle) {
-            actualTitle = parsed.title || null;
-          }
-        } catch {
-          console.warn('Failed to parse href JSON');
-          actualHref = href;
-        }
-      } else {
-        actualHref = href;
-      }
-    } else if (typeof href === 'object' && href !== null) {
-      // If href is an object (like from marked's token system), extract the href property
-      actualHref = href.href || href.url || String(href);
-
-      // Also try to extract title from the object if not provided separately
-      if (!actualTitle) {
-        actualTitle = href.title || href.text;
-      }
-    } else {
-      actualHref = String(href);
+    // Handle legacy case where individual parameters might be passed (for backward compatibility)
+    if (typeof token === 'string') {
+      actualHref = token;
+      actualTitle = arguments[1];
+      text = arguments[2];
     }
+
+    // Handle cases where href might be a stringified JSON object
+    if (typeof actualHref === 'string' && actualHref.startsWith('{') && actualHref.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(actualHref);
+        actualHref = parsed.href || parsed.url || actualHref;
+        if (!actualTitle) {
+          actualTitle = parsed.title || null;
+        }
+      } catch {
+        console.warn('Failed to parse href JSON');
+      }
+    }
+
+    // Ensure we have valid values
+    actualHref = actualHref || '';
+    text = text || actualHref; // Fallback to href if text is missing
 
     const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
     let isExternal = false;
@@ -133,7 +131,7 @@ export const configureMarked = t => {
       if (url.hostname !== currentDomain) {
         isExternal = true;
       }
-    } catch (e) {
+    } catch {
       // If URL parsing fails, assume it's a relative path or invalid
     }
     const targetAttr = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
