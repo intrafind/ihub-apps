@@ -172,7 +172,7 @@ export default async function registerSwaggerRoutes(app) {
   app.use('/api/docs', ...middleware, swaggerUi.serve);
   app.get('/api/docs', ...middleware, swaggerUi.setup(null, swaggerOptions));
 
-  // Individual API documentation routes
+  // Individual API documentation routes (JSON only)
   app.get('/api/docs/normal/swagger.json', ...middleware, (req, res) => {
     res.json(normalApiSpec);
   });
@@ -185,24 +185,39 @@ export default async function registerSwaggerRoutes(app) {
     res.json(openaiApiSpec);
   });
 
-  // Individual Swagger UI routes for each API category
-  app.use('/api/docs/normal', ...middleware, swaggerUi.serve);
-  app.get('/api/docs/normal', ...middleware, swaggerUi.setup(normalApiSpec, {
-    explorer: false,
-    customSiteTitle: 'AI Hub Apps - Chat & General APIs'
-  }));
+  // Create specific UI for each API set using query parameters
+  app.get('/api/docs/normal', ...middleware, (req, res) => {
+    const customOptions = {
+      explorer: false,
+      customSiteTitle: 'AI Hub Apps - Chat & General APIs',
+      swaggerOptions: {
+        url: '/api/docs/normal/swagger.json'
+      }
+    };
+    res.send(swaggerUi.generateHTML(normalApiSpec, customOptions));
+  });
 
-  app.use('/api/docs/admin', ...middleware, swaggerUi.serve);
-  app.get('/api/docs/admin', ...middleware, swaggerUi.setup(adminApiSpec, {
-    explorer: false,
-    customSiteTitle: 'AI Hub Apps - Admin APIs'
-  }));
+  app.get('/api/docs/admin', ...middleware, (req, res) => {
+    const customOptions = {
+      explorer: false,
+      customSiteTitle: 'AI Hub Apps - Admin APIs',
+      swaggerOptions: {
+        url: '/api/docs/admin/swagger.json'
+      }
+    };
+    res.send(swaggerUi.generateHTML(adminApiSpec, customOptions));
+  });
 
-  app.use('/api/docs/openai', ...middleware, swaggerUi.serve);
-  app.get('/api/docs/openai', ...middleware, swaggerUi.setup(openaiApiSpec, {
-    explorer: false,
-    customSiteTitle: 'AI Hub Apps - OpenAI Compatible APIs'
-  }));
+  app.get('/api/docs/openai', ...middleware, (req, res) => {
+    const customOptions = {
+      explorer: false,
+      customSiteTitle: 'AI Hub Apps - OpenAI Compatible APIs',
+      swaggerOptions: {
+        url: '/api/docs/openai/swagger.json'
+      }
+    };
+    res.send(swaggerUi.generateHTML(openaiApiSpec, customOptions));
+  });
 
   console.log('📚 Swagger documentation available at:');
   console.log('   📖 All APIs: /api/docs');
