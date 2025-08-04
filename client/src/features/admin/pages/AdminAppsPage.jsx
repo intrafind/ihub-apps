@@ -27,6 +27,7 @@ const AdminAppsPage = () => {
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [uiConfig, setUiConfig] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     loadApps();
@@ -165,6 +166,72 @@ const AdminAppsPage = () => {
     setShowCreationWizard(true);
   };
 
+  const downloadAppConfig = async appId => {
+    try {
+      const response = await makeAdminApiCall(`/admin/apps/${appId}`);
+      const app = response.data;
+
+      // Create a clean config object for download
+      const configData = JSON.stringify(app, null, 2);
+      const blob = new Blob([configData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      // Create download link
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `app-${appId}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(`Failed to download app config: ${err.message}`);
+    }
+  };
+
+  const handleUploadConfig = async event => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.json')) {
+      setError('Please select a JSON file');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileContent = await file.text();
+      const appConfig = JSON.parse(fileContent);
+
+      // Validate required fields
+      if (!appConfig.id || !appConfig.name || !appConfig.description) {
+        throw new Error('Invalid app config: missing required fields (id, name, description)');
+      }
+
+      // Upload the config
+      await makeAdminApiCall('/admin/apps', {
+        method: 'POST',
+        body: appConfig
+      });
+
+      // Reload apps to show the new one
+      await loadApps();
+
+      // Clear the file input
+      event.target.value = '';
+    } catch (err) {
+      if (err.message.includes('already exists')) {
+        setError(`App with ID "${JSON.parse(await file.text()).id}" already exists`);
+      } else if (err instanceof SyntaxError) {
+        setError('Invalid JSON file format');
+      } else {
+        setError(`Failed to upload app config: ${err.message}`);
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -225,6 +292,29 @@ const AdminAppsPage = () => {
                 <Icon name="plus" className="h-4 w-4 mr-2" />
                 {t('admin.apps.createApp', 'Create App')}
               </button>
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleUploadConfig}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  disabled={uploading}
+                />
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={uploading}
+                  title={t('admin.apps.uploadConfig', 'Upload App Config')}
+                >
+                  <Icon
+                    name={uploading ? 'refresh' : 'upload'}
+                    className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
+                  />
+                  {uploading
+                    ? t('admin.apps.uploading', 'Uploading...')
+                    : t('admin.apps.uploadConfig', 'Upload Config')}
+                </button>
+              </div>
               <button
                 type="button"
                 className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
@@ -507,6 +597,16 @@ const AdminAppsPage = () => {
                               title={t('admin.apps.actions.clone', 'Clone')}
                             >
                               <Icon name="copy" className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                downloadAppConfig(app.id);
+                              }}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-full"
+                              title={t('admin.apps.actions.download', 'Download Config')}
+                            >
+                              <Icon name="download" className="h-4 w-4" />
                             </button>
                             <button
                               onClick={e => {
