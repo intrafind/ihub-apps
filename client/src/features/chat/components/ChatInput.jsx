@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VoiceInputComponent } from '../../voice/components';
 import Icon from '../../../shared/components/Icon';
-import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
+import ChatInputActionsMenu from './ChatInputActionsMenu';
 import { UnifiedUploader } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
@@ -245,44 +245,18 @@ const ChatInput = ({
         </div>
 
         <div className="flex flex-col gap-1 justify-start">
-          {uploadConfig?.enabled === true && (
-            <button
-              type="button"
-              onClick={toggleUploader}
-              disabled={disabled || isProcessing}
-              className={`image-upload-button ${showUploader ? 'active' : ''} h-fit`}
-              title={t('common.toggleUpload', 'Toggle file upload')}
-              aria-label={t('common.toggleUpload', 'Toggle file upload')}
-            >
-              <Icon name="paper-clip" size="md" />
-            </button>
-          )}
-
-          {magicPromptEnabled && !showUndoMagicPrompt && (
-            <button
-              type="button"
-              onClick={onMagicPrompt}
-              disabled={disabled || isProcessing}
-              className="image-upload-button h-fit"
-              title={t('common.magicPrompt', 'Magic prompt')}
-              aria-label={t('common.magicPrompt', 'Magic prompt')}
-            >
-              {magicPromptLoading ? <MagicPromptLoader /> : <Icon name="sparkles" size="md" />}
-            </button>
-          )}
-
-          {showUndoMagicPrompt && (
-            <button
-              type="button"
-              onClick={onUndoMagicPrompt}
-              disabled={disabled || isProcessing}
-              className="image-upload-button h-fit"
-              title={t('common.undo', 'Undo')}
-              aria-label={t('common.undo', 'Undo')}
-            >
-              <Icon name="arrowLeft" size="md" />
-            </button>
-          )}
+          <ChatInputActionsMenu
+            uploadEnabled={uploadConfig?.enabled === true}
+            onToggleUploader={toggleUploader}
+            showUploader={showUploader}
+            magicPromptEnabled={magicPromptEnabled}
+            onMagicPrompt={onMagicPrompt}
+            showUndoMagicPrompt={showUndoMagicPrompt}
+            onUndoMagicPrompt={onUndoMagicPrompt}
+            magicPromptLoading={magicPromptLoading}
+            disabled={disabled}
+            isProcessing={isProcessing}
+          />
 
           {onVoiceInput && (
             <VoiceInputComponent
