@@ -80,15 +80,12 @@ const AdminAuthPage = () => {
       });
 
       // Success - axios doesn't have response.ok, successful responses are returned directly
-        setMessage({
-          type: 'success',
-          text: 'Authentication configuration saved successfully!'
-        });
-        // Refresh the platform config context to update navigation
-        refreshConfig();
-      } else {
-        throw new Error('Failed to save configuration');
-      }
+      setMessage({
+        type: 'success',
+        text: 'Authentication configuration saved successfully!'
+      });
+      // Refresh the platform config context to update navigation
+      refreshConfig();
     } catch (error) {
       setMessage({
         type: 'error',

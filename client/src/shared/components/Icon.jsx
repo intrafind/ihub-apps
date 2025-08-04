@@ -176,7 +176,11 @@ const iconMap = {
   'academic-cap': { outline: OutlineAcademicCapIcon, solid: SolidAcademicCapIcon },
   briefcase: { outline: BriefcaseIcon, solid: SolidBriefcaseIcon },
   download: { outline: ArrowDownTrayIcon, solid: ArrowDownTrayIcon },
-  'external-link': { outline: ArrowTopRightOnSquareIcon, solid: SolidArrowTopRightOnSquareIcon }
+  'external-link': { outline: ArrowTopRightOnSquareIcon, solid: SolidArrowTopRightOnSquareIcon },
+  // Add commonly used aliases and missing icons
+  save: { outline: OutlineCheckIcon, solid: SolidCheckIcon }, // Use check icon for save
+  plus: { outline: PlusCircleIcon, solid: SolidPlusCircleIcon },
+  warning: { outline: OutlineExclamationTriangleIcon, solid: SolidExclamationTriangleIcon }
 };
 
 const sizeClasses = {
@@ -193,13 +197,21 @@ const iconBaseUrl = import.meta.env.VITE_ICON_BASE_URL || '/icons';
 const Icon = ({ name, size = 'md', className = '', solid = false }) => {
   const [imgError, setImgError] = useState(false);
 
+  // Handle undefined, null, or empty names
+  if (!name || typeof name !== 'string') {
+    return null;
+  }
+
   const iconEntry = iconMap[name];
   if (iconEntry) {
     const IconComponent = solid ? iconEntry.solid : iconEntry.outline;
     return <IconComponent className={`${sizeClasses[size] || sizeClasses.md} ${className}`} />;
   }
 
-  if (imgError) return null;
+  // Don't try to load external SVGs for undefined or invalid names
+  if (imgError || name === 'undefined' || name === 'null') {
+    return null;
+  }
 
   return (
     <img
