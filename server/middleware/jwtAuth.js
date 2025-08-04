@@ -8,7 +8,7 @@ import configCache from '../configCache.js';
  */
 export default function jwtAuthMiddleware(req, res, next) {
   console.log('🔐 jwtAuth: Called for URL:', req.url, req.method);
-  
+
   if (req.user && req.user.id !== 'anonymous') {
     console.log('🔐 jwtAuth: User already set, skipping JWT validation');
     return next();
@@ -16,7 +16,7 @@ export default function jwtAuthMiddleware(req, res, next) {
 
   // Check for token in cookies first (preferred for SSE), then Authorization header
   let token = null;
-  
+
   // Check HTTP-only cookie first
   if (req.cookies && req.cookies.authToken) {
     token = req.cookies.authToken;
@@ -26,13 +26,13 @@ export default function jwtAuthMiddleware(req, res, next) {
   else {
     const authHeader = req.headers.authorization;
     console.log('🔐 jwtAuth: Authorization header:', authHeader);
-    
+
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.substring(7);
       console.log('🔐 jwtAuth: Token found in Authorization header');
     }
   }
-  
+
   if (!token) {
     console.log('🔐 jwtAuth: No token found in cookies or headers, continuing as anonymous');
     return next(); // No token, continue as anonymous

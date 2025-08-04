@@ -24,7 +24,6 @@ export function authRequired(req, res, next) {
   console.log('🔐 authRequired: req.user:', req.user);
   console.log('🔐 authRequired: Authorization header:', req.headers.authorization);
 
-
   // Anonymous access is disabled - require authentication
   if (!req.user || req.user.id === 'anonymous') {
     console.log('🔐 authRequired: Authentication failed - no valid user');
@@ -103,7 +102,7 @@ export const modelAccessRequired = resourceAccessRequired('model');
  */
 export function chatAuthRequired(req, res, next) {
   console.log('🔐 chatAuthRequired: Called for URL:', req.url, req.method);
-  
+
   // First check if authentication is required
   authRequired(req, res, err => {
     if (err) return next(err);
