@@ -1,5 +1,4 @@
 import registerAdminAuthRoutes from './admin/auth.js';
-import registerAdminAuthDebugRoutes from './admin/authDebug.js';
 import registerAdminCacheRoutes from './admin/cache.js';
 import registerAdminConfigRoutes from './admin/configs.js';
 import registerAdminAppsRoutes from './admin/apps.js';
@@ -13,7 +12,6 @@ import registerBackupRoutes from './admin/backup.js';
 
 export default async function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
-  registerAdminAuthDebugRoutes(app);
   registerAdminCacheRoutes(app);
   registerAdminConfigRoutes(app);
   registerAdminAppsRoutes(app);

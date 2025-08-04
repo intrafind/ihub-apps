@@ -117,19 +117,6 @@ const AdminNavigation = () => {
           // icon: 'shield-check',
           current: location.pathname === '/admin/auth'
         },
-        // Auth Debug page - only show if debug is enabled or if we're on the debug page
-        ...(platformConfig?.authDebug?.enabled || location.pathname === '/admin/auth/debug'
-          ? [
-              {
-                key: 'auth-debug',
-                name: t('admin.nav.auth-debug', 'Auth Debug'),
-                href: '/admin/auth/debug',
-                // icon: 'bug',
-                current: location.pathname === '/admin/auth/debug',
-                className: 'ml-4' // Indent to show it's related to auth
-              }
-            ]
-          : []),
         // Only show Users navigation if authentication is enabled
         ...(platformConfig?.localAuth?.enabled ||
         platformConfig?.oidcAuth?.enabled ||
