@@ -39,20 +39,16 @@ const AdminGroupsPage = () => {
     }
 
     try {
-      const response = await makeAdminApiCall(`/admin/groups/${groupId}`, {
+      await makeAdminApiCall(`/admin/groups/${groupId}`, {
         method: 'DELETE'
       });
 
-      if (response.ok) {
-        setMessage({
-          type: 'success',
-          text: 'Group deleted successfully!'
-        });
-        loadGroups();
-      } else {
-        const error = response.data;
-        throw new Error(error.error || 'Failed to delete group');
-      }
+      // Success - axios doesn't have response.ok, successful responses are returned directly
+      setMessage({
+        type: 'success',
+        text: 'Group deleted successfully!'
+      });
+      loadGroups();
     } catch (error) {
       setMessage({
         type: 'error',

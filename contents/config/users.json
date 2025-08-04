@@ -9,7 +9,9 @@
       "passwordHash": "$2b$12$CNq/zTdIoQm34eFbjlMXYO0hBvHaXZNd8p2gYAT5FKISGDbQ8ipHm",
       "createdAt": "2025-07-19T00:00:00.000Z",
       "updatedAt": "2025-07-19T00:00:00.000Z",
-      "internalGroups": ["admin"]
+      "internalGroups": [
+        "admin"
+      ]
     },
     "user_demo_user": {
       "id": "user_demo_user",
@@ -20,7 +22,9 @@
       "passwordHash": "$2b$12$vIxSlOJ3nGH/nv2treLpLeBjimsCuHI3JlztLIc2Yv41VtZKCBhJG",
       "createdAt": "2025-07-19T00:00:00.000Z",
       "updatedAt": "2025-07-19T00:00:00.000Z",
-      "internalGroups": ["user"]
+      "internalGroups": [
+        "user"
+      ]
     },
     "user_5f509bbf_227d_489a_bdeb_edb7914a087f": {
       "id": "user_5f509bbf_227d_489a_bdeb_edb7914a087f",
@@ -31,7 +35,10 @@
       "passwordHash": "$2b$12$T5m9t4qUGil5BBl.TiYoueuRx6utejTxixr2ZhSiwbgFvMem1xW1O",
       "createdAt": "2025-07-19T21:31:12.521Z",
       "updatedAt": "2025-07-19T21:31:12.521Z",
-      "internalGroups": ["admin", "user"]
+      "internalGroups": [
+        "admin",
+        "user"
+      ]
     },
     "user_cf41e08d_b8cc_4640_8685_12ee08f5fa07": {
       "id": "user_cf41e08d_b8cc_4640_8685_12ee08f5fa07",
@@ -39,22 +46,27 @@
       "email": "daniel.manzke@intrafind.com",
       "name": "Daniel Manzke",
       "active": true,
-      "authMethods": ["oidc"],
-      "lastActiveDate": "2025-08-03",
+      "authMethods": [
+        "oidc"
+      ],
+      "lastActiveDate": "2025-08-04",
       "createdAt": "2025-07-27T18:27:03.182Z",
-      "updatedAt": "2025-08-03T14:50:57.818Z",
+      "updatedAt": "2025-08-04T09:55:59.956Z",
       "oidcData": {
         "subject": "e2263c06-d262-4682-b5ae-a30d8d241bf3",
         "provider": "auth.intrafind.cloud",
         "lastProvider": "auth.intrafind.cloud"
       },
-      "internalGroups": ["admin"]
+      "internalGroups": [
+        "admin",
+        "test"
+      ]
     }
   },
   "metadata": {
     "version": "2.0.0",
     "description": "Local user database for AI Hub Apps - Updated with user-specific password hashing",
-    "lastUpdated": "2025-08-03T14:50:57.818Z",
+    "lastUpdated": "2025-08-04T09:55:59.956Z",
     "migrationDate": "2025-08-01T21:02:54.174Z",
     "migratedFrom": "2.0.0"
   }

@@ -71,7 +71,7 @@ const AdminAuthPage = () => {
     setMessage('');
 
     try {
-      const response = await makeAdminApiCall('/admin/configs/platform', {
+      await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -79,7 +79,7 @@ const AdminAuthPage = () => {
         body: JSON.stringify(config)
       });
 
-      if (response.ok) {
+      // Success - axios doesn't have response.ok, successful responses are returned directly
         setMessage({
           type: 'success',
           text: 'Authentication configuration saved successfully!'

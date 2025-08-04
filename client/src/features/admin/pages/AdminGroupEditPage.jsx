@@ -90,12 +90,8 @@ const AdminGroupEditPage = () => {
         body: JSON.stringify(group)
       });
 
-      if (response.ok) {
-        navigate('/admin/groups');
-      } else {
-        const errorData = response.data;
-        throw new Error(errorData.error || 'Failed to save group');
-      }
+      // Success - axios doesn't have response.ok, successful responses are returned directly
+      navigate('/admin/groups');
     } catch (err) {
       setError(err.message);
     } finally {

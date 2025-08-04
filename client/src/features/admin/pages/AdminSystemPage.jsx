@@ -123,9 +123,7 @@ const AdminSystemPage = () => {
         method: 'GET'
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to export configuration');
-      }
+      // Success - axios doesn't have response.ok, successful responses are returned directly
 
       // Create download link for the ZIP file
       const blob = await response.blob();
@@ -195,9 +193,7 @@ const AdminSystemPage = () => {
 
       const data = response.data;
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to import configuration');
-      }
+      // Success - axios doesn't have response.ok, successful responses are returned directly
 
       setImportMessage({
         type: 'success',
