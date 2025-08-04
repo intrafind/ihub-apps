@@ -76,67 +76,6 @@ validate_env_vars() {
     log_success "Environment validation passed"
 }
 
-# Function to initialize directories
-init_directories() {
-    log_info "Initializing directories..."
-    
-    # Create required directories if they don't exist
-    mkdir -p \
-        /app/contents/data \
-        /app/contents/uploads \
-        /app/contents/config \
-        /app/contents/pages \
-        /app/contents/sources \
-        /app/logs
-    
-    # Set proper permissions for writable directories
-    if [ "$(id -u)" = "0" ]; then
-        # Running as root, set ownership to aihub user
-        chown -R aihub:aihub \
-            /app/contents/data \
-            /app/contents/uploads \
-            /app/contents/pages \
-            /app/contents/sources \
-            /app/logs 2>/dev/null || log_warn "Could not set directory ownership"
-    else
-        # Running as non-root, just ensure directories are accessible
-        chmod 755 \
-            /app/contents/data \
-            /app/contents/uploads \
-            /app/contents/pages \
-            /app/contents/sources \
-            /app/logs 2>/dev/null || log_warn "Could not set directory permissions"
-    fi
-    
-    log_success "Directory initialization completed"
-}
-
-# Function to check and create default configuration
-init_config() {
-    log_info "Checking configuration files..."
-    
-    # Check if basic configuration exists
-    if [ ! -f "/app/contents/config/platform.json" ]; then
-        log_warn "Platform configuration not found. This may cause startup issues."
-    fi
-    
-    if [ ! -f "/app/contents/config/ui.json" ]; then
-        log_warn "UI configuration not found. Using defaults."
-    fi
-    
-    # Check if at least one app is configured
-    if [ ! -d "/app/contents/apps" ] || [ -z "$(ls -A /app/contents/apps 2>/dev/null)" ]; then
-        log_warn "No apps configured. Users may have limited functionality."
-    fi
-    
-    # Check if at least one model is configured
-    if [ ! -d "/app/contents/models" ] || [ -z "$(ls -A /app/contents/models 2>/dev/null)" ]; then
-        log_warn "No models configured. Chat functionality may not work."
-    fi
-    
-    log_success "Configuration check completed"
-}
-
 # Function to display startup information
 display_startup_info() {
     log_info "=== AI Hub Apps Container Starting ==="
@@ -155,8 +94,6 @@ main() {
     
     # Perform initialization steps
     validate_env_vars
-    init_directories
-    init_config
     
     log_success "Container initialization completed successfully"
     log_info "Starting AI Hub Apps with command: $*"
