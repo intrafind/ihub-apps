@@ -25,6 +25,7 @@ import AdminPromptEditPage from './features/admin/pages/AdminPromptEditPage';
 import AdminPagesPage from './features/admin/pages/AdminPagesPage';
 import AdminPageEditPage from './features/admin/pages/AdminPageEditPage';
 import AdminAuthPage from './features/admin/pages/AdminAuthPage';
+import AdminAuthDebugPage from './features/admin/pages/AdminAuthDebugPage';
 import AdminUsersPage from './features/admin/pages/AdminUsersPage';
 import AdminGroupsPage from './features/admin/pages/AdminGroupsPage';
 import AdminGroupEditPage from './features/admin/pages/AdminGroupEditPage';
@@ -61,6 +62,7 @@ const SafeAdminPromptEdit = withSafeRoute(AdminPromptEditPage);
 const SafeAdminPages = withSafeRoute(AdminPagesPage);
 const SafeAdminPageEdit = withSafeRoute(AdminPageEditPage);
 const SafeAdminAuth = withSafeRoute(AdminAuthPage);
+const SafeAdminAuthDebug = withSafeRoute(AdminAuthDebugPage);
 const SafeAdminUsers = withSafeRoute(AdminUsersPage);
 const SafeAdminGroups = withSafeRoute(AdminGroupsPage);
 const SafeAdminGroupEdit = withSafeRoute(AdminGroupEditPage);
@@ -139,6 +141,9 @@ function App() {
                     <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
                   )}
                   {showAdminPage('auth') && <Route path="admin/auth" element={<SafeAdminAuth />} />}
+                  {showAdminPage('auth') && (
+                    <Route path="admin/auth/debug" element={<SafeAdminAuthDebug />} />
+                  )}
                   {showAdminPage('users') && (
                     <Route path="admin/users" element={<SafeAdminUsers />} />
                   )}

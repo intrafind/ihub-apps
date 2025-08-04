@@ -959,6 +959,184 @@ const AdminAuthPage = () => {
                 )}
               </div>
             )}
+
+            {/* Authentication Debug Settings */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Debug Settings</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Enable detailed logging for authentication providers to troubleshoot issues.
+                    <span className="text-amber-600 font-medium ml-1">
+                      Warning: This may log sensitive information.
+                    </span>
+                  </p>
+                </div>
+                <a
+                  href="/admin/auth/debug"
+                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <Icon name="eye" size="sm" className="mr-1" />
+                  View Debug Logs
+                </a>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-start space-x-3">
+                  <div className="flex items-center h-5">
+                    <input
+                      type="checkbox"
+                      checked={config.authDebug?.enabled || false}
+                      onChange={e => updateNestedConfig('authDebug', 'enabled', e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-sm font-medium text-gray-900">
+                      Enable Authentication Debug Logging
+                    </label>
+                    <p className="text-xs text-gray-500">
+                      Log authentication events, token exchanges, and user information for
+                      troubleshooting
+                    </p>
+                  </div>
+                </div>
+
+                {config.authDebug?.enabled && (
+                  <div className="ml-6 space-y-4 pl-4 border-l-2 border-gray-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={config.authDebug?.includeTokens || false}
+                            onChange={e =>
+                              updateNestedConfig('authDebug', 'includeTokens', e.target.checked)
+                            }
+                            className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Include Tokens</span>
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1 ml-6">
+                          Log access tokens and refresh tokens (security risk)
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={config.authDebug?.includeUserInfo !== false}
+                            onChange={e =>
+                              updateNestedConfig('authDebug', 'includeUserInfo', e.target.checked)
+                            }
+                            className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="text-sm font-medium text-gray-700">
+                            Include User Info
+                          </span>
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1 ml-6">
+                          Log user profile information from providers
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={config.authDebug?.includeHeaders !== false}
+                            onChange={e =>
+                              updateNestedConfig('authDebug', 'includeHeaders', e.target.checked)
+                            }
+                            className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="text-sm font-medium text-gray-700">
+                            Include HTTP Headers
+                          </span>
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1 ml-6">
+                          Log HTTP request and response headers
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={config.authDebug?.includeExchangeDetails !== false}
+                            onChange={e =>
+                              updateNestedConfig(
+                                'authDebug',
+                                'includeExchangeDetails',
+                                e.target.checked
+                              )
+                            }
+                            className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="text-sm font-medium text-gray-700">
+                            Include Exchange Details
+                          </span>
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1 ml-6">
+                          Log detailed authentication flow information
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Log Retention (hours)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="168"
+                            value={config.authDebug?.retentionHours || 24}
+                            onChange={e =>
+                              updateNestedConfig(
+                                'authDebug',
+                                'retentionHours',
+                                parseInt(e.target.value) || 24
+                              )
+                            }
+                            className="w-20 px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            How long to keep debug logs (1-168 hours)
+                          </p>
+                        </div>
+
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Max Log Entries
+                          </label>
+                          <input
+                            type="number"
+                            min="100"
+                            max="10000"
+                            value={config.authDebug?.maxEntries || 1000}
+                            onChange={e =>
+                              updateNestedConfig(
+                                'authDebug',
+                                'maxEntries',
+                                parseInt(e.target.value) || 1000
+                              )
+                            }
+                            className="w-24 px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Maximum number of logs to keep in memory
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>

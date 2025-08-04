@@ -5,6 +5,7 @@ import configCache from '../configCache.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { generateJwt } from '../utils/tokenService.js';
+import authDebugService from '../utils/authDebugService.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -55,18 +56,50 @@ export function configureOidcProviders() {
         },
         async (accessToken, _refreshToken, _profile, done) => {
           try {
+            authDebugService.log('oidc', 'debug', 'token_exchange_success', {
+              provider: provider.name,
+              hasAccessToken: !!accessToken,
+              hasRefreshToken: !!_refreshToken,
+              accessTokenLength: accessToken?.length || 0,
+              tokenType: 'Bearer'
+            });
+
             // Get user info from OIDC provider
-            const userInfo = await fetchUserInfo(provider.userInfoURL, accessToken);
+            const userInfo = await fetchUserInfo(provider.userInfoURL, accessToken, provider.name);
 
             // Normalize user data from OIDC provider
             const oidcUser = normalizeOidcUser(userInfo, provider);
+
+            authDebugService.log('oidc', 'info', 'user_normalization_complete', {
+              provider: provider.name,
+              userId: oidcUser.id,
+              userEmail: oidcUser.email,
+              userName: oidcUser.name,
+              externalGroups: oidcUser.externalGroups,
+              internalGroups: oidcUser.groups
+            });
 
             // Validate and persist user based on platform configuration
             const platform = configCache.getPlatform() || {};
             const validatedUser = await validateAndPersistExternalUser(oidcUser, platform);
 
+            authDebugService.log('oidc', 'info', 'user_validation_success', {
+              provider: provider.name,
+              userId: validatedUser.id,
+              finalGroups: validatedUser.groups,
+              authMethod: validatedUser.authMethod,
+              persistent: validatedUser.persistedUser || false
+            });
+
             return done(null, validatedUser);
           } catch (error) {
+            authDebugService.log('oidc', 'error', 'user_validation_error', {
+              provider: provider.name,
+              error: error.message,
+              errorCode: error.code,
+              errorStack: error.stack
+            });
+
             console.error(`OIDC user validation error for provider ${provider.name}:`, error);
             return done(error, null);
           }
@@ -92,19 +125,61 @@ export function configureOidcProviders() {
 /**
  * Fetch user information from OIDC provider
  */
-async function fetchUserInfo(userInfoURL, accessToken) {
-  const response = await fetch(userInfoURL, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json'
-    }
+async function fetchUserInfo(userInfoURL, accessToken, providerName) {
+  authDebugService.log('oidc', 'debug', 'userinfo_request_start', {
+    provider: providerName,
+    userInfoURL,
+    hasAccessToken: !!accessToken
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch user info: ${response.status} ${response.statusText}`);
-  }
+  try {
+    const response = await fetch(userInfoURL, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json'
+      }
+    });
 
-  return await response.json();
+    authDebugService.log('oidc', 'debug', 'userinfo_response_received', {
+      provider: providerName,
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      authDebugService.log('oidc', 'error', 'userinfo_request_failed', {
+        provider: providerName,
+        status: response.status,
+        statusText: response.statusText,
+        errorBody: errorText
+      });
+
+      throw new Error(`Failed to fetch user info: ${response.status} ${response.statusText}`);
+    }
+
+    const userInfo = await response.json();
+
+    authDebugService.log('oidc', 'info', 'userinfo_parsed_success', {
+      provider: providerName,
+      userInfoKeys: Object.keys(userInfo),
+      hasEmail: !!userInfo.email,
+      hasName: !!userInfo.name,
+      hasSub: !!userInfo.sub,
+      hasGroups: !!(userInfo.groups || userInfo.roles || userInfo.memberOf)
+    });
+
+    return userInfo;
+  } catch (error) {
+    authDebugService.log('oidc', 'error', 'userinfo_request_error', {
+      provider: providerName,
+      error: error.message,
+      errorType: error.constructor.name
+    });
+
+    throw error;
+  }
 }
 
 /**
@@ -192,23 +267,76 @@ export function createOidcAuthHandler(providerName) {
   return (req, res, next) => {
     const provider = configuredProviders.get(providerName);
     if (!provider) {
+      authDebugService.log(
+        'oidc',
+        'error',
+        'provider_not_found',
+        {
+          requestedProvider: providerName,
+          configuredProviders: Array.from(configuredProviders.keys())
+        },
+        {
+          sessionId: req.sessionID,
+          userAgent: req.headers['user-agent'],
+          ip: req.ip
+        }
+      );
+
       return res.status(404).json({ error: `OIDC provider '${providerName}' not found` });
     }
 
-    // Debug session state
-    console.log(`[OIDC Auth] Starting auth for provider: ${providerName}`);
-    console.log(`[OIDC Auth] Session ID: ${req.sessionID}`);
-    console.log(`[OIDC Auth] Session exists: ${!!req.session}`);
+    const context = {
+      sessionId: req.sessionID,
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+      requestId: req.id
+    };
+
+    authDebugService.log(
+      'oidc',
+      'info',
+      'auth_initiation',
+      {
+        provider: providerName,
+        sessionId: req.sessionID,
+        sessionExists: !!req.session,
+        returnUrl: req.query.returnUrl,
+        scope: provider.scope || ['openid', 'profile', 'email'],
+        callbackURL: provider.callbackURL,
+        authorizationURL: provider.authorizationURL
+      },
+      context
+    );
 
     // Store return URL in session/state if provided
     const returnUrl = req.query.returnUrl;
     if (returnUrl) {
       // Ensure session exists
       if (!req.session) {
-        console.error('[OIDC Auth] No session available to store returnUrl');
+        authDebugService.log(
+          'oidc',
+          'error',
+          'session_unavailable',
+          {
+            provider: providerName,
+            returnUrl,
+            sessionID: req.sessionID
+          },
+          context
+        );
       } else {
         req.session.returnUrl = returnUrl;
-        console.log(`[OIDC Auth] Stored returnUrl in session: ${returnUrl}`);
+        authDebugService.log(
+          'oidc',
+          'debug',
+          'return_url_stored',
+          {
+            provider: providerName,
+            returnUrl,
+            sessionID: req.sessionID
+          },
+          context
+        );
       }
     }
 
@@ -231,8 +359,36 @@ export function createOidcCallbackHandler(providerName) {
     }
 
     passport.authenticate(provider.strategyName, (err, user, info) => {
+      const context = {
+        sessionId: req.sessionID,
+        userAgent: req.headers['user-agent'],
+        ip: req.ip,
+        requestId: req.id
+      };
+
       if (err) {
-        console.error(`OIDC authentication error for provider ${providerName}:`, err);
+        authDebugService.log(
+          'oidc',
+          'error',
+          'auth_callback_error',
+          {
+            provider: providerName,
+            error: err.message,
+            errorCode: err.code,
+            errorStack: err.stack,
+            query: req.query,
+            sessionData: req.session
+              ? {
+                  id: req.session.id || req.sessionID,
+                  hasReturnUrl: !!req.session.returnUrl
+                }
+              : null,
+            cookies: req.headers.cookie,
+            isStateVerificationError: err.message?.includes('Failed to verify request state')
+          },
+          context
+        );
+
         // Special handling for state verification errors
         if (err.message && err.message.includes('Failed to verify request state')) {
           console.error(
@@ -253,6 +409,19 @@ export function createOidcCallbackHandler(providerName) {
       }
 
       if (!user) {
+        authDebugService.log(
+          'oidc',
+          'warn',
+          'auth_callback_no_user',
+          {
+            provider: providerName,
+            info: info?.message,
+            query: req.query,
+            sessionId: req.sessionID
+          },
+          context
+        );
+
         console.warn(`OIDC authentication failed for provider ${providerName}:`, info);
 
         // Redirect back to the app with error message
@@ -261,6 +430,22 @@ export function createOidcCallbackHandler(providerName) {
       }
 
       try {
+        authDebugService.log(
+          'oidc',
+          'info',
+          'auth_callback_success',
+          {
+            provider: providerName,
+            userId: user.id,
+            userEmail: user.email,
+            userName: user.name,
+            userGroups: user.groups,
+            authMethod: user.authMethod,
+            persistedUser: user.persistedUser || false
+          },
+          { ...context, userId: user.id }
+        );
+
         // Generate JWT token using centralized token service
         const { token, expiresIn } = generateJwt(user, {
           authMode: 'oidc',
@@ -272,11 +457,39 @@ export function createOidcCallbackHandler(providerName) {
           }
         });
 
+        authDebugService.log(
+          'oidc',
+          'debug',
+          'jwt_token_generated',
+          {
+            provider: providerName,
+            userId: user.id,
+            tokenLength: token?.length || 0,
+            expiresIn,
+            tokenType: 'JWT'
+          },
+          { ...context, userId: user.id }
+        );
+
         // Get return URL
         let returnUrl = req.session?.returnUrl || '/';
         if (req.session) {
           delete req.session.returnUrl;
         }
+
+        authDebugService.log(
+          'oidc',
+          'debug',
+          'redirect_preparation',
+          {
+            provider: providerName,
+            userId: user.id,
+            returnUrl,
+            isDevelopment: process.env.NODE_ENV === 'development',
+            redirectQuery: req.query.redirect
+          },
+          { ...context, userId: user.id }
+        );
 
         // In development, redirect to Vite dev server instead of backend
         const isDevelopment =
@@ -290,10 +503,36 @@ export function createOidcCallbackHandler(providerName) {
         // For web flows, redirect with token in query (or set as cookie)
         if (req.query.redirect !== 'false') {
           const separator = returnUrl.includes('?') ? '&' : '?';
-          return res.redirect(`${returnUrl}${separator}token=${token}&provider=${providerName}`);
+          const finalRedirectUrl = `${returnUrl}${separator}token=${token}&provider=${providerName}`;
+
+          authDebugService.log(
+            'oidc',
+            'info',
+            'auth_redirect_complete',
+            {
+              provider: providerName,
+              userId: user.id,
+              finalRedirectUrl: finalRedirectUrl.replace(token, '[TOKEN_MASKED]')
+            },
+            { ...context, userId: user.id }
+          );
+
+          return res.redirect(finalRedirectUrl);
         }
 
         // For API flows, return JSON
+        authDebugService.log(
+          'oidc',
+          'info',
+          'auth_json_response',
+          {
+            provider: providerName,
+            userId: user.id,
+            responseType: 'json'
+          },
+          { ...context, userId: user.id }
+        );
+
         res.json({
           success: true,
           user: {
@@ -308,6 +547,19 @@ export function createOidcCallbackHandler(providerName) {
           expiresIn
         });
       } catch (tokenError) {
+        authDebugService.log(
+          'oidc',
+          'error',
+          'jwt_token_generation_error',
+          {
+            provider: providerName,
+            userId: user?.id,
+            error: tokenError.message,
+            errorStack: tokenError.stack
+          },
+          { ...context, userId: user?.id }
+        );
+
         console.error(`JWT token generation error for provider ${providerName}:`, tokenError);
 
         // Redirect back to the app with error message
