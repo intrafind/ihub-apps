@@ -25,6 +25,7 @@
     "axios": "^1.11.0",
     "bcrypt": "^6.0.0",
     "cached-dns": "^0.0.4",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "envalid": "^7.3.1",

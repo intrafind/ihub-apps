@@ -581,7 +581,15 @@ export function createOidcCallbackHandler(providerName) {
           sessionId
         );
 
-        // For web flows, redirect with token in query (or set as cookie)
+        // Set HTTP-only cookie for authentication
+        res.cookie('authToken', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: expiresIn * 1000
+        });
+
+        // For web flows, redirect with token in query (for backward compatibility)
         if (req.query.redirect !== 'false') {
           const separator = returnUrl.includes('?') ? '&' : '?';
           const finalRedirectUrl = `${returnUrl}${separator}token=${token}&provider=${providerName}`;

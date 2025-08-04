@@ -247,6 +247,14 @@ export async function teamsTokenExchange(req, res) {
       }
     });
 
+    // Set HTTP-only cookie for authentication
+    res.cookie('authToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: expiresIn * 1000
+    });
+
     res.json({
       success: true,
       user: {
@@ -257,7 +265,7 @@ export async function teamsTokenExchange(req, res) {
         provider: user.provider,
         authMethod: user.authMethod
       },
-      token,
+      token, // Still return token for backward compatibility
       expiresIn
     });
   } catch (error) {

@@ -145,6 +145,14 @@ export function ntlmAuthMiddleware(req, res, next) {
         });
         req.jwtToken = token;
         req.jwtExpiresIn = expiresIn;
+
+        // Set HTTP-only cookie for authentication
+        res.cookie('authToken', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: expiresIn * 1000
+        });
       } catch (tokenError) {
         console.error('[NTLM Auth] JWT token generation failed:', tokenError.message);
         // Continue without token - NTLM auth still valid

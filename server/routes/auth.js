@@ -31,10 +31,18 @@ export default function registerAuthRoutes(app) {
 
       const result = await loginUser(username, password, localAuthConfig);
 
+      // Set HTTP-only cookie for authentication
+      res.cookie('authToken', result.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Use HTTPS in production
+        sameSite: 'lax',
+        maxAge: result.expiresIn * 1000 // Convert seconds to milliseconds
+      });
+
       res.json({
         success: true,
         user: result.user,
-        token: result.token,
+        token: result.token, // Still return token for backward compatibility
         expiresIn: result.expiresIn
       });
     } catch (error) {
@@ -76,10 +84,18 @@ export default function registerAuthRoutes(app) {
 
       const result = await loginLdapUser(username, password, ldapProvider);
 
+      // Set HTTP-only cookie for authentication
+      res.cookie('authToken', result.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: result.expiresIn * 1000
+      });
+
       res.json({
         success: true,
         user: result.user,
-        token: result.token,
+        token: result.token, // Still return token for backward compatibility
         expiresIn: result.expiresIn
       });
     } catch (error) {
@@ -113,10 +129,18 @@ export default function registerAuthRoutes(app) {
 
       const result = processNtlmLogin(req, ntlmAuthConfig);
 
+      // Set HTTP-only cookie for authentication
+      res.cookie('authToken', result.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: result.expiresIn * 1000
+      });
+
       res.json({
         success: true,
         user: result.user,
-        token: result.token,
+        token: result.token, // Still return token for backward compatibility
         expiresIn: result.expiresIn
       });
     } catch (error) {
@@ -152,12 +176,17 @@ export default function registerAuthRoutes(app) {
   });
 
   /**
-   * Logout (client-side token removal, but we can track it)
+   * Logout (clear cookies and track logout)
    */
   app.post('/api/auth/logout', (req, res) => {
-    // For stateless JWT, logout is primarily client-side
-    // But we can log the event for analytics
+    // Clear the authentication cookie
+    res.clearCookie('authToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    });
 
+    // Log the event for analytics
     if (req.user && req.user.id !== 'anonymous') {
       console.log(`User ${req.user.id} logged out`);
     }

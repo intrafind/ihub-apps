@@ -10,15 +10,24 @@ import { isAnonymousAccessAllowed } from '../utils/authorization.js';
  * @param {Function} next - Express next function
  */
 export function authRequired(req, res, next) {
+  console.log('🔐 authRequired: Called for URL:', req.url, req.method);
   const platformConfig = req.app.get('platform') || {};
 
   // If anonymous access is allowed, proceed regardless of authentication
   if (isAnonymousAccessAllowed(platformConfig)) {
+    console.log('🔐 authRequired: Anonymous access allowed, proceeding');
     return next();
   }
 
+  // Add debugging
+  console.log('🔐 authRequired: Anonymous access disabled, checking authentication');
+  console.log('🔐 authRequired: req.user:', req.user);
+  console.log('🔐 authRequired: Authorization header:', req.headers.authorization);
+
+
   // Anonymous access is disabled - require authentication
   if (!req.user || req.user.id === 'anonymous') {
+    console.log('🔐 authRequired: Authentication failed - no valid user');
     return res.status(401).json({
       error: 'Authentication required',
       code: 'AUTH_REQUIRED',
@@ -26,6 +35,7 @@ export function authRequired(req, res, next) {
     });
   }
 
+  console.log('🔐 authRequired: Authentication successful for user:', req.user.id);
   next();
 }
 
@@ -92,15 +102,19 @@ export const modelAccessRequired = resourceAccessRequired('model');
  * @param {Function} next - Express next function
  */
 export function chatAuthRequired(req, res, next) {
+  console.log('🔐 chatAuthRequired: Called for URL:', req.url, req.method);
+  
   // First check if authentication is required
   authRequired(req, res, err => {
     if (err) return next(err);
 
     // Then check app access permissions if user is authenticated
     if (req.user && req.user.id !== 'anonymous') {
+      console.log('🔐 chatAuthRequired: User authenticated, checking app access');
       return appAccessRequired(req, res, next);
     }
 
+    console.log('🔐 chatAuthRequired: Proceeding without app access check');
     next();
   });
 }

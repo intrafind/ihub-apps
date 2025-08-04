@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import session from 'express-session';
 import { proxyAuth } from './proxyAuth.js';
 import localAuthMiddleware from './localAuth.js';
@@ -116,6 +117,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(checkContentLength(limit));
   app.use(express.json({ limit: `${limitMb}mb` }));
   app.use(express.urlencoded({ limit: `${limitMb}mb`, extended: true }));
+  app.use(cookieParser()); // Add cookie parser middleware
 
   // Set platform config on app for middleware access
   app.set('platform', platformConfig);

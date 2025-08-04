@@ -12,6 +12,7 @@ const apiClient = axios.create({
     'Content-Type': 'application/json'
   },
   timeout: API_REQUEST_TIMEOUT,
+  withCredentials: true, // Include cookies in requests
   // Configure axios to not treat 304 as an error
   validateStatus: function (status) {
     return (status >= 200 && status < 300) || status === 304;
@@ -25,6 +26,7 @@ const streamingApiClient = axios.create({
     'Content-Type': 'application/json'
   },
   timeout: STREAMING_REQUEST_TIMEOUT,
+  withCredentials: true, // Include cookies in requests
   // Configure axios to not treat 304 as an error
   validateStatus: function (status) {
     return (status >= 200 && status < 300) || status === 304;
@@ -45,7 +47,8 @@ const addRequestInterceptor = client => {
     // Add session ID to request headers
     config.headers['X-Session-ID'] = sessionId;
 
-    // Add authentication header if token exists
+    // Add authentication header as fallback if token exists in localStorage
+    // (for backward compatibility - cookies are preferred)
     const authToken = localStorage.getItem('authToken');
     if (authToken) {
       config.headers['Authorization'] = `Bearer ${authToken}`;
@@ -74,15 +77,15 @@ const addResponseInterceptor = client => {
 
       // Handle authentication errors
       if (error.response?.status === 401) {
-        // Token expired or invalid - clear it and potentially redirect to login
+        // Token expired or invalid - clear localStorage token for backward compatibility
         const currentToken = localStorage.getItem('authToken');
         if (currentToken) {
-          console.log('Authentication token expired or invalid, clearing token');
+          console.log('Authentication token expired or invalid, clearing localStorage token');
           localStorage.removeItem('authToken');
-
-          // Dispatch custom event for auth context to handle
-          window.dispatchEvent(new CustomEvent('authTokenExpired'));
         }
+
+        // Dispatch custom event for auth context to handle (will handle cookie clearing via logout API)
+        window.dispatchEvent(new CustomEvent('authTokenExpired'));
 
         // Don't retry auth requests to avoid infinite loops
         return Promise.reject(error);
