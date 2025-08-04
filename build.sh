@@ -24,7 +24,7 @@ echo "Building application for production..."
 # Step 1: Clean previous builds
 echo "Cleaning previous builds..."
 rm -rf dist
-mkdir -p dist/public dist/server dist/contents dist/examples
+mkdir -p dist/public dist/server dist/configs dist/examples
 
 # Step 2: Build the client
 echo "Building client..."
@@ -57,17 +57,12 @@ cp -r shared/* dist/shared/
 echo "Copying configuration files..."
 cp package.json dist/
 
-# Step 6: Copy contents files
-echo "Copying contents files..."
-mkdir -p dist/contents
-cp -r contents/* dist/contents/
+# Step 6: Copy default configurations (for auto-setup)
+echo "Copying default configurations..."
+mkdir -p dist/configs/default
+cp -r configs/default/* dist/configs/default/
 
-# Step 7: Copy examples folder
-echo "Copying examples folder..."
-mkdir -p dist/examples
-cp -r examples/* dist/examples/
-
-# Step 8: Copy .env file if it exists
+# Step 7: Copy .env file if it exists
 if [ -f .env ]; then
   echo "Copying .env file..."
   cp .env dist/
@@ -75,7 +70,7 @@ else
   echo "No .env file found, skipping..."
 fi
 
-# Step 9: Install production dependencies
+# Step 8: Install production dependencies
 echo "Installing production dependencies..."
 cd dist
 npm ci --omit=dev
@@ -85,7 +80,7 @@ cd ../..
 
 echo "Production build completed successfully!"
 
-# Step 10: Create binary with Node.js SEA if version is compatible
+# Step 9: Create binary with Node.js SEA if version is compatible
 if [ "$SEA_BUILD" = true ] && { [ "$1" == "--binary" ] || [ "$1" == "-b" ]; }; then
   echo "Creating binary executable using Node.js SEA..."
   ./build-sea.sh
