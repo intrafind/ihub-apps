@@ -15,11 +15,10 @@ const version = require('./package.json').version;
 console.log(`Building for version: ${version}`);
 const appName = 'ai-hub-apps';
 const outputDir = path.join(__dirname, 'dist-bin');
-const contentsDir = path.join(__dirname, 'contents');
+const defaultConfigDir = path.join(__dirname, 'configs', 'default');
 const clientPublicDir = path.join(__dirname, 'client/dist');
 const docsBookDir = path.join(__dirname, 'docs/book');
 const serverDir = path.join(__dirname, 'server');
-const examplesDir = path.join(__dirname, 'examples');
 const configEnvPath = path.join(__dirname, 'config.env');
 
 // Log system information
@@ -429,17 +428,14 @@ try {
     fs.copyFileSync(configEnvPath, path.join(outputDir, 'config.env'));
   }
 
-  // Copy contents
-  fs.cpSync(contentsDir, path.join(outputDir, 'contents'), { recursive: true });
+  // Copy default configuration (will be used by auto-setup on first run)
+  fs.cpSync(defaultConfigDir, path.join(outputDir, 'contents'), { recursive: true });
 
   // Copy shared directory
   const sharedDir = path.join(__dirname, 'shared');
   if (fs.existsSync(sharedDir)) {
     fs.cpSync(sharedDir, path.join(outputDir, 'shared'), { recursive: true });
   }
-
-  // Copy examples
-  fs.cpSync(examplesDir, path.join(outputDir, 'examples'), { recursive: true });
 
   // Copy client public files
   fs.cpSync(clientPublicDir, path.join(outputDir, 'public'), { recursive: true });
