@@ -139,7 +139,8 @@ const AdminAuthPage = () => {
       callbackURL: '',
       groupsAttribute: 'groups',
       defaultGroups: [],
-      pkce: true
+      pkce: true,
+      enabled: true
     };
 
     setConfig(prev => ({
@@ -761,9 +762,22 @@ const AdminAuthPage = () => {
                     {config.oidcAuth.providers.map((provider, index) => (
                       <div key={index} className="p-6 border border-gray-200 rounded-md">
                         <div className="flex justify-between items-start mb-4">
-                          <h4 className="text-md font-medium text-gray-900">
-                            {provider.displayName || provider.name || `Provider ${index + 1}`}
-                          </h4>
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              checked={provider.enabled !== false}
+                              onChange={e => updateOidcProvider(index, 'enabled', e.target.checked)}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            />
+                            <h4 className="text-md font-medium text-gray-900">
+                              {provider.displayName || provider.name || `Provider ${index + 1}`}
+                            </h4>
+                            {provider.enabled === false && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                Disabled
+                              </span>
+                            )}
+                          </div>
                           <button
                             onClick={() => removeOidcProvider(index)}
                             className="text-red-600 hover:text-red-800"
@@ -771,7 +785,7 @@ const AdminAuthPage = () => {
                             <Icon name="trash" size="sm" />
                           </button>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${provider.enabled === false ? 'opacity-50 pointer-events-none' : ''}`}>
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               Provider Name
