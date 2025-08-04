@@ -399,17 +399,17 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     // Use externalGroups (raw from token) if available, otherwise fall back to processed groups
     const externalGroupsToMap = externalUser.externalGroups || [];
     const mappedExternalGroups = mapExternalGroups(externalGroupsToMap);
-    
+
     // Include automatic internal groups (authenticated, provider defaults) + manual internal groups
     const automaticInternalGroups = externalUser.groups || []; // These include authenticated, provider defaults
     const manualInternalGroups = persistedUser.internalGroups || []; // Manual groups from users.json
-    
+
     // Merge all three: mapped external + automatic internal + manual internal
     const allGroups = new Set();
     mappedExternalGroups.forEach(group => allGroups.add(group));
-    automaticInternalGroups.forEach(group => allGroups.add(group)); 
+    automaticInternalGroups.forEach(group => allGroups.add(group));
     manualInternalGroups.forEach(group => allGroups.add(group));
-    
+
     const mergedGroups = Array.from(allGroups);
 
     return {
@@ -437,17 +437,17 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
   // Use externalGroups (raw from token) if available, otherwise fall back to processed groups
   const externalGroupsToMap = externalUser.externalGroups || [];
   const mappedExternalGroups = mapExternalGroups(externalGroupsToMap);
-  
+
   // Include automatic internal groups (authenticated, provider defaults) + manual internal groups
   const automaticInternalGroups = externalUser.groups || []; // These include authenticated, provider defaults
   const manualInternalGroups = persistedUser.internalGroups || []; // Manual groups from users.json
-  
+
   // Merge all three: mapped external + automatic internal + manual internal
   const allGroups = new Set();
   mappedExternalGroups.forEach(group => allGroups.add(group));
-  automaticInternalGroups.forEach(group => allGroups.add(group)); 
+  automaticInternalGroups.forEach(group => allGroups.add(group));
   manualInternalGroups.forEach(group => allGroups.add(group));
-  
+
   const combinedGroups = Array.from(allGroups);
 
   return {

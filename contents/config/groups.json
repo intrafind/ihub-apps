@@ -4,145 +4,74 @@
       "id": "admin",
       "name": "Admin",
       "description": "Full administrative access to all resources",
-      "inherits": [
-        "users"
-      ],
+      "inherits": ["users"],
       "permissions": {
-        "apps": [
-          "*"
-        ],
-        "prompts": [
-          "*"
-        ],
-        "models": [
-          "*"
-        ],
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
         "adminAccess": true
       },
-      "mappings": [
-        "Admins",
-        "IT-Admin",
-        "IT-Admins",
-        "Platform-Admin",
-        "Platform-Admins"
-      ]
+      "mappings": ["Admins", "IT-Admin", "IT-Admins", "Platform-Admin", "Platform-Admins"]
     },
     "user": {
       "id": "user",
       "name": "User",
       "description": "Standard user access to common applications and models",
       "permissions": {
-        "apps": [
-          "chat",
-          "translator",
-          "summarizer",
-          "email-composer"
-        ],
-        "prompts": [
-          "general",
-          "writing",
-          "analysis"
-        ],
-        "models": [
-          "gpt-3.5-turbo",
-          "gpt-4",
-          "claude-4-sonnet",
-          "gemini-2.0-flash"
-        ],
+        "apps": ["chat", "translator", "summarizer", "email-composer"],
+        "prompts": ["general", "writing", "analysis"],
+        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet", "gemini-2.0-flash"],
         "adminAccess": false
       },
-      "mappings": [
-        "Users",
-        "Employees",
-        "Staff"
-      ]
+      "mappings": ["Users", "Employees", "Staff"]
     },
     "hr": {
       "id": "hr",
       "name": "HR Team",
       "description": "HR team access with specialized tools and prompts",
-      "inherits": [
-        "authenticated"
-      ],
+      "inherits": ["authenticated"],
       "permissions": {
-        "apps": [
-          "hr-assistant"
-        ],
+        "apps": ["hr-assistant"],
         "prompts": [],
-        "models": [
-          "gpt-4",
-          "claude-4-sonnet"
-        ],
+        "models": ["gpt-4", "claude-4-sonnet"],
         "adminAccess": false
       },
-      "mappings": [
-        "HR-Team",
-        "HR",
-        "Human-Resources"
-      ]
+      "mappings": ["HR-Team", "HR", "Human-Resources"]
     },
     "contractors": {
       "id": "contractors",
       "name": "Contractors",
       "description": "Limited access for external contractors",
-      "inherits": [
-        "authenticated"
-      ],
+      "inherits": ["authenticated"],
       "permissions": {
         "apps": [],
         "prompts": [],
         "models": [],
         "adminAccess": false
       },
-      "mappings": [
-        "Contractors",
-        "External",
-        "Guests"
-      ]
+      "mappings": ["Contractors", "External", "Guests"]
     },
     "anonymous": {
       "id": "anonymous",
       "name": "Anonymous",
       "description": "Access for anonymous users (default configuration)",
       "permissions": {
-        "apps": [
-          "*"
-        ],
-        "prompts": [
-          "*"
-        ],
-        "models": [
-          "*"
-        ],
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
         "adminAccess": false
       },
-      "mappings": [
-        "anonymous",
-        "public"
-      ]
+      "mappings": ["anonymous", "public"]
     },
     "authenticated": {
       "id": "authenticated",
       "name": "Authenticated",
       "description": "Base permissions for all authenticated users",
-      "inherits": [
-        "anonymous"
-      ],
+      "inherits": ["anonymous"],
       "permissions": {
-        "apps": [
-          "translator",
-          "summarizer",
-          "email-composer",
-          "file-analysis"
-        ],
-        "prompts": [
-          "writing"
-        ],
-        "models": [
-          "gpt-3.5-turbo",
-          "gpt-4",
-          "claude-4-sonnet"
-        ],
+        "apps": ["translator", "summarizer", "email-composer", "file-analysis"],
+        "prompts": ["writing"],
+        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet"],
         "adminAccess": false
       },
       "mappings": []
@@ -152,17 +81,9 @@
       "name": "Google Users",
       "description": "Default permissions for Google authenticated users",
       "permissions": {
-        "apps": [
-          "chat",
-          "translator"
-        ],
-        "prompts": [
-          "general"
-        ],
-        "models": [
-          "gpt-3.5-turbo",
-          "gemini-2.0-flash"
-        ],
+        "apps": ["chat", "translator"],
+        "prompts": ["general"],
+        "models": ["gpt-3.5-turbo", "gemini-2.0-flash"],
         "adminAccess": false
       },
       "mappings": []
@@ -172,19 +93,9 @@
       "name": "Microsoft Users",
       "description": "Default permissions for Microsoft authenticated users",
       "permissions": {
-        "apps": [
-          "chat",
-          "translator",
-          "email-composer"
-        ],
-        "prompts": [
-          "general",
-          "writing"
-        ],
-        "models": [
-          "gpt-4",
-          "claude-4-sonnet"
-        ],
+        "apps": ["chat", "translator", "email-composer"],
+        "prompts": ["general", "writing"],
+        "models": ["gpt-4", "claude-4-sonnet"],
         "adminAccess": false
       },
       "mappings": []
@@ -194,18 +105,9 @@
       "name": "Auth0 Users",
       "description": "Default permissions for Auth0 authenticated users",
       "permissions": {
-        "apps": [
-          "chat",
-          "translator",
-          "summarizer"
-        ],
-        "prompts": [
-          "general"
-        ],
-        "models": [
-          "gpt-3.5-turbo",
-          "claude-4-sonnet"
-        ],
+        "apps": ["chat", "translator", "summarizer"],
+        "prompts": ["general"],
+        "models": ["gpt-3.5-turbo", "claude-4-sonnet"],
         "adminAccess": false
       },
       "mappings": []
@@ -214,17 +116,11 @@
       "id": "users",
       "name": "Users",
       "description": "Standard user group with extended permissions",
-      "inherits": [
-        "authenticated"
-      ],
+      "inherits": ["authenticated"],
       "permissions": {
         "apps": [],
-        "prompts": [
-          "analysis"
-        ],
-        "models": [
-          "gemini-2.0-flash"
-        ],
+        "prompts": ["analysis"],
+        "models": ["gemini-2.0-flash"],
         "adminAccess": false
       },
       "mappings": []
@@ -233,19 +129,11 @@
       "id": "admins",
       "name": "Admins",
       "description": "Administrative group with full access",
-      "inherits": [
-        "users"
-      ],
+      "inherits": ["users"],
       "permissions": {
-        "apps": [
-          "*"
-        ],
-        "prompts": [
-          "*"
-        ],
-        "models": [
-          "*"
-        ],
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
         "adminAccess": true
       },
       "mappings": []
@@ -254,23 +142,11 @@
       "id": "ldap-users",
       "name": "LDAP Users",
       "description": "Default permissions for LDAP authenticated users",
-      "inherits": [
-        "authenticated"
-      ],
+      "inherits": ["authenticated"],
       "permissions": {
-        "apps": [
-          "translator",
-          "summarizer"
-        ],
-        "prompts": [
-          "general",
-          "writing"
-        ],
-        "models": [
-          "gpt-3.5-turbo",
-          "gpt-4",
-          "claude-4-sonnet"
-        ],
+        "apps": ["translator", "summarizer"],
+        "prompts": ["general", "writing"],
+        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet"],
         "adminAccess": false
       },
       "mappings": []
@@ -279,61 +155,27 @@
       "id": "ad-users",
       "name": "Active Directory Users",
       "description": "Default permissions for Active Directory authenticated users",
-      "inherits": [
-        "authenticated"
-      ],
+      "inherits": ["authenticated"],
       "permissions": {
-        "apps": [
-          "chat",
-          "email-composer",
-          "file-analysis"
-        ],
-        "prompts": [
-          "general",
-          "writing",
-          "analysis"
-        ],
-        "models": [
-          "gpt-4",
-          "claude-4-sonnet",
-          "gemini-2.0-flash"
-        ],
+        "apps": ["chat", "email-composer", "file-analysis"],
+        "prompts": ["general", "writing", "analysis"],
+        "models": ["gpt-4", "claude-4-sonnet", "gemini-2.0-flash"],
         "adminAccess": false
       },
-      "mappings": [
-        "Domain Users",
-        "Employees",
-        "Staff"
-      ]
+      "mappings": ["Domain Users", "Employees", "Staff"]
     },
     "ntlm-users": {
       "id": "ntlm-users",
       "name": "NTLM Users",
       "description": "Default permissions for NTLM authenticated users",
-      "inherits": [
-        "authenticated"
-      ],
+      "inherits": ["authenticated"],
       "permissions": {
-        "apps": [
-          "chat",
-          "translator",
-          "email-composer"
-        ],
-        "prompts": [
-          "general",
-          "writing"
-        ],
-        "models": [
-          "gpt-3.5-turbo",
-          "gpt-4",
-          "claude-4-sonnet"
-        ],
+        "apps": ["chat", "translator", "email-composer"],
+        "prompts": ["general", "writing"],
+        "models": ["gpt-3.5-turbo", "gpt-4", "claude-4-sonnet"],
         "adminAccess": false
       },
-      "mappings": [
-        "Domain Users",
-        "NT AUTHORITY\\Authenticated Users"
-      ]
+      "mappings": ["Domain Users", "NT AUTHORITY\\Authenticated Users"]
     },
     "offline_access_intern": {
       "id": "offline_access_intern",
@@ -345,9 +187,7 @@
         "models": [],
         "adminAccess": false
       },
-      "mappings": [
-        "offline_access"
-      ]
+      "mappings": ["offline_access"]
     },
     "test": {
       "id": "test",
