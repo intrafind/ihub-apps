@@ -64,6 +64,18 @@ export function configureOidcProviders() {
           const sessionId = authDebugService.generateSessionId();
 
           try {
+            //log access token itself if includeRawdata is enabled
+            authDebugService.log(
+              'oidc',
+              'debug',
+              'raw_access_token',
+              {
+                provider: provider.name,
+                accessToken
+              },
+              sessionId
+            );
+
             authDebugService.log(
               'oidc',
               'debug',
@@ -83,6 +95,18 @@ export function configureOidcProviders() {
               provider.userInfoURL,
               accessToken,
               provider.name,
+              sessionId
+            );
+
+            // Log user info if includeRawData is enabled
+            authDebugService.log(
+              'oidc',
+              'debug',
+              'raw_user_info',
+              {
+                provider: provider.name,
+                userInfo: JSON.stringify(userInfo, null, 2)
+              },
               sessionId
             );
 

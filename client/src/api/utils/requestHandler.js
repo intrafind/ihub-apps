@@ -82,7 +82,20 @@ export const handleApiResponse = async (
           userFriendlyMessage =
             'You do not have permission to access this resource. Please contact your administrator if you believe this is an error.';
         } else if (error.response?.status === 401) {
-          userFriendlyMessage = 'Please log in to access this resource.';
+          // For authentication errors, prioritize the server's message if it's more descriptive
+          if (
+            error.response?.data?.message &&
+            error.response.data.message !== 'Authentication required'
+          ) {
+            userFriendlyMessage = error.response.data.message;
+          } else if (
+            error.response?.data?.error &&
+            error.response.data.error !== 'Authentication required'
+          ) {
+            userFriendlyMessage = error.response.data.error;
+          } else {
+            userFriendlyMessage = 'Authentication required. Please log in to access this resource.';
+          }
         } else if (error.response?.status === 404) {
           userFriendlyMessage = 'The requested resource was not found.';
         } else if (error.response?.status >= 500) {

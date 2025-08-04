@@ -107,7 +107,7 @@ const AdminPromptsPage = () => {
       alert(t('admin.prompts.deleteSuccess', 'Prompt deleted successfully'));
     } catch (err) {
       console.error('Error deleting prompt:', err);
-      alert(`Error: ${err.message}`);
+      alert(err.message || 'Failed to delete prompt');
     }
   };
 

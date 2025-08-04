@@ -149,7 +149,7 @@ const AdminPromptEditPage = () => {
       navigate('/admin/prompts');
     } catch (err) {
       console.error('Error saving prompt:', err);
-      alert(`Error: ${err.message}`);
+      alert(err.message || 'Failed to save prompt');
     } finally {
       setSaving(false);
     }
