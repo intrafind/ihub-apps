@@ -9,7 +9,7 @@
   "scripts": {
     "server": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
     "client": "cd client && npm run dev",
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "dev": "concurrently --kill-others-on-fail \"npm run server\" \"sleep 2 && npm run client\"",
     "install:all": "npm install && cd client && npm install && cd ../server && npm install",
     "build": "npm run build:clean && npm run build:client && npm run docs:build && npm run build:server && npm run build:config && npm run build:contents",
     "build:clean": "rimraf dist",

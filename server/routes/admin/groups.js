@@ -150,7 +150,7 @@ export default function registerAdminGroupRoutes(app) {
 
       // Check if group ID already exists
       if (groupsData.groups[id]) {
-        return res.status(400).json({ error: 'Group ID already exists' });
+        return res.status(409).json({ error: 'Group ID already exists' });
       }
 
       // Create new group

@@ -20,18 +20,14 @@ export const useFileUploadHandler = () => {
     // New unified upload config structure
     const uploadConfig = app?.upload || {};
 
-    // Backward compatibility with old structure
-    const imageConfig = uploadConfig?.imageUpload || app?.imageUpload || {};
-    const fileConfig = uploadConfig?.fileUpload || app?.fileUpload || {};
+    // Get upload config from unified structure only
+    const imageConfig = uploadConfig?.imageUpload || {};
+    const fileConfig = uploadConfig?.fileUpload || {};
 
     // Check if upload is enabled at all
     const uploadEnabled =
       uploadConfig?.enabled !== false &&
-      (imageConfig?.enabled === true ||
-        fileConfig?.enabled === true ||
-        // Legacy check
-        app?.imageUpload?.enabled === true ||
-        app?.fileUpload?.maxFileSizeMB > 0);
+      (imageConfig?.enabled === true || fileConfig?.enabled === true);
 
     if (!uploadEnabled) {
       return { enabled: false };
@@ -86,7 +82,7 @@ export const useFileUploadHandler = () => {
         ],
         supportedPdfFormats: fileConfig?.supportedPdfFormats || ['application/pdf']
       },
-      // Legacy format for backward compatibility
+      // Unified format fields for backward compatibility with components
       resizeImages: imageConfig?.resizeImages !== false,
       maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
       supportedImageFormats: imageUploadEnabled

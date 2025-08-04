@@ -107,7 +107,7 @@ export default function registerAdminAppsRoutes(app) {
       const appFilePath = join(rootDir, 'contents', 'apps', `${newApp.id}.json`);
       try {
         readFileSync(appFilePath, 'utf8');
-        return res.status(400).json({ error: 'App with this ID already exists' });
+        return res.status(409).json({ error: 'App with this ID already exists' });
       } catch {
         // file does not exist
       }

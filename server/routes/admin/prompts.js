@@ -72,7 +72,7 @@ export default function registerAdminPromptsRoutes(app) {
       const promptFilePath = join(rootDir, 'contents', 'prompts', `${newPrompt.id}.json`);
       try {
         readFileSync(promptFilePath, 'utf8');
-        return res.status(400).json({ error: 'Prompt with this ID already exists' });
+        return res.status(409).json({ error: 'Prompt with this ID already exists' });
       } catch {
         // file not found
       }

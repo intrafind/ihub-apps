@@ -164,9 +164,10 @@ const AdminModelsPage = () => {
     }
 
     setUploading(true);
+    let modelConfig;
     try {
       const fileContent = await file.text();
-      const modelConfig = JSON.parse(fileContent);
+      modelConfig = JSON.parse(fileContent);
 
       // Validate required fields
       if (
@@ -193,7 +194,7 @@ const AdminModelsPage = () => {
       event.target.value = '';
     } catch (err) {
       if (err.message.includes('already exists')) {
-        setError(`Model with ID "${JSON.parse(await file.text()).id}" already exists`);
+        setError(`Model with ID "${modelConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {

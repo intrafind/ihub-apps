@@ -134,10 +134,13 @@
       "showTranscript": true
     }
   },
-  "imageUpload": {
-    "enabled": false
-  },
-  "fileUpload": {
-    "enabled": false
+  "upload": {
+    "enabled": false,
+    "imageUpload": {
+      "enabled": false
+    },
+    "fileUpload": {
+      "enabled": false
+    }
   }
 }

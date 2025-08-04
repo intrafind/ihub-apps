@@ -87,7 +87,7 @@ export default function registerAdminModelsRoutes(app) {
       const modelFilePath = join(rootDir, 'contents', 'models', `${newModel.id}.json`);
       try {
         readFileSync(modelFilePath, 'utf8');
-        return res.status(400).json({ error: 'Model with this ID already exists' });
+        return res.status(409).json({ error: 'Model with this ID already exists' });
       } catch {
         // file not found, continue
       }

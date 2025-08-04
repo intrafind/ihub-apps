@@ -74,7 +74,7 @@ export default function registerAdminPagesRoutes(app) {
       const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));
       uiConfig.pages = uiConfig.pages || {};
       if (uiConfig.pages[id]) {
-        return res.status(400).json({ error: 'Page with this ID already exists' });
+        return res.status(409).json({ error: 'Page with this ID already exists' });
       }
       uiConfig.pages[id] = { title, filePath: {}, authRequired, allowedGroups, contentType };
       const fileExtension = contentType === 'react' ? 'jsx' : 'md';

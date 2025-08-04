@@ -40,7 +40,10 @@
     },
     "imageUpload": {
       "enabled": true,
-      "resizeImages": true
+      "resizeImages": true,
+      "maxFileSizeMB": 10,
+      "maxResizeDimension": 1024,
+      "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
     }
   },
   "enabled": true

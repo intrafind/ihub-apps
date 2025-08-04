@@ -199,9 +199,10 @@ const AdminAppsPage = () => {
     }
 
     setUploading(true);
+    let appConfig;
     try {
       const fileContent = await file.text();
-      const appConfig = JSON.parse(fileContent);
+      appConfig = JSON.parse(fileContent);
 
       // Validate required fields
       if (!appConfig.id || !appConfig.name || !appConfig.description) {
@@ -221,7 +222,7 @@ const AdminAppsPage = () => {
       event.target.value = '';
     } catch (err) {
       if (err.message.includes('already exists')) {
-        setError(`App with ID "${JSON.parse(await file.text()).id}" already exists`);
+        setError(`App with ID "${appConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {

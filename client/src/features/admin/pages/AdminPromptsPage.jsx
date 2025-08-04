@@ -153,9 +153,10 @@ const AdminPromptsPage = () => {
     }
 
     setUploading(true);
+    let promptConfig;
     try {
       const fileContent = await file.text();
-      const promptConfig = JSON.parse(fileContent);
+      promptConfig = JSON.parse(fileContent);
 
       // Validate required fields
       if (!promptConfig.id || !promptConfig.name || !promptConfig.prompt) {
@@ -175,7 +176,7 @@ const AdminPromptsPage = () => {
       event.target.value = '';
     } catch (err) {
       if (err.message.includes('already exists')) {
-        setError(`Prompt with ID "${JSON.parse(await file.text()).id}" already exists`);
+        setError(`Prompt with ID "${promptConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {

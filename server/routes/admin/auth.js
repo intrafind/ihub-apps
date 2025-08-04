@@ -122,7 +122,7 @@ export default function registerAdminAuthRoutes(app) {
       // Check if username already exists
       const existingUser = Object.values(usersData.users).find(user => user.username === username);
       if (existingUser) {
-        return res.status(400).json({ error: 'Username already exists' });
+        return res.status(409).json({ error: 'Username already exists' });
       }
 
       // Create new user
