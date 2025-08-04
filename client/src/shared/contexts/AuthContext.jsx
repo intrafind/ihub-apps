@@ -123,12 +123,23 @@ export function AuthProvider({ children }) {
               sessionStorage.removeItem(key);
             }
           });
+
+          // Clear logout parameter from URL on successful login
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('logout') === 'true') {
+            console.log('🧹 Clearing logout parameter after successful login');
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+
           dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
         } else {
           // Check for auto-redirect scenario
-          // Only redirect if user is not authenticated AND has no valid token
+          // Only redirect if user is not authenticated AND has no valid token AND not just logged out
           const hasValidToken = !!localStorage.getItem('authToken');
-          if (data.autoRedirect && !data.authenticated && !hasValidToken) {
+          const urlParams = new URLSearchParams(window.location.search);
+          const isLogoutPage = urlParams.get('logout') === 'true';
+
+          if (data.autoRedirect && !data.authenticated && !hasValidToken && !isLogoutPage) {
             // Prevent infinite redirect loops by checking if we've already attempted a redirect
             const redirectAttemptKey = `autoRedirect_${data.autoRedirect.provider}`;
             const lastRedirectAttempt = sessionStorage.getItem(redirectAttemptKey);
@@ -145,6 +156,8 @@ export function AuthProvider({ children }) {
                 `⚠️ Skipping auto-redirect to ${data.autoRedirect.provider} - attempted recently`
               );
             }
+          } else if (isLogoutPage) {
+            console.log('🚫 Skipping auto-redirect - user just logged out');
           }
 
           // If we had a token but auth status says not authenticated,
@@ -214,6 +227,9 @@ export function AuthProvider({ children }) {
       const token = urlParams.get('token');
 
       if (token) {
+        // OIDC callback processing - allow all manual logins
+        console.log('🔍 OIDC Callback: Processing login token');
+
         // Clean URL
         window.history.replaceState({}, document.title, window.location.pathname);
 
@@ -326,6 +342,8 @@ export function AuthProvider({ children }) {
   // Logout with comprehensive cleanup
   const logout = async () => {
     try {
+      console.log('🔒 LOGOUT: Redirecting to logout page to prevent auto-redirect');
+
       // Call logout API if authenticated
       if (state.isAuthenticated) {
         await apiClient.post(
@@ -343,9 +361,9 @@ export function AuthProvider({ children }) {
       performLogoutCleanup();
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
 
-      // Redirect to apps home page for security
+      // Redirect to apps home page with logout parameter to prevent auto redirect
       // This ensures users don't remain on admin or other protected pages after logout
-      window.location.href = '/';
+      window.location.href = '/?logout=true';
     }
   };
 

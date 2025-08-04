@@ -25,6 +25,12 @@ export function configureOidcProviders() {
 
   // Configure each OIDC provider
   for (const provider of oidcConfig.providers) {
+    // Skip disabled providers
+    if (provider.enabled === false) {
+      console.log(`OIDC provider ${provider.name} is disabled, skipping configuration`);
+      continue;
+    }
+
     if (
       !provider.name ||
       !provider.clientId ||
@@ -93,18 +99,24 @@ export function configureOidcProviders() {
  * Fetch user information from OIDC provider
  */
 async function fetchUserInfo(userInfoURL, accessToken) {
-  const response = await fetch(userInfoURL, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json'
+  try {
+    const response = await fetch(userInfoURL, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch user info: ${response.status} ${response.statusText}`);
     }
-  });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch user info: ${response.status} ${response.statusText}`);
+    const userInfo = await response.json();
+
+    return userInfo;
+  } catch (error) {
+    throw error;
   }
-
-  return await response.json();
 }
 
 /**
@@ -181,7 +193,9 @@ export function getConfiguredProviders() {
     name: provider.name,
     displayName: provider.displayName || provider.name,
     authURL: `/api/auth/oidc/${provider.name}`,
-    callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`
+    callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`,
+    autoRedirect: provider.autoRedirect || false,
+    enabled: provider.enabled
   }));
 }
 
@@ -195,20 +209,13 @@ export function createOidcAuthHandler(providerName) {
       return res.status(404).json({ error: `OIDC provider '${providerName}' not found` });
     }
 
-    // Debug session state
-    console.log(`[OIDC Auth] Starting auth for provider: ${providerName}`);
-    console.log(`[OIDC Auth] Session ID: ${req.sessionID}`);
-    console.log(`[OIDC Auth] Session exists: ${!!req.session}`);
-
     // Store return URL in session/state if provided
     const returnUrl = req.query.returnUrl;
     if (returnUrl) {
       // Ensure session exists
       if (!req.session) {
-        console.error('[OIDC Auth] No session available to store returnUrl');
       } else {
         req.session.returnUrl = returnUrl;
-        console.log(`[OIDC Auth] Stored returnUrl in session: ${returnUrl}`);
       }
     }
 
@@ -232,7 +239,6 @@ export function createOidcCallbackHandler(providerName) {
 
     passport.authenticate(provider.strategyName, (err, user, info) => {
       if (err) {
-        console.error(`OIDC authentication error for provider ${providerName}:`, err);
         // Special handling for state verification errors
         if (err.message && err.message.includes('Failed to verify request state')) {
           console.error(
@@ -290,10 +296,13 @@ export function createOidcCallbackHandler(providerName) {
         // For web flows, redirect with token in query (or set as cookie)
         if (req.query.redirect !== 'false') {
           const separator = returnUrl.includes('?') ? '&' : '?';
-          return res.redirect(`${returnUrl}${separator}token=${token}&provider=${providerName}`);
+          const finalRedirectUrl = `${returnUrl}${separator}token=${token}&provider=${providerName}`;
+
+          return res.redirect(finalRedirectUrl);
         }
 
         // For API flows, return JSON
+
         res.json({
           success: true,
           user: {

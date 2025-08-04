@@ -115,7 +115,7 @@ const AdminNavigation = () => {
           name: t('admin.nav.auth', 'Authentication'),
           href: '/admin/auth',
           // icon: 'shield-check',
-          current: location.pathname.startsWith('/admin/auth')
+          current: location.pathname === '/admin/auth'
         },
         // Only show Users navigation if authentication is enabled
         ...(platformConfig?.localAuth?.enabled ||

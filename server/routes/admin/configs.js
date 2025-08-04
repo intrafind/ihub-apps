@@ -91,7 +91,8 @@ export default function registerAdminConfigRoutes(app) {
         proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
         localAuth: newConfig.localAuth || existingConfig.localAuth,
         oidcAuth: newConfig.oidcAuth || existingConfig.oidcAuth,
-        authorization: newConfig.authorization || existingConfig.authorization
+        authorization: newConfig.authorization || existingConfig.authorization,
+        authDebug: newConfig.authDebug || existingConfig.authDebug
       };
 
       // Save to file

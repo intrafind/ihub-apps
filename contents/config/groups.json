@@ -176,11 +176,35 @@
         "adminAccess": false
       },
       "mappings": ["Domain Users", "NT AUTHORITY\\Authenticated Users"]
+    },
+    "offline_access_intern": {
+      "id": "offline_access_intern",
+      "name": "Offline Access",
+      "description": "",
+      "permissions": {
+        "apps": [],
+        "prompts": [],
+        "models": [],
+        "adminAccess": false
+      },
+      "mappings": ["offline_access"]
+    },
+    "test": {
+      "id": "test",
+      "name": "test",
+      "description": "",
+      "permissions": {
+        "apps": [],
+        "prompts": [],
+        "models": [],
+        "adminAccess": false
+      },
+      "mappings": []
     }
   },
   "metadata": {
     "version": "1.0.0",
     "description": "Unified group configuration with permissions and external mappings",
-    "lastModified": "2025-07-20T00:00:00Z"
+    "lastModified": "2025-08-04T09:55:54.056Z"
   }
 }

@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
 import configCache from '../configCache.js';
+import { mapExternalGroups } from './authorization.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -395,10 +396,21 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     await updateUserActivity(persistedUser.id, usersFilePath);
 
     // Merge groups: external groups (from auth provider) + internal groups (from users.json)
-    const mergedGroups = mergeUserGroups(
-      externalUser.groups || [],
-      persistedUser.internalGroups || []
-    );
+    // Use externalGroups (raw from token) if available, otherwise fall back to processed groups
+    const externalGroupsToMap = externalUser.externalGroups || [];
+    const mappedExternalGroups = mapExternalGroups(externalGroupsToMap);
+
+    // Include automatic internal groups (authenticated, provider defaults) + manual internal groups
+    const automaticInternalGroups = externalUser.groups || []; // These include authenticated, provider defaults
+    const manualInternalGroups = persistedUser.internalGroups || []; // Manual groups from users.json
+
+    // Merge all three: mapped external + automatic internal + manual internal
+    const allGroups = new Set();
+    mappedExternalGroups.forEach(group => allGroups.add(group));
+    automaticInternalGroups.forEach(group => allGroups.add(group));
+    manualInternalGroups.forEach(group => allGroups.add(group));
+
+    const mergedGroups = Array.from(allGroups);
 
     return {
       ...externalUser,
@@ -422,10 +434,21 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
   const persistedUser = await createOrUpdateExternalUser(externalUser, usersFilePath);
 
   // Combine external groups from auth provider with internal groups from users.json
-  const combinedGroups = mergeUserGroups(
-    externalUser.groups || [],
-    persistedUser.internalGroups || []
-  );
+  // Use externalGroups (raw from token) if available, otherwise fall back to processed groups
+  const externalGroupsToMap = externalUser.externalGroups || [];
+  const mappedExternalGroups = mapExternalGroups(externalGroupsToMap);
+
+  // Include automatic internal groups (authenticated, provider defaults) + manual internal groups
+  const automaticInternalGroups = externalUser.groups || []; // These include authenticated, provider defaults
+  const manualInternalGroups = persistedUser.internalGroups || []; // Manual groups from users.json
+
+  // Merge all three: mapped external + automatic internal + manual internal
+  const allGroups = new Set();
+  mappedExternalGroups.forEach(group => allGroups.add(group));
+  automaticInternalGroups.forEach(group => allGroups.add(group));
+  manualInternalGroups.forEach(group => allGroups.add(group));
+
+  const combinedGroups = Array.from(allGroups);
 
   return {
     ...externalUser,
