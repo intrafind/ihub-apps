@@ -87,6 +87,7 @@ export default function registerAdminConfigRoutes(app) {
       const mergedConfig = {
         ...existingConfig,
         auth: newConfig.auth || existingConfig.auth,
+        anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
         proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
         localAuth: newConfig.localAuth || existingConfig.localAuth,
         oidcAuth: newConfig.oidcAuth || existingConfig.oidcAuth,

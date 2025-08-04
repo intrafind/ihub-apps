@@ -16,7 +16,7 @@ import { Link } from 'react-router-dom';
  */
 const UserAuthMenu = ({ variant = 'header', className = '' }) => {
   const { t } = useTranslation();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, authConfig } = useAuth();
   const { platformConfig } = usePlatformConfig();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -24,8 +24,8 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
   const dropdownRef = useRef(null);
 
   const auth = platformConfig?.auth || {};
-  const authMode = auth.mode || 'anonymous';
-  const allowAnonymous = platformConfig?.anonymousAuth?.enabled !== false;
+  const authMode = authConfig?.authMode || auth.mode || 'anonymous';
+  const allowAnonymous = authConfig?.anonymousAuth?.enabled ?? platformConfig?.anonymousAuth?.enabled !== false;
 
   // Calculate user initials for sidebar variant
   const displayName = user?.name || user?.email || user?.username || user?.id || 'User';
@@ -58,9 +58,9 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
 
   // Check if any authentication methods are actually enabled
   const hasEnabledAuthMethods =
-    platformConfig?.localAuth?.enabled ||
-    platformConfig?.oidcAuth?.enabled ||
-    platformConfig?.proxyAuth?.enabled;
+    authConfig?.authMethods?.local?.enabled ||
+    authConfig?.authMethods?.oidc?.enabled ||
+    authConfig?.authMethods?.proxy?.enabled;
 
   // Don't show login options when in anonymous-only mode
   // This happens when anonymousAuth is enabled and no auth methods are enabled

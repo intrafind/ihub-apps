@@ -8,6 +8,7 @@ import {
 import { loginLdapUser, getConfiguredLdapProviders } from '../middleware/ldapAuth.js';
 import { processNtlmLogin, getNtlmConfig } from '../middleware/ntlmAuth.js';
 import { teamsTokenExchange, teamsTabConfigSave } from '../middleware/teamsAuth.js';
+import configCache from '../configCache.js';
 
 export default function registerAuthRoutes(app) {
   /**
@@ -205,7 +206,7 @@ export default function registerAuthRoutes(app) {
    * Get authentication status and configuration
    */
   app.get('/api/auth/status', (req, res) => {
-    const platform = app.get('platform') || {};
+    const platform = configCache.getPlatform() || {};
     const authConfig = platform.auth || {};
     const proxyAuthConfig = platform.proxyAuth || {};
     const localAuthConfig = platform.localAuth || {};
