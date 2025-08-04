@@ -9,6 +9,50 @@ import {
 } from '../utils/responseHelpers.js';
 
 export default function registerModelRoutes(app, { getLocalizedError }) {
+  /**
+   * @swagger
+   * /models:
+   *   get:
+   *     summary: Get available models
+   *     description: Retrieves a list of all available AI models that the user has access to
+   *     tags:
+   *       - Models
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     responses:
+   *       200:
+   *         description: List of available models
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 models:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id:
+   *                         type: string
+   *                         description: Unique model identifier
+   *                       name:
+   *                         type: string
+   *                         description: Human-readable model name
+   *                       description:
+   *                         type: string
+   *                         description: Model description
+   *                       provider:
+   *                         type: string
+   *                         description: AI provider (openai, anthropic, google, etc.)
+   *                       enabled:
+   *                         type: boolean
+   *                         description: Whether the model is enabled
+   *       401:
+   *         description: Authentication required
+   *       500:
+   *         description: Internal server error
+   */
   app.get('/api/models', authOptional, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};

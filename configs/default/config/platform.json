@@ -60,5 +60,9 @@
     "enabled": true,
     "usersFile": "contents/config/users.json",
     "showDemoAccounts": true
+  },
+  "swagger": {
+    "enabled": true,
+    "requireAuth": true
   }
 }

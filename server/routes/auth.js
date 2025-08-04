@@ -12,7 +12,60 @@ import configCache from '../configCache.js';
 
 export default function registerAuthRoutes(app) {
   /**
-   * Local authentication login
+   * @swagger
+   * /auth/login:
+   *   post:
+   *     summary: Local authentication login
+   *     description: Authenticates a user with username and password using local authentication
+   *     tags:
+   *       - Authentication
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - username
+   *               - password
+   *             properties:
+   *               username:
+   *                 type: string
+   *                 description: User's username
+   *               password:
+   *                 type: string
+   *                 description: User's password
+   *     responses:
+   *       200:
+   *         description: Login successful
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 user:
+   *                   type: object
+   *                   properties:
+   *                     id:
+   *                       type: string
+   *                     username:
+   *                       type: string
+   *                     groups:
+   *                       type: array
+   *                       items:
+   *                         type: string
+   *                 token:
+   *                   type: string
+   *                   description: JWT authentication token
+   *                 expiresIn:
+   *                   type: number
+   *                   description: Token expiration time in seconds
+   *       400:
+   *         description: Bad request (missing credentials or local auth disabled)
+   *       401:
+   *         description: Invalid credentials
+   *       500:
+   *         description: Internal server error
    */
   app.post('/api/auth/login', async (req, res) => {
     try {

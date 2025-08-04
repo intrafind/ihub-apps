@@ -7,6 +7,40 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 
 export default function registerAdminModelsRoutes(app) {
+  /**
+   * @swagger
+   * /admin/models:
+   *   get:
+   *     summary: Get all models (Admin)
+   *     description: Retrieves all configured models including disabled ones (admin access required)
+   *     tags:
+   *       - Admin - Models
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     responses:
+   *       200:
+   *         description: List of all models
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 type: object
+   *                 properties:
+   *                   id:
+   *                     type: string
+   *                   name:
+   *                     type: string
+   *                   provider:
+   *                     type: string
+   *                   enabled:
+   *                     type: boolean
+   *       401:
+   *         description: Admin authentication required
+   *       500:
+   *         description: Internal server error
+   */
   app.get('/api/admin/models', adminAuth, async (req, res) => {
     try {
       const { data: models, etag: modelsEtag } = configCache.getModels(true);

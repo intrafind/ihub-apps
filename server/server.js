@@ -21,6 +21,7 @@ import registerMagicPromptRoutes from './routes/magicPromptRoutes.js';
 import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
+import registerSwaggerRoutes from './routes/swagger.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import { setupMiddleware } from './middleware/setup.js';
@@ -159,6 +160,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerOpenAIProxyRoutes(app, { getLocalizedError });
   await registerAdminRoutes(app);
   registerShortLinkRoutes(app);
+  await registerSwaggerRoutes(app);
 
   // --- Session Management handled in sessionRoutes ---
 

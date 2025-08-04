@@ -15,6 +15,42 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
   const base = '/api/inference';
   app.use(`${base}/v1`, authRequired);
 
+  /**
+   * @swagger
+   * /inference/v1/models:
+   *   get:
+   *     summary: List available models (OpenAI Compatible)
+   *     description: Returns a list of available models in OpenAI-compatible format
+   *     tags:
+   *       - OpenAI Compatible
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     responses:
+   *       200:
+   *         description: List of available models
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 object:
+   *                   type: string
+   *                   example: "list"
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       object:
+   *                         type: string
+   *                         example: "model"
+   *                       id:
+   *                         type: string
+   *                         description: Model identifier
+   *       401:
+   *         description: Authentication required
+   */
   app.get(`${base}/v1/models`, async (req, res) => {
     const { data: models = [] } = configCache.getModels();
     let filtered = models;
@@ -25,6 +61,90 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {
     res.json({ object: 'list', data: filtered.map(m => ({ object: 'model', id: m.id })) });
   });
 
+  /**
+   * @swagger
+   * /inference/v1/chat/completions:
+   *   post:
+   *     summary: Create chat completion (OpenAI Compatible)
+   *     description: Creates a completion for the chat message in OpenAI-compatible format
+   *     tags:
+   *       - OpenAI Compatible
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - model
+   *               - messages
+   *             properties:
+   *               model:
+   *                 type: string
+   *                 description: ID of the model to use
+   *               messages:
+   *                 type: array
+   *                 description: A list of messages comprising the conversation so far
+   *                 items:
+   *                   type: object
+   *                   properties:
+   *                     role:
+   *                       type: string
+   *                       enum: [system, user, assistant, tool]
+   *                     content:
+   *                       type: string
+   *                       description: The contents of the message
+   *               temperature:
+   *                 type: number
+   *                 minimum: 0
+   *                 maximum: 2
+   *                 default: 0.7
+   *                 description: Sampling temperature to use
+   *               stream:
+   *                 type: boolean
+   *                 default: false
+   *                 description: Whether to stream back partial results
+   *               max_tokens:
+   *                 type: integer
+   *                 description: Maximum number of tokens to generate
+   *               tools:
+   *                 type: array
+   *                 description: List of tools the model may call
+   *               tool_choice:
+   *                 oneOf:
+   *                   - type: string
+   *                     enum: [none, auto]
+   *                   - type: object
+   *                 description: Controls which tool is called by the model
+   *     responses:
+   *       200:
+   *         description: Chat completion response
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 id:
+   *                   type: string
+   *                 object:
+   *                   type: string
+   *                   example: "chat.completion"
+   *                 created:
+   *                   type: integer
+   *                 model:
+   *                   type: string
+   *                 choices:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *       401:
+   *         description: Authentication required
+   *       400:
+   *         description: Bad request
+   */
   app.post(`${base}/v1/chat/completions`, async (req, res) => {
     const {
       model: modelId,
