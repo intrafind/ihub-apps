@@ -120,6 +120,39 @@ Therefore we want to build a web application which talks through a small node.js
 
    This will install dependencies for both the client and server components.
 
+3. **Start the application** (automatically sets up default configuration):
+
+   ```bash
+   npm run dev
+   ```
+
+   🎉 **That's it!** The server will automatically create default configuration files on first startup, so you can start using AI Hub Apps immediately.
+
+### Automatic Configuration Setup
+
+**New in this version**: AI Hub Apps automatically sets up default configuration when you start the server for the first time!
+
+- ✅ **Zero Configuration**: No manual setup required
+- ✅ **Smart Detection**: Only runs setup when the contents directory is empty
+- ✅ **Non-Destructive**: Never overwrites existing configuration files
+- ✅ **Works Everywhere**: Development, production, and packaged binary deployments
+
+**What happens on first startup:**
+
+1. Server checks if the `contents` directory is empty
+2. If empty, copies default configuration from `configs/default`
+3. Includes all apps, models, prompts, and platform settings
+4. Server continues normal startup with the new configuration
+
+**Custom contents directory:**
+
+```bash
+# Use a different directory for configuration
+CONTENTS_DIR=my-custom-config npm run dev
+```
+
+The automatic setup works with any custom contents directory you specify.
+
 ### Development
 
 To run the application in development mode:

@@ -4,6 +4,8 @@ This guide walks you through the basic workflow in AI Hub Apps and explains the 
 
 ## Getting Started
 
+**First-Time Setup**: AI Hub Apps automatically configures itself when you start it for the first time! No manual configuration is needed.
+
 1. **Choose a name** – On your first visit you will be asked to pick a user name. It is stored in your browser so previously used apps and chat history can be restored. If you prefer not to enter a name a random one is generated.
 2. **Read the disclaimer** – Below the name input you will see the current disclaimer text provided by the administrator. Continue after reading it.
 3. **Browse the apps** – After confirming, the apps page is shown. Use the search box at the top to quickly find an app or scroll through the list. The apps can also be sorted alphabetically.

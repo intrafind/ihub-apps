@@ -10,14 +10,37 @@ git clone <repository>
 cd ai-hub-apps
 npm run install:all
 
-# 2. Start the application
+# 2. Start the application (automatic setup included!)
 npm run dev
 
 # 3. Open your browser
 # Visit http://localhost:5173
 ```
 
-**That's it!** No configuration files to edit, no authentication to set up, no API keys required for basic functionality.
+**That's it!** The server automatically creates default configuration files on first startup.
+
+### What Happens During First Startup
+
+When you start the server for the first time:
+
+1. 🔍 **Smart Detection**: Checks if configuration directory is empty
+2. 📋 **Auto-Setup**: Copies default configuration from `configs/default`
+3. ✅ **Ready to Use**: All apps, models, and settings configured automatically
+4. 🚀 **Normal Startup**: Server continues and you can start using AI Hub Apps
+
+**Console output example:**
+```
+🔍 Checking if initial setup is required...
+📦 Contents directory is empty, performing initial setup...
+📋 Copying default configuration from configs/default to contents
+✅ Default configuration copied successfully
+```
+
+**On subsequent startups:**
+```
+🔍 Checking if initial setup is required...
+✅ Contents directory already exists and is not empty, skipping initial setup
+```
 
 ## What You Get Out of the Box
 

@@ -1,0 +1,275 @@
+{
+  "title": {
+    "en": "iHub Apps",
+    "de": "iHub Apps"
+  },
+  "header": {
+    "defaultColor": "rgb(0, 53, 87)",
+    "logo": {
+      "url": "/logo.svg",
+      "alt": {
+        "en": "iHub Apps Logo",
+        "de": "iHub Apps Logo"
+      },
+      "containerStyle": {
+        "backgroundColor": "#ffffff",
+        "borderBottomRightRadius": "16px",
+        "justifyContent": "center",
+        "padding": "0 8px"
+      },
+      "imageStyle": {
+        "maxHeight": "20%"
+      }
+    },
+    "links": [
+      {
+        "name": {
+          "en": "Home",
+          "de": "Startseite"
+        },
+        "url": "/"
+      },
+      {
+        "name": {
+          "en": "Prompts",
+          "de": "Prompts"
+        },
+        "url": "/prompts"
+      },
+      {
+        "name": {
+          "en": "FAQ",
+          "de": "FAQ"
+        },
+        "url": "/pages/faq"
+      },
+      {
+        "name": {
+          "en": "Documentation",
+          "de": "Dokumentation"
+        },
+        "url": "https://github.com/intrafind/ai-hub-apps/blob/main/docs/index.md"
+      },
+      {
+        "name": {
+          "en": "GitHub",
+          "de": "GitHub"
+        },
+        "url": "https://github.com/intrafind/ai-hub-apps"
+      }
+    ]
+  },
+  "footer": {
+    "text": {
+      "en": "© 2025 IntraFind Software AG. All rights reserved.",
+      "de": "© 2025 IntraFind Software AG. Alle Rechte vorbehalten."
+    },
+    "links": [
+      {
+        "name": {
+          "en": "Privacy Policy",
+          "de": "Datenschutzerklärung"
+        },
+        "url": "/pages/privacy"
+      },
+      {
+        "name": {
+          "en": "Terms of Service",
+          "de": "Nutzungsbedingungen"
+        },
+        "url": "/pages/terms"
+      },
+      {
+        "name": {
+          "en": "Contact",
+          "de": "Kontakt"
+        },
+        "url": "mailto:info@intrafind.com"
+      }
+    ]
+  },
+  "disclaimer": {
+    "text": {
+      "en": "Disclaimer: This application uses artificial intelligence language models that generate content based on their training data and the inputs provided. The responses may not always be accurate, appropriate, or complete. The AI does not have knowledge of events after its training cut-off date and does not access real-time information. Users should verify important information and exercise critical judgment when using AI-generated content. This application logs user interactions for service improvement and analytics purposes.",
+      "de": "Haftungsausschluss: Diese Anwendung verwendet künstliche Intelligenz-Sprachmodelle, die Inhalte basierend auf ihren Trainingsdaten und den bereitgestellten Eingaben generieren. Die Antworten sind möglicherweise nicht immer korrekt, angemessen oder vollständig. Die KI hat keine Kenntnis von Ereignissen nach ihrem Trainingsstichtag und greift nicht auf Echtzeit-Informationen zu. Benutzer sollten wichtige Informationen überprüfen und kritisches Urteilsvermögen bei der Nutzung von KI-generierten Inhalten anwenden. Diese Anwendung protokolliert Benutzerinteraktionen zur Verbesserung des Dienstes und zu Analysezwecken."
+    },
+    "version": "1.0",
+    "updated": "2025-04-16"
+  },
+  "appsList": {
+    "title": {
+      "en": "iHub Apps",
+      "de": "iHub Apps"
+    },
+    "subtitle": {
+      "en": "Choose an application to start a conversation",
+      "de": "Wählen Sie eine Anwendung, um ein Gespräch zu beginnen"
+    },
+    "search": {
+      "enabled": true,
+      "placeholder": {
+        "en": "Search apps...",
+        "de": "Apps suchen..."
+      },
+      "width": "w-full sm:w-2/3 lg:w-1/3"
+    },
+    "sort": {
+      "enabled": true,
+      "default": "relevance"
+    },
+    "categories": {
+      "enabled": true,
+      "showAll": true,
+      "list": [
+        {
+          "id": "all",
+          "name": {
+            "en": "All",
+            "de": "Alle"
+          },
+          "color": "#6B7280"
+        },
+        {
+          "id": "coding",
+          "name": {
+            "en": "Coding",
+            "de": "Programmierung"
+          },
+          "color": "#10B981"
+        },
+        {
+          "id": "writing",
+          "name": {
+            "en": "Creative Writing",
+            "de": "Kreatives Schreiben"
+          },
+          "color": "#F59E0B"
+        },
+        {
+          "id": "business",
+          "name": {
+            "en": "Business",
+            "de": "Geschäft"
+          },
+          "color": "#3B82F6"
+        },
+        {
+          "id": "analysis",
+          "name": {
+            "en": "Analysis",
+            "de": "Analyse"
+          },
+          "color": "#8B5CF6"
+        },
+        {
+          "id": "communication",
+          "name": {
+            "en": "Communication",
+            "de": "Kommunikation"
+          },
+          "color": "#EF4444"
+        },
+        {
+          "id": "utility",
+          "name": {
+            "en": "Utility",
+            "de": "Hilfsmittel"
+          },
+          "color": "#06B6D4"
+        }
+      ]
+    }
+  },
+  "promptsList": {
+    "sort": {
+      "enabled": true,
+      "default": "relevance"
+    },
+    "categories": {
+      "enabled": true,
+      "showAll": true,
+      "list": [
+        {
+          "id": "all",
+          "name": {
+            "en": "All",
+            "de": "Alle"
+          },
+          "color": "#6B7280"
+        },
+        {
+          "id": "summarization",
+          "name": {
+            "en": "Summarization",
+            "de": "Zusammenfassung"
+          },
+          "color": "#10B981"
+        },
+        {
+          "id": "translation",
+          "name": {
+            "en": "Translation",
+            "de": "Übersetzung"
+          },
+          "color": "#3B82F6"
+        },
+        {
+          "id": "qa",
+          "name": {
+            "en": "Q&A",
+            "de": "Frage & Antwort"
+          },
+          "color": "#F59E0B"
+        },
+        {
+          "id": "creative",
+          "name": {
+            "en": "Creative",
+            "de": "Kreativ"
+          },
+          "color": "#EF4444"
+        },
+        {
+          "id": "analysis",
+          "name": {
+            "en": "Analysis",
+            "de": "Analyse"
+          },
+          "color": "#8B5CF6"
+        }
+      ]
+    }
+  },
+  "pages": {
+    "privacy": {
+      "title": {
+        "en": "Privacy Policy",
+        "de": "Datenschutzerklärung"
+      },
+      "filePath": {
+        "en": "pages/en/privacy.md",
+        "de": "pages/de/privacy.md"
+      }
+    },
+    "terms": {
+      "title": {
+        "en": "Terms of Service",
+        "de": "Nutzungsbedingungen"
+      },
+      "filePath": {
+        "en": "pages/en/terms.md",
+        "de": "pages/de/terms.md"
+      }
+    },
+    "faq": {
+      "title": {
+        "en": "Frequently Asked Questions",
+        "de": "Häufig gestellte Fragen"
+      },
+      "filePath": {
+        "en": "pages/en/faq.md",
+        "de": "pages/de/faq.md"
+      }
+    }
+  }
+}

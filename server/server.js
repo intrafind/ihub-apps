@@ -31,6 +31,7 @@ import {
   processMessageTemplates,
   cleanupInactiveClients
 } from './serverHelpers.js';
+import { performInitialSetup } from './utils/setupUtils.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -67,6 +68,14 @@ if (cluster.isPrimary && workerCount > 1) {
   // Get the contents directory, either from environment variable or use default 'contents'
   const contentsDir = config.CONTENTS_DIR;
   console.log(`Using contents directory: ${contentsDir}`);
+
+  // Perform initial setup if contents directory is empty
+  try {
+    await performInitialSetup();
+  } catch (err) {
+    console.error('Failed to perform initial setup:', err);
+    console.warn('Server will continue, but may not function properly without configuration files');
+  }
 
   // Load platform configuration and initialize telemetry
   let platformConfig = {};

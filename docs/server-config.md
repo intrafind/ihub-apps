@@ -2,6 +2,49 @@
 
 This section covers environment variables and options for running the AI Hub Apps server.
 
+## Automatic Configuration Setup
+
+**New Feature**: AI Hub Apps automatically creates default configuration files when the server starts for the first time!
+
+### How It Works
+
+1. **First Startup Detection**: Server checks if the `CONTENTS_DIR` is empty or doesn't exist
+2. **Automatic Copy**: If empty, copies the entire default configuration from `configs/default`
+3. **Ready to Use**: Server continues startup with the new configuration files
+4. **Subsequent Startups**: Setup is skipped when configuration already exists
+
+### Benefits
+
+- ✅ **Zero Configuration**: No manual setup required for new installations
+- ✅ **Consistent Defaults**: All deployments start with the same baseline
+- ✅ **Non-Destructive**: Never overwrites existing configuration files
+- ✅ **Environment Agnostic**: Works in development, production, and packaged binaries
+
+### Custom Contents Directory
+
+The automatic setup respects your `CONTENTS_DIR` setting:
+
+```bash
+# Server will auto-setup in custom directory
+CONTENTS_DIR=/path/to/my-config npm run dev
+```
+
+### Console Output
+
+**First startup:**
+```
+🔍 Checking if initial setup is required...
+📦 Contents directory is empty, performing initial setup...
+📋 Copying default configuration to contents
+✅ Default configuration copied successfully
+```
+
+**Subsequent startups:**
+```
+🔍 Checking if initial setup is required...
+✅ Contents directory already exists, skipping initial setup
+```
+
 ## Environment Variables
 
 The server reads settings from the environment or a `.env` file such as `config.env`.
@@ -19,6 +62,7 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `DEFAULT_API_KEY`          | Fallback API key used when a model specific key is missing        | –                                                |
 | `LOCAL_API_KEY`            | Generic API key for local models                                  | –                                                |
 | `CONTENTS_DIR`             | Directory containing the `contents` folder                        | `contents`                                       |
+| `DATA_DIR`                 | Directory for storing application data                             | `data`                                           |
 | `APP_ROOT_DIR`             | Override the application root path when running packaged binaries | –                                                |
 | `MCP_SERVER_URL`           | URL of a Model Context Protocol server for tool discovery         | –                                                |
 | `BRAVE_SEARCH_API_KEY`     | API key for the Brave Search tool                                 | –                                                |

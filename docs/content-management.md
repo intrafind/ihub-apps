@@ -6,15 +6,43 @@ AI Hub Apps uses a content management system based on Markdown files stored in t
 2. Static page content for the application
 3. Documentation and supplementary information
 
+### Automatic Content Setup
+
+**New Feature**: When starting AI Hub Apps for the first time, the system automatically creates the `contents/` directory with default content files.
+
+**What gets copied automatically:**
+- Configuration files (platform settings, apps, models, etc.)
+- Default source content (documentation, FAQ)
+- Page templates (privacy policy, terms, FAQ pages)
+- Prompt templates and examples
+
+**When it runs:**
+- Only when the `contents/` directory is empty or doesn't exist
+- Copies from `configs/default/` to your configured `CONTENTS_DIR`
+- Never overwrites existing content
+
 ### Content Directory Structure
 
 The `contents/` directory contains Markdown (.md) files that can be referenced by the application:
 
 ```
 contents/
-  docs/README.md - Main documentation file
-  faq.md           - Frequently asked questions
-  [other-content].md - Additional content files
+  sources/
+    documentation.md - Main documentation file
+    faq.md          - Frequently asked questions
+  pages/
+    en/
+      faq.md        - FAQ page content
+      privacy.md    - Privacy policy
+      terms.md      - Terms of service
+    de/
+      faq.md        - German FAQ
+      privacy.md    - German privacy policy
+      terms.md      - German terms
+  config/           - Configuration files
+  apps/            - App definitions
+  models/          - Model configurations
+  prompts/         - Prompt templates
 ```
 
 ### Markdown Content Format

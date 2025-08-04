@@ -1,0 +1,58 @@
+{
+  "groups": {
+    "admins": {
+      "id": "admins",
+      "name": "Admins",
+      "description": "Full administrative access to all resources",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": true
+      },
+      "mappings": ["IT-Admin", "IT-Admins", "Platform-Admin", "Platform-Admins"]
+    },
+    "users": {
+      "id": "users",
+      "name": "Users",
+      "description": "Standard user access to common applications and models",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": false
+      },
+      "mappings": ["Employees", "Staff"]
+    },
+    "anonymous": {
+      "id": "anonymous",
+      "name": "Anonymous",
+      "description": "Access for anonymous users (default configuration)",
+      "permissions": {
+        "apps": ["chat"],
+        "prompts": ["*"],
+        "models": ["gemini-2.0-flash"],
+        "adminAccess": false
+      },
+      "mappings": ["anonymous", "public"]
+    },
+    "authenticated": {
+      "id": "authenticated",
+      "name": "Authenticated",
+      "description": "Base permissions for all authenticated users",
+      "inherits": ["anonymous"],
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": false
+      },
+      "mappings": []
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Unified group configuration with permissions and external mappings",
+    "lastModified": "2025-07-20T00:00:00Z"
+  }
+}

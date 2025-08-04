@@ -97,14 +97,18 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Configure CORS with platform configuration
   const corsConfig = platformConfig.cors || {};
   const corsOptions = {
-    origin: processCorsOrigins(corsConfig.origin),
+    origin: processCorsOrigins(corsConfig.origin) || true, // Allow all origins by default
     methods: corsConfig.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
     allowedHeaders: corsConfig.allowedHeaders || [
       'Content-Type',
       'Authorization',
       'X-Requested-With',
+      'X-Forwarded-User',
+      'X-Forwarded-Groups',
       'Accept',
-      'Origin'
+      'Origin',
+      'Cache-Control',
+      'X-File-Name'
     ],
     credentials: corsConfig.credentials !== undefined ? corsConfig.credentials : true,
     optionsSuccessStatus: corsConfig.optionsSuccessStatus || 200,

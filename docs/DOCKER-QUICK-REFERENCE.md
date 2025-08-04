@@ -13,12 +13,14 @@ npm run docker:up
 
 This command:
 - ✅ **Automatically mounts your entire `contents/` folder** - no configuration needed
+- ✅ **Auto-setup on first run** - If `contents/` is empty, default configuration is copied automatically
 - ✅ **All changes appear instantly** in the container
 - ✅ **Edit any file locally** - configs, apps, models, pages, prompts, sources
 - ✅ **Persistent data** - `contents/data/`, `contents/uploads/`, and logs use Docker volumes
 
 ### What This Means
 
+✅ **Zero setup** - Empty `contents/` folder gets default configuration automatically  
 ✅ **Edit files locally** - Changes in your local `contents/` folder are immediately available in the container  
 ✅ **No rebuilds needed** - Modify apps, models, and configs without restarting Docker  
 ✅ **Version control friendly** - Your changes are in your local repository  

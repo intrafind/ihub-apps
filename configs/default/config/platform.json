@@ -1,0 +1,64 @@
+{
+  "features": {
+    "usageTracking": true
+  },
+  "globalPromptVariables": {
+    "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user. \n"
+  },
+  "pdfExport": {
+    "defaultTemplate": "default",
+    "watermark": {
+      "enabled": true,
+      "text": "iHub Apps",
+      "position": "bottom-right",
+      "opacity": 0.5
+    },
+    "templates": {
+      "default": {
+        "name": "Default",
+        "description": "Standard chat export with colors and branding"
+      },
+      "professional": {
+        "name": "Professional",
+        "description": "Clean professional layout suitable for business"
+      },
+      "minimal": {
+        "name": "Minimal",
+        "description": "Simple minimal design with clean lines"
+      }
+    }
+  },
+  "defaultLanguage": "en",
+  "requestBodyLimitMB": 50,
+  "telemetry": {
+    "enabled": false,
+    "logs": true
+  },
+  "requestConcurrency": 5,
+  "refreshSalt": {
+    "salt": 1,
+    "lastUpdated": "2025-07-08T17:00:38.743Z"
+  },
+  "admin": {
+    "secret": "platform-secret",
+    "encrypted": false
+  },
+  "auth": {
+    "mode": "local",
+    "authenticatedGroup": "authenticated",
+    "sessionTimeoutMinutes": 480,
+    "jwtSecret": "magic-secret"
+  },
+  "anonymousAuth": {
+    "enabled": true,
+    "defaultGroups": ["anonymous"]
+  },
+  "proxyAuth": {
+    "enabled": false
+  },
+  "localAuth": {
+    "enabled": true,
+    "usersFile": "contents/config/users.json",
+    "showDemoAccounts": true
+  }
+}
