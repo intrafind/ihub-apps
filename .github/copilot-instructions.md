@@ -7,7 +7,7 @@ This document gives informations and instructions for working with the **ai-hub-
 - **Client**: React application located in `client/`.
 - **Server**: Node.js backend under `server/`.
 - **Shared**: code which is shared between Client and Server lives in `shared/`.
-- **Configs**: configuration for our application lives in `contents`
+- **Configs**: configuration for our application lives in `configs`
 - **Examples**: example as well as customer-specific configurations are located in `examples`
 - **Concepts**: Concepts for each feature are located in `concepts`
 - **Documentation**: documentation sources are in `docs/`. The rendered docs are copied to `public/help` during production builds.

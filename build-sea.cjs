@@ -431,9 +431,6 @@ try {
   // Copy default configuration (will be used by auto-setup on first run)
   fs.cpSync(defaultConfigDir, path.join(outputDir, 'configs', 'default'), { recursive: true });
 
-  // Also copy to contents for immediate use (backward compatibility)
-  fs.cpSync(defaultConfigDir, path.join(outputDir, 'contents'), { recursive: true });
-
   // Copy shared directory
   const sharedDir = path.join(__dirname, 'shared');
   if (fs.existsSync(sharedDir)) {
