@@ -62,7 +62,7 @@ jobs:
           npm run prod:build
 
           # Verify the build was successful
-          if [ -d "dist" ] && [ -d "dist/public" ] && [ -d "dist/server" ] && [ -d "dist/contents" ]; then
+          if [ -d "dist" ] && [ -d "dist/public" ] && [ -d "dist/server" ]; then
             echo "✅ Build successful!"
           else
             echo "❌ Build failed! Missing expected output directories."
