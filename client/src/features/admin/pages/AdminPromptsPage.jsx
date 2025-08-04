@@ -5,6 +5,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
+import ConfigFileManager from '../components/ConfigFileManager';
 import PromptDetailsPopup from '../../prompts/components/PromptDetailsPopup';
 import { fetchAdminPrompts, makeAdminApiCall, togglePrompts } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
@@ -119,6 +120,15 @@ const AdminPromptsPage = () => {
     setShowPromptDetails(true);
   };
 
+  const handleUploadSuccess = result => {
+    // Reload prompts after successful upload
+    loadPrompts();
+  };
+
+  const handleUploadError = errorMessage => {
+    setError(errorMessage);
+  };
+
   const filteredPrompts = prompts.filter(prompt => {
     const matchesSearch =
       searchTerm === '' ||
@@ -230,6 +240,15 @@ const AdminPromptsPage = () => {
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Config File Manager */}
+          <div className="mt-6">
+            <ConfigFileManager
+              configType="prompts"
+              onUploadSuccess={handleUploadSuccess}
+              onUploadError={handleUploadError}
+            />
           </div>
 
           {/* Search and Filter */}

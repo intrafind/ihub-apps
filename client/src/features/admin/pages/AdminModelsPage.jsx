@@ -6,6 +6,7 @@ import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
+import ConfigFileManager from '../components/ConfigFileManager';
 import { makeAdminApiCall, toggleModels } from '../../../api/adminApi';
 
 const AdminModelsPage = () => {
@@ -130,6 +131,15 @@ const AdminModelsPage = () => {
     }
   };
 
+  const handleUploadSuccess = result => {
+    // Reload models after successful upload
+    loadModels();
+  };
+
+  const handleUploadError = errorMessage => {
+    setError(errorMessage);
+  };
+
   const filteredModels = models.filter(model => {
     const matchesSearch =
       searchTerm === '' ||
@@ -218,6 +228,15 @@ const AdminModelsPage = () => {
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Config File Manager */}
+          <div className="mt-6">
+            <ConfigFileManager
+              configType="models"
+              onUploadSuccess={handleUploadSuccess}
+              onUploadError={handleUploadError}
+            />
           </div>
 
           {/* Search and Filter */}

@@ -8,6 +8,7 @@ import AppTemplateSelector from '../../apps/components/AppTemplateSelector';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
+import ConfigFileManager from '../components/ConfigFileManager';
 import { fetchAdminApps, makeAdminApiCall, toggleApps } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 
@@ -147,6 +148,15 @@ const AdminAppsPage = () => {
     setShowTemplateSelector(true);
   };
 
+  const handleUploadSuccess = result => {
+    // Reload apps after successful upload
+    loadApps();
+  };
+
+  const handleUploadError = errorMessage => {
+    setError(errorMessage);
+  };
+
   const handleTemplateSelected = template => {
     setSelectedTemplate(template);
     setShowTemplateSelector(false);
@@ -241,6 +251,15 @@ const AdminAppsPage = () => {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Config File Manager */}
+        <div className="mt-6">
+          <ConfigFileManager
+            configType="apps"
+            onUploadSuccess={handleUploadSuccess}
+            onUploadError={handleUploadError}
+          />
         </div>
 
         {/* Search and filter controls */}
