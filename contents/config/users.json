@@ -42,7 +42,7 @@
       "authMethods": ["oidc"],
       "lastActiveDate": "2025-08-04",
       "createdAt": "2025-07-27T18:27:03.182Z",
-      "updatedAt": "2025-08-04T09:55:59.956Z",
+      "updatedAt": "2025-08-04T14:18:06.307Z",
       "oidcData": {
         "subject": "e2263c06-d262-4682-b5ae-a30d8d241bf3",
         "provider": "auth.intrafind.cloud",
@@ -54,7 +54,7 @@
   "metadata": {
     "version": "2.0.0",
     "description": "Local user database for AI Hub Apps - Updated with user-specific password hashing",
-    "lastUpdated": "2025-08-04T09:55:59.956Z",
+    "lastUpdated": "2025-08-04T14:18:06.307Z",
     "migrationDate": "2025-08-01T21:02:54.174Z",
     "migratedFrom": "2.0.0"
   }

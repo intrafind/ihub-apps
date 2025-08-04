@@ -7,10 +7,7 @@ import configCache from '../configCache.js';
  * Validates JWT tokens issued by our system regardless of auth mode (local, oidc, etc.)
  */
 export default function jwtAuthMiddleware(req, res, next) {
-  console.log('🔐 jwtAuth: Called for URL:', req.url, req.method);
-
   if (req.user && req.user.id !== 'anonymous') {
-    console.log('🔐 jwtAuth: User already set, skipping JWT validation');
     return next();
   }
 
@@ -20,25 +17,19 @@ export default function jwtAuthMiddleware(req, res, next) {
   // Check HTTP-only cookie first
   if (req.cookies && req.cookies.authToken) {
     token = req.cookies.authToken;
-    console.log('🔐 jwtAuth: Token found in cookie');
   }
   // Fallback to Authorization header for API calls
   else {
     const authHeader = req.headers.authorization;
-    console.log('🔐 jwtAuth: Authorization header:', authHeader);
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.substring(7);
-      console.log('🔐 jwtAuth: Token found in Authorization header');
     }
   }
 
   if (!token) {
-    console.log('🔐 jwtAuth: No token found in cookies or headers, continuing as anonymous');
     return next(); // No token, continue as anonymous
   }
-
-  console.log('🔐 jwtAuth: Extracted token:', token.substring(0, 20) + '...');
 
   const platform = configCache.getPlatform() || {};
   const jwtSecret = config.JWT_SECRET || platform.auth?.jwtSecret;
@@ -56,7 +47,6 @@ export default function jwtAuthMiddleware(req, res, next) {
 
     const now = Math.floor(Date.now() / 1000);
     if (decoded.exp && decoded.exp < now) {
-      console.log('🔐 jwtAuth: Token expired');
       return res.status(401).json({
         error: 'Token expired',
         code: 'TOKEN_EXPIRED',
@@ -119,7 +109,6 @@ export default function jwtAuthMiddleware(req, res, next) {
       };
     }
 
-    console.log('🔐 jwtAuth: Successfully decoded token for user:', user.id);
     req.user = user;
 
     return next();

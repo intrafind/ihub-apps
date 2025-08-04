@@ -85,7 +85,11 @@
     "jwtSecret": "magic-secret"
   },
   "authDebug": {
-    "enabled": true
+    "enabled": true,
+    "consoleLogging": true,
+    "includeRawData": true,
+    "maskTokens": false,
+    "redactPasswords": false
   },
   "anonymousAuth": {
     "enabled": true,
