@@ -7,7 +7,40 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 
 export default function registerAdminConfigRoutes(app) {
   /**
-   * Get platform configuration for admin
+   * @swagger
+   * /admin/configs/platform:
+   *   get:
+   *     summary: Get platform configuration
+   *     description: Retrieves the current platform configuration (admin access required)
+   *     tags:
+   *       - Admin - Configuration
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     responses:
+   *       200:
+   *         description: Platform configuration
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 auth:
+   *                   type: object
+   *                   description: Authentication configuration
+   *                 anonymousAuth:
+   *                   type: object
+   *                   description: Anonymous authentication settings
+   *                 features:
+   *                   type: object
+   *                   description: Feature flags
+   *                 swagger:
+   *                   type: object
+   *                   description: Swagger documentation settings
+   *       401:
+   *         description: Admin authentication required
+   *       500:
+   *         description: Internal server error
    */
   app.get('/api/admin/configs/platform', adminAuth, async (req, res) => {
     try {

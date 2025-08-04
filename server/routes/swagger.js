@@ -2,6 +2,11 @@ import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import { authRequired } from '../middleware/authRequired.js';
 import { loadJson } from '../configLoader.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Creates the base Swagger configuration
@@ -90,15 +95,15 @@ export default async function registerSwaggerRoutes(app) {
     'APIs for chat functionality, models, tools, sessions, and general application features',
     '1.0.0',
     [
-      './routes/generalRoutes.js',
-      './routes/modelRoutes.js',
-      './routes/toolRoutes.js',
-      './routes/sessionRoutes.js',
-      './routes/pageRoutes.js',
-      './routes/magicPromptRoutes.js',
-      './routes/shortLinkRoutes.js',
-      './routes/auth.js',
-      './routes/chat/*.js'
+      path.join(__dirname, 'generalRoutes.js'),
+      path.join(__dirname, 'modelRoutes.js'),
+      path.join(__dirname, 'toolRoutes.js'),
+      path.join(__dirname, 'sessionRoutes.js'),
+      path.join(__dirname, 'pageRoutes.js'),
+      path.join(__dirname, 'magicPromptRoutes.js'),
+      path.join(__dirname, 'shortLinkRoutes.js'),
+      path.join(__dirname, 'auth.js'),
+      path.join(__dirname, 'chat/**/*.js')
     ]
   );
 
@@ -108,8 +113,8 @@ export default async function registerSwaggerRoutes(app) {
     'Administrative APIs for managing configurations, users, groups, and system settings',
     '1.0.0',
     [
-      './routes/adminRoutes.js',
-      './routes/admin/*.js'
+      path.join(__dirname, 'adminRoutes.js'),
+      path.join(__dirname, 'admin/**/*.js')
     ]
   );
 
@@ -118,13 +123,29 @@ export default async function registerSwaggerRoutes(app) {
     'AI Hub Apps - OpenAI Compatible APIs',
     'OpenAI-compatible inference APIs for chat completions and model listings',
     '1.0.0',
-    ['./routes/openaiProxy.js']
+    [path.join(__dirname, 'openaiProxy.js')]
   );
 
   // Generate Swagger specs
   const normalApiSpec = swaggerJSDoc(normalApiConfig);
   const adminApiSpec = swaggerJSDoc(adminApiConfig);
   const openaiApiSpec = swaggerJSDoc(openaiApiConfig);
+
+  // Debug logging
+  console.log('📚 Generated API specs:');
+  console.log(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).length}`);
+  console.log(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).length}`);
+  console.log(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).length}`);
+  
+  if (Object.keys(normalApiSpec.paths || {}).length > 0) {
+    console.log(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).join(', ')}`);
+  }
+  if (Object.keys(adminApiSpec.paths || {}).length > 0) {
+    console.log(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).join(', ')}`);
+  }
+  if (Object.keys(openaiApiSpec.paths || {}).length > 0) {
+    console.log(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).join(', ')}`);
+  }
 
   // Swagger UI options
   const swaggerOptions = {
@@ -165,16 +186,19 @@ export default async function registerSwaggerRoutes(app) {
   });
 
   // Individual Swagger UI routes for each API category
+  app.use('/api/docs/normal', ...middleware, swaggerUi.serve);
   app.get('/api/docs/normal', ...middleware, swaggerUi.setup(normalApiSpec, {
     explorer: false,
     customSiteTitle: 'AI Hub Apps - Chat & General APIs'
   }));
 
+  app.use('/api/docs/admin', ...middleware, swaggerUi.serve);
   app.get('/api/docs/admin', ...middleware, swaggerUi.setup(adminApiSpec, {
     explorer: false,
     customSiteTitle: 'AI Hub Apps - Admin APIs'
   }));
 
+  app.use('/api/docs/openai', ...middleware, swaggerUi.serve);
   app.get('/api/docs/openai', ...middleware, swaggerUi.setup(openaiApiSpec, {
     explorer: false,
     customSiteTitle: 'AI Hub Apps - OpenAI Compatible APIs'

@@ -19,6 +19,45 @@ export default function registerSessionRoutes(
   { verifyApiKey, getLocalizedError, DEFAULT_TIMEOUT }
 ) {
   const chatService = new ChatService();
+  
+  /**
+   * @swagger
+   * /models/{modelId}/chat/test:
+   *   get:
+   *     summary: Test chat model
+   *     description: Sends a test message to verify model connectivity and functionality
+   *     tags:
+   *       - Chat
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: modelId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The model ID to test
+   *     responses:
+   *       200:
+   *         description: Test successful
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 response:
+   *                   type: string
+   *                   description: Model's response to the test message
+   *       404:
+   *         description: Model not found
+   *       401:
+   *         description: Authentication or authorization required
+   *       500:
+   *         description: Internal server error
+   */
   app.get(
     '/api/models/:modelId/chat/test',
     authRequired,
