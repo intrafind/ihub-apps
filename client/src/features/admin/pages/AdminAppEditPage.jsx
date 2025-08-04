@@ -113,6 +113,7 @@ const AdminAppEditPage = () => {
           supportedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
         },
         fileUpload: {
+          enabled: false,
           maxFileSizeMB: 5,
           supportedTextFormats: [
             'text/plain',
@@ -126,6 +127,31 @@ const AdminAppEditPage = () => {
             'text/xml'
           ],
           supportedPdfFormats: ['application/pdf']
+        },
+        upload: {
+          enabled: false,
+          imageUpload: {
+            enabled: false,
+            resizeImages: true,
+            maxFileSizeMB: 10,
+            supportedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+          },
+          fileUpload: {
+            enabled: false,
+            maxFileSizeMB: 5,
+            supportedTextFormats: [
+              'text/plain',
+              'text/markdown',
+              'text/csv',
+              'application/json',
+              'text/html',
+              'text/css',
+              'text/javascript',
+              'application/javascript',
+              'text/xml'
+            ],
+            supportedPdfFormats: ['application/pdf']
+          }
         }
       });
       setLoading(false);
@@ -191,6 +217,7 @@ const AdminAppEditPage = () => {
           ...(data.imageUpload || {})
         },
         fileUpload: {
+          enabled: false,
           maxFileSizeMB: 5,
           supportedTextFormats: [
             'text/plain',
@@ -205,6 +232,32 @@ const AdminAppEditPage = () => {
           ],
           supportedPdfFormats: ['application/pdf'],
           ...(data.fileUpload || {})
+        },
+        upload: {
+          enabled: data.upload?.enabled || false,
+          imageUpload: {
+            enabled: data.upload?.imageUpload?.enabled || data.imageUpload?.enabled || false,
+            resizeImages: data.upload?.imageUpload?.resizeImages ?? data.imageUpload?.resizeImages ?? true,
+            maxFileSizeMB: data.upload?.imageUpload?.maxFileSizeMB || data.imageUpload?.maxFileSizeMB || 10,
+            supportedFormats: data.upload?.imageUpload?.supportedFormats || data.imageUpload?.supportedFormats || ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+          },
+          fileUpload: {
+            enabled: data.upload?.fileUpload?.enabled || data.fileUpload?.enabled || false,
+            maxFileSizeMB: data.upload?.fileUpload?.maxFileSizeMB || data.fileUpload?.maxFileSizeMB || 5,
+            supportedTextFormats: data.upload?.fileUpload?.supportedTextFormats || data.fileUpload?.supportedTextFormats || [
+              'text/plain',
+              'text/markdown',
+              'text/csv',
+              'application/json',
+              'text/html',
+              'text/css',
+              'text/javascript',
+              'application/javascript',
+              'text/xml'
+            ],
+            supportedPdfFormats: data.upload?.fileUpload?.supportedPdfFormats || data.fileUpload?.supportedPdfFormats || ['application/pdf']
+          },
+          ...(data.upload || {})
         }
       };
 
@@ -1618,136 +1671,525 @@ const AdminAppEditPage = () => {
             </div>
           </div>
 
-          {/* File Upload Configuration */}
+          {/* Unified Upload Configuration */}
           <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
                 <h3 className="text-lg font-medium leading-6 text-gray-900">
-                  {t('admin.apps.edit.fileUpload', 'File Upload')}
+                  {t('admin.apps.edit.uploadConfig', 'Upload Configuration')}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">
                   {t(
-                    'admin.apps.edit.fileUploadDesc',
-                    'Configure file upload settings and supported formats'
+                    'admin.apps.edit.uploadConfigDesc',
+                    'Configure unified file and image upload settings'
+                  )}
+                </p>
+              </div>
+              <div className="mt-5 md:col-span-2 md:mt-0">
+                <div className="space-y-6">
+                  {/* Main Upload Toggle */}
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={app.upload?.enabled}
+                      onChange={e =>
+                        handleInputChange('upload', {
+                          ...app.upload,
+                          enabled: e.target.checked
+                        })
+                      }
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900">
+                      {t('admin.apps.edit.uploadEnabled', 'Upload Enabled')}
+                    </label>
+                  </div>
+
+                  {app.upload?.enabled && (
+                    <div className="ml-6 space-y-6">
+                      {/* Image Upload Section */}
+                      <div className="border-l-4 border-blue-200 pl-4">
+                        <h4 className="text-md font-medium text-gray-900 mb-4">
+                          {t('admin.apps.edit.imageUpload', 'Image Upload')}
+                        </h4>
+                        <div className="space-y-4">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={app.upload?.imageUpload?.enabled}
+                              onChange={e =>
+                                handleInputChange('upload', {
+                                  ...app.upload,
+                                  imageUpload: {
+                                    ...app.upload?.imageUpload,
+                                    enabled: e.target.checked
+                                  }
+                                })
+                              }
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            />
+                            <label className="ml-2 block text-sm text-gray-700">
+                              {t('admin.apps.edit.imageUploadEnabled', 'Image Upload Enabled')}
+                            </label>
+                          </div>
+
+                          {app.upload?.imageUpload?.enabled && (
+                            <div className="ml-6 space-y-4">
+                              <div className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={app.upload?.imageUpload?.resizeImages}
+                                  onChange={e =>
+                                    handleInputChange('upload', {
+                                      ...app.upload,
+                                      imageUpload: {
+                                        ...app.upload?.imageUpload,
+                                        resizeImages: e.target.checked
+                                      }
+                                    })
+                                  }
+                                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                />
+                                <label className="ml-2 block text-sm text-gray-700">
+                                  {t('admin.apps.edit.resizeImages', 'Resize Images')}
+                                </label>
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700">
+                                  {t('admin.apps.edit.maxImageSize', 'Max Image Size (MB)')}
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="100"
+                                  value={app.upload?.imageUpload?.maxFileSizeMB}
+                                  onChange={e =>
+                                    handleInputChange('upload', {
+                                      ...app.upload,
+                                      imageUpload: {
+                                        ...app.upload?.imageUpload,
+                                        maxFileSizeMB: parseInt(e.target.value)
+                                      }
+                                    })
+                                  }
+                                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  {t('admin.apps.edit.supportedImageFormats', 'Supported Image Formats')}
+                                </label>
+                                <div className="space-y-2">
+                                  {app.upload?.imageUpload?.supportedFormats?.map((format, index) => (
+                                    <div key={index} className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={format}
+                                        onChange={e => {
+                                          const newFormats = [...app.upload.imageUpload.supportedFormats];
+                                          newFormats[index] = e.target.value;
+                                          handleInputChange('upload', {
+                                            ...app.upload,
+                                            imageUpload: {
+                                              ...app.upload?.imageUpload,
+                                              supportedFormats: newFormats
+                                            }
+                                          });
+                                        }}
+                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                        placeholder={t(
+                                          'admin.apps.edit.formatPlaceholder',
+                                          'e.g., image/jpeg'
+                                        )}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const newFormats = app.upload.imageUpload.supportedFormats.filter((_, i) => i !== index);
+                                          handleInputChange('upload', {
+                                            ...app.upload,
+                                            imageUpload: {
+                                              ...app.upload?.imageUpload,
+                                              supportedFormats: newFormats
+                                            }
+                                          });
+                                        }}
+                                        className="text-red-500 hover:text-red-700"
+                                      >
+                                        <Icon name="x" className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newFormats = [...(app.upload?.imageUpload?.supportedFormats || []), 'image/jpeg'];
+                                      handleInputChange('upload', {
+                                        ...app.upload,
+                                        imageUpload: {
+                                          ...app.upload?.imageUpload,
+                                          supportedFormats: newFormats
+                                        }
+                                      });
+                                    }}
+                                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                                  >
+                                    <Icon name="plus-circle" className="w-3 h-3 mr-1" />
+                                    {t('admin.apps.edit.addFormat', 'Add Format')}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* File Upload Section */}
+                      <div className="border-l-4 border-green-200 pl-4">
+                        <h4 className="text-md font-medium text-gray-900 mb-4">
+                          {t('admin.apps.edit.fileUpload', 'File Upload')}
+                        </h4>
+                        <div className="space-y-4">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={app.upload?.fileUpload?.enabled}
+                              onChange={e =>
+                                handleInputChange('upload', {
+                                  ...app.upload,
+                                  fileUpload: {
+                                    ...app.upload?.fileUpload,
+                                    enabled: e.target.checked
+                                  }
+                                })
+                              }
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            />
+                            <label className="ml-2 block text-sm text-gray-700">
+                              {t('admin.apps.edit.fileUploadEnabled', 'File Upload Enabled')}
+                            </label>
+                          </div>
+
+                          {app.upload?.fileUpload?.enabled && (
+                            <div className="ml-6 space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700">
+                                  {t('admin.apps.edit.maxFileSize', 'Max File Size (MB)')}
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="100"
+                                  value={app.upload?.fileUpload?.maxFileSizeMB}
+                                  onChange={e =>
+                                    handleInputChange('upload', {
+                                      ...app.upload,
+                                      fileUpload: {
+                                        ...app.upload?.fileUpload,
+                                        maxFileSizeMB: parseInt(e.target.value)
+                                      }
+                                    })
+                                  }
+                                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  {t('admin.apps.edit.supportedTextFormats', 'Supported Text Formats')}
+                                </label>
+                                <div className="space-y-2">
+                                  {app.upload?.fileUpload?.supportedTextFormats?.map((format, index) => (
+                                    <div key={index} className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={format}
+                                        onChange={e => {
+                                          const newFormats = [...app.upload.fileUpload.supportedTextFormats];
+                                          newFormats[index] = e.target.value;
+                                          handleInputChange('upload', {
+                                            ...app.upload,
+                                            fileUpload: {
+                                              ...app.upload?.fileUpload,
+                                              supportedTextFormats: newFormats
+                                            }
+                                          });
+                                        }}
+                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                        placeholder={t(
+                                          'admin.apps.edit.textFormatPlaceholder',
+                                          'e.g., text/plain'
+                                        )}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const newFormats = app.upload.fileUpload.supportedTextFormats.filter((_, i) => i !== index);
+                                          handleInputChange('upload', {
+                                            ...app.upload,
+                                            fileUpload: {
+                                              ...app.upload?.fileUpload,
+                                              supportedTextFormats: newFormats
+                                            }
+                                          });
+                                        }}
+                                        className="text-red-500 hover:text-red-700"
+                                      >
+                                        <Icon name="x" className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newFormats = [...(app.upload?.fileUpload?.supportedTextFormats || []), 'text/plain'];
+                                      handleInputChange('upload', {
+                                        ...app.upload,
+                                        fileUpload: {
+                                          ...app.upload?.fileUpload,
+                                          supportedTextFormats: newFormats
+                                        }
+                                      });
+                                    }}
+                                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                                  >
+                                    <Icon name="plus-circle" className="w-3 h-3 mr-1" />
+                                    {t('admin.apps.edit.addTextFormat', 'Add Text Format')}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  {t('admin.apps.edit.supportedPdfFormats', 'Supported PDF Formats')}
+                                </label>
+                                <div className="space-y-2">
+                                  {app.upload?.fileUpload?.supportedPdfFormats?.map((format, index) => (
+                                    <div key={index} className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={format}
+                                        onChange={e => {
+                                          const newFormats = [...app.upload.fileUpload.supportedPdfFormats];
+                                          newFormats[index] = e.target.value;
+                                          handleInputChange('upload', {
+                                            ...app.upload,
+                                            fileUpload: {
+                                              ...app.upload?.fileUpload,
+                                              supportedPdfFormats: newFormats
+                                            }
+                                          });
+                                        }}
+                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                        placeholder={t(
+                                          'admin.apps.edit.pdfFormatPlaceholder',
+                                          'e.g., application/pdf'
+                                        )}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const newFormats = app.upload.fileUpload.supportedPdfFormats.filter((_, i) => i !== index);
+                                          handleInputChange('upload', {
+                                            ...app.upload,
+                                            fileUpload: {
+                                              ...app.upload?.fileUpload,
+                                              supportedPdfFormats: newFormats
+                                            }
+                                          });
+                                        }}
+                                        className="text-red-500 hover:text-red-700"
+                                      >
+                                        <Icon name="x" className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newFormats = [...(app.upload?.fileUpload?.supportedPdfFormats || []), 'application/pdf'];
+                                      handleInputChange('upload', {
+                                        ...app.upload,
+                                        fileUpload: {
+                                          ...app.upload?.fileUpload,
+                                          supportedPdfFormats: newFormats
+                                        }
+                                      });
+                                    }}
+                                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                                  >
+                                    <Icon name="plus-circle" className="w-3 h-3 mr-1" />
+                                    {t('admin.apps.edit.addPdfFormat', 'Add PDF Format')}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Legacy File Upload Configuration - For backward compatibility */}
+          <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+            <div className="md:grid md:grid-cols-3 md:gap-6">
+              <div className="md:col-span-1">
+                <h3 className="text-lg font-medium leading-6 text-gray-900">
+                  {t('admin.apps.edit.legacyFileUpload', 'Legacy File Upload')}
+                  <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                    {t('admin.apps.edit.deprecated', 'Deprecated')}
+                  </span>
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  {t(
+                    'admin.apps.edit.legacyFileUploadDesc',
+                    'Legacy configuration for backward compatibility. Use unified upload above instead.'
                   )}
                 </p>
               </div>
               <div className="mt-5 md:col-span-2 md:mt-0">
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      {t('admin.apps.edit.maxFileSize', 'Max File Size (MB)')}
-                    </label>
+                  <div className="flex items-center">
                     <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={app.fileUpload?.maxFileSizeMB}
+                      type="checkbox"
+                      checked={app.fileUpload?.enabled}
                       onChange={e =>
                         handleInputChange('fileUpload', {
                           ...app.fileUpload,
-                          maxFileSizeMB: parseInt(e.target.value)
+                          enabled: e.target.checked
                         })
                       }
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                     />
+                    <label className="ml-2 block text-sm text-gray-900">
+                      {t('admin.apps.edit.fileUploadEnabled', 'File Upload Enabled')}
+                    </label>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {t('admin.apps.edit.supportedTextFormats', 'Supported Text Formats')}
-                    </label>
-                    <div className="space-y-2">
-                      {app.fileUpload?.supportedTextFormats?.map((format, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={format}
-                            onChange={e =>
-                              updateListItem(
-                                'fileUpload',
-                                'supportedTextFormats',
-                                index,
-                                e.target.value
-                              )
-                            }
-                            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            placeholder={t(
-                              'admin.apps.edit.textFormatPlaceholder',
-                              'e.g., text/plain'
-                            )}
-                          />
+                  {app.fileUpload?.enabled && (
+                    <div className="ml-6 space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          {t('admin.apps.edit.maxFileSize', 'Max File Size (MB)')}
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={app.fileUpload?.maxFileSizeMB}
+                          onChange={e =>
+                            handleInputChange('fileUpload', {
+                              ...app.fileUpload,
+                              maxFileSizeMB: parseInt(e.target.value)
+                            })
+                          }
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {t('admin.apps.edit.supportedTextFormats', 'Supported Text Formats')}
+                        </label>
+                        <div className="space-y-2">
+                          {app.fileUpload?.supportedTextFormats?.map((format, index) => (
+                            <div key={index} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={format}
+                                onChange={e =>
+                                  updateListItem(
+                                    'fileUpload',
+                                    'supportedTextFormats',
+                                    index,
+                                    e.target.value
+                                  )
+                                }
+                                className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                placeholder={t(
+                                  'admin.apps.edit.textFormatPlaceholder',
+                                  'e.g., text/plain'
+                                )}
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  removeFromList('fileUpload', 'supportedTextFormats', index)
+                                }
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <Icon name="x" className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
                           <button
                             type="button"
                             onClick={() =>
-                              removeFromList('fileUpload', 'supportedTextFormats', index)
+                              addToList('fileUpload', 'supportedTextFormats', 'text/plain')
                             }
-                            className="text-red-500 hover:text-red-700"
+                            className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
                           >
-                            <Icon name="x" className="w-4 h-4" />
+                            <Icon name="plus-circle" className="w-3 h-3 mr-1" />
+                            {t('admin.apps.edit.addTextFormat', 'Add Text Format')}
                           </button>
                         </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          addToList('fileUpload', 'supportedTextFormats', 'text/plain')
-                        }
-                        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
-                      >
-                        <Icon name="plus-circle" className="w-3 h-3 mr-1" />
-                        {t('admin.apps.edit.addTextFormat', 'Add Text Format')}
-                      </button>
-                    </div>
-                  </div>
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {t('admin.apps.edit.supportedPdfFormats', 'Supported PDF Formats')}
-                    </label>
-                    <div className="space-y-2">
-                      {app.fileUpload?.supportedPdfFormats?.map((format, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={format}
-                            onChange={e =>
-                              updateListItem(
-                                'fileUpload',
-                                'supportedPdfFormats',
-                                index,
-                                e.target.value
-                              )
-                            }
-                            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            placeholder={t(
-                              'admin.apps.edit.pdfFormatPlaceholder',
-                              'e.g., application/pdf'
-                            )}
-                          />
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {t('admin.apps.edit.supportedPdfFormats', 'Supported PDF Formats')}
+                        </label>
+                        <div className="space-y-2">
+                          {app.fileUpload?.supportedPdfFormats?.map((format, index) => (
+                            <div key={index} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={format}
+                                onChange={e =>
+                                  updateListItem(
+                                    'fileUpload',
+                                    'supportedPdfFormats',
+                                    index,
+                                    e.target.value
+                                  )
+                                }
+                                className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                placeholder={t(
+                                  'admin.apps.edit.pdfFormatPlaceholder',
+                                  'e.g., application/pdf'
+                                )}
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  removeFromList('fileUpload', 'supportedPdfFormats', index)
+                                }
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <Icon name="x" className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
                           <button
                             type="button"
                             onClick={() =>
-                              removeFromList('fileUpload', 'supportedPdfFormats', index)
+                              addToList('fileUpload', 'supportedPdfFormats', 'application/pdf')
                             }
-                            className="text-red-500 hover:text-red-700"
+                            className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
                           >
-                            <Icon name="x" className="w-4 h-4" />
+                            <Icon name="plus-circle" className="w-3 h-3 mr-1" />
+                            {t('admin.apps.edit.addPdfFormat', 'Add PDF Format')}
                           </button>
                         </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          addToList('fileUpload', 'supportedPdfFormats', 'application/pdf')
-                        }
-                        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
-                      >
-                        <Icon name="plus-circle" className="w-3 h-3 mr-1" />
-                        {t('admin.apps.edit.addPdfFormat', 'Add PDF Format')}
-                      </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
