@@ -50,16 +50,24 @@ jobs:
             should_run=true
           fi
           
-          # Check for comment trigger
+          # Check for comment trigger with proper escaping
           if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
-            comment="${{ github.event.comment.body }}"
-            if [[ "$comment" == *"@build docker images"* ]]; then
+            # Use environment variable to safely handle multi-line comments
+            echo "${{ github.event.comment.body }}" > comment_body.txt
+            if grep -q "@build docker images" comment_body.txt; then
               should_run=true
             fi
+            rm -f comment_body.txt
           fi
           
           echo "should-run=$should_run" >> $GITHUB_OUTPUT
           echo "Workflow should run: $should_run"
+          echo "Event: ${{ github.event_name }}"
+          
+          # Exit early if workflow shouldn't run to prevent downstream job scheduling
+          if [[ "$should_run" == "false" ]]; then
+            echo "Workflow conditions not met. Skipping Docker build."
+          fi
 
   # Build and test the Docker image
   build-and-test:
