@@ -237,25 +237,37 @@ const AdminAppEditPage = () => {
           enabled: data.upload?.enabled || false,
           imageUpload: {
             enabled: data.upload?.imageUpload?.enabled || data.imageUpload?.enabled || false,
-            resizeImages: data.upload?.imageUpload?.resizeImages ?? data.imageUpload?.resizeImages ?? true,
-            maxFileSizeMB: data.upload?.imageUpload?.maxFileSizeMB || data.imageUpload?.maxFileSizeMB || 10,
-            supportedFormats: data.upload?.imageUpload?.supportedFormats || data.imageUpload?.supportedFormats || ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+            resizeImages:
+              data.upload?.imageUpload?.resizeImages ?? data.imageUpload?.resizeImages ?? true,
+            maxFileSizeMB:
+              data.upload?.imageUpload?.maxFileSizeMB || data.imageUpload?.maxFileSizeMB || 10,
+            supportedFormats: data.upload?.imageUpload?.supportedFormats ||
+              data.imageUpload?.supportedFormats || [
+                'image/jpeg',
+                'image/jpg',
+                'image/png',
+                'image/gif',
+                'image/webp'
+              ]
           },
           fileUpload: {
             enabled: data.upload?.fileUpload?.enabled || data.fileUpload?.enabled || false,
-            maxFileSizeMB: data.upload?.fileUpload?.maxFileSizeMB || data.fileUpload?.maxFileSizeMB || 5,
-            supportedTextFormats: data.upload?.fileUpload?.supportedTextFormats || data.fileUpload?.supportedTextFormats || [
-              'text/plain',
-              'text/markdown',
-              'text/csv',
-              'application/json',
-              'text/html',
-              'text/css',
-              'text/javascript',
-              'application/javascript',
-              'text/xml'
-            ],
-            supportedPdfFormats: data.upload?.fileUpload?.supportedPdfFormats || data.fileUpload?.supportedPdfFormats || ['application/pdf']
+            maxFileSizeMB:
+              data.upload?.fileUpload?.maxFileSizeMB || data.fileUpload?.maxFileSizeMB || 5,
+            supportedTextFormats: data.upload?.fileUpload?.supportedTextFormats ||
+              data.fileUpload?.supportedTextFormats || [
+                'text/plain',
+                'text/markdown',
+                'text/csv',
+                'application/json',
+                'text/html',
+                'text/css',
+                'text/javascript',
+                'application/javascript',
+                'text/xml'
+              ],
+            supportedPdfFormats: data.upload?.fileUpload?.supportedPdfFormats ||
+              data.fileUpload?.supportedPdfFormats || ['application/pdf']
           },
           ...(data.upload || {})
         }
@@ -1779,53 +1791,66 @@ const AdminAppEditPage = () => {
 
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  {t('admin.apps.edit.supportedImageFormats', 'Supported Image Formats')}
+                                  {t(
+                                    'admin.apps.edit.supportedImageFormats',
+                                    'Supported Image Formats'
+                                  )}
                                 </label>
                                 <div className="space-y-2">
-                                  {app.upload?.imageUpload?.supportedFormats?.map((format, index) => (
-                                    <div key={index} className="flex items-center gap-2">
-                                      <input
-                                        type="text"
-                                        value={format}
-                                        onChange={e => {
-                                          const newFormats = [...app.upload.imageUpload.supportedFormats];
-                                          newFormats[index] = e.target.value;
-                                          handleInputChange('upload', {
-                                            ...app.upload,
-                                            imageUpload: {
-                                              ...app.upload?.imageUpload,
-                                              supportedFormats: newFormats
-                                            }
-                                          });
-                                        }}
-                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                        placeholder={t(
-                                          'admin.apps.edit.formatPlaceholder',
-                                          'e.g., image/jpeg'
-                                        )}
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const newFormats = app.upload.imageUpload.supportedFormats.filter((_, i) => i !== index);
-                                          handleInputChange('upload', {
-                                            ...app.upload,
-                                            imageUpload: {
-                                              ...app.upload?.imageUpload,
-                                              supportedFormats: newFormats
-                                            }
-                                          });
-                                        }}
-                                        className="text-red-500 hover:text-red-700"
-                                      >
-                                        <Icon name="x" className="w-4 h-4" />
-                                      </button>
-                                    </div>
-                                  ))}
+                                  {app.upload?.imageUpload?.supportedFormats?.map(
+                                    (format, index) => (
+                                      <div key={index} className="flex items-center gap-2">
+                                        <input
+                                          type="text"
+                                          value={format}
+                                          onChange={e => {
+                                            const newFormats = [
+                                              ...app.upload.imageUpload.supportedFormats
+                                            ];
+                                            newFormats[index] = e.target.value;
+                                            handleInputChange('upload', {
+                                              ...app.upload,
+                                              imageUpload: {
+                                                ...app.upload?.imageUpload,
+                                                supportedFormats: newFormats
+                                              }
+                                            });
+                                          }}
+                                          className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                          placeholder={t(
+                                            'admin.apps.edit.formatPlaceholder',
+                                            'e.g., image/jpeg'
+                                          )}
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const newFormats =
+                                              app.upload.imageUpload.supportedFormats.filter(
+                                                (_, i) => i !== index
+                                              );
+                                            handleInputChange('upload', {
+                                              ...app.upload,
+                                              imageUpload: {
+                                                ...app.upload?.imageUpload,
+                                                supportedFormats: newFormats
+                                              }
+                                            });
+                                          }}
+                                          className="text-red-500 hover:text-red-700"
+                                        >
+                                          <Icon name="x" className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    )
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const newFormats = [...(app.upload?.imageUpload?.supportedFormats || []), 'image/jpeg'];
+                                      const newFormats = [
+                                        ...(app.upload?.imageUpload?.supportedFormats || []),
+                                        'image/jpeg'
+                                      ];
                                       handleInputChange('upload', {
                                         ...app.upload,
                                         imageUpload: {
@@ -1898,53 +1923,66 @@ const AdminAppEditPage = () => {
 
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  {t('admin.apps.edit.supportedTextFormats', 'Supported Text Formats')}
+                                  {t(
+                                    'admin.apps.edit.supportedTextFormats',
+                                    'Supported Text Formats'
+                                  )}
                                 </label>
                                 <div className="space-y-2">
-                                  {app.upload?.fileUpload?.supportedTextFormats?.map((format, index) => (
-                                    <div key={index} className="flex items-center gap-2">
-                                      <input
-                                        type="text"
-                                        value={format}
-                                        onChange={e => {
-                                          const newFormats = [...app.upload.fileUpload.supportedTextFormats];
-                                          newFormats[index] = e.target.value;
-                                          handleInputChange('upload', {
-                                            ...app.upload,
-                                            fileUpload: {
-                                              ...app.upload?.fileUpload,
-                                              supportedTextFormats: newFormats
-                                            }
-                                          });
-                                        }}
-                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                        placeholder={t(
-                                          'admin.apps.edit.textFormatPlaceholder',
-                                          'e.g., text/plain'
-                                        )}
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const newFormats = app.upload.fileUpload.supportedTextFormats.filter((_, i) => i !== index);
-                                          handleInputChange('upload', {
-                                            ...app.upload,
-                                            fileUpload: {
-                                              ...app.upload?.fileUpload,
-                                              supportedTextFormats: newFormats
-                                            }
-                                          });
-                                        }}
-                                        className="text-red-500 hover:text-red-700"
-                                      >
-                                        <Icon name="x" className="w-4 h-4" />
-                                      </button>
-                                    </div>
-                                  ))}
+                                  {app.upload?.fileUpload?.supportedTextFormats?.map(
+                                    (format, index) => (
+                                      <div key={index} className="flex items-center gap-2">
+                                        <input
+                                          type="text"
+                                          value={format}
+                                          onChange={e => {
+                                            const newFormats = [
+                                              ...app.upload.fileUpload.supportedTextFormats
+                                            ];
+                                            newFormats[index] = e.target.value;
+                                            handleInputChange('upload', {
+                                              ...app.upload,
+                                              fileUpload: {
+                                                ...app.upload?.fileUpload,
+                                                supportedTextFormats: newFormats
+                                              }
+                                            });
+                                          }}
+                                          className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                          placeholder={t(
+                                            'admin.apps.edit.textFormatPlaceholder',
+                                            'e.g., text/plain'
+                                          )}
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const newFormats =
+                                              app.upload.fileUpload.supportedTextFormats.filter(
+                                                (_, i) => i !== index
+                                              );
+                                            handleInputChange('upload', {
+                                              ...app.upload,
+                                              fileUpload: {
+                                                ...app.upload?.fileUpload,
+                                                supportedTextFormats: newFormats
+                                              }
+                                            });
+                                          }}
+                                          className="text-red-500 hover:text-red-700"
+                                        >
+                                          <Icon name="x" className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    )
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const newFormats = [...(app.upload?.fileUpload?.supportedTextFormats || []), 'text/plain'];
+                                      const newFormats = [
+                                        ...(app.upload?.fileUpload?.supportedTextFormats || []),
+                                        'text/plain'
+                                      ];
                                       handleInputChange('upload', {
                                         ...app.upload,
                                         fileUpload: {
@@ -1963,53 +2001,66 @@ const AdminAppEditPage = () => {
 
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  {t('admin.apps.edit.supportedPdfFormats', 'Supported PDF Formats')}
+                                  {t(
+                                    'admin.apps.edit.supportedPdfFormats',
+                                    'Supported PDF Formats'
+                                  )}
                                 </label>
                                 <div className="space-y-2">
-                                  {app.upload?.fileUpload?.supportedPdfFormats?.map((format, index) => (
-                                    <div key={index} className="flex items-center gap-2">
-                                      <input
-                                        type="text"
-                                        value={format}
-                                        onChange={e => {
-                                          const newFormats = [...app.upload.fileUpload.supportedPdfFormats];
-                                          newFormats[index] = e.target.value;
-                                          handleInputChange('upload', {
-                                            ...app.upload,
-                                            fileUpload: {
-                                              ...app.upload?.fileUpload,
-                                              supportedPdfFormats: newFormats
-                                            }
-                                          });
-                                        }}
-                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                        placeholder={t(
-                                          'admin.apps.edit.pdfFormatPlaceholder',
-                                          'e.g., application/pdf'
-                                        )}
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const newFormats = app.upload.fileUpload.supportedPdfFormats.filter((_, i) => i !== index);
-                                          handleInputChange('upload', {
-                                            ...app.upload,
-                                            fileUpload: {
-                                              ...app.upload?.fileUpload,
-                                              supportedPdfFormats: newFormats
-                                            }
-                                          });
-                                        }}
-                                        className="text-red-500 hover:text-red-700"
-                                      >
-                                        <Icon name="x" className="w-4 h-4" />
-                                      </button>
-                                    </div>
-                                  ))}
+                                  {app.upload?.fileUpload?.supportedPdfFormats?.map(
+                                    (format, index) => (
+                                      <div key={index} className="flex items-center gap-2">
+                                        <input
+                                          type="text"
+                                          value={format}
+                                          onChange={e => {
+                                            const newFormats = [
+                                              ...app.upload.fileUpload.supportedPdfFormats
+                                            ];
+                                            newFormats[index] = e.target.value;
+                                            handleInputChange('upload', {
+                                              ...app.upload,
+                                              fileUpload: {
+                                                ...app.upload?.fileUpload,
+                                                supportedPdfFormats: newFormats
+                                              }
+                                            });
+                                          }}
+                                          className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                          placeholder={t(
+                                            'admin.apps.edit.pdfFormatPlaceholder',
+                                            'e.g., application/pdf'
+                                          )}
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const newFormats =
+                                              app.upload.fileUpload.supportedPdfFormats.filter(
+                                                (_, i) => i !== index
+                                              );
+                                            handleInputChange('upload', {
+                                              ...app.upload,
+                                              fileUpload: {
+                                                ...app.upload?.fileUpload,
+                                                supportedPdfFormats: newFormats
+                                              }
+                                            });
+                                          }}
+                                          className="text-red-500 hover:text-red-700"
+                                        >
+                                          <Icon name="x" className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    )
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const newFormats = [...(app.upload?.fileUpload?.supportedPdfFormats || []), 'application/pdf'];
+                                      const newFormats = [
+                                        ...(app.upload?.fileUpload?.supportedPdfFormats || []),
+                                        'application/pdf'
+                                      ];
                                       handleInputChange('upload', {
                                         ...app.upload,
                                         fileUpload: {
