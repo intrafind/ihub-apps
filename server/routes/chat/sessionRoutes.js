@@ -304,6 +304,7 @@ export default function registerSessionRoutes(
             modelId: model?.id,
             sessionId: chatId,
             userSessionId,
+            user: req.user,
             messages: llmMessages,
             options: { temperature, style, outputFormat, language: clientLanguage, streaming },
             ...extra

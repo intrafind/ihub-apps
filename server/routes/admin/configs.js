@@ -4,6 +4,69 @@ import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
+import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
+
+/**
+ * Reconfigure authentication methods when platform configuration changes
+ * @param {Object} oldConfig - Previous configuration
+ * @param {Object} newConfig - New configuration  
+ * @returns {Object} Reconfiguration results
+ */
+function reconfigureAuthenticationMethods(oldConfig = {}, newConfig = {}) {
+  const results = {
+    reconfigured: [],
+    requiresRestart: [],
+    notes: []
+  };
+
+  // Check what authentication methods changed
+  const oidcChanged = JSON.stringify(oldConfig.oidcAuth) !== JSON.stringify(newConfig.oidcAuth);
+  const ntlmChanged = JSON.stringify(oldConfig.ntlmAuth) !== JSON.stringify(newConfig.ntlmAuth);
+  const ldapChanged = JSON.stringify(oldConfig.ldapAuth) !== JSON.stringify(newConfig.ldapAuth);
+  const localChanged = JSON.stringify(oldConfig.localAuth) !== JSON.stringify(newConfig.localAuth);
+  const proxyChanged = JSON.stringify(oldConfig.proxyAuth) !== JSON.stringify(newConfig.proxyAuth);
+  const anonymousChanged = JSON.stringify(oldConfig.anonymousAuth) !== JSON.stringify(newConfig.anonymousAuth);
+
+  // OIDC - Can be reconfigured dynamically
+  if (oidcChanged) {
+    try {
+      reconfigureOidcProviders();
+      results.reconfigured.push('OIDC providers');
+      results.notes.push('OIDC providers reconfigured successfully');
+    } catch (error) {
+      console.error('Failed to reconfigure OIDC providers:', error);
+      results.notes.push(`OIDC reconfiguration failed: ${error.message}`);
+    }
+  }
+
+  // NTLM - Requires server restart (middleware cannot be dynamically removed)
+  if (ntlmChanged) {
+    results.requiresRestart.push('NTLM authentication');
+    results.notes.push('NTLM authentication changes require server restart (middleware limitation)');
+  }
+
+  // LDAP - No reconfiguration needed (loads config dynamically)
+  if (ldapChanged) {
+    results.notes.push('LDAP configuration updated (applied automatically on next authentication)');
+  }
+
+  // Local Auth - No reconfiguration needed (loads config dynamically)
+  if (localChanged) {
+    results.notes.push('Local authentication configuration updated (applied automatically)');
+  }
+
+  // Proxy Auth - No reconfiguration needed (loads config dynamically)
+  if (proxyChanged) {
+    results.notes.push('Proxy authentication configuration updated (applied automatically)');
+  }
+
+  // Anonymous Auth - No reconfiguration needed (loads config dynamically)
+  if (anonymousChanged) {
+    results.notes.push('Anonymous authentication configuration updated (applied automatically)');
+  }
+
+  return results;
+}
 
 export default function registerAdminConfigRoutes(app) {
   /**
@@ -106,7 +169,7 @@ export default function registerAdminConfigRoutes(app) {
       const rootDir = getRootDir();
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
 
-      // Load existing config to preserve other fields
+      // Load existing config to preserve other fields and track changes
       let existingConfig = {};
       try {
         const existingConfigData = await fs.readFile(platformConfigPath, 'utf8');
@@ -124,6 +187,8 @@ export default function registerAdminConfigRoutes(app) {
         proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
         localAuth: newConfig.localAuth || existingConfig.localAuth,
         oidcAuth: newConfig.oidcAuth || existingConfig.oidcAuth,
+        ldapAuth: newConfig.ldapAuth || existingConfig.ldapAuth,
+        ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
         authorization: newConfig.authorization || existingConfig.authorization,
         authDebug: newConfig.authDebug || existingConfig.authDebug
       };
@@ -134,11 +199,28 @@ export default function registerAdminConfigRoutes(app) {
       // Refresh cache
       await configCache.refreshCacheEntry('config/platform.json');
 
+      // Reconfigure authentication methods dynamically where possible
+      const reconfigResults = reconfigureAuthenticationMethods(existingConfig, newConfig);
+
+      // Log results
+      if (reconfigResults.reconfigured.length > 0) {
+        console.log(`🔄 Reconfigured: ${reconfigResults.reconfigured.join(', ')}`);
+      }
+      if (reconfigResults.requiresRestart.length > 0) {
+        console.log(`⚠️  Requires restart: ${reconfigResults.requiresRestart.join(', ')}`);
+      }
+      reconfigResults.notes.forEach(note => console.log(`ℹ️  ${note}`));
+
       console.log('🔧 Platform authentication configuration updated');
 
       res.json({
         message: 'Platform configuration updated successfully',
-        config: mergedConfig
+        config: mergedConfig,
+        reconfiguration: {
+          reconfigured: reconfigResults.reconfigured,
+          requiresRestart: reconfigResults.requiresRestart,
+          notes: reconfigResults.notes
+        }
       });
     } catch (error) {
       console.error('Error updating platform configuration:', error);

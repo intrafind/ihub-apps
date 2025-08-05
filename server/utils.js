@@ -138,6 +138,7 @@ export function getErrorDetails(error, model) {
  * @param {string} data.modelId - The ID of the model being used
  * @param {string} data.sessionId - The user's session ID (chatId)
  * @param {string} [data.userSessionId] - The user's browser session ID
+ * @param {Object} [data.user] - The authenticated user object with username, groups, and id
  * @param {Array} [data.messages] - The conversation messages
  * @param {Object} [data.options] - Additional options like temperature, style, etc.
  * @param {string} [data.responseType] - Type of response (error, success, feedback)
@@ -177,7 +178,11 @@ export async function logInteraction(interactionType, data) {
       appId: data.appId || 'direct',
       modelId: data.modelId,
       sessionId: data.sessionId, // This is the chatId
-      userSessionId: data.userSessionId // This is the browser session ID
+      userSessionId: data.userSessionId, // This is the browser session ID
+      user: data.user ? {
+        username: data.user.username || 'anonymous',
+        id: data.user.id || 'anonymous'
+      } : null
     };
 
     // Extract the user's query (last user message) if messages exist
@@ -215,24 +220,26 @@ export async function logInteraction(interactionType, data) {
     }
 
     // For debugging purposes, log to console with appropriate type prefix
+    const userInfo = logEntry.user ? `| User: ${logEntry.user.username || logEntry.user.id || 'unknown'}` : '| User: anonymous';
+    
     if (logType === 'feedback') {
       console.log(
-        `[FEEDBACK] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} | Rating: ${data.feedback?.rating || 'unknown'}`
+        `[FEEDBACK] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo} | Rating: ${data.feedback?.rating || 'unknown'}`
       );
     } else if (logType === 'chat_response') {
       console.log(
-        `[CHAT_RESPONSE] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId}`
+        `[CHAT_RESPONSE] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo}`
       );
     } else if (logType === 'chat_request') {
       const queryPreview = logEntry.query
         ? `| Query: ${logEntry.query.substring(0, 50)}${logEntry.query.length > 50 ? '...' : ''}`
         : '';
       console.log(
-        `[CHAT_REQUEST] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${queryPreview}`
+        `[CHAT_REQUEST] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo} ${queryPreview}`
       );
     } else {
       console.log(
-        `[INTERACTION] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId}`
+        `[INTERACTION] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo}`
       );
     }
 

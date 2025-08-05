@@ -63,7 +63,8 @@ export default function registerToolRoutes(app) {
         toolInput: params,
         toolOutput: result,
         sessionId: req.headers['x-chat-id'] || 'direct',
-        userSessionId: req.headers['x-session-id'] || 'unknown'
+        userSessionId: req.headers['x-session-id'] || 'unknown',
+        user: req.user
       });
       res.json(result);
     } catch (error) {

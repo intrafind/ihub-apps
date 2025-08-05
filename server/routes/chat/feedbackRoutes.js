@@ -24,6 +24,7 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
         modelId,
         sessionId: chatId,
         userSessionId,
+        user: req.user,
         responseType: 'feedback',
         feedback: {
           messageId,
