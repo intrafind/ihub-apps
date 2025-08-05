@@ -8,6 +8,7 @@ import {
   isAnonymousAccessAllowed
 } from './utils/authorization.js';
 import { loadTools } from './toolLoader.js';
+import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'crypto';
 
 /**
@@ -104,7 +105,8 @@ class ConfigCache {
       'config/platform.json',
       'config/ui.json',
       'config/groups.json',
-      'config/users.json'
+      'config/users.json',
+      'config/sources.json'
     ];
 
     // Built-in locales that should always be preloaded
@@ -487,6 +489,38 @@ class ConfigCache {
   }
 
   /**
+   * Get sources configuration
+   */
+  getSources(includeDisabled = false) {
+    try {
+      const cached = this.get('config/sources.json');
+      if (!cached) {
+        return { data: [], etag: null };
+      }
+
+      // Handle both array format and object format
+      let sources;
+      if (Array.isArray(cached.data)) {
+        sources = { data: cached.data, etag: cached.etag };
+      } else if (cached.data && typeof cached.data === 'object') {
+        sources = cached;
+      } else {
+        return { data: [], etag: null };
+      }
+
+      if (includeDisabled) return sources;
+
+      return {
+        data: sources.data.filter(source => source.enabled !== false),
+        etag: sources.etag
+      };
+    } catch (error) {
+      console.error('Error loading sources:', error);
+      return { data: [], etag: null };
+    }
+  }
+
+  /**
    * Get platform configuration
    */
   getPlatform() {
@@ -615,6 +649,33 @@ class ConfigCache {
       console.log(`✅ Prompts cache refreshed: ${prompts.length} enabled, ${prompts.length} total`);
     } catch (error) {
       console.error('❌ Error refreshing prompts cache:', error.message);
+    }
+  }
+
+  /**
+   * Refresh sources cache
+   * Should be called when sources are modified (create, update, delete, toggle)
+   */
+  async refreshSourcesCache() {
+    console.log('🔄 Refreshing sources cache...');
+
+    try {
+      await this.refreshCacheEntry('config/sources.json');
+
+      // Validate sources after refresh
+      const { data: sources } = this.getSources(true);
+      for (const source of sources) {
+        const validation = validateSourceConfig(source);
+        if (!validation.success) {
+          console.warn(`Invalid source configuration for ${source.id}:`, validation.errors);
+        }
+      }
+
+      console.log(`✅ Sources cache refreshed: ${sources.length} sources loaded`);
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to refresh sources cache:', error);
+      return false;
     }
   }
 

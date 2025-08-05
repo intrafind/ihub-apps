@@ -47,6 +47,7 @@ class URLHandler extends SourceHandler {
         metadata: {
           type: 'url',
           url,
+          link: result.metadata?.finalUrl || url, // Use final URL as link for references
           title: result.metadata?.title || '',
           description: result.metadata?.description || '',
           contentLength: result.content.length,
@@ -69,9 +70,19 @@ class URLHandler extends SourceHandler {
   async getWebContentExtractor() {
     try {
       // Try to load the existing web content extraction functionality
-      const webTools = require('../tools/web');
-      return webTools.webContentExtractor;
-    } catch {
+      const webContentExtractor = (await import('../tools/webContentExtractor.js')).default;
+      return {
+        extract: async params => {
+          return await webContentExtractor({
+            url: params.url,
+            maxLength: params.maxContentLength || 50000,
+            ignoreSSL: params.ignoreSSL || false,
+            chatId: params.chatId || 'unknown'
+          });
+        }
+      };
+    } catch (error) {
+      console.warn('Could not load webContentExtractor tool, using fallback:', error.message);
       // Fallback implementation if tool not available
       return this.createFallbackExtractor();
     }
@@ -82,40 +93,91 @@ class URLHandler extends SourceHandler {
    * @returns {Object} - Basic extractor implementation
    */
   createFallbackExtractor() {
+    console.log('Using fallback web content extractor (limited functionality)');
+
     return {
-      extract: async ({ url }) => {
-        const fetch = (await import('node-fetch')).default;
-        const response = await fetch(url, {
-          headers: {
-            'User-Agent': 'AI-Hub-Apps/1.0 (+https://github.com/intrafind/ai-hub-apps)',
-            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-          },
-          timeout: 30000,
-          follow: 5
-        });
+      extract: async ({
+        url,
+        maxContentLength = 50000,
+        followRedirects = true,
+        cleanContent = true
+      }) => {
+        try {
+          console.log(`Fallback extractor: Fetching ${url}`);
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const content = await response.text();
-
-        // Basic HTML content cleaning
-        const cleanedContent = content
-          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-          .replace(/<[^>]*>/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-
-        return {
-          content: cleanedContent,
-          metadata: {
-            statusCode: response.status,
-            contentType: response.headers.get('content-type'),
-            finalUrl: response.url
+          // Use native fetch if available, otherwise import node-fetch
+          let fetch;
+          if (typeof globalThis.fetch === 'function') {
+            fetch = globalThis.fetch;
+          } else {
+            fetch = (await import('node-fetch')).default;
           }
-        };
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'User-Agent': 'AI-Hub-Apps/1.0 (+https://github.com/intrafind/ai-hub-apps)',
+              Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.5',
+              'Accept-Encoding': 'gzip, deflate',
+              Connection: 'keep-alive'
+            },
+            signal: controller.signal,
+            redirect: followRedirects ? 'follow' : 'manual'
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          let content = await response.text();
+          console.log(`Fallback extractor: Retrieved ${content.length} characters`);
+
+          // Basic HTML content cleaning if requested
+          if (cleanContent) {
+            content = content
+              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+              .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+              .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+              .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+              .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
+              .replace(/<[^>]*>/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+          }
+
+          // Truncate content if too long
+          if (content.length > maxContentLength) {
+            content = content.substring(0, maxContentLength);
+            console.log(`Fallback extractor: Content truncated to ${maxContentLength} characters`);
+          }
+
+          return {
+            content: content,
+            metadata: {
+              statusCode: response.status,
+              contentType: response.headers.get('content-type') || 'unknown',
+              finalUrl: response.url,
+              link: response.url, // Use final URL as link for references
+              title: '',
+              description: '',
+              extractedAt: new Date().toISOString(),
+              extractorType: 'fallback'
+            }
+          };
+        } catch (error) {
+          if (error.name === 'AbortError') {
+            throw new Error('Request timeout after 30 seconds');
+          }
+          console.error('Fallback extractor error:', error.message);
+          throw error;
+        }
       }
     };
   }
@@ -211,6 +273,7 @@ class URLHandler extends SourceHandler {
             metadata: {
               type: 'url',
               url: urlConfig.url,
+              link: urlConfig.url, // Use original URL as link even on error
               error: error.message,
               loadedAt: new Date().toISOString()
             }

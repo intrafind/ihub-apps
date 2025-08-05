@@ -1,0 +1,224 @@
+[
+  {
+    "id": "documentation",
+    "name": {
+      "en": "Documentation",
+      "de": "Dokumentation"
+    },
+    "description": {
+      "en": "Internal system documentation",
+      "de": "Interne Systemdokumentation"
+    },
+    "type": "filesystem",
+    "enabled": true,
+    "exposeAs": "prompt",
+    "tags": [],
+    "updated": "2025-08-05T19:57:05.867Z",
+    "config": {
+      "path": "sources/documentation.md",
+      "encoding": "utf-8"
+    }
+  },
+  {
+    "id": "faq",
+    "name": {
+      "en": "FAQ",
+      "de": "FAQ"
+    },
+    "description": {
+      "en": "Frequently asked questions",
+      "de": "Häufig gestellte Fragen"
+    },
+    "type": "filesystem",
+    "enabled": true,
+    "exposeAs": "prompt",
+    "tags": [],
+    "updated": "2025-08-05T19:52:27.174Z",
+    "config": {
+      "path": "sources/faq.md",
+      "encoding": "utf-8"
+    }
+  },
+  {
+    "id": "intrafind-website-home",
+    "name": {
+      "en": "IntraFind.com"
+    },
+    "description": {
+      "en": "Website from IntraFind.com"
+    },
+    "type": "url",
+    "enabled": true,
+    "exposeAs": "prompt",
+    "category": "",
+    "tags": [],
+    "created": "2025-08-05T19:41:15.191Z",
+    "updated": "2025-08-05T19:41:15.191Z",
+    "config": {
+      "url": "https://www.intrafind.com",
+      "method": "GET",
+      "headers": {},
+      "timeout": 10000,
+      "followRedirects": true,
+      "maxRedirects": 5,
+      "retries": 3,
+      "maxContentLength": 1048576,
+      "cleanContent": true
+    }
+  },
+  {
+    "id": "intrafind-website-ifinder",
+    "name": {
+      "en": "IntraFind Website: iFinder"
+    },
+    "description": {
+      "en": "Website about the iFinder product"
+    },
+    "type": "url",
+    "enabled": true,
+    "exposeAs": "prompt",
+    "category": "",
+    "tags": [],
+    "created": "2025-08-05T19:46:00.049Z",
+    "updated": "2025-08-05T19:46:00.048Z",
+    "config": {
+      "url": "https://intrafind.com/en/ifinder",
+      "method": "GET",
+      "headers": {},
+      "timeout": 10000,
+      "followRedirects": true,
+      "maxRedirects": 5,
+      "retries": 3,
+      "maxContentLength": 1048576,
+      "cleanContent": true
+    }
+  },
+  {
+    "id": "intrafind-website-ifinder-features",
+    "name": {
+      "en": "IntraFind Website: iFinder Features"
+    },
+    "description": {
+      "en": "Website about the product ifinder and its features"
+    },
+    "type": "url",
+    "enabled": true,
+    "exposeAs": "prompt",
+    "category": "",
+    "tags": [],
+    "created": "2025-08-05T19:46:38.298Z",
+    "updated": "2025-08-05T19:46:38.298Z",
+    "config": {
+      "url": "https://intrafind.com/en/ifinder/features",
+      "method": "GET",
+      "headers": {},
+      "timeout": 10000,
+      "followRedirects": true,
+      "maxRedirects": 5,
+      "retries": 3,
+      "maxContentLength": 1048576,
+      "cleanContent": true
+    }
+  },
+  {
+    "id": "intrafind-website-ifinder-connectors",
+    "name": {
+      "en": "IntraFind Website: iFinder Connectors"
+    },
+    "description": {
+      "en": "Website about the product iFinder and the supported connectors"
+    },
+    "type": "url",
+    "enabled": true,
+    "exposeAs": "prompt",
+    "category": "",
+    "tags": [],
+    "created": "2025-08-05T19:47:14.938Z",
+    "updated": "2025-08-05T19:47:14.938Z",
+    "config": {
+      "url": "https://intrafind.com/en/ifinder/connectors",
+      "method": "GET",
+      "headers": {},
+      "timeout": 10000,
+      "followRedirects": true,
+      "maxRedirects": 5,
+      "retries": 3,
+      "maxContentLength": 1048576,
+      "cleanContent": true
+    }
+  },
+  {
+    "id": "intrafind-website-iassistant",
+    "name": {
+      "en": "IntraFind Website: iAssistant"
+    },
+    "description": {
+      "en": "Website about the iAssistant"
+    },
+    "type": "url",
+    "enabled": true,
+    "exposeAs": "prompt",
+    "category": "",
+    "tags": [],
+    "created": "2025-08-05T19:47:43.888Z",
+    "updated": "2025-08-05T19:47:43.888Z",
+    "config": {
+      "url": "https://intrafind.com/en/iassistant",
+      "method": "GET",
+      "headers": {},
+      "timeout": 10000,
+      "followRedirects": true,
+      "maxRedirects": 5,
+      "retries": 3,
+      "maxContentLength": 1048576,
+      "cleanContent": true
+    }
+  },
+  {
+    "id": "intrafind-website-ihub",
+    "name": {
+      "en": "IntraFind Website: iHub"
+    },
+    "description": {
+      "en": "Website about the iHub"
+    },
+    "type": "url",
+    "enabled": true,
+    "exposeAs": "prompt",
+    "category": "",
+    "tags": [],
+    "created": "2025-08-05T19:48:15.997Z",
+    "updated": "2025-08-05T19:48:15.997Z",
+    "config": {
+      "url": "https://intrafind.com/en/ihub",
+      "method": "GET",
+      "headers": {},
+      "timeout": 10000,
+      "followRedirects": true,
+      "maxRedirects": 5,
+      "retries": 3,
+      "maxContentLength": 1048576,
+      "cleanContent": true
+    }
+  },
+  {
+    "id": "faq-page-source",
+    "name": {
+      "en": "FAQ Page"
+    },
+    "description": {
+      "en": "FAQ Page"
+    },
+    "type": "page",
+    "enabled": true,
+    "exposeAs": "prompt",
+    "category": "",
+    "tags": [],
+    "created": "2025-08-05T20:03:25.278Z",
+    "updated": "2025-08-05T20:03:25.278Z",
+    "config": {
+      "pageId": "faq",
+      "language": "en"
+    }
+  }
+]

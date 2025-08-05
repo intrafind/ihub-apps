@@ -22,6 +22,8 @@ import AdminModelEditPage from './features/admin/pages/AdminModelEditPage';
 import AdminModelsPage from './features/admin/pages/AdminModelsPage';
 import AdminPromptsPage from './features/admin/pages/AdminPromptsPage';
 import AdminPromptEditPage from './features/admin/pages/AdminPromptEditPage';
+import AdminSourcesPage from './features/admin/pages/AdminSourcesPage';
+import AdminSourceEditPage from './features/admin/pages/AdminSourceEditPage';
 import AdminPagesPage from './features/admin/pages/AdminPagesPage';
 import AdminPageEditPage from './features/admin/pages/AdminPageEditPage';
 import AdminAuthPage from './features/admin/pages/AdminAuthPage';
@@ -59,6 +61,8 @@ const SafeAdminModels = withSafeRoute(AdminModelsPage);
 const SafeAdminModelEdit = withSafeRoute(AdminModelEditPage);
 const SafeAdminPrompts = withSafeRoute(AdminPromptsPage);
 const SafeAdminPromptEdit = withSafeRoute(AdminPromptEditPage);
+const SafeAdminSources = withSafeRoute(AdminSourcesPage);
+const SafeAdminSourceEdit = withSafeRoute(AdminSourceEditPage);
 const SafeAdminPages = withSafeRoute(AdminPagesPage);
 const SafeAdminPageEdit = withSafeRoute(AdminPageEditPage);
 const SafeAdminAuth = withSafeRoute(AdminAuthPage);
@@ -139,6 +143,12 @@ function App() {
                   )}
                   {showAdminPage('prompts') && (
                     <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
+                  )}
+                  {showAdminPage('sources') && (
+                    <Route path="admin/sources" element={<SafeAdminSources />} />
+                  )}
+                  {showAdminPage('sources') && (
+                    <Route path="admin/sources/:id" element={<SafeAdminSourceEdit />} />
                   )}
                   {showAdminPage('auth') && <Route path="admin/auth" element={<SafeAdminAuth />} />}
                   {showAdminPage('users') && (

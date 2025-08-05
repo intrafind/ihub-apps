@@ -3,13 +3,14 @@
  *
  * Exports all source-related components for loading content from various sources.
  * This module provides a unified interface for handling different source types
- * including filesystem, URLs, and iFinder document management system.
+ * including filesystem, URLs, iFinder document management system, and pages.
  */
 
 import SourceHandler from './SourceHandler.js';
 import FileSystemHandler from './FileSystemHandler.js';
 import URLHandler from './URLHandler.js';
 import IFinderHandler from './IFinderHandler.js';
+import PageHandler from './PageHandler.js';
 import SourceManager from './SourceManager.js';
 
 // Factory function to create source manager with default configuration
@@ -25,8 +26,8 @@ export const validateSourceConfig = sourceConfig => {
 
 // Helper to get available handler types
 export const getAvailableHandlerTypes = () => {
-  return ['filesystem', 'url', 'ifinder'];
+  return ['filesystem', 'url', 'ifinder', 'page'];
 };
 
 // Export all components
-export { SourceHandler, FileSystemHandler, URLHandler, IFinderHandler, SourceManager };
+export { SourceHandler, FileSystemHandler, URLHandler, IFinderHandler, PageHandler, SourceManager };

@@ -78,6 +78,13 @@ const AdminNavigation = () => {
           current: location.pathname.startsWith('/admin/prompts')
         },
         {
+          key: 'sources',
+          name: t('admin.nav.sources', 'Sources'),
+          href: '/admin/sources',
+          // icon: 'database',
+          current: location.pathname.startsWith('/admin/sources')
+        },
+        {
           key: 'pages',
           name: t('admin.nav.pages', 'Pages'),
           href: '/admin/pages',
@@ -178,8 +185,8 @@ const AdminNavigation = () => {
       // Filter enabled items
       const enabledItems = navItems.filter(item => isEnabled(item.key));
 
-      // Fixed desktop items: home, apps, models, prompts, pages, shortlinks
-      const desktopVisibleKeys = ['home', 'apps', 'models', 'prompts', 'pages', 'shortlinks'];
+      // Fixed desktop items: home, apps, models, prompts
+      const desktopVisibleKeys = ['home', 'apps', 'models', 'prompts'];
 
       // Desktop: show specific items, rest go to more menu
       const desktopVisibleItems = enabledItems.filter(item =>

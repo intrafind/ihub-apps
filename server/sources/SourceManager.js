@@ -1,6 +1,7 @@
 import FileSystemHandler from './FileSystemHandler.js';
 import URLHandler from './URLHandler.js';
 import IFinderHandler from './IFinderHandler.js';
+import PageHandler from './PageHandler.js';
 
 /**
  * Source Manager
@@ -22,14 +23,35 @@ class SourceManager {
    * Initialize default source handlers
    */
   initializeHandlers() {
-    // Register filesystem handler
-    this.registerHandler('filesystem', new FileSystemHandler(this.config.filesystem || {}));
+    try {
+      // Register filesystem handler
+      console.log('Initializing FileSystem handler...');
+      this.registerHandler('filesystem', new FileSystemHandler(this.config.filesystem || {}));
+      console.log('✓ FileSystem handler registered successfully');
 
-    // Register URL handler
-    this.registerHandler('url', new URLHandler(this.config.url || {}));
+      // Register URL handler
+      console.log('Initializing URL handler...');
+      this.registerHandler('url', new URLHandler(this.config.url || {}));
+      console.log('✓ URL handler registered successfully');
 
-    // Register iFinder handler
-    this.registerHandler('ifinder', new IFinderHandler(this.config.ifinder || {}));
+      // Register iFinder handler
+      console.log('Initializing iFinder handler...');
+      this.registerHandler('ifinder', new IFinderHandler(this.config.ifinder || {}));
+      console.log('✓ iFinder handler registered successfully');
+
+      // Register Page handler
+      console.log('Initializing Page handler...');
+      this.registerHandler('page', new PageHandler(this.config.page || {}));
+      console.log('✓ Page handler registered successfully');
+
+      console.log(
+        `✓ All source handlers initialized: ${Array.from(this.handlers.keys()).join(', ')}`
+      );
+    } catch (error) {
+      console.error('Error initializing source handlers:', error.message);
+      console.error('Stack trace:', error.stack);
+      throw new Error(`Failed to initialize source handlers: ${error.message}`);
+    }
   }
 
   /**
@@ -83,6 +105,8 @@ class SourceManager {
 
     for (const source of sources) {
       try {
+        console.log(`Processing source: ${source.id} (type: ${source.type})`);
+
         // Validate source configuration
         if (!this.validateSourceConfig(source)) {
           throw new Error(`Invalid source configuration: ${JSON.stringify(source)}`);
@@ -96,12 +120,18 @@ class SourceManager {
           ...context
         };
 
+        console.log(`Loading content for source: ${source.id}`);
         // Load content
         const result = await handler.getCachedContent(sourceConfig);
+
+        console.log(
+          `✓ Successfully loaded content for source: ${source.id} (${result.content.length} characters)`
+        );
 
         results.push({
           id: source.id,
           type: source.type,
+          link: result.metadata?.link || source.link || '',
           exposeAs: source.exposeAs || 'prompt',
           content: result.content,
           metadata: result.metadata,
@@ -110,15 +140,22 @@ class SourceManager {
 
         // Accumulate content for prompt integration
         if (source.exposeAs !== 'tool') {
-          totalContent += `\n\n--- Source: ${source.id} ---\n${result.content}`;
+          const sourceLink = result.metadata?.link || source.link || '';
+          totalContent += `\n\n<source id="${source.id}" type="${source.type}" link="${sourceLink}">\n${result.content}\n</source>`;
         }
       } catch (error) {
+        console.error(`✗ Failed to load content for source: ${source.id} - ${error.message}`);
+
         const errorResult = {
           id: source.id,
           type: source.type,
           exposeAs: source.exposeAs || 'prompt',
           content: '',
-          metadata: { error: error.message },
+          metadata: {
+            error: error.message,
+            errorStack: error.stack,
+            errorCode: error.code || 'UNKNOWN_ERROR'
+          },
           success: false
         };
 
@@ -242,6 +279,18 @@ class SourceManager {
           description: 'Maximum number of search results'
         };
         break;
+
+      case 'page':
+        baseSchema.properties.pageId = {
+          type: 'string',
+          description: 'Page identifier to load (required)'
+        };
+        baseSchema.properties.language = {
+          type: 'string',
+          description: 'Language code for the page (e.g., "en", "de")'
+        };
+        baseSchema.required = ['pageId'];
+        break;
     }
 
     return baseSchema;
@@ -269,6 +318,7 @@ class SourceManager {
    */
   validateSourceConfig(source) {
     if (!source || typeof source !== 'object') {
+      console.error('Source configuration must be an object');
       return false;
     }
 
@@ -276,25 +326,45 @@ class SourceManager {
 
     // Required fields
     if (!id || typeof id !== 'string' || id.trim() === '') {
+      console.error('Source configuration must have a valid id string');
       return false;
     }
 
-    if (!type || typeof type !== 'string' || !this.handlers.has(type)) {
+    if (!type || typeof type !== 'string') {
+      console.error(`Source ${id}: type must be a non-empty string`);
+      return false;
+    }
+
+    if (!this.handlers.has(type)) {
+      console.error(
+        `Source ${id}: unknown handler type '${type}'. Available types: ${Array.from(this.handlers.keys()).join(', ')}`
+      );
       return false;
     }
 
     if (!config || typeof config !== 'object') {
+      console.error(`Source ${id}: config must be an object`);
       return false;
     }
 
     // Validate exposeAs
     if (exposeAs && !['prompt', 'tool'].includes(exposeAs)) {
+      console.error(`Source ${id}: exposeAs must be either 'prompt' or 'tool', got '${exposeAs}'`);
       return false;
     }
 
     // Delegate to handler-specific validation
-    const handler = this.handlers.get(type);
-    return handler.validateConfig(config);
+    try {
+      const handler = this.handlers.get(type);
+      const isValid = handler.validateConfig(config);
+      if (!isValid) {
+        console.error(`Source ${id}: handler-specific configuration validation failed`);
+      }
+      return isValid;
+    } catch (error) {
+      console.error(`Source ${id}: error during handler validation:`, error.message);
+      return false;
+    }
   }
 
   /**
@@ -326,6 +396,216 @@ class SourceManager {
     }
 
     return stats;
+  }
+
+  /**
+   * Test source connection without loading content
+   * @param {string} type - Handler type
+   * @param {Object} config - Source configuration
+   * @returns {Promise<Object>} Test results
+   */
+  async testSource(type, config) {
+    const handler = this.handlers.get(type);
+    if (!handler) {
+      throw new Error(`Unknown source handler: ${type}`);
+    }
+
+    // Test connection based on handler type
+    switch (type) {
+      case 'filesystem':
+        return await this.testFilesystemSource(config);
+      case 'url':
+        return await this.testUrlSource(config);
+      case 'ifinder':
+        return await this.testIFinderSource(config);
+      case 'page':
+        return await this.testPageSource(config);
+      default:
+        throw new Error(`Testing not implemented for handler: ${type}`);
+    }
+  }
+
+  /**
+   * Test filesystem source
+   */
+  async testFilesystemSource(config) {
+    const { path: filePath, encoding = 'utf-8' } = config;
+    const fs = await import('fs');
+    const path = await import('path');
+    const { getRootDir } = await import('../pathUtils.js');
+
+    try {
+      if (!filePath) {
+        throw new Error('File path is required');
+      }
+
+      // Resolve path relative to contents directory
+      const contentsDir = path.join(getRootDir(), 'contents');
+      const fullPath = path.resolve(contentsDir, filePath);
+
+      // Security check: ensure resolved path stays within contents directory
+      if (!fullPath.startsWith(contentsDir)) {
+        throw new Error('Invalid file path: Path must be within contents directory');
+      }
+
+      const stats = await fs.promises.stat(fullPath);
+
+      if (!stats.isFile()) {
+        throw new Error('Path is not a file');
+      }
+
+      // Try to read the file to verify accessibility
+      const content = await fs.promises.readFile(fullPath, encoding);
+      const fileSize = stats.size;
+
+      return {
+        accessible: true,
+        relativePath: filePath,
+        fileSize,
+        contentLength: Buffer.byteLength(content, encoding),
+        encoding,
+        lastModified: stats.mtime.toISOString()
+      };
+    } catch (error) {
+      // Never expose full filesystem paths in error messages
+      const sanitizedMessage = error.message.replace(/\/[^/\s]+/g, '[path]');
+      throw new Error(`Filesystem test failed: ${sanitizedMessage}`);
+    }
+  }
+
+  /**
+   * Test URL source
+   */
+  async testUrlSource(config) {
+    const { url, method = 'GET', timeout = 10000, headers = {} } = config;
+
+    try {
+      const startTime = Date.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch(url, {
+        method,
+        headers,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      const duration = Date.now() - startTime;
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Get content type and count actual content size
+      const contentType = response.headers.get('content-type') || 'unknown';
+      const headerContentLength = response.headers.get('content-length');
+
+      // Read the content to count its actual size
+      const content = await response.text();
+      const actualContentLength = Buffer.byteLength(content, 'utf8');
+
+      return {
+        accessible: true,
+        status: response.status,
+        statusText: response.statusText,
+        contentType,
+        contentLength: actualContentLength,
+        headerContentLength: headerContentLength ? parseInt(headerContentLength) : null,
+        duration
+      };
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${timeout}ms`);
+      }
+      throw new Error(`URL test failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Test iFinder source
+   */
+  async testIFinderSource(config) {
+    const { searchProfile = 'default' } = config;
+
+    try {
+      const testQuery = 'test';
+      const startTime = Date.now();
+
+      // Use the existing IFinderHandler to test
+      const handler = this.handlers.get('ifinder');
+      const testConfig = { ...config, query: testQuery, maxResults: 1 };
+
+      await handler.loadContent(testConfig);
+      const duration = Date.now() - startTime;
+
+      return {
+        accessible: true,
+        searchProfile,
+        duration,
+        testQuery
+      };
+    } catch (error) {
+      throw new Error(`iFinder test failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Test page source
+   */
+  async testPageSource(config) {
+    const { pageId, language = 'en' } = config;
+
+    if (!pageId) {
+      throw new Error('Page testing requires a pageId');
+    }
+
+    try {
+      const handler = this.handlers.get('page');
+      const result = await handler.pageExists(pageId);
+
+      if (!result.exists) {
+        throw new Error(`Page '${pageId}' not found in any language`);
+      }
+
+      return {
+        accessible: true,
+        pageId,
+        requestedLanguage: language,
+        availableLanguages: result.languages,
+        defaultLanguage: handler.defaultLanguage,
+        url: handler.generatePageUrl(pageId, language)
+      };
+    } catch (error) {
+      throw new Error(`Page test failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Load content from a source (for preview functionality)
+   * @param {string} type - Source type
+   * @param {Object} config - Source configuration
+   * @returns {Promise<string>} Content
+   */
+  async loadContent(type, config) {
+    const handler = this.handlers.get(type);
+    if (!handler) {
+      throw new Error(`Unknown source handler: ${type}`);
+    }
+
+    const result = await handler.loadContent(config);
+    return result.content || result;
+  }
+
+  /**
+   * Get source statistics
+   */
+  getSourceStats() {
+    return {
+      registeredHandlers: Array.from(this.handlers.keys()),
+      totalTools: this.toolRegistry.size,
+      cacheStats: this.getCacheStats()
+    };
   }
 
   /**

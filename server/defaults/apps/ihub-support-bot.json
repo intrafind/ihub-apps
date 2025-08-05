@@ -24,23 +24,7 @@
   "preferredStyle": "normal",
   "preferredTemperature": 0.3,
   "sendChatHistory": true,
-  "sources": [
-    {
-      "id": "faq-content",
-      "type": "filesystem",
-      "description": "Frequently asked questions document",
-      "config": {
-        "path": "sources/ihub-faq.md",
-        "encoding": "utf8"
-      },
-      "exposeAs": "prompt",
-      "caching": {
-        "ttl": 3600,
-        "strategy": "static"
-      },
-      "enabled": true
-    }
-  ],
+  "sources": ["faq"],
   "enabled": true,
   "tools": [],
   "greeting": {
@@ -50,13 +34,6 @@
     }
   },
   "allowEmptyContent": false,
-  "features": {
-    "magicPrompt": {
-      "enabled": false,
-      "model": "gpt-4",
-      "prompt": "You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}"
-    }
-  },
   "settings": {
     "enabled": true,
     "model": {

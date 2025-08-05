@@ -78,6 +78,7 @@ class IFinderHandler extends SourceHandler {
         metadata: {
           type: 'ifinder',
           documentId: targetDocumentId,
+          link: metadataResult.url || `ifinder://document/${targetDocumentId}`, // Use document URL if available
           title: metadataResult.title,
           author: metadataResult.author,
           documentType: metadataResult.documentType,
@@ -258,6 +259,7 @@ class IFinderHandler extends SourceHandler {
             metadata: {
               type: 'ifinder',
               documentId,
+              link: `ifinder://document/${documentId}`, // Provide link even on error
               error: error.message,
               loadedAt: new Date().toISOString()
             }

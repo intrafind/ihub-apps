@@ -1,6 +1,7 @@
 import { getLocalizedContent } from '../../shared/localize.js';
 import configCache from '../configCache.js';
 import { createSourceManager } from '../sources/index.js';
+import SourceResolutionService from './SourceResolutionService.js';
 import config from '../config.js';
 import { getRootDir } from '../pathUtils.js';
 import path from 'path';
@@ -189,33 +190,49 @@ class PromptService {
         }
       }
 
-      // Process sources using new source handler system
+      // Process sources using unified source resolution system
       try {
-        const sourceManager = createSourceManager({
-          filesystem: {
-            basePath: path.resolve(getRootDir(), config.CONTENTS_DIR)
-          }
-        });
         let sourceContent = '';
 
-        // Handle new sources system
+        // Handle both admin source references and inline source configs
         if (app.sources && Array.isArray(app.sources) && app.sources.length > 0) {
-          console.log(`Loading content from ${app.sources.length} configured sources`);
+          console.log(`Processing ${app.sources.length} source references for app: ${app.id}`);
 
+          // Initialize source resolution service
+          const sourceResolutionService = new SourceResolutionService();
+
+          // Resolve source references to actual configurations
           const context = {
             user: user,
             chatId: chatId,
-            userVariables: userVariables
+            userVariables: userVariables,
+            language: lang
           };
 
-          const result = await sourceManager.processAppSources(app, context);
-          sourceContent = result.content;
+          const resolvedSources = await sourceResolutionService.resolveAppSources(app, context);
 
-          console.log(
-            `Loaded sources: ${result.metadata.loadedSources}/${result.metadata.totalSources} successful`
-          );
-          if (result.metadata.errors.length > 0) {
-            console.warn('Source loading errors:', result.metadata.errors);
+          if (resolvedSources.length > 0) {
+            console.log(`Loading content from ${resolvedSources.length} resolved sources`);
+
+            // Create source manager for content loading
+            const sourceManager = createSourceManager({
+              filesystem: {
+                basePath: path.resolve(getRootDir(), config.CONTENTS_DIR)
+              }
+            });
+
+            // Load content from resolved sources
+            const result = await sourceManager.loadSources(resolvedSources, context);
+            sourceContent = result.content;
+
+            console.log(
+              `Loaded sources: ${result.metadata.loadedSources}/${result.metadata.totalSources} successful`
+            );
+            if (result.metadata.errors.length > 0) {
+              console.warn('Source loading errors:', result.metadata.errors);
+            }
+          } else {
+            console.warn(`No sources resolved for app: ${app.id}`);
           }
 
           // Replace {{sources}} template with combined content
@@ -228,7 +245,7 @@ class PromptService {
           }
         }
       } catch (error) {
-        console.error('Error in source processing system:', error);
+        console.error('Error in source resolution system:', error);
         throw new Error(`Failed to process sources: ${error.message}`);
       }
 

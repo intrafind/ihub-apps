@@ -3,12 +3,12 @@
   "order": 1,
   "category": "utility",
   "name": {
-    "en": "AI Chat",
-    "de": "KI-Chat"
+    "en": "Chat",
+    "de": "Chat"
   },
   "description": {
-    "en": "General purpose AI chatbot assistant",
-    "de": "Allzweck KI-Chatbot-Assistent"
+    "en": "General purpose chatbot assistant",
+    "de": "Allzweck Chatbot-Assistent"
   },
   "color": "#4F46E5",
   "icon": "chat-bubbles",

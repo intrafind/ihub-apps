@@ -259,3 +259,102 @@ export const deleteUIAsset = async assetId => {
   });
   return response;
 };
+
+// Sources API functions
+export const fetchAdminSources = async () => {
+  try {
+    const response = await makeAdminApiCall('/admin/sources');
+    const data = response.data;
+
+    // Ensure we return an array
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error in fetchAdminSources:', error);
+    throw error;
+  }
+};
+
+export const fetchAdminSource = async sourceId => {
+  const response = await makeAdminApiCall(`/admin/sources/${sourceId}`);
+  return response.data;
+};
+
+export const createSource = async sourceData => {
+  const response = await makeAdminApiCall('/admin/sources', {
+    method: 'POST',
+    body: sourceData
+  });
+  return response.data;
+};
+
+export const updateSource = async (sourceId, sourceData) => {
+  const response = await makeAdminApiCall(`/admin/sources/${sourceId}`, {
+    method: 'PUT',
+    body: sourceData
+  });
+  return response.data;
+};
+
+export const deleteSource = async sourceId => {
+  const response = await makeAdminApiCall(`/admin/sources/${sourceId}`, {
+    method: 'DELETE'
+  });
+  return response.data;
+};
+
+export const testSource = async (sourceId, testData) => {
+  const response = await makeAdminApiCall(`/admin/sources/${sourceId}/test`, {
+    method: 'POST',
+    body: testData
+  });
+  return response.data;
+};
+
+export const toggleSources = async (ids, enabled) => {
+  const response = await makeAdminApiCall('/admin/sources/_toggle', {
+    method: 'POST',
+    body: { ids: Array.isArray(ids) ? ids : [ids], enabled }
+  });
+  return response.data;
+};
+
+// Create an adminApi object that contains all the functions for compatibility
+export const adminApi = {
+  // Existing functions
+  makeAdminApiCall,
+  fetchAdminUsageData,
+  fetchAdminCacheStats,
+  fetchAdminApps,
+  fetchAdminModels,
+  fetchAdminPrompts,
+  fetchAdminAppTemplates,
+  fetchAppInheritance,
+  createPrompt,
+  updatePrompt,
+  translateText,
+  toggleApps,
+  fetchAdminPages,
+  fetchAdminPage,
+  createPage,
+  toggleModels,
+  updatePage,
+  togglePrompts,
+  deletePage,
+  getUIConfig,
+  updateUIConfig,
+  backupUIConfig,
+  getUIAssets,
+  uploadUIAsset,
+  deleteUIAsset,
+
+  // Sources functions - both name variants for compatibility
+  fetchAdminSources,
+  getSources: fetchAdminSources, // Alias for SourcePicker compatibility
+  fetchAdminSource,
+  getSource: fetchAdminSource, // Alias
+  createSource,
+  updateSource,
+  deleteSource,
+  testSource,
+  toggleSources
+};
