@@ -475,7 +475,7 @@
       "fields": {
         "id": "Model ID",
         "name": "Name",
-        "description": "Description", 
+        "description": "Description",
         "provider": "Provider",
         "modelId": "API Model ID",
         "url": "API URL",
