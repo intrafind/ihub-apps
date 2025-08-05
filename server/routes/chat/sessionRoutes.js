@@ -19,7 +19,7 @@ export default function registerSessionRoutes(
   { verifyApiKey, getLocalizedError, DEFAULT_TIMEOUT }
 ) {
   const chatService = new ChatService();
-  
+
   /**
    * @swagger
    * /models/{modelId}/chat/test:

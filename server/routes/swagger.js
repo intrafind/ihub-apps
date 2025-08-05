@@ -70,7 +70,7 @@ export default async function registerSwaggerRoutes(app) {
   // Check if Swagger is enabled in platform configuration
   let platformConfig = {};
   try {
-    platformConfig = await loadJson('config/platform.json') || {};
+    platformConfig = (await loadJson('config/platform.json')) || {};
   } catch (error) {
     console.warn('Could not load platform configuration for Swagger setup:', error.message);
   }
@@ -112,10 +112,7 @@ export default async function registerSwaggerRoutes(app) {
     'AI Hub Apps - Admin APIs',
     'Administrative APIs for managing configurations, users, groups, and system settings',
     '1.0.0',
-    [
-      path.join(__dirname, 'adminRoutes.js'),
-      path.join(__dirname, 'admin/**/*.js')
-    ]
+    [path.join(__dirname, 'adminRoutes.js'), path.join(__dirname, 'admin/**/*.js')]
   );
 
   // OpenAI Compatible APIs Documentation
@@ -136,7 +133,7 @@ export default async function registerSwaggerRoutes(app) {
   console.log(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).length}`);
   console.log(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).length}`);
   console.log(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).length}`);
-  
+
   if (Object.keys(normalApiSpec.paths || {}).length > 0) {
     console.log(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).join(', ')}`);
   }
@@ -224,7 +221,7 @@ export default async function registerSwaggerRoutes(app) {
   console.log('   💬 Chat & General: /api/docs/normal');
   console.log('   🔧 Admin: /api/docs/admin');
   console.log('   🤖 OpenAI Compatible: /api/docs/openai');
-  
+
   if (requireAuth) {
     console.log('🔐 Authentication required for Swagger access');
   } else {
