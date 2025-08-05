@@ -58,7 +58,7 @@ export function configureOidcProviders() {
           pkce: provider.pkce ?? true,
           // Add custom state verification to handle development issues
           customHeaders: {},
-          skipUserProfile: true // We'll fetch user info manually
+          skipUserProfile: false // We'll fetch user info manually
         },
         async (accessToken, _refreshToken, _profile, done) => {
           const sessionId = authDebugService.generateSessionId();

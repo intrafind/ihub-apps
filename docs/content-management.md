@@ -18,7 +18,7 @@ AI Hub Apps uses a content management system based on Markdown files stored in t
 
 **When it runs:**
 - Only when the `contents/` directory is empty or doesn't exist
-- Copies from `configs/default/` to your configured `CONTENTS_DIR`
+- Copies from `server/defaults/` to your configured `CONTENTS_DIR`
 - Never overwrites existing content
 
 ### Content Directory Structure

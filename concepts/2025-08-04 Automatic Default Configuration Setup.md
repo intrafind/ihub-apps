@@ -2,7 +2,7 @@
 
 ## Overview
 
-This feature implements a smooth installation experience by automatically copying the default configuration files from `configs/default` to the contents directory when the server starts for the first time.
+This feature implements a smooth installation experience by automatically copying the default configuration files from `server/defaults` to the contents directory when the server starts for the first time.
 
 ## Problem Statement
 
@@ -14,7 +14,7 @@ Previously, users had to manually set up configuration files before starting the
 
 1. **Setup Utility Module** (`server/utils/setupUtils.js`):
    - `isContentsDirectoryEmpty()`: Checks if the contents directory is empty or non-existent
-   - `copyDefaultConfiguration()`: Recursively copies all files from `configs/default` to the contents directory
+   - `copyDefaultConfiguration()`: Recursively copies all files from `server/defaults` to the contents directory
    - `performInitialSetup()`: Main function that orchestrates the setup process
 
 2. **Server Integration** (`server/server.js`):
@@ -56,7 +56,7 @@ Server Startup
 
 ### Configuration Source
 
-The default configuration is sourced from `configs/default/` which contains:
+The default configuration is sourced from `server/defaults/` which contains:
 - `apps/`: Application configurations
 - `config/`: Platform, UI, and system configurations  
 - `models/`: AI model configurations
@@ -71,6 +71,8 @@ The default configuration is sourced from `configs/default/` which contains:
 3. **Development Friendly**: Simplifies development environment setup
 4. **Production Ready**: Works seamlessly in packaged binary deployments
 5. **Maintainable**: Centralized default configuration management
+6. **User Friendly**: Default configuration is embedded in the server, preventing users from accidentally copying from visible config directories
+7. **Clean Distribution**: No external configuration directories that users might confuse with actual configuration files
 
 ## Testing
 
@@ -91,7 +93,7 @@ The feature has been tested to ensure:
 
 ## Security Considerations
 
-- Only copies from the predefined `configs/default` directory
+- Only copies from the predefined `server/defaults` directory
 - No external file access or network operations
 - Preserves existing file permissions
 - Safe path resolution to prevent directory traversal

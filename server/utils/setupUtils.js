@@ -70,14 +70,14 @@ async function copyMissingFiles(src, dest, copiedCount = 0) {
 }
 
 /**
- * Copies missing default configuration files from configs/default to the contents directory
+ * Copies missing default configuration files from server/defaults to the contents directory
  * Only copies files that don't already exist in the destination
  * @returns {Promise<boolean>} True if any files were copied
  */
 export async function copyDefaultConfiguration() {
   try {
     const rootDir = getRootDir();
-    const defaultConfigPath = path.join(rootDir, 'configs', 'default');
+    const defaultConfigPath = path.join(rootDir, 'server', 'defaults');
     const contentsPath = path.join(rootDir, config.CONTENTS_DIR);
 
     // Check if default config directory exists

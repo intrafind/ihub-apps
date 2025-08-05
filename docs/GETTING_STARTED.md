@@ -24,7 +24,7 @@ npm run dev
 When you start the server for the first time:
 
 1. 🔍 **Smart Detection**: Checks if configuration directory is empty
-2. 📋 **Auto-Setup**: Copies default configuration from `configs/default`
+2. 📋 **Auto-Setup**: Copies default configuration from `server/defaults`
 3. ✅ **Ready to Use**: All apps, models, and settings configured automatically
 4. 🚀 **Normal Startup**: Server continues and you can start using AI Hub Apps
 
@@ -32,7 +32,7 @@ When you start the server for the first time:
 ```
 🔍 Checking if initial setup is required...
 📦 Contents directory is empty, performing initial setup...
-📋 Copying default configuration from configs/default to contents
+📋 Copying default configuration from server/defaults to contents
 ✅ Default configuration copied successfully
 ```
 

@@ -22,6 +22,12 @@
   "preferredTemperature": 0.7,
   "upload": {
     "enabled": true,
+    "imageUpload": {
+      "enabled": true,
+      "resizeImages": true,
+      "maxFileSizeMB": 10,
+      "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+    },
     "fileUpload": {
       "enabled": true,
       "maxFileSizeMB": 5,

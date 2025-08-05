@@ -1,12 +1,12 @@
 {
   "title": {
-    "en": "iHub Apps",
-    "de": "iHub Apps"
+    "en": "iHub Apps1",
+    "de": "iHub Apps2"
   },
   "header": {
     "title": {
-      "en": "iHub Apps",
-      "de": "iHub Apps"
+      "en": "iHub Apps3",
+      "de": "iHub Apps4"
     },
     "defaultColor": "rgb(0, 53, 87)",
     "logo": {
@@ -137,8 +137,8 @@
   },
   "appsList": {
     "title": {
-      "en": "iHub Apps",
-      "de": "iHub Apps"
+      "en": "5",
+      "de": "iHub Apps6"
     },
     "subtitle": {
       "en": "Choose an application to start a conversation",

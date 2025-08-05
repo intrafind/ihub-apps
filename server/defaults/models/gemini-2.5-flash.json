@@ -14,5 +14,5 @@
   "tokenLimit": 32768,
   "supportsTools": true,
   "enabled": true,
-  "default": false
+  "default": true
 }

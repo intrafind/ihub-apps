@@ -140,7 +140,7 @@ Therefore we want to build a web application which talks through a small node.js
 **What happens on first startup:**
 
 1. Server checks if the `contents` directory is empty
-2. If empty, copies default configuration from `configs/default`
+2. If empty, copies default configuration from `server/defaults`
 3. Includes all apps, models, prompts, and platform settings
 4. Server continues normal startup with the new configuration
 

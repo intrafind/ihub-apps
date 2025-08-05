@@ -1,5 +1,6 @@
 {
   "id": "summarizer",
+  "enabled": false,
   "order": 4,
   "category": "analysis",
   "name": {
@@ -80,6 +81,5 @@
         }
       ]
     }
-  ],
-  "enabled": true
+  ]
 }

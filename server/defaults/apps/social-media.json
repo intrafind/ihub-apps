@@ -1,6 +1,7 @@
 {
   "id": "social-media",
   "category": "writing",
+  "enabled": false,
   "name": {
     "en": "Social Media Content",
     "de": "Social-Media-Inhalte"
@@ -226,6 +227,5 @@
       },
       "type": "text"
     }
-  ],
-  "enabled": true
+  ]
 }

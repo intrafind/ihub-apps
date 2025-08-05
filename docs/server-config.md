@@ -9,7 +9,7 @@ This section covers environment variables and options for running the AI Hub App
 ### How It Works
 
 1. **First Startup Detection**: Server checks if the `CONTENTS_DIR` is empty or doesn't exist
-2. **Automatic Copy**: If empty, copies the entire default configuration from `configs/default`
+2. **Automatic Copy**: If empty, copies the entire default configuration from `server/defaults`
 3. **Ready to Use**: Server continues startup with the new configuration files
 4. **Subsequent Startups**: Setup is skipped when configuration already exists
 

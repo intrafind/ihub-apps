@@ -13,6 +13,6 @@
   "provider": "anthropic",
   "tokenLimit": 64000,
   "supportsTools": true,
-  "enabled": true,
+  "enabled": false,
   "default": false
 }

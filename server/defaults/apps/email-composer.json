@@ -1,5 +1,6 @@
 {
   "id": "email-composer",
+  "enabled": false,
   "order": 4,
   "name": {
     "en": "Email Assistant",

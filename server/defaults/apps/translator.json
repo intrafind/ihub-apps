@@ -1,5 +1,6 @@
 {
   "id": "translator",
+  "enabled": false,
   "order": 3,
   "name": {
     "en": "Translator",
@@ -137,6 +138,5 @@
         "language": "English"
       }
     }
-  ],
-  "enabled": true
+  ]
 }

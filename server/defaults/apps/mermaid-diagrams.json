@@ -1,0 +1,124 @@
+{
+  "id": "mermaid-diagrams",
+  "order": 10,
+  "name": {
+    "en": "Diagram Generator",
+    "de": "Diagramm-Generator"
+  },
+  "description": {
+    "en": "Generate interactive diagrams, flowcharts, and visualizations using MermaidJS",
+    "de": "Erstelle interaktive Diagramme, Flussdiagramme und Visualisierungen mit MermaidJS"
+  },
+  "color": "#059669",
+  "icon": "chart-bar",
+  "system": {
+    "en": "You are a diagram generation specialist. Create clear, well-structured diagrams using MermaidJS syntax. Always respond with Mermaid code blocks using ```mermaid syntax. Consider the diagram type requested and use appropriate Mermaid diagram types:\n\n- flowchart: For processes and workflows\n- sequenceDiagram: For interactions between entities\n- classDiagram: For object relationships\n- erDiagram: For database schemas\n- gantt: For project timelines\n- gitgraph: For version control flows\n- journey: For user experience flows\n- pie: For data distribution\n- quadrantChart: For categorization\n- timeline: For chronological events\n\nEnsure diagrams are:\n- Clear and readable\n- Properly structured with logical flow\n- Use concise, descriptive labels\n- Include relevant connections and relationships\n- Follow Mermaid syntax best practices",
+    "de": "Du bist ein Spezialist für Diagrammerstellung. Erstelle klare, gut strukturierte Diagramme mit MermaidJS-Syntax. Antworte immer mit Mermaid-Codeblöcken mit ```mermaid-Syntax. Berücksichtige den angeforderten Diagrammtyp und verwende geeignete Mermaid-Diagrammtypen:\n\n- flowchart: Für Prozesse und Arbeitsabläufe\n- sequenceDiagram: Für Interaktionen zwischen Entitäten\n- classDiagram: Für Objektbeziehungen\n- erDiagram: Für Datenbankschemas\n- gantt: Für Projektzeitpläne\n- gitgraph: Für Versionskontrollabläufe\n- journey: Für Benutzererfahrungsabläufe\n- pie: Für Datenverteilung\n- quadrantChart: Für Kategorisierung\n- timeline: Für chronologische Ereignisse\n\nStelle sicher, dass Diagramme:\n- Klar und lesbar sind\n- Richtig strukturiert mit logischem Ablauf\n- Prägnante, aussagekräftige Beschriftungen verwenden\n- Relevante Verbindungen und Beziehungen enthalten\n- MermaidJS-Syntax-Best-Practices befolgen"
+  },
+  "tokenLimit": 6000,
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "normal",
+  "preferredTemperature": 0.3,
+  "sendChatHistory": true,
+  "messagePlaceholder": {
+    "en": "Describe the diagram you want to create (e.g., 'Create a flowchart for user authentication process')",
+    "de": "Beschreibe das Diagramm, das du erstellen möchtest (z.B. 'Erstelle ein Flussdiagramm für den Benutzeranmeldeprozess')"
+  },
+  "variables": [
+    {
+      "name": "diagramType",
+      "label": {
+        "en": "Diagram Type",
+        "de": "Diagrammtyp"
+      },
+      "type": "string",
+      "required": false,
+      "predefinedValues": [
+        { "label": { "en": "Flowchart", "de": "Flussdiagramm" }, "value": "flowchart" },
+        { "label": { "en": "Sequence Diagram", "de": "Sequenzdiagramm" }, "value": "sequence" },
+        { "label": { "en": "Class Diagram", "de": "Klassendiagramm" }, "value": "class" },
+        {
+          "label": { "en": "Entity Relationship", "de": "Entitäts-Beziehung" },
+          "value": "entity relationship"
+        },
+        { "label": { "en": "Gantt Chart", "de": "Gantt-Diagramm" }, "value": "Gantt" },
+        { "label": { "en": "Git Flow", "de": "Git-Ablauf" }, "value": "git flow" },
+        { "label": { "en": "User Journey", "de": "Benutzerreise" }, "value": "user journey" },
+        { "label": { "en": "Pie Chart", "de": "Kreisdiagramm" }, "value": "pie" },
+        { "label": { "en": "Quadrant Chart", "de": "Quadranten-Diagramm" }, "value": "quadrant" },
+        { "label": { "en": "Timeline", "de": "Zeitstrahl" }, "value": "timeline" },
+        { "label": { "en": "Mind Map", "de": "Mind Map" }, "value": "mind map" },
+        { "label": { "en": "State Diagram", "de": "Zustandsdiagramm" }, "value": "state" }
+      ]
+    }
+  ],
+  "starterPrompts": [
+    {
+      "title": {
+        "en": "Create a flowchart for user authentication process",
+        "de": "Erstelle ein Flussdiagramm für den Benutzeranmeldeprozess"
+      },
+      "message": {
+        "en": "Create a flowchart showing the steps for user authentication including login, password reset, and account creation.",
+        "de": "Erstelle ein Flussdiagramm, das die Schritte für die Benutzeranmeldung einschließlich Login, Passwortzurücksetzung und Kontoerstellung zeigt."
+      }
+    },
+    {
+      "title": {
+        "en": "Design a sequence diagram for order processing",
+        "de": "Entwerfe ein Sequenzdiagramm für die Auftragsbearbeitung"
+      },
+      "message": {
+        "en": "Design a sequence diagram illustrating the interactions between customer, order system, and payment gateway during order processing.",
+        "de": "Entwerfe ein Sequenzdiagramm, das die Interaktionen zwischen Kunde, Bestellsystem und Zahlungs-Gateway während der Auftragsbearbeitung zeigt."
+      }
+    },
+    {
+      "title": {
+        "en": "Generate a class diagram for a library management system",
+        "de": "Generiere ein Klassendiagramm für ein Bibliotheksverwaltungssystem"
+      },
+      "message": {
+        "en": "Generate a class diagram that includes classes for Book, Member, Loan, and Librarian with their relationships and attributes.",
+        "de": "Generiere ein Klassendiagramm, das Klassen für Buch, Mitglied, Ausleihe und Bibliothekar mit ihren Beziehungen und Attributen enthält."
+      }
+    },
+    {
+      "title": {
+        "en": "Create a Gantt chart for a software development project",
+        "de": "Erstelle ein Gantt-Diagramm für ein Softwareentwicklungsprojekt"
+      },
+      "message": {
+        "en": "Create a Gantt chart outlining the phases of a software development project including planning, design, development, testing, and deployment with estimated timelines.",
+        "de": "Erstelle ein Gantt-Diagramm, das die Phasen eines Softwareentwicklungsprojekts einschließlich Planung, Design, Entwicklung, Test und Bereitstellung mit geschätzten Zeitrahmen umreißt."
+      }
+    },
+    {
+      "title": {
+        "en": "Design an entity relationship diagram for an e-commerce platform",
+        "de": "Entwerfe ein Entitäts-Beziehungsdiagramm für eine E-Commerce-Plattform"
+      },
+      "message": {
+        "en": "Design an entity relationship diagram that includes entities like User, Product, Order, and Review with their attributes and relationships.",
+        "de": "Entwerfe ein Entitäts-Beziehungsdiagramm, das Entitäten wie Benutzer, Produkt, Bestellung und Bewertung mit ihren Attributen und Beziehungen enthält."
+      }
+    },
+    {
+      "title": {
+        "en": "Create a mind map for project brainstorming",
+        "de": "Erstelle eine Mind Map für Projektbrainstorming"
+      },
+      "message": {
+        "en": "Create a mind map to brainstorm ideas for a new project, including main topics like Goals, Resources, Timeline, and Risks with subtopics for each.",
+        "de": "Erstelle eine Mind Map, um Ideen für ein neues Projekt zu brainstormen, einschließlich Hauptthemen wie Ziele, Ressourcen, Zeitplan und Risiken mit Unterthemen für jedes."
+      }
+    }
+  ],
+  "features": {
+    "enableMermaidRendering": true,
+    "exportFormats": ["svg", "png", "pdf"],
+    "allowFullscreen": true
+  },
+  "category": "productivity",
+  "enabled": true
+}
