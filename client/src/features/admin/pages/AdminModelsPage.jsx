@@ -406,17 +406,24 @@ const AdminModelsPage = () => {
                             {model.provider || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                model.enabled
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-gray-100 text-gray-800'
-                              }`}
-                            >
-                              {model.enabled
-                                ? t('admin.models.enabled', 'Enabled')
-                                : t('admin.models.disabled', 'Disabled')}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  model.enabled
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}
+                              >
+                                {model.enabled
+                                  ? t('admin.models.enabled', 'Enabled')
+                                  : t('admin.models.disabled', 'Disabled')}
+                              </span>
+                              {model.default && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  {t('admin.models.default', 'Default')}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex items-center justify-end space-x-2">

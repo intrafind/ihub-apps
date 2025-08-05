@@ -85,7 +85,8 @@ export default function registerAdminModelsRoutes(app) {
         return res.status(400).json({ error: 'Model ID cannot be changed' });
       }
       if (updatedModel.default === true) {
-        const allModels = configCache.getModels(true);
+        const modelsResponse = configCache.getModels(true);
+        const allModels = modelsResponse.data || modelsResponse;
         for (const model of allModels) {
           if (model.id !== modelId && model.default === true) {
             const otherModelPath = join(getRootDir(), 'contents', 'models', `${model.id}.json`);
@@ -126,7 +127,8 @@ export default function registerAdminModelsRoutes(app) {
         // file not found, continue
       }
       if (newModel.default === true) {
-        const allModels = configCache.getModels(true);
+        const modelsResponse = configCache.getModels(true);
+        const allModels = modelsResponse.data || modelsResponse;
         for (const model of allModels) {
           if (model.default === true) {
             const otherModelPath = join(getRootDir(), 'contents', 'models', `${model.id}.json`);

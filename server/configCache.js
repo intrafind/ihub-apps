@@ -397,8 +397,8 @@ class ConfigCache {
     // After cache simplification, all models (including disabled) are now stored in config/models.json
     const models = this.get('config/models.json');
     if (models === null || !models.data) {
-      console.warn('Models cache not initialized - returning empty array');
-      return [];
+      console.warn('Models cache not initialized - returning empty object');
+      return { data: [], etag: null };
     }
 
     if (includeDisabled) {

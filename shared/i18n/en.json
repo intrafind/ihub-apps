@@ -449,7 +449,60 @@
       "delete": "Delete",
       "deleteConfirm": "Delete this model?",
       "noModels": "No models found",
-      "noModelsDesc": "Get started by creating a new model."
+      "noModelsDesc": "Get started by creating a new model.",
+      "edit": {
+        "title": "Edit Model",
+        "titleNew": "Create New Model",
+        "subtitle": "Editing {{name}}",
+        "subtitleNew": "Create a new AI model configuration",
+        "backToModels": "Back to Models",
+        "basicInfo": "Basic Information",
+        "basicInfoDesc": "Basic information about the model",
+        "configuration": "Configuration",
+        "configurationDesc": "Advanced configuration options for the model",
+        "saving": "Saving...",
+        "createModel": "Create Model",
+        "saveChanges": "Save Changes",
+        "usageStats": "Usage Statistics",
+        "noUsageData": "No usage data available",
+        "appsUsingModel": "Apps Using This Model",
+        "noApps": "No apps are currently using this model",
+        "requiredFields": "Please fill in all required fields",
+        "success": "Model {{action}} successfully",
+        "successCreated": "created",
+        "successUpdated": "updated"
+      },
+      "fields": {
+        "id": "Model ID",
+        "name": "Name",
+        "description": "Description", 
+        "provider": "Provider",
+        "modelId": "API Model ID",
+        "url": "API URL",
+        "tokenLimit": "Token Limit",
+        "concurrency": "Concurrency",
+        "requestDelay": "Request Delay (ms)",
+        "supportsTools": "Supports Tools",
+        "enabled": "Enabled",
+        "defaultModel": "Default Model"
+      },
+      "hints": {
+        "modelId": "Unique identifier for this model configuration",
+        "apiModelId": "The actual model ID used in API calls (e.g., gpt-4, claude-3-opus)"
+      },
+      "placeholders": {
+        "selectProvider": "Select a provider",
+        "apiModelId": "e.g., gpt-4, claude-3-opus",
+        "apiUrl": "https://api.example.com/v1/chat/completions"
+      },
+      "status": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "details": {
+        "messages": "Messages",
+        "tokens": "Tokens"
+      }
     },
     "prompts": {
       "title": "Prompt Management",

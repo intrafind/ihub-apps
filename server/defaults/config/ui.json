@@ -4,6 +4,10 @@
     "de": "iHub Apps"
   },
   "header": {
+    "title": {
+      "en": "iHub Apps",
+      "de": "iHub Apps"
+    },
     "defaultColor": "rgb(0, 53, 87)",
     "logo": {
       "url": "/logo.svg",
