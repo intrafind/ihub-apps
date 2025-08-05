@@ -501,7 +501,8 @@
       },
       "details": {
         "messages": "Messages",
-        "tokens": "Tokens"
+        "tokens": "Tokens",
+        "editModel": "Edit Model"
       }
     },
     "prompts": {
