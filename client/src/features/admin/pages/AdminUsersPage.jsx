@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
@@ -6,21 +7,10 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
 const AdminUsersPage = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [message, setMessage] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    name: '',
-    password: '',
-    confirmPassword: '',
-    internalGroups: [],
-    groupsString: '', // Add separate field for groups input string
-    active: true
-  });
 
   useEffect(() => {
     loadUsers();
@@ -41,123 +31,6 @@ const AdminUsersPage = () => {
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCreateUser = async e => {
-    e.preventDefault();
-
-    if (formData.password !== formData.confirmPassword) {
-      setMessage({
-        type: 'error',
-        text: 'Passwords do not match'
-      });
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setMessage({
-        type: 'error',
-        text: 'Password must be at least 6 characters long'
-      });
-      return;
-    }
-
-    // Process groups string into array
-    const groupsArray = formData.groupsString
-      .split(',')
-      .map(g => g.trim())
-      .filter(g => g.length > 0);
-
-    try {
-      const response = await makeAdminApiCall('/admin/auth/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          username: formData.username,
-          email: formData.email,
-          name: formData.name,
-          password: formData.password,
-          internalGroups: groupsArray,
-          active: formData.active
-        })
-      });
-
-      // Axios returns successful responses directly, errors are thrown
-      setMessage({
-        type: 'success',
-        text: 'User created successfully!'
-      });
-      setShowCreateModal(false);
-      resetForm();
-      loadUsers();
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: `Failed to create user: ${error.message}`
-      });
-    }
-  };
-
-  const handleUpdateUser = async e => {
-    e.preventDefault();
-
-    // Process groups string into array
-    const groupsArray = formData.groupsString
-      .split(',')
-      .map(g => g.trim())
-      .filter(g => g.length > 0);
-
-    try {
-      const updateData = {
-        email: formData.email,
-        name: formData.name,
-        internalGroups: groupsArray,
-        active: formData.active
-      };
-
-      // Only include password if it's provided
-      if (formData.password) {
-        if (formData.password !== formData.confirmPassword) {
-          setMessage({
-            type: 'error',
-            text: 'Passwords do not match'
-          });
-          return;
-        }
-        if (formData.password.length < 6) {
-          setMessage({
-            type: 'error',
-            text: 'Password must be at least 6 characters long'
-          });
-          return;
-        }
-        updateData.password = formData.password;
-      }
-
-      const response = await makeAdminApiCall(`/admin/auth/users/${editingUser.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updateData)
-      });
-
-      // Axios returns successful responses directly, errors are thrown
-      setMessage({
-        type: 'success',
-        text: 'User updated successfully!'
-      });
-      setEditingUser(null);
-      resetForm();
-      loadUsers();
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: `Failed to update user: ${error.message}`
-      });
     }
   };
 
@@ -216,38 +89,6 @@ const AdminUsersPage = () => {
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      username: '',
-      email: '',
-      name: '',
-      password: '',
-      confirmPassword: '',
-      internalGroups: [],
-      groupsString: '',
-      active: true
-    });
-  };
-
-  const startEdit = user => {
-    setEditingUser(user);
-    setFormData({
-      username: user.username,
-      email: user.email || '',
-      name: user.name || '',
-      password: '',
-      confirmPassword: '',
-      internalGroups: user.internalGroups || [],
-      groupsString: (user.internalGroups || []).join(', '),
-      active: user.active !== false
-    });
-  };
-
-  const cancelEdit = () => {
-    setEditingUser(null);
-    resetForm();
-  };
-
   if (loading) {
     return (
       <AdminAuth>
@@ -274,10 +115,7 @@ const AdminUsersPage = () => {
                 </p>
               </div>
               <button
-                onClick={() => {
-                  resetForm();
-                  setShowCreateModal(true);
-                }}
+                onClick={() => navigate('/admin/users/new')}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 <Icon name="plus" size="md" className="mr-2" />
@@ -468,7 +306,7 @@ const AdminUsersPage = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex space-x-2">
                             <button
-                              onClick={() => startEdit(user)}
+                              onClick={() => navigate(`/admin/users/${user.id}/edit`)}
                               className="text-blue-600 hover:text-blue-900"
                             >
                               <Icon name="edit" size="sm" />
@@ -490,136 +328,6 @@ const AdminUsersPage = () => {
           </div>
         </div>
       </div>
-
-      {/* Create/Edit User Modal */}
-      {(showCreateModal || editingUser) && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {editingUser ? 'Edit User' : 'Create New User'}
-              </h3>
-
-              <form
-                onSubmit={editingUser ? handleUpdateUser : handleCreateUser}
-                className="space-y-4"
-              >
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                  <input
-                    type="text"
-                    value={formData.username}
-                    onChange={e => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                    disabled={!!editingUser}
-                    required={!editingUser}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
-                    placeholder="Enter username"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Enter email"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Enter full name"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {editingUser ? 'New Password (leave blank to keep current)' : 'Password'}
-                  </label>
-                  <input
-                    type="password"
-                    value={formData.password}
-                    onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    required={!editingUser}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Enter password"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm Password
-                  </label>
-                  <input
-                    type="password"
-                    value={formData.confirmPassword}
-                    onChange={e =>
-                      setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))
-                    }
-                    required={!editingUser || formData.password}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Confirm password"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Groups (comma-separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.groupsString}
-                    onChange={e => setFormData(prev => ({ ...prev, groupsString: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="admin, user, editors"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enter group names separated by commas
-                  </p>
-                </div>
-
-                <div>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.active}
-                      onChange={e => setFormData(prev => ({ ...prev, active: e.target.checked }))}
-                      className="mr-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Active User</span>
-                  </label>
-                </div>
-
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    type="submit"
-                    className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    {editingUser ? 'Update User' : 'Create User'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateModal(false);
-                      cancelEdit();
-                    }}
-                    className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
     </AdminAuth>
   );
 };

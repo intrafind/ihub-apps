@@ -1,27 +1,62 @@
 import { z } from 'zod';
 
+// Localized string schema - matches client pattern for language codes
+const localizedStringSchema = z.record(
+  z
+    .string()
+    .regex(/^[a-z]{2}(-[A-Z]{2})?$/, 'Invalid language code format (e.g., "en", "de", "en-US")'),
+  z.string().min(1, 'Localized string cannot be empty')
+);
+
+// Thinking configuration schema
+const thinkingSchema = z
+  .object({
+    enabled: z.boolean(),
+    budget: z.number().int(), // 0=disabled, -1=dynamic, positive=specific budget
+    thoughts: z.boolean() // whether to include thoughts in response
+  })
+  .strict();
+
 export const modelConfigSchema = z
   .object({
-    id: z.string(),
-    modelId: z.string(),
-    name: z.record(z.string()),
-    description: z.record(z.string()),
-    url: z.string(),
-    provider: z.string(),
-    tokenLimit: z.number(),
-    default: z.boolean().optional(),
-    supportsTools: z.boolean().optional(),
-    concurrency: z.number().optional(),
-    requestDelayMs: z.number().optional(),
-    enabled: z.boolean().optional(),
-    thinking: z
-      .object({
-        enabled: z.boolean(),
-        budget: z.number(), // 0=disabled, -1=dynamic, positive=specific budget
-        thoughts: z.boolean() // whether to include thoughts in response
+    // Required fields
+    id: z
+      .string()
+      .regex(/^[a-z0-9-]+$/, 'ID must contain only lowercase letters, numbers, and hyphens')
+      .min(1, 'ID cannot be empty'),
+    modelId: z.string().min(1, 'Model ID cannot be empty'),
+    name: localizedStringSchema,
+    description: localizedStringSchema,
+    url: z.string().url('URL must be a valid URI format'),
+    provider: z.enum(['openai', 'anthropic', 'google', 'mistral', 'local'], {
+      errorMap: () => ({
+        message: 'Provider must be one of: openai, anthropic, google, mistral, local'
       })
-      .optional()
+    }),
+    tokenLimit: z
+      .number()
+      .int()
+      .min(1, 'Token limit must be at least 1')
+      .max(1000000, 'Token limit cannot exceed 1,000,000'),
+
+    // Optional fields with validation
+    default: z.boolean().optional().default(false),
+    supportsTools: z.boolean().optional().default(false),
+    concurrency: z
+      .number()
+      .int()
+      .min(1, 'Concurrency must be at least 1')
+      .max(100, 'Concurrency cannot exceed 100')
+      .optional(),
+    requestDelayMs: z
+      .number()
+      .int()
+      .min(0, 'Request delay cannot be negative')
+      .max(10000, 'Request delay cannot exceed 10 seconds')
+      .optional(),
+    enabled: z.boolean().optional().default(true),
+    thinking: thinkingSchema.optional()
   })
-  .passthrough();
+  .strict(); // Use strict instead of passthrough for better validation
 
 export const knownModelKeys = Object.keys(modelConfigSchema.shape);

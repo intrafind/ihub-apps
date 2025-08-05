@@ -26,6 +26,7 @@ import AdminPagesPage from './features/admin/pages/AdminPagesPage';
 import AdminPageEditPage from './features/admin/pages/AdminPageEditPage';
 import AdminAuthPage from './features/admin/pages/AdminAuthPage';
 import AdminUsersPage from './features/admin/pages/AdminUsersPage';
+import AdminUserEditPage from './features/admin/pages/AdminUserEditPage';
 import AdminGroupsPage from './features/admin/pages/AdminGroupsPage';
 import AdminGroupEditPage from './features/admin/pages/AdminGroupEditPage';
 import AdminUICustomization from './features/admin/pages/AdminUICustomization';
@@ -62,6 +63,7 @@ const SafeAdminPages = withSafeRoute(AdminPagesPage);
 const SafeAdminPageEdit = withSafeRoute(AdminPageEditPage);
 const SafeAdminAuth = withSafeRoute(AdminAuthPage);
 const SafeAdminUsers = withSafeRoute(AdminUsersPage);
+const SafeAdminUserEdit = withSafeRoute(AdminUserEditPage);
 const SafeAdminGroups = withSafeRoute(AdminGroupsPage);
 const SafeAdminGroupEdit = withSafeRoute(AdminGroupEditPage);
 const SafeAdminUICustomization = withSafeRoute(AdminUICustomization);
@@ -141,6 +143,12 @@ function App() {
                   {showAdminPage('auth') && <Route path="admin/auth" element={<SafeAdminAuth />} />}
                   {showAdminPage('users') && (
                     <Route path="admin/users" element={<SafeAdminUsers />} />
+                  )}
+                  {showAdminPage('users') && (
+                    <Route path="admin/users/new" element={<SafeAdminUserEdit />} />
+                  )}
+                  {showAdminPage('users') && (
+                    <Route path="admin/users/:userId/edit" element={<SafeAdminUserEdit />} />
                   )}
                   {showAdminPage('groups') && (
                     <Route path="admin/groups" element={<SafeAdminGroups />} />

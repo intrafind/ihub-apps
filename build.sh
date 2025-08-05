@@ -24,7 +24,7 @@ echo "Building application for production..."
 # Step 1: Clean previous builds
 echo "Cleaning previous builds..."
 rm -rf dist
-mkdir -p dist/public dist/server dist/examples
+mkdir -p dist/public dist/server
 
 # Step 2: Build the client
 echo "Building client..."

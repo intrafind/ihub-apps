@@ -9,7 +9,7 @@ import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
 /**
  * Reconfigure authentication methods when platform configuration changes
  * @param {Object} oldConfig - Previous configuration
- * @param {Object} newConfig - New configuration  
+ * @param {Object} newConfig - New configuration
  * @returns {Object} Reconfiguration results
  */
 function reconfigureAuthenticationMethods(oldConfig = {}, newConfig = {}) {
@@ -25,7 +25,8 @@ function reconfigureAuthenticationMethods(oldConfig = {}, newConfig = {}) {
   const ldapChanged = JSON.stringify(oldConfig.ldapAuth) !== JSON.stringify(newConfig.ldapAuth);
   const localChanged = JSON.stringify(oldConfig.localAuth) !== JSON.stringify(newConfig.localAuth);
   const proxyChanged = JSON.stringify(oldConfig.proxyAuth) !== JSON.stringify(newConfig.proxyAuth);
-  const anonymousChanged = JSON.stringify(oldConfig.anonymousAuth) !== JSON.stringify(newConfig.anonymousAuth);
+  const anonymousChanged =
+    JSON.stringify(oldConfig.anonymousAuth) !== JSON.stringify(newConfig.anonymousAuth);
 
   // OIDC - Can be reconfigured dynamically
   if (oidcChanged) {
@@ -42,7 +43,9 @@ function reconfigureAuthenticationMethods(oldConfig = {}, newConfig = {}) {
   // NTLM - Requires server restart (middleware cannot be dynamically removed)
   if (ntlmChanged) {
     results.requiresRestart.push('NTLM authentication');
-    results.notes.push('NTLM authentication changes require server restart (middleware limitation)');
+    results.notes.push(
+      'NTLM authentication changes require server restart (middleware limitation)'
+    );
   }
 
   // LDAP - No reconfiguration needed (loads config dynamically)

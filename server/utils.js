@@ -179,10 +179,12 @@ export async function logInteraction(interactionType, data) {
       modelId: data.modelId,
       sessionId: data.sessionId, // This is the chatId
       userSessionId: data.userSessionId, // This is the browser session ID
-      user: data.user ? {
-        username: data.user.username || 'anonymous',
-        id: data.user.id || 'anonymous'
-      } : null
+      user: data.user
+        ? {
+            username: data.user.username || 'anonymous',
+            id: data.user.id || 'anonymous'
+          }
+        : null
     };
 
     // Extract the user's query (last user message) if messages exist
@@ -220,8 +222,10 @@ export async function logInteraction(interactionType, data) {
     }
 
     // For debugging purposes, log to console with appropriate type prefix
-    const userInfo = logEntry.user ? `| User: ${logEntry.user.username || logEntry.user.id || 'unknown'}` : '| User: anonymous';
-    
+    const userInfo = logEntry.user
+      ? `| User: ${logEntry.user.username || logEntry.user.id || 'unknown'}`
+      : '| User: anonymous';
+
     if (logType === 'feedback') {
       console.log(
         `[FEEDBACK] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo} | Rating: ${data.feedback?.rating || 'unknown'}`
