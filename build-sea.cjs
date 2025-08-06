@@ -15,7 +15,7 @@ const version = require('./package.json').version;
 console.log(`Building for version: ${version}`);
 const appName = 'ai-hub-apps';
 const outputDir = path.join(__dirname, 'dist-bin');
-const defaultConfigDir = path.join(__dirname, 'configs', 'default');
+const defaultConfigDir = path.join(__dirname, 'server', 'defaults');
 const clientPublicDir = path.join(__dirname, 'client/dist');
 const docsBookDir = path.join(__dirname, 'docs/book');
 const serverDir = path.join(__dirname, 'server');
@@ -429,7 +429,7 @@ try {
   }
 
   // Copy default configuration (will be used by auto-setup on first run)
-  fs.cpSync(defaultConfigDir, path.join(outputDir, 'configs', 'default'), { recursive: true });
+  fs.cpSync(defaultConfigDir, path.join(outputDir, 'server', 'defaults'), { recursive: true });
 
   // Copy shared directory
   const sharedDir = path.join(__dirname, 'shared');
