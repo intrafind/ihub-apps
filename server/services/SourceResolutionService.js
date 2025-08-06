@@ -152,6 +152,7 @@ class SourceResolutionService {
 
     return {
       id: adminSource.id,
+      name: adminSource.name, // Keep the original localized name for display purposes
       type: adminSource.type,
       description: description,
       config: config,

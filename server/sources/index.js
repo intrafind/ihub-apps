@@ -13,14 +13,20 @@ import IFinderHandler from './IFinderHandler.js';
 import PageHandler from './PageHandler.js';
 import SourceManager from './SourceManager.js';
 
+// Singleton instance of SourceManager
+let singletonSourceManager = null;
+
 // Factory function to create source manager with default configuration
 export const createSourceManager = (config = {}) => {
-  return new SourceManager(config);
+  if (!singletonSourceManager) {
+    singletonSourceManager = new SourceManager(config);
+  }
+  return singletonSourceManager;
 };
 
 // Helper to validate source configurations
 export const validateSourceConfig = sourceConfig => {
-  const manager = new SourceManager();
+  const manager = createSourceManager();
   return manager.validateSourceConfig(sourceConfig);
 };
 

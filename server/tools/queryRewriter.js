@@ -215,7 +215,10 @@ export default async function queryRewriter({
 
   actionTracker.trackToolCallStart(chatId, { toolName: 'queryRewriter', toolInput: { query } });
   const prompt = getPrompt(query, think, context);
-  const result = await simpleCompletion(`${prompt.system}\n${prompt.user}`, { model: resolvedModel, temperature });
+  const result = await simpleCompletion(`${prompt.system}\n${prompt.user}`, {
+    model: resolvedModel,
+    temperature
+  });
   const completion = result.content;
 
   try {

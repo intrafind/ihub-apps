@@ -1,6 +1,7 @@
 import config from './config.js';
 import configCache from './configCache.js';
 import { throttledFetch } from './requestThrottler.js';
+import { createSourceManager } from './sources/index.js';
 
 /**
  * Extract language-specific value from a multilingual object or return the value as-is
@@ -146,13 +147,35 @@ export async function loadTools(language = null) {
  * Get tools applicable to a specific app
  * @param {Object} app - app configuration object
  * @param {string} language - Optional language for localization
+ * @param {Object} context - Context object (user, chatId, etc.) for source tool generation
  */
-export async function getToolsForApp(app, language = null) {
+export async function getToolsForApp(app, language = null, context = {}) {
+  // Get static tools from tool definitions
   const allTools = await loadTools(language);
+  let appTools = [];
+
   if (Array.isArray(app.tools) && app.tools.length > 0) {
-    return allTools.filter(t => app.tools.includes(t.id));
+    appTools = allTools.filter(t => app.tools.includes(t.id));
   }
-  return [];
+
+  // Add source-generated tools
+  if (Array.isArray(app.sources) && app.sources.length > 0) {
+    try {
+      const sourceManager = createSourceManager();
+      const { data: sourcesConfig } = configCache.getSources();
+      if (sourcesConfig && Array.isArray(sourcesConfig)) {
+        const appSources = sourcesConfig.filter(
+          source => app.sources.includes(source.id) && source.enabled
+        );
+        const sourceTools = sourceManager.generateTools(appSources, context);
+        appTools = appTools.concat(sourceTools);
+      }
+    } catch (error) {
+      console.error('Error generating source tools:', error);
+    }
+  }
+
+  return appTools;
 }
 
 /**
@@ -174,6 +197,20 @@ export async function runTool(toolId, params = {}) {
   console.log(`Running tool: ${toolId} with params:`, JSON.stringify(params, null, 2));
   if (!/^[A-Za-z0-9_.-]+$/.test(toolId)) {
     throw new Error('Invalid tool id');
+  }
+
+  // Check if this is a source tool (starts with 'source_')
+  if (toolId.startsWith('source_')) {
+    const { createSourceManager } = await import('./sources/index.js');
+    const sourceManager = createSourceManager();
+    const sourceToolFn = sourceManager.getToolFunction(toolId);
+
+    if (sourceToolFn) {
+      console.log(`Executing source tool: ${toolId}`);
+      return await sourceToolFn(params);
+    } else {
+      throw new Error(`Source tool ${toolId} not found in registry`);
+    }
   }
 
   // Find tool definition to determine the script file

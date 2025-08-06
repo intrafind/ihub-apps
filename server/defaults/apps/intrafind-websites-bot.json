@@ -1,13 +1,13 @@
 {
-  "id": "websites-bot",
+  "id": "intrafind-websites-bot",
   "order": 0,
   "name": {
-    "en": "Websites Bot",
-    "de": "Websites-Bot"
+    "en": "IntraFind Website Bot",
+    "de": "IntraFind Website Bot"
   },
   "description": {
-    "en": "Answer questions using information from a specific websites",
-    "de": "Beantworte Fragen mit Informationen aus einer spezifischen Websites"
+    "en": "Answer questions using information from the IntraFind websites",
+    "de": "Beantworte Fragen mit Informationen von der IntraFind Websites"
   },
   "color": "#10B981",
   "icon": "question-mark-circle",
@@ -71,7 +71,7 @@
     }
   },
   "inputMode": {
-    "type": "multiline",
+    "type": "single",
     "rows": 5,
     "microphone": {
       "enabled": true,

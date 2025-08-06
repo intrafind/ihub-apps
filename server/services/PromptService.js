@@ -196,8 +196,6 @@ class PromptService {
 
         // Handle both admin source references and inline source configs
         if (app.sources && Array.isArray(app.sources) && app.sources.length > 0) {
-          console.log(`Processing ${app.sources.length} source references for app: ${app.id}`);
-
           // Initialize source resolution service
           const sourceResolutionService = new SourceResolutionService();
 
@@ -212,8 +210,6 @@ class PromptService {
           const resolvedSources = await sourceResolutionService.resolveAppSources(app, context);
 
           if (resolvedSources.length > 0) {
-            console.log(`Loading content from ${resolvedSources.length} resolved sources`);
-
             // Create source manager for content loading
             const sourceManager = createSourceManager({
               filesystem: {
@@ -225,14 +221,9 @@ class PromptService {
             const result = await sourceManager.loadSources(resolvedSources, context);
             sourceContent = result.content;
 
-            console.log(
-              `Loaded sources: ${result.metadata.loadedSources}/${result.metadata.totalSources} successful`
-            );
             if (result.metadata.errors.length > 0) {
               console.warn('Source loading errors:', result.metadata.errors);
             }
-          } else {
-            console.warn(`No sources resolved for app: ${app.id}`);
           }
 
           // Replace {{sources}} template with combined content

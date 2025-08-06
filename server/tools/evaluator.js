@@ -32,7 +32,10 @@ export default async function evaluator({ question, answer, model = null }) {
   const results = [];
   for (const type of types) {
     try {
-      const result = await simpleCompletion(prompts[type], { model: resolvedModel, temperature: 0 });
+      const result = await simpleCompletion(prompts[type], {
+        model: resolvedModel,
+        temperature: 0
+      });
       const parsed = JSON.parse(result.content.trim());
       results.push({ type, ...parsed });
       if (!parsed.pass) break;

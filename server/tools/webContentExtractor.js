@@ -22,7 +22,6 @@ export default async function webContentExtractor({
   ignoreSSL = false,
   chatId
 }) {
-  console.log(`Starting content extraction from: ${url || uri || link}`);
   actionTracker.trackToolCallStart(chatId, {
     toolName: 'webContentExtractor',
     toolInput: { url: url || uri || link }
@@ -59,10 +58,7 @@ export default async function webContentExtractor({
       ignoreSSL && validUrl.protocol === 'https:'
         ? new https.Agent({ rejectUnauthorized: false })
         : undefined;
-    if (ignoreSSL && validUrl.protocol === 'https:') {
-      console.warn(`Ignoring SSL certificate errors for ${targetUrl}`);
-    }
-
+    // Ignoring SSL certificate errors if requested
     const response = await throttledFetch('webContentExtractor', targetUrl, {
       headers: {
         'User-Agent':
@@ -77,7 +73,6 @@ export default async function webContentExtractor({
       ...(dispatcher ? { dispatcher } : {})
     });
 
-    console.log(`Extracting content from webpage: ${targetUrl}`);
     actionTracker.trackToolCallProgress(chatId, {
       toolName: 'webContentExtractor',
       status: 'parsing'
@@ -101,12 +96,9 @@ export default async function webContentExtractor({
       );
     }
 
-    console.log(`Extracting content from webpage: ${targetUrl}`);
-
     // Handle PDF content
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('application/pdf')) {
-      console.log(`Extracting content from PDF: ${targetUrl}`);
       actionTracker.trackToolCallProgress(chatId, {
         toolName: 'webContentExtractor',
         status: 'extracting',
@@ -115,7 +107,6 @@ export default async function webContentExtractor({
 
       try {
         const arrayBuffer = await response.arrayBuffer();
-        console.log(`PDF size: ${arrayBuffer.byteLength} bytes`);
 
         // Use pdfjs-dist to parse the PDF
         const loadingTask = pdfjs.getDocument({
@@ -124,7 +115,6 @@ export default async function webContentExtractor({
         });
 
         const pdf = await loadingTask.promise;
-        console.log(`PDF loaded successfully, ${pdf.numPages} pages`);
 
         let fullText = '';
         const maxPagesToProcess = Math.min(pdf.numPages, 10); // Limit to first 10 pages for performance
@@ -139,8 +129,6 @@ export default async function webContentExtractor({
           // Stop if we have enough content
           if (fullText.length > maxLength * 2) break;
         }
-
-        console.log(`PDF text extraction successful, ${fullText.length} characters extracted`);
 
         const textContent = fullText.substring(0, maxLength);
         const output = {
@@ -158,8 +146,6 @@ export default async function webContentExtractor({
         });
         return output;
       } catch (pdfError) {
-        console.error(`PDF parsing error: ${pdfError.message}`);
-        console.error(`PDF error stack: ${pdfError.stack}`);
         throw createError(`Failed to parse PDF: ${pdfError.message}`, 'PDF_PARSE_ERROR');
       }
     }

@@ -3,6 +3,9 @@ import URLHandler from './URLHandler.js';
 import IFinderHandler from './IFinderHandler.js';
 import PageHandler from './PageHandler.js';
 
+// Global registry for source tool functions (persists across SourceManager instances)
+const globalSourceToolRegistry = new Map();
+
 /**
  * Source Manager
  *
@@ -105,7 +108,21 @@ class SourceManager {
 
     for (const source of sources) {
       try {
-        console.log(`Processing source: ${source.id} (type: ${source.type})`);
+        // Skip loading content for tool sources - they should only be loaded when the tool is called
+        if (source.exposeAs === 'tool') {
+          results.push({
+            id: source.id,
+            name: source.name,
+            type: source.type,
+            link: source.config?.url || source.config?.path || '',
+            exposeAs: 'tool',
+            description: source.description || `Content from ${source.id}`,
+            content: '',
+            metadata: { skipped: true, reason: 'Tool source - loaded on demand' },
+            success: true
+          });
+          continue;
+        }
 
         // Validate source configuration
         if (!this.validateSourceConfig(source)) {
@@ -120,21 +137,28 @@ class SourceManager {
           ...context
         };
 
-        console.log(`Loading content for source: ${source.id}`);
         // Load content
         const result = await handler.getCachedContent(sourceConfig);
 
-        console.log(
-          `✓ Successfully loaded content for source: ${source.id} (${result.content.length} characters)`
-        );
+        // Extract original link from source config for different source types
+        let originalLink = result.metadata?.link || source.link || '';
+        if (!originalLink && source.config) {
+          if (source.type === 'url' && source.config.url) {
+            originalLink = source.config.url;
+          } else if (source.type === 'filesystem' && source.config.path) {
+            originalLink = source.config.path;
+          }
+        }
 
         results.push({
           id: source.id,
+          name: source.name,
           type: source.type,
-          link: result.metadata?.link || source.link || '',
+          link: originalLink,
           exposeAs: source.exposeAs || 'prompt',
+          description: source.description || `Content from ${source.id}`,
           content: result.content,
-          metadata: result.metadata,
+          metadata: { ...result.metadata, originalUrl: originalLink },
           success: true
         });
 
@@ -144,12 +168,13 @@ class SourceManager {
           totalContent += `\n\n<source id="${source.id}" type="${source.type}" link="${sourceLink}">\n${result.content}\n</source>`;
         }
       } catch (error) {
-        console.error(`✗ Failed to load content for source: ${source.id} - ${error.message}`);
-
         const errorResult = {
           id: source.id,
+          name: source.name,
           type: source.type,
           exposeAs: source.exposeAs || 'prompt',
+          description: source.description || `Content from ${source.id}`,
+          link: source.config?.url || source.config?.path || '',
           content: '',
           metadata: {
             error: error.message,
@@ -164,9 +189,16 @@ class SourceManager {
       }
     }
 
+    // Generate enhanced sources template with both prompt and tool sources
+    const enhancedContent = this.generateEnhancedSourcesTemplate(
+      results,
+      totalContent.trim(),
+      context
+    );
+
     return {
       sources: results,
-      content: totalContent.trim(),
+      content: enhancedContent,
       metadata: {
         totalSources: sources.length,
         loadedSources: results.filter(r => r.success).length,
@@ -190,12 +222,87 @@ class SourceManager {
       if (source.exposeAs === 'tool') {
         const tool = this.createSourceTool(source, context);
         if (tool) {
-          tools.push(tool);
+          // Validate tool structure before adding (generic format)
+          if (tool.name && tool.description && tool.parameters) {
+            tools.push(tool);
+          } else {
+            console.error(
+              `Invalid tool generated for source ${source.id}:`,
+              JSON.stringify(tool, null, 2)
+            );
+          }
         }
       }
     }
 
     return tools;
+  }
+
+  /**
+   * Generate enhanced sources template that includes both prompt sources (with content)
+   * and tool sources (with function references)
+   * @param {Array} results - Source loading results
+   * @param {string} promptContent - Existing prompt-based source content
+   * @param {Object} context - Context with language information
+   * @returns {string} Enhanced sources template
+   */
+  generateEnhancedSourcesTemplate(results, promptContent, context = {}) {
+    const sourceEntries = [];
+
+    for (const result of results) {
+      if (result.success) {
+        if (result.exposeAs === 'tool') {
+          // Tool-based source - include as function reference with human-friendly name
+          const link = result.link || '';
+
+          // Localize description
+          let description = result.description || `Content from ${result.id}`;
+          if (typeof description === 'object') {
+            description =
+              description.en || Object.values(description)[0] || `Content from ${result.id}`;
+          }
+
+          // Get human-friendly display name
+          const language = context.language || 'en';
+          let displayName = result.id; // fallback to ID if no name
+          if (result.name) {
+            if (typeof result.name === 'string') {
+              displayName = result.name;
+            } else if (typeof result.name === 'object' && result.name !== null) {
+              displayName =
+                result.name[language] ||
+                result.name.en ||
+                Object.values(result.name)[0] ||
+                result.id;
+            }
+          }
+
+          sourceEntries.push(
+            `  <source id="${result.id}" type="function" name="source_${result.id}" displayName="${displayName}" link="${link}" description="${description}"/>`
+          );
+        } else {
+          // Prompt-based source - include directly in content (already handled in totalContent)
+          // Just add metadata entry to the list
+          const link = result.link || '';
+          let description = result.description || `Content from ${result.id}`;
+          if (typeof description === 'object') {
+            description =
+              description.en || Object.values(description)[0] || `Content from ${result.id}`;
+          }
+
+          sourceEntries.push(
+            `  <source id="${result.id}" type="${result.type}" link="${link}" description="${description}"/>`
+          );
+        }
+      }
+    }
+
+    if (sourceEntries.length > 0) {
+      const sourcesHeader = `<sources>\n${sourceEntries.join('\n')}\n</sources>\n\n`;
+      return sourcesHeader + promptContent;
+    }
+
+    return promptContent;
   }
 
   /**
@@ -212,8 +319,8 @@ class SourceManager {
 
     const toolId = `source_${source.id}`;
 
-    // Store tool execution function
-    this.toolRegistry.set(toolId, async params => {
+    // Store tool execution function in global registry
+    const toolFunction = async params => {
       const sourceConfig = {
         ...source.config,
         ...context,
@@ -221,17 +328,42 @@ class SourceManager {
       };
 
       return await handler.getCachedContent(sourceConfig);
-    });
-
-    // Generate tool schema based on handler type
-    return {
-      type: 'function',
-      function: {
-        name: toolId,
-        description: source.description || `Load content from ${source.type} source: ${source.id}`,
-        parameters: this.generateToolParameters(source)
-      }
     };
+
+    this.toolRegistry.set(toolId, toolFunction);
+    globalSourceToolRegistry.set(toolId, toolFunction);
+
+    // Localize description
+    const language = context.language || 'en';
+    let description = source.description || `Load content from ${source.type} source: ${source.id}`;
+
+    // Handle multilingual descriptions
+    if (typeof description === 'object' && description[language]) {
+      description = description[language];
+    } else if (typeof description === 'object' && description.en) {
+      description = description.en; // fallback to English
+    }
+
+    // Get human-friendly name
+    let displayName = source.id; // fallback to ID if no name
+    if (source.name) {
+      if (typeof source.name === 'string') {
+        displayName = source.name;
+      } else if (typeof source.name === 'object') {
+        displayName =
+          source.name[language] || source.name.en || Object.values(source.name)[0] || source.id;
+      }
+    }
+
+    // Generate tool schema in generic format (will be converted by provider adapters)
+    const tool = {
+      name: toolId,
+      displayName: displayName,
+      description: description,
+      parameters: this.generateToolParameters(source)
+    };
+
+    return tool;
   }
 
   /**
@@ -636,6 +768,15 @@ class SourceManager {
       tools,
       metadata: sourcesResult.metadata
     };
+  }
+
+  /**
+   * Get a tool function from the registry
+   * @param {string} toolId - Tool ID to retrieve
+   * @returns {Function|null} - Tool execution function or null if not found
+   */
+  getToolFunction(toolId) {
+    return this.toolRegistry.get(toolId) || globalSourceToolRegistry.get(toolId) || null;
   }
 }
 

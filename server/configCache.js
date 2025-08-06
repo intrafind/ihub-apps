@@ -359,13 +359,6 @@ class ConfigCache {
       };
     }
 
-    // Check if entry is still valid (extra safety check)
-    const age = Date.now() - entry.timestamp;
-    if (age > this.cacheTTL * 2) {
-      // Allow 2x TTL grace period
-      console.warn(`Cache entry for ${configPath} is stale (${Math.round(age / 1000)}s old)`);
-    }
-
     return entry;
   }
 
@@ -572,7 +565,9 @@ class ConfigCache {
 
   async _loadAndCacheLocaleInternal(language) {
     try {
-      console.log(`🔄 Loading locale: ${language}`);
+      // Check if locale is already cached
+      const existing = this.cache.get(`locales/${language}.json`);
+      const wasInCache = !!existing;
 
       const base = await loadBuiltinLocaleJson(`${language}.json`);
       if (!base) {
@@ -582,14 +577,30 @@ class ConfigCache {
 
       const overrides = (await loadJson(`locales/${language}.json`)) || {};
       const merged = this.mergeLocaleData(base, overrides);
+
+      // Generate ETag to check if content has changed
+      const newEtag = this.generateETag(merged);
+      const hasChanged = !existing || existing.etag !== newEtag;
+
+      // Only log if this is initial load or content has changed
+      if (!wasInCache || hasChanged) {
+        console.log(`🔄 Loading locale: ${language}`);
+      }
+
       this.setCacheEntry(`locales/${language}.json`, merged);
 
-      const overrideInfo =
-        Object.keys(overrides).length > 0 ? ` with ${Object.keys(overrides).length} overrides` : '';
+      // Only log success if this is initial load or content has changed
+      if (!wasInCache || hasChanged) {
+        const overrideInfo =
+          Object.keys(overrides).length > 0
+            ? ` with ${Object.keys(overrides).length} overrides`
+            : '';
 
-      console.log(
-        `✓ Cached locale: ${language} (${Object.keys(merged).length} keys${overrideInfo})`
-      );
+        console.log(
+          `✓ Cached locale: ${language} (${Object.keys(merged).length} keys${overrideInfo})`
+        );
+      }
+
       return merged;
     } catch (error) {
       console.error(`❌ Error caching locale ${language}:`, error.message);

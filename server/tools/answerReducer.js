@@ -44,11 +44,7 @@ Do not change technical terms, names, or specific details`,
   };
 }
 
-export default async function answerReducer({
-  answers,
-  model = null,
-  temperature = 0.3
-}) {
+export default async function answerReducer({ answers, model = null, temperature = 0.3 }) {
   const resolvedModel = resolveModelId(model, 'answerReducer');
   if (!resolvedModel) {
     throw new Error('answerReducer: No model available');

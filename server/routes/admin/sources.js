@@ -8,24 +8,19 @@ import {
   validateSourcesArray,
   getDefaultSourceConfig
 } from '../../validators/sourceConfigSchema.js';
-import SourceManager from '../../sources/SourceManager.js';
+import { createSourceManager } from '../../sources/index.js';
 import {
   sendNotFound,
   sendBadRequest,
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
 
-let sourceManager = null;
-
 /**
  * Initialize source manager singleton
  * @returns {SourceManager} Source manager instance
  */
 function getSourceManager() {
-  if (!sourceManager) {
-    sourceManager = new SourceManager();
-  }
-  return sourceManager;
+  return createSourceManager();
 }
 
 /**

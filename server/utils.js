@@ -453,35 +453,39 @@ export function resolveModelId(preferredModel = null, toolName = 'unknown') {
     // Get available models and default model
     const { data: models = [] } = configCache.getModels();
     const defaultModel = models.find(m => m.default)?.id;
-    
+
     // Check if any models are available
     if (!models || models.length === 0) {
       console.warn(`${toolName}: No models available, using fallback`);
       return null;
     }
-    
+
     // Use preferred model if provided and exists
     if (preferredModel && models.some(m => m.id === preferredModel)) {
       return preferredModel;
     }
-    
+
     // Log warning if preferred model was specified but not found
     if (preferredModel) {
-      console.warn(`${toolName}: Model '${preferredModel}' not found, falling back to default model '${defaultModel}'`);
+      console.warn(
+        `${toolName}: Model '${preferredModel}' not found, falling back to default model '${defaultModel}'`
+      );
     }
-    
+
     // Fallback to default model
     if (defaultModel && models.some(m => m.id === defaultModel)) {
       return defaultModel;
     }
-    
+
     // Final fallback to first available model
     const firstModel = models[0]?.id;
     if (firstModel) {
-      console.warn(`${toolName}: Default model not found, using first available model '${firstModel}'`);
+      console.warn(
+        `${toolName}: Default model not found, using first available model '${firstModel}'`
+      );
       return firstModel;
     }
-    
+
     console.error(`${toolName}: No models available`);
     return null;
   } catch (error) {

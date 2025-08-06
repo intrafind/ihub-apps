@@ -100,7 +100,7 @@ class OpenAIAdapterClass extends BaseAdapter {
       body.response_format = { type: 'json_object' };
     }
 
-    console.log('OpenAI request body:', body);
+    console.log('OpenAI request body:', JSON.stringify(body, null, 2));
 
     return {
       url: model.url,

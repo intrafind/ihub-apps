@@ -29,7 +29,7 @@ export default async function deepResearch({
   if (!resolvedModel) {
     throw new Error('deepResearch: No model available');
   }
-  
+
   if (!query) {
     throw new Error('query parameter is required');
   }
