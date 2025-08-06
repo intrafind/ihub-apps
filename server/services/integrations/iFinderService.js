@@ -3,6 +3,7 @@ import config from '../../config.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
 import configCache from '../../configCache.js';
+import authDebugService from '../../utils/authDebugService.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -117,7 +118,14 @@ class IFinderService {
       // Generate JWT token for the user
       const authHeader = getIFinderAuthorizationHeader(user);
 
-      console.log(`iFinder Search: Auth Header for user ${JSON.stringify(user)}:`, authHeader);
+      // Log authentication header with proper masking
+      authDebugService.log('iFinder', 'info', 'JWT token generated for search request', {
+        userId: user.id,
+        userName: user.name,
+        userGroups: user.groups,
+        authHeader: authHeader,
+        searchProfile: profileId
+      });
 
       // Construct search URL with profile ID
       const searchEndpoint = config.endpoints.search.replace(

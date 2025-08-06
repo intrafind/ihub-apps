@@ -13,6 +13,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
   const [fileContent, setFileContent] = useState('');
   const [isEditingContent, setIsEditingContent] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const loadCurrentFile = useCallback(async () => {
     if (!source?.id || !source?.config?.path) return;
@@ -47,12 +48,44 @@ const FileUploader = ({ source, onChange, isEditing }) => {
     // Load current file info if source has a file path configured
     if (source?.config?.path && isEditing) {
       loadCurrentFile();
+    } else if (source?.config?.tempContent) {
+      // Load temporary content for new sources
+      setCurrentFile({
+        name: source.config.originalFileName || 'content.txt',
+        path: source.config.path || '',
+        size: new TextEncoder().encode(source.config.tempContent).length,
+        modified: source.config.uploadedAt || new Date().toISOString()
+      });
+      setFileContent(source.config.tempContent);
     }
-  }, [source?.config?.path, isEditing, loadCurrentFile]);
+  }, [source?.config?.path, source?.config?.tempContent, isEditing, loadCurrentFile]);
 
-  const handleFileUpload = async event => {
-    const file = event.target.files[0];
+  const processFile = async file => {
     if (!file) return;
+
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      setError(t('admin.sources.fileTooLarge', 'File size exceeds 10MB limit'));
+      return;
+    }
+
+    // Check file type
+    const allowedExtensions = [
+      '.txt',
+      '.md',
+      '.json',
+      '.xml',
+      '.csv',
+      '.log',
+      '.conf',
+      '.yaml',
+      '.yml'
+    ];
+    const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!allowedExtensions.includes(fileExtension)) {
+      setError(t('admin.sources.unsupportedFileType', 'Unsupported file type'));
+      return;
+    }
 
     try {
       setLoading(true);
@@ -62,27 +95,55 @@ const FileUploader = ({ source, onChange, isEditing }) => {
       const content = await readFileContent(file);
 
       // Generate file path in sources directory
-      const fileName = `${source.id}_${Date.now()}_${file.name}`;
+      const sourceId = source.id || `temp_${Date.now()}`;
+      const fileName = `${sourceId}_${Date.now()}_${file.name}`;
       const filePath = `sources/${fileName}`;
 
-      // Upload file
-      const response = await makeAdminApiCall(`/admin/sources/${source.id}/files`, {
-        method: 'POST',
-        body: JSON.stringify({
-          path: filePath,
-          content: content,
-          encoding: 'utf8'
-        })
-      });
+      if (source.id) {
+        // Source already exists, upload to server
+        const response = await makeAdminApiCall(`/admin/sources/${source.id}/files`, {
+          method: 'POST',
+          body: JSON.stringify({
+            path: filePath,
+            content: content,
+            encoding: 'utf8'
+          })
+        });
 
-      if (response.data.success) {
-        // Update source configuration with new file path
+        if (response.data.success) {
+          // Update source configuration with new file path
+          const updatedSource = {
+            ...source,
+            config: {
+              ...source.config,
+              path: filePath,
+              originalFileName: file.name,
+              uploadedAt: new Date().toISOString()
+            }
+          };
+
+          onChange(updatedSource);
+
+          setCurrentFile({
+            name: file.name,
+            path: filePath,
+            size: file.size,
+            modified: new Date().toISOString()
+          });
+          setFileContent(content);
+          setHasUnsavedChanges(false);
+        } else {
+          setError(response.data.error || 'Failed to upload file');
+        }
+      } else {
+        // New source, just store content locally until source is saved
         const updatedSource = {
           ...source,
           config: {
             ...source.config,
             path: filePath,
             originalFileName: file.name,
+            tempContent: content, // Store temporarily
             uploadedAt: new Date().toISOString()
           }
         };
@@ -97,8 +158,6 @@ const FileUploader = ({ source, onChange, isEditing }) => {
         });
         setFileContent(content);
         setHasUnsavedChanges(false);
-      } else {
-        setError(response.data.error || 'Failed to upload file');
       }
     } catch (err) {
       console.error('Failed to upload file:', err);
@@ -106,6 +165,11 @@ const FileUploader = ({ source, onChange, isEditing }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFileUpload = async event => {
+    const file = event.target.files[0];
+    await processFile(file);
   };
 
   const readFileContent = file => {
@@ -117,34 +181,119 @@ const FileUploader = ({ source, onChange, isEditing }) => {
     });
   };
 
+  const handleDragEnter = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!loading && isEditing) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragging to false if we're leaving the drop zone entirely
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = e => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async e => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (!isEditing || loading) return;
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      await processFile(files[0]);
+    }
+  };
+
   const saveFileContent = async () => {
-    if (!currentFile?.path) return;
+    if (!currentFile?.path && !source?.config?.tempContent) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      const response = await makeAdminApiCall(`/admin/sources/${source.id}/files`, {
-        method: 'POST',
-        body: JSON.stringify({
-          path: currentFile.path,
-          content: fileContent,
-          encoding: 'utf8'
-        })
-      });
+      let filePath = currentFile?.path;
 
-      if (response.data.success) {
+      // If no file exists yet, create a new file path
+      if (!filePath) {
+        const sourceId = source.id || `temp_${Date.now()}`;
+        const fileName = `${sourceId}_${Date.now()}_content.txt`;
+        filePath = `sources/${fileName}`;
+      }
+
+      if (source.id) {
+        // Source exists, save to server
+        const response = await makeAdminApiCall(`/admin/sources/${source.id}/files`, {
+          method: 'POST',
+          body: JSON.stringify({
+            path: filePath,
+            content: fileContent,
+            encoding: 'utf8'
+          })
+        });
+
+        if (response.data.success) {
+          setHasUnsavedChanges(false);
+          setIsEditingContent(false);
+
+          // Update source configuration if this is a new file
+          if (!currentFile?.path) {
+            const updatedSource = {
+              ...source,
+              config: {
+                ...source.config,
+                path: filePath,
+                originalFileName: 'content.txt',
+                uploadedAt: new Date().toISOString()
+              }
+            };
+            onChange(updatedSource);
+          }
+
+          // Update file metadata
+          setCurrentFile({
+            name: currentFile?.name || 'content.txt',
+            path: filePath,
+            size: new TextEncoder().encode(fileContent).length,
+            modified: new Date().toISOString()
+          });
+        } else {
+          setError(response.data.error || 'Failed to save file');
+        }
+      } else {
+        // New source, store content temporarily
         setHasUnsavedChanges(false);
         setIsEditingContent(false);
 
-        // Update file metadata
-        setCurrentFile(prev => ({
-          ...prev,
+        const updatedSource = {
+          ...source,
+          config: {
+            ...source.config,
+            path: filePath,
+            originalFileName: 'content.txt',
+            tempContent: fileContent,
+            uploadedAt: new Date().toISOString()
+          }
+        };
+        onChange(updatedSource);
+
+        setCurrentFile({
+          name: 'content.txt',
+          path: filePath,
           size: new TextEncoder().encode(fileContent).length,
           modified: new Date().toISOString()
-        }));
-      } else {
-        setError(response.data.error || 'Failed to save file');
+        });
       }
     } catch (err) {
       console.error('Failed to save file:', err);
@@ -152,6 +301,22 @@ const FileUploader = ({ source, onChange, isEditing }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const createNewContent = () => {
+    const sourceId = source.id || `temp_${Date.now()}`;
+    const fileName = `${sourceId}_${Date.now()}_content.txt`;
+    const filePath = `sources/${fileName}`;
+
+    setCurrentFile({
+      name: 'content.txt',
+      path: filePath,
+      size: 0,
+      modified: new Date().toISOString()
+    });
+    setFileContent('');
+    setIsEditingContent(true);
+    setHasUnsavedChanges(false);
   };
 
   const formatFileSize = bytes => {
@@ -299,46 +464,106 @@ const FileUploader = ({ source, onChange, isEditing }) => {
           </div>
         )}
 
-        {/* File Upload Input - Hide when editing content */}
+        {/* File Upload Input and Create Content Options - Hide when editing content */}
         {!isEditingContent && (
-          <div className="relative">
-            <input
-              type="file"
-              onChange={handleFileUpload}
-              disabled={loading || !isEditing}
-              className="sr-only"
-              id="file-upload"
-              accept=".txt,.md,.json,.xml,.csv,.log,.conf,.yaml,.yml"
-            />
-            <label
-              htmlFor="file-upload"
-              className={`flex items-center justify-center px-4 py-2 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
-                loading || !isEditing
-                  ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
-                  : 'border-gray-300 hover:border-gray-400 bg-white'
-              }`}
+          <div className="space-y-4">
+            {/* Upload File Section */}
+            <div
+              className="relative"
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
             >
-              <div className="space-y-1 text-center">
-                <Icon
-                  name={loading ? 'arrow-path' : 'cloud-arrow-up'}
-                  className={`mx-auto h-8 w-8 ${loading ? 'animate-spin text-gray-400' : 'text-gray-400'}`}
-                />
-                <div className="flex text-sm text-gray-600">
-                  <span className="font-medium text-blue-600 hover:text-blue-500">
-                    {currentFile
-                      ? t('admin.sources.uploadNewFile', 'Upload new file')
-                      : t('admin.sources.uploadFile', 'Upload file')}
-                  </span>
-                  <p className="pl-1">{t('admin.sources.orDragDrop', 'or drag and drop')}</p>
+              <input
+                type="file"
+                onChange={handleFileUpload}
+                disabled={loading || !isEditing}
+                className="sr-only"
+                id="file-upload"
+                accept=".txt,.md,.json,.xml,.csv,.log,.conf,.yaml,.yml"
+              />
+              <label
+                htmlFor="file-upload"
+                className={`flex items-center justify-center px-4 py-2 border-2 border-dashed rounded-lg transition-all ${
+                  loading || !isEditing
+                    ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
+                    : isDragging
+                      ? 'border-blue-400 bg-blue-50 cursor-copy'
+                      : 'border-gray-300 hover:border-gray-400 bg-white cursor-pointer'
+                }`}
+              >
+                <div className="space-y-1 text-center pointer-events-none">
+                  <Icon
+                    name={
+                      loading ? 'arrow-path' : isDragging ? 'document-arrow-down' : 'cloud-arrow-up'
+                    }
+                    className={`mx-auto h-8 w-8 ${
+                      loading
+                        ? 'animate-spin text-gray-400'
+                        : isDragging
+                          ? 'text-blue-500'
+                          : 'text-gray-400'
+                    }`}
+                  />
+                  <div className="flex text-sm text-gray-600">
+                    {isDragging ? (
+                      <span className="font-medium text-blue-600">
+                        {t('admin.sources.dropFileHere', 'Drop file here')}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="font-medium text-blue-600 hover:text-blue-500">
+                          {currentFile
+                            ? t('admin.sources.uploadNewFile', 'Upload new file')
+                            : t('admin.sources.uploadFile', 'Upload file')}
+                        </span>
+                        <p className="pl-1">{t('admin.sources.orDragDrop', 'or drag and drop')}</p>
+                      </>
+                    )}
+                  </div>
+                  {!isDragging && (
+                    <p className="text-xs text-gray-500">
+                      {t(
+                        'admin.sources.supportedFormats',
+                        'TXT, MD, JSON, XML, CSV, LOG, CONF, YAML up to 10MB'
+                      )}
+                    </p>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500">
+              </label>
+            </div>
+
+            {/* Create New Content Option */}
+            {!currentFile && isEditing && (
+              <div className="text-center">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-300" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white text-gray-500">
+                      {t('admin.sources.or', 'or')}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={createNewContent}
+                  disabled={loading}
+                  className="mt-4 inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Icon name="document-plus" className="h-4 w-4 mr-2" />
+                  {t('admin.sources.createNewContent', 'Create new content')}
+                </button>
+                <p className="mt-2 text-xs text-gray-500">
                   {t(
-                    'admin.sources.supportedFormats',
-                    'TXT, MD, JSON, XML, CSV, LOG, CONF, YAML up to 10MB'
+                    'admin.sources.createNewContentHelp',
+                    'Start writing content directly in the editor'
                   )}
                 </p>
               </div>
-            </label>
+            )}
           </div>
         )}
 
@@ -359,11 +584,11 @@ const FileUploader = ({ source, onChange, isEditing }) => {
         )}
 
         {/* Help Text */}
-        {!currentFile && !error && (
+        {!currentFile && !error && !isEditing && (
           <p className="mt-2 text-xs text-gray-500">
             {t(
               'admin.sources.fileUploadHelp',
-              'Upload a file to use as the content source. The file will be stored securely and referenced by this source.'
+              'Upload a file or create new content to use as the content source. The file will be stored securely and referenced by this source.'
             )}
           </p>
         )}

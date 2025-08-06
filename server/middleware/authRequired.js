@@ -2,6 +2,7 @@
  * Authentication middleware to enforce authentication when required
  */
 import { isAnonymousAccessAllowed } from '../utils/authorization.js';
+import authDebugService from '../utils/authDebugService.js';
 
 /**
  * Middleware that requires authentication when anonymousAuth is disabled
@@ -10,23 +11,49 @@ import { isAnonymousAccessAllowed } from '../utils/authorization.js';
  * @param {Function} next - Express next function
  */
 export function authRequired(req, res, next) {
-  console.log('🔐 authRequired: Called for URL:', req.url, req.method);
+  // Initial auth check logging
+  authDebugService.log('auth-required', 'debug', 'Authentication middleware called', {
+    url: req.url,
+    method: req.method
+  });
   const platformConfig = req.app.get('platform') || {};
 
   // If anonymous access is allowed, proceed regardless of authentication
   if (isAnonymousAccessAllowed(platformConfig)) {
-    console.log('🔐 authRequired: Anonymous access allowed, proceeding');
+    authDebugService.log(
+      'auth-required',
+      'info',
+      'Anonymous access allowed - proceeding without authentication check',
+      { url: req.url, method: req.method }
+    );
     return next();
   }
 
-  // Add debugging
-  console.log('🔐 authRequired: Anonymous access disabled, checking authentication');
-  console.log('🔐 authRequired: req.user:', req.user);
-  console.log('🔐 authRequired: Authorization header:', req.headers.authorization);
+  // Log authentication check with proper token masking
+  authDebugService.log(
+    'auth-required',
+    'info',
+    'Authentication check - anonymous access disabled',
+    {
+      url: req.url,
+      method: req.method,
+      hasUser: !!req.user,
+      userId: req.user?.id,
+      userName: req.user?.name,
+      userGroups: req.user?.groups,
+      authHeader: req.headers.authorization,
+      userAgent: req.headers['user-agent']
+    }
+  );
 
   // Anonymous access is disabled - require authentication
   if (!req.user || req.user.id === 'anonymous') {
-    console.log('🔐 authRequired: Authentication failed - no valid user');
+    authDebugService.log('auth-required', 'warn', 'Authentication failed - no valid user found', {
+      url: req.url,
+      method: req.method,
+      hasUser: !!req.user,
+      userId: req.user?.id
+    });
     return res.status(401).json({
       error: 'Authentication required',
       code: 'AUTH_REQUIRED',
@@ -34,7 +61,13 @@ export function authRequired(req, res, next) {
     });
   }
 
-  console.log('🔐 authRequired: Authentication successful for user:', req.user.id);
+  authDebugService.log('auth-required', 'info', 'Authentication successful', {
+    url: req.url,
+    method: req.method,
+    userId: req.user.id,
+    userName: req.user.name,
+    userGroups: req.user.groups
+  });
   next();
 }
 
@@ -101,7 +134,10 @@ export const modelAccessRequired = resourceAccessRequired('model');
  * @param {Function} next - Express next function
  */
 export function chatAuthRequired(req, res, next) {
-  console.log('🔐 chatAuthRequired: Called for URL:', req.url, req.method);
+  authDebugService.log('chat-auth-required', 'debug', 'Chat authentication middleware called', {
+    url: req.url,
+    method: req.method
+  });
 
   // First check if authentication is required
   authRequired(req, res, err => {
@@ -109,11 +145,31 @@ export function chatAuthRequired(req, res, next) {
 
     // Then check app access permissions if user is authenticated
     if (req.user && req.user.id !== 'anonymous') {
-      console.log('🔐 chatAuthRequired: User authenticated, checking app access');
+      authDebugService.log(
+        'chat-auth-required',
+        'info',
+        'User authenticated, checking app access',
+        {
+          url: req.url,
+          method: req.method,
+          userId: req.user?.id,
+          appId: req.params.appId
+        }
+      );
       return appAccessRequired(req, res, next);
     }
 
-    console.log('🔐 chatAuthRequired: Proceeding without app access check');
+    authDebugService.log(
+      'chat-auth-required',
+      'info',
+      'Proceeding without app access check (anonymous or unauthenticated user)',
+      {
+        url: req.url,
+        method: req.method,
+        hasUser: !!req.user,
+        userId: req.user?.id
+      }
+    );
     next();
   });
 }
