@@ -101,6 +101,8 @@
       "toggleImageUpload": "Toggle image upload",
       "toggleFileUpload": "Toggle file upload",
       "toggleUpload": "Toggle file upload",
+      "hideUpload": "Hide file upload",
+      "moreActions": "More actions",
       "favorites": "Favorites",
       "clearFilters": "Clear filters",
       "loadMore": "Load More",

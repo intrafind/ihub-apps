@@ -47,6 +47,7 @@ import {
   ExclamationTriangleIcon as OutlineExclamationTriangleIcon,
   AcademicCapIcon as OutlineAcademicCapIcon,
   ListBulletIcon,
+  PlusIcon,
   PlusCircleIcon,
   MinusCircleIcon,
   SwatchIcon,
@@ -89,6 +90,7 @@ import {
   ClockIcon as SolidClockIcon,
   AcademicCapIcon as SolidAcademicCapIcon,
   InformationCircleIcon as SolidInformationCircleIcon,
+  PlusIcon as SolidPlusIcon,
   PlusCircleIcon as SolidPlusCircleIcon,
   MinusCircleIcon as SolidMinusCircleIcon,
   SwatchIcon as SolidSwatchIcon,
@@ -179,7 +181,7 @@ const iconMap = {
   'external-link': { outline: ArrowTopRightOnSquareIcon, solid: SolidArrowTopRightOnSquareIcon },
   // Add commonly used aliases and missing icons
   save: { outline: OutlineCheckIcon, solid: SolidCheckIcon }, // Use check icon for save
-  plus: { outline: PlusCircleIcon, solid: SolidPlusCircleIcon },
+  plus: { outline: PlusIcon, solid: SolidPlusIcon },
   warning: { outline: OutlineExclamationTriangleIcon, solid: SolidExclamationTriangleIcon }
 };
 
