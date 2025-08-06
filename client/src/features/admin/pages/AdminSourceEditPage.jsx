@@ -93,16 +93,16 @@ const AdminSourceEditPage = () => {
           ...sourceData.config
         }
       };
-      
+
       // Remove temporary fields from config before saving
       if (cleanSourceData.config) {
         delete cleanSourceData.config.tempContent;
         delete cleanSourceData.config.originalFileName;
         delete cleanSourceData.config.uploadedAt;
       }
-      
+
       let savedSource;
-      
+
       if (isEditing) {
         const response = await makeAdminApiCall(`/admin/sources/${id}`, {
           method: 'PUT',
@@ -115,7 +115,7 @@ const AdminSourceEditPage = () => {
           body: JSON.stringify(cleanSourceData)
         });
         savedSource = response.data?.source || cleanSourceData;
-        
+
         // If new source has temporary content, upload it now
         if (tempContent && savedSource?.id) {
           try {

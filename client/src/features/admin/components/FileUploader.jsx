@@ -394,39 +394,39 @@ const FileUploader = ({ source, onChange, isEditing }) => {
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                  {!isEditingContent ? (
+                {!isEditingContent ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingContent(true)}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    {t('admin.sources.editContent', 'Edit Content')}
+                  </button>
+                ) : (
+                  <>
                     <button
                       type="button"
-                      onClick={() => setIsEditingContent(true)}
-                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      onClick={saveFileContent}
+                      disabled={loading || !hasUnsavedChanges}
+                      className="text-sm text-green-600 hover:text-green-700 font-medium disabled:opacity-50"
                     >
-                      {t('admin.sources.editContent', 'Edit Content')}
+                      {t('common.save', 'Save')}
                     </button>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={saveFileContent}
-                        disabled={loading || !hasUnsavedChanges}
-                        className="text-sm text-green-600 hover:text-green-700 font-medium disabled:opacity-50"
-                      >
-                        {t('common.save', 'Save')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsEditingContent(false);
-                          setHasUnsavedChanges(false);
-                          // Reload original content
-                          loadCurrentFile();
-                        }}
-                        className="text-sm text-gray-600 hover:text-gray-700 font-medium"
-                      >
-                        {t('common.cancel', 'Cancel')}
-                      </button>
-                    </>
-                  )}
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditingContent(false);
+                        setHasUnsavedChanges(false);
+                        // Reload original content
+                        loadCurrentFile();
+                      }}
+                      className="text-sm text-gray-600 hover:text-gray-700 font-medium"
+                    >
+                      {t('common.cancel', 'Cancel')}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}
