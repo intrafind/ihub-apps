@@ -83,7 +83,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.0",
-    "electron": "^32.2.6",
+    "electron": "^37.2.6",
     "electron-builder": "^26.0.12",
     "esbuild": "^0.25.8",
     "eslint": "^9.32.0",
