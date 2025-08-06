@@ -1,4 +1,4 @@
-import { simpleCompletion } from '../utils.js';
+import { simpleCompletion, resolveModelId } from '../utils.js';
 import { actionTracker } from '../actionTracker.js';
 
 function getPrompt(query, think, context) {
@@ -201,17 +201,21 @@ export default async function queryRewriter({
   query,
   think = '',
   context = '',
-  model = 'gpt-4o',
+  model = null,
   temperature = 0.3,
   chatId
 }) {
+  const resolvedModel = resolveModelId(model, 'queryRewriter');
+  if (!resolvedModel) {
+    throw new Error('queryRewriter: No model available');
+  }
   if (!query) {
     throw new Error('query parameter is required');
   }
 
   actionTracker.trackToolCallStart(chatId, { toolName: 'queryRewriter', toolInput: { query } });
   const prompt = getPrompt(query, think, context);
-  const result = await simpleCompletion(`${prompt.system}\n${prompt.user}`, { model, temperature });
+  const result = await simpleCompletion(`${prompt.system}\n${prompt.user}`, { model: resolvedModel, temperature });
   const completion = result.content;
 
   try {

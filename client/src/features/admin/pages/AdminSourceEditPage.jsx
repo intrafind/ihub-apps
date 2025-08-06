@@ -85,16 +85,54 @@ const AdminSourceEditPage = () => {
       setSaving(true);
       setError(null);
 
+      // Prepare source data for saving (remove temporary fields)
+      const tempContent = sourceData.config?.tempContent;
+      const cleanSourceData = {
+        ...sourceData,
+        config: {
+          ...sourceData.config
+        }
+      };
+      
+      // Remove temporary fields from config before saving
+      if (cleanSourceData.config) {
+        delete cleanSourceData.config.tempContent;
+        delete cleanSourceData.config.originalFileName;
+        delete cleanSourceData.config.uploadedAt;
+      }
+      
+      let savedSource;
+      
       if (isEditing) {
-        await makeAdminApiCall(`/admin/sources/${id}`, {
+        const response = await makeAdminApiCall(`/admin/sources/${id}`, {
           method: 'PUT',
-          body: JSON.stringify(sourceData)
+          body: JSON.stringify(cleanSourceData)
         });
+        savedSource = response.data?.source || cleanSourceData;
       } else {
-        await makeAdminApiCall('/admin/sources', {
+        const response = await makeAdminApiCall('/admin/sources', {
           method: 'POST',
-          body: JSON.stringify(sourceData)
+          body: JSON.stringify(cleanSourceData)
         });
+        savedSource = response.data?.source || cleanSourceData;
+        
+        // If new source has temporary content, upload it now
+        if (tempContent && savedSource?.id) {
+          try {
+            await makeAdminApiCall(`/admin/sources/${savedSource.id}/files`, {
+              method: 'POST',
+              body: JSON.stringify({
+                path: sourceData.config.path,
+                content: tempContent,
+                encoding: 'utf8'
+              })
+            });
+          } catch (uploadErr) {
+            console.error('Failed to upload temporary content:', uploadErr);
+            setError(uploadErr.message || 'Source created but failed to upload content');
+            return;
+          }
+        }
       }
 
       setHasUnsavedChanges(false);
@@ -108,7 +146,7 @@ const AdminSourceEditPage = () => {
   };
 
   const handleTestConnection = async () => {
-    if (!source || !source.id) {
+    if (!source || !source.id || !isEditing) {
       setError('Please save the source first before testing');
       return;
     }

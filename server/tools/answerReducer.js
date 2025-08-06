@@ -1,4 +1,4 @@
-import { simpleCompletion } from '../utils.js';
+import { simpleCompletion, resolveModelId } from '../utils.js';
 import fs from 'fs';
 
 function getPrompt(answers) {
@@ -46,9 +46,13 @@ Do not change technical terms, names, or specific details`,
 
 export default async function answerReducer({
   answers,
-  model = 'gemini-1.5-flash',
+  model = null,
   temperature = 0.3
 }) {
+  const resolvedModel = resolveModelId(model, 'answerReducer');
+  if (!resolvedModel) {
+    throw new Error('answerReducer: No model available');
+  }
   if (!Array.isArray(answers) || answers.length === 0) {
     throw new Error('answers must be a non-empty array');
   }
@@ -57,7 +61,7 @@ export default async function answerReducer({
 
   try {
     const combined = `${prompt.system}\n\n${prompt.user}`;
-    const result = await simpleCompletion(combined, { model, temperature });
+    const result = await simpleCompletion(combined, { model: resolvedModel, temperature });
     const text = result.content;
 
     const totalLength = answers.reduce((acc, cur) => acc + cur.length, 0);

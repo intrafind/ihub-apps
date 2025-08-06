@@ -3,7 +3,7 @@ import webContentExtractor from './webContentExtractor.js';
 import { actionTracker } from '../actionTracker.js';
 import queryRewriter from './queryRewriter.js';
 import finalizer from './finalizer.js';
-import { simpleCompletion } from '../utils.js';
+import { simpleCompletion, resolveModelId } from '../utils.js';
 
 /**
  * Perform iterative web research with progress updates via SSE.
@@ -22,9 +22,14 @@ export default async function deepResearch({
   maxResults = 3,
   contentMaxLength = 3000,
   chatId,
-  model = 'gemini-1.5-flash',
+  model = null,
   refineTemperature = 0.5
 }) {
+  const resolvedModel = resolveModelId(model, 'deepResearch');
+  if (!resolvedModel) {
+    throw new Error('deepResearch: No model available');
+  }
+  
   if (!query) {
     throw new Error('query parameter is required');
   }
@@ -154,7 +159,7 @@ export default async function deepResearch({
   let finalAnswer = '';
   try {
     sendProgress('research-finalizing', { sources: aggregated.length });
-    finalAnswer = await finalizer({ question: query, results: aggregated, model });
+    finalAnswer = await finalizer({ question: query, results: aggregated, model: resolvedModel });
     sendProgress('research-finalized', { length: finalAnswer.length });
   } catch (err) {
     console.error('Failed to finalize answer:', err);

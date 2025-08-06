@@ -1,4 +1,4 @@
-import { simpleCompletion } from '../utils.js';
+import { simpleCompletion, resolveModelId } from '../utils.js';
 
 function getDefinitivePrompt(question, answer) {
   return `You are an evaluator of answer definitiveness. Return a JSON object {\"think\":string,\"pass\":boolean}.
@@ -13,7 +13,11 @@ function getCompletenessPrompt(question, answer) {
   return `You are an evaluator that checks if an answer covers all explicitly mentioned aspects of the question. Identify which aspects are mentioned and whether they are addressed. Return JSON {\"think\":string,\"pass\":boolean}.\nQuestion: ${question}\nAnswer: ${answer}`;
 }
 
-export default async function evaluator({ question, answer, model = 'gemini-1.5-flash' }) {
+export default async function evaluator({ question, answer, model = null }) {
+  const resolvedModel = resolveModelId(model, 'evaluator');
+  if (!resolvedModel) {
+    throw new Error('evaluator: No model available');
+  }
   if (!question || !answer) {
     throw new Error('question and answer parameters are required');
   }
@@ -28,7 +32,7 @@ export default async function evaluator({ question, answer, model = 'gemini-1.5-
   const results = [];
   for (const type of types) {
     try {
-      const result = await simpleCompletion(prompts[type], { model, temperature: 0 });
+      const result = await simpleCompletion(prompts[type], { model: resolvedModel, temperature: 0 });
       const parsed = JSON.parse(result.content.trim());
       results.push({ type, ...parsed });
       if (!parsed.pass) break;

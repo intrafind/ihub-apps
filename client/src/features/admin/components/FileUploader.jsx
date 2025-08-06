@@ -94,13 +94,15 @@ const FileUploader = ({ source, onChange, isEditing }) => {
       // Read file content
       const content = await readFileContent(file);
 
-      // Generate file path in sources directory
+      // Generate file path using source ID to avoid conflicts
       const sourceId = source.id || `temp_${Date.now()}`;
-      const fileName = `${sourceId}_${Date.now()}_${file.name}`;
+      const timestamp = Date.now();
+      const fileExtension = file.name.substring(file.name.lastIndexOf('.'));
+      const fileName = `${sourceId}_${timestamp}${fileExtension}`;
       const filePath = `sources/${fileName}`;
 
-      if (source.id) {
-        // Source already exists, upload to server
+      if (source.id && isEditing) {
+        // Source already exists on server, upload to server
         const response = await makeAdminApiCall(`/admin/sources/${source.id}/files`, {
           method: 'POST',
           body: JSON.stringify({
@@ -116,9 +118,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
             ...source,
             config: {
               ...source.config,
-              path: filePath,
-              originalFileName: file.name,
-              uploadedAt: new Date().toISOString()
+              path: filePath
             }
           };
 
@@ -136,14 +136,14 @@ const FileUploader = ({ source, onChange, isEditing }) => {
           setError(response.data.error || 'Failed to upload file');
         }
       } else {
-        // New source, just store content locally until source is saved
+        // New source, store content temporarily until source is saved
         const updatedSource = {
           ...source,
           config: {
             ...source.config,
             path: filePath,
+            tempContent: content,
             originalFileName: file.name,
-            tempContent: content, // Store temporarily
             uploadedAt: new Date().toISOString()
           }
         };
@@ -184,7 +184,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
   const handleDragEnter = e => {
     e.preventDefault();
     e.stopPropagation();
-    if (!loading && isEditing) {
+    if (!loading) {
       setIsDragging(true);
     }
   };
@@ -208,7 +208,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
     e.stopPropagation();
     setIsDragging(false);
 
-    if (!isEditing || loading) return;
+    if (loading) return;
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
@@ -217,7 +217,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
   };
 
   const saveFileContent = async () => {
-    if (!currentFile?.path && !source?.config?.tempContent) return;
+    if (!currentFile?.path && !fileContent.trim()) return;
 
     try {
       setLoading(true);
@@ -225,15 +225,16 @@ const FileUploader = ({ source, onChange, isEditing }) => {
 
       let filePath = currentFile?.path;
 
-      // If no file exists yet, create a new file path
+      // If no file path exists yet, create a new one
       if (!filePath) {
         const sourceId = source.id || `temp_${Date.now()}`;
-        const fileName = `${sourceId}_${Date.now()}_content.txt`;
+        const timestamp = Date.now();
+        const fileName = `${sourceId}_${timestamp}.txt`;
         filePath = `sources/${fileName}`;
       }
 
-      if (source.id) {
-        // Source exists, save to server
+      if (source.id && isEditing) {
+        // Source exists on server, save to server
         const response = await makeAdminApiCall(`/admin/sources/${source.id}/files`, {
           method: 'POST',
           body: JSON.stringify({
@@ -247,19 +248,15 @@ const FileUploader = ({ source, onChange, isEditing }) => {
           setHasUnsavedChanges(false);
           setIsEditingContent(false);
 
-          // Update source configuration if this is a new file
-          if (!currentFile?.path) {
-            const updatedSource = {
-              ...source,
-              config: {
-                ...source.config,
-                path: filePath,
-                originalFileName: 'content.txt',
-                uploadedAt: new Date().toISOString()
-              }
-            };
-            onChange(updatedSource);
-          }
+          // Always update source configuration with the current path
+          const updatedSource = {
+            ...source,
+            config: {
+              ...source.config,
+              path: filePath
+            }
+          };
+          onChange(updatedSource);
 
           // Update file metadata
           setCurrentFile({
@@ -281,15 +278,15 @@ const FileUploader = ({ source, onChange, isEditing }) => {
           config: {
             ...source.config,
             path: filePath,
-            originalFileName: 'content.txt',
             tempContent: fileContent,
+            originalFileName: currentFile?.name || 'content.txt',
             uploadedAt: new Date().toISOString()
           }
         };
         onChange(updatedSource);
 
         setCurrentFile({
-          name: 'content.txt',
+          name: currentFile?.name || 'content.txt',
           path: filePath,
           size: new TextEncoder().encode(fileContent).length,
           modified: new Date().toISOString()
@@ -305,7 +302,8 @@ const FileUploader = ({ source, onChange, isEditing }) => {
 
   const createNewContent = () => {
     const sourceId = source.id || `temp_${Date.now()}`;
-    const fileName = `${sourceId}_${Date.now()}_content.txt`;
+    const timestamp = Date.now();
+    const fileName = `${sourceId}_${timestamp}.txt`;
     const filePath = `sources/${fileName}`;
 
     setCurrentFile({
@@ -317,6 +315,19 @@ const FileUploader = ({ source, onChange, isEditing }) => {
     setFileContent('');
     setIsEditingContent(true);
     setHasUnsavedChanges(false);
+
+    // Update source config to include the path and temp content
+    const updatedSource = {
+      ...source,
+      config: {
+        ...source.config,
+        path: filePath,
+        tempContent: '',
+        originalFileName: 'content.txt',
+        uploadedAt: new Date().toISOString()
+      }
+    };
+    onChange(updatedSource);
   };
 
   const formatFileSize = bytes => {
@@ -382,8 +393,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
                   </p>
                 </div>
               </div>
-              {isEditing && (
-                <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2">
                   {!isEditingContent ? (
                     <button
                       type="button"
@@ -417,7 +427,6 @@ const FileUploader = ({ source, onChange, isEditing }) => {
                     </>
                   )}
                 </div>
-              )}
             </div>
           </div>
         )}
@@ -456,7 +465,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
                   wordWrap: 'on',
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
-                  readOnly: !isEditing
+                  readOnly: false
                 }}
                 theme="vs-light"
               />
@@ -478,7 +487,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
               <input
                 type="file"
                 onChange={handleFileUpload}
-                disabled={loading || !isEditing}
+                disabled={loading}
                 className="sr-only"
                 id="file-upload"
                 accept=".txt,.md,.json,.xml,.csv,.log,.conf,.yaml,.yml"
@@ -486,7 +495,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
               <label
                 htmlFor="file-upload"
                 className={`flex items-center justify-center px-4 py-2 border-2 border-dashed rounded-lg transition-all ${
-                  loading || !isEditing
+                  loading
                     ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
                     : isDragging
                       ? 'border-blue-400 bg-blue-50 cursor-copy'
@@ -535,7 +544,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
             </div>
 
             {/* Create New Content Option */}
-            {!currentFile && isEditing && (
+            {!currentFile && (
               <div className="text-center">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
@@ -584,7 +593,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
         )}
 
         {/* Help Text */}
-        {!currentFile && !error && !isEditing && (
+        {!currentFile && !error && (
           <p className="mt-2 text-xs text-gray-500">
             {t(
               'admin.sources.fileUploadHelp',

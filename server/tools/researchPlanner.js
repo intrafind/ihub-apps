@@ -1,4 +1,4 @@
-import { simpleCompletion } from '../utils.js';
+import { simpleCompletion, resolveModelId } from '../utils.js';
 
 /**
  * Generate a research plan by decomposing a question into focused tasks.
@@ -8,8 +8,12 @@ export default async function researchPlanner({
   question,
   teamSize = 3,
   soundBites = '',
-  model = 'gemini-1.5-flash'
+  model = null
 }) {
+  const resolvedModel = resolveModelId(model, 'researchPlanner');
+  if (!resolvedModel) {
+    throw new Error('researchPlanner: No model available');
+  }
   if (!question) {
     throw new Error('question parameter is required');
   }
@@ -23,7 +27,7 @@ export default async function researchPlanner({
   const user = `\n${question}\n\n<soundbites>\n${soundBites}\n</soundbites>\n\n<think>`;
 
   const prompt = `${system}\n${user}`;
-  const result = await simpleCompletion(prompt, { model, temperature: 0.3 });
+  const result = await simpleCompletion(prompt, { model: resolvedModel, temperature: 0.3 });
   const response = result.content;
 
   try {

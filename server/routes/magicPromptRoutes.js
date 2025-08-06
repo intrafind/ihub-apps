@@ -16,7 +16,34 @@ export default function registerMagicPromptRoutes(app) {
         return res.status(400).json({ error: 'Missing input' });
       }
 
-      const selectedModelId = modelId || config.MAGIC_PROMPT_MODEL || 'gpt-3.5-turbo';
+      // Get available models and default model
+      const { data: models = [] } = configCache.getModels();
+      const defaultModel = models.find(m => m.default)?.id;
+      
+      // Check if any models are available
+      if (!models || models.length === 0) {
+        return res.status(500).json({ error: 'No models available for magic prompt generation' });
+      }
+      
+      // Determine the model to use with fallback chain
+      let selectedModelId = modelId || config.MAGIC_PROMPT_MODEL || defaultModel;
+      
+      // Validate if the specified model exists and fallback if not
+      const modelExists = models.some(m => m.id === selectedModelId);
+      
+      if (!modelExists) {
+        const fallbackModel = config.MAGIC_PROMPT_MODEL || defaultModel;
+        console.warn(`Magic prompt model '${selectedModelId}' not found, falling back to '${fallbackModel}'`);
+        selectedModelId = fallbackModel;
+        
+        // Double-check fallback model exists
+        const fallbackExists = models.some(m => m.id === fallbackModel);
+        if (!fallbackExists) {
+          console.warn(`Fallback model '${fallbackModel}' not found, using first available model`);
+          selectedModelId = models[0]?.id;
+        }
+      }
+      
       const systemPrompt = prompt || config.MAGIC_PROMPT_PROMPT || 'Improve the following prompt.';
       const messages = [
         { role: 'system', content: systemPrompt },
