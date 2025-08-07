@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the proposed plugin-based architecture for AI Hub Apps integrations, starting with the iFinder integration and designed to easily accommodate future integrations.
+This document outlines the proposed plugin-based architecture for iHub Apps integrations, starting with the iFinder integration and designed to easily accommodate future integrations.
 
 ## Core Architecture
 
@@ -448,4 +448,4 @@ const iFinderFormSchema = {
 3. Plan detailed implementation timeline
 4. Define success metrics and testing strategy
 
-This plugin-based architecture will transform AI Hub Apps into a truly extensible platform while maintaining the robust functionality of the current iFinder integration.
+This plugin-based architecture will transform iHub Apps into a truly extensible platform while maintaining the robust functionality of the current iFinder integration.

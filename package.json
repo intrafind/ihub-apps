@@ -15,7 +15,7 @@
     "build:clean": "rimraf dist",
     "build:client": "cd client && npm run build && mkdir -p ../dist/public && cp -r dist/* ../dist/public/",
     "docs:update-version": "node scripts/update-docs-version.js",
-    "docs:build": "npm run docs:update-version && mdbook build docs",
+    "docs:build": "npm run docs:update-version && cd docs && mdbook build",
     "version:sync": "node scripts/sync-release-version.js",
     "version:sync:commit": "node scripts/sync-release-version.js",
     "docs:copy": "mkdir -p dist/docs && cp -r docs/book/* dist/docs/",

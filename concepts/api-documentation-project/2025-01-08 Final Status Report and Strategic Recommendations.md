@@ -272,4 +272,4 @@ The API Documentation Project has achieved significant success in its initial ph
 
 **Key Success Factor:** The established patterns and infrastructure from the completed work significantly reduce the effort required for remaining tasks, making this an opportune time to complete the most valuable remaining documentation with maximum efficiency.
 
-The project demonstrates excellent ROI and positions the AI Hub Apps platform for accelerated development, reduced maintenance overhead, and enhanced developer experience across all integration scenarios.
+The project demonstrates excellent ROI and positions the iHub Apps platform for accelerated development, reduced maintenance overhead, and enhanced developer experience across all integration scenarios.

@@ -213,7 +213,7 @@ export default class IFinderPlugin extends IntegrationPlugin {
       name: 'iFinder Document Management',
       version: '1.0.0',
       description: 'iFinder enterprise document search and management',
-      author: 'AI Hub Apps',
+      author: 'iHub Apps',
       category: 'document-management',
       features: ['search', 'content-retrieval', 'metadata', 'authentication'],
       requirements: {

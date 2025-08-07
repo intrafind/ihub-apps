@@ -60,9 +60,13 @@ export function createResourceLoader({
     const dirContents = await fs.readdir(resourceDir);
     const files = dirContents.filter(file => file.endsWith('.json'));
 
-    if (verbose) {
-      console.log(`📱 Loading ${files.length} individual ${resourceName.toLowerCase()} files...`);
+    if (verbose && files.length > 0) {
+      console.log(`\n━━━ Loading ${resourceName} ━━━`);
+      console.log(`📱 Found ${files.length} ${resourceName.toLowerCase()} files`);
     }
+
+    const loadedItems = [];
+    const errorItems = [];
 
     for (const file of files) {
       try {
@@ -87,15 +91,20 @@ export function createResourceLoader({
 
         resources.push(resource);
         if (verbose) {
-          const status = resource.enabled ? 'enabled' : 'disabled';
-          console.log(`✅ Loaded ${resource.id} (${status})`);
+          const icon = resource.enabled ? '✅' : '⏸️';
+          loadedItems.push(`   ${icon} ${resource.id}`);
         }
       } catch (error) {
-        console.error(
-          `❌ Error loading ${resourceName.toLowerCase()} from ${file}:`,
-          error.message
-        );
+        errorItems.push(`   ❌ ${file}: ${error.message}`);
       }
+    }
+
+    // Log all items together for better clustering
+    if (verbose && loadedItems.length > 0) {
+      console.log(loadedItems.join('\n'));
+    }
+    if (errorItems.length > 0) {
+      console.log(errorItems.join('\n'));
     }
 
     return resources;
@@ -230,9 +239,8 @@ export function createResourceLoader({
       const enabledCount = allResources.filter(r => r.enabled !== false).length;
       const disabledCount = allResources.length - enabledCount;
       console.log(
-        `🎯 Total ${resourceName.toLowerCase()}s loaded: ${allResources.length}, ` +
-          `Enabled: ${enabledCount}, Disabled: ${disabledCount}, ` +
-          `Include Disabled: ${includeDisabled}`
+        `📊 Summary: ${allResources.length} ${resourceName.toLowerCase()}s ` +
+          `(${enabledCount} enabled, ${disabledCount} disabled)`
       );
     }
 

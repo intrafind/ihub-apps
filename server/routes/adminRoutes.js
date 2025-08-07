@@ -24,6 +24,6 @@ export default async function registerAdminRoutes(app) {
   registerAdminTranslateRoute(app);
   registerAdminPagesRoutes(app);
   registerAdminUIRoutes(app);
-  registerBackupRoutes(app);
+  await registerBackupRoutes(app);
   registerAdminSchemasRoutes(app);
 }

@@ -1,6 +1,6 @@
-# AI Hub Apps - Technical Architecture
+# iHub Apps - Technical Architecture
 
-AI Hub Apps is an enterprise-grade platform for creating, managing, and deploying AI-powered applications. This document provides comprehensive technical details of the system architecture, components, and data flow patterns.
+iHub Apps is an enterprise-grade platform for creating, managing, and deploying AI-powered applications. This document provides comprehensive technical details of the system architecture, components, and data flow patterns.
 
 ## Table of Contents
 

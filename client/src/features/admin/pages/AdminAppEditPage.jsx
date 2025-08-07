@@ -65,6 +65,7 @@ const AdminAppEditPage = () => {
       // Initialize new app
       setApp({
         id: '',
+        order: 0,
         name: { en: '' },
         description: { en: '' },
         color: '#4F46E5',
@@ -73,12 +74,9 @@ const AdminAppEditPage = () => {
         tokenLimit: 4096,
         preferredModel: 'gpt-4',
         preferredOutputFormat: 'markdown',
-        preferredStyle: 'normal',
+        preferredStyle: 'keep',
         preferredTemperature: 0.7,
         enabled: true,
-        order: 0,
-        messagePlaceholder: { en: '' },
-        prompt: { en: '' },
         variables: [],
         starterPrompts: [],
         tools: [],
@@ -86,33 +84,17 @@ const AdminAppEditPage = () => {
           en: {
             title: '👋 Hello!',
             subtitle: 'How can I help you today?'
+          },
+          de: {
+            title: '👋 Hallo!',
+            subtitle: 'Wie kann ich Ihnen heute helfen?'
           }
         },
         allowEmptyContent: false,
         sendChatHistory: true,
         category: 'utility',
-        features: {
-          magicPrompt: {
-            enabled: false,
-            model: 'gpt-4',
-            prompt:
-              'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
-          }
-        },
-        settings: {
-          enabled: true,
-          model: { enabled: true },
-          temperature: { enabled: true },
-          outputFormat: { enabled: true },
-          chatHistory: { enabled: true },
-          style: { enabled: true },
-          speechRecognition: {
-            service: 'default',
-            host: ''
-          }
-        },
         inputMode: {
-          type: 'multiline',
+          type: 'singleline',
           rows: 5,
           microphone: {
             enabled: true,
@@ -166,33 +148,16 @@ const AdminAppEditPage = () => {
           en: {
             title: '👋 Hello!',
             subtitle: 'How can I help you today?'
+          },
+          de: {
+            title: '👋 Hallo!',
+            subtitle: 'Wie kann ich Ihnen heute helfen?'
           }
         },
         allowEmptyContent: data.allowEmptyContent ?? false,
         sendChatHistory: data.sendChatHistory ?? true,
-        features: data.features || {
-          magicPrompt: {
-            enabled: false,
-            model: 'gpt-4',
-            prompt:
-              'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
-          }
-        },
-        settings: {
-          enabled: true,
-          model: { enabled: true },
-          temperature: { enabled: true },
-          outputFormat: { enabled: true },
-          chatHistory: { enabled: true },
-          style: { enabled: true },
-          speechRecognition: {
-            service: 'default',
-            host: ''
-          },
-          ...(data.settings || {})
-        },
         inputMode: {
-          type: 'multiline',
+          type: 'singleline',
           rows: 5,
           microphone: {
             enabled: true,

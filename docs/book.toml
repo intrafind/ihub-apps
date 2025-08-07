@@ -1,3 +1,21 @@
 [book]
-title = "iHub Apps Docs"
+title = "iHub Apps Documentation"
+authors = ["IntraFind"]
+description = "iHub Applications Platform - AI-powered applications with LLM integration"
 src = "."
+
+[build]
+create-missing = false
+
+[output.html]
+theme = "theme"
+additional-css = ["theme/custom.css"]
+additional-js = ["theme/mermaid.min.js", "theme/mermaid-init.js"]
+git-repository-url = "https://github.com/intrafind/ihub-apps"
+edit-url-template = "https://github.com/intrafind/ihub-apps/edit/main/docs/{path}"
+
+[preprocessor.template]
+command = "mdbook-template"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"

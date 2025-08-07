@@ -38,16 +38,13 @@
     "en": {
       "title": "👋 Hello!",
       "subtitle": "How can I help you today?"
+    },
+    "de": {
+      "title": "👋 Hallo!",
+      "subtitle": "Wie kann ich Ihnen heute helfen?"
     }
   },
   "allowEmptyContent": false,
-  "features": {
-    "magicPrompt": {
-      "enabled": false,
-      "model": "gpt-4",
-      "prompt": "You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}"
-    }
-  },
   "settings": {
     "enabled": true,
     "model": {
@@ -64,14 +61,10 @@
     },
     "style": {
       "enabled": true
-    },
-    "speechRecognition": {
-      "service": "default",
-      "host": ""
     }
   },
   "inputMode": {
-    "type": "single",
+    "type": "singleline",
     "rows": 5,
     "microphone": {
       "enabled": true,

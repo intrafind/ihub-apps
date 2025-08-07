@@ -396,14 +396,203 @@
       "subtitle": "Verwalten Sie Ihre iHub-Anwendungen",
       "createApp": "App erstellen",
       "wizard": {
+        "title": "Neue App erstellen",
+        "basedOn": "Basierend auf",
+        "back": "Zurück",
+        "next": "Weiter",
+        "finish": "App fertigstellen",
+        "create": "App erstellen",
+        "creating": "Wird erstellt...",
+        "revert": "Auf übergeordnet zurücksetzen",
+        "steps": {
+          "basic": "Grundlagen",
+          "prompt": "Prompt",
+          "advanced": "Erweitert",
+          "tools": "Werkzeuge",
+          "review": "Überprüfung"
+        },
+        "navigation": {
+          "previous": "Zurück",
+          "next": "Weiter",
+          "finish": "App erstellen",
+          "saving": "Wird erstellt..."
+        },
+        "method": {
+          "title": "Erstellungsmethode",
+          "description": "Wie möchten Sie Ihre App erstellen?",
+          "instruction": "Wählen Sie, wie Sie Ihre App erstellen möchten:",
+          "ai": "KI-generiert",
+          "aiDescription": "Beschreiben Sie, was Ihre App tun soll, und die KI generiert die Konfiguration für Sie.",
+          "manual": "Manuelle Konfiguration",
+          "manualDescription": "Konfigurieren Sie Ihre App Schritt für Schritt mit vollständiger Kontrolle über alle Einstellungen.",
+          "template": "Auf Vorlage basierend",
+          "templateDescription": "Beginnen Sie mit der Konfiguration von \"{templateName}\" und passen Sie sie an."
+        },
         "ai": {
+          "title": "KI-Generierung",
+          "description": "Beschreiben Sie, was Ihre App tun soll",
           "language": "Sprache",
+          "prompt": "Beschreiben Sie Ihre App",
+          "promptPlaceholder": "Beispiel: Erstelle eine Meeting-Zusammenfassungsapp, die Besprechungsnotizen nimmt und wichtige Punkte, Aktionsaufgaben und Entscheidungen extrahiert...",
+          "generate": "App generieren",
+          "generating": "Wird generiert...",
+          "loadingPrompt": "Lade Prompt-Konfiguration...",
+          "success": "App-Konfiguration erfolgreich generiert! Sie können sie in den nächsten Schritten überprüfen und ändern.",
+          "error": {
+            "parse": "Generierte Konfiguration konnte nicht gelesen werden",
+            "generate": "Konfiguration konnte nicht generiert werden",
+            "network": "Netzwerkfehler bei der Generierung der App"
+          }
+        },
+        "generator": {
+          "title": "KI-App-Generator",
+          "description": "Beschreiben Sie die App, die Sie erstellen möchten, und ich generiere sie für Sie",
+          "placeholder": "Beschreiben Sie Ihre App-Idee...",
+          "generate": "App generieren",
+          "generating": "Wird generiert...",
           "loadingPrompt": "Lade Prompt-Konfiguration...",
           "error": {
             "parse": "Generierte Konfiguration konnte nicht gelesen werden",
             "generate": "Konfiguration konnte nicht generiert werden",
             "network": "Netzwerkfehler bei der Generierung der App"
           }
+        },
+        "basic": {
+          "title": "Grundlegende Informationen",
+          "description": "Name, Beschreibung und Aussehen konfigurieren",
+          "language": "Sprache",
+          "appId": "App-ID",
+          "appIdPlaceholder": "z.B. meine-tolle-app",
+          "name": "App-Name",
+          "namePlaceholder": "App-Name eingeben",
+          "description": "Beschreibung",
+          "descriptionPlaceholder": "App-Beschreibung eingeben",
+          "color": "Farbe",
+          "icon": "Symbol",
+          "iconPlaceholder": "z.B. chat-bubbles",
+          "nameLabel": {
+            "label": "App-Name",
+            "placeholder": "App-Name eingeben"
+          },
+          "descriptionLabel": {
+            "label": "Beschreibung",
+            "placeholder": "Beschreiben Sie, was diese App tut"
+          },
+          "colorLabel": {
+            "label": "Themenfarbe",
+            "description": "Wählen Sie eine Farbe für das App-Theme"
+          },
+          "iconLabel": {
+            "label": "Symbol",
+            "description": "Wählen Sie ein Symbol für die App"
+          },
+          "category": {
+            "label": "Kategorie",
+            "placeholder": "Kategorie auswählen oder eingeben"
+          }
+        },
+        "system": {
+          "title": "Systemanweisungen",
+          "description": "Definieren Sie, wie sich Ihre App verhalten soll",
+          "prompt": "Systemanweisungen",
+          "promptPlaceholder": "Geben Sie Systemanweisungen ein, die definieren, wie sich die KI verhalten soll...",
+          "messagePlaceholder": "Nachricht-Platzhalter",
+          "messagePlaceholderPlaceholder": "Geben Sie Ihre Nachricht hier ein...",
+          "model": "Bevorzugtes Modell",
+          "temperature": "Temperatur"
+        },
+        "variables": {
+          "title": "Variablen",
+          "description": "Benutzerkonfigurierbare Variablen hinzufügen",
+          "instruction": "Variablen ermöglichen es Benutzern, das App-Verhalten anzupassen. Sie können in der Prompt-Vorlage mit der {{variableName}}-Syntax verwendet werden.",
+          "variable": "Variable {{index}}",
+          "name": "Name",
+          "namePlaceholder": "z.B. zielSprache",
+          "type": "Typ",
+          "label": "Bezeichnung",
+          "labelPlaceholder": "z.B. Zielsprache",
+          "required": "Erforderlich",
+          "add": "Variable hinzufügen"
+        },
+        "prompt": {
+          "title": "System-Prompt",
+          "description": "Definieren Sie, wie sich die KI verhalten soll",
+          "system": {
+            "label": "System-Prompt",
+            "placeholder": "Du bist ein hilfreicher Assistent, der...",
+            "description": "Anweisungen, die die Rolle und das Verhalten der KI definieren"
+          },
+          "variables": {
+            "title": "Variablen",
+            "description": "Variablen hinzufügen, die Benutzer konfigurieren können",
+            "add": "Variable hinzufügen",
+            "name": "Name",
+            "label": "Bezeichnung",
+            "type": "Typ",
+            "required": "Erforderlich",
+            "defaultValue": "Standardwert",
+            "options": "Optionen (kommagetrennt)",
+            "placeholder": "Platzhaltertext"
+          }
+        },
+        "advanced": {
+          "title": "Erweiterte Einstellungen",
+          "description": "Erweiterte Funktionen konfigurieren",
+          "instruction": "Konfigurieren Sie erweiterte Einstellungen für Ihre App.",
+          "allowEmptyContent": "Leeren Inhalt zulassen",
+          "sendChatHistory": "Chat-Verlauf senden",
+          "imageUpload": "Bild-Upload aktivieren",
+          "category": "Kategorie",
+          "order": "Anzeigereihenfolge",
+          "model": {
+            "label": "Bevorzugtes Modell",
+            "description": "Standardmodell für diese App"
+          },
+          "tokenLimit": {
+            "label": "Token-Limit",
+            "description": "Maximale Tokens pro Anfrage"
+          },
+          "temperature": {
+            "label": "Temperatur",
+            "description": "Steuert Kreativität vs. Konsistenz"
+          },
+          "outputFormat": {
+            "label": "Ausgabeformat",
+            "description": "Standardformat für Antworten"
+          }
+        },
+        "tools": {
+          "title": "Werkzeuge",
+          "description": "Verfügbare Werkzeuge auswählen",
+          "instruction": "Wählen Sie die Werkzeuge aus, die für Ihre App verfügbar sein sollen. Werkzeuge erweitern die Fähigkeiten des KI-Assistenten.",
+          "searchPlaceholder": "Werkzeuge suchen...",
+          "noResults": "Keine Werkzeuge entsprechen Ihrer Suche",
+          "noTools": "Keine Werkzeuge verfügbar"
+        },
+        "review": {
+          "title": "Überprüfung & Erstellen",
+          "description": "App-Konfiguration überprüfen",
+          "instruction": "Überprüfen Sie Ihre App-Konfiguration vor der Erstellung.",
+          "basedOn": "Basierend auf Vorlage: {templateName}",
+          "overridden": "Überschriebene Felder: {fields}",
+          "warning": "Nach der Erstellung können Sie die App-Konfiguration bearbeiten, aber nicht die ID ändern. Stellen Sie sicher, dass die ID eindeutig und beschreibend ist.",
+          "basicInfo": "Grundlegende Informationen",
+          "systemPrompt": "System-Prompt",
+          "settings": "Einstellungen",
+          "selectedTools": "Ausgewählte Werkzeuge",
+          "noTools": "Keine Werkzeuge ausgewählt"
+        },
+        "error": {
+          "missingFields": "Bitte füllen Sie alle erforderlichen Felder aus, bevor Sie fortfahren.",
+          "methodRequired": "Bitte wählen Sie eine Erstellungsmethode",
+          "idRequired": "App-ID ist erforderlich",
+          "nameRequired": "App-Name ist erforderlich",
+          "descriptionRequired": "App-Beschreibung ist erforderlich",
+          "colorRequired": "App-Farbe ist erforderlich",
+          "iconRequired": "App-Symbol ist erforderlich",
+          "systemRequired": "Systemanweisungen sind erforderlich",
+          "tokenLimitRequired": "Token-Limit ist erforderlich",
+          "createFailed": "Fehler beim Erstellen der App"
         }
       }
     },

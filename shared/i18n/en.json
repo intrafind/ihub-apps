@@ -288,6 +288,13 @@
       },
       "wizard": {
         "title": "Create New App",
+        "basedOn": "Based on",
+        "back": "Back",
+        "next": "Next",
+        "finish": "Finish App",
+        "create": "Create App",
+        "creating": "Creating...",
+        "revert": "Revert to parent",
         "steps": {
           "basic": "Basic",
           "prompt": "Prompt",
@@ -300,6 +307,33 @@
           "next": "Next",
           "finish": "Create App",
           "saving": "Creating..."
+        },
+        "method": {
+          "title": "Creation Method",
+          "description": "How would you like to create your app?",
+          "instruction": "Choose how you want to create your app:",
+          "ai": "AI-Generated",
+          "aiDescription": "Describe what your app should do, and AI will generate the configuration for you.",
+          "manual": "Manual Configuration",
+          "manualDescription": "Configure your app step by step with full control over all settings.",
+          "template": "Based on Template",
+          "templateDescription": "Start with the configuration from \"{templateName}\" and customize it."
+        },
+        "ai": {
+          "title": "AI Generation",
+          "description": "Describe what your app should do",
+          "language": "Language",
+          "prompt": "Describe your app",
+          "promptPlaceholder": "Example: Create a meeting summarizer app that takes meeting notes and extracts key points, action items, and decisions...",
+          "generate": "Generate App",
+          "generating": "Generating...",
+          "loadingPrompt": "Loading prompt configuration...",
+          "success": "App configuration generated successfully! You can review and modify it in the next steps.",
+          "error": {
+            "parse": "Failed to parse generated configuration",
+            "generate": "Failed to generate app configuration",
+            "network": "Network error occurred while generating app"
+          }
         },
         "generator": {
           "title": "AI App Generator",
@@ -317,19 +351,29 @@
         "basic": {
           "title": "Basic Information",
           "description": "Configure name, description, and appearance",
-          "name": {
+          "language": "Language",
+          "appId": "App ID",
+          "appIdPlaceholder": "e.g., my-awesome-app",
+          "name": "App Name",
+          "namePlaceholder": "Enter app name",
+          "description": "Description",
+          "descriptionPlaceholder": "Enter app description",
+          "color": "Color",
+          "icon": "Icon",
+          "iconPlaceholder": "e.g., chat-bubbles",
+          "nameLabel": {
             "label": "App Name",
             "placeholder": "Enter app name"
           },
-          "description": {
+          "descriptionLabel": {
             "label": "Description",
             "placeholder": "Describe what this app does"
           },
-          "color": {
+          "colorLabel": {
             "label": "Theme Color",
             "description": "Choose a color for the app's theme"
           },
-          "icon": {
+          "iconLabel": {
             "label": "Icon",
             "description": "Select an icon for the app"
           },
@@ -337,6 +381,29 @@
             "label": "Category",
             "placeholder": "Select or enter category"
           }
+        },
+        "system": {
+          "title": "System Instructions",
+          "description": "Define how your app should behave",
+          "prompt": "System Instructions",
+          "promptPlaceholder": "Enter system instructions that define how the AI should behave...",
+          "messagePlaceholder": "Message Placeholder",
+          "messagePlaceholderPlaceholder": "Enter your message here...",
+          "model": "Preferred Model",
+          "temperature": "Temperature"
+        },
+        "variables": {
+          "title": "Variables",
+          "description": "Add user-configurable variables",
+          "instruction": "Variables allow users to customize the app behavior. They can be used in the prompt template with {{variableName}} syntax.",
+          "variable": "Variable {{index}}",
+          "name": "Name",
+          "namePlaceholder": "e.g., targetLanguage",
+          "type": "Type",
+          "label": "Label",
+          "labelPlaceholder": "e.g., Target Language",
+          "required": "Required",
+          "add": "Add Variable"
         },
         "prompt": {
           "title": "System Prompt",
@@ -361,7 +428,13 @@
         },
         "advanced": {
           "title": "Advanced Settings",
-          "description": "Configure model preferences and limits",
+          "description": "Configure advanced features",
+          "instruction": "Configure advanced settings for your app.",
+          "allowEmptyContent": "Allow Empty Content",
+          "sendChatHistory": "Send Chat History",
+          "imageUpload": "Enable Image Upload",
+          "category": "Category",
+          "order": "Display Order",
           "model": {
             "label": "Preferred Model",
             "description": "Default model for this app"
@@ -378,6 +451,31 @@
             "label": "Output Format",
             "description": "Default format for responses"
           }
+        },
+        "review": {
+          "title": "Review & Create",
+          "description": "Review your app configuration",
+          "instruction": "Review your app configuration before creating it.",
+          "basedOn": "Based on template: {templateName}",
+          "overridden": "Overridden fields: {fields}",
+          "warning": "Once created, you can edit the app configuration but cannot change its ID. Make sure the ID is unique and descriptive.",
+          "basicInfo": "Basic Information",
+          "systemPrompt": "System Prompt",
+          "settings": "Settings",
+          "selectedTools": "Selected Tools",
+          "noTools": "No tools selected"
+        },
+        "error": {
+          "missingFields": "Please fill in all required fields before proceeding.",
+          "methodRequired": "Please select a creation method",
+          "idRequired": "App ID is required",
+          "nameRequired": "App name is required",
+          "descriptionRequired": "App description is required",
+          "colorRequired": "App color is required",
+          "iconRequired": "App icon is required",
+          "systemRequired": "System instructions are required",
+          "tokenLimitRequired": "Token limit is required",
+          "createFailed": "Failed to create app"
         },
         "tools": {
           "title": "Tools",

@@ -22,7 +22,7 @@ export const modelConfigSchema = z
     // Required fields
     id: z
       .string()
-      .regex(/^[a-z0-9-]+$/, 'ID must contain only lowercase letters, numbers, and hyphens')
+      .regex(/^[a-z0-9.-]+$/, 'ID must contain only lowercase letters, numbers, hyphens, and dots')
       .min(1, 'ID cannot be empty'),
     modelId: z.string().min(1, 'Model ID cannot be empty'),
     name: localizedStringSchema,

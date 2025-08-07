@@ -1,6 +1,6 @@
-# AI Hub Apps - Visual Architecture Diagrams
+# iHub Apps - Visual Architecture Diagrams
 
-This document provides comprehensive visual representations of the AI Hub Apps architecture using Mermaid diagrams. These diagrams complement the detailed [Architecture Documentation](./architecture.md) and help visualize system components, data flows, and interactions.
+This document provides comprehensive visual representations of the iHub Apps architecture using Mermaid diagrams. These diagrams complement the detailed [Architecture Documentation](./architecture.md) and help visualize system components, data flows, and interactions.
 
 ## Table of Contents
 
@@ -1215,9 +1215,9 @@ graph TB
     end
     
     subgraph "Application Containers"
-        AppContainer1[AI Hub App Container 1<br/>Port 3001]
-        AppContainer2[AI Hub App Container 2<br/>Port 3002]
-        AppContainerN[AI Hub App Container N<br/>Port 300N]
+        AppContainer1[iHub App Container 1<br/>Port 3001]
+        AppContainer2[iHub App Container 2<br/>Port 3002]
+        AppContainerN[iHub App Container N<br/>Port 300N]
     end
     
     subgraph "Proxy Container"
@@ -1297,7 +1297,7 @@ This diagram shows the self-contained binary deployment option.
 ```mermaid
 graph TB
     subgraph "Binary Package"
-        Executable[AI Hub Apps Binary<br/>Single Executable File]
+        Executable[iHub Apps Binary<br/>Single Executable File]
         EmbeddedAssets[Embedded Static Assets]
         EmbeddedServer[Embedded Node.js Runtime]
     end
@@ -1644,7 +1644,7 @@ flowchart TD
 
 ## Summary
 
-These visual diagrams provide comprehensive coverage of the AI Hub Apps architecture, illustrating:
+These visual diagrams provide comprehensive coverage of the iHub Apps architecture, illustrating:
 
 1. **System Overview**: High-level architecture and component relationships
 2. **Server Architecture**: Detailed server components, clustering, and service architecture

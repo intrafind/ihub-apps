@@ -31,6 +31,10 @@
     "en": {
       "title": "👋 Hello!",
       "subtitle": "How can I help you today?"
+    },
+    "de": {
+      "title": "👋 Hallo!",
+      "subtitle": "Wie kann ich Ihnen heute helfen?"
     }
   },
   "allowEmptyContent": false,
@@ -50,10 +54,6 @@
     },
     "style": {
       "enabled": true
-    },
-    "speechRecognition": {
-      "service": "default",
-      "host": ""
     }
   },
   "inputMode": {

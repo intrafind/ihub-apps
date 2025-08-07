@@ -161,4 +161,4 @@ This documentation provides a complete reference for the Admin Prompts API that 
 4. **Maintain Consistency**: Established patterns for future API documentation
 5. **Test APIs**: Example requests and expected responses for validation
 
-The documentation follows OpenAPI 3.0 specifications and integrates seamlessly with the existing AI Hub Apps API documentation ecosystem.
+The documentation follows OpenAPI 3.0 specifications and integrates seamlessly with the existing iHub Apps API documentation ecosystem.

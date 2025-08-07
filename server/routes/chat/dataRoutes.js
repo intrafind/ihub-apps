@@ -1,13 +1,11 @@
 import configCache from '../../configCache.js';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
 import {
   filterResourcesByPermissions,
   isAnonymousAccessAllowed,
   enhanceUserWithPermissions
 } from '../../utils/authorization.js';
 import { authRequired } from '../../middleware/authRequired.js';
+import { getAppVersion } from '../../utils/versionHelper.js';
 import crypto from 'crypto';
 
 /**
@@ -71,7 +69,7 @@ import crypto from 'crypto';
  *       example:
  *         "common.save": "Save"
  *         "common.cancel": "Cancel"
- *         "app.title": "AI Hub Apps"
+ *         "app.title": "iHub Apps"
  *
  *     UIConfiguration:
  *       type: object
@@ -476,7 +474,7 @@ export default function registerDataRoutes(app) {
    *                   "common.save": "Save"
    *                   "common.cancel": "Cancel"
    *                   "common.delete": "Delete"
-   *                   "app.title": "AI Hub Apps"
+   *                   "app.title": "iHub Apps"
    *                   "nav.home": "Home"
    *                   "nav.apps": "Applications"
    *                   "auth.login": "Login"
@@ -487,7 +485,7 @@ export default function registerDataRoutes(app) {
    *                   "common.save": "Speichern"
    *                   "common.cancel": "Abbrechen"
    *                   "common.delete": "Löschen"
-   *                   "app.title": "AI Hub Apps"
+   *                   "app.title": "iHub Apps"
    *                   "nav.home": "Startseite"
    *                   "nav.apps": "Anwendungen"
    *                   "auth.login": "Anmelden"
@@ -497,7 +495,7 @@ export default function registerDataRoutes(app) {
    *                 value:
    *                   "common.save": "Save"
    *                   "common.cancel": "Cancel"
-   *                   "app.title": "AI Hub Apps"
+   *                   "app.title": "iHub Apps"
    *       500:
    *         description: Internal server error or translation loading failure
    *         content:
@@ -668,7 +666,7 @@ export default function registerDataRoutes(app) {
    *               $ref: '#/components/schemas/UIConfiguration'
    *             example:
    *               branding:
-   *                 appName: "AI Hub Apps"
+   *                 appName: "iHub Apps"
    *                 logo: "/assets/logo.png"
    *                 favicon: "/assets/favicon.ico"
    *                 primaryColor: "#3B82F6"
@@ -685,7 +683,7 @@ export default function registerDataRoutes(app) {
    *                   showUserMenu: true
    *                 footer:
    *                   show: true
-   *                   text: "Powered by AI Hub Apps"
+   *                   text: "Powered by iHub Apps"
    *               features:
    *                 enableDarkMode: true
    *                 enableNotifications: true
@@ -812,16 +810,8 @@ export default function registerDataRoutes(app) {
         return res.status(500).json({ error: 'Failed to load platform configuration' });
       }
 
-      // Get app version from package.json
-      let appVersion = '1.0.0'; // fallback
-      try {
-        const rootDir = getRootDir();
-        const packageJsonPath = join(rootDir, 'package.json');
-        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-        appVersion = packageJson.version;
-      } catch (error) {
-        console.warn('Could not read version from package.json:', error.message);
-      }
+      // Get app version using the helper
+      const appVersion = getAppVersion();
 
       // Compute refresh salt combining version and admin-triggered value
       const refreshSalt = platform.refreshSalt || {

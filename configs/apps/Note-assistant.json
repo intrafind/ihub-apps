@@ -26,7 +26,7 @@
     "de": "Welches Thema soll der Vermerk behandeln und auf welche zentralen Aspekte soll ich im Sachverhalt oder der Bewertung eingehen?"
   },
   "inputMode": {
-    "type": "single",
+    "type": "singleline",
     "microphone": {
       "enabled": false
     }

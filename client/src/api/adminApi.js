@@ -12,13 +12,19 @@ export const makeAdminApiCall = async (url, options = {}) => {
     ...options
   };
 
+  // Initialize headers
+  axiosConfig.headers = axiosConfig.headers || {};
+
+  // Track if this is a FormData request
+  const isFormData = options.body instanceof FormData;
+
   // Handle request body
   if (options.body) {
-    if (options.body instanceof FormData) {
+    if (isFormData) {
       axiosConfig.data = options.body;
-      // Don't set Content-Type for FormData, let axios handle it
+      // For FormData, start with empty headers (no Content-Type)
+      // Let the browser set the correct multipart/form-data header with boundary
       axiosConfig.headers = {
-        ...axiosConfig.headers,
         ...options.headers
       };
     } else if (typeof options.body === 'string') {
@@ -43,21 +49,54 @@ export const makeAdminApiCall = async (url, options = {}) => {
 
   if (authToken) {
     // In OIDC/Local/Proxy modes, use the regular auth token
-    axiosConfig.headers = {
-      ...axiosConfig.headers,
-      Authorization: `Bearer ${authToken}`
-    };
+    axiosConfig.headers.Authorization = `Bearer ${authToken}`;
   } else if (adminToken) {
     // In anonymous mode, use admin token if available
-    axiosConfig.headers = {
-      ...axiosConfig.headers,
-      Authorization: `Bearer ${adminToken}`
-    };
+    axiosConfig.headers.Authorization = `Bearer ${adminToken}`;
   }
 
   try {
-    const response = await apiClient(axiosConfig);
-    return response;
+    // For FormData requests, use fetch directly to avoid axios default headers
+    if (isFormData) {
+      const API_URL = import.meta.env.VITE_API_URL || '/api';
+      const fullUrl = `${API_URL}${axiosConfig.url}`;
+
+      // Add session ID manually since we're not using axios interceptors
+      const { getSessionId } = await import('../utils/sessionManager');
+      const sessionId = getSessionId();
+
+      const fetchHeaders = {
+        ...axiosConfig.headers,
+        'X-Session-ID': sessionId
+        // Deliberately NOT setting Content-Type - let browser handle it for FormData
+      };
+
+      const fetchResponse = await fetch(fullUrl, {
+        method: axiosConfig.method,
+        headers: fetchHeaders,
+        body: axiosConfig.data,
+        credentials: 'include'
+      });
+
+      if (!fetchResponse.ok) {
+        const error = new Error(`HTTP ${fetchResponse.status}`);
+        error.response = {
+          status: fetchResponse.status,
+          statusText: fetchResponse.statusText,
+          data: await fetchResponse.json().catch(() => ({}))
+        };
+        throw error;
+      }
+
+      return {
+        data: await fetchResponse.json(),
+        status: fetchResponse.status,
+        headers: Object.fromEntries(fetchResponse.headers.entries())
+      };
+    } else {
+      const response = await apiClient(axiosConfig);
+      return response;
+    }
   } catch (error) {
     // Handle admin-specific auth failures
     if (error.response?.status === 401 || error.response?.status === 403) {

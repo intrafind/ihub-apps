@@ -1145,7 +1145,7 @@ export default function registerAdminPromptsRoutes(app) {
    *     description: |
    *       Retrieves the app generator prompt template localized for the specified language.
    *       This special endpoint provides access to the app generation prompt used by the
-   *       AI Hub Apps platform to create new application configurations.
+   *       iHub Apps platform to create new application configurations.
    *
    *       **Admin Access Required**: This endpoint requires administrator authentication.
    *
@@ -1175,7 +1175,7 @@ export default function registerAdminPromptsRoutes(app) {
    *               $ref: '#/components/schemas/AppGeneratorPrompt'
    *             example:
    *               id: "app-generator"
-   *               prompt: "You are an expert in the AI Hub Apps platform. Your job is to help users create complete and valid JSON configurations..."
+   *               prompt: "You are an expert in the iHub Apps platform. Your job is to help users create complete and valid JSON configurations..."
    *               language: "en"
    *       401:
    *         description: Authentication required

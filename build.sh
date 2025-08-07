@@ -57,6 +57,9 @@ cp -r shared/* dist/shared/
 echo "Copying configuration files..."
 cp package.json dist/
 
+# Create version file for binary builds
+echo "$VERSION" > dist/version.txt
+
 # Step 6: Copy .env file if it exists
 if [ -f .env ]; then
   echo "Copying .env file..."

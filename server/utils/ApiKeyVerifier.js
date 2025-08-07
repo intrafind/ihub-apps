@@ -73,6 +73,110 @@ class ApiKeyVerifier {
       return { valid: true, missing: [] };
     }
   }
+
+  /**
+   * Validate API keys for enabled models only
+   * @param {Array} models - Array of model configurations
+   * @returns {Object} Validation results with missing keys for enabled models
+   */
+  async validateEnabledModelsApiKeys(models = null) {
+    if (!models) {
+      models = configCache.getModels() || [];
+    }
+
+    const enabledModels = models.filter(model => model.enabled);
+    const missingKeys = new Map();
+    const validKeys = new Set();
+
+    for (const model of enabledModels) {
+      if (!model.provider) continue;
+
+      const provider = model.provider.toLowerCase();
+      const envVar = `${provider.toUpperCase()}_API_KEY`;
+
+      // Skip if we already checked this provider
+      if (validKeys.has(provider) || missingKeys.has(provider)) continue;
+
+      // Check if API key exists
+      if (!process.env[envVar]) {
+        if (!missingKeys.has(provider)) {
+          missingKeys.set(provider, []);
+        }
+        missingKeys.get(provider).push(model.id);
+      } else {
+        validKeys.add(provider);
+      }
+    }
+
+    // Log results
+    if (missingKeys.size > 0) {
+      console.warn('\n⚠️  API Key Validation Results:');
+      for (const [provider, modelIds] of missingKeys) {
+        console.warn(`   ❌ ${provider.toUpperCase()}: Missing ${provider.toUpperCase()}_API_KEY`);
+        console.warn(`      Required for models: ${modelIds.join(', ')}`);
+      }
+      console.warn('   Please add the missing API keys to your .env or config.env file\n');
+      return { valid: false, missing: Object.fromEntries(missingKeys) };
+    } else if (enabledModels.length > 0) {
+      console.log(`✅ All API keys configured for ${enabledModels.length} enabled models`);
+      return { valid: true, missing: {} };
+    }
+
+    return { valid: true, missing: {} };
+  }
+
+  /**
+   * Validate environment variables used in configuration
+   * @param {Object} config - Configuration object to scan
+   * @param {string} configName - Name of the configuration for logging
+   * @returns {Object} Validation results with missing variables
+   */
+  validateEnvironmentVariables(config, configName = 'configuration') {
+    const missingVars = new Set();
+    const foundVars = new Set();
+
+    // Recursively scan for ${VARIABLE} patterns
+    const scanForVariables = (obj, path = '') => {
+      if (!obj || typeof obj !== 'object') {
+        if (typeof obj === 'string') {
+          // Find all ${VARIABLE} patterns
+          const matches = obj.matchAll(/\$\{([^}]+)\}/g);
+          for (const match of matches) {
+            const varName = match[1];
+            if (process.env[varName] === undefined) {
+              missingVars.add(varName);
+            } else {
+              foundVars.add(varName);
+            }
+          }
+        }
+        return;
+      }
+
+      if (Array.isArray(obj)) {
+        obj.forEach((item, index) => scanForVariables(item, `${path}[${index}]`));
+      } else {
+        for (const [key, value] of Object.entries(obj)) {
+          scanForVariables(value, path ? `${path}.${key}` : key);
+        }
+      }
+    };
+
+    scanForVariables(config);
+
+    // Log results
+    if (missingVars.size > 0) {
+      console.warn(`\n⚠️  Environment Variable Validation for ${configName}:`);
+      console.warn(`   ❌ Missing variables: ${Array.from(missingVars).join(', ')}`);
+      console.warn('   These variables are referenced in configuration but not set\n');
+      return { valid: false, missing: Array.from(missingVars) };
+    } else if (foundVars.size > 0) {
+      console.log(`✅ All ${foundVars.size} environment variables found for ${configName}`);
+      return { valid: true, found: Array.from(foundVars) };
+    }
+
+    return { valid: true, found: [] };
+  }
 }
 
 export default ApiKeyVerifier;

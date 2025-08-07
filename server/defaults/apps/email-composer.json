@@ -26,9 +26,6 @@
     "en": "Write a {{type}} email to {{recipient}} regarding {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}",
     "de": "Schreibe eine {{type}} E-Mail an {{recipient}} bezüglich {{subject}}. {{tone}} {{additional_instructions}}\n\n{{content}}"
   },
-  "microphone": {
-    "enabled": false
-  },
   "settings": {
     "enabled": true,
     "model": {

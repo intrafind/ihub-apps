@@ -10,6 +10,7 @@ import {
 import { loadTools } from './toolLoader.js';
 import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'crypto';
+import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 
 /**
  * Resolve environment variables in a string
@@ -91,6 +92,7 @@ class ConfigCache {
     this.refreshTimers = new Map();
     this.isInitialized = false;
     this.localeLoadingLocks = new Map();
+    this.apiKeyVerifier = new ApiKeyVerifier();
 
     // Cache TTL in milliseconds (default: 5 minutes for production, shorter for development)
     this.cacheTTL = process.env.NODE_ENV === 'production' ? 5 * 60 * 1000 : 60 * 1000;
@@ -195,6 +197,18 @@ class ConfigCache {
       if (failedLocales.length > 0) {
         console.error(`❌ Failed to load default locales: ${failedLocales.join(', ')}`);
         // Don't fail startup, but log the issue
+      }
+
+      // Validate API keys for enabled models
+      const modelsResult = this.getModels();
+      if (modelsResult && modelsResult.data) {
+        await this.apiKeyVerifier.validateEnabledModelsApiKeys(modelsResult.data);
+      }
+
+      // Validate environment variables in platform configuration
+      const platformConfig = this.getPlatform();
+      if (platformConfig) {
+        this.apiKeyVerifier.validateEnvironmentVariables(platformConfig, 'platform.json');
       }
 
       this.isInitialized = true;

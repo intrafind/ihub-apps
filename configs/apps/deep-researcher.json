@@ -36,10 +36,6 @@
     },
     "style": {
       "enabled": true
-    },
-    "speechRecognition": {
-      "service": "default",
-      "host": ""
     }
   },
   "enabled": true,

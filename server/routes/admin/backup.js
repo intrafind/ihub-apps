@@ -61,13 +61,39 @@ function extractZip(zipPath, extractPath) {
       zipfile.readEntry();
 
       zipfile.on('entry', async entry => {
-        const entryPath = path.join(extractPath, entry.fileName);
+        console.log(`📂 ZIP entry: "${entry.fileName}"`);
 
-        // Skip directories or files outside contents/
-        if (/\/$/.test(entry.fileName) || !entry.fileName.startsWith('contents/')) {
+        // Skip directories
+        if (/\/$/.test(entry.fileName)) {
+          console.log(`⏭️  Skipping directory: ${entry.fileName}`);
           zipfile.readEntry();
           return;
         }
+
+        // Skip macOS metadata files
+        if (
+          entry.fileName.includes('__MACOSX/') ||
+          entry.fileName.includes('.DS_Store') ||
+          entry.fileName.startsWith('._')
+        ) {
+          console.log(`⏭️  Skipping metadata: ${entry.fileName}`);
+          zipfile.readEntry();
+          return;
+        }
+
+        // Check if this is a contents file (either direct contents/ or nested */contents/)
+        const contentsMatch = entry.fileName.match(/(?:^|.*\/)contents\/(.+)$/);
+        if (!contentsMatch) {
+          console.log(`⏭️  Skipping non-contents file: ${entry.fileName}`);
+          zipfile.readEntry();
+          return;
+        }
+
+        // Extract the relative path within contents/
+        const relativePath = contentsMatch[1];
+        const entryPath = path.join(extractPath, 'contents', relativePath);
+
+        console.log(`✅ Extracting: ${entry.fileName} -> contents/${relativePath}`);
 
         // Ensure the directory exists
         await ensureDir(path.dirname(entryPath));
@@ -140,6 +166,9 @@ export async function exportConfig(req, res) {
         // Get relative path from project root
         const relativePath = path.relative(path.join(contentsPath, '../'), filePath);
 
+        // Debug logging
+        console.log(`📁 Adding to archive: ${relativePath} (from ${filePath})`);
+
         // Add file to archive
         archive.file(filePath, { name: relativePath });
         fileCount++;
@@ -197,6 +226,13 @@ export async function importConfig(req, res) {
     // Extract ZIP file
     await fs.mkdir(tempExtractPath, { recursive: true });
     await extractZip(tempZipPath, tempExtractPath);
+
+    // Debug: List what was actually extracted
+    const extractedItems = await fs.readdir(tempExtractPath, { withFileTypes: true });
+    console.log(
+      '📋 Extracted items:',
+      extractedItems.map(item => `${item.name}${item.isDirectory() ? '/' : ''}`)
+    );
 
     // Verify the extracted content has a contents directory
     const extractedContentsPath = path.join(tempExtractPath, 'contents');

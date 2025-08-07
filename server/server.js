@@ -90,6 +90,10 @@ if (cluster.isPrimary && workerCount > 1) {
     console.error('Failed to initialize telemetry:', err);
   }
 
+  // Log application version information
+  const { logVersionInfo } = await import('./utils/versionHelper.js');
+  logVersionInfo();
+
   // Initialize configuration cache for optimal performance
   try {
     await configCache.initialize();

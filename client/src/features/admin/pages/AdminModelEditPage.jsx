@@ -36,9 +36,7 @@ const AdminModelEditPage = () => {
     tokenLimit: '',
     supportsTools: false,
     enabled: true,
-    default: false,
-    concurrency: '',
-    requestDelayMs: ''
+    default: false
   });
 
   useEffect(() => {
@@ -92,7 +90,7 @@ const AdminModelEditPage = () => {
         return { [DEFAULT_LANGUAGE]: '' };
       };
 
-      setFormData({
+      const formDataObj = {
         id: model.id || '',
         modelId: model.modelId || '',
         name: ensureLocalizedObject(model.name),
@@ -102,10 +100,18 @@ const AdminModelEditPage = () => {
         tokenLimit: model.tokenLimit || '',
         supportsTools: model.supportsTools || false,
         enabled: model.enabled !== undefined ? model.enabled : true,
-        default: model.default || false,
-        concurrency: model.concurrency || '',
-        requestDelayMs: model.requestDelayMs || ''
-      });
+        default: model.default || false
+      };
+
+      // Only include optional number fields if they exist
+      if (model.concurrency !== undefined) {
+        formDataObj.concurrency = model.concurrency;
+      }
+      if (model.requestDelayMs !== undefined) {
+        formDataObj.requestDelayMs = model.requestDelayMs;
+      }
+
+      setFormData(formDataObj);
 
       console.log('Form data set with name:', ensureLocalizedObject(model.name));
       console.log('Form data set with description:', ensureLocalizedObject(model.description));

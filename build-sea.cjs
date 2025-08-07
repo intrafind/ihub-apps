@@ -492,6 +492,10 @@ if %ERRORLEVEL% neq 0 (
   // Write the launcher script
   fs.writeFileSync(path.join(outputDir, 'launcher.cjs'), launcherScript);
 
+  // Create version file for binary
+  fs.writeFileSync(path.join(outputDir, 'version.txt'), version);
+  console.log(`Created version file: ${version}`);
+
   // Copy Node.js binary with platform-specific name
   console.log('Copying Node.js executable...');
   if (currentPlatform.platform === 'windows') {

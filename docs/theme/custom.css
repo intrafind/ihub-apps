@@ -20,3 +20,188 @@ strong:contains("Version") {
     font-size: 12px;
     color: var(--fg);
 }
+
+/* Mermaid diagram styling fixes */
+.mermaid {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 20px 0 !important;
+    text-align: center !important;
+}
+
+/* Fix node styling */
+.mermaid .node rect,
+.mermaid .node circle,
+.mermaid .node ellipse,
+.mermaid .node polygon,
+.mermaid .node path {
+    fill: #ffffff !important;
+    stroke: #333333 !important;
+    stroke-width: 1.5px !important;
+}
+
+.mermaid .node .label,
+.mermaid .nodeLabel,
+.mermaid .node text {
+    color: #000000 !important;
+    fill: #000000 !important;
+    font-family: inherit !important;
+    font-size: 12px !important;
+}
+
+/* Fix edge/arrow styling */
+.mermaid .edgePath .path {
+    stroke: #333333 !important;
+    stroke-width: 1.5px !important;
+}
+
+.mermaid .arrowheadPath {
+    fill: #333333 !important;
+    stroke: #333333 !important;
+}
+
+/* Fix edge labels */
+.mermaid .edgeLabel {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    fill: #000000 !important;
+    font-size: 11px !important;
+}
+
+/* Fix subgraph styling */
+.mermaid .cluster rect {
+    fill: #f9f9f9 !important;
+    stroke: #cccccc !important;
+    stroke-width: 1px !important;
+}
+
+.mermaid .cluster .label,
+.mermaid .cluster text {
+    color: #000000 !important;
+    fill: #000000 !important;
+    font-weight: bold !important;
+}
+
+/* Fix class definitions in diagrams */
+.mermaid .node.clientTier rect { fill: #e1f5fe !important; }
+.mermaid .node.serverTier rect { fill: #f3e5f5 !important; }
+.mermaid .node.integrationTier rect { fill: #e8f5e8 !important; }
+.mermaid .node.dataTier rect { fill: #fff3e0 !important; }
+.mermaid .node.externalTier rect { fill: #fce4ec !important; }
+
+.mermaid .node.frontend rect { fill: #bbdefb !important; }
+.mermaid .node.backend rect { fill: #c8e6c9 !important; }
+.mermaid .node.infrastructure rect { fill: #fff9c4 !important; }
+.mermaid .node.external rect { fill: #ffcdd2 !important; }
+
+.mermaid .node.core rect { fill: #ffeb3b !important; }
+.mermaid .node.handlers rect { fill: #4caf50 !important; color: #ffffff !important; }
+.mermaid .node.tools rect { fill: #ff9800 !important; }
+.mermaid .node.adapters rect { fill: #2196f3 !important; color: #ffffff !important; }
+.mermaid .node.support rect { fill: #9c27b0 !important; color: #ffffff !important; }
+
+/* Fix text color for colored nodes */
+.mermaid .node.handlers .label,
+.mermaid .node.handlers text,
+.mermaid .node.adapters .label,
+.mermaid .node.adapters text,
+.mermaid .node.support .label,
+.mermaid .node.support text {
+    color: #ffffff !important;
+    fill: #ffffff !important;
+}
+
+/* Sequence diagram fixes */
+.mermaid .actor {
+    fill: #ffffff !important;
+    stroke: #333333 !important;
+}
+
+.mermaid .actor-line {
+    stroke: #cccccc !important;
+}
+
+.mermaid .messageLine0,
+.mermaid .messageLine1 {
+    stroke: #333333 !important;
+}
+
+.mermaid .messageText {
+    fill: #000000 !important;
+    color: #000000 !important;
+}
+
+.mermaid .note {
+    fill: #ffffcc !important;
+    stroke: #cccccc !important;
+}
+
+/* Gantt chart fixes */
+.mermaid .grid .tick {
+    stroke: #cccccc !important;
+}
+
+.mermaid .today {
+    fill: none !important;
+    stroke: #ff6b6b !important;
+}
+
+/* Pie chart fixes */
+.mermaid .pieOuterCircle {
+    stroke: #333333 !important;
+}
+
+.mermaid .pieTitleText {
+    fill: #000000 !important;
+}
+
+/* Fix code block visibility issues */
+code {
+    background-color: var(--quote-bg) !important;
+    color: var(--fg) !important;
+    padding: 2px 4px !important;
+    border-radius: 3px !important;
+    font-family: "Source Code Pro", Consolas, monospace !important;
+}
+
+pre code {
+    background-color: transparent !important;
+    padding: 0 !important;
+}
+
+/* Fix inline code in dark theme */
+.light code {
+    background-color: #f5f5f5 !important;
+    color: #333333 !important;
+}
+
+.rust code {
+    background-color: #f5f5f5 !important;
+    color: #333333 !important;
+}
+
+.coal code {
+    background-color: #2d2d2d !important;
+    color: #cccccc !important;
+}
+
+.navy code {
+    background-color: #1e1e1e !important;
+    color: #cccccc !important;
+}
+
+.ayu code {
+    background-color: #0f1419 !important;
+    color: #e6e1cf !important;
+}
+
+/* Ensure text is readable in all themes */
+p, li, td {
+    color: var(--fg) !important;
+}
+
+/* Fix command examples with better contrast */
+.hljs {
+    background: var(--quote-bg) !important;
+    color: var(--fg) !important;
+}

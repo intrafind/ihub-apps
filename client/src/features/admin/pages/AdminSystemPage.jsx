@@ -4,9 +4,11 @@ import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 const AdminSystemPage = () => {
   const { t } = useTranslation();
+  const { platformConfig } = usePlatformConfig();
   const fileInputRef = useRef(null);
   const [forceRefreshLoading, setForceRefreshLoading] = useState(false);
   const [forceRefreshMessage, setForceRefreshMessage] = useState('');
@@ -50,6 +52,14 @@ const AdminSystemPage = () => {
       setForceRefreshLoading(false);
     }
   };
+
+  // Check if password change should be available (only when anonymous is the ONLY auth method)
+  const shouldShowPasswordChange =
+    platformConfig?.anonymousAuth?.enabled &&
+    !platformConfig?.admin?.encrypted &&
+    !platformConfig?.localAuth?.enabled &&
+    !platformConfig?.proxyAuth?.enabled &&
+    platformConfig?.auth?.mode !== 'oidc';
 
   const handlePasswordChange = async e => {
     e.preventDefault();
@@ -120,18 +130,19 @@ const AdminSystemPage = () => {
 
     try {
       const response = await makeAdminApiCall('/admin/backup/export', {
-        method: 'GET'
+        method: 'GET',
+        responseType: 'blob'
       });
 
       // Success - axios doesn't have response.ok, successful responses are returned directly
 
       // Create download link for the ZIP file
-      const blob = await response.blob();
+      const blob = response.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
 
       // Extract filename from Content-Disposition header or create default
-      const contentDisposition = response.headers.get('Content-Disposition');
+      const contentDisposition = response.headers['content-disposition'];
       const filenameMatch = contentDisposition && contentDisposition.match(/filename="(.+)"/);
       const filename = filenameMatch
         ? filenameMatch[1]
@@ -362,192 +373,153 @@ const AdminSystemPage = () => {
               </div>
             </div>
 
-            {/* Cache Management Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0 mt-1">
-                  <div className="p-3 rounded-full bg-blue-100">
-                    <Icon name="server" size="lg" className="text-blue-600" />
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    {t('admin.system.cacheTitle', 'Server Cache Management')}
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    {t(
-                      'admin.system.cacheDesc',
-                      'Manage server-side configuration cache. Use these tools to refresh or clear cached configuration files on the server.'
-                    )}
-                  </p>
-
-                  <div className="flex space-x-4">
-                    <a
-                      href="/api/admin/cache/_refresh"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      <Icon name="refresh" size="md" className="mr-2" />
-                      {t('admin.system.refreshCache', 'Refresh Cache')}
-                    </a>
-
-                    <a
-                      href="/api/admin/cache/_clear"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                    >
-                      <Icon name="trash" size="md" className="mr-2" />
-                      {t('admin.system.clearCache', 'Clear Cache')}
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Password Change Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-start space-x-4">
-                <div className="flex-shrink-0 mt-1">
-                  <div className="p-3 rounded-full bg-purple-100">
-                    <Icon name="lock" size="lg" className="text-purple-600" />
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    {t('admin.system.passwordTitle', 'Change Admin Password')}
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    {t(
-                      'admin.system.passwordDesc',
-                      'Update the admin password. The new password will be encrypted using bcrypt and stored securely.'
-                    )}
-                  </p>
-
-                  {passwordChangeMessage && (
-                    <div
-                      className={`p-4 rounded-md mb-4 ${
-                        passwordChangeMessage.type === 'success'
-                          ? 'bg-green-50 border border-green-200'
-                          : 'bg-red-50 border border-red-200'
-                      }`}
-                    >
-                      <div className="flex">
-                        <Icon
-                          name={passwordChangeMessage.type === 'success' ? 'check' : 'warning'}
-                          size="md"
-                          className={`mt-0.5 mr-3 ${
-                            passwordChangeMessage.type === 'success'
-                              ? 'text-green-500'
-                              : 'text-red-500'
-                          }`}
-                        />
-                        <p
-                          className={`text-sm ${
-                            passwordChangeMessage.type === 'success'
-                              ? 'text-green-700'
-                              : 'text-red-700'
-                          }`}
-                        >
-                          {passwordChangeMessage.text}
-                        </p>
-                      </div>
+            {/* Password Change Section - Only show for anonymous mode */}
+            {shouldShowPasswordChange && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-start space-x-4">
+                  <div className="flex-shrink-0 mt-1">
+                    <div className="p-3 rounded-full bg-purple-100">
+                      <Icon name="lock" size="lg" className="text-purple-600" />
                     </div>
-                  )}
-
-                  <form onSubmit={handlePasswordChange} className="space-y-4">
-                    <div>
-                      <label
-                        htmlFor="newPassword"
-                        className="block text-sm font-medium text-gray-700 mb-2"
-                      >
-                        {t('admin.system.newPassword', 'New Password')}
-                      </label>
-                      <input
-                        type="password"
-                        id="newPassword"
-                        value={passwordForm.newPassword}
-                        onChange={e =>
-                          setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))
-                        }
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
-                        placeholder={t('admin.system.newPasswordPlaceholder', 'Enter new password')}
-                        disabled={passwordChangeLoading}
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="confirmPassword"
-                        className="block text-sm font-medium text-gray-700 mb-2"
-                      >
-                        {t('admin.system.confirmPassword', 'Confirm New Password')}
-                      </label>
-                      <input
-                        type="password"
-                        id="confirmPassword"
-                        value={passwordForm.confirmPassword}
-                        onChange={e =>
-                          setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))
-                        }
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
-                        placeholder={t(
-                          'admin.system.confirmPasswordPlaceholder',
-                          'Confirm new password'
-                        )}
-                        disabled={passwordChangeLoading}
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={passwordChangeLoading}
-                      className={`
-                        inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium 
-                        rounded-md shadow-sm text-white 
-                        ${
-                          passwordChangeLoading
-                            ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500'
-                        }
-                      `}
-                    >
-                      {passwordChangeLoading ? (
-                        <>
-                          <svg
-                            className="animate-spin -ml-1 mr-3 h-4 w-4 text-white"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            ></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
-                          {t('admin.system.changingPassword', 'Changing Password...')}
-                        </>
-                      ) : (
-                        <>
-                          <Icon name="lock" size="md" className="mr-2" />
-                          {t('admin.system.changePassword', 'Change Password')}
-                        </>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {t('admin.system.passwordTitle', 'Change Admin Password')}
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      {t(
+                        'admin.system.passwordDesc',
+                        'Update the admin password. The new password will be encrypted using bcrypt and stored securely.'
                       )}
-                    </button>
-                  </form>
+                    </p>
+
+                    {passwordChangeMessage && (
+                      <div
+                        className={`p-4 rounded-md mb-4 ${
+                          passwordChangeMessage.type === 'success'
+                            ? 'bg-green-50 border border-green-200'
+                            : 'bg-red-50 border border-red-200'
+                        }`}
+                      >
+                        <div className="flex">
+                          <Icon
+                            name={passwordChangeMessage.type === 'success' ? 'check' : 'warning'}
+                            size="md"
+                            className={`mt-0.5 mr-3 ${
+                              passwordChangeMessage.type === 'success'
+                                ? 'text-green-500'
+                                : 'text-red-500'
+                            }`}
+                          />
+                          <p
+                            className={`text-sm ${
+                              passwordChangeMessage.type === 'success'
+                                ? 'text-green-700'
+                                : 'text-red-700'
+                            }`}
+                          >
+                            {passwordChangeMessage.text}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <form onSubmit={handlePasswordChange} className="space-y-4">
+                      <div>
+                        <label
+                          htmlFor="newPassword"
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                        >
+                          {t('admin.system.newPassword', 'New Password')}
+                        </label>
+                        <input
+                          type="password"
+                          id="newPassword"
+                          value={passwordForm.newPassword}
+                          onChange={e =>
+                            setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))
+                          }
+                          className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
+                          placeholder={t(
+                            'admin.system.newPasswordPlaceholder',
+                            'Enter new password'
+                          )}
+                          disabled={passwordChangeLoading}
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="confirmPassword"
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                        >
+                          {t('admin.system.confirmPassword', 'Confirm New Password')}
+                        </label>
+                        <input
+                          type="password"
+                          id="confirmPassword"
+                          value={passwordForm.confirmPassword}
+                          onChange={e =>
+                            setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))
+                          }
+                          className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
+                          placeholder={t(
+                            'admin.system.confirmPasswordPlaceholder',
+                            'Confirm new password'
+                          )}
+                          disabled={passwordChangeLoading}
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={passwordChangeLoading}
+                        className={`
+                          inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium 
+                          rounded-md shadow-sm text-white 
+                          ${
+                            passwordChangeLoading
+                              ? 'bg-gray-400 cursor-not-allowed'
+                              : 'bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500'
+                          }
+                        `}
+                      >
+                        {passwordChangeLoading ? (
+                          <>
+                            <svg
+                              className="animate-spin -ml-1 mr-3 h-4 w-4 text-white"
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              ></circle>
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                              ></path>
+                            </svg>
+                            {t('admin.system.changingPassword', 'Changing Password...')}
+                          </>
+                        ) : (
+                          <>
+                            <Icon name="lock" size="md" className="mr-2" />
+                            {t('admin.system.changePassword', 'Change Password')}
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Backup/Import Section */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

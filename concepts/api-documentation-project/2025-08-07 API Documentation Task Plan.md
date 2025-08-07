@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document outlines a comprehensive plan to add Swagger/OpenAPI documentation to all remaining APIs in the AI Hub Apps project. Based on analysis of the codebase, we have identified 18+ undocumented route files containing approximately 60+ API endpoints that need documentation.
+This document outlines a comprehensive plan to add Swagger/OpenAPI documentation to all remaining APIs in the iHub Apps project. Based on analysis of the codebase, we have identified 18+ undocumented route files containing approximately 60+ API endpoints that need documentation.
 
 **Business Value:**
 - Improved developer experience for API integration
