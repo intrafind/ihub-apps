@@ -1,25 +1,5 @@
 [
   {
-    "id": "documentation",
-    "name": {
-      "en": "Documentation",
-      "de": "Dokumentation"
-    },
-    "description": {
-      "en": "Internal system documentation",
-      "de": "Interne Systemdokumentation"
-    },
-    "type": "filesystem",
-    "enabled": true,
-    "exposeAs": "prompt",
-    "tags": [],
-    "updated": "2025-08-05T19:57:05.867Z",
-    "config": {
-      "path": "sources/documentation.md",
-      "encoding": "utf-8"
-    }
-  },
-  {
     "id": "faq",
     "name": {
       "en": "FAQ",
