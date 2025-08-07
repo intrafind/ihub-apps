@@ -1,3 +1,6 @@
+![INTRAFIND Logo iHub](https://github.com/user-attachments/assets/7aea35c8-1c3f-44f3-abad-528cfc5c65be)
+
+
 # iHub Apps
 
 **A comprehensive platform for building and deploying AI-powered applications with enterprise-grade features.**
