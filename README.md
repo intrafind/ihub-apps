@@ -1199,6 +1199,7 @@ iHub Apps supports dynamic React component rendering for advanced page functiona
 
 1. **Create React component files** in `contents/pages/{lang}/{page-id}.jsx`
 2. **Component Structure**:
+
    ```jsx
    function UserComponent(props) {
      const { React, useState, useEffect, t, navigate, user } = props;
@@ -1206,6 +1207,7 @@ iHub Apps supports dynamic React component rendering for advanced page functiona
      return <div className="p-4">{/* Your component JSX */}</div>;
    }
    ```
+
 3. **Available Props**: Full React hooks, translation function, navigation, user context
 4. **Styling**: Tailwind CSS classes available
 5. **Auto-detection**: System automatically detects React vs Markdown content

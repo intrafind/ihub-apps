@@ -54,7 +54,7 @@ The `header` section controls the appearance and content of the application head
 "header": {
   "defaultColor": "rgb(0, 53, 87)",
   "logo": {
-    "url": "/logo-bmas-2.png",
+    "url": "/logo-custom-2.png",
     "alt": {
       "en": "iHub Apps Logo",
       "de": "KI-Hub Apps Logo"

@@ -42,28 +42,6 @@ npm run format:fix
 timeout 10s node server/server.js || echo "Server startup check completed"
 ```
 
-### Testing
-
-```bash
-# Test LLM adapters
-npm run test:openai
-npm run test:anthropic
-npm run test:google
-npm run test:mistral
-npm run test:all
-
-# Test authentication security
-cd server && node tests/authentication-security.test.js
-
-# Test tool calling functionality
-npm run test:tool-calling
-
-# Additional integration tests
-npm run test:tool-integration
-npm run test:real-llm
-npm run test:azure-openai
-```
-
 ### Docker Commands
 
 ```bash
