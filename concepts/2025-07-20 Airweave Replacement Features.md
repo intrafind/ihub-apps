@@ -2,7 +2,7 @@
 
 ## Summary
 
-This concept outlines the native reimplementation of core Airweave functionality. The goal is to build equivalent capabilities inside ai-hub-apps without relying on the Airweave codebase. Each subsection below describes the key feature, design considerations and the relevant components we plan to create.
+This concept outlines the native reimplementation of core Airweave functionality. The goal is to build equivalent capabilities inside ihub-apps without relying on the Airweave codebase. Each subsection below describes the key feature, design considerations and the relevant components we plan to create.
 
 ## 1. Data Synchronization & Connectors
 

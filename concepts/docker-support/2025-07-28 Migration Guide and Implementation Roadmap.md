@@ -175,7 +175,7 @@ EOF
 cat > docker-compose.yml << 'EOF'
 version: '3.8'
 services:
-  ai-hub-dev:
+  ihub-dev:
     # ... (use implementation from previous documents)
 EOF
 
@@ -202,14 +202,14 @@ echo "Testing development container..."
 
 # Build development image
 echo "Building development image..."
-docker build --target development -t ai-hub-apps:dev .
+docker build --target development -t ihub-apps:dev .
 
 # Test container startup
 echo "Testing container startup..."
-docker run --rm -d --name ai-hub-test -p 3001:3000 \
+docker run --rm -d --name ihub-test -p 3001:3000 \
   -e OPENAI_API_KEY=test \
   -e JWT_SECRET=test_secret \
-  ai-hub-apps:dev
+  ihub-apps:dev
 
 # Wait for startup
 sleep 30
@@ -222,7 +222,7 @@ else
 fi
 
 # Clean up
-docker stop ai-hub-test 2>/dev/null || true
+docker stop ihub-test 2>/dev/null || true
 
 echo "Development container test complete"
 ```
@@ -304,9 +304,9 @@ fi
 
 # Create Docker volumes
 echo "Creating Docker volumes..."
-docker volume create ai-hub-dev-data
-docker volume create ai-hub-dev-uploads
-docker volume create ai-hub-dev-logs
+docker volume create ihub-dev-data
+docker volume create ihub-dev-uploads
+docker volume create ihub-dev-logs
 
 # Migrate data to volumes
 echo "Migrating data to volumes..."
@@ -314,7 +314,7 @@ echo "Migrating data to volumes..."
 # Migrate data directory
 if [ -d "contents/data" ]; then
     docker run --rm -v "$(pwd)/contents/data:/source:ro" \
-               -v "ai-hub-dev-data:/dest" \
+               -v "ihub-dev-data:/dest" \
                alpine sh -c "cp -r /source/* /dest/ 2>/dev/null || true"
     echo "✓ Migrated contents/data to Docker volume"
 fi
@@ -322,7 +322,7 @@ fi
 # Migrate uploads
 if [ -d "contents/uploads" ]; then
     docker run --rm -v "$(pwd)/contents/uploads:/source:ro" \
-               -v "ai-hub-dev-uploads:/dest" \
+               -v "ihub-dev-uploads:/dest" \
                alpine sh -c "cp -r /source/* /dest/ 2>/dev/null || true"
     echo "✓ Migrated contents/uploads to Docker volume"
 fi
@@ -330,15 +330,15 @@ fi
 # Migrate logs
 if [ -d "logs" ]; then
     docker run --rm -v "$(pwd)/logs:/source:ro" \
-               -v "ai-hub-dev-logs:/dest" \
+               -v "ihub-dev-logs:/dest" \
                alpine sh -c "cp -r /source/* /dest/ 2>/dev/null || true"
     echo "✓ Migrated logs to Docker volume"
 fi
 
 # Verify migration
 echo "Verifying migration..."
-docker run --rm -v "ai-hub-dev-data:/data" alpine ls -la /data
-docker run --rm -v "ai-hub-dev-uploads:/uploads" alpine ls -la /uploads
+docker run --rm -v "ihub-dev-data:/data" alpine ls -la /data
+docker run --rm -v "ihub-dev-uploads:/uploads" alpine ls -la /uploads
 
 echo "Data migration completed successfully!"
 echo "Backup available at: $BACKUP_DIR"
@@ -350,7 +350,7 @@ echo "Backup available at: $BACKUP_DIR"
 # Updated docker-compose.yml with proper volume mapping
 version: '3.8'
 services:
-  ai-hub-dev:
+  ihub-dev:
     build:
       context: .
       target: development
@@ -373,9 +373,9 @@ services:
       - ./contents/sources:/app/contents/sources:rw
 
       # Persistent data (Docker volumes)
-      - ai-hub-dev-data:/app/contents/data:rw
-      - ai-hub-dev-uploads:/app/contents/uploads:rw
-      - ai-hub-dev-logs:/app/logs:rw
+      - ihub-dev-data:/app/contents/data:rw
+      - ihub-dev-uploads:/app/contents/uploads:rw
+      - ihub-dev-logs:/app/logs:rw
     environment:
       - NODE_ENV=development
     env_file:
@@ -383,11 +383,11 @@ services:
     restart: unless-stopped
 
 volumes:
-  ai-hub-dev-data:
+  ihub-dev-data:
     external: true
-  ai-hub-dev-uploads:
+  ihub-dev-uploads:
     external: true
-  ai-hub-dev-logs:
+  ihub-dev-logs:
     external: true
 ```
 
@@ -419,32 +419,32 @@ set -e
 VERSION=${1:-latest}
 REGISTRY=${2:-""}
 
-echo "Building production image: ai-hub-apps:$VERSION"
+echo "Building production image: ihub-apps:$VERSION"
 
 # Build production image
-docker build --target production -t ai-hub-apps:$VERSION .
+docker build --target production -t ihub-apps:$VERSION .
 
 # Tag for registry if provided
 if [ -n "$REGISTRY" ]; then
-    docker tag ai-hub-apps:$VERSION $REGISTRY/ai-hub-apps:$VERSION
-    echo "Tagged for registry: $REGISTRY/ai-hub-apps:$VERSION"
+    docker tag ihub-apps:$VERSION $REGISTRY/ihub-apps:$VERSION
+    echo "Tagged for registry: $REGISTRY/ihub-apps:$VERSION"
 fi
 
 # Security scan
 echo "Running security scan..."
 if command -v trivy >/dev/null 2>&1; then
-    trivy image ai-hub-apps:$VERSION
+    trivy image ihub-apps:$VERSION
 else
     echo "Trivy not available, skipping security scan"
 fi
 
 # Test production image
 echo "Testing production image..."
-docker run --rm -d --name ai-hub-prod-test -p 3002:3000 \
+docker run --rm -d --name ihub-prod-test -p 3002:3000 \
   -e NODE_ENV=production \
   -e JWT_SECRET=test_prod_secret \
   -e OPENAI_API_KEY=test \
-  ai-hub-apps:$VERSION
+  ihub-apps:$VERSION
 
 sleep 30
 
@@ -454,9 +454,9 @@ else
     echo "✗ Production image test failed"
 fi
 
-docker stop ai-hub-prod-test
+docker stop ihub-prod-test
 
-echo "Production image build complete: ai-hub-apps:$VERSION"
+echo "Production image build complete: ihub-apps:$VERSION"
 ```
 
 ##### 3.2 Production Environment Setup
@@ -485,15 +485,15 @@ EOF
 cp docker-compose.prod.yml.example docker-compose.prod.yml
 
 # Create production volumes
-docker volume create ai-hub-config
-docker volume create ai-hub-data
-docker volume create ai-hub-uploads
-docker volume create ai-hub-logs
+docker volume create ihub-config
+docker volume create ihub-data
+docker volume create ihub-uploads
+docker volume create ihub-logs
 
 # Initialize configuration in volumes
 echo "Initializing configuration volumes..."
 docker run --rm -v "$(pwd)/contents/config:/source:ro" \
-           -v "ai-hub-config:/dest" \
+           -v "ihub-config:/dest" \
            alpine sh -c "cp -r /source/* /dest/"
 
 echo "Production environment setup complete"
@@ -618,11 +618,11 @@ sleep 60
 
 # Run API tests
 echo "Running API tests..."
-docker-compose -f docker-compose.test.yml exec ai-hub-test npm run test:api
+docker-compose -f docker-compose.test.yml exec ihub-test npm run test:api
 
 # Run integration tests
 echo "Running integration tests..."
-docker-compose -f docker-compose.test.yml exec ai-hub-test npm run test:integration
+docker-compose -f docker-compose.test.yml exec ihub-test npm run test:integration
 
 # Run load tests
 echo "Running load tests..."
@@ -692,7 +692,7 @@ docker-compose -f docker-compose.prod.yml pull
 
 # Deploy with zero downtime
 echo "Starting deployment..."
-docker-compose -f docker-compose.prod.yml up -d --no-deps ai-hub-app
+docker-compose -f docker-compose.prod.yml up -d --no-deps ihub-app
 
 # Wait for health check
 echo "Waiting for health check..."
@@ -708,7 +708,7 @@ done
 # Verify deployment
 echo "Verifying deployment..."
 docker-compose -f docker-compose.prod.yml ps
-docker-compose -f docker-compose.prod.yml logs --tail=50 ai-hub-app
+docker-compose -f docker-compose.prod.yml logs --tail=50 ihub-app
 
 echo "Production deployment complete"
 ```
@@ -780,11 +780,11 @@ if [ -d "server/node_modules.backup" ]; then
 fi
 
 # Restore data from volumes
-docker run --rm -v "ai-hub-data:/source:ro" \
+docker run --rm -v "ihub-data:/source:ro" \
                 -v "$(pwd)/contents/data:/dest" \
                 alpine sh -c "cp -r /source/* /dest/ 2>/dev/null || true"
 
-docker run --rm -v "ai-hub-uploads:/source:ro" \
+docker run --rm -v "ihub-uploads:/source:ro" \
                 -v "$(pwd)/contents/uploads:/dest" \
                 alpine sh -c "cp -r /source/* /dest/ 2>/dev/null || true"
 
@@ -815,13 +815,13 @@ time curl -f http://localhost:3000/ >/dev/null || echo "FAIL: Homepage load"
 
 # Data integrity tests
 echo "3. Data Integrity Tests"
-docker exec ai-hub-app ls -la /app/contents/data || echo "FAIL: Data directory"
-docker exec ai-hub-app ls -la /app/contents/uploads || echo "FAIL: Uploads directory"
+docker exec ihub-app ls -la /app/contents/data || echo "FAIL: Data directory"
+docker exec ihub-app ls -la /app/contents/uploads || echo "FAIL: Uploads directory"
 
 # Security tests
 echo "4. Security Tests"
-docker exec ai-hub-app whoami | grep -v root || echo "FAIL: Running as root"
-docker exec ai-hub-app find /app -writable -type d | grep -E '^/app$' && echo "FAIL: Root writable"
+docker exec ihub-app whoami | grep -v root || echo "FAIL: Running as root"
+docker exec ihub-app find /app -writable -type d | grep -E '^/app$' && echo "FAIL: Root writable"
 
 echo "Post-migration validation complete"
 ```

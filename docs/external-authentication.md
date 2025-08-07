@@ -136,7 +136,7 @@ Authentication is configured in `contents/config/platform.json`:
         "name": "example-provider",
         "header": "Authorization",
         "issuer": "https://example.com",
-        "audience": "ai-hub-apps",
+        "audience": "ihub-apps",
         "jwkUrl": "https://example.com/.well-known/jwks.json"
       }
     ]
@@ -315,7 +315,7 @@ Authentication is handled by a reverse proxy (nginx, Apache, OAuth2 Proxy, etc.)
         "name": "your-provider",
         "header": "Authorization",
         "issuer": "https://your-provider.com",
-        "audience": "ai-hub-apps",
+        "audience": "ihub-apps",
         "jwkUrl": "https://your-provider.com/.well-known/jwks.json"
       }
     ]
@@ -336,7 +336,7 @@ Authentication is handled by a reverse proxy (nginx, Apache, OAuth2 Proxy, etc.)
 
 ```nginx
 location / {
-    proxy_pass http://ai-hub-apps:3000;
+    proxy_pass http://ihub-apps:3000;
     proxy_set_header X-Forwarded-User $remote_user;
     proxy_set_header X-Forwarded-Groups "Users,Employees";
     proxy_set_header X-Forwarded-Name "$http_x_forwarded_name";
@@ -362,7 +362,7 @@ Supports authentication using **only JWT tokens** without requiring any headers:
   "family_name": "Doe",
   "groups": ["users", "admins"],
   "iss": "https://your-provider.com",
-  "aud": "ai-hub-apps"
+  "aud": "ihub-apps"
 }
 ```
 

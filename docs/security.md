@@ -523,7 +523,7 @@ export NODE_EXTRA_CA_CERTS=/path/to/certificates.pem
 ```nginx
 server {
     listen 443 ssl;
-    server_name ai-hub.company.com;
+    server_name ihub.company.com;
     
     ssl_certificate /path/to/certificate.pem;
     ssl_certificate_key /path/to/private-key.pem;
@@ -575,19 +575,19 @@ chmod -R 644 contents/config/
 chmod 755 contents/
 
 # Run as non-root user
-useradd -r -s /bin/false aihub
-chown -R aihub:aihub /opt/ai-hub-apps
-sudo -u aihub npm run start:prod
+useradd -r -s /bin/false ihub
+chown -R ihub:ihub /opt/ihub-apps
+sudo -u ihub npm run start:prod
 ```
 
 #### Process Management
 ```bash
 # Using systemd (recommended)
-sudo systemctl enable ai-hub-apps
-sudo systemctl start ai-hub-apps
+sudo systemctl enable ihub-apps
+sudo systemctl start ihub-apps
 
 # Monitor service status
-sudo systemctl status ai-hub-apps
+sudo systemctl status ihub-apps
 ```
 
 ### Docker Deployment
@@ -598,8 +598,8 @@ sudo systemctl status ai-hub-apps
 FROM node:20-alpine AS production
 
 # Run as non-root user
-RUN addgroup -S aihub && adduser -S -D -H -s /sbin/nologin -G aihub aihub
-USER aihub
+RUN addgroup -S ihub && adduser -S -D -H -s /sbin/nologin -G ihub ihub
+USER ihub
 
 # Use tini for proper signal handling
 ENTRYPOINT ["/sbin/tini", "--"]
@@ -620,16 +620,16 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
 #### Docker Compose Production
 ```yaml
 services:
-  ai-hub-app:
-    image: ai-hub-apps:latest
+  ihub-app:
+    image: ihub-apps:latest
     volumes:
       # Configuration as read-only
-      - ai-hub-config:/app/contents/config:ro
-      - ai-hub-apps:/app/contents/apps:ro
+      - ihub-config:/app/contents/config:ro
+      - ihub-apps:/app/contents/apps:ro
       
       # Writable data volumes
-      - ai-hub-data:/app/contents/data:rw
-      - ai-hub-logs:/app/logs:rw
+      - ihub-data:/app/contents/data:rw
+      - ihub-logs:/app/logs:rw
     deploy:
       resources:
         limits:
@@ -650,7 +650,7 @@ services:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ai-hub-apps
+  name: ihub-apps
 spec:
   template:
     spec:
@@ -659,8 +659,8 @@ spec:
         runAsUser: 1000
         fsGroup: 1000
       containers:
-      - name: ai-hub-apps
-        image: ai-hub-apps:latest
+      - name: ihub-apps
+        image: ihub-apps:latest
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -681,7 +681,7 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ai-hub-secrets
+  name: ihub-secrets
 type: Opaque
 stringData:
   OPENAI_API_KEY: "sk-..."
@@ -693,12 +693,12 @@ spec:
   template:
     spec:
       containers:
-      - name: ai-hub-apps
+      - name: ihub-apps
         env:
         - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:
-              name: ai-hub-secrets
+              name: ihub-secrets
               key: OPENAI_API_KEY
 ```
 
@@ -707,18 +707,18 @@ spec:
 #### Standalone Binary Security
 ```bash
 # Download and verify checksums
-wget https://releases.example.com/ai-hub-apps-v1.0.0-linux
-wget https://releases.example.com/ai-hub-apps-v1.0.0-linux.sha256
+wget https://releases.example.com/ihub-apps-v1.0.0-linux
+wget https://releases.example.com/ihub-apps-v1.0.0-linux.sha256
 
 # Verify integrity
-sha256sum -c ai-hub-apps-v1.0.0-linux.sha256
+sha256sum -c ihub-apps-v1.0.0-linux.sha256
 
 # Set secure permissions
-chmod 755 ai-hub-apps-v1.0.0-linux
-chown root:root ai-hub-apps-v1.0.0-linux
+chmod 755 ihub-apps-v1.0.0-linux
+chown root:root ihub-apps-v1.0.0-linux
 
 # Run as non-root user
-sudo -u aihub ./ai-hub-apps-v1.0.0-linux
+sudo -u ihub ./ihub-apps-v1.0.0-linux
 ```
 
 ## Operational Security
@@ -930,7 +930,7 @@ npm run security:audit:config
 
 # Scan for vulnerabilities  
 npm audit
-docker scan ai-hub-apps:latest
+docker scan ihub-apps:latest
 
 # Check dependencies
 npm run security:check:deps

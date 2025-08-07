@@ -98,7 +98,7 @@ export function generateIFinderJWT(user, options = {}) {
   const token = jwt.sign(payload, privateKey, {
     algorithm: config.algorithm || 'RS256', // Default to RS256 for private key signing
     expiresIn: expiresIn,
-    issuer: config.issuer || 'ai-hub-apps',
+    issuer: config.issuer || 'ihub-apps',
     audience: config.audience || 'ifinder-api'
   });
 
@@ -117,7 +117,7 @@ export function validateIFinderJWT(token) {
   try {
     const decoded = jwt.verify(token, privateKey, {
       algorithms: [config.algorithm || 'RS256'],
-      issuer: config.issuer || 'ai-hub-apps',
+      issuer: config.issuer || 'ihub-apps',
       audience: config.audience || 'ifinder-api'
     });
 

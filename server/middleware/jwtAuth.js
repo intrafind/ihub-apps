@@ -41,7 +41,7 @@ export default function jwtAuthMiddleware(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, jwtSecret, {
-      issuer: 'ai-hub-apps',
+      issuer: 'ihub-apps',
       maxAge: '7d'
     });
 

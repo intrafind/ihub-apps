@@ -71,16 +71,16 @@ RUN apk add --update --no-cache dumb-init curl
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S aihub -u 1001 -G nodejs
+    adduser -S ihub -u 1001 -G nodejs
 
 # Create app directory
 WORKDIR /app
 
 # Copy built application from builder stage
-COPY --from=builder --chown=aihub:nodejs /app/dist ./
+COPY --from=builder --chown=ihub:nodejs /app/dist ./
 
 # Copy server node_modules (production only)
-COPY --from=builder --chown=aihub:nodejs /app/server/node_modules ./server/node_modules
+COPY --from=builder --chown=ihub:nodejs /app/server/node_modules ./server/node_modules
 
 # Create required directories with proper permissions
 RUN mkdir -p /app/contents/data \
@@ -89,10 +89,10 @@ RUN mkdir -p /app/contents/data \
              /app/contents/pages \
              /app/contents/sources \
              /app/logs && \
-    chown -R aihub:nodejs /app/contents /app/logs
+    chown -R ihub:nodejs /app/contents /app/logs
 
 # Create health check script
-COPY --chown=aihub:nodejs <<EOF /app/healthcheck.js
+COPY --chown=ihub:nodejs <<EOF /app/healthcheck.js
 import http from 'http';
 
 const options = {
@@ -116,7 +116,7 @@ request.end();
 EOF
 
 # Switch to non-root user
-USER aihub
+USER ihub
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
@@ -140,12 +140,12 @@ version: '3.8'
 
 services:
   # Main iHub Apps Development Container
-  ai-hub-dev:
+  ihub-dev:
     build:
       context: .
       target: development
       dockerfile: Dockerfile
-    container_name: ai-hub-dev
+    container_name: ihub-dev
     ports:
       - '3000:3000' # Server port
       - '5173:5173' # Vite dev server port
@@ -167,14 +167,14 @@ services:
       - ./contents/sources:/app/contents/sources:rw
 
       # Persistent data volumes
-      - ai-hub-dev-data:/app/contents/data
-      - ai-hub-dev-uploads:/app/contents/uploads
-      - ai-hub-dev-logs:/app/logs
+      - ihub-dev-data:/app/contents/data
+      - ihub-dev-uploads:/app/contents/uploads
+      - ihub-dev-logs:/app/logs
 
       # Node modules cache (performance optimization)
-      - ai-hub-dev-node-modules:/app/node_modules
-      - ai-hub-dev-client-modules:/app/client/node_modules
-      - ai-hub-dev-server-modules:/app/server/node_modules
+      - ihub-dev-node-modules:/app/node_modules
+      - ihub-dev-client-modules:/app/client/node_modules
+      - ihub-dev-server-modules:/app/server/node_modules
     environment:
       - NODE_ENV=development
       - LOG_LEVEL=debug
@@ -184,7 +184,7 @@ services:
       - .env
     restart: unless-stopped
     networks:
-      - ai-hub-network
+      - ihub-network
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
       interval: 30s
@@ -193,48 +193,48 @@ services:
       start_period: 60s
 
   # Optional: Database for external persistence (PostgreSQL example)
-  ai-hub-db:
+  ihub-db:
     image: postgres:15-alpine
-    container_name: ai-hub-db
+    container_name: ihub-db
     profiles: ['database']
     environment:
-      POSTGRES_DB: aihub
-      POSTGRES_USER: aihub
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-aihub123}
+      POSTGRES_DB: ihub
+      POSTGRES_USER: ihub
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ihub123}
     volumes:
-      - ai-hub-db-data:/var/lib/postgresql/data
+      - ihub-db-data:/var/lib/postgresql/data
     ports:
       - '5432:5432'
     networks:
-      - ai-hub-network
+      - ihub-network
     restart: unless-stopped
 
   # Optional: Redis for session storage and caching
-  ai-hub-redis:
+  ihub-redis:
     image: redis:7-alpine
-    container_name: ai-hub-redis
+    container_name: ihub-redis
     profiles: ['cache']
     command: redis-server --appendonly yes
     volumes:
-      - ai-hub-redis-data:/data
+      - ihub-redis-data:/data
     ports:
       - '6379:6379'
     networks:
-      - ai-hub-network
+      - ihub-network
     restart: unless-stopped
 
 volumes:
-  ai-hub-dev-data:
-  ai-hub-dev-uploads:
-  ai-hub-dev-logs:
-  ai-hub-dev-node-modules:
-  ai-hub-dev-client-modules:
-  ai-hub-dev-server-modules:
-  ai-hub-db-data:
-  ai-hub-redis-data:
+  ihub-dev-data:
+  ihub-dev-uploads:
+  ihub-dev-logs:
+  ihub-dev-node-modules:
+  ihub-dev-client-modules:
+  ihub-dev-server-modules:
+  ihub-db-data:
+  ihub-redis-data:
 
 networks:
-  ai-hub-network:
+  ihub-network:
     driver: bridge
 ```
 
@@ -246,27 +246,27 @@ version: '3.8'
 
 services:
   # Main iHub Apps Production Container
-  ai-hub-app:
-    image: ai-hub-apps:${VERSION:-latest}
-    container_name: ai-hub-app
+  ihub-app:
+    image: ihub-apps:${VERSION:-latest}
+    container_name: ihub-app
     ports:
       - '3000:3000'
     volumes:
       # Configuration volumes (mounted from host or init container)
-      - ai-hub-config:/app/contents/config:ro
-      - ai-hub-apps:/app/contents/apps:ro
-      - ai-hub-models:/app/contents/models:ro
-      - ai-hub-locales:/app/contents/locales:ro
-      - ai-hub-prompts:/app/contents/prompts:ro
+      - ihub-config:/app/contents/config:ro
+      - ihub-apps:/app/contents/apps:ro
+      - ihub-models:/app/contents/models:ro
+      - ihub-locales:/app/contents/locales:ro
+      - ihub-prompts:/app/contents/prompts:ro
 
       # Content that may be updated via admin interface
-      - ai-hub-pages:/app/contents/pages:rw
-      - ai-hub-sources:/app/contents/sources:rw
+      - ihub-pages:/app/contents/pages:rw
+      - ihub-sources:/app/contents/sources:rw
 
       # Persistent data volumes
-      - ai-hub-data:/app/contents/data:rw
-      - ai-hub-uploads:/app/contents/uploads:rw
-      - ai-hub-logs:/app/logs:rw
+      - ihub-data:/app/contents/data:rw
+      - ihub-uploads:/app/contents/uploads:rw
+      - ihub-logs:/app/logs:rw
     environment:
       - NODE_ENV=production
       - LOG_LEVEL=info
@@ -284,7 +284,7 @@ services:
           cpus: '0.5'
           memory: 512M
     networks:
-      - ai-hub-network
+      - ihub-network
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
       interval: 30s
@@ -298,20 +298,20 @@ services:
         max-file: '3'
 
   # Configuration Initialization Container
-  ai-hub-config-init:
+  ihub-config-init:
     image: alpine:latest
-    container_name: ai-hub-config-init
+    container_name: ihub-config-init
     volumes:
       - ./contents/config:/source:ro
       - ./contents/apps:/source-apps:ro
       - ./contents/models:/source-models:ro
       - ./contents/locales:/source-locales:ro
       - ./contents/prompts:/source-prompts:ro
-      - ai-hub-config:/dest-config
-      - ai-hub-apps:/dest-apps
-      - ai-hub-models:/dest-models
-      - ai-hub-locales:/dest-locales
-      - ai-hub-prompts:/dest-prompts
+      - ihub-config:/dest-config
+      - ihub-apps:/dest-apps
+      - ihub-models:/dest-models
+      - ihub-locales:/dest-locales
+      - ihub-prompts:/dest-prompts
     command: >
       sh -c "
         echo 'Initializing configuration volumes...'
@@ -325,21 +325,21 @@ services:
     restart: 'no'
 
   # Reverse Proxy with SSL Termination
-  ai-hub-proxy:
+  ihub-proxy:
     image: nginx:alpine
-    container_name: ai-hub-proxy
+    container_name: ihub-proxy
     ports:
       - '80:80'
       - '443:443'
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
-      - ai-hub-uploads:/var/www/uploads:ro # Serve uploads directly
+      - ihub-uploads:/var/www/uploads:ro # Serve uploads directly
     depends_on:
-      ai-hub-app:
+      ihub-app:
         condition: service_healthy
     networks:
-      - ai-hub-network
+      - ihub-network
     restart: unless-stopped
     logging:
       driver: 'json-file'
@@ -348,19 +348,19 @@ services:
         max-file: '3'
 
 volumes:
-  ai-hub-config:
-  ai-hub-apps:
-  ai-hub-models:
-  ai-hub-locales:
-  ai-hub-prompts:
-  ai-hub-pages:
-  ai-hub-sources:
-  ai-hub-data:
-  ai-hub-uploads:
-  ai-hub-logs:
+  ihub-config:
+  ihub-apps:
+  ihub-models:
+  ihub-locales:
+  ihub-prompts:
+  ihub-pages:
+  ihub-sources:
+  ihub-data:
+  ihub-uploads:
+  ihub-logs:
 
 networks:
-  ai-hub-network:
+  ihub-network:
     driver: bridge
 ```
 
@@ -440,8 +440,8 @@ events {
 }
 
 http {
-    upstream ai-hub-backend {
-        server ai-hub-app:3000;
+    upstream ihub-backend {
+        server ihub-app:3000;
         keepalive 32;
     }
 
@@ -483,7 +483,7 @@ http {
         # API routes with rate limiting
         location /api/ {
             limit_req zone=api burst=20 nodelay;
-            proxy_pass http://ai-hub-backend;
+            proxy_pass http://ihub-backend;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection 'upgrade';
@@ -498,7 +498,7 @@ http {
         # Upload endpoints with stricter rate limiting
         location /api/upload {
             limit_req zone=uploads burst=5 nodelay;
-            proxy_pass http://ai-hub-backend;
+            proxy_pass http://ihub-backend;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -518,7 +518,7 @@ http {
 
         # Static files and SPA
         location / {
-            proxy_pass http://ai-hub-backend;
+            proxy_pass http://ihub-backend;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -527,7 +527,7 @@ http {
 
             # Cache static assets
             location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-                proxy_pass http://ai-hub-backend;
+                proxy_pass http://ihub-backend;
                 expires 1y;
                 add_header Cache-Control "public, immutable";
             }
@@ -535,7 +535,7 @@ http {
 
         # Health check endpoint (no rate limiting)
         location /api/health {
-            proxy_pass http://ai-hub-backend;
+            proxy_pass http://ihub-backend;
             access_log off;
         }
     }
@@ -637,7 +637,7 @@ wait_for_service() {
 mkdir -p /app/contents/data /app/contents/uploads /app/logs
 
 # Set proper permissions
-chown -R aihub:nodejs /app/contents /app/logs 2>/dev/null || true
+chown -R ihub:nodejs /app/contents /app/logs 2>/dev/null || true
 
 # Wait for external services if configured
 if [ -n "$DATABASE_HOST" ]; then
@@ -673,16 +673,16 @@ exec "$@"
 docker-compose up -d
 
 # View logs
-docker-compose logs -f ai-hub-dev
+docker-compose logs -f ihub-dev
 
 # Restart after code changes
-docker-compose restart ai-hub-dev
+docker-compose restart ihub-dev
 
 # Run tests
-docker-compose exec ai-hub-dev npm run test:all
+docker-compose exec ihub-dev npm run test:all
 
 # Access shell for debugging
-docker-compose exec ai-hub-dev sh
+docker-compose exec ihub-dev sh
 
 # Clean up
 docker-compose down -v
@@ -692,13 +692,13 @@ docker-compose down -v
 
 ```bash
 # Build production image
-docker build -t ai-hub-apps:v1.0.0 .
+docker build -t ihub-apps:v1.0.0 .
 
 # Deploy with compose
 docker-compose -f docker-compose.prod.yml up -d
 
 # Scale the application
-docker-compose -f docker-compose.prod.yml up -d --scale ai-hub-app=3
+docker-compose -f docker-compose.prod.yml up -d --scale ihub-app=3
 
 # Monitor health
 docker-compose -f docker-compose.prod.yml ps
@@ -706,7 +706,7 @@ docker-compose -f docker-compose.prod.yml logs -f
 
 # Update deployment
 docker-compose -f docker-compose.prod.yml pull
-docker-compose -f docker-compose.prod.yml up -d --no-deps ai-hub-app
+docker-compose -f docker-compose.prod.yml up -d --no-deps ihub-app
 ```
 
 These implementation examples provide a complete foundation for containerizing iHub Apps with proper separation of concerns, security considerations, and production-ready configurations.

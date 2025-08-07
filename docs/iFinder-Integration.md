@@ -67,7 +67,7 @@ Alternatively, configure iFinder in your `platform.json`:
     "timeout": 30000,
     "downloadDir": "/tmp/ifinder-downloads",
     "algorithm": "RS256",
-    "issuer": "ai-hub-apps",
+    "issuer": "ihub-apps",
     "audience": "ifinder-api",
     "defaultScope": "fa_index_read",
     "tokenExpirationSeconds": 3600

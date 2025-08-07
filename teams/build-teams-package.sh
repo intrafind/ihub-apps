@@ -8,7 +8,7 @@ set -e
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
-PACKAGE_NAME="ai-hub-apps-teams.zip"
+PACKAGE_NAME="ihub-apps-teams.zip"
 
 # Colors for output
 RED='\033[0;31m'
@@ -68,7 +68,7 @@ get_config() {
     fi
     
     if [[ -z "$APP_URL" ]]; then
-        read -p "Enter your iHub Apps URL (e.g., https://ai-hub.company.com): " APP_URL
+        read -p "Enter your iHub Apps URL (e.g., https://ihub.company.com): " APP_URL
     fi
     
     if [[ -z "$AAD_CLIENT_ID" ]]; then

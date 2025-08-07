@@ -72,23 +72,23 @@ RUN apk add --update --no-cache \
     netcat-openbsd
 
 # Create non-root user for security
-RUN addgroup -S aihub && \
-    adduser -S -D -H -s /sbin/nologin -G aihub aihub
+RUN addgroup -S ihub && \
+    adduser -S -D -H -s /sbin/nologin -G ihub ihub
 
 # Create app directory
 WORKDIR /app
 
 # Copy built application from builder stage (this contains everything: server, public, contents)
-COPY --from=builder --chown=aihub:aihub /app/dist ./
+COPY --from=builder --chown=ihub:ihub /app/dist ./
 
 # Create required directories with proper permissions (these will be mounted from volumes)
 RUN mkdir -p \
     /app/contents/ \
     /app/logs && \
-    chown -R aihub:aihub /app/contents /app/logs
+    chown -R ihub:ihub /app/contents /app/logs
 
 # Create health check script
-COPY --chown=aihub:aihub <<EOF /app/healthcheck.js
+COPY --chown=ihub:ihub <<EOF /app/healthcheck.js
 import http from 'http';
 
 const options = {
@@ -122,11 +122,11 @@ request.end();
 EOF
 
 # Copy entrypoint script
-COPY --chown=aihub:aihub docker/docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY --chown=ihub:ihub docker/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 # Switch to non-root user
-USER aihub
+USER ihub
 
 # Health check configuration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

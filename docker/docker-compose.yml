@@ -3,12 +3,12 @@ version: '3.8'
 
 services:
   # Main iHub Apps Development Container
-  ai-hub-dev:
+  ihub-dev:
     build:
       context: ..
       target: development
       dockerfile: docker/Dockerfile
-    container_name: ai-hub-dev
+    container_name: ihub-dev
     ports:
       - '3000:3000' # Server port
       - '5173:5173' # Vite dev server port
@@ -22,14 +22,14 @@ services:
       - ../contents:/app/contents:rw
 
       # Override specific subdirectories with persistent volumes (mounted later = higher priority)
-      - ai-hub-dev-data:/app/contents/data
-      - ai-hub-dev-uploads:/app/contents/uploads
-      - ai-hub-dev-logs:/app/logs
+      - ihub-dev-data:/app/contents/data
+      - ihub-dev-uploads:/app/contents/uploads
+      - ihub-dev-logs:/app/logs
 
       # Node modules cache (performance optimization)
-      - ai-hub-dev-node-modules:/app/node_modules
-      - ai-hub-dev-client-modules:/app/client/node_modules
-      - ai-hub-dev-server-modules:/app/server/node_modules
+      - ihub-dev-node-modules:/app/node_modules
+      - ihub-dev-client-modules:/app/client/node_modules
+      - ihub-dev-server-modules:/app/server/node_modules
     environment:
       - NODE_ENV=development
       - LOG_LEVEL=debug
@@ -43,7 +43,7 @@ services:
       - ../.env
     restart: unless-stopped
     networks:
-      - ai-hub-network
+      - ihub-network
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
       interval: 30s
@@ -53,22 +53,22 @@ services:
 
 volumes:
   # Development persistent volumes
-  ai-hub-dev-data:
+  ihub-dev-data:
     driver: local
-  ai-hub-dev-uploads:
+  ihub-dev-uploads:
     driver: local
-  ai-hub-dev-logs:
+  ihub-dev-logs:
     driver: local
 
   # Node modules caches for faster rebuilds
-  ai-hub-dev-node-modules:
+  ihub-dev-node-modules:
     driver: local
-  ai-hub-dev-client-modules:
+  ihub-dev-client-modules:
     driver: local
-  ai-hub-dev-server-modules:
+  ihub-dev-server-modules:
     driver: local
 
 networks:
-  ai-hub-network:
+  ihub-network:
     driver: bridge
-    name: ai-hub-network
+    name: ihub-network

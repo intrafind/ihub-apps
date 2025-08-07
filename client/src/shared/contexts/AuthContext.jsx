@@ -411,7 +411,7 @@ export function AuthProvider({ children }) {
       // Clear any IndexedDB or other persistent storage if used
       if ('indexedDB' in window) {
         // Clear common iHub Apps databases
-        const dbNames = ['aiHubApps', 'chatHistory', 'userFiles'];
+        const dbNames = ['ihubApps', 'chatHistory', 'userFiles'];
         dbNames.forEach(dbName => {
           try {
             indexedDB.deleteDatabase(dbName);
@@ -428,7 +428,7 @@ export function AuthProvider({ children }) {
           .then(cacheNames => {
             return Promise.all(
               cacheNames.map(cacheName => {
-                if (cacheName.includes('aiHubApps') || cacheName.includes('api')) {
+                if (cacheName.includes('ihubApps') || cacheName.includes('api')) {
                   return caches.delete(cacheName);
                 }
               })

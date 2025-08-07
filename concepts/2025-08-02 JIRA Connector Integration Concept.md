@@ -702,7 +702,7 @@ const auditJiraOperation = async operation => {
 JIRA_BASE_URL=https://your-company.atlassian.net
 JIRA_OAUTH_CLIENT_ID=your-oauth-client-id
 JIRA_OAUTH_CLIENT_SECRET=your-oauth-client-secret
-JIRA_OAUTH_REDIRECT_URI=https://ai-hub.company.com/auth/jira/callback
+JIRA_OAUTH_REDIRECT_URI=https://ihub.company.com/auth/jira/callback
 
 # Security Configuration
 TOKEN_ENCRYPTION_KEY=your-256-bit-encryption-key-in-hex
@@ -710,7 +710,7 @@ JIRA_RATE_LIMIT_WINDOW=900000  # 15 minutes
 JIRA_RATE_LIMIT_MAX=100        # Max requests per window
 
 # Optional: Database configuration for token storage
-DATABASE_URL=postgresql://user:pass@localhost/aihub
+DATABASE_URL=postgresql://user:pass@localhost/ihub
 REDIS_URL=redis://localhost:6379  # For session storage
 ```
 

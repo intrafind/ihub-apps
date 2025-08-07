@@ -3,7 +3,7 @@
   "manifestVersion": "1.16",
   "version": "1.0.0",
   "id": "{{TEAMS_APP_ID}}",
-  "packageName": "com.aihubapps.teams",
+  "packageName": "com.ihubapps.teams",
   "developer": {
     "name": "iHub Apps",
     "websiteUrl": "{{APP_URL}}",
@@ -25,7 +25,7 @@
   "accentColor": "#3B82F6",
   "staticTabs": [
     {
-      "entityId": "ai-hub-apps-tab",
+      "entityId": "ihub-apps-tab",
       "name": "iHub Apps",
       "contentUrl": "{{APP_URL}}/teams/tab?loginHint={loginHint}&userObjectId={userObjectId}&theme={theme}",
       "websiteUrl": "{{APP_URL}}",

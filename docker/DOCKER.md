@@ -79,13 +79,13 @@ npm run docker:up:build
 
 ```bash
 # Development build
-docker build -f docker/Dockerfile -t ai-hub-apps:dev --target development .
+docker build -f docker/Dockerfile -t ihub-apps:dev --target development .
 
 # Production build
-docker build -f docker/Dockerfile -t ai-hub-apps:prod --target production .
+docker build -f docker/Dockerfile -t ihub-apps:prod --target production .
 
 # Multi-platform build (requires Docker Buildx)
-docker buildx build -f docker/Dockerfile --platform linux/amd64,linux/arm64 -t ai-hub-apps:multi .
+docker buildx build -f docker/Dockerfile --platform linux/amd64,linux/arm64 -t ihub-apps:multi .
 ```
 
 ### Build Process Explained
@@ -105,7 +105,7 @@ docker build -f docker/Dockerfile \
   --build-arg BUILDTIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
   --build-arg VERSION="1.0.0" \
   --build-arg REVISION="$(git rev-parse HEAD)" \
-  -t ai-hub-apps:custom .
+  -t ihub-apps:custom .
 ```
 
 ### Build Verification
@@ -115,17 +115,17 @@ docker build -f docker/Dockerfile \
 docker run --rm -p 3000:3000 -p 5173:5173 \
   -v $(pwd)/contents:/app/contents \
   -e JWT_SECRET=test-secret \
-  ai-hub-apps:dev
+  ihub-apps:dev
 
 # Test production build (serves built client + API on port 3000)
 docker run --rm -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
   -e JWT_SECRET=test-secret \
   -e NODE_ENV=production \
-  ai-hub-apps:prod
+  ihub-apps:prod
 
 # Check image details
-docker image inspect ai-hub-apps:prod
+docker image inspect ihub-apps:prod
 ```
 
 **Expected behavior:**
@@ -203,9 +203,9 @@ This will automatically start the CI/CD pipeline and publish new images to the r
 Images are available at:
 
 ```
-ghcr.io/intrafind/ai-hub-apps:latest
-ghcr.io/intrafind/ai-hub-apps:v1.0.0
-ghcr.io/intrafind/ai-hub-apps:main
+ghcr.io/intrafind/ihub-apps:latest
+ghcr.io/intrafind/ihub-apps:v1.0.0
+ghcr.io/intrafind/ihub-apps:main
 ```
 
 ### Using Published Images
@@ -215,13 +215,13 @@ ghcr.io/intrafind/ai-hub-apps:main
 docker run -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
   -e JWT_SECRET=your-secret \
-  ghcr.io/intrafind/ai-hub-apps:latest
+  ghcr.io/intrafind/ihub-apps:latest
 
 # Use specific version
 docker run -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
   -e JWT_SECRET=your-secret \
-  ghcr.io/intrafind/ai-hub-apps:v1.0.0
+  ghcr.io/intrafind/ihub-apps:v1.0.0
 ```
 
 ### Maintenance Commands
@@ -278,9 +278,9 @@ MISTRAL_API_KEY=your-mistral-key
 docker-compose --profile database up -d
 
 # Environment variables
-DB_HOST=ai-hub-db
-DB_NAME=aihub
-DB_USER=aihub
+DB_HOST=ihub-db
+DB_NAME=ihub
+DB_USER=ihub
 DB_PASSWORD=your-db-password
 ```
 
@@ -291,7 +291,7 @@ DB_PASSWORD=your-db-password
 docker-compose --profile cache up -d
 
 # Environment variables
-REDIS_HOST=ai-hub-redis
+REDIS_HOST=ihub-redis
 REDIS_PASSWORD=your-redis-password
 ```
 
@@ -335,13 +335,13 @@ http://localhost:8080
 
 ### Development Network
 
-- **Bridge network**: `ai-hub-network`
+- **Bridge network**: `ihub-network`
 - **Port mappings**: 3000 (app), 5173 (vite), 5432 (postgres), 6379 (redis)
 - **Service discovery**: Containers communicate by service name
 
 ### Production Network
 
-- **Isolated network**: `ai-hub-prod-network`
+- **Isolated network**: `ihub-prod-network`
 - **External access**: Only through reverse proxy
 - **Internal communication**: Services communicate privately
 - **Load balancing**: Multiple app replicas supported
@@ -361,7 +361,7 @@ http://localhost:8080
 docker-compose logs -f
 
 # View specific service logs
-docker-compose logs -f ai-hub-dev
+docker-compose logs -f ihub-dev
 
 # Production logs with rotation
 docker-compose -f docker-compose.prod.yml logs -f
@@ -379,10 +379,10 @@ docker-compose -f docker-compose.prod.yml logs -f
 
 ```bash
 # Backup volumes
-docker run --rm -v ai-hub-data:/data -v $(pwd)/backups:/backup alpine tar czf /backup/data-$(date +%Y%m%d).tar.gz -C /data .
+docker run --rm -v ihub-data:/data -v $(pwd)/backups:/backup alpine tar czf /backup/data-$(date +%Y%m%d).tar.gz -C /data .
 
 # Backup database (if using PostgreSQL)
-docker-compose exec ai-hub-db pg_dump -U aihub aihub > backup-$(date +%Y%m%d).sql
+docker-compose exec ihub-db pg_dump -U ihub ihub > backup-$(date +%Y%m%d).sql
 ```
 
 ### Migration from Non-Docker
@@ -396,12 +396,12 @@ cp -r contents/data contents/data.backup
 cp -r contents/uploads contents/uploads.backup
 
 # 3. Create Docker volumes
-docker volume create ai-hub-data
-docker volume create ai-hub-uploads
+docker volume create ihub-data
+docker volume create ihub-uploads
 
 # 4. Copy data to volumes
-docker run --rm -v $(pwd)/contents/data:/source -v ai-hub-data:/dest alpine cp -r /source/* /dest/
-docker run --rm -v $(pwd)/contents/uploads:/source -v ai-hub-uploads:/dest alpine cp -r /source/* /dest/
+docker run --rm -v $(pwd)/contents/data:/source -v ihub-data:/dest alpine cp -r /source/* /dest/
+docker run --rm -v $(pwd)/contents/uploads:/source -v ihub-uploads:/dest alpine cp -r /source/* /dest/
 
 # 5. Start Docker environment
 npm run docker:up
@@ -415,23 +415,23 @@ npm run docker:up
 
 ```bash
 # Check logs
-docker-compose logs ai-hub-dev
+docker-compose logs ihub-dev
 
 # Check if required environment variables are set
 docker-compose config
 
 # Verify image exists
-docker images | grep ai-hub-apps
+docker images | grep ihub-apps
 ```
 
 #### Permission issues
 
 ```bash
 # Fix volume permissions
-docker-compose exec ai-hub-dev chown -R aihub:nodejs /app/contents /app/logs
+docker-compose exec ihub-dev chown -R ihub:nodejs /app/contents /app/logs
 
 # Check user inside container
-docker-compose exec ai-hub-dev id
+docker-compose exec ihub-dev id
 ```
 
 #### Port conflicts
@@ -451,10 +451,10 @@ AI_HUB_PORT=3001 docker-compose up -d
 docker volume ls
 
 # Inspect volume
-docker volume inspect ai-hub-data
+docker volume inspect ihub-data
 
 # Check mount points
-docker-compose exec ai-hub-dev df -h
+docker-compose exec ihub-dev df -h
 ```
 
 ### Performance Optimization
@@ -463,10 +463,10 @@ docker-compose exec ai-hub-dev df -h
 
 ```bash
 # Use BuildKit for faster builds
-DOCKER_BUILDKIT=1 docker build -t ai-hub-apps:latest .
+DOCKER_BUILDKIT=1 docker build -t ihub-apps:latest .
 
 # Use multi-stage caching
-docker build --target production --cache-from ai-hub-apps:latest -t ai-hub-apps:latest .
+docker build --target production --cache-from ihub-apps:latest -t ihub-apps:latest .
 ```
 
 #### Runtime Optimization
@@ -495,13 +495,13 @@ The repository includes a comprehensive GitHub Actions workflow that:
 
 ```bash
 # Tag for registry
-docker tag ai-hub-apps:latest ghcr.io/yourusername/ai-hub-apps:latest
+docker tag ihub-apps:latest ghcr.io/yourusername/ihub-apps:latest
 
 # Push to registry
-docker push ghcr.io/yourusername/ai-hub-apps:latest
+docker push ghcr.io/yourusername/ihub-apps:latest
 
 # Pull from registry
-docker pull ghcr.io/yourusername/ai-hub-apps:latest
+docker pull ghcr.io/yourusername/ihub-apps:latest
 ```
 
 ## Advanced Configuration
@@ -511,7 +511,7 @@ docker pull ghcr.io/yourusername/ai-hub-apps:latest
 For customized deployments, you can extend the base Dockerfile:
 
 ```dockerfile
-FROM ghcr.io/yourusername/ai-hub-apps:latest
+FROM ghcr.io/yourusername/ihub-apps:latest
 
 # Add custom certificates
 COPY custom-ca.crt /usr/local/share/ca-certificates/
@@ -520,7 +520,7 @@ RUN update-ca-certificates
 # Add custom configuration
 COPY custom-config/ /app/contents/config/
 
-USER aihub
+USER ihub
 ```
 
 ### Kubernetes Deployment
@@ -534,10 +534,10 @@ For Kubernetes deployments, see the `concepts/docker-support/` directory for com
 docker swarm init
 
 # Deploy stack
-docker stack deploy -c docker-compose.prod.yml ai-hub-apps
+docker stack deploy -c docker-compose.prod.yml ihub-apps
 
 # Scale services
-docker service scale ai-hub-apps_ai-hub-app=3
+docker service scale ihub-apps_ihub-app=3
 ```
 
 ## Support and Resources

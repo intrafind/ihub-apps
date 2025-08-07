@@ -156,7 +156,7 @@ jobs:
           echo "Testing container startup..."
           # Use first tag from metadata instead of github.sha
           IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
-          docker run --rm -d --name ai-hub-test \
+          docker run --rm -d --name ihub-test \
             -e JWT_SECRET=test-secret \
             -e NODE_ENV=production \
             -p 3000:3000 \
@@ -165,12 +165,12 @@ jobs:
           # Wait for container to start with better error handling
           if ! timeout 60 bash -c 'until curl -f http://localhost:3000/api/health; do sleep 2; done'; then
             echo "Container startup failed"
-            docker logs ai-hub-test
-            docker stop ai-hub-test || true
+            docker logs ihub-test
+            docker stop ihub-test || true
             exit 1
           fi
           
-          docker stop ai-hub-test
+          docker stop ihub-test
           echo "Container startup test passed!"
 
   # Security scanning with Trivy

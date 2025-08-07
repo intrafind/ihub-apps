@@ -105,7 +105,7 @@
         "name": "example-provider",
         "header": "Authorization",
         "issuer": "https://example.com",
-        "audience": "ai-hub-apps",
+        "audience": "ihub-apps",
         "jwkUrl": "https://example.com/.well-known/jwks.json"
       }
     ]
@@ -249,7 +249,7 @@
     "baseUrl": "${IFINDER_API_URL}",
     "privateKey": "${IFINDER_PRIVATE_KEY}",
     "algorithm": "RS256",
-    "issuer": "ai-hub-apps",
+    "issuer": "ihub-apps",
     "audience": "ifinder-api",
     "defaultScope": "",
     "tokenExpirationSeconds": 3600,

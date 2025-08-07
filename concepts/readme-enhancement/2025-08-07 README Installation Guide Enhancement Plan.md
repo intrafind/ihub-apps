@@ -110,7 +110,7 @@ Choose your installation method based on your needs:
 
 **Requirements**:
 - Move binary content from lines 238-278 to main installation section
-- Add direct GitHub releases link: https://github.com/intrafind/ai-hub-apps/releases
+- Add direct GitHub releases link: https://github.com/intrafind/ihub-apps/releases
 - Include platform-specific download and run instructions
 - Add system requirements and security considerations
 
@@ -191,7 +191,7 @@ Choose your installation method based on your needs:
    - [Windows](link) • [macOS](link) • [Linux](link)
 2. Extract and run:
    ```bash
-   ./ai-hub-apps-v{version}-{platform}
+   ./ihub-apps-v{version}-{platform}
    ```
 3. Open http://localhost:3000
 
@@ -208,7 +208,7 @@ Choose your installation method based on your needs:
 2. Start development environment:
    ```bash
    git clone {repo-url}
-   cd ai-hub-apps
+   cd ihub-apps
    npm run docker:up
    ```
 3. Open http://localhost:3000
@@ -226,7 +226,7 @@ Choose your installation method based on your needs:
 2. Clone and start:
    ```bash
    git clone {repo-url}
-   cd ai-hub-apps
+   cd ihub-apps
    npm run install:all
    npm run dev
    ```
@@ -245,7 +245,7 @@ Choose your installation method based on your needs:
 2. Build desktop app:
    ```bash
    git clone {repo-url}
-   cd ai-hub-apps
+   cd ihub-apps
    npm run install:all
    npm run electron:build
    ```

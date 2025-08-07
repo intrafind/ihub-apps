@@ -1231,7 +1231,7 @@ graph TB
     end
     
     subgraph "Network"
-        AppNetwork[Docker Network<br/>ai-hub-network]
+        AppNetwork[Docker Network<br/>ihub-network]
     end
     
     subgraph "External Services"
@@ -1308,7 +1308,7 @@ graph TB
     end
     
     subgraph "External Configuration"
-        ConfigDir[Configuration Directory<br/>/etc/ai-hub-apps or ./contents]
+        ConfigDir[Configuration Directory<br/>/etc/ihub-apps or ./contents]
         EnvFile[Environment File<br/>.env]
         CertFiles[SSL Certificates<br/>Optional]
     end

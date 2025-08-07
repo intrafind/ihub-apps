@@ -27,7 +27,7 @@ const PromptsList = () => {
 
   // Create favorite prompts helpers
   const { getFavorites: getFavoritePrompts, toggleFavorite: toggleFavoritePrompt } =
-    createFavoriteItemHelpers('aihub_favorite_prompts');
+    createFavoriteItemHelpers('ihub_favorite_prompts');
   const [copyStatus, setCopyStatus] = useState({});
   const [searchParams] = useSearchParams();
   const { uiConfig } = useUIConfig();

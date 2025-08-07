@@ -10,8 +10,8 @@
 
 import { fetchPlatformConfig } from '../api/api';
 
-const REFRESH_SALT_KEY = 'ai-hub-refresh-salt';
-const DISCLAIMER_KEY = 'ai-hub-disclaimer-acknowledged';
+const REFRESH_SALT_KEY = 'ihub-refresh-salt';
+const DISCLAIMER_KEY = 'ihub-disclaimer-acknowledged';
 
 /**
  * Checks if a force refresh is needed by comparing the current salt with the stored salt

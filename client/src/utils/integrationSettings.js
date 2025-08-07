@@ -9,7 +9,7 @@
  */
 export const getIntegrationSettings = () => {
   try {
-    const savedSettings = localStorage.getItem('aiHubIntegrationSettings');
+    const savedSettings = localStorage.getItem('ihubIntegrationSettings');
     if (savedSettings) {
       return JSON.parse(savedSettings);
     }
@@ -25,7 +25,7 @@ export const getIntegrationSettings = () => {
  */
 export const saveIntegrationSettings = settings => {
   try {
-    localStorage.setItem('aiHubIntegrationSettings', JSON.stringify(settings));
+    localStorage.setItem('ihubIntegrationSettings', JSON.stringify(settings));
   } catch (error) {
     console.error('Error saving integration settings to localStorage:', error);
   }

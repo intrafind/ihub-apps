@@ -69,4 +69,4 @@ We may update this Privacy Policy from time to time. We will notify you of any m
 
 ## Contact Us
 
-If you have any questions about this Privacy Policy, please contact us at privacy@ai-hub.example.com.
+If you have any questions about this Privacy Policy, please contact us at privacy@ihub.example.com.

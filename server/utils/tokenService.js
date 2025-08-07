@@ -73,8 +73,8 @@ export function generateJwt(user, options = {}) {
 
   const token = jwt.sign(tokenPayload, jwtSecret, {
     expiresIn: `${expiresIn}s`,
-    issuer: 'ai-hub-apps',
-    audience: 'ai-hub-apps',
+    issuer: 'ihub-apps',
+    audience: 'ihub-apps',
     algorithm: 'HS256'
   });
 
@@ -97,8 +97,8 @@ export function verifyJwt(token) {
     }
 
     return jwt.verify(token, jwtSecret, {
-      issuer: 'ai-hub-apps',
-      audience: 'ai-hub-apps'
+      issuer: 'ihub-apps',
+      audience: 'ihub-apps'
     });
   } catch (error) {
     console.warn('JWT verification failed:', error.message);

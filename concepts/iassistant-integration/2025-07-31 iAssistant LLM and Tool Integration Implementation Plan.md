@@ -803,7 +803,7 @@ export default {
     "defaultSearchProfile": "default",
     "privateKey": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
     "algorithm": "RS256",
-    "issuer": "ai-hub-apps",
+    "issuer": "ihub-apps",
     "audience": "ifinder-api",
     "tokenExpirationSeconds": 3600,
     "defaultScope": "fa_index_read"

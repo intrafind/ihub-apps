@@ -83,7 +83,7 @@ docker/DOCKER.md:
 ```bash
 # Current documentation covers:
 ./build.sh --binary                    # Build command
-./dist-bin/ai-hub-apps-v${VERSION}-*   # Execution
+./dist-bin/ihub-apps-v${VERSION}-*   # Execution
 GitHub Releases download instructions   # Pre-built binaries
 ```
 
@@ -246,11 +246,11 @@ Universal:
    
    ```bash
    # macOS/Linux - make executable and run
-   chmod +x ai-hub-apps-v*-macos
-   ./ai-hub-apps-v*-macos
+   chmod +x ihub-apps-v*-macos
+   ./ihub-apps-v*-macos
    
    # Windows - run directly
-   ai-hub-apps-v*-win.bat
+   ihub-apps-v*-win.bat
    ```
    
    **Requirements**: None (self-contained executable)

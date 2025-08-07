@@ -19,7 +19,7 @@ const AppsList = () => {
 
   // Create favorite apps helpers
   const { getFavorites: getFavoriteApps, toggleFavorite: toggleFavoriteApp } =
-    createFavoriteItemHelpers('aihub_favorite_apps');
+    createFavoriteItemHelpers('ihub_favorite_apps');
 
   // Get search configuration from UI config with defaults
   const searchConfig = useMemo(() => {

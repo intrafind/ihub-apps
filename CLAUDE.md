@@ -455,7 +455,7 @@ export ALLOWED_ORIGINS="https://staging.yourdomain.com,https://test.yourdomain.c
 
 ```javascript
 // Calling iHub APIs from another web application
-fetch('https://your-ai-hub-domain.com/api/health', {
+fetch('https://your-ihub-domain.com/api/health', {
   method: 'GET',
   credentials: 'include', // Important for authenticated requests
   headers: {

@@ -56,4 +56,4 @@ We accept all major credit cards, PayPal, and selected cryptocurrency payments.
 
 ### How do I get support?
 
-For technical issues or questions, please email support@ai-hub.example.com. Premium users have access to priority support through our in-app chat system.
+For technical issues or questions, please email support@ihub.example.com. Premium users have access to priority support through our in-app chat system.

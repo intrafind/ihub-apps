@@ -154,7 +154,7 @@ runTests().catch(console.error);
 
 **Execution**:
 ```bash
-cd /Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps
+cd /Users/danielmanzke/Workspaces/github.intrafind/ihub-apps
 node server/sources/test-handlers.js
 ```
 

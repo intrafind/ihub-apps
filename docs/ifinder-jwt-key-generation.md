@@ -106,7 +106,7 @@ Alternatively, configure in your `contents/config/platform.json`:
     "defaultSearchProfile": "your-default-search-profile",
     "privateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...\n-----END PRIVATE KEY-----",
     "algorithm": "RS256",
-    "issuer": "ai-hub-apps",
+    "issuer": "ihub-apps",
     "audience": "ifinder-api",
     "defaultScope": "fa_index_read",
     "tokenExpirationSeconds": 3600
@@ -145,7 +145,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: https://ai-hub-apps.example.com/issuer
+          issuer-uri: https://ihub-apps.example.com/issuer
 ```
 
 #### Option C: Enable OAuth2 Resource Server
@@ -206,7 +206,7 @@ The generated JWT tokens will have this structure:
     "admin": true,
     "iat": 1643723400,
     "exp": 1643727000,
-    "iss": "ai-hub-apps",
+    "iss": "ihub-apps",
     "aud": "ifinder-api",
     "scope": "fa_index_read"
   }
@@ -390,7 +390,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          jwk-set-uri: https://ai-hub-apps.example.com/.well-known/jwks.json
+          jwk-set-uri: https://ihub-apps.example.com/.well-known/jwks.json
 ```
 
 ### High Availability Setup

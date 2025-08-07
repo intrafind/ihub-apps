@@ -26,7 +26,7 @@ function createSwaggerConfig(title, description, version, paths) {
         version,
         contact: {
           name: 'iHub Apps',
-          url: 'https://github.com/intrafind/ai-hub-apps'
+          url: 'https://github.com/intrafind/ihub-apps'
         }
       },
       servers: [

@@ -855,11 +855,11 @@ const EmptyDocumentBrowser = ({ onGetStarted }) => (
 ```css
 /* Dynamic theme support using CSS custom properties */
 :root {
-  --ifinder-primary: var(--ai-hub-primary, rgb(0, 53, 87));
-  --ifinder-secondary: var(--ai-hub-secondary, #6b7280);
-  --ifinder-accent: var(--ai-hub-accent, #3b82f6);
-  --ifinder-background: var(--ai-hub-background, #ffffff);
-  --ifinder-surface: var(--ai-hub-surface, #f8fafc);
+  --ifinder-primary: var(--ihub-primary, rgb(0, 53, 87));
+  --ifinder-secondary: var(--ihub-secondary, #6b7280);
+  --ifinder-accent: var(--ihub-accent, #3b82f6);
+  --ifinder-background: var(--ihub-background, #ffffff);
+  --ifinder-surface: var(--ihub-surface, #f8fafc);
 }
 
 /* Dark mode support */

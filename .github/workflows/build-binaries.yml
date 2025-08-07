@@ -119,7 +119,7 @@ jobs:
             echo "VERSION=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
           fi
           # Set versioned name for binary
-          echo "VERSIONED_NAME=ai-hub-apps-${{ env.VERSION }}-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
+          echo "VERSIONED_NAME=ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
         shell: bash
 
       - name: Sync package.json version with release tag
@@ -163,19 +163,19 @@ jobs:
         with:
           name: binary-${{ matrix.platform }}-${{ env.VERSION }}
           path: |
-            dist-bin/ai-hub-apps-v*-${{ matrix.platform }}${{ matrix.binary_extension }}
-            dist-bin/ai-hub-apps-v*-win.bat
-            dist-bin/ai-hub-apps-v*-${{ matrix.platform }}
+            dist-bin/ihub-apps-v*-${{ matrix.platform }}${{ matrix.binary_extension }}
+            dist-bin/ihub-apps-v*-win.bat
+            dist-bin/ihub-apps-v*-${{ matrix.platform }}
 
       - name: Create platform-specific archive
         run: |
           cd dist-bin
           # Create versioned archive name
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            VERSIONED_ARCHIVE_NAME="ai-hub-apps-${{ env.VERSION }}-win"
+            VERSIONED_ARCHIVE_NAME="ihub-apps-${{ env.VERSION }}-win"
             7z a -tzip ../$VERSIONED_ARCHIVE_NAME.zip .
           else
-            VERSIONED_ARCHIVE_NAME="ai-hub-apps-${{ env.VERSION }}-${{ matrix.platform }}"
+            VERSIONED_ARCHIVE_NAME="ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}"
             tar -czf ../$VERSIONED_ARCHIVE_NAME.tar.gz .
           fi
           echo "VERSIONED_ARCHIVE_NAME=$VERSIONED_ARCHIVE_NAME" >> $GITHUB_ENV

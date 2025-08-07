@@ -8,7 +8,7 @@
 
 ### 1. Server Startup Test
 ```bash
-cd /Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps
+cd /Users/danielmanzke/Workspaces/github.intrafind/ihub-apps
 npm run dev
 ```
 

@@ -13,7 +13,7 @@ const os = require('os');
 // Configuration
 const version = require('./package.json').version;
 console.log(`Building for version: ${version}`);
-const appName = 'ai-hub-apps';
+const appName = 'ihub-apps';
 const outputDir = path.join(__dirname, 'dist-bin');
 const defaultConfigDir = path.join(__dirname, 'server', 'defaults');
 const clientPublicDir = path.join(__dirname, 'client/dist');
@@ -401,7 +401,7 @@ try {
   copyServerFiles(serverDir, path.join(outputDir, 'server'));
   // Create a package.json for the server
   const serverPackageJson = {
-    name: 'ai-hub-apps-server',
+    name: 'ihub-apps-server',
     version,
     private: true,
     type: 'module',

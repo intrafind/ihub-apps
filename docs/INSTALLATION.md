@@ -24,7 +24,7 @@ This guide provides comprehensive installation instructions for iHub Apps across
 
 **Want to try iHub Apps in under 2 minutes?**
 
-1. **Download the latest binary** from [GitHub Releases](https://github.com/intrafind/ai-hub-apps/releases)
+1. **Download the latest binary** from [GitHub Releases](https://github.com/intrafind/ihub-apps/releases)
 2. **Extract and run** the platform-specific executable
 3. **Open** http://localhost:3000 in your browser
 4. **Start using** the pre-configured AI applications
@@ -125,45 +125,45 @@ iHub Apps offers four installation methods designed for different use cases:
 
 #### Step 1: Download Binary
 
-Visit [GitHub Releases](https://github.com/intrafind/ai-hub-apps/releases/latest) and download the appropriate package:
+Visit [GitHub Releases](https://github.com/intrafind/ihub-apps/releases/latest) and download the appropriate package:
 
 **Complete Packages (Recommended):**
-- **Windows**: `ai-hub-apps-v{VERSION}-win.zip`
-- **macOS**: `ai-hub-apps-v{VERSION}-macos.tar.gz`
-- **Linux**: `ai-hub-apps-v{VERSION}-linux.tar.gz`
+- **Windows**: `ihub-apps-v{VERSION}-win.zip`
+- **macOS**: `ihub-apps-v{VERSION}-macos.tar.gz`
+- **Linux**: `ihub-apps-v{VERSION}-linux.tar.gz`
 
 **Standalone Executables:**
-- **Windows**: `ai-hub-apps-v{VERSION}-win.bat`
-- **macOS**: `ai-hub-apps-v{VERSION}-macos`
-- **Linux**: `ai-hub-apps-v{VERSION}-linux`
+- **Windows**: `ihub-apps-v{VERSION}-win.bat`
+- **macOS**: `ihub-apps-v{VERSION}-macos`
+- **Linux**: `ihub-apps-v{VERSION}-linux`
 
 #### Step 2: Extract and Prepare
 
 **Windows:**
 ```powershell
 # Extract ZIP file to desired location
-Expand-Archive -Path "ai-hub-apps-v*-win.zip" -DestinationPath "C:\ihub-apps"
+Expand-Archive -Path "ihub-apps-v*-win.zip" -DestinationPath "C:\ihub-apps"
 cd "C:\ihub-apps"
 ```
 
 **macOS:**
 ```bash
 # Extract package
-tar -xzf ai-hub-apps-v*-macos.tar.gz
-cd ai-hub-apps-v*-macos
+tar -xzf ihub-apps-v*-macos.tar.gz
+cd ihub-apps-v*-macos
 
 # Make executable (if needed)
-chmod +x ai-hub-apps-v*-macos
+chmod +x ihub-apps-v*-macos
 ```
 
 **Linux:**
 ```bash
 # Extract package
-tar -xzf ai-hub-apps-v*-linux.tar.gz
-cd ai-hub-apps-v*-linux
+tar -xzf ihub-apps-v*-linux.tar.gz
+cd ihub-apps-v*-linux
 
 # Make executable
-chmod +x ai-hub-apps-v*-linux
+chmod +x ihub-apps-v*-linux
 ```
 
 #### Step 3: Configure Environment (Optional)
@@ -198,16 +198,16 @@ PORT=3000
 **Windows:**
 ```powershell
 # Run the batch file
-.\ai-hub-apps-v*-win.bat
+.\ihub-apps-v*-win.bat
 
 # Or run the executable directly
-.\ai-hub-apps-v*-win.exe
+.\ihub-apps-v*-win.exe
 ```
 
 **macOS/Linux:**
 ```bash
 # Run the application
-./ai-hub-apps-v*-platform
+./ihub-apps-v*-platform
 ```
 
 #### Step 5: Verify Installation
@@ -260,14 +260,14 @@ docker run -d \
   -e OPENAI_API_KEY=your-openai-key \
   -e ANTHROPIC_API_KEY=your-anthropic-key \
   --restart unless-stopped \
-  ghcr.io/intrafind/ai-hub-apps:latest
+  ghcr.io/intrafind/ihub-apps:latest
 ```
 
 **Development with automatic local contents:**
 ```bash
 # Clone repository for development
-git clone https://github.com/intrafind/ai-hub-apps.git
-cd ai-hub-apps
+git clone https://github.com/intrafind/ihub-apps.git
+cd ihub-apps
 
 # Copy environment template
 cp .env.example .env
@@ -281,8 +281,8 @@ npm run docker:up
 
 ```bash
 # Clone repository
-git clone https://github.com/intrafind/ai-hub-apps.git
-cd ai-hub-apps
+git clone https://github.com/intrafind/ihub-apps.git
+cd ihub-apps
 
 # Build development image
 npm run docker:build:dev
@@ -296,7 +296,7 @@ docker run -d \
   -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
   -e JWT_SECRET=your-secure-secret \
-  ai-hub-apps:prod
+  ihub-apps:prod
 ```
 
 #### Docker Development Workflow
@@ -392,8 +392,8 @@ sudo apt-get install build-essential python3
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/intrafind/ai-hub-apps.git
-cd ai-hub-apps
+git clone https://github.com/intrafind/ihub-apps.git
+cd ihub-apps
 ```
 
 2. **Install dependencies:**
@@ -467,8 +467,8 @@ npm run prod:build    # Complete production build
 
 1. **Clone and install dependencies:**
 ```bash
-git clone https://github.com/intrafind/ai-hub-apps.git
-cd ai-hub-apps
+git clone https://github.com/intrafind/ihub-apps.git
+cd ihub-apps
 npm run install:all
 ```
 
@@ -667,7 +667,7 @@ For detailed configuration documentation, see the main README.md Configuration s
 1. **Backup current installation:**
 ```bash
 # Create backup of entire directory
-cp -r ai-hub-apps-current ai-hub-apps-backup-$(date +%Y%m%d)
+cp -r ihub-apps-current ihub-apps-backup-$(date +%Y%m%d)
 
 # Or backup just configuration
 cp -r contents contents-backup-$(date +%Y%m%d)
@@ -677,11 +677,11 @@ cp -r contents contents-backup-$(date +%Y%m%d)
 ```bash
 # Stop the application (Ctrl+C or close terminal)
 # Or kill process if running in background
-pkill -f ai-hub-apps
+pkill -f ihub-apps
 ```
 
 3. **Download new version:**
-   - Visit [GitHub Releases](https://github.com/intrafind/ai-hub-apps/releases/latest)
+   - Visit [GitHub Releases](https://github.com/intrafind/ihub-apps/releases/latest)
    - Download the appropriate package for your platform
    - Extract to a new directory
 
@@ -698,8 +698,8 @@ cp -r contents-backup-*/data/* new-version/contents/data/
 5. **Start updated application:**
 ```bash
 cd new-version
-chmod +x ai-hub-apps-v*-platform  # Linux/macOS only
-./ai-hub-apps-v*-platform
+chmod +x ihub-apps-v*-platform  # Linux/macOS only
+./ihub-apps-v*-platform
 ```
 
 6. **Verify update:**
@@ -720,7 +720,7 @@ npm run docker:up
 # Method 2: Manual container update
 docker stop ihub-apps
 docker rm ihub-apps
-docker pull ghcr.io/intrafind/ai-hub-apps:latest
+docker pull ghcr.io/intrafind/ihub-apps:latest
 
 # Start with same volume mounts (preserves data)
 docker run -d \
@@ -729,7 +729,7 @@ docker run -d \
   -v $(pwd)/contents:/app/contents \
   -e JWT_SECRET=your-secret \
   --restart unless-stopped \
-  ghcr.io/intrafind/ai-hub-apps:latest
+  ghcr.io/intrafind/ihub-apps:latest
 ```
 
 ### npm Installation Updates
@@ -763,7 +763,7 @@ npm run electron:build
 **Check current version:**
 ```bash
 # Binary installation
-./ai-hub-apps --version
+./ihub-apps --version
 
 # Docker container
 docker exec ihub-apps node -p "require('/app/package.json').version"
@@ -777,7 +777,7 @@ curl http://localhost:3000/api/health | jq '.version'
 
 **Rollback procedures:**
 - **Binary**: Replace executable with backup version
-- **Docker**: Use specific version tag: `ghcr.io/intrafind/ai-hub-apps:v3.2.0`
+- **Docker**: Use specific version tag: `ghcr.io/intrafind/ihub-apps:v3.2.0`
 - **npm**: `git checkout v3.2.0` (or specific commit)
 
 ### Update Automation
@@ -796,8 +796,8 @@ docker run -d \
 #!/bin/bash
 # update-ihub-apps.sh
 
-CURRENT_VERSION=$(./ai-hub-apps --version | cut -d' ' -f2)
-LATEST_VERSION=$(curl -s https://api.github.com/repos/intrafind/ai-hub-apps/releases/latest | jq -r '.tag_name')
+CURRENT_VERSION=$(./ihub-apps --version | cut -d' ' -f2)
+LATEST_VERSION=$(curl -s https://api.github.com/repos/intrafind/ihub-apps/releases/latest | jq -r '.tag_name')
 
 if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ]; then
   echo "Updating from $CURRENT_VERSION to $LATEST_VERSION"
@@ -832,13 +832,13 @@ export PORT=3001
 **Solutions:**
 ```bash
 # Make executable
-chmod +x ai-hub-apps-v*-platform
+chmod +x ihub-apps-v*-platform
 
 # Check file permissions
-ls -la ai-hub-apps-v*-platform
+ls -la ihub-apps-v*-platform
 
 # Run with explicit shell
-bash ./ai-hub-apps-v*-platform
+bash ./ihub-apps-v*-platform
 ```
 
 #### Docker Image Pull Failed
@@ -847,10 +847,10 @@ bash ./ai-hub-apps-v*-platform
 **Solutions:**
 ```bash
 # Try different registry
-docker pull ghcr.io/intrafind/ai-hub-apps:latest
+docker pull ghcr.io/intrafind/ihub-apps:latest
 
 # Check available tags
-curl -s https://api.github.com/repos/intrafind/ai-hub-apps/releases
+curl -s https://api.github.com/repos/intrafind/ihub-apps/releases
 
 # Build image locally
 npm run docker:build:prod
@@ -888,8 +888,8 @@ tail -f logs/server.log
 2. **Missing dependencies:**
 ```bash
 # Binary: Check OS compatibility
-ldd ai-hub-apps-v*-linux  # Linux
-otool -L ai-hub-apps-v*-macos  # macOS
+ldd ihub-apps-v*-linux  # Linux
+otool -L ihub-apps-v*-macos  # macOS
 
 # npm: Reinstall dependencies
 rm -rf node_modules
@@ -958,7 +958,7 @@ docker --version
 curl http://localhost:3000/api/health
 
 # Process info
-ps aux | grep ai-hub
+ps aux | grep ihub
 netstat -tulpn | grep 3000
 ```
 
@@ -978,7 +978,7 @@ If you encounter issues not covered here:
    - Project README.md for general configuration
 
 2. **Search existing issues:**
-   - GitHub Issues: https://github.com/intrafind/ai-hub-apps/issues
+   - GitHub Issues: https://github.com/intrafind/ihub-apps/issues
 
 3. **Create detailed bug report:**
    - Include installation method and platform
@@ -1029,18 +1029,18 @@ chmod 700 contents/data/  # User data should be more restricted
 
 ```bash
 # Verify download (if checksums provided)
-sha256sum ai-hub-apps-v*-linux
+sha256sum ihub-apps-v*-linux
 # Compare with published checksum
 ```
 
 #### Docker Installation
-- **Use official images** from ghcr.io/intrafind/ai-hub-apps
+- **Use official images** from ghcr.io/intrafind/ihub-apps
 - **Pin image versions** in production: `:v3.3.0` not `:latest`
 - **Scan images for vulnerabilities**:
 ```bash
-docker scan ghcr.io/intrafind/ai-hub-apps:latest
+docker scan ghcr.io/intrafind/ihub-apps:latest
 # or use trivy
-trivy image ghcr.io/intrafind/ai-hub-apps:latest
+trivy image ghcr.io/intrafind/ihub-apps:latest
 ```
 
 #### npm Installation  
@@ -1131,7 +1131,7 @@ This installation guide provides comprehensive instructions for deploying iHub A
 For additional help, consult the method-specific documentation or create an issue on GitHub.
 
 **Quick Links:**
-- [GitHub Repository](https://github.com/intrafind/ai-hub-apps)
-- [Release Downloads](https://github.com/intrafind/ai-hub-apps/releases)
+- [GitHub Repository](https://github.com/intrafind/ihub-apps)
+- [Release Downloads](https://github.com/intrafind/ihub-apps/releases)
 - [Docker Documentation](../docker/DOCKER.md)
 - [Authentication Guide](external-authentication.md)

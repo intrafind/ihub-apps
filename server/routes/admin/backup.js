@@ -111,7 +111,7 @@ export async function exportConfig(req, res) {
     console.log('🔄 Starting configuration export...');
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = `ai-hub-config-backup-${timestamp}.zip`;
+    const filename = `ihub-config-backup-${timestamp}.zip`;
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

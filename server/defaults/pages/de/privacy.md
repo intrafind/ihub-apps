@@ -69,4 +69,4 @@ Wir können diese Datenschutzerklärung von Zeit zu Zeit aktualisieren. Wir werd
 
 ## Kontaktieren Sie uns
 
-Wenn Sie Fragen zu dieser Datenschutzerklärung haben, kontaktieren Sie uns bitte unter privacy@ai-hub.example.com.
+Wenn Sie Fragen zu dieser Datenschutzerklärung haben, kontaktieren Sie uns bitte unter privacy@ihub.example.com.

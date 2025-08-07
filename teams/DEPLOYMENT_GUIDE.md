@@ -187,7 +187,7 @@ Follow the prompts to enter:
 - Your iHub Apps URL
 - Azure AD Client ID
 
-The script will create `teams/build/ai-hub-apps-teams.zip`
+The script will create `teams/build/ihub-apps-teams.zip`
 
 ### 3.3 Manual Package Creation (Alternative)
 
@@ -208,7 +208,7 @@ If the script doesn't work, create manually:
 1. Go to [Teams Admin Center](https://admin.teams.microsoft.com)
 2. Navigate to **Teams apps** > **Manage apps**
 3. Click **Upload new app** > **Upload**
-4. Select your `ai-hub-apps-teams.zip` file
+4. Select your `ihub-apps-teams.zip` file
 5. Click **Open**
 
 ### 4.2 Upload via Teams Client (Sideloading)

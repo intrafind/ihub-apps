@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This comprehensive task plan addresses the documentation review findings (85/100 score) by systematically updating ai-hub-apps documentation to ensure accuracy, completeness, and developer-friendly experience. The plan prioritizes high-impact issues affecting user onboarding and system understanding.
+This comprehensive task plan addresses the documentation review findings (85/100 score) by systematically updating ihub-apps documentation to ensure accuracy, completeness, and developer-friendly experience. The plan prioritizes high-impact issues affecting user onboarding and system understanding.
 
 ## Task Organization
 
@@ -23,8 +23,8 @@ This comprehensive task plan addresses the documentation review findings (85/100
 - **Task Name**: Update CLAUDE.md Script Commands
 - **Description**: Audit and fix all script commands in CLAUDE.md to match actual package.json scripts. Remove outdated commands, add missing ones, ensure accuracy.
 - **Files to Check/Modify**: 
-  - `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/CLAUDE.md`
-  - `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/package.json`
+  - `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/CLAUDE.md`
+  - `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/package.json`
 - **Validation Criteria**: 
   - All commands in CLAUDE.md exist in package.json
   - All critical scripts are documented
@@ -39,11 +39,11 @@ This comprehensive task plan addresses the documentation review findings (85/100
 - **Task Name**: Document Source Handlers Architecture
 - **Description**: Create comprehensive documentation for the source handlers system including SourceManager, FileSystemHandler, SourceHandler classes, configuration schema, and integration patterns.
 - **Files to Check/Modify**:
-  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/source-handlers.md`
-  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/server/sources/SourceManager.js`
-  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/server/sources/FileSystemHandler.js`
-  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/server/sources/SourceHandler.js`
-  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/server/validators/sourceConfigSchema.js`
+  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/source-handlers.md`
+  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/server/sources/SourceManager.js`
+  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/server/sources/FileSystemHandler.js`
+  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/server/sources/SourceHandler.js`
+  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/server/validators/sourceConfigSchema.js`
 - **Validation Criteria**:
   - Complete API documentation for all source handler classes
   - Configuration schema fully documented with examples
@@ -58,8 +58,8 @@ This comprehensive task plan addresses the documentation review findings (85/100
 - **Task Name**: Enhance README Installation Section
 - **Description**: Update README to prominently feature all installation methods (npm, Docker, Binary) with clear decision matrix and quick start commands.
 - **Files to Check/Modify**:
-  - `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/README.md`
-  - `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docker/DOCKER.md` (for cross-references)
+  - `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/README.md`
+  - `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docker/DOCKER.md` (for cross-references)
 - **Validation Criteria**:
   - All installation methods visible in main README
   - Decision matrix helps users choose appropriate method
@@ -76,9 +76,9 @@ This comprehensive task plan addresses the documentation review findings (85/100
 - **Task Name**: Create Comprehensive Architecture Documentation
 - **Description**: Expand the existing architecture overview in CLAUDE.md into detailed documentation covering system components, data flow, request lifecycle, and component relationships.
 - **Files to Check/Modify**:
-  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/architecture.md`
-  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/CLAUDE.md` (add cross-reference)
-  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/README.md` (add to TOC)
+  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/architecture.md`
+  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/CLAUDE.md` (add cross-reference)
+  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/README.md` (add to TOC)
 - **Validation Criteria**:
   - Complete system architecture overview
   - Component interaction diagrams (text-based)
@@ -94,10 +94,10 @@ This comprehensive task plan addresses the documentation review findings (85/100
 - **Task Name**: Configuration Validation Documentation
 - **Description**: Document the Zod-based configuration validation system, including all schemas, validation rules, error handling, and configuration loading process.
 - **Files to Check/Modify**:
-  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/configuration-validation.md`
-  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/server/validators/appConfigSchema.js`
-  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/server/validators/sourceConfigSchema.js`
-  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/server/configCache.js`
+  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/configuration-validation.md`
+  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/server/validators/appConfigSchema.js`
+  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/server/validators/sourceConfigSchema.js`
+  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/server/configCache.js`
 - **Validation Criteria**:
   - All validation schemas documented with examples
   - Configuration loading process explained
@@ -112,9 +112,9 @@ This comprehensive task plan addresses the documentation review findings (85/100
 - **Task Name**: Comprehensive Troubleshooting Guide
 - **Description**: Create detailed troubleshooting documentation covering common installation issues, configuration problems, authentication failures, and runtime errors with step-by-step solutions.
 - **Files to Check/Modify**:
-  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/troubleshooting.md`
-  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/README.md` (add to TOC)
-  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docker/DOCKER.md` (extract Docker issues)
+  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/troubleshooting.md`
+  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/README.md` (add to TOC)
+  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docker/DOCKER.md` (extract Docker issues)
 - **Validation Criteria**:
   - Covers installation issues for all methods (npm, Docker, Binary)
   - Authentication and authorization troubleshooting
@@ -130,9 +130,9 @@ This comprehensive task plan addresses the documentation review findings (85/100
 - **Task Name**: Improve Docker Documentation Integration
 - **Description**: Update the comprehensive Docker documentation in docker/DOCKER.md to include better cross-references to main README and ensure consistency in installation instructions.
 - **Files to Check/Modify**:
-  - `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docker/DOCKER.md`
-  - `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/DOCKER-QUICK-REFERENCE.md`
-  - `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/.github/workflows/docker-ci.yml` (verify commands)
+  - `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docker/DOCKER.md`
+  - `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/DOCKER-QUICK-REFERENCE.md`
+  - `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/.github/workflows/docker-ci.yml` (verify commands)
 - **Validation Criteria**:
   - Consistent commands across all Docker documentation
   - Clear back-references to README
@@ -149,8 +149,8 @@ This comprehensive task plan addresses the documentation review findings (85/100
 - **Task Name**: Create Visual System Diagrams
 - **Description**: Create text-based diagrams using ASCII art or Mermaid syntax to illustrate system architecture, request flow, and component relationships.
 - **Files to Check/Modify**:
-  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/architecture.md`
-  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/diagrams/` (optional)
+  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/architecture.md`
+  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/diagrams/` (optional)
 - **Validation Criteria**:
   - Clear system architecture diagram
   - Request/response flow visualization  
@@ -166,9 +166,9 @@ This comprehensive task plan addresses the documentation review findings (85/100
 - **Task Name**: Improved Developer Onboarding Guide
 - **Description**: Create step-by-step developer onboarding documentation with guided tutorials, common development workflows, and contribution guidelines.
 - **Files to Check/Modify**:
-  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/developer-onboarding.md`
-  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/CONTRIBUTING.md` (if exists)
-  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/GETTING_STARTED.md`
+  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/developer-onboarding.md`
+  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/CONTRIBUTING.md` (if exists)
+  - Review: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/GETTING_STARTED.md`
 - **Validation Criteria**:
   - Step-by-step setup instructions for new developers
   - Common development workflows documented
@@ -184,8 +184,8 @@ This comprehensive task plan addresses the documentation review findings (85/100
 - **Task Name**: Binary Installation Security Guide
 - **Description**: Document security considerations, system requirements, and best practices for binary installation method based on review findings.
 - **Files to Check/Modify**:
-  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/binary-deployment-security.md`
-  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/README.md` (add security notes to binary section)
+  - Create: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/binary-deployment-security.md`
+  - Update: `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/README.md` (add security notes to binary section)
 - **Validation Criteria**:
   - Security warnings and considerations documented
   - System requirements for each platform
@@ -203,9 +203,9 @@ This comprehensive task plan addresses the documentation review findings (85/100
 - **Task Name**: Complete Documentation Link Audit
 - **Description**: Audit all documentation files for broken links, outdated references, and missing cross-references. Ensure comprehensive navigation between related documents.
 - **Files to Check/Modify**:
-  - All files in `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/docs/`
-  - `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/README.md`
-  - `/Users/danielmanzke/Workspaces/github.intrafind/ai-hub-apps/CLAUDE.md`
+  - All files in `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/docs/`
+  - `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/README.md`
+  - `/Users/danielmanzke/Workspaces/github.intrafind/ihub-apps/CLAUDE.md`
 - **Validation Criteria**:
   - All internal links functional
   - Comprehensive cross-reference system
@@ -297,4 +297,4 @@ This comprehensive task plan addresses the documentation review findings (85/100
 
 ---
 
-*This task plan transforms the comprehensive but scattered ai-hub-apps documentation into a coherent, accurate, and user-friendly system that supports both new users and experienced developers.*
+*This task plan transforms the comprehensive but scattered ihub-apps documentation into a coherent, accurate, and user-friendly system that supports both new users and experienced developers.*

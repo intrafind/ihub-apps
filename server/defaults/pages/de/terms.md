@@ -61,4 +61,4 @@ Diese Bedingungen unterliegen den Gesetzen von [Rechtsgebiet] und werden in Übe
 
 ## Kontaktieren Sie uns
 
-Wenn Sie Fragen zu diesen Bedingungen haben, kontaktieren Sie uns bitte unter legal@ai-hub.example.com.
+Wenn Sie Fragen zu diesen Bedingungen haben, kontaktieren Sie uns bitte unter legal@ihub.example.com.

@@ -10,8 +10,8 @@ create-missing = false
 [output.html]
 theme = "theme"
 additional-css = ["theme/custom.css"]
-git-repository-url = "https://github.com/intrafind/ai-hub-apps"
-edit-url-template = "https://github.com/intrafind/ai-hub-apps/edit/main/docs/{path}"
+git-repository-url = "https://github.com/intrafind/ihub-apps"
+edit-url-template = "https://github.com/intrafind/ihub-apps/edit/main/docs/{path}"
 
 [preprocessor.template]
 command = "mdbook-template"

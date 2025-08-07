@@ -346,7 +346,7 @@ flowchart TD
 
 - **OpenWebUI MermaidJS Implementation**: https://openwebui.com/features/code-execution/mermaid
 - **MermaidJS Documentation**: https://mermaid.js.org/
-- **Issue #280**: https://github.com/intrafind/ai-hub-apps/issues/280
+- **Issue #280**: https://github.com/intrafind/ihub-apps/issues/280
 
 ---
 

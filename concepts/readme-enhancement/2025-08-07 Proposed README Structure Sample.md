@@ -35,15 +35,15 @@ Choose your installation method based on your needs. iHub Apps offers four insta
 **Get started in 2 minutes with zero dependencies:**
 
 1. **Download for your platform:**
-   - [**Windows**](https://github.com/intrafind/ai-hub-apps/releases/latest/download/ai-hub-apps-win.zip) • [**macOS**](https://github.com/intrafind/ai-hub-apps/releases/latest/download/ai-hub-apps-macos.tar.gz) • [**Linux**](https://github.com/intrafind/ai-hub-apps/releases/latest/download/ai-hub-apps-linux.tar.gz)
+   - [**Windows**](https://github.com/intrafind/ihub-apps/releases/latest/download/ihub-apps-win.zip) • [**macOS**](https://github.com/intrafind/ihub-apps/releases/latest/download/ihub-apps-macos.tar.gz) • [**Linux**](https://github.com/intrafind/ihub-apps/releases/latest/download/ihub-apps-linux.tar.gz)
 
 2. **Extract and run:**
    ```bash
    # Windows
-   ai-hub-apps-v{VERSION}-win.bat
+   ihub-apps-v{VERSION}-win.bat
    
    # macOS/Linux
-   ./ai-hub-apps-v{VERSION}-macos    # or -linux
+   ./ihub-apps-v{VERSION}-macos    # or -linux
    ```
 
 3. **Open http://localhost:3000** ✅
@@ -63,8 +63,8 @@ Choose your installation method based on your needs. iHub Apps offers four insta
 
 2. **Start with automatic local contents:**
    ```bash
-   git clone https://github.com/intrafind/ai-hub-apps.git
-   cd ai-hub-apps
+   git clone https://github.com/intrafind/ihub-apps.git
+   cd ihub-apps
    cp .env.example .env  # Edit with your API keys
    npm run docker:up
    ```
@@ -90,8 +90,8 @@ Choose your installation method based on your needs. iHub Apps offers four insta
 
 2. **Clone and start development environment:**
    ```bash
-   git clone https://github.com/intrafind/ai-hub-apps.git
-   cd ai-hub-apps
+   git clone https://github.com/intrafind/ihub-apps.git
+   cd ihub-apps
    npm run install:all
    npm run dev
    ```
@@ -113,8 +113,8 @@ Choose your installation method based on your needs. iHub Apps offers four insta
 
 2. **Build desktop application:**
    ```bash
-   git clone https://github.com/intrafind/ai-hub-apps.git
-   cd ai-hub-apps
+   git clone https://github.com/intrafind/ihub-apps.git
+   cd ihub-apps
    npm run install:all
    npm run electron:build
    ```
@@ -141,10 +141,10 @@ Choose your installation method based on your needs. iHub Apps offers four insta
 
 1. **Download the latest release:**
    
-   Visit [iHub Apps Releases](https://github.com/intrafind/ai-hub-apps/releases/latest) and download:
-   - **Windows**: `ai-hub-apps-v{VERSION}-win.zip`
-   - **macOS**: `ai-hub-apps-v{VERSION}-macos.tar.gz`
-   - **Linux**: `ai-hub-apps-v{VERSION}-linux.tar.gz`
+   Visit [iHub Apps Releases](https://github.com/intrafind/ihub-apps/releases/latest) and download:
+   - **Windows**: `ihub-apps-v{VERSION}-win.zip`
+   - **macOS**: `ihub-apps-v{VERSION}-macos.tar.gz`
+   - **Linux**: `ihub-apps-v{VERSION}-linux.tar.gz`
 
 2. **Extract the package:**
    ```bash
@@ -152,26 +152,26 @@ Choose your installation method based on your needs. iHub Apps offers four insta
    # Right-click → Extract All
    
    # macOS
-   tar -xzf ai-hub-apps-v{VERSION}-macos.tar.gz
+   tar -xzf ihub-apps-v{VERSION}-macos.tar.gz
    
    # Linux
-   tar -xzf ai-hub-apps-v{VERSION}-linux.tar.gz
+   tar -xzf ihub-apps-v{VERSION}-linux.tar.gz
    ```
 
 3. **Run the application:**
    ```bash
    # Windows
-   cd ai-hub-apps-v{VERSION}-win
-   ai-hub-apps.bat
+   cd ihub-apps-v{VERSION}-win
+   ihub-apps.bat
    
    # macOS
-   cd ai-hub-apps-v{VERSION}-macos
-   ./ai-hub-apps
+   cd ihub-apps-v{VERSION}-macos
+   ./ihub-apps
    
    # Linux  
-   cd ai-hub-apps-v{VERSION}-linux
-   chmod +x ai-hub-apps  # If needed
-   ./ai-hub-apps
+   cd ihub-apps-v{VERSION}-linux
+   chmod +x ihub-apps  # If needed
+   ./ihub-apps
    ```
 
 4. **Verify installation:**
@@ -209,16 +209,16 @@ To update to a new version:
 **Port 3000 already in use:**
 ```bash
 # Windows
-set PORT=8080 && ai-hub-apps.bat
+set PORT=8080 && ihub-apps.bat
 
 # macOS/Linux
-PORT=8080 ./ai-hub-apps
+PORT=8080 ./ihub-apps
 ```
 
 **Permission denied (macOS/Linux):**
 ```bash
-chmod +x ai-hub-apps
-./ai-hub-apps
+chmod +x ihub-apps
+./ihub-apps
 ```
 
 **macOS Gatekeeper warning:**
@@ -242,8 +242,8 @@ The Docker setup automatically mounts your local `contents/` directory, making c
 
 1. **Prepare environment:**
    ```bash
-   git clone https://github.com/intrafind/ai-hub-apps.git
-   cd ai-hub-apps
+   git clone https://github.com/intrafind/ihub-apps.git
+   cd ihub-apps
    cp .env.example .env
    ```
 
@@ -301,8 +301,8 @@ npm run docker:prod:up         # Start production environment
 npm run docker:prod:down       # Stop production environment
 
 # Manual Docker commands
-docker build -f docker/Dockerfile -t ai-hub-apps:dev --target development .
-docker build -f docker/Dockerfile -t ai-hub-apps:prod --target production .
+docker build -f docker/Dockerfile -t ihub-apps:dev --target development .
+docker build -f docker/Dockerfile -t ihub-apps:prod --target production .
 ```
 
 #### Troubleshooting
@@ -352,8 +352,8 @@ npm -v     # Should show 8.x.x or higher
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/intrafind/ai-hub-apps.git
-   cd ai-hub-apps
+   git clone https://github.com/intrafind/ihub-apps.git
+   cd ihub-apps
    ```
 
 2. **Install all dependencies:**
@@ -401,7 +401,7 @@ npm -v     # Should show 8.x.x or higher
 
 **File Structure:**
 ```
-ai-hub-apps/
+ihub-apps/
 ├── client/          # React frontend application
 ├── server/          # Node.js backend application  
 ├── contents/        # Configuration and content files
@@ -515,8 +515,8 @@ For additional development guidance, see [docs/README.md](docs/README.md).
 - **[Development Guide](CLAUDE.md)** - Development patterns and contribution guide
 
 ### Community Support
-- **[GitHub Issues](https://github.com/intrafind/ai-hub-apps/issues)** - Bug reports and feature requests
-- **[GitHub Discussions](https://github.com/intrafind/ai-hub-apps/discussions)** - Questions and community help
+- **[GitHub Issues](https://github.com/intrafind/ihub-apps/issues)** - Bug reports and feature requests
+- **[GitHub Discussions](https://github.com/intrafind/ihub-apps/discussions)** - Questions and community help
 - **[FAQ](contents/pages/en/faq.md)** - Frequently asked questions
 
 ### Common Issues Quick Links

@@ -75,8 +75,8 @@ We will implement a **Hybrid Integration Architecture** that combines:
   class TeamsAuthBridge {
     async authenticateTeamsUser(teamsContext) {
       const teamsUser = await this.validateTeamsToken(teamsContext.token);
-      const aiHubUser = await this.mapOrCreateUser(teamsUser);
-      return this.generateAIHubToken(aiHubUser);
+      const ihubUser = await this.mapOrCreateUser(teamsUser);
+      return this.generateihubToken(ihubUser);
     }
   }
   ```
@@ -93,8 +93,8 @@ We will implement a **Hybrid Integration Architecture** that combines:
   // Teams Adapter
   class TeamsAdapter {
     async processActivity(activity) {
-      const aiHubRequest = this.translateToAIHub(activity);
-      const response = await this.aiHubService.process(aiHubRequest);
+      const ihubRequest = this.translateToihub(activity);
+      const response = await this.ihubService.process(ihubRequest);
       return this.translateToTeams(response);
     }
   }

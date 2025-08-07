@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../utils/localizeContent';
 
-const DISCLAIMER_STORAGE_KEY = 'ai-hub-disclaimer-acknowledged';
+const DISCLAIMER_STORAGE_KEY = 'ihub-disclaimer-acknowledged';
 
 const DisclaimerPopup = ({ disclaimer, currentLanguage }) => {
   const { t } = useTranslation();

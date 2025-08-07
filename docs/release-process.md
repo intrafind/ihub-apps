@@ -35,7 +35,7 @@ The system automatically updates:
 **Binary Builds:**
 - Creates standalone executables for Linux, macOS, Windows
 - Uses Node.js SEA (Single Executable Application) feature
-- Archives binaries with versioned names: `ai-hub-apps-v3.4.0-linux.tar.gz`
+- Archives binaries with versioned names: `ihub-apps-v3.4.0-linux.tar.gz`
 
 **Docker Builds:**
 - Builds and publishes Docker images with proper version tags

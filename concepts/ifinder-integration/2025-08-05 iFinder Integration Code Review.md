@@ -41,7 +41,7 @@ The current iFinder integration follows a **tightly-coupled, integration-specifi
     "defaultSearchProfile": "default",
     "privateKey": "-----BEGIN PRIVATE KEY-----...",
     "algorithm": "RS256",
-    "issuer": "ai-hub-apps",
+    "issuer": "ihub-apps",
     "audience": "ifinder-api"
   }
 }

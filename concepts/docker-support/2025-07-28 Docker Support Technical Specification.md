@@ -99,7 +99,7 @@ CMD ["node", "server/server.js"]
 ```yaml
 version: '3.8'
 services:
-  ai-hub-dev:
+  ihub-dev:
     build:
       context: .
       target: development
@@ -113,9 +113,9 @@ services:
       - ./shared:/app/shared:ro
 
       # Data volumes (persistent)
-      - ai-hub-data:/app/contents/data
-      - ai-hub-uploads:/app/contents/uploads
-      - ai-hub-logs:/app/logs
+      - ihub-data:/app/contents/data
+      - ihub-uploads:/app/contents/uploads
+      - ihub-logs:/app/logs
 
       # Configuration (bind mounts for easy editing)
       - ./contents/config:/app/contents/config:ro
@@ -136,24 +136,24 @@ services:
 ```yaml
 version: '3.8'
 services:
-  ai-hub-app:
-    image: ai-hub-apps:latest
+  ihub-app:
+    image: ihub-apps:latest
     ports:
       - '3000:3000'
     volumes:
       # Persistent data volumes
-      - ai-hub-config:/app/contents/config:ro
-      - ai-hub-data:/app/contents/data:rw
-      - ai-hub-uploads:/app/contents/uploads:rw
-      - ai-hub-logs:/app/logs:rw
-      - ai-hub-pages:/app/contents/pages:rw
-      - ai-hub-sources:/app/contents/sources:rw
+      - ihub-config:/app/contents/config:ro
+      - ihub-data:/app/contents/data:rw
+      - ihub-uploads:/app/contents/uploads:rw
+      - ihub-logs:/app/logs:rw
+      - ihub-pages:/app/contents/pages:rw
+      - ihub-sources:/app/contents/sources:rw
 
       # Static content (read-only)
-      - ai-hub-apps:/app/contents/apps:ro
-      - ai-hub-models:/app/contents/models:ro
-      - ai-hub-locales:/app/contents/locales:ro
-      - ai-hub-prompts:/app/contents/prompts:ro
+      - ihub-apps:/app/contents/apps:ro
+      - ihub-models:/app/contents/models:ro
+      - ihub-locales:/app/contents/locales:ro
+      - ihub-prompts:/app/contents/prompts:ro
     environment:
       - NODE_ENV=production
     env_file:
@@ -166,16 +166,16 @@ services:
       retries: 3
 
 volumes:
-  ai-hub-config:
-  ai-hub-data:
-  ai-hub-uploads:
-  ai-hub-logs:
-  ai-hub-pages:
-  ai-hub-sources:
-  ai-hub-apps:
-  ai-hub-models:
-  ai-hub-locales:
-  ai-hub-prompts:
+  ihub-config:
+  ihub-data:
+  ihub-uploads:
+  ihub-logs:
+  ihub-pages:
+  ihub-sources:
+  ihub-apps:
+  ihub-models:
+  ihub-locales:
+  ihub-prompts:
 ```
 
 ## Environment Configuration
@@ -208,7 +208,7 @@ MAX_UPLOAD_SIZE=50mb
 UPLOAD_PATH=/app/contents/uploads
 
 # Database (if using external persistence)
-# DATABASE_URL=postgresql://user:pass@db:5432/aihub
+# DATABASE_URL=postgresql://user:pass@db:5432/ihub
 ```
 
 ### Development vs Production Differences
@@ -229,13 +229,13 @@ UPLOAD_PATH=/app/contents/uploads
 
 ```bash
 # Build production image
-docker build -t ai-hub-apps:latest .
+docker build -t ihub-apps:latest .
 
 # Build development image
-docker build --target development -t ai-hub-apps:dev .
+docker build --target development -t ihub-apps:dev .
 
 # Multi-platform build
-docker buildx build --platform linux/amd64,linux/arm64 -t ai-hub-apps:latest .
+docker buildx build --platform linux/amd64,linux/arm64 -t ihub-apps:latest .
 ```
 
 ### Docker Compose Profiles
@@ -243,11 +243,11 @@ docker buildx build --platform linux/amd64,linux/arm64 -t ai-hub-apps:latest .
 ```yaml
 version: '3.8'
 services:
-  ai-hub-app:
+  ihub-app:
     profiles: ['production']
     # ... production config
 
-  ai-hub-dev:
+  ihub-dev:
     profiles: ['development']
     # ... development config
 
@@ -260,7 +260,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - ai-hub-app
+      - ihub-app
 ```
 
 ### Helm Chart Structure (Kubernetes)
@@ -349,7 +349,7 @@ ENV NODE_OPTIONS="--max-old-space-size=1024"
 ```yaml
 version: '3.8'
 services:
-  ai-hub-app:
+  ihub-app:
     deploy:
       replicas: 3
       update_config:
@@ -404,17 +404,17 @@ cp -r contents/data contents/data.backup
 cp -r contents/uploads contents/uploads.backup
 
 # Create Docker volumes and migrate data
-docker volume create ai-hub-data
-docker volume create ai-hub-uploads
-docker volume create ai-hub-logs
+docker volume create ihub-data
+docker volume create ihub-uploads
+docker volume create ihub-logs
 
 # Copy existing data to volumes
 docker run --rm -v "$(pwd)/contents/data:/source:ro" \
-           -v "ai-hub-data:/dest" \
+           -v "ihub-data:/dest" \
            alpine sh -c "cp -r /source/* /dest/"
 
 docker run --rm -v "$(pwd)/contents/uploads:/source:ro" \
-           -v "ai-hub-uploads:/dest" \
+           -v "ihub-uploads:/dest" \
            alpine sh -c "cp -r /source/* /dest/"
 
 echo "Migration completed successfully!"

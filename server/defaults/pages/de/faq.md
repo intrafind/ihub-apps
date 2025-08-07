@@ -56,4 +56,4 @@ Wir akzeptieren alle gängigen Kreditkarten, PayPal und ausgewählte Kryptowähr
 
 ### Wie erhalte ich Support?
 
-Bei technischen Problemen oder Fragen senden Sie bitte eine E-Mail an support@ai-hub.example.com. Premium-Nutzer haben Zugang zu prioritärem Support über unser In-App-Chatsystem.
+Bei technischen Problemen oder Fragen senden Sie bitte eine E-Mail an support@ihub.example.com. Premium-Nutzer haben Zugang zu prioritärem Support über unser In-App-Chatsystem.

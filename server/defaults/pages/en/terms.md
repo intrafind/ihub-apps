@@ -61,4 +61,4 @@ These Terms shall be governed by and construed in accordance with the laws of [J
 
 ## Contact Us
 
-If you have any questions about these Terms, please contact us at legal@ai-hub.example.com.
+If you have any questions about these Terms, please contact us at legal@ihub.example.com.

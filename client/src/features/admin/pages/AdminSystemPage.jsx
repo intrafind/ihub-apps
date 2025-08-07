@@ -135,7 +135,7 @@ const AdminSystemPage = () => {
       const filenameMatch = contentDisposition && contentDisposition.match(/filename="(.+)"/);
       const filename = filenameMatch
         ? filenameMatch[1]
-        : `ai-hub-config-backup-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.zip`;
+        : `ihub-config-backup-${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.zip`;
 
       a.href = url;
       a.download = filename;

@@ -45,13 +45,13 @@ npm run docker:up:build
 
 ```bash
 # Development build
-docker build -f docker/Dockerfile -t ai-hub-apps:dev --target development .
+docker build -f docker/Dockerfile -t ihub-apps:dev --target development .
 
 # Production build
-docker build -f docker/Dockerfile -t ai-hub-apps:prod --target production .
+docker build -f docker/Dockerfile -t ihub-apps:prod --target production .
 
 # Test your local build
-docker run --rm -p 3000:3000 -v $(pwd)/contents:/app/contents -e JWT_SECRET=test ai-hub-apps:dev
+docker run --rm -p 3000:3000 -v $(pwd)/contents:/app/contents -e JWT_SECRET=test ihub-apps:dev
 ```
 
 ## Other Useful Commands
@@ -92,8 +92,8 @@ Docker images are built and published when:
 
 ```bash
 # Latest version
-docker pull ghcr.io/intrafind/ai-hub-apps:latest
+docker pull ghcr.io/intrafind/ihub-apps:latest
 
 # Specific version
-docker pull ghcr.io/intrafind/ai-hub-apps:v1.0.0
+docker pull ghcr.io/intrafind/ihub-apps:v1.0.0
 ```

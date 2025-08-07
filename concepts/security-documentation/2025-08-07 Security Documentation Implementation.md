@@ -159,11 +159,11 @@ Created comprehensive security documentation for iHub Apps covering all aspects 
 ### Secure Docker Configuration
 ```dockerfile
 # Non-root user execution
-RUN addgroup -S aihub && adduser -S aihub aihub
-USER aihub
+RUN addgroup -S ihub && adduser -S ihub ihub
+USER ihub
 
 # Security contexts
-COPY --chown=aihub:aihub /app/dist ./
+COPY --chown=ihub:ihub /app/dist ./
 ```
 
 ## Security Analysis Results

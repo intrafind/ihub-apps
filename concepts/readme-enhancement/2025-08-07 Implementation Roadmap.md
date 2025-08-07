@@ -199,16 +199,16 @@ This roadmap provides a systematic approach to transforming the iHub Apps README
 
 **Implementation Steps**:
 1. **Verify current releases structure**: 
-   - Check https://github.com/intrafind/ai-hub-apps/releases
+   - Check https://github.com/intrafind/ihub-apps/releases
    - Document available artifacts for each platform
    - Test download and execution process
 
 2. **Create dynamic link templates**:
    ```markdown
    **Download Latest Release:**
-   - [Windows](https://github.com/intrafind/ai-hub-apps/releases/latest/download/ai-hub-apps-v{VERSION}-win.zip)
-   - [macOS](https://github.com/intrafind/ai-hub-apps/releases/latest/download/ai-hub-apps-v{VERSION}-macos.tar.gz)  
-   - [Linux](https://github.com/intrafind/ai-hub-apps/releases/latest/download/ai-hub-apps-v{VERSION}-linux.tar.gz)
+   - [Windows](https://github.com/intrafind/ihub-apps/releases/latest/download/ihub-apps-v{VERSION}-win.zip)
+   - [macOS](https://github.com/intrafind/ihub-apps/releases/latest/download/ihub-apps-v{VERSION}-macos.tar.gz)  
+   - [Linux](https://github.com/intrafind/ihub-apps/releases/latest/download/ihub-apps-v{VERSION}-linux.tar.gz)
    ```
 
 ### Phase 2 Success Criteria

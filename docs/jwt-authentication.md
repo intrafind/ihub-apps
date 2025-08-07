@@ -39,7 +39,7 @@ Add JWT providers to your `contents/config/platform.json`:
         "name": "my-jwt-provider",
         "header": "Authorization",
         "issuer": "https://my-jwt-provider.com",
-        "audience": "ai-hub-apps",
+        "audience": "ihub-apps",
         "jwkUrl": "https://my-jwt-provider.com/.well-known/jwks.json"
       }
     ]
@@ -54,7 +54,7 @@ Add JWT providers to your `contents/config/platform.json`:
 | `name`     | Unique identifier for the provider   | Yes      | `"company-jwt"`                                    |
 | `header`   | HTTP header containing the JWT token | Yes      | `"Authorization"`                                  |
 | `issuer`   | Expected `iss` claim in JWT          | Yes      | `"https://auth.company.com"`                       |
-| `audience` | Expected `aud` claim in JWT          | Yes      | `"ai-hub-apps"`                                    |
+| `audience` | Expected `aud` claim in JWT          | Yes      | `"ihub-apps"`                                    |
 | `jwkUrl`   | URL to fetch JSON Web Key Set        | Yes      | `"https://auth.company.com/.well-known/jwks.json"` |
 
 ## JWT Token Requirements
@@ -66,7 +66,7 @@ Your JWT tokens must include these standard claims:
 ```json
 {
   "iss": "https://my-jwt-provider.com",
-  "aud": "ai-hub-apps",
+  "aud": "ihub-apps",
   "exp": 1703980800,
   "iat": 1703977200,
   "sub": "user123"
@@ -105,14 +105,14 @@ The system will use the first available claim for user identification:
 
 ```bash
 curl -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..." \
-     https://your-ai-hub.com/api/apps
+     https://your-ihub.com/api/apps
 ```
 
 ### Custom Header (if configured)
 
 ```bash
 curl -H "X-JWT-Token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..." \
-     https://your-ai-hub.com/api/apps
+     https://your-ihub.com/api/apps
 ```
 
 ### JavaScript Example
@@ -139,7 +139,7 @@ const apps = await response.json();
   "name": "auth0",
   "header": "Authorization",
   "issuer": "https://company.auth0.com/",
-  "audience": "ai-hub-apps",
+  "audience": "ihub-apps",
   "jwkUrl": "https://company.auth0.com/.well-known/jwks.json"
 }
 ```
@@ -151,7 +151,7 @@ const apps = await response.json();
   "name": "azure-ad",
   "header": "Authorization",
   "issuer": "https://sts.windows.net/tenant-id/",
-  "audience": "api://ai-hub-apps",
+  "audience": "api://ihub-apps",
   "jwkUrl": "https://login.microsoftonline.com/tenant-id/discovery/v2.0/keys"
 }
 ```
@@ -163,7 +163,7 @@ const apps = await response.json();
   "name": "internal-auth",
   "header": "X-Auth-Token",
   "issuer": "https://internal-auth.company.com",
-  "audience": "ai-hub-apps",
+  "audience": "ihub-apps",
   "jwkUrl": "https://internal-auth.company.com/jwks"
 }
 ```
@@ -177,14 +177,14 @@ const apps = await response.json();
       "name": "auth0",
       "header": "Authorization",
       "issuer": "https://company.auth0.com/",
-      "audience": "ai-hub-apps",
+      "audience": "ihub-apps",
       "jwkUrl": "https://company.auth0.com/.well-known/jwks.json"
     },
     {
       "name": "internal",
       "header": "X-Internal-Token",
       "issuer": "https://internal.company.com",
-      "audience": "ai-hub-internal",
+      "audience": "ihub-internal",
       "jwkUrl": "https://internal.company.com/.well-known/jwks.json"
     }
   ]
@@ -317,7 +317,7 @@ curl https://your-provider.com/.well-known/jwks.json
 
 # Test API with token
 curl -v -H "Authorization: Bearer YOUR_TOKEN" \
-     https://your-ai-hub.com/api/auth/status
+     https://your-ihub.com/api/auth/status
 ```
 
 ## Limitations

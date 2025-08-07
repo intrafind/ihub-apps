@@ -1,6 +1,6 @@
 # Repository Guide for Codex
 
-This document gives informations and instructions for working with the **ai-hub-apps** repository. **ai-hub-apps** is a platform which hosts ai-enabled apps. ai-enabled apps allow the user to communicate with the ai, but without the need to know how to prompt. The goal is to allow companies to customize it without the need of coding.
+This document gives informations and instructions for working with the **ihub-apps** repository. **ihub-apps** is a platform which hosts ai-enabled apps. ai-enabled apps allow the user to communicate with the ai, but without the need to know how to prompt. The goal is to allow companies to customize it without the need of coding.
 
 ## Project Overview
 

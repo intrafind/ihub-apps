@@ -18,7 +18,7 @@ const SmartSearch = () => {
   const recentAppIds = useMemo(() => getRecentAppIds(), []);
 
   // Create favorite apps helpers
-  const { getFavorites: getFavoriteApps } = createFavoriteItemHelpers('aihub_favorite_apps');
+  const { getFavorites: getFavoriteApps } = createFavoriteItemHelpers('ihub_favorite_apps');
 
   useEffect(() => {
     const handleKeyDown = e => {

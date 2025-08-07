@@ -3,9 +3,9 @@ version: '3.8'
 
 services:
   # Configuration Initialization Container
-  ai-hub-config-init:
+  ihub-config-init:
     image: alpine:latest
-    container_name: ai-hub-config-init
+    container_name: ihub-config-init
     volumes:
       # Source configuration files
       - ../contents/config:/source-config:ro
@@ -15,11 +15,11 @@ services:
       - ../contents/prompts:/source-prompts:ro
 
       # Destination volumes
-      - ai-hub-config:/dest-config
-      - ai-hub-apps:/dest-apps
-      - ai-hub-models:/dest-models
-      - ai-hub-locales:/dest-locales
-      - ai-hub-prompts:/dest-prompts
+      - ihub-config:/dest-config
+      - ihub-apps:/dest-apps
+      - ihub-models:/dest-models
+      - ihub-locales:/dest-locales
+      - ihub-prompts:/dest-prompts
     command: >
       sh -c "
         echo 'Initializing configuration volumes...'
@@ -55,30 +55,30 @@ services:
     restart: 'no'
     # network_mode: host
     networks:
-      - ai-hub-network
+      - ihub-network
 
   # Main iHub Apps Production Container
-  ai-hub-app:
-    image: ${AI_HUB_IMAGE:-ai-hub-apps:latest}
-    container_name: ai-hub-app
+  ihub-app:
+    image: ${AI_HUB_IMAGE:-ihub-apps:latest}
+    container_name: ihub-app
     ports:
       - '${AI_HUB_PORT:-3000}:3000'
     volumes:
       # Configuration volumes (read-only for security)
-      - ai-hub-config:/app/contents/config:ro
-      - ai-hub-apps:/app/contents/apps:ro
-      - ai-hub-models:/app/contents/models:ro
-      - ai-hub-locales:/app/contents/locales:ro
-      - ai-hub-prompts:/app/contents/prompts:ro
+      - ihub-config:/app/contents/config:ro
+      - ihub-apps:/app/contents/apps:ro
+      - ihub-models:/app/contents/models:ro
+      - ihub-locales:/app/contents/locales:ro
+      - ihub-prompts:/app/contents/prompts:ro
 
       # Content that may be updated via admin interface
-      - ai-hub-pages:/app/contents/pages:rw
-      - ai-hub-sources:/app/contents/sources:rw
+      - ihub-pages:/app/contents/pages:rw
+      - ihub-sources:/app/contents/sources:rw
 
       # Persistent data volumes
-      - ai-hub-data:/app/contents/data:rw
-      - ai-hub-uploads:/app/contents/uploads:rw
-      - ai-hub-logs:/app/logs:rw
+      - ihub-data:/app/contents/data:rw
+      - ihub-uploads:/app/contents/uploads:rw
+      - ihub-logs:/app/logs:rw
     environment:
       - NODE_ENV=production
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -98,7 +98,7 @@ services:
           cpus: '0.5'
           memory: 512M
     networks:
-      - ai-hub-network
+      - ihub-network
     # network_mode: host
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
@@ -112,40 +112,40 @@ services:
         max-size: '10m'
         max-file: '3'
     depends_on:
-      ai-hub-config-init:
+      ihub-config-init:
         condition: service_completed_successfully
 
 volumes:
   # Configuration volumes (semi-static)
-  ai-hub-config:
+  ihub-config:
     driver: local
-  ai-hub-apps:
+  ihub-apps:
     driver: local
-  ai-hub-models:
+  ihub-models:
     driver: local
-  ai-hub-locales:
+  ihub-locales:
     driver: local
-  ai-hub-prompts:
+  ihub-prompts:
     driver: local
 
   # Content volumes (editable via admin)
-  ai-hub-pages:
+  ihub-pages:
     driver: local
-  ai-hub-sources:
+  ihub-sources:
     driver: local
 
   # Persistent data volumes
-  ai-hub-data:
+  ihub-data:
     driver: local
-  ai-hub-uploads:
+  ihub-uploads:
     driver: local
-  ai-hub-logs:
+  ihub-logs:
     driver: local
 
 networks:
-  ai-hub-network:
+  ihub-network:
     driver: bridge
-    name: ai-hub-prod-network
-  # ai-hub-init-network:
+    name: ihub-prod-network
+  # ihub-init-network:
   #   driver: host
-  #   name: ai-hub-prod-init-network
+  #   name: ihub-prod-init-network

@@ -218,14 +218,14 @@ iHub Apps provides multiple installation methods to suit different use cases and
 
 ```bash
 # npm Installation (Development)
-git clone <repository-url> && cd ai-hub-apps
+git clone <repository-url> && cd ihub-apps
 npm run install:all && npm run dev
 
 # Docker Installation (Production-ready)
-docker run -p 3000:3000 -e JWT_SECRET=your-secret ghcr.io/intrafind/ai-hub-apps:latest
+docker run -p 3000:3000 -e JWT_SECRET=your-secret ghcr.io/intrafind/ihub-apps:latest
 
 # Binary Installation (Standalone)
-# Download from: https://github.com/intrafind/ai-hub-apps/releases
+# Download from: https://github.com/intrafind/ihub-apps/releases
 # Extract and run the executable
 
 # Electron Desktop App
@@ -269,7 +269,7 @@ npm run install:all && npm run electron:dev
 - [Complete Documentation](docs/README.md) - Full documentation portal
 - [Comprehensive Docker Guide](docker/DOCKER.md)
 - [Docker Quick Reference](docs/DOCKER-QUICK-REFERENCE.md)
-- [Binary Downloads](https://github.com/intrafind/ai-hub-apps/releases)
+- [Binary Downloads](https://github.com/intrafind/ihub-apps/releases)
 - [Sources System](docs/sources.md) - Knowledge source integration
 - [Web Tools](docs/web-tools.md) - Web search and content extraction
 - [Authentication Guide](docs/external-authentication.md) - Security setup
@@ -291,7 +291,7 @@ npm run install:all && npm run electron:dev
 
    ```bash
    git clone <repository-url>
-   cd ai-hub-apps
+   cd ihub-apps
    ```
 
 2. Install dependencies:
@@ -332,7 +332,7 @@ npm run install:all && npm run electron:dev
      -v $(pwd)/contents:/app/contents \
      -e JWT_SECRET=your-secure-secret \
      --name ihub-apps \
-     ghcr.io/intrafind/ai-hub-apps:latest
+     ghcr.io/intrafind/ihub-apps:latest
    ```
 
 2. **Using Docker Compose for development:**
@@ -340,7 +340,7 @@ npm run install:all && npm run electron:dev
    ```bash
    # Clone repository and setup environment
    git clone <repository-url>
-   cd ai-hub-apps
+   cd ihub-apps
    cp .env.example .env  # Edit with your API keys
 
    # Start development environment (auto-mounts local contents/)
@@ -373,24 +373,24 @@ For comprehensive Docker documentation, see [docker/DOCKER.md](docker/DOCKER.md)
 
 1. **Download the latest binary:**
 
-   Visit [GitHub Releases](https://github.com/intrafind/ai-hub-apps/releases) and download:
-   - **Complete package** (recommended): `ai-hub-apps-v<version>-<platform>.tar.gz` or `.zip`
-   - **Standalone executable**: `ai-hub-apps-v<version>-<platform>`
+   Visit [GitHub Releases](https://github.com/intrafind/ihub-apps/releases) and download:
+   - **Complete package** (recommended): `ihub-apps-v<version>-<platform>.tar.gz` or `.zip`
+   - **Standalone executable**: `ihub-apps-v<version>-<platform>`
 
 2. **Extract and run:**
 
    ```bash
    # macOS/Linux - Complete package
-   tar -xzf ai-hub-apps-v*-linux.tar.gz
-   cd ai-hub-apps-v*
-   ./ai-hub-apps-v*-linux
+   tar -xzf ihub-apps-v*-linux.tar.gz
+   cd ihub-apps-v*
+   ./ihub-apps-v*-linux
 
    # Windows - Complete package
-   # Extract the .zip file and run ai-hub-apps-v*-win.bat
+   # Extract the .zip file and run ihub-apps-v*-win.bat
 
    # Standalone executable (any platform)
-   chmod +x ai-hub-apps-v*-linux  # Linux/macOS only
-   ./ai-hub-apps-v*-linux
+   chmod +x ihub-apps-v*-linux  # Linux/macOS only
+   ./ihub-apps-v*-linux
    ```
 
 3. **Configure environment variables (optional):**
@@ -423,7 +423,7 @@ For comprehensive Docker documentation, see [docker/DOCKER.md](docker/DOCKER.md)
 
    ```bash
    git clone <repository-url>
-   cd ai-hub-apps
+   cd ihub-apps
    npm run install:all
    ```
 
@@ -617,7 +617,7 @@ PORT=8080 HOST=127.0.0.1 WORKERS=4 npm run start:prod
 Or with the binary (replace `${VERSION}` with the current version):
 
 ```bash
-PORT=8080 HOST=127.0.0.1 WORKERS=4 ./dist-bin/ai-hub-apps-v${VERSION}-macos
+PORT=8080 HOST=127.0.0.1 WORKERS=4 ./dist-bin/ihub-apps-v${VERSION}-macos
 ```
 
 ## 🔄 Update Procedures
@@ -639,7 +639,7 @@ npm run dev
 
 ```bash
 # Pull latest image
-docker pull ghcr.io/intrafind/ai-hub-apps:latest
+docker pull ghcr.io/intrafind/ihub-apps:latest
 
 # Stop current container
 docker stop ihub-apps
@@ -651,7 +651,7 @@ docker run -d \
   -v $(pwd)/contents:/app/contents \
   -e JWT_SECRET=your-secure-secret \
   --name ihub-apps \
-  ghcr.io/intrafind/ai-hub-apps:latest
+  ghcr.io/intrafind/ihub-apps:latest
 
 # Or using Docker Compose
 npm run docker:down
@@ -670,17 +670,17 @@ npm run docker:up
 
 2. **Download new version:**
 
-   Visit [GitHub Releases](https://github.com/intrafind/ai-hub-apps/releases) and download the latest binary.
+   Visit [GitHub Releases](https://github.com/intrafind/ihub-apps/releases) and download the latest binary.
 
 3. **Replace executable and restart:**
 
    ```bash
    # Stop current application (Ctrl+C)
    # Replace the executable file
-   chmod +x ai-hub-apps-v*-new-version  # Linux/macOS
+   chmod +x ihub-apps-v*-new-version  # Linux/macOS
 
    # Start new version (it will use existing contents/)
-   ./ai-hub-apps-v*-new-version
+   ./ihub-apps-v*-new-version
    ```
 
 **Note:** Your `contents/` directory (containing apps, models, and data) is preserved between updates.
@@ -710,7 +710,7 @@ npm run --silent version
 docker exec ihub-apps cat /app/package.json | grep version
 
 # Binary
-./ai-hub-apps-v*-platform --version
+./ihub-apps-v*-platform --version
 
 # Web interface
 # Visit /api/health endpoint for version information
@@ -787,7 +787,7 @@ export JWT_SECRET=your-secure-secret
       {
         "name": "your-provider",
         "issuer": "https://your-provider.com",
-        "audience": "ai-hub-apps",
+        "audience": "ihub-apps",
         "jwkUrl": "https://your-provider.com/.well-known/jwks.json"
       }
     ]

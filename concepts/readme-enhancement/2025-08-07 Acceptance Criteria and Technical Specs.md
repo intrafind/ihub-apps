@@ -187,7 +187,7 @@ Each user story must meet specific, measurable criteria to be considered complet
 **Technical Standards**:
 - All installation commands tested on macOS, Linux, and Windows
 - Version numbers use placeholder format: `v{VERSION}`
-- GitHub releases URL verified: https://github.com/intrafind/ai-hub-apps/releases
+- GitHub releases URL verified: https://github.com/intrafind/ihub-apps/releases
 - Docker commands verified against docker/DOCKER.md
 
 ### TIR-3: Comparison Table Specifications
@@ -213,7 +213,7 @@ Each user story must meet specific, measurable criteria to be considered complet
 ### TIR-4: Link and Reference Requirements
 
 **External Links Required**:
-- GitHub releases: https://github.com/intrafind/ai-hub-apps/releases
+- GitHub releases: https://github.com/intrafind/ihub-apps/releases
 - Docker documentation: docker/DOCKER.md (relative link)
 - Development documentation: docs/README.md (relative link)
 

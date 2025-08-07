@@ -7,7 +7,7 @@
 ```bash
 # 1. Clone and install
 git clone <repository>
-cd ai-hub-apps
+cd ihub-apps
 npm run install:all
 
 # 2. Start the application (automatic setup included!)

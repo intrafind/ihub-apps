@@ -14,7 +14,7 @@ function generateCode(length = 6) {
 
 const getUsername = () => {
   try {
-    return localStorage.getItem('aihub_username') || 'anonymous';
+    return localStorage.getItem('ihub_username') || 'anonymous';
   } catch {
     return 'anonymous';
   }

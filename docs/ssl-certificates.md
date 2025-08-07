@@ -37,7 +37,7 @@ sudo cp your-certificate.crt /usr/local/share/ca-certificates/
 sudo update-ca-certificates
 
 # Restart iHub Apps
-systemctl restart ai-hub-apps
+systemctl restart ihub-apps
 ```
 
 #### On CentOS/RHEL:
@@ -50,7 +50,7 @@ sudo cp your-certificate.crt /etc/pki/ca-trust/source/anchors/
 sudo update-ca-trust
 
 # Restart iHub Apps
-systemctl restart ai-hub-apps
+systemctl restart ihub-apps
 ```
 
 #### On macOS:
@@ -84,7 +84,7 @@ npm run start:prod
 Or when running the binary:
 
 ```bash
-NODE_EXTRA_CA_CERTS=/path/to/your-certificate.pem ./ai-hub-apps-v1.0.0-linux
+NODE_EXTRA_CA_CERTS=/path/to/your-certificate.pem ./ihub-apps-v1.0.0-linux
 ```
 
 ### Method 3: Certificate Bundle
@@ -118,7 +118,7 @@ npm run start:prod
 Or when running the binary:
 
 ```bash
-NODE_TLS_REJECT_UNAUTHORIZED=0 ./ai-hub-apps-v1.0.0-linux
+NODE_TLS_REJECT_UNAUTHORIZED=0 ./ihub-apps-v1.0.0-linux
 ```
 
 ### Configuration File Method
@@ -151,7 +151,7 @@ Or with volume mount:
 ```yaml
 # docker-compose.yml
 services:
-  ai-hub-apps:
+  ihub-apps:
     volumes:
       - ./certificates:/usr/local/share/ca-certificates:ro
     command: >
@@ -163,7 +163,7 @@ services:
 ```yaml
 # docker-compose.yml
 services:
-  ai-hub-apps:
+  ihub-apps:
     environment:
       - NODE_EXTRA_CA_CERTS=/app/certificates/bundle.pem
     volumes:
@@ -188,12 +188,12 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ai-hub-apps
+  name: ihub-apps
 spec:
   template:
     spec:
       containers:
-        - name: ai-hub-apps
+        - name: ihub-apps
           env:
             - name: NODE_EXTRA_CA_CERTS
               value: /etc/ssl/certs/bundle.pem
@@ -239,7 +239,7 @@ Monitor the application logs for SSL-related errors:
 
 ```bash
 # Check for SSL errors in logs
-tail -f /var/log/ai-hub-apps/app.log | grep -i "certificate\|ssl\|tls"
+tail -f /var/log/ihub-apps/app.log | grep -i "certificate\|ssl\|tls"
 ```
 
 ### Test Specific Features

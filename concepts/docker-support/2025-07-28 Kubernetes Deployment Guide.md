@@ -25,10 +25,10 @@ This guide provides production-ready Kubernetes manifests and Helm charts for de
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: ai-hub-apps
+  name: ihub-apps
   labels:
-    name: ai-hub-apps
-    app.kubernetes.io/name: ai-hub-apps
+    name: ihub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 
 ---
@@ -36,10 +36,10 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: ai-hub-apps
-  namespace: ai-hub-apps
+  name: ihub-apps
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 
 ---
@@ -47,8 +47,8 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  namespace: ai-hub-apps
-  name: ai-hub-apps-role
+  namespace: ihub-apps
+  name: ihub-apps-role
 rules:
   - apiGroups: ['']
     resources: ['configmaps', 'secrets']
@@ -62,15 +62,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: ai-hub-apps-rolebinding
-  namespace: ai-hub-apps
+  name: ihub-apps-rolebinding
+  namespace: ihub-apps
 subjects:
   - kind: ServiceAccount
-    name: ai-hub-apps
-    namespace: ai-hub-apps
+    name: ihub-apps
+    namespace: ihub-apps
 roleRef:
   kind: Role
-  name: ai-hub-apps-role
+  name: ihub-apps-role
   apiGroup: rbac.authorization.k8s.io
 ```
 
@@ -81,10 +81,10 @@ roleRef:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ai-hub-apps-config
-  namespace: ai-hub-apps
+  name: ihub-apps-config
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 data:
   NODE_ENV: 'production'
@@ -103,10 +103,10 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ai-hub-apps-files
-  namespace: ai-hub-apps
+  name: ihub-apps-files
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 data:
   # These would be populated from your actual config files
@@ -125,10 +125,10 @@ data:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ai-hub-apps-secrets
-  namespace: ai-hub-apps
+  name: ihub-apps-secrets
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 type: Opaque
 data:
@@ -148,10 +148,10 @@ data:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: ai-hub-apps-config-pvc
-  namespace: ai-hub-apps
+  name: ihub-apps-config-pvc
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 spec:
   accessModes:
@@ -165,10 +165,10 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: ai-hub-apps-data-pvc
-  namespace: ai-hub-apps
+  name: ihub-apps-data-pvc
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 spec:
   accessModes:
@@ -182,10 +182,10 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: ai-hub-apps-uploads-pvc
-  namespace: ai-hub-apps
+  name: ihub-apps-uploads-pvc
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 spec:
   accessModes:
@@ -199,10 +199,10 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: ai-hub-apps-logs-pvc
-  namespace: ai-hub-apps
+  name: ihub-apps-logs-pvc
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 spec:
   accessModes:
@@ -220,10 +220,10 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ai-hub-apps
-  namespace: ai-hub-apps
+  name: ihub-apps
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
     app.kubernetes.io/version: '1.0.5'
 spec:
@@ -235,12 +235,12 @@ spec:
       maxUnavailable: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: ai-hub-apps
+      app.kubernetes.io/name: ihub-apps
       app.kubernetes.io/instance: production
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: ai-hub-apps
+        app.kubernetes.io/name: ihub-apps
         app.kubernetes.io/instance: production
         app.kubernetes.io/version: '1.0.5'
       annotations:
@@ -248,15 +248,15 @@ spec:
         prometheus.io/port: '3000'
         prometheus.io/path: '/api/metrics'
     spec:
-      serviceAccountName: ai-hub-apps
+      serviceAccountName: ihub-apps
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
         runAsGroup: 1001
         fsGroup: 1001
       containers:
-        - name: ai-hub-apps
-          image: ai-hub-apps:1.0.5
+        - name: ihub-apps
+          image: ihub-apps:1.0.5
           imagePullPolicy: Always
           ports:
             - name: http
@@ -266,62 +266,62 @@ spec:
             - name: NODE_ENV
               valueFrom:
                 configMapKeyRef:
-                  name: ai-hub-apps-config
+                  name: ihub-apps-config
                   key: NODE_ENV
             - name: LOG_LEVEL
               valueFrom:
                 configMapKeyRef:
-                  name: ai-hub-apps-config
+                  name: ihub-apps-config
                   key: LOG_LEVEL
             - name: WORKERS
               valueFrom:
                 configMapKeyRef:
-                  name: ai-hub-apps-config
+                  name: ihub-apps-config
                   key: WORKERS
             - name: PORT
               valueFrom:
                 configMapKeyRef:
-                  name: ai-hub-apps-config
+                  name: ihub-apps-config
                   key: PORT
             - name: HOST
               valueFrom:
                 configMapKeyRef:
-                  name: ai-hub-apps-config
+                  name: ihub-apps-config
                   key: HOST
             - name: CORS_ORIGIN
               valueFrom:
                 configMapKeyRef:
-                  name: ai-hub-apps-config
+                  name: ihub-apps-config
                   key: CORS_ORIGIN
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: ai-hub-apps-secrets
+                  name: ihub-apps-secrets
                   key: JWT_SECRET
             - name: ADMIN_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: ai-hub-apps-secrets
+                  name: ihub-apps-secrets
                   key: ADMIN_SECRET
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: ai-hub-apps-secrets
+                  name: ihub-apps-secrets
                   key: OPENAI_API_KEY
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: ai-hub-apps-secrets
+                  name: ihub-apps-secrets
                   key: ANTHROPIC_API_KEY
             - name: GOOGLE_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: ai-hub-apps-secrets
+                  name: ihub-apps-secrets
                   key: GOOGLE_API_KEY
             - name: MISTRAL_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: ai-hub-apps-secrets
+                  name: ihub-apps-secrets
                   key: MISTRAL_API_KEY
           volumeMounts:
             - name: config-volume
@@ -369,19 +369,19 @@ spec:
       volumes:
         - name: config-volume
           persistentVolumeClaim:
-            claimName: ai-hub-apps-config-pvc
+            claimName: ihub-apps-config-pvc
         - name: data-volume
           persistentVolumeClaim:
-            claimName: ai-hub-apps-data-pvc
+            claimName: ihub-apps-data-pvc
         - name: uploads-volume
           persistentVolumeClaim:
-            claimName: ai-hub-apps-uploads-pvc
+            claimName: ihub-apps-uploads-pvc
         - name: logs-volume
           persistentVolumeClaim:
-            claimName: ai-hub-apps-logs-pvc
+            claimName: ihub-apps-logs-pvc
         - name: config-files
           configMap:
-            name: ai-hub-apps-files
+            name: ihub-apps-files
       restartPolicy: Always
       terminationGracePeriodSeconds: 30
 ```
@@ -393,10 +393,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: ai-hub-apps-service
-  namespace: ai-hub-apps
+  name: ihub-apps-service
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 spec:
   type: ClusterIP
@@ -406,7 +406,7 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 
 ---
@@ -414,10 +414,10 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: ai-hub-apps-ingress
-  namespace: ai-hub-apps
+  name: ihub-apps-ingress
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
   annotations:
     kubernetes.io/ingress.class: nginx
@@ -431,7 +431,7 @@ spec:
   tls:
     - hosts:
         - yourdomain.com
-      secretName: ai-hub-apps-tls
+      secretName: ihub-apps-tls
   rules:
     - host: yourdomain.com
       http:
@@ -440,7 +440,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: ai-hub-apps-service
+                name: ihub-apps-service
                 port:
                   number: 3000
 ```
@@ -452,16 +452,16 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: ai-hub-apps-hpa
-  namespace: ai-hub-apps
+  name: ihub-apps-hpa
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: ai-hub-apps
+    name: ihub-apps
   minReplicas: 3
   maxReplicas: 10
   metrics:
@@ -499,15 +499,15 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: ai-hub-apps-network-policy
-  namespace: ai-hub-apps
+  name: ihub-apps-network-policy
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
     app.kubernetes.io/instance: production
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: ai-hub-apps
+      app.kubernetes.io/name: ihub-apps
       app.kubernetes.io/instance: production
   policyTypes:
     - Ingress
@@ -548,14 +548,14 @@ spec:
 ```yaml
 # helm-chart/Chart.yaml
 apiVersion: v2
-name: ai-hub-apps
+name: ihub-apps
 description: A Helm chart for iHub Apps
 type: application
 version: 1.0.5
 appVersion: '1.0.5'
-home: https://github.com/yourusername/ai-hub-apps
+home: https://github.com/yourusername/ihub-apps
 sources:
-  - https://github.com/yourusername/ai-hub-apps
+  - https://github.com/yourusername/ihub-apps
 maintainers:
   - name: Your Name
     email: your.email@company.com
@@ -573,7 +573,7 @@ keywords:
 replicaCount: 3
 
 image:
-  repository: ai-hub-apps
+  repository: ihub-apps
   pullPolicy: Always
   tag: '1.0.5'
 
@@ -621,7 +621,7 @@ ingress:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: ai-hub-apps-tls
+    - secretName: ihub-apps-tls
       hosts:
         - yourdomain.com
 
@@ -691,37 +691,37 @@ networkPolicy:
 kubectl apply -f k8s/
 
 # Check deployment status
-kubectl get pods -n ai-hub-apps
-kubectl get services -n ai-hub-apps
-kubectl get ingress -n ai-hub-apps
+kubectl get pods -n ihub-apps
+kubectl get services -n ihub-apps
+kubectl get ingress -n ihub-apps
 
 # View logs
-kubectl logs -f deployment/ai-hub-apps -n ai-hub-apps
+kubectl logs -f deployment/ihub-apps -n ihub-apps
 
 # Scale deployment
-kubectl scale deployment ai-hub-apps --replicas=5 -n ai-hub-apps
+kubectl scale deployment ihub-apps --replicas=5 -n ihub-apps
 
 # Rolling update
-kubectl set image deployment/ai-hub-apps ai-hub-apps=ai-hub-apps:v1.0.6 -n ai-hub-apps
+kubectl set image deployment/ihub-apps ihub-apps=ihub-apps:v1.0.6 -n ihub-apps
 
 # Rollback
-kubectl rollout undo deployment/ai-hub-apps -n ai-hub-apps
+kubectl rollout undo deployment/ihub-apps -n ihub-apps
 ```
 
 ### Using Helm
 
 ```bash
 # Install chart
-helm install ai-hub-apps ./helm-chart -n ai-hub-apps --create-namespace
+helm install ihub-apps ./helm-chart -n ihub-apps --create-namespace
 
 # Upgrade
-helm upgrade ai-hub-apps ./helm-chart -n ai-hub-apps
+helm upgrade ihub-apps ./helm-chart -n ihub-apps
 
 # Rollback
-helm rollback ai-hub-apps 1 -n ai-hub-apps
+helm rollback ihub-apps 1 -n ihub-apps
 
 # Uninstall
-helm uninstall ai-hub-apps -n ai-hub-apps
+helm uninstall ihub-apps -n ihub-apps
 ```
 
 ## Monitoring and Observability
@@ -732,14 +732,14 @@ helm uninstall ai-hub-apps -n ai-hub-apps
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: ai-hub-apps-metrics
-  namespace: ai-hub-apps
+  name: ihub-apps-metrics
+  namespace: ihub-apps
   labels:
-    app.kubernetes.io/name: ai-hub-apps
+    app.kubernetes.io/name: ihub-apps
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: ai-hub-apps
+      app.kubernetes.io/name: ihub-apps
   endpoints:
     - port: http
       path: /api/metrics
@@ -757,7 +757,7 @@ spec:
         "title": "Request Rate",
         "targets": [
           {
-            "expr": "rate(http_requests_total{service=\"ai-hub-apps\"}[5m])"
+            "expr": "rate(http_requests_total{service=\"ihub-apps\"}[5m])"
           }
         ]
       },
@@ -765,7 +765,7 @@ spec:
         "title": "Response Time",
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{service=\"ai-hub-apps\"}[5m]))"
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{service=\"ihub-apps\"}[5m]))"
           }
         ]
       },
@@ -773,7 +773,7 @@ spec:
         "title": "Active Connections",
         "targets": [
           {
-            "expr": "nodejs_active_handles{service=\"ai-hub-apps\"}"
+            "expr": "nodejs_active_handles{service=\"ihub-apps\"}"
           }
         ]
       }
@@ -788,23 +788,23 @@ spec:
 
 ```bash
 # Check pod health
-kubectl describe pod <pod-name> -n ai-hub-apps
+kubectl describe pod <pod-name> -n ihub-apps
 
 # Access pod shell for debugging
-kubectl exec -it <pod-name> -n ai-hub-apps -- sh
+kubectl exec -it <pod-name> -n ihub-apps -- sh
 
 # Check resource usage
-kubectl top pods -n ai-hub-apps
+kubectl top pods -n ihub-apps
 
 # View events
-kubectl get events -n ai-hub-apps --sort-by=.metadata.creationTimestamp
+kubectl get events -n ihub-apps --sort-by=.metadata.creationTimestamp
 ```
 
 ### Backup and Recovery
 
 ```bash
 # Backup persistent volumes
-kubectl create job --from=cronjob/backup-job backup-manual-$(date +%Y%m%d%H%M%S) -n ai-hub-apps
+kubectl create job --from=cronjob/backup-job backup-manual-$(date +%Y%m%d%H%M%S) -n ihub-apps
 
 # Restore from backup
 kubectl apply -f backup-restore-job.yaml

@@ -23,7 +23,7 @@ Welcome to the iHub Apps development team! This guide will help you get up and r
 ```bash
 # 1. Clone and install dependencies
 git clone <repository>
-cd ai-hub-apps
+cd ihub-apps
 npm run install:all
 
 # 2. Start development environment
@@ -130,7 +130,7 @@ graph TB
 
 ```bash
 git clone <repository-url>
-cd ai-hub-apps
+cd ihub-apps
 
 # Install dependencies for all components
 npm run install:all
@@ -207,7 +207,7 @@ npm run docker:run:dev
 ### High-Level Structure
 
 ```
-ai-hub-apps/
+ihub-apps/
 ├── 📁 client/          # React frontend application
 ├── 📁 server/          # Node.js Express backend
 ├── 📁 contents/        # JSON configuration files
@@ -645,7 +645,7 @@ export const sourceHandlers = [
 1. **Enable Debug Logging**:
 ```bash
 # Set debug environment variable
-export DEBUG=ai-hub:*
+export DEBUG=ihub:*
 npm run server
 ```
 

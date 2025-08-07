@@ -18,7 +18,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
   const [recentPromptIds, setRecentPromptIds] = useState([]);
 
   // Create favorite prompts helpers
-  const { getFavorites: getFavoritePrompts } = createFavoriteItemHelpers('aihub_favorite_prompts');
+  const { getFavorites: getFavoritePrompts } = createFavoriteItemHelpers('ihub_favorite_prompts');
 
   useEffect(() => {
     if (isOpen) {

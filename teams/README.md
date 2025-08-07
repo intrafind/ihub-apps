@@ -15,8 +15,8 @@ This directory contains the Microsoft Teams app package for iHub Apps.
 1. Copy `manifest.json` to `manifest.configured.json`
 2. Replace the following placeholders in `manifest.configured.json`:
    - `{{TEAMS_APP_ID}}`: Generate a new GUID for your Teams app
-   - `{{APP_URL}}`: Your iHub Apps URL (e.g., https://ai-hub.company.com)
-   - `{{VALID_DOMAIN}}`: Your domain without protocol (e.g., ai-hub.company.com)
+   - `{{APP_URL}}`: Your iHub Apps URL (e.g., https://ihub.company.com)
+   - `{{VALID_DOMAIN}}`: Your domain without protocol (e.g., ihub.company.com)
    - `{{AAD_CLIENT_ID}}`: Your Azure AD app client ID
 
 3. Add icon files:
@@ -31,7 +31,7 @@ This directory contains the Microsoft Teams app package for iHub Apps.
    - `outline.png`
 
 ```bash
-zip -r ai-hub-apps-teams.zip manifest.json color.png outline.png
+zip -r ihub-apps-teams.zip manifest.json color.png outline.png
 ```
 
 ### 4. Azure AD Configuration
@@ -70,7 +70,7 @@ Add Teams authentication to your `platform.json`:
 ### 6. Upload to Teams
 
 1. In Teams Admin Center or Teams client
-2. Upload the `ai-hub-apps-teams.zip` package
+2. Upload the `ihub-apps-teams.zip` package
 3. Install for your organization or specific users
 
 ## Development

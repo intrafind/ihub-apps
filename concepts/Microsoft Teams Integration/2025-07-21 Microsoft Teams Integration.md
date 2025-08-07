@@ -22,7 +22,7 @@ Additionally, apps can be invoked from a message context menu, such as running t
 
 1. **Teams App**
    - The app manifest defines a **Bot** and a **Personal Tab**.
-   - The tab simply loads the hosted React client (`https://your.aihub.example/`).
+   - The tab simply loads the hosted React client (`https://your.ihub.example/`).
    - The bot exposes a message endpoint using the Microsoft Bot Framework.
 2. **Bot Service**
    - Implement a new `server/teamsBot.js` that uses `botbuilder` to handle

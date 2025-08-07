@@ -1,6 +1,6 @@
 const getCurrentUsername = () => {
   try {
-    return localStorage.getItem('aihub_username') || 'default';
+    return localStorage.getItem('ihub_username') || 'default';
   } catch (err) {
     console.error('Error accessing localStorage for username:', err);
     return 'default';

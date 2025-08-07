@@ -162,7 +162,7 @@ const handleEditorDidMount = (editor, monaco) => {
   monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
     validate: true,
     schemas: [{
-      uri: `http://ai-hub-apps.local/${entityType}-schema.json`,
+      uri: `http://ihub-apps.local/${entityType}-schema.json`,
       fileMatch: ['*'],
       schema: getSchemaForEntityType(entityType)
     }]

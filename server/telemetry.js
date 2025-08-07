@@ -49,7 +49,7 @@ export async function initTelemetry(config = {}) {
     : undefined;
 
   sdk = new NodeSDK({
-    resource: new Resource({ 'service.name': 'ai-hub-apps-server' }),
+    resource: new Resource({ 'service.name': 'ihub-apps-server' }),
     traceExporter: config.traces ? new ConsoleSpanExporter() : undefined,
     instrumentations: config.traces ? [getNodeAutoInstrumentations()] : [],
     metricReader
@@ -60,7 +60,7 @@ export async function initTelemetry(config = {}) {
   if (config.metrics?.enabled === true) {
     tokenUsageCounter = sdk
       .getMeterProvider()
-      .getMeter('ai-hub-apps')
+      .getMeter('ihub-apps')
       .createCounter('token_usage_total', {
         description: 'Total number of tokens processed'
       });
@@ -68,13 +68,13 @@ export async function initTelemetry(config = {}) {
 
   if (config.logs?.enabled === true) {
     const loggerProvider = new LoggerProvider({
-      resource: new Resource({ 'service.name': 'ai-hub-apps-server' })
+      resource: new Resource({ 'service.name': 'ihub-apps-server' })
     });
     loggerProvider.addLogRecordProcessor(
       new SimpleLogRecordProcessor(new ConsoleLogRecordExporter())
     );
     loggerProvider.register();
-    logger = logs.getLogger('ai-hub-apps');
+    logger = logs.getLogger('ihub-apps');
     interceptConsole();
   }
 }

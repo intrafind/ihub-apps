@@ -95,7 +95,7 @@ Add a `proxyAuth` section to `platform.json`:
       {
         "header": "Authorization",
         "issuer": "https://login.example.com/",
-        "audience": "ai-hub-apps",
+        "audience": "ihub-apps",
         "jwkUrl": "https://login.example.com/.well-known/jwks.json"
       }
     ]
