@@ -1313,26 +1313,45 @@ Comprehensive documentation is available in the `/docs` directory and includes:
 
 ### Core Documentation
 
+- [Complete Documentation Portal](docs/README.md) - Full documentation index
 - [Getting Started Guide](docs/GETTING_STARTED.md) - Quick setup and first steps
 - [Installation Guide](docs/INSTALLATION.md) - Detailed installation instructions
 - [User Guide](docs/user-guide.md) - End-user documentation
-- [Server Configuration](docs/server-config.md) - Server setup and tuning
+- [Architecture Overview](docs/architecture.md) - System architecture and components
+- [Architecture Diagrams](docs/diagrams.md) - Visual system documentation
 
-### Feature Documentation
+### Configuration & Setup
+
+- [Server Configuration](docs/server-config.md) - Server setup and tuning
+- [Configuration Validation](docs/configuration-validation.md) - Config troubleshooting
+- [Apps Configuration](docs/apps.md) - Application setup
+- [Models](docs/models.md) - LLM configuration
+- [Platform Configuration](docs/platform.md) - Core platform settings
+
+### Security & Authentication
+
+- [Security Guide](docs/security.md) - Comprehensive security implementation
+- [External Authentication](docs/external-authentication.md) - Security and user management
+- [OIDC Authentication](docs/oidc-authentication.md) - Enterprise SSO setup
+- [JWT Authentication](docs/jwt-authentication.md) - Token-based authentication
+- [SSL Certificates](docs/ssl-certificates.md) - SSL/TLS configuration
+
+### Features & Integration
 
 - [Sources System](docs/sources.md) - Knowledge source integration
-- [Authentication](docs/external-authentication.md) - Security and user management
 - [Web Tools](docs/web-tools.md) - Web search and content extraction
 - [File Upload](docs/file-upload-feature.md) - File processing capabilities
 - [Tools System](docs/tools.md) - AI tool integration
-- [Models](docs/models.md) - LLM configuration
-- [Apps Configuration](docs/apps.md) - Application setup
-
-### Integration Guides
-
 - [iFinder Integration](docs/iFinder-Integration.md) - Enterprise document management
-- [OIDC Authentication](docs/oidc-authentication.md) - Enterprise SSO setup
-- [JWT Authentication](docs/jwt-authentication.md) - Token-based authentication
+- [React Components](docs/react-component-feature.md) - Dynamic page rendering
 - [Electron App](docs/electron-app.md) - Desktop application
 
-The documentation is also available as a rendered mdBook at `/help` when running the application.
+### Development & Deployment
+
+- [Developer Onboarding](docs/developer-onboarding.md) - Complete development setup
+- [Docker Quick Reference](docs/DOCKER-QUICK-REFERENCE.md) - Fast Docker commands
+- [Troubleshooting](docs/troubleshooting.md) - Problem diagnosis and solutions
+
+### Additional Resources
+
+The documentation is also available as a rendered mdBook at `/help` when running the application, providing an interactive browsing experience with search functionality.

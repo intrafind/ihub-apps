@@ -525,3 +525,18 @@ Access statistics via `/api/admin/sources/_stats` endpoint or admin interface.
 ---
 
 For additional support, consult the server logs or contact your system administrator. The sources system is designed to be robust and self-healing, with comprehensive error handling and recovery mechanisms.
+
+---
+
+## Related Documentation
+
+For comprehensive guidance on related topics:
+
+- [App Configuration](apps.md) - How to configure apps to use sources
+- [Tools System](tools.md) - Understanding tool-mode sources
+- [Content Management](content-management.md) - Managing content files and pages
+- [iFinder Integration](iFinder-Integration.md) - Enterprise document management setup
+- [Server Configuration](server-config.md) - Source system configuration options
+- [Troubleshooting](troubleshooting.md) - Common source-related issues
+- [Platform Configuration](platform.md) - Core platform settings
+- [Security Guide](security.md) - Securing source endpoints and content

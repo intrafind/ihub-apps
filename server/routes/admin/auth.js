@@ -7,7 +7,153 @@ import { adminAuth, isAdminAuthRequired, hashPassword } from '../../middleware/a
 import { hashPasswordWithUserId } from '../../middleware/localAuth.js';
 import { v4 as uuidv4 } from 'uuid';
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     AuthStatus:
+ *       type: object
+ *       description: Authentication status information
+ *       properties:
+ *         authRequired:
+ *           type: boolean
+ *           description: Whether admin authentication is required
+ *           example: true
+ *         authenticated:
+ *           type: boolean
+ *           description: Whether the current request is authenticated
+ *           example: false
+ *
+ *     User:
+ *       type: object
+ *       description: User account information
+ *       required:
+ *         - id
+ *         - username
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: Unique user identifier
+ *           example: "user_a1b2c3d4_e5f6_7890_abcd_ef1234567890"
+ *         username:
+ *           type: string
+ *           description: User's login username
+ *           example: "john.doe"
+ *         email:
+ *           type: string
+ *           description: User's email address
+ *           example: "john.doe@company.com"
+ *         name:
+ *           type: string
+ *           description: User's display name
+ *           example: "John Doe"
+ *         internalGroups:
+ *           type: array
+ *           description: List of internal groups the user belongs to
+ *           items:
+ *             type: string
+ *           example: ["developers", "users"]
+ *         active:
+ *           type: boolean
+ *           description: Whether the user account is active
+ *           example: true
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *           description: Account creation timestamp
+ *           example: "2024-01-15T10:30:00Z"
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *           description: Last update timestamp
+ *           example: "2024-01-15T15:45:00Z"
+ *
+ *     UsersData:
+ *       type: object
+ *       description: Complete users database structure
+ *       properties:
+ *         users:
+ *           type: object
+ *           description: Map of user ID to user data
+ *           additionalProperties:
+ *             $ref: '#/components/schemas/User'
+ *         metadata:
+ *           type: object
+ *           description: Database metadata
+ *           properties:
+ *             version:
+ *               type: string
+ *               example: "2.0.0"
+ *             description:
+ *               type: string
+ *               example: "Local user database for iHub Apps"
+ *             lastUpdated:
+ *               type: string
+ *               format: date-time
+ *
+ *     UserOperation:
+ *       type: object
+ *       description: Result of a user operation
+ *       properties:
+ *         message:
+ *           type: string
+ *           description: Operation result message
+ *         user:
+ *           $ref: '#/components/schemas/User'
+ *           description: The affected user (excludes password hash)
+ *
+ *     AuthError:
+ *       type: object
+ *       properties:
+ *         error:
+ *           type: string
+ *           description: Error message
+ */
+
 export default function registerAdminAuthRoutes(app) {
+  /**
+   * @swagger
+   * /api/admin/auth/status:
+   *   get:
+   *     summary: Check admin authentication status
+   *     description: |
+   *       Determines whether admin authentication is required and if the current
+   *       request is properly authenticated. This endpoint is used by admin UI
+   *       to determine authentication state.
+   *
+   *       **Authentication Logic:**
+   *       - Checks if admin auth is required based on current user context
+   *       - Verifies Bearer token presence for authentication status
+   *       - No admin authentication required for this status check endpoint
+   *     tags:
+   *       - Admin
+   *       - Authentication
+   *     responses:
+   *       200:
+   *         description: Authentication status successfully retrieved
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AuthStatus'
+   *             examples:
+   *               authRequired:
+   *                 summary: Authentication required, not authenticated
+   *                 value:
+   *                   authRequired: true
+   *                   authenticated: false
+   *               authenticated:
+   *                 summary: Authentication required and authenticated
+   *                 value:
+   *                   authRequired: true
+   *                   authenticated: true
+   *               noAuthRequired:
+   *                 summary: No authentication required
+   *                 value:
+   *                   authRequired: false
+   *                   authenticated: true
+   *       500:
+   *         description: Failed to check authentication status
+   */
   app.get('/api/admin/auth/status', async (req, res) => {
     try {
       // Check if admin auth is required considering current user authentication
@@ -24,6 +170,40 @@ export default function registerAdminAuthRoutes(app) {
     }
   });
 
+  /**
+   * @swagger
+   * /api/admin/auth/test:
+   *   get:
+   *     summary: Test admin authentication
+   *     description: |
+   *       Tests if admin authentication is working correctly.
+   *       This endpoint requires valid admin authentication and returns
+   *       a success message if authentication passes.
+   *     tags:
+   *       - Admin
+   *       - Authentication
+   *     security:
+   *       - adminAuth: []
+   *     responses:
+   *       200:
+   *         description: Authentication test successful
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 message:
+   *                   type: string
+   *                 authenticated:
+   *                   type: boolean
+   *             example:
+   *               message: "Admin authentication successful"
+   *               authenticated: true
+   *       401:
+   *         description: Authentication failed
+   *       500:
+   *         description: Failed to test authentication
+   */
   app.get('/api/admin/auth/test', adminAuth, async (req, res) => {
     try {
       res.json({ message: 'Admin authentication successful', authenticated: true });
@@ -33,6 +213,59 @@ export default function registerAdminAuthRoutes(app) {
     }
   });
 
+  /**
+   * @swagger
+   * /api/admin/auth/change-password:
+   *   post:
+   *     summary: Change admin password
+   *     description: |
+   *       Changes the admin password and encrypts it in the platform configuration.
+   *       The new password is hashed and stored securely, and the cache is refreshed.
+   *
+   *       **Security Features:**
+   *       - Password is hashed before storage
+   *       - Atomic write operations prevent corruption
+   *       - Cache automatically refreshed
+   *     tags:
+   *       - Admin
+   *       - Authentication
+   *       - Security
+   *     security:
+   *       - adminAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - newPassword
+   *             properties:
+   *               newPassword:
+   *                 type: string
+   *                 description: New admin password
+   *                 minLength: 1
+   *                 example: "newSecurePassword123"
+   *     responses:
+   *       200:
+   *         description: Password successfully changed
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 message:
+   *                   type: string
+   *                 encrypted:
+   *                   type: boolean
+   *             example:
+   *               message: "Admin password changed successfully"
+   *               encrypted: true
+   *       400:
+   *         description: Invalid password
+   *       500:
+   *         description: Failed to change password
+   */
   app.post('/api/admin/auth/change-password', adminAuth, async (req, res) => {
     try {
       const { newPassword } = req.body;
@@ -62,7 +295,28 @@ export default function registerAdminAuthRoutes(app) {
   // User Management Routes
 
   /**
-   * Get all users
+   * @swagger
+   * /api/admin/auth/users:
+   *   get:
+   *     summary: Get all user accounts
+   *     description: |
+   *       Retrieves all user accounts in the local user database.
+   *       Returns complete user data including metadata but excludes password hashes
+   *       for security reasons.
+   *     tags:
+   *       - Admin
+   *       - User Management
+   *     security:
+   *       - adminAuth: []
+   *     responses:
+   *       200:
+   *         description: Users successfully retrieved
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/UsersData'
+   *       500:
+   *         description: Failed to get users
    */
   app.get('/api/admin/auth/users', adminAuth, async (req, res) => {
     try {
@@ -86,7 +340,74 @@ export default function registerAdminAuthRoutes(app) {
   });
 
   /**
-   * Create a new user
+   * @swagger
+   * /api/admin/auth/users:
+   *   post:
+   *     summary: Create a new user account
+   *     description: |
+   *       Creates a new user account with username, password, and optional details.
+   *       Validates username uniqueness and password strength requirements.
+   *
+   *       **Validation Rules:**
+   *       - Username must be unique
+   *       - Password must be at least 6 characters
+   *       - User ID is automatically generated
+   *       - Password is hashed with user-specific salt
+   *     tags:
+   *       - Admin
+   *       - User Management
+   *     security:
+   *       - adminAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - username
+   *               - password
+   *             properties:
+   *               username:
+   *                 type: string
+   *                 description: Unique username for login
+   *                 example: "john.doe"
+   *               password:
+   *                 type: string
+   *                 description: User password (minimum 6 characters)
+   *                 minLength: 6
+   *                 example: "securePassword123"
+   *               email:
+   *                 type: string
+   *                 description: User email address
+   *                 example: "john.doe@company.com"
+   *               name:
+   *                 type: string
+   *                 description: Display name
+   *                 example: "John Doe"
+   *               internalGroups:
+   *                 type: array
+   *                 description: Internal groups to assign
+   *                 items:
+   *                   type: string
+   *                 example: ["users", "developers"]
+   *               active:
+   *                 type: boolean
+   *                 description: Whether account is active
+   *                 default: true
+   *     responses:
+   *       200:
+   *         description: User successfully created
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/UserOperation'
+   *       400:
+   *         description: Validation error
+   *       409:
+   *         description: Username already exists
+   *       500:
+   *         description: Failed to create user
    */
   app.post('/api/admin/auth/users', adminAuth, async (req, res) => {
     try {
@@ -163,7 +484,66 @@ export default function registerAdminAuthRoutes(app) {
   });
 
   /**
-   * Update a user
+   * @swagger
+   * /api/admin/auth/users/{userId}:
+   *   put:
+   *     summary: Update an existing user account
+   *     description: |
+   *       Updates an existing user account with new information.
+   *       Only provided fields are updated, others remain unchanged.
+   *       Password updates include strength validation and proper hashing.
+   *     tags:
+   *       - Admin
+   *       - User Management
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: userId
+   *         required: true
+   *         description: Unique user identifier
+   *         schema:
+   *           type: string
+   *           example: "user_a1b2c3d4_e5f6_7890_abcd_ef1234567890"
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               email:
+   *                 type: string
+   *               name:
+   *                 type: string
+   *               password:
+   *                 type: string
+   *                 minLength: 6
+   *                 description: New password (minimum 6 characters)
+   *               internalGroups:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *               active:
+   *                 type: boolean
+   *           example:
+   *             email: "john.doe.updated@company.com"
+   *             name: "John Doe Jr."
+   *             internalGroups: ["users", "managers"]
+   *             active: true
+   *     responses:
+   *       200:
+   *         description: User successfully updated
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/UserOperation'
+   *       400:
+   *         description: Validation error (e.g., password too short)
+   *       404:
+   *         description: User not found
+   *       500:
+   *         description: Failed to update user
    */
   app.put('/api/admin/auth/users/:userId', adminAuth, async (req, res) => {
     try {
@@ -226,7 +606,46 @@ export default function registerAdminAuthRoutes(app) {
   });
 
   /**
-   * Delete a user
+   * @swagger
+   * /api/admin/auth/users/{userId}:
+   *   delete:
+   *     summary: Delete a user account
+   *     description: |
+   *       Permanently deletes a user account from the system.
+   *       This operation cannot be undone. The user will be immediately
+   *       removed from the database and cache.
+   *
+   *       **Warning:** This is a destructive operation that cannot be reversed.
+   *       Consider deactivating the user instead if the account might be needed later.
+   *     tags:
+   *       - Admin
+   *       - User Management
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: userId
+   *         required: true
+   *         description: Unique user identifier
+   *         schema:
+   *           type: string
+   *           example: "user_a1b2c3d4_e5f6_7890_abcd_ef1234567890"
+   *     responses:
+   *       200:
+   *         description: User successfully deleted
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 message:
+   *                   type: string
+   *             example:
+   *               message: "User deleted successfully"
+   *       404:
+   *         description: User not found
+   *       500:
+   *         description: Failed to delete user
    */
   app.delete('/api/admin/auth/users/:userId', adminAuth, async (req, res) => {
     try {

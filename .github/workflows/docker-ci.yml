@@ -87,6 +87,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js (for version sync)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies for version sync
+        run: npm ci
+
+      - name: Sync version with release tag
+        if: github.event_name == 'release'
+        run: |
+          RELEASE_TAG=${GITHUB_REF#refs/tags/}
+          echo "Syncing version with release tag: $RELEASE_TAG"
+          node scripts/sync-release-version.js $RELEASE_TAG
+        shell: bash
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:

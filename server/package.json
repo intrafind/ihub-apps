@@ -1,6 +1,6 @@
 {
   "name": "ai-hub-apps-server",
-  "version": "1.0.0",
+  "version": "3.3.0",
   "description": "iHub Apps Applications Server",
   "type": "module",
   "main": "server.js",

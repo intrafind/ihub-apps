@@ -1334,3 +1334,18 @@ grep -A 10 -B 10 "error-message" server/logs/server.log
 6. **Workarounds**: Any temporary solutions discovered
 
 This troubleshooting guide covers the most common issues encountered with iHub Apps. Regular updates based on user feedback and new deployment scenarios will keep it current and useful for the community.
+
+---
+
+## Related Documentation
+
+For more specific guidance, consult these related documentation files:
+
+- [Installation Guide](INSTALLATION.md) - Detailed installation procedures
+- [Docker Quick Reference](DOCKER-QUICK-REFERENCE.md) - Docker-specific troubleshooting
+- [External Authentication](external-authentication.md) - Authentication setup and troubleshooting
+- [Security Guide](security.md) - Security configuration and common issues
+- [Server Configuration](server-config.md) - Production server setup
+- [Configuration Validation](configuration-validation.md) - Config file validation
+- [Developer Onboarding](developer-onboarding.md) - Development environment setup
+- [Architecture Overview](architecture.md) - System architecture understanding

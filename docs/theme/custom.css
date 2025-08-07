@@ -1,0 +1,22 @@
+/* Custom styling for enhanced documentation */
+
+/* Add some visual enhancements for version display in README */
+h1 + p {
+    padding: 10px 15px;
+    background: var(--quote-bg);
+    border-left: 4px solid var(--quote-border);
+    margin: 20px 0;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* Style version badges in content */
+strong:contains("Version") {
+    display: inline-block;
+    padding: 3px 8px;
+    background: var(--theme-hover);
+    border-radius: 12px;
+    font-size: 12px;
+    color: var(--fg);
+}

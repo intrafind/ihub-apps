@@ -918,3 +918,19 @@ timeout 15s npm run dev || echo "Development environment startup check completed
 ```
 
 This prevents deployment of code with import errors, missing dependencies, or runtime issues.
+
+---
+
+## Related Documentation
+
+For deeper understanding of specific architectural components:
+
+- [Architecture Diagrams](diagrams.md) - Visual system representations and data flows
+- [Developer Onboarding](developer-onboarding.md) - Development environment and patterns
+- [Sources System](sources.md) - Knowledge source integration architecture
+- [External Authentication](external-authentication.md) - Authentication system architecture
+- [Security Guide](security.md) - Security architecture and implementation
+- [Platform Configuration](platform.md) - Configuration system architecture
+- [Server Configuration](server-config.md) - Production deployment considerations
+- [Troubleshooting](troubleshooting.md) - Common architectural issues and solutions
+- [Configuration Validation](configuration-validation.md) - Config system validation patterns

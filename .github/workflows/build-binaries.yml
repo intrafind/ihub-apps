@@ -122,16 +122,11 @@ jobs:
           echo "VERSIONED_NAME=ai-hub-apps-${{ env.VERSION }}-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
         shell: bash
 
-      - name: Update package.json version if needed
+      - name: Sync package.json version with release tag
         run: |
-          # If VERSION is set and doesn't match package.json, update it
           if [ -n "${{ env.VERSION }}" ]; then
-            PKG_VERSION=$(node -p "require('./package.json').version")
-            VERSION_NO_V="${VERSION#v}"
-            if [ "$PKG_VERSION" != "$VERSION_NO_V" ]; then
-              echo "Updating package.json version from $PKG_VERSION to $VERSION_NO_V"
-              npm version $VERSION_NO_V --no-git-tag-version
-            fi
+            echo "Syncing version with release tag: ${{ env.VERSION }}"
+            node scripts/sync-release-version.js ${{ env.VERSION }}
           fi
         shell: bash
 
@@ -195,9 +190,53 @@ jobs:
             ${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz
             ${{ env.VERSIONED_ARCHIVE_NAME }}.zip
 
+  # Commit version changes back to repository
+  commit-version:
+    name: Commit Version Changes
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set version for commit job
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          else
+            echo "VERSION=${{ github.event.inputs.release_tag }}" >> $GITHUB_ENV
+          fi
+        shell: bash
+
+      - name: Sync and commit version changes
+        run: |
+          echo "Syncing and committing version changes for ${{ env.VERSION }}"
+          node scripts/sync-release-version.js ${{ env.VERSION }} --commit
+          
+          # Push changes back to the repository
+          git push origin HEAD:${{ github.ref_name }} || echo "No changes to push or push failed"
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   release:
     name: Attach to Release
-    needs: build
+    needs: [build, commit-version]
     runs-on: ubuntu-latest
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     permissions:
