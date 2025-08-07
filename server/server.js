@@ -22,6 +22,7 @@ import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
 import registerSwaggerRoutes from './routes/swagger.js';
+import jiraRoutes from './routes/integrations/jira.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import { setupMiddleware } from './middleware/setup.js';
@@ -179,6 +180,9 @@ if (cluster.isPrimary && workerCount > 1) {
   await registerAdminRoutes(app, basePath);
   registerShortLinkRoutes(app, basePath);
   await registerSwaggerRoutes(app, basePath);
+
+  // --- Integration Routes ---
+  app.use('/api/integrations/jira', jiraRoutes);
 
   // --- Session Management handled in sessionRoutes ---
 
