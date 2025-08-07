@@ -1,4 +1,4 @@
-# LLM Guidelines for AI Hub Apps Project
+# LLM Guidelines for iHub Apps Project
 
 ## Core Principles
 

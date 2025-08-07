@@ -1,4 +1,4 @@
-# Docker CI/CD Pipeline for AI Hub Apps
+# Docker CI/CD Pipeline for iHub Apps
 # Builds and publishes Docker images to GitHub Container Registry
 
 name: Docker CI/CD
@@ -112,8 +112,8 @@ jobs:
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
           labels: |
-            org.opencontainers.image.title=AI Hub Apps
-            org.opencontainers.image.description=AI Hub Applications Platform
+            org.opencontainers.image.title=iHub Apps
+            org.opencontainers.image.description=iHub Applications Platform
             org.opencontainers.image.vendor=IntraFind Software AG
             org.opencontainers.image.licenses=MIT
 

@@ -104,7 +104,7 @@ const ContentEditor = ({ config, onUpdate }) => {
                     d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9"
                   />
                 </svg>
-                <span>{config.title?.en || 'AI Hub Apps'}</span>
+                <span>{config.title?.en || 'iHub Apps'}</span>
               </div>
             </div>
           </div>

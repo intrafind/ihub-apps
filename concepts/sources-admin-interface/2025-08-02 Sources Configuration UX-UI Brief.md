@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The Sources Configuration admin interface introduces comprehensive source management capabilities to AI Hub Apps, enabling administrators to manage filesystem, URL, and iFinder sources with full testing, caching, and integration features. The design follows established AI Hub Apps admin patterns while introducing specialized components for source configuration, testing, and app integration.
+The Sources Configuration admin interface introduces comprehensive source management capabilities to iHub Apps, enabling administrators to manage filesystem, URL, and iFinder sources with full testing, caching, and integration features. The design follows established iHub Apps admin patterns while introducing specialized components for source configuration, testing, and app integration.
 
 ## Component Hierarchy
 
@@ -165,7 +165,7 @@ graph TD
 
 ### Spacing
 
-Following AI Hub Apps 4px grid system:
+Following iHub Apps 4px grid system:
 
 - **Component padding**: 16px (4 units)
 - **Section margins**: 24px (6 units)
@@ -419,4 +419,4 @@ Following existing Icon component patterns:
 3. **Cache endpoints**: Cache management API integration
 4. **Error handling**: Proper API error response handling
 
-This comprehensive UI/UX brief provides the foundation for implementing a professional, accessible, and user-friendly Sources Configuration interface that seamlessly integrates with the existing AI Hub Apps admin experience while providing powerful source management capabilities.
+This comprehensive UI/UX brief provides the foundation for implementing a professional, accessible, and user-friendly Sources Configuration interface that seamlessly integrates with the existing iHub Apps admin experience while providing powerful source management capabilities.

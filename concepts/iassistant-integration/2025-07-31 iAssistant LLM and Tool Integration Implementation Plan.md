@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-This document provides a comprehensive implementation plan for integrating iFinder's iAssistant as both an LLM adapter and a tool within the AI Hub Apps architecture. The integration leverages existing iFinder service infrastructure while addressing the unique characteristics of iAssistant (non-conversational, single-turn requests).
+This document provides a comprehensive implementation plan for integrating iFinder's iAssistant as both an LLM adapter and a tool within the iHub Apps architecture. The integration leverages existing iFinder service infrastructure while addressing the unique characteristics of iAssistant (non-conversational, single-turn requests).
 
 ## Business Value and Objectives
 
@@ -29,7 +29,7 @@ This document provides a comprehensive implementation plan for integrating iFind
 
 ### Existing LLM Adapter Pattern
 
-The AI Hub Apps uses a standardized adapter pattern for LLM integration:
+The iHub Apps uses a standardized adapter pattern for LLM integration:
 
 **Base Structure:**
 
@@ -157,7 +157,7 @@ class IAssistantAdapterClass extends BaseAdapter {
    */
   processResponseBuffer(data) {
     // iAssistant responses come in RAG API format
-    // Convert to standardized format expected by AI Hub Apps
+    // Convert to standardized format expected by iHub Apps
     const result = {
       content: [],
       tool_calls: [],
@@ -449,7 +449,7 @@ import iFinderService from '../services/integrations/iFinderService.js';
 import { createRAGApi } from '../temp/rag-api.js';
 
 /**
- * iAssistant Tool for AI Hub Apps
+ * iAssistant Tool for iHub Apps
  * Allows other LLMs to ask questions to iAssistant and get enterprise knowledge responses
  */
 
@@ -1057,7 +1057,7 @@ IFINDER_TIMEOUT=30000
 
 - iFinder API access with appropriate search profiles configured
 - Private key for JWT signing (RS256)
-- Network connectivity from AI Hub Apps to iFinder/iAssistant APIs
+- Network connectivity from iHub Apps to iFinder/iAssistant APIs
 
 ### Deployment Steps
 
@@ -1130,7 +1130,7 @@ IFINDER_TIMEOUT=30000
 
 ## Conclusion
 
-This implementation plan provides a comprehensive approach to integrating iAssistant as both an LLM adapter and a tool within AI Hub Apps. The design leverages existing infrastructure while accommodating iAssistant's unique characteristics, ensuring a seamless user experience and maintainable codebase.
+This implementation plan provides a comprehensive approach to integrating iAssistant as both an LLM adapter and a tool within iHub Apps. The design leverages existing infrastructure while accommodating iAssistant's unique characteristics, ensuring a seamless user experience and maintainable codebase.
 
 The phased approach allows for incremental deployment and testing, minimizing risk while delivering immediate value to users seeking enterprise knowledge access. The robust error handling, security considerations, and performance optimizations ensure the integration will scale effectively in production environments.
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide documents the test-driven development (TDD) approach for integrating iAssistant into AI Hub Apps as both an LLM adapter and a tool. By writing tests first, we ensure our implementation meets all requirements and handles edge cases properly.
+This guide documents the test-driven development (TDD) approach for integrating iAssistant into iHub Apps as both an LLM adapter and a tool. By writing tests first, we ensure our implementation meets all requirements and handles edge cases properly.
 
 ## Key Design Decisions
 

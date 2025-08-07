@@ -346,7 +346,7 @@ const AdminAppEditPage = () => {
             </h1>
             <p className="mt-2 text-sm text-gray-700">
               {appId === 'new'
-                ? t('admin.apps.edit.subtitleNew', 'Configure a new AI Hub application')
+                ? t('admin.apps.edit.subtitleNew', 'Configure a new iHub application')
                 : t('admin.apps.edit.subtitleEdit', 'Modify app settings and configuration')}
             </p>
           </div>
@@ -405,7 +405,7 @@ const AdminAppEditPage = () => {
               appId === 'new'
                 ? t(
                     'admin.apps.edit.configureNewAppDesc',
-                    'Set up the configuration for your new AI Hub app using the form interface or JSON editor.'
+                    'Set up the configuration for your new iHub app using the form interface or JSON editor.'
                   )
                 : t(
                     'admin.apps.edit.editAppConfigDesc',

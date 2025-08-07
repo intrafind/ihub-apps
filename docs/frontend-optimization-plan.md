@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides a detailed step-by-step implementation plan for optimizing frontend chat performance in AI Hub Apps. The optimization addresses performance bottlenecks in longer chat conversations through IndexedDB storage, debounced writes, message virtualization, and enhanced resource management.
+This document provides a detailed step-by-step implementation plan for optimizing frontend chat performance in iHub Apps. The optimization addresses performance bottlenecks in longer chat conversations through IndexedDB storage, debounced writes, message virtualization, and enhanced resource management.
 
 ## Current Architecture Analysis
 

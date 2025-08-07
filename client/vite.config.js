@@ -14,6 +14,14 @@ export default defineConfig({
       '/s/': {
         target: 'http://localhost:3000',
         changeOrigin: true
+      },
+      '/docs': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/uploads': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
       }
     }
   }

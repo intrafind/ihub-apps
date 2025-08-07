@@ -53,7 +53,7 @@
   },
   "metadata": {
     "version": "2.0.0",
-    "description": "Local user database for AI Hub Apps - Updated with user-specific password hashing",
+    "description": "Local user database for iHub Apps - Updated with user-specific password hashing",
     "lastUpdated": "2025-08-04T14:18:06.307Z",
     "migrationDate": "2025-08-01T21:02:54.174Z",
     "migratedFrom": "2.0.0"

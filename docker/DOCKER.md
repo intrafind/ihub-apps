@@ -1,6 +1,6 @@
-# Docker Support for AI Hub Apps
+# Docker Support for iHub Apps
 
-This document provides comprehensive guidance for running AI Hub Apps in Docker containers for both development and production environments.
+This document provides comprehensive guidance for running iHub Apps in Docker containers for both development and production environments.
 
 ## Quick Start
 

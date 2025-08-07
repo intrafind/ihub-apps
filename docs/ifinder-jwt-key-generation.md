@@ -6,7 +6,7 @@ This guide provides step-by-step instructions for generating RSA public-private 
 
 iFinder integration requires JWT tokens signed with RS256 (RSA with SHA-256) for secure authentication. This process involves:
 
-1. **Generating a private key** for signing JWT tokens in AI Hub Apps
+1. **Generating a private key** for signing JWT tokens in iHub Apps
 2. **Extracting the public key** for verification in iFinder
 3. **Configuring both systems** to use the key pair
 4. **Testing the integration** to ensure proper authentication
@@ -15,13 +15,13 @@ iFinder integration requires JWT tokens signed with RS256 (RSA with SHA-256) for
 
 - OpenSSL installed on your system
 - Access to iFinder administration interface
-- Administrative access to AI Hub Apps configuration
+- Administrative access to iHub Apps configuration
 
 ## Step-by-Step Key Generation
 
 ### 1. Generate RSA Private Key
 
-Create a 2048-bit RSA private key that will be used by AI Hub Apps to sign JWT tokens:
+Create a 2048-bit RSA private key that will be used by iHub Apps to sign JWT tokens:
 
 ```bash
 openssl genpkey -algorithm RSA -out ifinder_private.pem -pkeyopt rsa_keygen_bits:2048
@@ -77,11 +77,11 @@ head -1 ifinder_private.pem
 head -1 ifinder_public.pem
 ```
 
-## AI Hub Apps Configuration
+## iHub Apps Configuration
 
 ### Environment Variable Configuration
 
-Configure AI Hub Apps to use the private key for JWT signing:
+Configure iHub Apps to use the private key for JWT signing:
 
 ```bash
 # Set the private key content as environment variable
@@ -271,9 +271,9 @@ You should see "Verified OK" if the key pair is working correctly.
 
 ### 2. Test JWT Generation
 
-Use AI Hub Apps' iFinder integration to verify JWT generation:
+Use iHub Apps' iFinder integration to verify JWT generation:
 
-1. Authenticate as a user in AI Hub Apps
+1. Authenticate as a user in iHub Apps
 2. Try using any iFinder tool (e.g., search)
 3. Check server logs for JWT generation messages
 4. Verify iFinder receives and validates the JWT token
@@ -331,12 +331,12 @@ INFO: User granted access to search profile: default
 **Solutions**:
 
 1. Increase `tokenExpirationSeconds` in configuration
-2. Synchronize clocks between AI Hub Apps and iFinder servers
+2. Synchronize clocks between iHub Apps and iFinder servers
 3. Check JWT `exp` claim value
 
 ### Debug Mode
 
-Enable detailed JWT debugging in AI Hub Apps:
+Enable detailed JWT debugging in iHub Apps:
 
 ```bash
 DEBUG=jwt:*,ifinder:* npm start
@@ -355,7 +355,7 @@ logging:
 
 Manually verify JWT tokens using online tools (development only):
 
-1. Copy JWT token from AI Hub Apps logs
+1. Copy JWT token from iHub Apps logs
 2. Paste into [jwt.io](https://jwt.io)
 3. Upload public key for verification
 4. Check claims and signature validation
@@ -366,7 +366,7 @@ Manually verify JWT tokens using online tools (development only):
 
 ### Custom JWT Claims
 
-Configure custom claims in AI Hub Apps platform configuration:
+Configure custom claims in iHub Apps platform configuration:
 
 ```json
 {
@@ -395,7 +395,7 @@ spring:
 
 ### High Availability Setup
 
-For production deployments with multiple AI Hub Apps instances:
+For production deployments with multiple iHub Apps instances:
 
 1. Use shared key storage (e.g., HashiCorp Vault, Azure Key Vault)
 2. Ensure all instances use the same private key
@@ -415,7 +415,7 @@ For issues with JWT key generation or iFinder integration:
 1. **Check Prerequisites**: Verify OpenSSL version and iFinder access
 2. **Review Configurations**: Double-check all configuration files
 3. **Test Step by Step**: Follow each section in order
-4. **Check Logs**: Review both AI Hub Apps and iFinder logs
+4. **Check Logs**: Review both iHub Apps and iFinder logs
 5. **Contact Support**: Provide configuration details (redact sensitive information)
 
 ---

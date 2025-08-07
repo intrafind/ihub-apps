@@ -1,10 +1,10 @@
 # Microsoft Teams Integration - Deployment Guide
 
-This guide walks you through deploying AI Hub Apps as a Microsoft Teams tab application with Single Sign-On (SSO) authentication.
+This guide walks you through deploying iHub Apps as a Microsoft Teams tab application with Single Sign-On (SSO) authentication.
 
 ## Prerequisites
 
-- AI Hub Apps instance running on HTTPS (Teams requires secure connections)
+- iHub Apps instance running on HTTPS (Teams requires secure connections)
 - Azure AD tenant with admin privileges
 - Teams admin access to upload custom applications
 - Node.js installed for building the Teams package
@@ -17,7 +17,7 @@ This guide walks you through deploying AI Hub Apps as a Microsoft Teams tab appl
 2. Navigate to **Azure Active Directory** > **App registrations**
 3. Click **New registration**
 4. Configure:
-   - **Name**: `AI Hub Apps Teams Integration`
+   - **Name**: `iHub Apps Teams Integration`
    - **Supported account types**: `Accounts in this organizational directory only`
    - **Redirect URI**: Leave empty for now
 5. Click **Register**
@@ -38,8 +38,8 @@ This guide walks you through deploying AI Hub Apps as a Microsoft Teams tab appl
 3. Set to: `api://your-domain.com/{client-id}`
 4. Click **Add a scope**:
    - **Scope name**: `access_as_user`
-   - **Admin consent display name**: `Access AI Hub Apps as the user`
-   - **Admin consent description**: `Allow Teams to access AI Hub Apps on behalf of the user`
+   - **Admin consent display name**: `Access iHub Apps as the user`
+   - **Admin consent description**: `Allow Teams to access iHub Apps on behalf of the user`
    - **State**: `Enabled`
 5. Click **Add scope**
 
@@ -58,12 +58,12 @@ This guide walks you through deploying AI Hub Apps as a Microsoft Teams tab appl
 
 1. Go to **Certificates & secrets**
 2. Click **New client secret**
-3. Add description: `AI Hub Apps Teams Integration`
+3. Add description: `iHub Apps Teams Integration`
 4. Set expiration as needed
 5. Click **Add**
 6. **Copy the secret value** - you won't see it again
 
-## Step 2: Configure AI Hub Apps
+## Step 2: Configure iHub Apps
 
 ### 2.1 Update Platform Configuration
 
@@ -184,7 +184,7 @@ cd teams/
 Follow the prompts to enter:
 
 - Teams App ID (generate a new GUID)
-- Your AI Hub Apps URL
+- Your iHub Apps URL
 - Azure AD Client ID
 
 The script will create `teams/build/ai-hub-apps-teams.zip`
@@ -196,7 +196,7 @@ If the script doesn't work, create manually:
 1. Copy `manifest.json` to `manifest.configured.json`
 2. Replace placeholders with your values:
    - `{{TEAMS_APP_ID}}`: New GUID (use online generator)
-   - `{{APP_URL}}`: Your AI Hub Apps URL
+   - `{{APP_URL}}`: Your iHub Apps URL
    - `{{VALID_DOMAIN}}`: Your domain without https://
    - `{{AAD_CLIENT_ID}}`: Your Azure AD client ID
 3. Create ZIP with: `manifest.json`, `color.png`, `outline.png`
@@ -232,7 +232,7 @@ If the script doesn't work, create manually:
 ### 5.1 Install App
 
 1. In Teams, go to **Apps**
-2. Search for "AI Hub Apps"
+2. Search for "iHub Apps"
 3. Click **Add**
 4. The app will open as a personal tab
 
@@ -240,7 +240,7 @@ If the script doesn't work, create manually:
 
 1. App should automatically attempt SSO
 2. If consent is required, complete the consent flow
-3. Verify you're logged in and can access AI Hub Apps features
+3. Verify you're logged in and can access iHub Apps features
 4. Test different apps based on your permissions
 
 ## Step 6: Production Considerations
@@ -291,7 +291,7 @@ If the script doesn't work, create manually:
 
 ### Logs to Check
 
-- AI Hub Apps server logs
+- iHub Apps server logs
 - Azure AD sign-in logs
 - Teams admin center app logs
 - Browser developer console
@@ -300,7 +300,7 @@ If the script doesn't work, create manually:
 
 For additional support:
 
-1. Check the main AI Hub Apps documentation
+1. Check the main iHub Apps documentation
 2. Review Teams development documentation
 3. Check Azure AD troubleshooting guides
 4. Contact your IT administrator for organization-specific issues

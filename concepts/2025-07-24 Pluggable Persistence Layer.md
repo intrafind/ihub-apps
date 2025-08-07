@@ -7,7 +7,7 @@
 
 ## Overview
 
-Currently, the AI Hub Apps platform stores all data in the filesystem, which prevents horizontal scaling. This concept outlines the analysis of the current persistence architecture and provides a roadmap for implementing a pluggable persistence layer that can support databases, OpenSearch, and Spring Cloud Server.
+Currently, the iHub Apps platform stores all data in the filesystem, which prevents horizontal scaling. This concept outlines the analysis of the current persistence architecture and provides a roadmap for implementing a pluggable persistence layer that can support databases, OpenSearch, and Spring Cloud Server.
 
 ## Current Persistence Analysis
 

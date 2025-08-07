@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The Sources Administration interface introduces comprehensive source management capabilities to AI Hub Apps, enabling administrators to configure, test, and manage filesystem, URL, and iFinder sources with full integration into the prompt system. The design follows established AI Hub Apps admin patterns while introducing specialized components for source configuration, validation, and app integration. The interface prioritizes ease of use, robust error handling, and seamless integration with existing app workflows.
+The Sources Administration interface introduces comprehensive source management capabilities to iHub Apps, enabling administrators to configure, test, and manage filesystem, URL, and iFinder sources with full integration into the prompt system. The design follows established iHub Apps admin patterns while introducing specialized components for source configuration, validation, and app integration. The interface prioritizes ease of use, robust error handling, and seamless integration with existing app workflows.
 
 ## Component Hierarchy
 
@@ -218,7 +218,7 @@ graph TD
 
 ### Spacing
 
-Following AI Hub Apps 4px grid system:
+Following iHub Apps 4px grid system:
 
 - **Page container**: 32px padding (8 units)
 - **Section containers**: 24px padding (6 units)
@@ -530,4 +530,4 @@ Following existing Icon component patterns:
 - **Network testing**: Test behavior with slow/unreliable connections
 - **Memory testing**: Monitor memory usage with long-running sessions
 
-This comprehensive UI/UX brief provides the complete foundation for implementing a professional, accessible, and user-friendly Sources Administration interface that seamlessly integrates with the existing AI Hub Apps ecosystem while providing powerful source management capabilities.
+This comprehensive UI/UX brief provides the complete foundation for implementing a professional, accessible, and user-friendly Sources Administration interface that seamlessly integrates with the existing iHub Apps ecosystem while providing powerful source management capabilities.

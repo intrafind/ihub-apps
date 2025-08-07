@@ -9,7 +9,7 @@
     "defaultTemplate": "default",
     "watermark": {
       "enabled": true,
-      "text": "AI Hub Apps",
+      "text": "iHub Apps",
       "position": "bottom-right",
       "opacity": 0.5
     },

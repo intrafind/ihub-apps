@@ -1,6 +1,6 @@
 # JWT Authentication
 
-The AI Hub Apps platform supports **external JWT authentication**, allowing systems with existing JWT providers to integrate seamlessly without implementing OIDC flows. This enables direct API access using pre-issued JWT tokens.
+The iHub Apps platform supports **external JWT authentication**, allowing systems with existing JWT providers to integrate seamlessly without implementing OIDC flows. This enables direct API access using pre-issued JWT tokens.
 
 ## Overview
 
@@ -15,7 +15,7 @@ JWT (JSON Web Token) authentication allows external systems to:
 
 1. **External System**: Issues JWT tokens to users/systems
 2. **Client**: Makes API calls with `Authorization: Bearer <jwt-token>` header
-3. **AI Hub**: Validates JWT against external provider's public keys
+3. **iHub**: Validates JWT against external provider's public keys
 4. **Access**: Grants access based on token claims and group mappings
 
 ## Configuration
@@ -279,7 +279,7 @@ Configure group mappings to translate JWT groups to application roles in `conten
 **Solutions**:
 
 - Verify JWKs URL is correct and accessible
-- Check network connectivity from AI Hub server
+- Check network connectivity from iHub server
 - Ensure JWKs endpoint returns valid JSON
 
 #### 3. User Not Found

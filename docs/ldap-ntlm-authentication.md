@@ -1,10 +1,10 @@
 # LDAP and NTLM Authentication
 
-This document describes how to configure and use LDAP and NTLM/Windows authentication in AI Hub Apps.
+This document describes how to configure and use LDAP and NTLM/Windows authentication in iHub Apps.
 
 ## Overview
 
-AI Hub Apps supports enterprise authentication through:
+iHub Apps supports enterprise authentication through:
 
 - **LDAP Authentication**: Connect to LDAP servers including Active Directory
 - **NTLM Authentication**: Windows Integrated Authentication using NTLM protocol

@@ -4,7 +4,7 @@
 
 ## Introduction
 
-Welcome to AI Hub Apps! These Terms of Service ("Terms") govern your use of our website, applications, and services (collectively, the "Services") operated by AI Hub Apps ("we," "our," or "us"). By accessing or using our Services, you agree to be bound by these Terms.
+Welcome to iHub Apps! These Terms of Service ("Terms") govern your use of our website, applications, and services (collectively, the "Services") operated by iHub Apps ("we," "our," or "us"). By accessing or using our Services, you agree to be bound by these Terms.
 
 ## Account Registration
 
@@ -45,7 +45,7 @@ To the maximum extent permitted by law, we shall not be liable for any indirect,
 
 ## Indemnification
 
-You agree to indemnify and hold harmless AI Hub Apps and its officers, directors, employees, and agents from any claims, damages, liabilities, costs, or expenses arising from your use of our Services or violation of these Terms.
+You agree to indemnify and hold harmless iHub Apps and its officers, directors, employees, and agents from any claims, damages, liabilities, costs, or expenses arising from your use of our Services or violation of these Terms.
 
 ## Termination
 

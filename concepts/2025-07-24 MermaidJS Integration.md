@@ -1,4 +1,4 @@
-# MermaidJS Integration Concept for AI Hub Apps
+# MermaidJS Integration Concept for iHub Apps
 
 **Date:** 2025-07-24  
 **Issue:** #280 - Integrate diagram / chart tool  
@@ -6,7 +6,7 @@
 
 ## 🎯 Executive Summary
 
-This proposal outlines a comprehensive integration of MermaidJS into AI Hub Apps to enable LLMs to generate interactive charts, diagrams, and visualizations directly within the chat interface. The solution builds upon the existing markdown processing pipeline while maintaining security, performance, and user experience standards.
+This proposal outlines a comprehensive integration of MermaidJS into iHub Apps to enable LLMs to generate interactive charts, diagrams, and visualizations directly within the chat interface. The solution builds upon the existing markdown processing pipeline while maintaining security, performance, and user experience standards.
 
 ## 🏗️ Technical Architecture
 
@@ -350,5 +350,5 @@ flowchart TD
 
 ---
 
-This comprehensive integration concept provides a robust foundation for adding MermaidJS diagram capabilities to AI Hub Apps while maintaining the platform's security, performance, and user experience standards.
+This comprehensive integration concept provides a robust foundation for adding MermaidJS diagram capabilities to iHub Apps while maintaining the platform's security, performance, and user experience standards.
 ```

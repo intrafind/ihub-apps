@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The JSON Editor feature provides admin users with a dual-mode editing interface that seamlessly switches between form-based editing and raw JSON editing. This addresses the need for power users to access fields not available in forms while maintaining the user-friendly form interface for standard operations. The design maintains visual consistency with AI Hub Apps' existing design system while introducing professional JSON editing capabilities through Monaco Editor integration.
+The JSON Editor feature provides admin users with a dual-mode editing interface that seamlessly switches between form-based editing and raw JSON editing. This addresses the need for power users to access fields not available in forms while maintaining the user-friendly form interface for standard operations. The design maintains visual consistency with iHub Apps' existing design system while introducing professional JSON editing capabilities through Monaco Editor integration.
 
 **Key Design Decisions:**
 - Persistent mode toggle with clear visual state indication
@@ -413,4 +413,4 @@ const monacoConfig = {
 - **TypeScript**: Full type safety for all props and state objects
 - **Testing**: Unit tests for validation logic, integration tests for user flows
 
-This comprehensive UI/UX specification provides the foundation for implementing a professional, accessible, and user-friendly JSON editor that seamlessly integrates with AI Hub Apps' existing design system while meeting the complex needs of admin users managing configuration data.
+This comprehensive UI/UX specification provides the foundation for implementing a professional, accessible, and user-friendly JSON editor that seamlessly integrates with iHub Apps' existing design system while meeting the complex needs of admin users managing configuration data.

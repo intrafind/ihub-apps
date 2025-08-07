@@ -1,5 +1,5 @@
 #!/bin/bash
-# build.sh - Build script for AI Hub Apps
+# build.sh - Build script for iHub Apps
 # This script now uses Node.js SEA instead of pkg
 
 # Exit on error
@@ -7,7 +7,7 @@ set -e
 
 # Get version from package.json
 VERSION=$(node -p "require('./package.json').version")
-echo "Building AI Hub Apps v$VERSION for production..."
+echo "Building iHub Apps v$VERSION for production..."
 
 # Check Node.js version - SEA requires Node.js 20+
 if scripts/check-node-version.sh; then

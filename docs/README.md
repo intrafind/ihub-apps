@@ -1,6 +1,6 @@
-# AI Hub Apps Documentation
+# iHub Apps Documentation
 
-This book contains configuration details and user instructions for the AI Hub Apps.
+This book contains configuration details and user instructions for the iHub Apps.
 
 ## User Guide
 

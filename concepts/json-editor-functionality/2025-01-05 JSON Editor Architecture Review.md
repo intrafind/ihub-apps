@@ -1,8 +1,8 @@
-# Code Review: JSON Editor Functionality for AI Hub Apps
+# Code Review: JSON Editor Functionality for iHub Apps
 
 ## Summary
 
-This document provides a comprehensive engineering review of the proposed JSON editor functionality for AI Hub Apps, analyzing the technical plan to add Monaco Editor-based JSON editing alongside existing form-based editing. The review evaluates architectural soundness, integration approach, data integrity, performance, maintainability, security, user experience, and implementation strategy.
+This document provides a comprehensive engineering review of the proposed JSON editor functionality for iHub Apps, analyzing the technical plan to add Monaco Editor-based JSON editing alongside existing form-based editing. The review evaluates architectural soundness, integration approach, data integrity, performance, maintainability, security, user experience, and implementation strategy.
 
 ## Critical Issues 🚨
 

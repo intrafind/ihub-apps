@@ -2,7 +2,7 @@
 version: '3.8'
 
 services:
-  # Main AI Hub Apps Development Container
+  # Main iHub Apps Development Container
   ai-hub-dev:
     build:
       context: ..

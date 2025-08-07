@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The AdminUICustomization component is a comprehensive interface for managing UI branding and customization within the AI Hub Apps platform. The component follows a tabbed architecture with five distinct sections: Header, Footer, Assets, Styles, and Content. While functionally robust, the interface presents several opportunities for improvement in user experience, accessibility, visual hierarchy, and modern design patterns.
+The AdminUICustomization component is a comprehensive interface for managing UI branding and customization within the iHub Apps platform. The component follows a tabbed architecture with five distinct sections: Header, Footer, Assets, Styles, and Content. While functionally robust, the interface presents several opportunities for improvement in user experience, accessibility, visual hierarchy, and modern design patterns.
 
 **Key Strengths:**
 

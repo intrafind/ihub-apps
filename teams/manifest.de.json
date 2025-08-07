@@ -5,7 +5,7 @@
   "id": "{{TEAMS_APP_ID}}",
   "packageName": "com.aihubapps.teams",
   "developer": {
-    "name": "AI Hub Apps",
+    "name": "iHub Apps",
     "websiteUrl": "{{APP_URL}}",
     "privacyUrl": "{{APP_URL}}/page/privacy",
     "termsOfUseUrl": "{{APP_URL}}/page/terms"
@@ -15,18 +15,18 @@
     "outline": "outline.png"
   },
   "name": {
-    "short": "AI Hub Apps",
-    "full": "AI Hub Apps - Enterprise KI-Assistent"
+    "short": "iHub Apps",
+    "full": "iHub Apps - Enterprise KI-Assistent"
   },
   "description": {
     "short": "Zugriff auf KI-basierte Anwendungen direkt in Microsoft Teams",
-    "full": "AI Hub Apps bietet eine umfassende Suite von KI-basierten Anwendungen für Unternehmensbenutzer. Greifen Sie auf Chat-Assistenten, Dokumentanalysatoren und spezialisierte KI-Tools direkt in Microsoft Teams zu."
+    "full": "iHub Apps bietet eine umfassende Suite von KI-basierten Anwendungen für Unternehmensbenutzer. Greifen Sie auf Chat-Assistenten, Dokumentanalysatoren und spezialisierte KI-Tools direkt in Microsoft Teams zu."
   },
   "accentColor": "#3B82F6",
   "staticTabs": [
     {
       "entityId": "ai-hub-apps-tab",
-      "name": "AI Hub Apps",
+      "name": "iHub Apps",
       "contentUrl": "{{APP_URL}}/teams/tab?loginHint={loginHint}&userObjectId={userObjectId}&theme={theme}",
       "websiteUrl": "{{APP_URL}}",
       "scopes": ["personal"]

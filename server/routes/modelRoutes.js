@@ -1,8 +1,7 @@
 import configCache from '../configCache.js';
 import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
-import { authRequired, authOptional, modelAccessRequired } from '../middleware/authRequired.js';
+import { authRequired, modelAccessRequired } from '../middleware/authRequired.js';
 import {
-  sendAuthRequired,
   sendFailedOperationError,
   sendNotFound,
   sendInternalError
@@ -53,15 +52,10 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
    *       500:
    *         description: Internal server error
    */
-  app.get('/api/models', authOptional, async (req, res) => {
+  app.get('/api/models', authRequired, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
       const authConfig = platformConfig.auth || {};
-
-      // Check if anonymous access is allowed
-      if (!isAnonymousAccessAllowed(platformConfig) && (!req.user || req.user.id === 'anonymous')) {
-        return sendAuthRequired(res);
-      }
 
       // Force permission enhancement if not already done
       if (req.user && !req.user.permissions) {

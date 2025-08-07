@@ -1,8 +1,8 @@
-# Concept: Dynamic UI Generation and LLM Integration in AI Hub Apps
+# Concept: Dynamic UI Generation and LLM Integration in iHub Apps
 
 ## Executive Summary
 
-This proof-of-concept explores integrating custom, domain-specific user interfaces with Large Language Models (LLMs) within the AI Hub ecosystem. Through the implementation of a BR Nexus incident management dashboard, we've identified key patterns, challenges, and solutions for creating interactive, data-driven UIs that respond to LLM outputs in real-time.
+This proof-of-concept explores integrating custom, domain-specific user interfaces with Large Language Models (LLMs) within the iHub ecosystem. Through the implementation of a BR Nexus incident management dashboard, we've identified key patterns, challenges, and solutions for creating interactive, data-driven UIs that respond to LLM outputs in real-time.
 
 ## Problem Statement
 
@@ -60,7 +60,7 @@ Benefits: Token efficiency, consistent UX, true interactivity
 
 ```mermaid
 graph TD
-    A[User Input] --> B[AI Hub Chat]
+    A[User Input] --> B[iHub Chat]
     B --> C[LLM Processing]
     C --> D[JSON Response]
     D --> E[Response Parser]
@@ -415,4 +415,4 @@ This framework can be applied to various domains: financial dashboards, project 
 
 _Document created: 2025-07-21_  
 _Based on: BR Nexus Dashboard POC implementation_  
-_Authors: AI Hub Development Team_
+_Authors: iHub Development Team_

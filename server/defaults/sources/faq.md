@@ -2,15 +2,15 @@
 
 ## General Questions
 
-### What is AI Hub Apps?
+### What is iHub Apps?
 
-AI Hub Apps is a platform that provides a collection of specialized AI assistants designed for various tasks. Each app is optimized for specific purposes like translation, summarization, email composition, and more.
+iHub Apps is a platform that provides a collection of specialized AI assistants designed for various tasks. Each app is optimized for specific purposes like translation, summarization, email composition, and more.
 
 ### How do I start using an app?
 
 Simply click on any app tile from the main dashboard. Each app has a custom interface tailored to its specific function with appropriate input fields and options.
 
-### Is my data secure when using AI Hub Apps?
+### Is my data secure when using iHub Apps?
 
 Yes, we take data security seriously. Your conversations are not stored permanently unless explicitly configured to do so. All communication with AI models is encrypted.
 
@@ -54,4 +54,4 @@ Our translation app provides high-quality translations for common languages. How
 
 ### Can I use these apps on mobile devices?
 
-Yes, AI Hub Apps is designed to be responsive and works well on mobile devices and tablets.
+Yes, iHub Apps is designed to be responsive and works well on mobile devices and tablets.

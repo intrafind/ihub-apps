@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document outlines the technical implementation plan for extending the AI Hub Apps admin interface to support comprehensive sources configuration management. The implementation will enable administrators to configure, manage, and monitor source handlers (filesystem, URL, iFinder) through a web-based interface, reducing dependency on manual JSON configuration.
+This document outlines the technical implementation plan for extending the iHub Apps admin interface to support comprehensive sources configuration management. The implementation will enable administrators to configure, manage, and monitor source handlers (filesystem, URL, iFinder) through a web-based interface, reducing dependency on manual JSON configuration.
 
 ### Business Value
 
@@ -230,7 +230,7 @@ Features:
 
 ### Storage Strategy
 
-Since AI Hub Apps uses file-based configuration, sources will be stored in:
+Since iHub Apps uses file-based configuration, sources will be stored in:
 
 - **Global Sources**: `/contents/config/sources.json`
 - **App Sources**: Maintained in app configurations as references to global sources

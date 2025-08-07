@@ -2,7 +2,7 @@
 
 ## Overview
 
-The file upload feature allows users to upload text files and PDF documents to the AI Hub Apps chat interface. The uploaded content is automatically processed and included in the AI conversation.
+The file upload feature allows users to upload text files and PDF documents to the iHub Apps chat interface. The uploaded content is automatically processed and included in the AI conversation.
 
 ## Supported File Types
 

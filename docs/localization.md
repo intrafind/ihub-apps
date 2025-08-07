@@ -18,7 +18,7 @@ Customers can override any of the built-in strings by creating files in `content
 ```json
 {
   "app": {
-    "title": "Meine AI Hub Apps"
+    "title": "Meine iHub Apps"
   }
 }
 ```

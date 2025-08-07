@@ -1,7 +1,7 @@
 #!/bin/bash
-# Setup script for AI Hub Apps
+# Setup script for iHub Apps
 
-echo "Setting up AI Hub Apps..."
+echo "Setting up iHub Apps..."
 
 # Install root dependencies
 echo "Installing root dependencies..."

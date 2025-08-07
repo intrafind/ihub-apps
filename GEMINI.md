@@ -1,6 +1,6 @@
-# Gemini Guidelines for AI Hub Apps Project
+# Gemini Guidelines for iHub Apps Project
 
-This document provides guidelines for Gemini models working on the AI Hub Apps project.
+This document provides guidelines for Gemini models working on the iHub Apps project.
 
 ## Core Principles
 

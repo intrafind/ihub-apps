@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "AI Hub Apps",
+    "title": "iHub Apps",
     "loading": "Loading...",
     "error": "An error occurred",
     "retry": "Retry"
@@ -83,7 +83,7 @@
   },
   "pages": {
     "home": {
-      "title": "AI Hub Apps",
+      "title": "iHub Apps",
       "description": "Interact with various AI models through a simple interface",
       "featured": "Featured Apps",
       "viewAll": "View All Apps"
@@ -254,7 +254,7 @@
     },
     "apps": {
       "title": "Apps Management",
-      "subtitle": "Manage your AI Hub applications",
+      "subtitle": "Manage your iHub applications",
       "createApp": "Create App",
       "list": {
         "title": "Applications",
@@ -900,15 +900,15 @@
     },
     "manifest": {
       "name": {
-        "short": "AI Hub Apps",
-        "full": "AI Hub Apps - Enterprise AI Assistant"
+        "short": "iHub Apps",
+        "full": "iHub Apps - Enterprise AI Assistant"
       },
       "description": {
         "short": "Access AI-powered applications directly in Microsoft Teams",
-        "full": "AI Hub Apps provides a comprehensive suite of AI-powered applications for enterprise users. Access chat assistants, document analyzers, and specialized AI tools directly within Microsoft Teams."
+        "full": "iHub Apps provides a comprehensive suite of AI-powered applications for enterprise users. Access chat assistants, document analyzers, and specialized AI tools directly within Microsoft Teams."
       },
       "staticTabs": {
-        "name": "AI Hub Apps"
+        "name": "iHub Apps"
       }
     }
   }

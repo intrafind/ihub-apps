@@ -2,7 +2,7 @@
 
 **Document Version:** 1.0  
 **Date:** 2025-08-03  
-**Project:** AI Hub Apps - Enterprise Admin Layout Critical Review  
+**Project:** iHub Apps - Enterprise Admin Layout Critical Review  
 **Author:** Claude Code-Sage (Staff Engineer Review)  
 **Review Type:** Pre-Implementation Critical Analysis  
 

@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-This document outlines a comprehensive concept for implementing a unified JIRA connector tool within the AI Hub Apps ecosystem. Following the established patterns of `iFinder` and `entraPeopleSearch`, the connector provides a single tool with multiple functions that enable LLM-powered AI assistants to interact with JIRA instances. Users can search tickets, read details, add comments, manage status transitions, and access attachments - all within the security context of their individual JIRA permissions through a seamless, integrated experience.
+This document outlines a comprehensive concept for implementing a unified JIRA connector tool within the iHub Apps ecosystem. Following the established patterns of `iFinder` and `entraPeopleSearch`, the connector provides a single tool with multiple functions that enable LLM-powered AI assistants to interact with JIRA instances. Users can search tickets, read details, add comments, manage status transitions, and access attachments - all within the security context of their individual JIRA permissions through a seamless, integrated experience.
 
 ## 1. Business Requirements
 
@@ -33,9 +33,9 @@ The unified JIRA tool provides comprehensive ticket management through multiple 
 
 ## 2. Architecture Analysis
 
-### Current AI Hub Apps Integration Patterns
+### Current iHub Apps Integration Patterns
 
-Based on analysis of the existing codebase, AI Hub Apps provides a robust framework for tool integration:
+Based on analysis of the existing codebase, iHub Apps provides a robust framework for tool integration:
 
 #### **Tool Integration Framework**
 
@@ -81,7 +81,7 @@ GET  /rest/api/2/mypermissions                   # Check Permissions
 #### **Implementation Strategy**
 
 1. **OAuth 2.0 with PKCE**: Use JIRA's OAuth 2.0 (3LO) for user authentication
-2. **Encrypted Token Storage**: Store user OAuth tokens securely in AI Hub Apps
+2. **Encrypted Token Storage**: Store user OAuth tokens securely in iHub Apps
 3. **Permission Inheritance**: API calls use individual user tokens, respecting JIRA permissions
 4. **Automatic Token Management**: Handle token refresh and expiration transparently
 
@@ -106,7 +106,7 @@ GET  /rest/api/2/mypermissions                   # Check Permissions
 #### **Implementation Strategy**
 
 1. **Service Account**: Dedicated JIRA service account with broad permissions
-2. **User Mapping**: Map AI Hub Apps users to JIRA users by email/username
+2. **User Mapping**: Map iHub Apps users to JIRA users by email/username
 3. **Permission Simulation**: Custom permission checking before API calls
 4. **Audit Logging**: Custom audit trail showing actual user vs technical user
 
@@ -145,8 +145,8 @@ User Action → JIRA Tool Request → Connection Check → OAuth Flow → Tool E
 4. User clicks "Connect to JIRA" button
 5. Generate OAuth2 state and PKCE challenge
 6. Redirect to Atlassian OAuth consent screen
-7. User authorizes AI Hub Apps access to their JIRA account
-8. Return to AI Hub with authorization code
+7. User authorizes iHub Apps access to their JIRA account
+8. Return to iHub with authorization code
 9. Exchange code for access/refresh tokens using PKCE
 10. Store encrypted tokens with user profile
 11. Execute original JIRA request seamlessly
@@ -297,7 +297,7 @@ Following the established patterns of `iFinder` and `entraPeopleSearch`, the JIR
 - **Easier Updates**: Changes to JIRA API integration affect one service
 - **Consistent Testing**: Single test suite for all JIRA functionality
 
-#### **4. Following AI Hub Apps Patterns**
+#### **4. Following iHub Apps Patterns**
 
 - **Established Convention**: Matches existing `entraPeopleSearch` and `iFinder` patterns
 - **Service Layer Architecture**: Clean separation between tool wrapper and service implementation
@@ -876,8 +876,8 @@ If OAuth2 implementation faces insurmountable technical or organizational obstac
 
 ## Conclusion
 
-The JIRA Connector integration represents a significant enhancement to AI Hub Apps' enterprise integration capabilities. By implementing user-scoped OAuth2 authentication, we ensure maximum security, compliance, and user trust while providing powerful JIRA integration capabilities to AI assistants.
+The JIRA Connector integration represents a significant enhancement to iHub Apps' enterprise integration capabilities. By implementing user-scoped OAuth2 authentication, we ensure maximum security, compliance, and user trust while providing powerful JIRA integration capabilities to AI assistants.
 
 The detailed technical architecture outlined in this document provides a clear roadmap for implementation, with comprehensive security measures, intuitive user experience, and robust error handling. The 8-week implementation timeline balances thorough development with reasonable delivery expectations.
 
-This integration will position AI Hub Apps as a premier platform for enterprise AI applications requiring secure, compliant integration with critical business systems like JIRA.
+This integration will position iHub Apps as a premier platform for enterprise AI applications requiring secure, compliant integration with critical business systems like JIRA.

@@ -1,21 +1,12 @@
 import configCache from '../configCache.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
-import { authRequired, authOptional, appAccessRequired } from '../middleware/authRequired.js';
+import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
 
 export default function registerGeneralRoutes(app, { getLocalizedError }) {
-  app.get('/api/apps', authOptional, async (req, res) => {
+  app.get('/api/apps', authRequired, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
       const authConfig = platformConfig.auth || {};
-
-      // Check if anonymous access is allowed
-      if (!isAnonymousAccessAllowed(platformConfig) && (!req.user || req.user.id === 'anonymous')) {
-        return res.status(401).json({
-          error: 'Authentication required',
-          code: 'AUTH_REQUIRED',
-          message: 'You must be logged in to access this resource'
-        });
-      }
 
       // Force permission enhancement if not already done
       if (req.user && !req.user.permissions) {

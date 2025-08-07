@@ -154,7 +154,7 @@ export async function exportConfig(req, res) {
     const metadata = {
       backupDate: new Date().toISOString(),
       version: '1.0',
-      description: 'AI Hub Apps Configuration Backup',
+      description: 'iHub Apps Configuration Backup',
       fileCount: fileCount,
       note: 'This backup includes all configuration files, custom pages, apps, models, and frontend customizations (CSS, HTML, etc.)'
     };

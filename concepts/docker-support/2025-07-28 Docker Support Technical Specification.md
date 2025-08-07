@@ -1,4 +1,4 @@
-# Docker Support Technical Specification for AI Hub Apps
+# Docker Support Technical Specification for iHub Apps
 
 **Document Version:** 1.0  
 **Date:** 2025-07-28  
@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-This specification defines comprehensive Docker support for AI Hub Apps, enabling:
+This specification defines comprehensive Docker support for iHub Apps, enabling:
 
 - Consistent development environments across team members
 - Simplified production deployment with container orchestration
@@ -26,7 +26,7 @@ This specification defines comprehensive Docker support for AI Hub Apps, enablin
 
 ### Application Structure
 
-AI Hub Apps consists of:
+iHub Apps consists of:
 
 - **Node.js Express Server** with clustering support (port 3000)
 - **React/Vite Client** served as static files
@@ -397,7 +397,7 @@ services:
 #!/bin/bash
 # migrate-to-docker.sh
 
-echo "Migrating AI Hub Apps to Docker..."
+echo "Migrating iHub Apps to Docker..."
 
 # Backup current data
 cp -r contents/data contents/data.backup
@@ -487,4 +487,4 @@ echo "Migration completed successfully!"
 4. **Team Training** - Docker workflows and troubleshooting
 5. **Full Migration** - Production deployment and monitoring setup
 
-This specification provides a comprehensive foundation for implementing Docker support in AI Hub Apps while maintaining the existing functionality and ensuring smooth migration from the current deployment model.
+This specification provides a comprehensive foundation for implementing Docker support in iHub Apps while maintaining the existing functionality and ensuring smooth migration from the current deployment model.

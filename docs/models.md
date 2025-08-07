@@ -1,6 +1,6 @@
 ## Models Configuration
 
-The models configuration defines the AI models available in the AI Hub application. These settings are managed through the `config/models.json` file, which contains an array of model objects.
+The models configuration defines the AI models available in the iHub application. These settings are managed through the `config/models.json` file, which contains an array of model objects.
 
 ### Basic Model Structure
 
@@ -72,7 +72,7 @@ The system currently supports the following providers:
 
 ### Model Selection in Apps
 
-The AI Hub provides a flexible system for selecting which AI model an app uses. The model is determined based on the following order of precedence:
+The iHub provides a flexible system for selecting which AI model an app uses. The model is determined based on the following order of precedence:
 
 1.  **User Selection**: A user can manually select a model from the dropdown in the app's interface. This choice is saved for the session and overrides all other settings.
 

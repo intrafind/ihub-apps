@@ -3,11 +3,11 @@
 **Document Version:** 1.0  
 **Date:** 2025-07-28  
 **Author:** Claude Code  
-**Purpose:** Step-by-step migration guide and implementation roadmap for containerizing AI Hub Apps
+**Purpose:** Step-by-step migration guide and implementation roadmap for containerizing iHub Apps
 
 ## Executive Summary
 
-This document provides a comprehensive roadmap for migrating AI Hub Apps from traditional deployment to a fully containerized infrastructure. The migration is designed to be incremental, minimizing disruption while providing immediate benefits at each stage.
+This document provides a comprehensive roadmap for migrating iHub Apps from traditional deployment to a fully containerized infrastructure. The migration is designed to be incremental, minimizing disruption while providing immediate benefits at each stage.
 
 ### Migration Benefits
 
@@ -32,15 +32,15 @@ echo "Date: $(date)"
 echo "Host: $(hostname)"
 echo ""
 
-# Check current AI Hub Apps installation
+# Check current iHub Apps installation
 echo "1. Current Installation Check"
 if [ -f "server/server.js" ]; then
-    echo "✓ AI Hub Apps found"
+    echo "✓ iHub Apps found"
     echo "  Version: $(grep '"version"' package.json | cut -d'"' -f4)"
     echo "  Node.js: $(node --version)"
     echo "  NPM: $(npm --version)"
 else
-    echo "✗ AI Hub Apps not found in current directory"
+    echo "✗ iHub Apps not found in current directory"
     exit 1
 fi
 
@@ -166,7 +166,7 @@ echo "=== Audit Complete ==="
 ```bash
 # Create Dockerfile
 cat > Dockerfile << 'EOF'
-# Multi-stage Dockerfile for AI Hub Apps
+# Multi-stage Dockerfile for iHub Apps
 FROM node:20-alpine AS dependencies
 # ... (use implementation from previous documents)
 EOF
@@ -682,7 +682,7 @@ set -e
 VERSION=${1:-latest}
 ENVIRONMENT=${2:-production}
 
-echo "Deploying AI Hub Apps $VERSION to $ENVIRONMENT"
+echo "Deploying iHub Apps $VERSION to $ENVIRONMENT"
 
 # Pull latest images
 docker-compose -f docker-compose.prod.yml pull
@@ -884,14 +884,14 @@ echo "Post-migration validation complete"
 
 ## Conclusion
 
-This migration guide provides a comprehensive, phased approach to containerizing AI Hub Apps. The incremental migration strategy minimizes risk while providing immediate benefits at each stage. With proper execution of this roadmap, the organization will achieve:
+This migration guide provides a comprehensive, phased approach to containerizing iHub Apps. The incremental migration strategy minimizes risk while providing immediate benefits at each stage. With proper execution of this roadmap, the organization will achieve:
 
 - **Improved Development Experience**: Consistent environments and faster onboarding
 - **Enhanced Operational Capabilities**: Better monitoring, scaling, and deployment
 - **Increased Security**: Container isolation and security hardening
 - **Future-Ready Infrastructure**: Foundation for cloud-native deployments and scaling
 
-The success of this migration depends on thorough preparation, comprehensive testing, and team training. Following this guide will ensure a smooth transition to containerized infrastructure while maintaining the reliability and functionality of AI Hub Apps.
+The success of this migration depends on thorough preparation, comprehensive testing, and team training. Following this guide will ensure a smooth transition to containerized infrastructure while maintaining the reliability and functionality of iHub Apps.
 
 ---
 

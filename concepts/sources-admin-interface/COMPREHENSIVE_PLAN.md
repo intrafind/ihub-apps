@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-This comprehensive plan outlines the implementation of sources configuration through the AI Hub Apps admin interface. Currently, sources can only be configured manually in JSON files. This feature will extend the admin interface to provide a complete CRUD interface for managing sources with different handlers (filesystem, URL, iFinder), while maintaining full backward compatibility.
+This comprehensive plan outlines the implementation of sources configuration through the iHub Apps admin interface. Currently, sources can only be configured manually in JSON files. This feature will extend the admin interface to provide a complete CRUD interface for managing sources with different handlers (filesystem, URL, iFinder), while maintaining full backward compatibility.
 
 ## Business Value
 

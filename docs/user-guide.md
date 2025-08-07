@@ -1,10 +1,10 @@
 # User Guide
 
-This guide walks you through the basic workflow in AI Hub Apps and explains the most common features for new users.
+This guide walks you through the basic workflow in iHub Apps and explains the most common features for new users.
 
 ## Getting Started
 
-**First-Time Setup**: AI Hub Apps automatically configures itself when you start it for the first time! No manual configuration is needed.
+**First-Time Setup**: iHub Apps automatically configures itself when you start it for the first time! No manual configuration is needed.
 
 1. **Choose a name** – On your first visit you will be asked to pick a user name. It is stored in your browser so previously used apps and chat history can be restored. If you prefer not to enter a name a random one is generated.
 2. **Read the disclaimer** – Below the name input you will see the current disclaimer text provided by the administrator. Continue after reading it.

@@ -122,7 +122,7 @@ function TeamsTab() {
         });
       });
 
-      // Exchange Teams SSO token for AI Hub Apps JWT token
+      // Exchange Teams SSO token for iHub Apps JWT token
       const response = await apiClient.post('/auth/teams/exchange', {
         ssoToken: token
       });

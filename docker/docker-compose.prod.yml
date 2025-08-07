@@ -57,7 +57,7 @@ services:
     networks:
       - ai-hub-network
 
-  # Main AI Hub Apps Production Container
+  # Main iHub Apps Production Container
   ai-hub-app:
     image: ${AI_HUB_IMAGE:-ai-hub-apps:latest}
     container_name: ai-hub-app

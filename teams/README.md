@@ -1,13 +1,13 @@
 # Microsoft Teams Integration
 
-This directory contains the Microsoft Teams app package for AI Hub Apps.
+This directory contains the Microsoft Teams app package for iHub Apps.
 
 ## Setup Instructions
 
 ### 1. Prerequisites
 
 - Azure AD app registration with Teams SSO configured
-- AI Hub Apps instance accessible from Teams (HTTPS required)
+- iHub Apps instance accessible from Teams (HTTPS required)
 - Teams admin permissions to upload custom apps
 
 ### 2. Configuration
@@ -15,7 +15,7 @@ This directory contains the Microsoft Teams app package for AI Hub Apps.
 1. Copy `manifest.json` to `manifest.configured.json`
 2. Replace the following placeholders in `manifest.configured.json`:
    - `{{TEAMS_APP_ID}}`: Generate a new GUID for your Teams app
-   - `{{APP_URL}}`: Your AI Hub Apps URL (e.g., https://ai-hub.company.com)
+   - `{{APP_URL}}`: Your iHub Apps URL (e.g., https://ai-hub.company.com)
    - `{{VALID_DOMAIN}}`: Your domain without protocol (e.g., ai-hub.company.com)
    - `{{AAD_CLIENT_ID}}`: Your Azure AD app client ID
 
@@ -49,7 +49,7 @@ zip -r ai-hub-apps-teams.zip manifest.json color.png outline.png
    - Platform: Single-page application
    - Redirect URI: `https://your-domain.com/teams/auth-end`
 
-### 5. AI Hub Apps Configuration
+### 5. iHub Apps Configuration
 
 Add Teams authentication to your `platform.json`:
 

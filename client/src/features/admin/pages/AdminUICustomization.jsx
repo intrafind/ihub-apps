@@ -165,7 +165,7 @@ const AdminUICustomization = () => {
                 <p className="text-gray-600 mt-1">
                   {t(
                     'admin.ui.description',
-                    'Customize the appearance and branding of your AI Hub Apps'
+                    'Customize the appearance and branding of your iHub Apps'
                   )}
                 </p>
               </div>

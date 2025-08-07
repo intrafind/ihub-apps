@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import config from '../config.js';
+import { authRequired } from '../middleware/authRequired.js';
 
 export default function registerStaticRoutes(app, { isPackaged, rootDir }) {
   fileURLToPath(import.meta.url);
@@ -23,6 +24,11 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir }) {
   console.log(`Serving uploaded assets from: ${uploadsPath}`);
   app.use('/uploads', express.static(uploadsPath));
 
+  // Serve documentation with authentication
+  const docsPath = path.join(rootDir, 'docs/book');
+  console.log(`Serving documentation from: ${docsPath}`);
+  app.use('/docs', authRequired, express.static(docsPath));
+
   // Determine index path once during setup
   let indexPath;
   if (isPackaged) {
@@ -34,7 +40,12 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir }) {
   }
   console.log(`SPA will be served from: ${indexPath}`);
 
-  app.get('*', (_, res) => {
+  // Catch-all for SPA routing (but exclude docs paths)
+  app.get('*', (req, res, next) => {
+    // Don't serve SPA for docs routes if they weren't handled by static middleware
+    if (req.path.startsWith('/docs')) {
+      return res.status(404).send('Documentation not found');
+    }
     res.sendFile(indexPath);
   });
 }

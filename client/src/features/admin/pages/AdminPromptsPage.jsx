@@ -267,10 +267,7 @@ const AdminPromptsPage = () => {
                 {t('admin.prompts.title', 'Prompt Management')}
               </h1>
               <p className="mt-2 text-sm text-gray-700">
-                {t(
-                  'admin.prompts.subtitle',
-                  'Create, edit, and manage prompts for your AI Hub Apps'
-                )}
+                {t('admin.prompts.subtitle', 'Create, edit, and manage prompts for your iHub Apps')}
               </p>
             </div>
             <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">

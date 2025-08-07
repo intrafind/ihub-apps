@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "AI Hub Apps",
+    "title": "iHub Apps",
     "loading": "Wird geladen...",
     "error": "Ein Fehler ist aufgetreten",
     "retry": "Wiederholen"
@@ -85,7 +85,7 @@
   },
   "pages": {
     "home": {
-      "title": "AI Hub Apps",
+      "title": "iHub Apps",
       "description": "Interagiere mit verschiedenen KI-Modellen über eine einfache Schnittstelle",
       "featured": "Ausgewählte Anwendungen",
       "viewAll": "Alle Anwendungen anzeigen"
@@ -393,7 +393,7 @@
     },
     "apps": {
       "title": "Apps-Verwaltung",
-      "subtitle": "Verwalten Sie Ihre AI Hub-Anwendungen",
+      "subtitle": "Verwalten Sie Ihre iHub-Anwendungen",
       "createApp": "App erstellen",
       "wizard": {
         "ai": {
@@ -752,15 +752,15 @@
     },
     "manifest": {
       "name": {
-        "short": "AI Hub Apps",
-        "full": "AI Hub Apps - Enterprise KI-Assistent"
+        "short": "iHub Apps",
+        "full": "iHub Apps - Enterprise KI-Assistent"
       },
       "description": {
         "short": "Zugriff auf KI-basierte Anwendungen direkt in Microsoft Teams",
-        "full": "AI Hub Apps bietet eine umfassende Suite von KI-basierten Anwendungen für Unternehmensbenutzer. Greifen Sie auf Chat-Assistenten, Dokumentanalysatoren und spezialisierte KI-Tools direkt in Microsoft Teams zu."
+        "full": "iHub Apps bietet eine umfassende Suite von KI-basierten Anwendungen für Unternehmensbenutzer. Greifen Sie auf Chat-Assistenten, Dokumentanalysatoren und spezialisierte KI-Tools direkt in Microsoft Teams zu."
       },
       "staticTabs": {
-        "name": "AI Hub Apps"
+        "name": "iHub Apps"
       }
     }
   }

@@ -1,6 +1,6 @@
 # Electron Desktop Application
 
-The Electron wrapper allows AI Hub Apps to run as a standalone desktop
+The Electron wrapper allows iHub Apps to run as a standalone desktop
 application that bundles the server and client. It can be packaged for
 macOS, Linux and Windows using `electron-builder`.
 

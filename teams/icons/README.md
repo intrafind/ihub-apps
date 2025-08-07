@@ -13,7 +13,7 @@ This directory should contain the required icon files for the Microsoft Teams ap
   - Must be exactly 192x192 pixels
   - PNG format with transparency support
   - Maximum file size: 64KB
-  - Should represent your AI Hub Apps branding
+  - Should represent your iHub Apps branding
 
 ### outline.png
 
@@ -29,7 +29,7 @@ This directory should contain the required icon files for the Microsoft Teams ap
 
 ## Creating Icons
 
-1. **Use your existing AI Hub Apps logo/branding**
+1. **Use your existing iHub Apps logo/branding**
 2. **Color icon (192x192)**:
    - Export your full-color logo at 192x192 pixels
    - Ensure it's readable at this size

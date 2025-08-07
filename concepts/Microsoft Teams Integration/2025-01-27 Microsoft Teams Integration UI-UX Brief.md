@@ -21,7 +21,7 @@
 - Natural language interactions over complex UIs
 - Intelligent command interpretation
 - Helpful error messages and suggestions
-- Personality that matches AI Hub Apps brand
+- Personality that matches iHub Apps brand
 
 ## Bot Interactions
 
@@ -30,19 +30,19 @@
 #### Natural Language Commands
 
 ```
-@AI Hub help
-@AI Hub analyze this document
-@AI Hub generate a summary of our last meeting
-@AI Hub create an image of a futuristic city
+@iHub help
+@iHub analyze this document
+@iHub generate a summary of our last meeting
+@iHub create an image of a futuristic city
 ```
 
 #### Structured Commands
 
 ```
-@AI Hub /app CodeReview
-@AI Hub /list apps
-@AI Hub /history
-@AI Hub /settings
+@iHub /app CodeReview
+@iHub /list apps
+@iHub /history
+@iHub /settings
 ```
 
 ### Conversation Flow
@@ -50,8 +50,8 @@
 #### Initial Interaction
 
 ```
-User: @AI Hub
-Bot: 👋 Hi! I'm AI Hub, your AI assistant in Teams.
+User: @iHub
+Bot: 👋 Hi! I'm iHub, your AI assistant in Teams.
 
 I can help you with:
 • Document analysis and summarization
@@ -102,7 +102,7 @@ To: [Date Picker]
 
 ```
 ┌─────────────────────────────────┐
-│ 🤖 AI Hub Apps                  │
+│ 🤖 iHub Apps                  │
 │─────────────────────────────────│
 │ Code Review Results             │
 │                                 │
@@ -135,7 +135,7 @@ To: [Date Picker]
 #### User-Friendly Error Messages
 
 ```
-User: @AI Hub analize the document
+User: @iHub analize the document
 Bot: I think you meant "analyze" 😊. I'll help you analyze the document. Please share the file you'd like me to review.
 ```
 
@@ -145,7 +145,7 @@ Bot: I think you meant "analyze" 😊. I'll help you analyze the document. Pleas
 Bot: I'm having trouble accessing that feature right now. Here's what you can try:
 • Check if the file is accessible
 • Try a smaller file (under 10MB)
-• Use our web app for larger files: [Open AI Hub Apps]
+• Use our web app for larger files: [Open iHub Apps]
 
 Need help? Type 'support' for assistance.
 ```
@@ -156,7 +156,7 @@ Need help? Type 'support' for assistance.
 
 ```
 ┌─────────────────────────────────┐
-│ Configure AI Hub Apps Tab       │
+│ Configure iHub Apps Tab       │
 │─────────────────────────────────│
 │ Choose your default view:       │
 │                                 │
@@ -192,7 +192,7 @@ Need help? Type 'support' for assistance.
 
 ```
 ┌─────────────────────────────────┐
-│ 🔍 Search AI Hub Apps           │
+│ 🔍 Search iHub Apps           │
 │─────────────────────────────────│
 │ [Search conversations...]       │
 │                                 │
@@ -208,7 +208,7 @@ Need help? Type 'support' for assistance.
 
 ### Message Actions
 
-Right-click on any message → AI Hub Apps →
+Right-click on any message → iHub Apps →
 
 - Summarize Thread
 - Extract Action Items
@@ -266,7 +266,7 @@ Right-click on any message → AI Hub Apps →
 
 ### Color Palette
 
-- Primary: AI Hub Apps brand colors
+- Primary: iHub Apps brand colors
 - Secondary: Teams theme colors
 - Semantic: Success (green), Warning (yellow), Error (red)
 - Ensure WCAG AA compliance
@@ -281,7 +281,7 @@ Right-click on any message → AI Hub Apps →
 ### Iconography
 
 - Fluent UI icons for Teams elements
-- Custom icons for AI Hub Apps features
+- Custom icons for iHub Apps features
 - Consistent icon size and style
 - Meaningful and intuitive
 

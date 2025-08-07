@@ -1,32 +1,140 @@
-# AI Hub Apps
+# iHub Apps
 
-This repository contains the source code for the AI Hub Apps.
+**A comprehensive platform for building and deploying AI-powered applications with enterprise-grade features.**
 
-For detailed documentation please see [docs/README.md](docs/README.md).
-When you run a production build, the generated documentation is copied to
-`public/help` inside the build directory and served by the server. After
-starting the built application, open `/help/index.html` in your browser to
-read the rendered mdBook docs.
+iHub Apps is a full-stack application that provides a unified interface for interacting with multiple AI models and integrating various knowledge sources. Built for both individual users and enterprise environments, it offers flexible authentication, powerful source management, and extensive customization capabilities.
 
-## Purpose
+## 🎆 **What Makes iHub Apps Special**
 
-The purpose of this repository is to provide a collection of apps, which a user can use to interact with all kind of AI models.
+- **🤖 Multiple AI Providers**: OpenAI, Anthropic, Google, Mistral with unified interface
+- **📚 Intelligent Knowledge Integration**: Access local files, web content, and enterprise documents
+- **🔍 Advanced Web Tools**: Search, extract, and analyze web content automatically
+- **🔐 Enterprise Security**: Multi-mode authentication with OIDC, JWT, and group-based permissions
+- **🚀 Multiple Deployment Options**: npm, Docker, standalone binaries, and Electron desktop apps
+- **🎨 Modern Interface**: React SPA with dark/light themes and mobile-friendly design
+- **📊 Admin-Friendly**: Comprehensive administration interface for non-technical users
 
-## Apps
+---
 
-### Chat
+**📚 Documentation**: [docs/README.md](docs/README.md) | **🚀 Quick Start**: [Installation Guide](#-installation-overview) | **📝 Help**: `/help` (after startup)
 
-Basic conversational AI interface supporting multiple models.
+## 🗺️ Table of Contents
 
-### Translation
+- [🚀 **Installation Overview**](#-installation-overview) - Get started quickly with multiple installation options
+- [📱 **Available Applications**](#-available-applications) - Pre-built AI applications for various use cases
+- [✨ **Key Features**](#-key-features) - Core platform capabilities and integrations
+- [🔐 **Authentication & Security**](#-authentication-and-authorization) - Enterprise-grade security setup
+- [📚 **Source Handlers System**](#-source-handlers-system) - Knowledge integration and management
+- [🛠️ **Advanced Tools**](#-advanced-tools--integrations) - Web tools and enterprise integrations
+- [🏢 **Architecture**](#-architecture--implementation) - Technical implementation details
+- [📊 **Documentation**](#-documentation) - Complete documentation index
 
-Multi-language translation capabilities.
+When you run a production build, the complete documentation is available at `/help/index.html` in your browser.
 
-### iFinder Document Explorer
+## Purpose & Vision
 
-Advanced document management integration with iFinder systems. Provides AI-powered document search, content analysis, and metadata retrieval. See [iFinder Integration documentation](docs/iFinder-Integration.md) for detailed setup and configuration.
+iHub Apps bridges the gap between powerful AI models and practical business applications. Whether you're a developer building custom AI solutions, an enterprise looking for secure AI deployment, or a team needing intelligent document processing, iHub Apps provides the foundation for AI-powered workflows.
 
-## Implementation
+## 📱 Available Applications
+
+iHub Apps comes with several pre-configured AI applications, each designed for specific use cases:
+
+### 💬 **Chat Applications**
+
+- **Basic Chat**: Conversational AI interface supporting multiple models
+- **Chat with Web**: Web-enabled assistant with search and content extraction
+- **Knowledge Assistant**: AI with access to integrated knowledge sources
+
+### 🌍 **Translation & Language**
+
+- **Translation**: Multi-language translation capabilities
+- **Language processing**: Text analysis and linguistic tasks
+
+### 📚 **Document & Content Management**
+
+- **iFinder Document Explorer**: Enterprise document search and analysis
+- **File Upload Processing**: Handle text files and PDFs with automatic processing
+- **Content Analysis**: Analyze and summarize uploaded documents
+
+### 🔍 **Research & Analysis**
+
+- **Web Research**: Deep web research with iterative search
+- **Content Extraction**: Extract and analyze web page content
+- **Research Planning**: Break down complex research topics
+- **Answer Evaluation**: Assess information quality and completeness
+
+### 🛠️ **Specialized Tools**
+
+- **Screenshot & PDF Capture**: Visual documentation tools
+- **Query Optimization**: Improve search queries for better results
+- **Data Processing**: Handle CSV, JSON, and structured data
+- **Code Analysis**: Review and analyze code files
+
+All applications are fully configurable and can be customized through the admin interface. New applications can be created by combining different AI models, tools, and knowledge sources.
+
+## ✨ Key Features
+
+### 🤖 **AI Integration**
+
+- Multiple LLM providers (OpenAI, Anthropic, Google, Mistral)
+- Streaming responses for real-time interaction
+- Configurable token limits and model preferences
+- Temperature and output format controls
+
+### 📚 **Source Handlers System**
+
+- **Filesystem Sources**: Local markdown, text, and JSON files
+- **URL Sources**: Web pages with intelligent content extraction
+- **iFinder Sources**: Enterprise document management integration
+- **Page Sources**: Internal application pages (FAQ, documentation)
+- **Flexible Integration**: Sources can be provided as context (prompt) or as callable tools
+- **Admin Interface**: Comprehensive source management with testing and preview capabilities
+
+### 🛠️ **Advanced Tools**
+
+- **Web Search Tools**: Brave Search, Tavily Search, DuckDuckGo integration
+- **Content Extraction**: Clean content extraction from any webpage
+- **Research Tools**: Deep research, query rewriting, answer evaluation
+- **Screenshot Tools**: Playwright and Selenium-based page capture
+- **File Processing**: Upload and process text files and PDFs
+- **iFinder Integration**: Enterprise document search and retrieval
+- **Microsoft Entra**: Corporate directory and people search
+
+### 🔐 **Authentication & Security**
+
+- **Multiple Auth Modes**: Anonymous, Local, OIDC, Proxy (JWT)
+- **Dual Authentication**: Multiple methods can be enabled simultaneously
+- **Group-Based Permissions**: Hierarchical group inheritance system
+- **Enterprise SSO**: OIDC integration for Google, Microsoft, and custom providers
+- **Security Headers**: CORS support for web app integration
+
+### 🎨 **User Interface**
+
+- **Modern React SPA**: Built with Vite and Tailwind CSS
+- **Dark/Light Mode**: Automatic theme switching support
+- **Responsive Design**: Mobile-friendly interface
+- **Real-time Chat**: EventSource streaming for live responses
+- **Dynamic Pages**: Support for React components and Markdown content
+- **Internationalization**: Multi-language support (English, German)
+
+### 📊 **Administration**
+
+- **Admin Panel**: Comprehensive configuration management
+- **Source Management**: Create, edit, test, and preview knowledge sources
+- **App Management**: Configure AI applications and prompts
+- **Model Configuration**: Manage LLM providers and settings
+- **User Management**: Group-based permission system
+- **Content Editor**: Built-in editors for Markdown and JSON content
+
+### 🚀 **Deployment Options**
+
+- **npm**: Development and customization
+- **Docker**: Production-ready containerization
+- **Binary**: Standalone executables (no dependencies)
+- **Electron**: Desktop application support
+- **Auto-setup**: Automatic configuration on first startup
+
+## 🏢 Architecture & Implementation
 
 ### Server
 
@@ -94,14 +202,90 @@ But also custom styles are possible, which are stored in the local storage.
 All keys as well as texts has to support i18n / localization.
 Therefore we want to build a web application which talks through a small node.js service with the LLMs.
 
+## 🚀 Installation Overview
+
+iHub Apps provides multiple installation methods to suit different use cases and environments. Choose the method that best fits your needs:
+
+### Installation Methods Comparison
+
+| Method     | Best For                               | Setup Time | System Requirements                      | Auto-Updates      |
+| ---------- | -------------------------------------- | ---------- | ---------------------------------------- | ----------------- |
+| **npm**    | Development, customization             | ~5 min     | Node.js 20+, npm 8+                      | Manual            |
+| **Docker** | Production, containerized environments | ~2 min     | Docker Engine 24.0+, Docker Compose 2.0+ | Container restart |
+| **Binary** | Quick deployment, no dependencies      | ~1 min     | OS-specific (Windows, macOS, Linux)      | Manual download   |
+
+### Quick Start Commands
+
+```bash
+# npm Installation (Development)
+git clone <repository-url> && cd ai-hub-apps
+npm run install:all && npm run dev
+
+# Docker Installation (Production-ready)
+docker run -p 3000:3000 -e JWT_SECRET=your-secret ghcr.io/intrafind/ai-hub-apps:latest
+
+# Binary Installation (Standalone)
+# Download from: https://github.com/intrafind/ai-hub-apps/releases
+# Extract and run the executable
+
+# Electron Desktop App
+npm run install:all && npm run electron:dev
+```
+
+### Choosing Your Installation Method
+
+- **Choose npm** if you need to customize code, develop features, or contribute to the project
+- **Choose Docker** for production deployments, containerized environments, or easy scaling
+- **Choose Binary** for quick setup, no dependencies, or when Node.js is not available
+- **Choose Electron** for a desktop application experience or offline usage
+
+### System Requirements
+
+#### Minimum Requirements by Installation Method
+
+**npm Installation:**
+
+- Node.js 20.x or higher
+- npm 8.x or higher
+- 2GB RAM, 1GB free disk space
+
+**Docker Installation:**
+
+- Docker Engine 24.0 or higher
+- Docker Compose 2.0 or higher (for development)
+- 2GB RAM, 4GB free disk space
+- Linux, macOS, or Windows with WSL2
+
+**Binary Installation:**
+
+- **Windows:** Windows 10 or higher
+- **macOS:** macOS 10.15 (Catalina) or higher
+- **Linux:** glibc 2.17 or higher (most modern distributions)
+- 1GB RAM, 500MB free disk space
+- No additional dependencies
+
+### Quick Links
+
+- [Complete Documentation](docs/README.md) - Full documentation portal
+- [Comprehensive Docker Guide](docker/DOCKER.md)
+- [Docker Quick Reference](docs/DOCKER-QUICK-REFERENCE.md)
+- [Binary Downloads](https://github.com/intrafind/ai-hub-apps/releases)
+- [Sources System](docs/sources.md) - Knowledge source integration
+- [Web Tools](docs/web-tools.md) - Web search and content extraction
+- [Authentication Guide](docs/external-authentication.md) - Security setup
+
 ## Setup and Installation
 
-### Prerequisites
+### Method 1: npm Installation (Development)
+
+**Best for:** Development, customization, contributing to the project
+
+#### Prerequisites
 
 - Node.js 20.x or higher
 - npm 8.x or higher
 
-### Installation
+#### Installation Steps (Development)
 
 1. Clone the repository:
 
@@ -114,7 +298,7 @@ Therefore we want to build a web application which talks through a small node.js
 
    ```bash
    npm run install:all
-   npx playwright install
+   npx playwright install (optional)
    # Selenium tools require Chrome or Chromium in your PATH
    ```
 
@@ -126,11 +310,153 @@ Therefore we want to build a web application which talks through a small node.js
    npm run dev
    ```
 
-   🎉 **That's it!** The server will automatically create default configuration files on first startup, so you can start using AI Hub Apps immediately.
+   🎉 **That's it!** The server will automatically create default configuration files on first startup, so you can start using iHub Apps immediately.
+
+### Method 2: Docker Installation (Recommended for Production)
+
+**Best for:** Production deployments, containerized environments, easy scaling
+
+#### Prerequisites
+
+- Docker Engine 24.0 or higher
+- Docker Compose 2.0 or higher
+
+#### Quick Start with Docker
+
+1. **Using pre-built images (fastest):**
+
+   ```bash
+   # Pull and run the latest version
+   docker run -d \
+     -p 3000:3000 \
+     -v $(pwd)/contents:/app/contents \
+     -e JWT_SECRET=your-secure-secret \
+     --name ihub-apps \
+     ghcr.io/intrafind/ai-hub-apps:latest
+   ```
+
+2. **Using Docker Compose for development:**
+
+   ```bash
+   # Clone repository and setup environment
+   git clone <repository-url>
+   cd ai-hub-apps
+   cp .env.example .env  # Edit with your API keys
+
+   # Start development environment (auto-mounts local contents/)
+   npm run docker:up
+   ```
+
+3. **Access the application:**
+   - **Development**: http://localhost:3000 (API) + http://localhost:5173 (Hot reload UI)
+   - **Production**: http://localhost:3000 (Combined server + UI)
+
+**Docker Features:**
+
+- ✅ **Automatic local contents mounting** - Changes to `contents/` folder appear instantly
+- ✅ **Auto-setup** - Creates default configuration if `contents/` is empty
+- ✅ **Persistent data** - User data and uploads stored in Docker volumes
+- ✅ **Multi-platform** - Supports Linux, macOS, and Windows
+
+For comprehensive Docker documentation, see [docker/DOCKER.md](docker/DOCKER.md).
+
+### Method 3: Binary Installation (Standalone)
+
+**Best for:** Quick deployment, no dependencies, environments without Node.js
+
+#### Prerequisites
+
+- Windows 10+, macOS 10.15+, or Linux (glibc 2.17+)
+- No additional dependencies required
+
+#### Installation Steps
+
+1. **Download the latest binary:**
+
+   Visit [GitHub Releases](https://github.com/intrafind/ai-hub-apps/releases) and download:
+   - **Complete package** (recommended): `ai-hub-apps-v<version>-<platform>.tar.gz` or `.zip`
+   - **Standalone executable**: `ai-hub-apps-v<version>-<platform>`
+
+2. **Extract and run:**
+
+   ```bash
+   # macOS/Linux - Complete package
+   tar -xzf ai-hub-apps-v*-linux.tar.gz
+   cd ai-hub-apps-v*
+   ./ai-hub-apps-v*-linux
+
+   # Windows - Complete package
+   # Extract the .zip file and run ai-hub-apps-v*-win.bat
+
+   # Standalone executable (any platform)
+   chmod +x ai-hub-apps-v*-linux  # Linux/macOS only
+   ./ai-hub-apps-v*-linux
+   ```
+
+3. **Configure environment variables (optional):**
+
+   ```bash
+   export JWT_SECRET=your-secure-secret
+   export OPENAI_API_KEY=your-openai-key
+   export PORT=3000
+   ```
+
+**Binary Features:**
+
+- ✅ **Zero dependencies** - Complete standalone application
+- ✅ **Auto-setup** - Creates default configuration on first run
+- ✅ **Cross-platform** - Windows, macOS, and Linux binaries
+- ✅ **Production-ready** - Optimized single executable
+
+### Method 4: Electron Desktop Application
+
+**Best for:** Desktop app experience, offline usage, system integration
+
+#### Prerequisites
+
+- Node.js 20.x or higher (for building)
+- npm 8.x or higher
+
+#### Installation Steps
+
+1. **Clone and install dependencies:**
+
+   ```bash
+   git clone <repository-url>
+   cd ai-hub-apps
+   npm run install:all
+   ```
+
+2. **Run in development mode:**
+
+   ```bash
+   npm run electron:dev
+   ```
+
+3. **Build desktop installers:**
+
+   ```bash
+   npm run electron:build
+   ```
+
+   This creates platform-specific installers in the `dist-electron/` directory.
+
+4. **Connect to remote server (optional):**
+
+   ```bash
+   REMOTE_SERVER_URL=https://your-server.com npm run electron:dev
+   ```
+
+**Electron Features:**
+
+- ✅ **Native desktop experience** - System tray, notifications, file associations
+- ✅ **Offline capable** - Can work without internet connection
+- ✅ **Cross-platform** - Windows, macOS, and Linux applications
+- ✅ **Remote server support** - Connect to existing iHub Apps deployments
 
 ### Automatic Configuration Setup
 
-**New in this version**: AI Hub Apps automatically sets up default configuration when you start the server for the first time!
+**New in this version**: iHub Apps automatically sets up default configuration when you start the server for the first time!
 
 - ✅ **Zero Configuration**: No manual setup required
 - ✅ **Smart Detection**: Only runs setup when the contents directory is empty
@@ -211,7 +537,7 @@ timeout 15s npm run dev || echo "Development environment startup check completed
 
 This should be done after every build or significant refactoring to ensure no linting errors, import errors, missing dependencies, or runtime errors.
 
-## Building for Production
+## 🏭 Building for Production
 
 ### Standard Production Build
 
@@ -235,71 +561,21 @@ To start the production build:
 npm run start:prod
 ```
 
-### Building as Binary
+### Building Your Own Binary (Advanced)
 
-Node.js 20 or newer is required to create the single executable. Check your
-version with:
-
-```bash
-node -v
-```
-
-You can package the entire application as a standalone binary using:
+**For developers:** You can build your own binary from source.
 
 **Prerequisite:** Node.js 20 or newer is required for creating the binary.
 
 ```bash
+# Check Node.js version
+node -v
+
+# Build binary from source
 ./build.sh --binary
 ```
 
 This creates versioned executables in the `dist-bin` directory along with configuration files and assets.
-
-To run the binary (replace `${VERSION}` with the current version):
-
-```bash
-./dist-bin/ai-hub-apps-v${VERSION}-macos    # On macOS
-./dist-bin/ai-hub-apps-v${VERSION}-linux    # On Linux
-./dist-bin/ai-hub-apps-v${VERSION}-win.bat  # On Windows
-```
-
-### Downloading Pre-built Binaries
-
-Pre-built binaries for all platforms are available on the [GitHub Releases](https://github.com/your-username/ai-hub-apps/releases) page. Each release includes:
-
-- **Standalone executables**:
-  - `ai-hub-apps-v<version>-macos` - for macOS
-  - `ai-hub-apps-v<version>-linux` - for Linux
-  - `ai-hub-apps-v<version>-win.bat` - for Windows
-- **Complete packages** (executable + configuration files):
-  - `ai-hub-apps-v<version>-macos.tar.gz` - macOS package
-  - `ai-hub-apps-v<version>-linux.tar.gz` - Linux package
-  - `ai-hub-apps-v<version>-win.zip` - Windows package
-
-For most users, downloading the complete package is recommended as it includes all necessary configuration files and assets.
-
-## Electron Desktop Application
-
-You can also run AI Hub Apps as a desktop application using Electron. During development run:
-
-```bash
-npm run electron:dev
-```
-
-For a packaged version build the production files and create installers with:
-
-```bash
-npm run electron:build
-```
-
-This creates platform-specific artifacts for macOS, Linux and Windows using `electron-builder`.
-
-To connect the desktop app to an existing backend instead of starting the
-server locally, set the `REMOTE_SERVER_URL` environment variable before
-launching Electron:
-
-```bash
-REMOTE_SERVER_URL=https://your-host.example.com npm run electron:dev
-```
 
 ## Configuration
 
@@ -344,9 +620,113 @@ Or with the binary (replace `${VERSION}` with the current version):
 PORT=8080 HOST=127.0.0.1 WORKERS=4 ./dist-bin/ai-hub-apps-v${VERSION}-macos
 ```
 
-## Authentication and Authorization
+## 🔄 Update Procedures
 
-AI Hub Apps includes a comprehensive authentication system supporting multiple authentication modes with enterprise-grade security.
+### Updating npm Installation
+
+```bash
+# Pull latest changes
+git pull origin main
+
+# Update dependencies
+npm run install:all
+
+# Restart development server
+npm run dev
+```
+
+### Updating Docker Installation
+
+```bash
+# Pull latest image
+docker pull ghcr.io/intrafind/ai-hub-apps:latest
+
+# Stop current container
+docker stop ihub-apps
+docker rm ihub-apps
+
+# Start with new image (preserving data)
+docker run -d \
+  -p 3000:3000 \
+  -v $(pwd)/contents:/app/contents \
+  -e JWT_SECRET=your-secure-secret \
+  --name ihub-apps \
+  ghcr.io/intrafind/ai-hub-apps:latest
+
+# Or using Docker Compose
+npm run docker:down
+docker-compose pull
+npm run docker:up
+```
+
+### Updating Binary Installation
+
+1. **Backup your configuration:**
+
+   ```bash
+   # Create backup of contents directory
+   cp -r contents contents-backup-$(date +%Y%m%d)
+   ```
+
+2. **Download new version:**
+
+   Visit [GitHub Releases](https://github.com/intrafind/ai-hub-apps/releases) and download the latest binary.
+
+3. **Replace executable and restart:**
+
+   ```bash
+   # Stop current application (Ctrl+C)
+   # Replace the executable file
+   chmod +x ai-hub-apps-v*-new-version  # Linux/macOS
+
+   # Start new version (it will use existing contents/)
+   ./ai-hub-apps-v*-new-version
+   ```
+
+**Note:** Your `contents/` directory (containing apps, models, and data) is preserved between updates.
+
+### Updating Electron Application
+
+```bash
+# Update source code
+git pull origin main
+
+# Update dependencies
+npm run install:all
+
+# Rebuild application
+npm run electron:build
+```
+
+### Version Checking
+
+Check your current version:
+
+```bash
+# npm installation
+npm run --silent version
+
+# Docker container
+docker exec ihub-apps cat /app/package.json | grep version
+
+# Binary
+./ai-hub-apps-v*-platform --version
+
+# Web interface
+# Visit /api/health endpoint for version information
+curl http://localhost:3000/api/health
+```
+
+### Migration Notes
+
+- **Configuration files** in `contents/config/` are automatically migrated
+- **User data** in `contents/data/` and `contents/uploads/` is preserved
+- **Custom apps and models** are maintained across updates
+- **Breaking changes** are documented in release notes
+
+## 🔐 Authentication and Authorization
+
+iHub Apps includes a comprehensive authentication system supporting multiple authentication modes with enterprise-grade security.
 
 ### Authentication Modes
 
@@ -458,7 +838,7 @@ Access control uses group-based permissions:
 }
 ```
 
-### Configuration
+### ⚙️ Configuration
 
 Authentication is configured in `contents/config/platform.json`:
 
@@ -484,13 +864,112 @@ For complete authentication documentation, see:
 - [OIDC Authentication Setup](docs/oidc-authentication.md)
 - [Security Implementation Details](concepts/2025-07-20-Final-Authentication-Security-Implementation.md)
 
-## Configuration Files
+## 📚 Source Handlers System
+
+iHub Apps includes a comprehensive source handlers system that provides unified access to different types of knowledge sources. This system enables AI applications to dynamically access and integrate content from multiple sources.
+
+### Supported Source Types
+
+#### 1. FileSystem Sources
+
+Load content from local files within the `contents/sources/` directory:
+
+- Markdown (.md), Text (.txt), JSON (.json) files
+- UTF-8 text-based formats
+- Internal documentation and knowledge base articles
+
+#### 2. URL Sources
+
+Fetch and process content from web URLs with intelligent content extraction:
+
+- External documentation and company websites
+- Automatic content cleaning and extraction
+- Configurable timeout, retry logic, and content limits
+- Metadata extraction (title, description)
+
+#### 3. iFinder Sources
+
+Enterprise document management system integration:
+
+- Document search functionality
+- User authentication support
+- Specific document retrieval by ID
+- Configurable search profiles
+
+#### 4. Page Sources
+
+Access internal application pages as sources:
+
+- FAQ pages, help documentation
+- Dynamic content pages
+- Multi-language support
+
+### Source Integration Modes
+
+**Prompt Mode (`exposeAs: "prompt")`**:
+
+- Content loaded immediately and included in AI prompt
+- Suitable for static, contextual information
+- Content appears in XML tags with metadata
+
+**Tool Mode (`exposeAs: "tool")`**:
+
+- Source becomes a callable tool for the AI
+- Content loaded only when AI calls the tool
+- Reduces token usage for large sources
+- Perfect for dynamic, searchable content
+
+### Administration Interface
+
+The source system includes a comprehensive admin interface at `/admin/sources`:
+
+- **Source Management**: Create, edit, delete, and organize sources
+- **Connection Testing**: Verify source connectivity and content
+- **Content Preview**: View source content before saving
+- **File Operations**: Browse, edit, and upload source files
+- **Dependency Tracking**: View which apps use each source
+- **Performance Statistics**: Monitor source usage and cache performance
+
+For detailed source system documentation, see [Sources Documentation](docs/sources.md).
+
+## 🛠️ Advanced Tools & Integrations
+
+### Web Tools
+
+iHub Apps includes powerful web integration capabilities:
+
+- **Enhanced Web Search**: Combined search with automatic content extraction
+- **Web Content Extractor**: Clean content extraction from any webpage
+- **Search Providers**: Brave Search, Tavily Search integration
+- **Screenshot Tools**: Playwright and Selenium page capture
+- **Research Tools**: Deep research, query rewriting, answer evaluation
+
+### File Upload & Processing
+
+- **Text File Support**: .txt, .md, .csv, .json, .html, .css, .js files
+- **PDF Processing**: Automatic conversion to markdown
+- **File Size**: Up to 10MB supported
+- **AI Integration**: Automatic content inclusion in conversations
+
+### Enterprise Integrations
+
+- **iFinder Document Management**: Full document search and retrieval
+- **Microsoft Entra**: Corporate directory and people search
+- **Tool Chaining**: Combine multiple tools for complex workflows
+
+For complete tools documentation, see:
+
+- [Web Tools Documentation](docs/web-tools.md)
+- [Tools Configuration](docs/tools.md)
+- [File Upload Feature](docs/file-upload-feature.md)
+
+## ⚙️ Configuration Files
 
 Configuration JSON files are kept in `contents/config` during development. When building, they are copied to `dist/contents/config`.
 
 ### apps.json
 
-This file defines all available applications in the AI Hub. Each app has the following structure:
+This file defines all available applications in the iHub. Each app has the following structure:
 
 ```json
 {
@@ -586,7 +1065,7 @@ Configures the user interface elements:
 ```json
 {
   "title": {
-    "en": "AI Hub",
+    "en": "iHub",
     "de": "KI-Hub"
   },
   "header": {
@@ -602,7 +1081,7 @@ Configures the user interface elements:
   },
   "footer": {
     "text": {
-      "en": "© 2025 AI Hub. All rights reserved.",
+      "en": "© 2025 iHub. All rights reserved.",
       "de": "© 2025 KI-Hub. Alle Rechte vorbehalten."
     },
     "links": [
@@ -638,7 +1117,7 @@ Configures the user interface elements:
 }
 ```
 
-## Localization
+## 🌍 Localization
 
 The application supports internationalization through localization files:
 
@@ -658,7 +1137,7 @@ Client-side translations are shared with the server and stored in `shared/i18n/{
 3. Copy the structure from an existing language file and translate all values.
 4. Update the language selector in `client/src/components/LanguageSelector.jsx` to include the new language.
 
-## Creating Custom Pages
+## 📝 Creating Custom Pages
 
 Custom pages can be added through the `ui.json` configuration in the `pages` section:
 
@@ -714,13 +1193,144 @@ Custom pages can be added through the `ui.json` configuration in the `pages` sec
 
 Custom pages are rendered using the `UnifiedPage` component and are accessible at the path `/page/{id}`.
 
-## Development Guidelines
+### React Component Pages
 
-- All UI changes should support dark/light mode themes
-- New features should include appropriate translations
-- API endpoints should follow the established pattern
-- Server-side code should maintain the modular adapter pattern for LLM providers
+iHub Apps supports dynamic React component rendering for advanced page functionality:
 
-## FAQ
+1. **Create React component files** in `contents/pages/{lang}/{page-id}.jsx`
+2. **Component Structure**:
+   ```jsx
+   function UserComponent(props) {
+     const { React, useState, useEffect, t, navigate, user } = props;
 
-A default FAQ page is provided in [contents/pages/en/faq.md](contents/pages/en/faq.md) which can be customized or translated.
+     return <div className="p-4">{/* Your component JSX */}</div>;
+   }
+   ```
+3. **Available Props**: Full React hooks, translation function, navigation, user context
+4. **Styling**: Tailwind CSS classes available
+5. **Auto-detection**: System automatically detects React vs Markdown content
+
+For more details, see [React Component Feature](docs/react-component-feature.md).
+
+## 👩‍💻 Development Guidelines
+
+### Code Quality Standards
+
+- **ESLint 9.x**: Modern flat config with comprehensive rules
+- **Prettier**: Consistent code formatting with pre-commit hooks
+- **Testing**: Always test server startup after changes
+- **Documentation**: Update relevant docs when adding features
+
+### Architecture Patterns
+
+- **Modular Design**: Maintain the adapter pattern for LLM providers
+- **Security First**: Follow authentication and authorization patterns
+- **Source System**: Use the source handlers for knowledge integration
+- **Tool Integration**: Follow established tool development patterns
+- **API Consistency**: Maintain RESTful endpoint conventions
+
+### UI/UX Standards
+
+- **Theme Support**: All UI changes must support dark/light modes
+- **Internationalization**: Include translations for new features
+- **Responsive Design**: Mobile-friendly components
+- **Accessibility**: Follow WCAG guidelines
+- **Component Reuse**: Leverage existing design system components
+
+### Development Workflow
+
+```bash
+# Always run before committing
+npm run lint:fix
+
+# Test server startup
+timeout 10s node server/server.js || echo "Server startup check completed"
+
+# Run development environment
+npm run dev
+```
+
+## ❓ Frequently Asked Questions
+
+### What's New in Recent Versions?
+
+- **📚 Source Handlers System**: Unified knowledge source integration (filesystem, URLs, iFinder, pages)
+- **🔍 Enhanced Web Tools**: Advanced web search, content extraction, and research capabilities
+- **📎 File Upload Processing**: Support for text files and PDFs with automatic content integration
+- **🔐 Improved Authentication**: Multi-mode authentication with simultaneous local and OIDC support
+- **📊 Admin Interface Enhancements**: Comprehensive source management and testing capabilities
+- **🎨 React Component Pages**: Dynamic page rendering with full React support
+
+### Which Installation Method Should I Choose?
+
+- **💻 Developers**: Use **npm installation** for customization and development
+- **🚀 Production**: Use **Docker** for scalable, containerized deployments
+- **⚡ Quick Setup**: Use **binary** for instant deployment without dependencies
+- **🖥️ Desktop**: Use **Electron** for offline or desktop application use
+
+### How Do I Add Knowledge Sources?
+
+1. Access the admin interface at `/admin/sources`
+2. Create a new source (filesystem, URL, iFinder, or page)
+3. Test the source connection
+4. Assign the source to your applications
+5. Sources can be used as context (prompt) or callable tools
+
+### Can I Use Multiple AI Providers?
+
+Yes! iHub Apps supports multiple AI providers simultaneously:
+
+- OpenAI (GPT-3.5, GPT-4, etc.)
+- Anthropic (Claude models)
+- Google (Gemini models)
+- Mistral AI models
+- Configure API keys and let users choose their preferred model
+
+### Is iHub Apps Enterprise-Ready?
+
+Absolutely! Enterprise features include:
+
+- 🔐 OIDC/SSO integration (Google, Microsoft, custom providers)
+- 📁 Group-based permissions with inheritance
+- 📚 Enterprise document management (iFinder integration)
+- 🔒 JWT authentication for secure API access
+- 📊 Admin interface for non-technical management
+- 🚀 Multiple deployment options (Docker, Kubernetes-ready)
+
+---
+
+**Need Help?** Check the [complete documentation](docs/README.md) or visit `/help` after starting the application.
+
+---
+
+_A default FAQ page with more detailed answers is also available in [contents/pages/en/faq.md](contents/pages/en/faq.md) and can be customized or translated._
+
+## 📊 Documentation
+
+Comprehensive documentation is available in the `/docs` directory and includes:
+
+### Core Documentation
+
+- [Getting Started Guide](docs/GETTING_STARTED.md) - Quick setup and first steps
+- [Installation Guide](docs/INSTALLATION.md) - Detailed installation instructions
+- [User Guide](docs/user-guide.md) - End-user documentation
+- [Server Configuration](docs/server-config.md) - Server setup and tuning
+
+### Feature Documentation
+
+- [Sources System](docs/sources.md) - Knowledge source integration
+- [Authentication](docs/external-authentication.md) - Security and user management
+- [Web Tools](docs/web-tools.md) - Web search and content extraction
+- [File Upload](docs/file-upload-feature.md) - File processing capabilities
+- [Tools System](docs/tools.md) - AI tool integration
+- [Models](docs/models.md) - LLM configuration
+- [Apps Configuration](docs/apps.md) - Application setup
+
+### Integration Guides
+
+- [iFinder Integration](docs/iFinder-Integration.md) - Enterprise document management
+- [OIDC Authentication](docs/oidc-authentication.md) - Enterprise SSO setup
+- [JWT Authentication](docs/jwt-authentication.md) - Token-based authentication
+- [Electron App](docs/electron-app.md) - Desktop application
+
+The documentation is also available as a rendered mdBook at `/help` when running the application.

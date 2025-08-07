@@ -8,14 +8,14 @@
 
 ## Executive Summary
 
-This implementation plan provides a complete step-by-step guide for adding Sources Administration capabilities to AI Hub Apps. The feature will enable administrators to manage filesystem, URL, and iFinder sources through a comprehensive admin interface while maintaining full backward compatibility with existing app configurations.
+This implementation plan provides a complete step-by-step guide for adding Sources Administration capabilities to iHub Apps. The feature will enable administrators to manage filesystem, URL, and iFinder sources through a comprehensive admin interface while maintaining full backward compatibility with existing app configurations.
 
 ## Prerequisites
 
 Before starting implementation, ensure you have:
 
 - Development environment set up with Node.js 18+
-- AI Hub Apps running locally with admin access
+- iHub Apps running locally with admin access
 - Understanding of existing admin patterns (AdminAppsPage, AdminModelsPage)
 - Familiarity with the SourceManager and handler architecture
 - Basic knowledge of Zod validation schemas

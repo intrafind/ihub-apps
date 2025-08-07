@@ -42,7 +42,7 @@ const DocumentTitle = () => {
       return;
     }
 
-    let title = 'AI Hub Apps'; // Default fallback
+    let title = 'iHub Apps'; // Default fallback
 
     // Use the configurable title if available
     if (uiConfig?.title) {

@@ -1,6 +1,6 @@
 # React Component Rendering Feature
 
-AI Hub Apps now supports rendering interactive React components directly from JSX files. This powerful feature allows you to create dynamic, interactive pages alongside traditional markdown content.
+iHub Apps now supports rendering interactive React components directly from JSX files. This powerful feature allows you to create dynamic, interactive pages alongside traditional markdown content.
 
 ## Overview
 
@@ -411,4 +411,4 @@ function UserComponent(props) {
 3. Load external dependencies dynamically
 4. Update styling to use Tailwind classes
 
-This feature opens up powerful possibilities for creating interactive, dynamic content within AI Hub Apps while maintaining security and performance.
+This feature opens up powerful possibilities for creating interactive, dynamic content within iHub Apps while maintaining security and performance.

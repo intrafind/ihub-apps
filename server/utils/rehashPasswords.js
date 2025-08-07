@@ -57,7 +57,7 @@ async function rehashUserPasswords() {
       ...usersData.metadata,
       version: '2.0.0',
       description:
-        'Local user database for AI Hub Apps - Updated with user-specific password hashing',
+        'Local user database for iHub Apps - Updated with user-specific password hashing',
       lastUpdated: new Date().toISOString()
     };
 

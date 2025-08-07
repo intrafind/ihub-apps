@@ -44,4 +44,4 @@ Currently, all chat messages are kept in React state and persisted to `sessionSt
 ---
 
 _Document created: 2025-07-21_
-_Author: AI Hub Development Team_
+_Author: iHub Development Team_

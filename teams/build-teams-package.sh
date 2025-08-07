@@ -68,7 +68,7 @@ get_config() {
     fi
     
     if [[ -z "$APP_URL" ]]; then
-        read -p "Enter your AI Hub Apps URL (e.g., https://ai-hub.company.com): " APP_URL
+        read -p "Enter your iHub Apps URL (e.g., https://ai-hub.company.com): " APP_URL
     fi
     
     if [[ -z "$AAD_CLIENT_ID" ]]; then
@@ -185,7 +185,7 @@ show_instructions() {
 
 # Main execution
 main() {
-    log_info "Building Microsoft Teams app package for AI Hub Apps"
+    log_info "Building Microsoft Teams app package for iHub Apps"
     echo
     
     check_requirements

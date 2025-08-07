@@ -1,10 +1,10 @@
+/* Microsoft Teams Integration */
+@import './features/teams/teams.css';
+
 /* Base Styles */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Microsoft Teams Integration */
-@import './features/teams/teams.css';
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {

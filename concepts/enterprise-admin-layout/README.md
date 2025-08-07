@@ -1,10 +1,10 @@
 # Enterprise Admin Navigation Layout Concept
 
-This directory contains a comprehensive study and concept development for improving AI Hub Apps' admin navigation system. The project involved analyzing the current horizontal tab navigation system and developing both complex and simple solutions.
+This directory contains a comprehensive study and concept development for improving iHub Apps' admin navigation system. The project involved analyzing the current horizontal tab navigation system and developing both complex and simple solutions.
 
 ## 📋 Project Overview
 
-**Problem**: AI Hub Apps admin center has grown to 12 main sections, causing the horizontal top navigation to no longer scale effectively.
+**Problem**: iHub Apps admin center has grown to 12 main sections, causing the horizontal top navigation to no longer scale effectively.
 
 **Request**: Design an enterprise-ready admin layout with left-side navigation concept.
 

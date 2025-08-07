@@ -214,7 +214,7 @@ if (cluster.isPrimary && workerCount > 1) {
   server.listen(PORT, HOST, () => {
     const protocol = server instanceof https.Server ? 'https' : 'http';
     console.log(`Server is running on ${protocol}://${HOST}:${PORT}`);
-    console.log(`Open ${protocol}://${HOST}:${PORT} in your browser to use AI Hub Apps`);
+    console.log(`Open ${protocol}://${HOST}:${PORT} in your browser to use iHub Apps`);
   });
 
   const handleShutdownSignal = async () => {

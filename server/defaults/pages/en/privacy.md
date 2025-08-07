@@ -4,7 +4,7 @@
 
 ## Introduction
 
-This Privacy Policy describes how AI Hub Apps ("we," "our," or "us") collects, uses, and shares information about you when you use our website, applications, and services (collectively, the "Services"). By using our Services, you agree to the terms of this Privacy Policy and our Terms of Service.
+This Privacy Policy describes how iHub Apps ("we," "our," or "us") collects, uses, and shares information about you when you use our website, applications, and services (collectively, the "Services"). By using our Services, you agree to the terms of this Privacy Policy and our Terms of Service.
 
 ## Information We Collect
 

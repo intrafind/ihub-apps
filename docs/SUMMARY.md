@@ -1,4 +1,4 @@
-- [AI Hub Apps Documentation](README.md)
+- [iHub Apps Documentation](README.md)
   - [User Guide](user-guide.md)
   - [Configuration]()
     - [App Configuration](apps.md)

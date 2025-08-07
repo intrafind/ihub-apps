@@ -2,7 +2,7 @@
 
 **Document Version:** 1.0  
 **Date:** 2025-08-03  
-**Project:** AI Hub Apps - Enterprise Admin Layout  
+**Project:** iHub Apps - Enterprise Admin Layout  
 **Type:** Architecture Decision Record  
 **Author:** Technical Architecture Team  
 
@@ -11,7 +11,7 @@
 
 ## Context
 
-The AI Hub Apps administration interface has grown from a simple configuration panel to a comprehensive enterprise management platform with 12 distinct admin sections. The current horizontal tab-based navigation (`AdminNavigation.jsx`) has reached its scalability limits and creates poor user experience on mobile devices.
+The iHub Apps administration interface has grown from a simple configuration panel to a comprehensive enterprise management platform with 12 distinct admin sections. The current horizontal tab-based navigation (`AdminNavigation.jsx`) has reached its scalability limits and creates poor user experience on mobile devices.
 
 ### Current Technical Challenges
 1. **Navigation Overflow**: 12+ tabs don't fit horizontally on standard screens
@@ -795,8 +795,8 @@ const navigationConfig = {
 
 ## Conclusion
 
-The left sidebar navigation architecture provides the best solution for AI Hub Apps' current and future needs. It solves immediate scalability problems while providing a foundation for enterprise-grade admin features. The phased implementation approach minimizes risk while delivering immediate value to users.
+The left sidebar navigation architecture provides the best solution for iHub Apps' current and future needs. It solves immediate scalability problems while providing a foundation for enterprise-grade admin features. The phased implementation approach minimizes risk while delivering immediate value to users.
 
 The component-based architecture ensures maintainability and extensibility, while the responsive design provides excellent mobile support. Performance optimizations and accessibility compliance make this solution suitable for enterprise deployments.
 
-This architecture decision positions AI Hub Apps as a professional, scalable platform ready for enterprise adoption and future growth.
+This architecture decision positions iHub Apps as a professional, scalable platform ready for enterprise adoption and future growth.

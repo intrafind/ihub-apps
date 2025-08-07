@@ -107,7 +107,7 @@ const Layout = () => {
                 >
                   {uiConfig?.header?.title
                     ? getLocalizedContent(uiConfig.header.title, currentLanguage)
-                    : 'AI Hub Apps'}
+                    : 'iHub Apps'}
                 </Link>
               </div>
 

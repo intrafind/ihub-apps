@@ -1,6 +1,6 @@
 # Web Tools Documentation
 
-This document describes the web tools available in the AI Hub Apps platform for extracting and searching web content.
+This document describes the web tools available in the iHub Apps platform for extracting and searching web content.
 
 ## Overview
 

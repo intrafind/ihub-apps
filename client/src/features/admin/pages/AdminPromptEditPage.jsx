@@ -202,7 +202,7 @@ const AdminPromptEditPage = () => {
               </h1>
               <p className="mt-1 text-sm text-gray-600">
                 {isNewPrompt
-                  ? t('admin.prompts.edit.createDesc', 'Create a new prompt for your AI Hub Apps')
+                  ? t('admin.prompts.edit.createDesc', 'Create a new prompt for your iHub Apps')
                   : t('admin.prompts.edit.editDesc', 'Edit the prompt details and configuration')}
               </p>
             </div>

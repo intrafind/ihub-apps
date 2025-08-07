@@ -12,8 +12,8 @@
     "logo": {
       "url": "/logo.svg",
       "alt": {
-        "en": "AI Hub Apps Logo",
-        "de": "AI Hub Apps Logo"
+        "en": "iHub Apps Logo",
+        "de": "iHub Apps Logo"
       },
       "containerStyle": {
         "backgroundColor": "#ffffff",
@@ -103,7 +103,7 @@
   "widget": {
     "defaultApp": "faq-bot",
     "title": {
-      "en": "AI Hub Apps Chat",
+      "en": "iHub Apps Chat",
       "de": "KI-Hub Apps Chat"
     },
     "placeholder": {

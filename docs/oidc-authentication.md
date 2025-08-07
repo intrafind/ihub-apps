@@ -1,10 +1,10 @@
 # OIDC Authentication
 
-This document explains how to configure and use OpenID Connect (OIDC) authentication in AI Hub Apps.
+This document explains how to configure and use OpenID Connect (OIDC) authentication in iHub Apps.
 
 ## Overview
 
-AI Hub Apps now supports OIDC authentication in addition to proxy and local authentication modes. OIDC enables integration with popular identity providers like Google, Microsoft, Auth0, and other OpenID Connect compliant providers.
+iHub Apps now supports OIDC authentication in addition to proxy and local authentication modes. OIDC enables integration with popular identity providers like Google, Microsoft, Auth0, and other OpenID Connect compliant providers.
 
 ## Features
 
@@ -127,7 +127,7 @@ Each OIDC provider requires the following configuration:
 1. Go to [Azure Portal](https://portal.azure.com/)
 2. Navigate to Azure Active Directory > App registrations
 3. Create new registration:
-   - Name: AI Hub Apps
+   - Name: iHub Apps
    - Redirect URI: `https://yourdomain.com/api/auth/oidc/microsoft/callback`
 4. Configure API permissions:
    - Microsoft Graph: `User.Read`, `openid`, `profile`, `email`
@@ -200,7 +200,7 @@ To enable direct launching from Microsoft Apps (Office 365 / Microsoft 365 app l
 
 ## Group Assignment
 
-AI Hub Apps provides flexible group assignment for OIDC users through multiple mechanisms:
+iHub Apps provides flexible group assignment for OIDC users through multiple mechanisms:
 
 ### 1. Automatic Groups
 

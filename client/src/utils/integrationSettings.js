@@ -1,6 +1,6 @@
 /**
  * Utility functions for managing integration settings (header/footer visibility)
- * throughout the AI Hub application.
+ * throughout the iHub application.
  */
 
 /**

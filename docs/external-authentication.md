@@ -1,10 +1,10 @@
 # External Authentication Integration
 
-This document explains how to configure and use the External Authentication Integration feature in AI Hub Apps.
+This document explains how to configure and use the External Authentication Integration feature in iHub Apps.
 
 ## Overview
 
-AI Hub Apps supports multiple authentication modes and is **fully functional without any authentication by default**:
+iHub Apps supports multiple authentication modes and is **fully functional without any authentication by default**:
 
 ### **Default Configuration (No Authentication Required)**
 
@@ -30,7 +30,7 @@ The system is designed to be stateless and flexible, supporting both authenticat
 
 ## Default Configuration (No Authentication)
 
-**AI Hub Apps works perfectly without any authentication setup!** This is the default configuration:
+**iHub Apps works perfectly without any authentication setup!** This is the default configuration:
 
 ```json
 {
@@ -184,7 +184,7 @@ OIDC_AUTH_ENABLED=true|false
 
 ### Group Management
 
-**NEW:** AI Hub Apps now includes a unified group management system accessible through the admin interface at `/admin/groups`.
+**NEW:** iHub Apps now includes a unified group management system accessible through the admin interface at `/admin/groups`.
 
 #### Admin Interface
 
@@ -238,7 +238,7 @@ node scripts/migrate-group-config.js
 
 ### Group Assignment
 
-AI Hub Apps provides automatic group assignment for all authenticated users:
+iHub Apps provides automatic group assignment for all authenticated users:
 
 #### Automatic Groups
 

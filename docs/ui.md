@@ -1,6 +1,6 @@
 ## UI Configuration
 
-The UI configuration defines the appearance and behavior of the AI Hub Apps user interface. These settings are managed through the `config/ui.json` file.
+The UI configuration defines the appearance and behavior of the iHub Apps user interface. These settings are managed through the `config/ui.json` file.
 
 ### Basic Structure
 
@@ -9,7 +9,7 @@ The UI configuration contains the following top-level sections:
 ```json
 {
   "title": {
-    "en": "AI Hub Apps",
+    "en": "iHub Apps",
     "de": "KI-Hub Apps"
   },
   "header": {
@@ -41,7 +41,7 @@ The `title` property defines the localized application title shown in the browse
 
 ```json
 "title": {
-  "en": "AI Hub Apps",
+  "en": "iHub Apps",
   "de": "KI-Hub Apps"
 }
 ```
@@ -56,7 +56,7 @@ The `header` section controls the appearance and content of the application head
   "logo": {
     "url": "/logo-bmas-2.png",
     "alt": {
-      "en": "AI Hub Apps Logo",
+      "en": "iHub Apps Logo",
       "de": "KI-Hub Apps Logo"
     },
     "containerStyle": {
@@ -103,7 +103,7 @@ The `footer` section controls the appearance and content of the application foot
 "footer": {
   "enabled": true,
   "text": {
-    "en": "© 2025 AI Hub Apps. All rights reserved.",
+    "en": "© 2025 iHub Apps. All rights reserved.",
     "de": "© 2025 KI-Hub Apps. Alle Rechte vorbehalten."
   },
   "links": [

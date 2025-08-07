@@ -1,10 +1,10 @@
 # Technical Documentation
 
-## AI Hub Apps Platform
+## iHub Apps Platform
 
 ### Overview
 
-AI Hub Apps is a comprehensive platform for creating and managing AI-powered applications. It provides a flexible architecture that supports multiple LLM providers, authentication systems, and knowledge sources.
+iHub Apps is a comprehensive platform for creating and managing AI-powered applications. It provides a flexible architecture that supports multiple LLM providers, authentication systems, and knowledge sources.
 
 ### Key Features
 

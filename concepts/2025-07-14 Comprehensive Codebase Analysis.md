@@ -1,4 +1,4 @@
-# AI Hub Apps - Comprehensive Codebase Analysis Report
+# iHub Apps - Comprehensive Codebase Analysis Report
 
 **Date**: July 14, 2025  
 **Analyst**: Claude Code  

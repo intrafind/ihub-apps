@@ -1,5 +1,5 @@
 /**
- * Node.js SEA (Single Executable Application) wrapper for AI Hub Apps server
+ * Node.js SEA (Single Executable Application) wrapper for iHub Apps server
  * This file loads and runs the ESM server module using dynamic import in a CommonJS context
  */
 
@@ -25,7 +25,7 @@ async function startServer() {
 
     const binDir = config.APP_ROOT_DIR || path.dirname(process.execPath);
     console.log(`Running server from directory: ${binDir}`);
-    console.log('Initializing AI Hub Apps server...');
+    console.log('Initializing iHub Apps server...');
 
     const serverPath = path.join(binDir, 'server', 'server.js');
     const serverUrl = url.pathToFileURL(serverPath).href;

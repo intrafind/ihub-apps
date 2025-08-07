@@ -6,7 +6,7 @@ Proposed
 
 ## Context
 
-AI Hub Apps needs to integrate with Microsoft Teams to provide users with seamless access to AI capabilities within their primary collaboration platform. The integration must maintain the existing AI Hub Apps architecture while adding Teams-specific functionality.
+iHub Apps needs to integrate with Microsoft Teams to provide users with seamless access to AI capabilities within their primary collaboration platform. The integration must maintain the existing iHub Apps architecture while adding Teams-specific functionality.
 
 ## Decision
 
@@ -14,7 +14,7 @@ AI Hub Apps needs to integrate with Microsoft Teams to provide users with seamle
 
 We will implement a **Hybrid Integration Architecture** that combines:
 
-- Embedded bot service within the existing AI Hub Apps Node.js server
+- Embedded bot service within the existing iHub Apps Node.js server
 - Reuse of existing authentication and API infrastructure
 - Teams-specific adapters for protocol translation
 - Minimal changes to the existing codebase
@@ -34,7 +34,7 @@ We will implement a **Hybrid Integration Architecture** that combines:
 └──────────┬──────────┘
            │
 ┌──────────┴──────────┐
-│  AI Hub Apps Server │
+│  iHub Apps Server │
 │  ┌────────────────┐ │
 │  │  Teams Module  │ │
 │  │  - Bot Handler │ │
@@ -66,9 +66,9 @@ We will implement a **Hybrid Integration Architecture** that combines:
 
 - **Decision**: Dual authentication with SSO bridge
 - **Rationale**:
-  - Leverage existing AI Hub Apps auth system
+  - Leverage existing iHub Apps auth system
   - Add Teams SSO for seamless experience
-  - Map Teams users to AI Hub Apps users
+  - Map Teams users to iHub Apps users
 - **Implementation**:
   ```javascript
   // Pseudo-code for auth bridge
@@ -107,7 +107,7 @@ We will implement a **Hybrid Integration Architecture** that combines:
   - Maintain conversation context across platforms
   - Enable cross-platform conversation continuity
   - Respect Teams data retention policies
-- **Storage**: Existing AI Hub Apps database with Teams metadata
+- **Storage**: Existing iHub Apps database with Teams metadata
 
 #### 5. Deployment Architecture
 
@@ -191,7 +191,7 @@ router.get('/api/teams/tab/config', teamsAuth, async (req, res) => {
 
 #### Data Isolation
 
-- Separate Teams-specific data from core AI Hub data
+- Separate Teams-specific data from core iHub data
 - Implement tenant isolation for multi-tenant scenarios
 - Respect Teams data governance policies
 
@@ -205,7 +205,7 @@ router.get('/api/teams/tab/config', teamsAuth, async (req, res) => {
 
 #### Caching Strategy
 
-- Cache user mappings (Teams ID -> AI Hub ID)
+- Cache user mappings (Teams ID -> iHub ID)
 - Cache app manifests and configurations
 - Implement Redis-based distributed cache for scale
 

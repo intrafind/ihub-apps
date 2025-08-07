@@ -2,16 +2,16 @@
 
 ## Problem Statement
 
-AI Hub Apps currently operates as a standalone web application, requiring users to switch contexts between their primary collaboration platform (Microsoft Teams) and the AI Hub interface. This context switching reduces productivity and creates barriers to adoption within enterprises that have standardized on Microsoft Teams as their primary collaboration platform.
+iHub Apps currently operates as a standalone web application, requiring users to switch contexts between their primary collaboration platform (Microsoft Teams) and the iHub interface. This context switching reduces productivity and creates barriers to adoption within enterprises that have standardized on Microsoft Teams as their primary collaboration platform.
 
 Enterprise users need seamless access to AI capabilities within their existing workflow, without leaving the Teams environment where they conduct meetings, share documents, and collaborate with colleagues.
 
 ## Solution Overview
 
-Integrate AI Hub Apps as a native Microsoft Teams application, providing users with direct access to AI capabilities through:
+Integrate iHub Apps as a native Microsoft Teams application, providing users with direct access to AI capabilities through:
 
 - A conversational bot interface for natural language interactions
-- Personal tabs embedding the existing AI Hub Apps interface
+- Personal tabs embedding the existing iHub Apps interface
 - Message extensions for contextual AI actions
 - Meeting integration for AI-powered assistance during calls
 
@@ -65,7 +65,7 @@ Integrate AI Hub Apps as a native Microsoft Teams application, providing users w
 ### Personal Tab
 
 1. **Embedded Web Experience**
-   - Full AI Hub Apps interface within Teams tab
+   - Full iHub Apps interface within Teams tab
    - Single Sign-On (SSO) using Teams credentials
    - Responsive design optimized for Teams desktop and mobile
 
@@ -111,12 +111,12 @@ Integrate AI Hub Apps as a native Microsoft Teams application, providing users w
 - All communications encrypted in transit
 - Compliance with Microsoft Teams security standards
 - Respect Teams data retention policies
-- No storage of Teams-specific data outside of AI Hub Apps
+- No storage of Teams-specific data outside of iHub Apps
 
 ### Availability
 
 - 99.9% uptime for Teams integration
-- Graceful degradation if AI Hub Apps is unavailable
+- Graceful degradation if iHub Apps is unavailable
 - Clear error messages with fallback options
 
 ### Scalability
@@ -129,7 +129,7 @@ Integrate AI Hub Apps as a native Microsoft Teams application, providing users w
 
 ### Adoption Metrics
 
-- 50% of existing AI Hub Apps users adopt Teams interface within 3 months
+- 50% of existing iHub Apps users adopt Teams interface within 3 months
 - 30% increase in overall user base from Teams-native users
 - Average of 5+ interactions per user per week
 

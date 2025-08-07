@@ -1,6 +1,6 @@
 # OAuth2 Multi-Tenancy Final Concept
 
-This document finalizes the approach for implementing multi-tenancy in **AI Hub**.
+This document finalizes the approach for implementing multi-tenancy in **iHub**.
 It incorporates lessons learned from Airweave's Auth0 based design and expands on
 our earlier `multi-tenancy.md` concept.
 
@@ -18,14 +18,14 @@ our earlier `multi-tenancy.md` concept.
 - Collection data, credentials and vector namespaces are stored with an
   `organization_id` ensuring complete isolation of tenant data.
 
-## Gaps in the Existing AI Hub Concept
+## Gaps in the Existing iHub Concept
 
 Our earlier `multi-tenancy.md` covers hierarchical configuration inheritance but
 lacks a concrete OAuth2 workflow or membership model. It also does not describe
 how users are attached to tenants or how connectors store credentials per
 organization.
 
-## Final Design for AI Hub
+## Final Design for iHub
 
 1. **Organization Model**
    - Table `organization` with fields `id`, `name`, `description`, and optional
@@ -70,5 +70,5 @@ organization.
 - Provides clear API endpoints for admin tasks.
 - Ensures every stored item is isolated by organization.
 
-This plan brings AI Hub's multi-tenancy on par with Airweave's capabilities while
+This plan brings iHub's multi-tenancy on par with Airweave's capabilities while
 keeping our configuration inheritance approach.

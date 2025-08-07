@@ -1,12 +1,12 @@
 # Self-Signed SSL Certificate Handling
 
-When AI Hub Apps needs to communicate with external services that use self-signed SSL certificates (such as internal APIs, local development servers, or enterprise services), Node.js will reject these connections by default for security reasons.
+When iHub Apps needs to communicate with external services that use self-signed SSL certificates (such as internal APIs, local development servers, or enterprise services), Node.js will reject these connections by default for security reasons.
 
 This guide covers how administrators can configure the application to work with self-signed certificates in different scenarios.
 
 ## Understanding the Problem
 
-Node.js applications, including AI Hub Apps, use the system's certificate store to verify SSL/TLS connections. When connecting to a service with a self-signed certificate, you may encounter errors like:
+Node.js applications, including iHub Apps, use the system's certificate store to verify SSL/TLS connections. When connecting to a service with a self-signed certificate, you may encounter errors like:
 
 ```
 Error: unable to verify the first certificate
@@ -14,7 +14,7 @@ Error: self signed certificate
 Error: certificate verify failed
 ```
 
-These errors occur when AI Hub Apps makes requests to:
+These errors occur when iHub Apps makes requests to:
 
 - Custom LLM endpoints with self-signed certificates
 - Internal APIs configured as tools
@@ -36,7 +36,7 @@ sudo cp your-certificate.crt /usr/local/share/ca-certificates/
 # Update the certificate store
 sudo update-ca-certificates
 
-# Restart AI Hub Apps
+# Restart iHub Apps
 systemctl restart ai-hub-apps
 ```
 
@@ -49,7 +49,7 @@ sudo cp your-certificate.crt /etc/pki/ca-trust/source/anchors/
 # Update the certificate store
 sudo update-ca-trust
 
-# Restart AI Hub Apps
+# Restart iHub Apps
 systemctl restart ai-hub-apps
 ```
 
@@ -59,7 +59,7 @@ systemctl restart ai-hub-apps
 # Add certificate to system keychain
 sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain your-certificate.crt
 
-# Restart AI Hub Apps
+# Restart iHub Apps
 ```
 
 #### On Windows:
@@ -67,7 +67,7 @@ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keyc
 1. Open the certificate file in Windows Explorer
 2. Click "Install Certificate"
 3. Choose "Local Machine" and place in "Trusted Root Certification Authorities"
-4. Restart AI Hub Apps
+4. Restart iHub Apps
 
 ### Method 2: Node.js Certificate Environment Variable
 
@@ -77,7 +77,7 @@ You can specify additional certificates for Node.js to trust:
 # Set the path to your certificate file
 export NODE_EXTRA_CA_CERTS=/path/to/your-certificate.pem
 
-# Start AI Hub Apps
+# Start iHub Apps
 npm run start:prod
 ```
 
@@ -111,7 +111,7 @@ Set the `NODE_TLS_REJECT_UNAUTHORIZED` environment variable to disable certifica
 # Disable SSL certificate verification (NOT RECOMMENDED for production)
 export NODE_TLS_REJECT_UNAUTHORIZED=0
 
-# Start AI Hub Apps
+# Start iHub Apps
 npm run start:prod
 ```
 
@@ -136,7 +136,7 @@ NODE_TLS_REJECT_UNAUTHORIZED=0
 
 ### Docker Deployments
 
-When running AI Hub Apps in Docker containers:
+When running iHub Apps in Docker containers:
 
 #### Method 1: Mount Certificate Volume
 
@@ -209,7 +209,7 @@ spec:
 
 ### Load Balancer and Reverse Proxy Scenarios
 
-If AI Hub Apps is behind a reverse proxy (nginx, Apache, etc.), you have additional options:
+If iHub Apps is behind a reverse proxy (nginx, Apache, etc.), you have additional options:
 
 #### Option 1: Terminate SSL at Proxy
 
@@ -226,14 +226,14 @@ After configuring certificate handling, test that external connections work:
 ### Test with curl
 
 ```bash
-# Test the same endpoint that AI Hub Apps needs to reach
+# Test the same endpoint that iHub Apps needs to reach
 curl -v https://your-internal-api.example.com/health
 
 # If using NODE_TLS_REJECT_UNAUTHORIZED=0, this should work:
 NODE_TLS_REJECT_UNAUTHORIZED=0 curl -v https://your-internal-api.example.com/health
 ```
 
-### Check AI Hub Apps Logs
+### Check iHub Apps Logs
 
 Monitor the application logs for SSL-related errors:
 
@@ -325,7 +325,7 @@ openssl x509 -in certificate.pem -checkend 86400
 
 ## Related Configuration
 
-- [Server Configuration](server-config.md) - For configuring AI Hub Apps' own SSL certificates
+- [Server Configuration](server-config.md) - For configuring iHub Apps' own SSL certificates
 - [External Authentication](external-authentication.md) - For OIDC providers with self-signed certificates
 
 ## Support

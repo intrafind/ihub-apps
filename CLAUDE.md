@@ -20,8 +20,13 @@ npm run prod:build
 # Run production build
 npm run start:prod
 
-# Build as standalone binary
+# Build as standalone binary (requires Node.js 20+)
 ./build.sh --binary
+# or
+./build.sh -b
+
+# Alternative: Use npm script
+npm run build:binary
 ```
 
 ### Code Quality
@@ -52,13 +57,62 @@ cd server && node tests/authentication-security.test.js
 
 # Test tool calling functionality
 npm run test:tool-calling
+
+# Additional integration tests
+npm run test:tool-integration
+npm run test:real-llm
+npm run test:azure-openai
+```
+
+### Docker Commands
+
+```bash
+# Build Docker images
+npm run docker:build        # Build latest image
+npm run docker:build:dev    # Build development image
+npm run docker:build:prod   # Build production image
+
+# Run containers
+npm run docker:run           # Run production container
+npm run docker:run:dev       # Run development container with volume mounts
+
+# Docker Compose operations
+npm run docker:up            # Start services
+npm run docker:up:build      # Start services and rebuild images
+npm run docker:down          # Stop services
+npm run docker:down:volumes  # Stop services and remove volumes
+
+# Logs and debugging
+npm run docker:logs          # View all service logs
+npm run docker:logs:app      # View app-specific logs
+npm run docker:shell         # Access container shell
+
+# Production Docker Compose
+npm run docker:prod:up       # Start production services
+npm run docker:prod:down     # Stop production services
+npm run docker:prod:logs     # View production logs
+npm run docker:prod:shell    # Access production container shell
+
+# Cleanup
+npm run docker:clean         # Clean unused Docker resources
+npm run docker:clean:all     # Clean all Docker resources (destructive)
+```
+
+### Electron App
+
+```bash
+# Development
+npm run electron:dev         # Run Electron app in development mode
+
+# Build desktop application
+npm run electron:build       # Build Electron app for distribution
 ```
 
 ## Architecture Overview
 
 ### High-Level Structure
 
-AI Hub Apps is a full-stack application for creating and managing AI-powered applications. It consists of three main components:
+iHub Apps is a full-stack application for creating and managing AI-powered applications. It consists of three main components:
 
 - **Server** (`/server`): Node.js Express backend with LLM adapters and authentication
 - **Client** (`/client`): React/Vite frontend with Tailwind CSS
@@ -131,7 +185,7 @@ client/src/
 
 #### React Component Rendering System
 
-AI Hub Apps supports dynamic React component rendering through the `ReactComponentRenderer` and `UnifiedPage` components:
+iHub Apps supports dynamic React component rendering through the `ReactComponentRenderer` and `UnifiedPage` components:
 
 **Key Components:**
 
@@ -183,11 +237,13 @@ AI Hub Apps supports dynamic React component rendering through the `ReactCompone
 
 #### Core Configuration Files
 
-- **`platform.json`**: Server behavior, authentication, authorization
-- **`apps.json`**: AI application definitions with prompts and variables
-- **`models.json`**: LLM model configurations and endpoints
-- **`groups.json`**: User groups, permissions, and inheritance hierarchy
-- **`ui.json`**: UI customization, pages, and branding
+- **`config/platform.json`**: Server behavior, authentication, authorization
+- **`apps/*.json`**: Individual AI application definition files
+- **`models/*.json`**: Individual LLM model configuration files
+- **`config/groups.json`**: User groups, permissions, and inheritance hierarchy
+- **`config/ui.json`**: UI customization, pages, and branding
+- **`config/sources.json`**: Source configurations for knowledge bases
+- **`config/tools.json`**: Available tools and their configurations
 
 #### Groups Configuration Structure
 
@@ -247,38 +303,43 @@ Apps must conform to the Zod schema defined in `server/validators/appConfigSchem
 
 ```javascript
 {
-  id: string,                           // Required: Unique app identifier
-  order: number,                        // Optional: Display order
+  // Required fields
+  id: string,                           // Required: Unique app identifier (max 50 chars)
   name: object,                         // Required: Localized app names
   description: object,                  // Required: Localized descriptions
-  color: string,                        // Required: UI color theme
+  color: string,                        // Required: Hex color code (e.g., #4F46E5)
   icon: string,                         // Required: Icon identifier
   system: object,                       // Required: Localized system prompts
-  tokenLimit: number,                   // Required: Maximum tokens per request
+  tokenLimit: number,                   // Required: Maximum tokens (1-1,000,000)
+
+  // Optional fields
+  order: number,                        // Optional: Display order
   preferredModel: string,               // Optional: Default model selection
-  preferredOutputFormat: string,        // Optional: Output format preference
+  preferredOutputFormat: string,        // Optional: 'markdown'|'text'|'json'|'html'
   preferredStyle: string,               // Optional: Style preference
-  preferredTemperature: number,         // Optional: Temperature setting
-  sendChatHistory: boolean,             // Optional: Include chat history
+  preferredTemperature: number,         // Optional: Temperature (0-2)
+  sendChatHistory: boolean,             // Optional: Include chat history (default: true)
+  thinking: object,                     // Optional: Thinking configuration
   messagePlaceholder: object,           // Optional: Localized input placeholder
   prompt: object,                       // Optional: Localized user prompts
   variables: array,                     // Optional: Input variable definitions
-  settings: any,                        // Optional: Additional settings
-  inputMode: any,                       // Optional: Input mode configuration
-  imageUpload: any,                     // Optional: Image upload settings
-  fileUpload: any,                      // Optional: File upload settings
-  features: any,                        // Optional: Feature flags
-  greeting: any,                        // Optional: Welcome message
-  starterPrompts: array,                // Optional: Suggested prompts
+  settings: object,                     // Optional: UI settings configuration
+  inputMode: object,                    // Optional: Input mode configuration
+  upload: object,                       // Optional: File/image upload settings
+  features: object,                     // Optional: Feature flags (e.g., magicPrompt)
+  greeting: object,                     // Optional: Localized welcome messages
+  starterPrompts: array,                // Optional: Suggested starter prompts
+  sources: array,                       // Optional: Source reference IDs
   allowedModels: array,                 // Optional: Restricted model list
-  disallowModelSelection: boolean,      // Optional: Hide model selector
-  allowEmptyContent: boolean,           // Optional: Allow empty submissions
+  disallowModelSelection: boolean,      // Optional: Hide model selector (default: false)
+  allowEmptyContent: boolean,           // Optional: Allow empty submissions (default: false)
   tools: array,                         // Optional: Available tool names
-  outputSchema: any,                    // Optional: Structured output schema
+  outputSchema: object|string,          // Optional: Structured output schema
   category: string,                     // Optional: App category
-  enabled: boolean,                     // Optional: Enable/disable app
+  enabled: boolean,                     // Optional: Enable/disable app (default: true)
+
   // Inheritance fields
-  allowInheritance: boolean,            // Optional: Allow child apps
+  allowInheritance: boolean,            // Optional: Allow child apps (default: false)
   parentId: string,                     // Optional: Parent app ID
   inheritanceLevel: number,             // Optional: Inheritance depth
   overriddenFields: array               // Optional: Fields overridden from parent
@@ -317,7 +378,7 @@ The system automatically resolves group inheritance at startup:
 To add a new LLM provider:
 
 1. Create adapter in `server/adapters/` implementing standard interface
-2. Add model configurations in `contents/models/`
+2. Add model configurations as individual JSON files in `contents/models/`
 3. Register adapter in `server/adapters/index.js`
 
 ### Configuration Changes
@@ -325,6 +386,7 @@ To add a new LLM provider:
 - **Platform/Auth**: Requires server restart
 - **Apps/Models/UI**: Reloaded automatically via `configCache`
 - **Groups/Permissions**: Reloaded automatically with inheritance resolution
+- **Sources/Tools**: Reloaded automatically via `configCache`
 
 ## Important Implementation Details
 
@@ -351,7 +413,7 @@ The system uses `anonymousAuth` structure instead of legacy `allowAnonymous`:
 
 #### CORS Configuration
 
-AI Hub Apps has comprehensive CORS support for embedding and integration with other web applications:
+iHub Apps has comprehensive CORS support for embedding and integration with other web applications:
 
 **Configuration Location:**
 
@@ -414,7 +476,7 @@ export ALLOWED_ORIGINS="https://staging.yourdomain.com,https://test.yourdomain.c
 **Integration Example:**
 
 ```javascript
-// Calling AI Hub APIs from another web application
+// Calling iHub APIs from another web application
 fetch('https://your-ai-hub-domain.com/api/health', {
   method: 'GET',
   credentials: 'include', // Important for authenticated requests
@@ -478,14 +540,14 @@ fetch('https://your-ai-hub-domain.com/api/health', {
 ### Configuration Files
 
 - **`contents/config/platform.json`**: Core platform configuration
-- **`contents/config/apps.json`**: AI application definitions
+- **`contents/apps/`**: Directory containing individual AI application JSON files
 - **`contents/config/groups.json`**: User permissions and groups
 
 ### Dynamic Content Files
 
 - **`contents/pages/{language}/{page-id}.md`**: Markdown content files
 - **`contents/pages/{language}/{page-id}.jsx`**: React component files
-- **Examples**: `contents/pages/en/qr-generator.jsx`, `contents/pages/en/dashboard.md`
+- **Examples**: `contents/pages/en/qr-generator.jsx`, `contents/pages/en/faq.md`
 
 #### React Component File Structure
 

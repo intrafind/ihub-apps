@@ -1,10 +1,10 @@
 # Server Configuration
 
-This section covers environment variables and options for running the AI Hub Apps server.
+This section covers environment variables and options for running the iHub Apps server.
 
 ## Automatic Configuration Setup
 
-**New Feature**: AI Hub Apps automatically creates default configuration files when the server starts for the first time!
+**New Feature**: iHub Apps automatically creates default configuration files when the server starts for the first time!
 
 ### How It Works
 
@@ -123,7 +123,7 @@ When `SSL_KEY` and `SSL_CERT` are set the server starts in HTTPS mode.
 
 ### External Services with Self-Signed Certificates
 
-If AI Hub Apps needs to communicate with external services using self-signed SSL certificates (such as custom LLM endpoints, internal APIs, or authentication providers), see the [SSL Certificates Guide](ssl-certificates.md) for configuration options.
+If iHub Apps needs to communicate with external services using self-signed SSL certificates (such as custom LLM endpoints, internal APIs, or authentication providers), see the [SSL Certificates Guide](ssl-certificates.md) for configuration options.
 
 ## Example
 

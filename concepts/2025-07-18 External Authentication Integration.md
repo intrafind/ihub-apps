@@ -1,10 +1,10 @@
 # External Authentication Integration
 
-This concept outlines how AI Hub Apps can rely on a reverse proxy or external service for user authentication. Instead of handling the login flow ourselves, the server will trust user information provided by upstream components such as nginx, Apache, OAuth proxies, or Microsoft Teams. The long term goal is to support both this "proxy" mode and a full OpenID Connect (OIDC) flow managed by the server itself.
+This concept outlines how iHub Apps can rely on a reverse proxy or external service for user authentication. Instead of handling the login flow ourselves, the server will trust user information provided by upstream components such as nginx, Apache, OAuth proxies, or Microsoft Teams. The long term goal is to support both this "proxy" mode and a full OpenID Connect (OIDC) flow managed by the server itself.
 
 ## Goals
 
-- Support deployments where authentication is already handled outside of the AI Hub Apps server.
+- Support deployments where authentication is already handled outside of the iHub Apps server.
 - Reuse user identity (name, email, groups) provided by a reverse proxy or platform like Teams.
 - Keep the server stateless: every request must include the required headers or tokens.
 - Allow mapping of external groups to our internal permission groups.
@@ -612,7 +612,7 @@ The External Authentication Integration concept has been **fully implemented** w
 
 ### 🎯 **Key Design Principles Achieved:**
 
-1. **Immediate Functionality** - Users can start using AI Hub Apps without any authentication setup
+1. **Immediate Functionality** - Users can start using iHub Apps without any authentication setup
 2. **Progressive Enhancement** - Authentication can be added when needed without breaking existing workflows
 3. **Enterprise Scalability** - Supports everything from personal use to corporate SSO deployments
 4. **Security by Design** - Modern security practices with defense in depth

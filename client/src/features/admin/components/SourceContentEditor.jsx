@@ -82,9 +82,9 @@ function SourceContentEditor({
 
 ## General Questions
 
-### What is AI Hub Apps?
+### What is iHub Apps?
 
-AI Hub Apps is a platform that provides a collection of specialized AI assistants designed for various tasks. Each app is optimized for specific purposes like translation, summarization, email composition, and more.
+iHub Apps is a platform that provides a collection of specialized AI assistants designed for various tasks. Each app is optimized for specific purposes like translation, summarization, email composition, and more.
 
 ### How do I start using an app?
 

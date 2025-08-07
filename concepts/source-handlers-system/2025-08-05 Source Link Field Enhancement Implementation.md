@@ -6,7 +6,7 @@
 
 ## Overview
 
-This document describes the implementation of the `source.link` field enhancement across all source handlers in the AI Hub Apps source management system. The enhancement ensures that all source handlers properly populate the `link` field that is already being used in `SourceManager.js` for content attribution and user references.
+This document describes the implementation of the `source.link` field enhancement across all source handlers in the iHub Apps source management system. The enhancement ensures that all source handlers properly populate the `link` field that is already being used in `SourceManager.js` for content attribution and user references.
 
 ## Implementation Summary
 

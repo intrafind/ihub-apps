@@ -2,7 +2,7 @@
 
 ## Overview
 
-This concept outlines how to expose the AI Hub Apps inside Microsoft Teams. The
+This concept outlines how to expose the iHub Apps inside Microsoft Teams. The
 goal is to give users a bot interface that can execute any configured app and an
 optional tab embedding the standard web UI. Users should be able to chat with a
 bot like "Translate this document" and have the bot run the `translator` app in
@@ -11,10 +11,10 @@ Additionally, apps can be invoked from a message context menu, such as running t
 
 ## Objectives
 
-- Provide a Teams bot that forwards user messages to the AI Hub Apps backend.
+- Provide a Teams bot that forwards user messages to the iHub Apps backend.
 - Allow the bot to pick an app based on user intent (e.g. translator).
 - Offer an optional Teams tab that loads the web client.
-- Provide message actions to run AI Hub apps on selected messages or documents (e.g. summarize a shared file).
+- Provide message actions to run iHub apps on selected messages or documents (e.g. summarize a shared file).
 
 - Reuse existing authentication and configuration where possible.
 
@@ -35,14 +35,14 @@ Additionally, apps can be invoked from a message context menu, such as running t
    - Streaming SSE responses are relayed back to Teams as messages.
 3. **Authentication**
    - The bot uses OAuth with Microsoft Entra to obtain the user's identity.
-   - The same token or user ID is sent to the AI Hub backend so existing
+   - The same token or user ID is sent to the iHub backend so existing
      authorization logic can apply.
 4. **Deployment**
    - Host the bot service alongside the server or as a separate Node.js process.
    - Register the Teams app in Azure and upload the generated manifest.
 5. **Message Extension**
    - Register an action-based message extension in the manifest.
-   - The extension sends the selected message or attachment to the server, which runs the chosen AI Hub app (e.g. summary) and posts the result.
+   - The extension sends the selected message or attachment to the server, which runs the chosen iHub app (e.g. summary) and posts the result.
 
 ## Key Files
 
@@ -62,7 +62,7 @@ Additionally, apps can be invoked from a message context menu, such as running t
    - Implement a message handler that:
      1. Detects the target app (e.g. via regex or LLM service).
      2. Sends the user's text to the chat endpoint of that app.
-     3. Streams the AI Hub response back to the Teams conversation.
+     3. Streams the iHub response back to the Teams conversation.
 3. **Update `server.js`**
    - Optionally start the bot if the env vars are present.
    - Expose the `/api/teams/messages` endpoint used by the adapter.
@@ -84,7 +84,7 @@ Additionally, apps can be invoked from a message context menu, such as running t
 
 ## Benefits
 
-- Users interact with AI Hub Apps without leaving Teams.
+- Users interact with iHub Apps without leaving Teams.
 - The bot provides a lightweight way to trigger apps from chat.
 - Existing React client is reused as a tab for rich interactions.
-- Message extension actions allow AI Hub Apps to process content directly from Teams messages.
+- Message extension actions allow iHub Apps to process content directly from Teams messages.

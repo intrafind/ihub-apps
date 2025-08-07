@@ -280,7 +280,7 @@ const AdminAppsPage = () => {
               {t('admin.apps.title', 'Apps Administration')}
             </h1>
             <p className="mt-2 text-sm text-gray-700">
-              {t('admin.apps.subtitle', 'Manage your AI Hub applications')}
+              {t('admin.apps.subtitle', 'Manage your iHub applications')}
             </p>
           </div>
           <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">

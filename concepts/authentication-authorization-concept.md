@@ -1,6 +1,6 @@
 ## Authentication and Authorization Concept
 
-This concept outlines a comprehensive authentication and authorization layer for the AI Hub Apps platform, supporting multiple authentication methods with robust security measures.
+This concept outlines a comprehensive authentication and authorization layer for the iHub Apps platform, supporting multiple authentication methods with robust security measures.
 
 **Last Updated:** July 20, 2025 - Complete authentication system with admin security model and frontend integration fixes.
 

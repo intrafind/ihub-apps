@@ -2,13 +2,13 @@
 
 **Document Version:** 1.0  
 **Date:** 2025-08-03  
-**Project:** AI Hub Apps - Enterprise Admin Layout  
+**Project:** iHub Apps - Enterprise Admin Layout  
 **Type:** UI/UX Design Specification  
 **Author:** UI/UX Design Team  
 
 ## Executive Summary
 
-This UI/UX design brief provides comprehensive component specifications, responsive design patterns, and interaction guidelines for implementing AI Hub Apps' enterprise-ready left sidebar navigation system. The design transforms the current horizontal tab-based navigation into a scalable, accessible, and mobile-responsive admin interface that groups 12 admin sections into logical categories.
+This UI/UX design brief provides comprehensive component specifications, responsive design patterns, and interaction guidelines for implementing iHub Apps' enterprise-ready left sidebar navigation system. The design transforms the current horizontal tab-based navigation into a scalable, accessible, and mobile-responsive admin interface that groups 12 admin sections into logical categories.
 
 ### Key Design Decisions
 

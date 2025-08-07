@@ -68,7 +68,7 @@ const AdminHome = () => {
       title: t('admin.nav.ui', 'UI Customization'),
       description: t(
         'admin.home.sections.uiDesc',
-        'Customize the appearance, branding, and content of your AI Hub Apps'
+        'Customize the appearance, branding, and content of your iHub Apps'
       ),
       href: '/admin/ui',
       //icon: 'paint-brush',
@@ -88,7 +88,7 @@ const AdminHome = () => {
                 {t('admin.home.title', 'Admin Dashboard')}
               </h1>
               <p className="text-gray-600 mt-2 text-lg">
-                {t('admin.home.welcome', 'Welcome to the AI Hub Apps administration center')}
+                {t('admin.home.welcome', 'Welcome to the iHub Apps administration center')}
               </p>
             </div>
           </div>

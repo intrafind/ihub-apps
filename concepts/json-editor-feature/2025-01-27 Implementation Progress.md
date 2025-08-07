@@ -1,12 +1,12 @@
 # JSON Editor Feature Implementation Progress
 
 **Date**: January 27, 2025
-**Feature**: Dual-mode JSON Editor for AI Hub Apps
+**Feature**: Dual-mode JSON Editor for iHub Apps
 **Status**: Core Implementation Complete
 
 ## Overview
 
-Successfully implemented a comprehensive JSON editor feature that provides dual-mode editing (Form + JSON) for AI Hub Apps configuration. This feature allows admin users to toggle between a user-friendly form interface and a professional JSON editor with real-time validation.
+Successfully implemented a comprehensive JSON editor feature that provides dual-mode editing (Form + JSON) for iHub Apps configuration. This feature allows admin users to toggle between a user-friendly form interface and a professional JSON editor with real-time validation.
 
 ## Architecture
 
@@ -183,4 +183,4 @@ The implementation maintains full compatibility with the server-side Zod schema:
 - **Accessibility**: Keyboard navigation and screen reader support
 - **Responsive Design**: Works on desktop and tablet devices
 
-This implementation provides a solid foundation for JSON editing across the AI Hub Apps platform and can be easily extended to other configuration management areas.
+This implementation provides a solid foundation for JSON editing across the iHub Apps platform and can be easily extended to other configuration management areas.

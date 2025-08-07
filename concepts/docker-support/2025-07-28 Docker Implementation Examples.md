@@ -1,4 +1,4 @@
-# Docker Implementation Examples for AI Hub Apps
+# Docker Implementation Examples for iHub Apps
 
 **Document Version:** 1.0  
 **Date:** 2025-07-28  
@@ -11,7 +11,7 @@
 
 ```dockerfile
 # =============================================================================
-# AI Hub Apps - Multi-Stage Docker Build
+# iHub Apps - Multi-Stage Docker Build
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -139,7 +139,7 @@ CMD ["node", "server/server.js"]
 version: '3.8'
 
 services:
-  # Main AI Hub Apps Development Container
+  # Main iHub Apps Development Container
   ai-hub-dev:
     build:
       context: .
@@ -245,7 +245,7 @@ networks:
 version: '3.8'
 
 services:
-  # Main AI Hub Apps Production Container
+  # Main iHub Apps Production Container
   ai-hub-app:
     image: ai-hub-apps:${VERSION:-latest}
     container_name: ai-hub-app
@@ -660,7 +660,7 @@ if [ -n "$required_vars" ]; then
 fi
 
 # Run the application
-echo "Starting AI Hub Apps..."
+echo "Starting iHub Apps..."
 exec "$@"
 ```
 
@@ -709,4 +709,4 @@ docker-compose -f docker-compose.prod.yml pull
 docker-compose -f docker-compose.prod.yml up -d --no-deps ai-hub-app
 ```
 
-These implementation examples provide a complete foundation for containerizing AI Hub Apps with proper separation of concerns, security considerations, and production-ready configurations.
+These implementation examples provide a complete foundation for containerizing iHub Apps with proper separation of concerns, security considerations, and production-ready configurations.

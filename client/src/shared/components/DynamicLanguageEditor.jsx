@@ -11,7 +11,8 @@ const DynamicLanguageEditor = ({
   type = 'text',
   placeholder = {},
   className = '',
-  fieldType = null // For nested objects like greeting.title, greeting.subtitle
+  fieldType = null, // For nested objects like greeting.title, greeting.subtitle
+  error = null // Error message to display
 }) => {
   const { t } = useTranslation();
   const [showAddLanguage, setShowAddLanguage] = useState(false);
@@ -281,7 +282,7 @@ const DynamicLanguageEditor = ({
             <select
               value={newLanguageCode}
               onChange={e => setNewLanguageCode(e.target.value)}
-              className="block w-32 rounded-lg border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+              className="block w-32 rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
             >
               <option value="">{t('admin.apps.edit.selectLanguage', 'Select...')}</option>
               {availableLanguages.map(lang => (
@@ -295,7 +296,7 @@ const DynamicLanguageEditor = ({
               value={newLanguageCode}
               onChange={e => setNewLanguageCode(e.target.value.toLowerCase())}
               placeholder={t('admin.apps.edit.languageCode', 'Language code (e.g., en, de, es)')}
-              className="flex-1 block rounded-lg border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+              className="flex-1 block rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
             />
             <button
               type="button"
@@ -324,7 +325,9 @@ const DynamicLanguageEditor = ({
                   onChange={e => handleLanguageChange(lang, e.target.value)}
                   placeholder={placeholder[lang] || ''}
                   rows={3}
-                  className="block w-full rounded-lg border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+                  className={`block w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                    error ? 'border-red-300 focus:border-red-500' : 'border-gray-300'
+                  }`}
                   required={required && lang === 'en'}
                 />
               ) : (
@@ -333,7 +336,9 @@ const DynamicLanguageEditor = ({
                   value={currentValue[lang] || ''}
                   onChange={e => handleLanguageChange(lang, e.target.value)}
                   placeholder={placeholder[lang] || ''}
-                  className="block w-full rounded-lg border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+                  className={`block w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                    error ? 'border-red-300 focus:border-red-500' : 'border-gray-300'
+                  }`}
                   required={required && lang === 'en'}
                 />
               )}
@@ -368,6 +373,8 @@ const DynamicLanguageEditor = ({
           )}
         </div>
       )}
+
+      {error && <div className="mt-1 text-sm text-red-600">{error}</div>}
     </div>
   );
 };

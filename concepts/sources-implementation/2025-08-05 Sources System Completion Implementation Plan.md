@@ -1,4 +1,4 @@
-# AI Hub Apps Sources System Completion Implementation Plan
+# iHub Apps Sources System Completion Implementation Plan
 
 **Date:** 2025-08-05  
 **Scope:** Complete sources lifecycle implementation  

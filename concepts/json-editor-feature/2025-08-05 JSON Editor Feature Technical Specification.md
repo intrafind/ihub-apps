@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document provides a comprehensive technical plan for adding JSON editor functionality to the AI Hub Apps frontend, allowing users to switch between form-based editing and raw JSON editing when managing apps, prompts, and models.
+This document provides a comprehensive technical plan for adding JSON editor functionality to the iHub Apps frontend, allowing users to switch between form-based editing and raw JSON editing when managing apps, prompts, and models.
 
 ## Business Value and User Benefits
 
@@ -619,7 +619,7 @@ client/package.json (if new dependencies needed)
 
 ## Conclusion
 
-This JSON editor feature will significantly enhance the flexibility and power of the AI Hub Apps admin interface while maintaining the simplicity of form-based editing for casual users. The phased implementation approach ensures minimal risk while delivering value incrementally.
+This JSON editor feature will significantly enhance the flexibility and power of the iHub Apps admin interface while maintaining the simplicity of form-based editing for casual users. The phased implementation approach ensures minimal risk while delivering value incrementally.
 
 The technical architecture leverages existing patterns and technologies, ensuring consistency with the current codebase. The comprehensive validation strategy maintains data integrity while providing immediate feedback to users.
 

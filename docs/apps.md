@@ -1,6 +1,6 @@
 ## App Configuration
 
-The app configuration defines the behavior, appearance, and capabilities of each AI application in the AI Hub Apps. Configuration is managed through the `config/apps.json` file, which contains an array of app objects.
+The app configuration defines the behavior, appearance, and capabilities of each AI application in the iHub Apps. Configuration is managed through the `config/apps.json` file, which contains an array of app objects.
 
 ### Basic App Structure
 

@@ -1,6 +1,6 @@
 ## Content Management
 
-AI Hub Apps uses a content management system based on Markdown files stored in the `contents/` directory. These files serve multiple purposes:
+iHub Apps uses a content management system based on Markdown files stored in the `contents/` directory. These files serve multiple purposes:
 
 1. Source material for knowledge-based AI apps
 2. Static page content for the application
@@ -8,7 +8,7 @@ AI Hub Apps uses a content management system based on Markdown files stored in t
 
 ### Automatic Content Setup
 
-**New Feature**: When starting AI Hub Apps for the first time, the system automatically creates the `contents/` directory with default content files.
+**New Feature**: When starting iHub Apps for the first time, the system automatically creates the `contents/` directory with default content files.
 
 **What gets copied automatically:**
 - Configuration files (platform settings, apps, models, etc.)
@@ -63,9 +63,9 @@ Example from the FAQ content:
 
 ## General Questions
 
-### What is AI Hub Apps?
+### What is iHub Apps?
 
-AI Hub Apps is a platform that provides a collection of specialized AI assistants...
+iHub Apps is a platform that provides a collection of specialized AI assistants...
 
 ### How do I start using an app?
 

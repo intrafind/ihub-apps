@@ -1,25 +1,16 @@
 import { runTool } from '../toolLoader.js';
 import { logInteraction } from '../utils.js';
-import { authRequired, authOptional } from '../middleware/authRequired.js';
+import { authRequired } from '../middleware/authRequired.js';
 import validate from '../validators/validate.js';
 import { runToolSchema } from '../validators/index.js';
 import configCache from '../configCache.js';
 import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 
 export default function registerToolRoutes(app) {
-  app.get('/api/tools', authOptional, async (req, res) => {
+  app.get('/api/tools', authRequired, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
       const authConfig = platformConfig.auth || {};
-
-      // Check if anonymous access is allowed
-      if (!isAnonymousAccessAllowed(platformConfig) && (!req.user || req.user.id === 'anonymous')) {
-        return res.status(401).json({
-          error: 'Authentication required',
-          code: 'AUTH_REQUIRED',
-          message: 'You must be logged in to access this resource'
-        });
-      }
 
       // Force permission enhancement if not already done
       if (req.user && !req.user.permissions) {

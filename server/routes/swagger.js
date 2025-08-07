@@ -25,7 +25,7 @@ function createSwaggerConfig(title, description, version, paths) {
         description,
         version,
         contact: {
-          name: 'AI Hub Apps',
+          name: 'iHub Apps',
           url: 'https://github.com/intrafind/ai-hub-apps'
         }
       },
@@ -91,7 +91,7 @@ export default async function registerSwaggerRoutes(app) {
 
   // Normal/Chat APIs Documentation
   const normalApiConfig = createSwaggerConfig(
-    'AI Hub Apps - Chat & General APIs',
+    'iHub Apps - Chat & General APIs',
     'APIs for chat functionality, models, tools, sessions, and general application features',
     '1.0.0',
     [
@@ -109,7 +109,7 @@ export default async function registerSwaggerRoutes(app) {
 
   // Admin APIs Documentation
   const adminApiConfig = createSwaggerConfig(
-    'AI Hub Apps - Admin APIs',
+    'iHub Apps - Admin APIs',
     'Administrative APIs for managing configurations, users, groups, and system settings',
     '1.0.0',
     [path.join(__dirname, 'adminRoutes.js'), path.join(__dirname, 'admin/**/*.js')]
@@ -117,7 +117,7 @@ export default async function registerSwaggerRoutes(app) {
 
   // OpenAI Compatible APIs Documentation
   const openaiApiConfig = createSwaggerConfig(
-    'AI Hub Apps - OpenAI Compatible APIs',
+    'iHub Apps - OpenAI Compatible APIs',
     'OpenAI-compatible inference APIs for chat completions and model listings',
     '1.0.0',
     [path.join(__dirname, 'openaiProxy.js')]
@@ -186,7 +186,7 @@ export default async function registerSwaggerRoutes(app) {
   app.get('/api/docs/normal', ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
-      customSiteTitle: 'AI Hub Apps - Chat & General APIs',
+      customSiteTitle: 'iHub Apps - Chat & General APIs',
       swaggerOptions: {
         url: '/api/docs/normal/swagger.json'
       }
@@ -197,7 +197,7 @@ export default async function registerSwaggerRoutes(app) {
   app.get('/api/docs/admin', ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
-      customSiteTitle: 'AI Hub Apps - Admin APIs',
+      customSiteTitle: 'iHub Apps - Admin APIs',
       swaggerOptions: {
         url: '/api/docs/admin/swagger.json'
       }
@@ -208,7 +208,7 @@ export default async function registerSwaggerRoutes(app) {
   app.get('/api/docs/openai', ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
-      customSiteTitle: 'AI Hub Apps - OpenAI Compatible APIs',
+      customSiteTitle: 'iHub Apps - OpenAI Compatible APIs',
       swaggerOptions: {
         url: '/api/docs/openai/swagger.json'
       }

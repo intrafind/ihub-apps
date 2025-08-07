@@ -442,13 +442,13 @@ try {
 
   // Copy generated documentation
   if (fs.existsSync(docsBookDir)) {
-    fs.cpSync(docsBookDir, path.join(outputDir, 'public', 'help'), { recursive: true });
+    fs.cpSync(docsBookDir, path.join(outputDir, 'docs'), { recursive: true });
   }
 
   // Create a simple launcher shell script on Unix platforms
   if (os.platform() !== 'win32') {
     const shellLauncher = `#!/bin/bash
-# AI Hub Apps Launcher
+# iHub Apps Launcher
 
 # Get the directory where this script is located
 DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
@@ -462,7 +462,7 @@ DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
   } else {
     // On Windows, create a more robust batch file
     const batchLauncher = `@echo off
-REM AI Hub Apps Launcher
+REM iHub Apps Launcher
 
 REM Get the directory where this batch file is located (handles spaces in paths)
 set "DIR=%~dp0"

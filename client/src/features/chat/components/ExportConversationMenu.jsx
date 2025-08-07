@@ -13,7 +13,7 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
   const [pdfConfig, setPdfConfig] = useState({
     template: 'default',
     watermark: {
-      text: 'AI Hub Apps',
+      text: 'iHub Apps',
       position: 'bottom-right',
       opacity: 0.5
     }
@@ -40,7 +40,7 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
       // Get app name for better file naming
       const appName = uiConfig?.title
         ? getLocalizedContent(uiConfig.title, currentLanguage)
-        : 'AI Hub Apps';
+        : 'iHub Apps';
 
       // Prepare export options
       const options = {

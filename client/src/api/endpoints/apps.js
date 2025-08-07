@@ -63,7 +63,7 @@ export const exportChatToPDF = async (
   settings,
   template = 'default',
   watermark = {},
-  appName = 'AI Hub Apps'
+  appName = 'iHub Apps'
 ) => {
   if (!messages) {
     throw new Error('Missing required parameters');
@@ -171,7 +171,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat Export - ${appName || 'AI Hub Apps'}</title>
+  <title>Chat Export - ${appName || 'iHub Apps'}</title>
   <style>
     ${styles}
     ${watermarkStyle}
@@ -559,7 +559,7 @@ export const exportChatToFormat = async (messages, settings, format, options = {
   const {
     appId = null,
     chatId = null,
-    appName = 'AI Hub Apps',
+    appName = 'iHub Apps',
     template = 'default',
     watermark = {}
   } = options;

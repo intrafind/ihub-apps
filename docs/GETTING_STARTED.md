@@ -1,8 +1,8 @@
-# Getting Started with AI Hub Apps
+# Getting Started with iHub Apps
 
 ## Quick Start (No Authentication Required)
 
-**AI Hub Apps works immediately without any setup!**
+**iHub Apps works immediately without any setup!**
 
 ```bash
 # 1. Clone and install
@@ -26,7 +26,7 @@ When you start the server for the first time:
 1. 🔍 **Smart Detection**: Checks if configuration directory is empty
 2. 📋 **Auto-Setup**: Copies default configuration from `server/defaults`
 3. ✅ **Ready to Use**: All apps, models, and settings configured automatically
-4. 🚀 **Normal Startup**: Server continues and you can start using AI Hub Apps
+4. 🚀 **Normal Startup**: Server continues and you can start using iHub Apps
 
 **Console output example:**
 ```
@@ -112,4 +112,4 @@ Consider enabling authentication if you need:
 
 ---
 
-**Remember**: AI Hub Apps is designed to be functional and useful immediately, with authentication as an optional enhancement rather than a requirement!
+**Remember**: iHub Apps is designed to be functional and useful immediately, with authentication as an optional enhancement rather than a requirement!

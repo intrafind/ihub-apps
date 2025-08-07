@@ -1,5 +1,5 @@
 #!/bin/sh
-# docker-entrypoint.sh - Container initialization script for AI Hub Apps
+# docker-entrypoint.sh - Container initialization script for iHub Apps
 
 set -e
 
@@ -78,7 +78,7 @@ validate_env_vars() {
 
 # Function to display startup information
 display_startup_info() {
-    log_info "=== AI Hub Apps Container Starting ==="
+    log_info "=== iHub Apps Container Starting ==="
     log_info "Node.js version: $(node --version)"
     log_info "Environment: ${NODE_ENV:-development}"
     log_info "Port: ${PORT:-3000}"
@@ -96,7 +96,7 @@ main() {
     validate_env_vars
     
     log_success "Container initialization completed successfully"
-    log_info "Starting AI Hub Apps with command: $*"
+    log_info "Starting iHub Apps with command: $*"
     
     # Execute the main command
     exec "$@"

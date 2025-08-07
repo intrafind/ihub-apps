@@ -1,10 +1,10 @@
 # iFinder Integration Documentation
 
-This document provides comprehensive information about the iFinder document management system integration in AI Hub Apps.
+This document provides comprehensive information about the iFinder document management system integration in iHub Apps.
 
 ## Overview
 
-The iFinder integration allows AI Hub Apps to search, retrieve, and analyze documents from your iFinder document management system. Users can interact with documents using natural language through AI assistants that automatically search for relevant content, extract document metadata, fetch full document text, and provide insights.
+The iFinder integration allows iHub Apps to search, retrieve, and analyze documents from your iFinder document management system. Users can interact with documents using natural language through AI assistants that automatically search for relevant content, extract document metadata, fetch full document text, and provide insights.
 
 ## Features
 

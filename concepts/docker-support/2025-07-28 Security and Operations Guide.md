@@ -1,4 +1,4 @@
-# Security and Operations Guide for Containerized AI Hub Apps
+# Security and Operations Guide for Containerized iHub Apps
 
 **Document Version:** 1.0  
 **Date:** 2025-07-28  
@@ -225,14 +225,14 @@ jobs:
 ### 1. Runtime Security Monitoring
 
 ```yaml
-# Falco rules for AI Hub Apps
+# Falco rules for iHub Apps
 - rule: Unexpected Network Connection
-  desc: Detect unexpected network connections from AI Hub Apps
+  desc: Detect unexpected network connections from iHub Apps
   condition: >
     (spawned_process and container.name contains "ai-hub-apps") and
     (outbound and not fd.sport in (80, 443, 53))
   output: >
-    Unexpected network connection from AI Hub Apps
+    Unexpected network connection from iHub Apps
     (command=%proc.cmdline connection=%fd.name container=%container.name)
   priority: WARNING
 
@@ -418,8 +418,8 @@ spec:
           labels:
             severity: critical
           annotations:
-            summary: 'AI Hub Apps is down'
-            description: 'AI Hub Apps has been down for more than 5 minutes'
+            summary: 'iHub Apps is down'
+            description: 'iHub Apps has been down for more than 5 minutes'
 
         - alert: AIHubAppsHighMemoryUsage
           expr: (container_memory_usage_bytes{container="ai-hub-apps"} / container_spec_memory_limit_bytes{container="ai-hub-apps"}) > 0.9
@@ -427,7 +427,7 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: 'AI Hub Apps high memory usage'
+            summary: 'iHub Apps high memory usage'
             description: 'Memory usage is above 90% for more than 10 minutes'
 
         - alert: AIHubAppsHighCPUUsage
@@ -436,7 +436,7 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: 'AI Hub Apps high CPU usage'
+            summary: 'iHub Apps high CPU usage'
             description: 'CPU usage is above 80% for more than 15 minutes'
 
         - alert: AIHubAppsHighErrorRate
@@ -445,7 +445,7 @@ spec:
           labels:
             severity: critical
           annotations:
-            summary: 'AI Hub Apps high error rate'
+            summary: 'iHub Apps high error rate'
             description: 'Error rate is above 10% for more than 5 minutes'
 ```
 
@@ -645,4 +645,4 @@ kubectl exec -n ai-hub-apps deployment/ai-hub-apps -- nslookup google.com
 kubectl describe networkpolicy -n ai-hub-apps
 ```
 
-This comprehensive security and operations guide provides the foundation for running AI Hub Apps in a secure, compliant, and operationally sound containerized environment.
+This comprehensive security and operations guide provides the foundation for running iHub Apps in a secure, compliant, and operationally sound containerized environment.

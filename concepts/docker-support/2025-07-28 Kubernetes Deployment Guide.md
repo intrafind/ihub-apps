@@ -1,4 +1,4 @@
-# Kubernetes Deployment Guide for AI Hub Apps
+# Kubernetes Deployment Guide for iHub Apps
 
 **Document Version:** 1.0  
 **Date:** 2025-07-28  
@@ -7,7 +7,7 @@
 
 ## Overview
 
-This guide provides production-ready Kubernetes manifests and Helm charts for deploying AI Hub Apps at scale. The deployment supports:
+This guide provides production-ready Kubernetes manifests and Helm charts for deploying iHub Apps at scale. The deployment supports:
 
 - **High Availability**: Multiple replicas with rolling updates
 - **Auto-scaling**: Horizontal Pod Autoscaler based on CPU/memory metrics
@@ -549,7 +549,7 @@ spec:
 # helm-chart/Chart.yaml
 apiVersion: v2
 name: ai-hub-apps
-description: A Helm chart for AI Hub Apps
+description: A Helm chart for iHub Apps
 type: application
 version: 1.0.5
 appVersion: '1.0.5'
@@ -751,7 +751,7 @@ spec:
 ```json
 {
   "dashboard": {
-    "title": "AI Hub Apps",
+    "title": "iHub Apps",
     "panels": [
       {
         "title": "Request Rate",
@@ -810,4 +810,4 @@ kubectl create job --from=cronjob/backup-job backup-manual-$(date +%Y%m%d%H%M%S)
 kubectl apply -f backup-restore-job.yaml
 ```
 
-This Kubernetes deployment guide provides a comprehensive foundation for running AI Hub Apps at enterprise scale with proper security, monitoring, and operational procedures.
+This Kubernetes deployment guide provides a comprehensive foundation for running iHub Apps at enterprise scale with proper security, monitoring, and operational procedures.

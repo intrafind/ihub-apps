@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# build-sea.sh - Build script for AI Hub Apps using Node.js Single Executable Application (SEA) 
+# build-sea.sh - Build script for iHub Apps using Node.js Single Executable Application (SEA) 
 # Requires Node.js 20 or later
 
 set -e  # Exit on errors
@@ -18,7 +18,7 @@ else
 fi
 
 # Display build information
-echo "Building AI Hub Apps using Node.js SEA..."
+echo "Building iHub Apps using Node.js SEA..."
 echo "Node.js version: $(node -v)"
 echo "OS platform: $(uname -s)"
 

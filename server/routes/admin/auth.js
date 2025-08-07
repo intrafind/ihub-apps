@@ -114,7 +114,7 @@ export default function registerAdminAuthRoutes(app) {
           users: {},
           metadata: {
             version: '2.0.0',
-            description: 'Local user database for AI Hub Apps'
+            description: 'Local user database for iHub Apps'
           }
         };
       }

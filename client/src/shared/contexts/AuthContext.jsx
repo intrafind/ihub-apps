@@ -410,7 +410,7 @@ export function AuthProvider({ children }) {
 
       // Clear any IndexedDB or other persistent storage if used
       if ('indexedDB' in window) {
-        // Clear common AI Hub Apps databases
+        // Clear common iHub Apps databases
         const dbNames = ['aiHubApps', 'chatHistory', 'userFiles'];
         dbNames.forEach(dbName => {
           try {
