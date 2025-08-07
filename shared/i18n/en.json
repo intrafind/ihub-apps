@@ -1012,5 +1012,49 @@
         "name": "iHub Apps"
       }
     }
+  },
+  "integrations": {
+    "jira": {
+      "title": "JIRA Integration",
+      "description": "Connect your JIRA account to search and manage tickets",
+      "connect": "Connect to JIRA",
+      "disconnect": "Disconnect",
+      "reconnect": "Reconnect",
+      "refresh": "Refresh Connection",
+      "test": "Test Connection",
+      "status": {
+        "connected": "Connected",
+        "disconnected": "Not Connected",
+        "expired": "Connection Expired",
+        "connecting": "Connecting...",
+        "testing": "Testing..."
+      },
+      "auth": {
+        "required": "JIRA authentication required",
+        "expired": "JIRA authentication expired",
+        "failed": "Authentication failed",
+        "successful": "Successfully connected to JIRA"
+      },
+      "errors": {
+        "configMissing": "JIRA configuration is incomplete",
+        "connectionFailed": "Failed to connect to JIRA",
+        "searchFailed": "Failed to search JIRA tickets",
+        "ticketNotFound": "Ticket not found",
+        "permissionDenied": "Permission denied",
+        "invalidJQL": "Invalid JQL query"
+      },
+      "functions": {
+        "searchTickets": "Search Tickets",
+        "getTicket": "Get Ticket Details",
+        "addComment": "Add Comment",
+        "getTransitions": "Get Transitions",
+        "transitionTicket": "Change Status",
+        "getAttachment": "Get Attachment"
+      },
+      "confirmations": {
+        "addComment": "Are you sure you want to add this comment?",
+        "transitionTicket": "Are you sure you want to change the ticket status?"
+      }
+    }
   }
 }

@@ -955,5 +955,49 @@
         "name": "iHub Apps"
       }
     }
+  },
+  "integrations": {
+    "jira": {
+      "title": "JIRA-Integration",
+      "description": "Verbinden Sie Ihr JIRA-Konto um Tickets zu suchen und zu verwalten",
+      "connect": "Mit JIRA verbinden",
+      "disconnect": "Trennen",
+      "reconnect": "Erneut verbinden",
+      "refresh": "Verbindung aktualisieren",
+      "test": "Verbindung testen",
+      "status": {
+        "connected": "Verbunden",
+        "disconnected": "Nicht verbunden",
+        "expired": "Verbindung abgelaufen",
+        "connecting": "Verbinde...",
+        "testing": "Teste..."
+      },
+      "auth": {
+        "required": "JIRA-Authentifizierung erforderlich",
+        "expired": "JIRA-Authentifizierung abgelaufen",
+        "failed": "Authentifizierung fehlgeschlagen",
+        "successful": "Erfolgreich mit JIRA verbunden"
+      },
+      "errors": {
+        "configMissing": "JIRA-Konfiguration ist unvollständig",
+        "connectionFailed": "Verbindung zu JIRA fehlgeschlagen",
+        "searchFailed": "Suche nach JIRA-Tickets fehlgeschlagen",
+        "ticketNotFound": "Ticket nicht gefunden",
+        "permissionDenied": "Berechtigung verweigert",
+        "invalidJQL": "Ungültige JQL-Abfrage"
+      },
+      "functions": {
+        "searchTickets": "Tickets suchen",
+        "getTicket": "Ticket-Details abrufen",
+        "addComment": "Kommentar hinzufügen",
+        "getTransitions": "Übergänge abrufen",
+        "transitionTicket": "Status ändern",
+        "getAttachment": "Anhang abrufen"
+      },
+      "confirmations": {
+        "addComment": "Sind Sie sicher, dass Sie diesen Kommentar hinzufügen möchten?",
+        "transitionTicket": "Sind Sie sicher, dass Sie den Ticket-Status ändern möchten?"
+      }
+    }
   }
 }
