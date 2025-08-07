@@ -5,9 +5,15 @@
 
 **A comprehensive platform for building and deploying AI-powered applications with enterprise-grade features.**
 
-iHub Apps is a full-stack application that provides a unified interface for interacting with multiple AI models and integrating various knowledge sources. Built for both individual users and enterprise environments, it offers flexible authentication, powerful source management, and extensive customization capabilities.
+**iHub Apps** is a full-stack application that provides a unified interface for interacting with multiple AI models and integrating various knowledge sources. Built for both individual users and enterprise environments, it offers flexible authentication, powerful source management, and extensive customization capabilities.
 
-Unleash creativity and productivity in your organization with iHub — the AI Hub that brings the power of generative AI directly into your secure corporate environment. Whether you need to compose emails, generate and edit texts, translate content, analyze files, or brainstorm ideas, iHub offers a suite of intuitive micro-apps designed for everyday business needs. With no prompting expertise required and full control over your data, iHub lets you work creatively and securely—on-premise or with carefully selected cloud models. Seamlessly integrate iHub with your existing IntraFind solutions and experience a unified platform for search, knowledge-based answers, and creative AI applications—all free and open source.
+Unleash creativity and productivity in your organization with **iHub** — the AI Hub that brings the power of generative AI directly into your secure corporate environment. Whether you need to compose emails, generate and edit texts, translate content, analyze files, or brainstorm ideas, **iHub** offers a suite of intuitive micro-apps designed for everyday business needs. With no prompting expertise required and full control over your data, **iHub** lets you work creatively and securely—on-premise or with carefully selected cloud models. Seamlessly integrate **iHub** with your existing **IntraFind** solutions and experience a unified platform for search, knowledge-based answers, and creative AI applications—all free and open source.
+
+**iHub** is developed by [**IntraFind Software AG**](https://intrafind.com/) - made with ❤️ from our teams in Berlin, Bonn, Munich + Remote
+
+The Software is free-of-use and "AS-IS without warranty of any kind. - Check the [License Details](LICENSE.md)
+
+**For enterprise-grade support, custom features, or professional services, please contact us at [eMail](mailto:info@intrafind.com).**
 
 ## 🎆 **What Makes iHub Apps Special**
 
