@@ -1,8 +1,7 @@
 import 'dotenv/config';
 import axios from 'axios';
 import crypto from 'crypto';
-import fs from 'fs/promises';
-import path from 'path';
+import tokenStorage from '../TokenStorageService.js';
 
 /**
  * JIRA Service for comprehensive ticket management integration
@@ -14,16 +13,10 @@ class JiraService {
     this.clientId = process.env.JIRA_OAUTH_CLIENT_ID;
     this.clientSecret = process.env.JIRA_OAUTH_CLIENT_SECRET;
     this.redirectUri = process.env.JIRA_OAUTH_REDIRECT_URI;
-    this.encryptionKey = process.env.TOKEN_ENCRYPTION_KEY;
+    this.serviceName = 'jira';
 
     if (!this.baseUrl || !this.clientId || !this.clientSecret || !this.redirectUri) {
       console.warn('⚠️ JIRA OAuth configuration incomplete. Some JIRA features may not work.');
-    }
-
-    // Initialize encryption key if not provided
-    if (!this.encryptionKey) {
-      this.encryptionKey = crypto.randomBytes(32).toString('hex');
-      console.warn('⚠️ Using generated encryption key. Set TOKEN_ENCRYPTION_KEY for production.');
     }
 
     this.tokenUrl = `${this.baseUrl}/oauth/token`;
@@ -122,74 +115,11 @@ class JiraService {
   }
 
   /**
-   * Encrypt token data for secure storage
-   */
-  encryptTokens(tokens) {
-    try {
-      const algorithm = 'aes-256-gcm';
-      const key = Buffer.from(this.encryptionKey, 'hex');
-      const iv = crypto.randomBytes(16);
-
-      const cipher = crypto.createCipherGCM(algorithm, key, iv);
-
-      let encrypted = cipher.update(JSON.stringify(tokens), 'utf8', 'hex');
-      encrypted += cipher.final('hex');
-
-      const authTag = cipher.getAuthTag();
-
-      return {
-        encrypted,
-        iv: iv.toString('hex'),
-        authTag: authTag.toString('hex')
-      };
-    } catch (error) {
-      console.error('❌ Error encrypting tokens:', error.message);
-      throw new Error('Failed to encrypt tokens');
-    }
-  }
-
-  /**
-   * Decrypt token data from storage
-   */
-  decryptTokens(encryptedData) {
-    try {
-      const algorithm = 'aes-256-gcm';
-      const key = Buffer.from(this.encryptionKey, 'hex');
-      const iv = Buffer.from(encryptedData.iv, 'hex');
-
-      const decipher = crypto.createDecipherGCM(algorithm, key, iv);
-      decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
-
-      let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
-
-      return JSON.parse(decrypted);
-    } catch (error) {
-      console.error('❌ Error decrypting tokens:', error.message);
-      throw new Error('Failed to decrypt tokens');
-    }
-  }
-
-  /**
-   * Store encrypted user tokens
+   * Store encrypted user tokens using centralized token storage
    */
   async storeUserTokens(userId, tokens) {
     try {
-      const encryptedTokens = this.encryptTokens(tokens);
-      const tokenData = {
-        userId,
-        ...encryptedTokens,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + tokens.expiresIn * 1000).toISOString()
-      };
-
-      // Store in contents/integrations/jira directory
-      const tokenDir = path.join(process.cwd(), 'contents', 'integrations', 'jira');
-      await fs.mkdir(tokenDir, { recursive: true });
-
-      const tokenFile = path.join(tokenDir, `${userId}.json`);
-      await fs.writeFile(tokenFile, JSON.stringify(tokenData, null, 2));
-
+      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
       console.log(`✅ JIRA tokens stored for user ${userId}`);
       return true;
     } catch (error) {
@@ -199,37 +129,27 @@ class JiraService {
   }
 
   /**
-   * Retrieve and decrypt user tokens
+   * Retrieve and decrypt user tokens using centralized token storage
    */
   async getUserTokens(userId) {
     try {
-      const tokenFile = path.join(
-        process.cwd(),
-        'contents',
-        'integrations',
-        'jira',
-        `${userId}.json`
-      );
-      const tokenData = JSON.parse(await fs.readFile(tokenFile, 'utf8'));
-
       // Check if tokens are expired
-      const expiresAt = new Date(tokenData.expiresAt);
-      const now = new Date();
+      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName);
 
-      if (expiresAt <= now) {
+      if (expired) {
         console.log(`🔄 Tokens expired for user ${userId}, attempting refresh...`);
 
-        const decryptedTokens = this.decryptTokens(tokenData);
-        const refreshedTokens = await this.refreshAccessToken(decryptedTokens.refreshToken);
+        const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
+        const refreshedTokens = await this.refreshAccessToken(expiredTokens.refreshToken);
 
         // Store the refreshed tokens
         await this.storeUserTokens(userId, refreshedTokens);
         return refreshedTokens;
       }
 
-      return this.decryptTokens(tokenData);
+      return await tokenStorage.getUserTokens(userId, this.serviceName);
     } catch (error) {
-      if (error.code === 'ENOENT') {
+      if (error.message.includes('not authenticated')) {
         throw new Error('User not authenticated with JIRA');
       }
       console.error('❌ Error retrieving user tokens:', error.message);
@@ -238,24 +158,17 @@ class JiraService {
   }
 
   /**
-   * Delete user tokens (disconnect)
+   * Delete user tokens using centralized token storage (disconnect)
    */
   async deleteUserTokens(userId) {
     try {
-      const tokenFile = path.join(
-        process.cwd(),
-        'contents',
-        'integrations',
-        'jira',
-        `${userId}.json`
-      );
-      await fs.unlink(tokenFile);
-      console.log(`✅ JIRA tokens deleted for user ${userId}`);
-      return true;
-    } catch (error) {
-      if (error.code !== 'ENOENT') {
-        console.error('❌ Error deleting user tokens:', error.message);
+      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName);
+      if (result) {
+        console.log(`✅ JIRA tokens deleted for user ${userId}`);
       }
+      return result;
+    } catch (error) {
+      console.error('❌ Error deleting user tokens:', error.message);
       return false;
     }
   }
@@ -530,8 +443,7 @@ class JiraService {
    */
   async isUserAuthenticated(userId) {
     try {
-      await this.getUserTokens(userId);
-      return true;
+      return await tokenStorage.hasValidTokens(userId, this.serviceName);
     } catch (error) {
       return false;
     }
