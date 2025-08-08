@@ -11,6 +11,7 @@ import {
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
 
 /**
  * @swagger
@@ -409,6 +410,12 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { appId } = req.params;
+        
+        // Validate appId for security
+        if (!validateIdForPath(appId, 'app', res)) {
+          return;
+        }
+        
         const { data: apps } = configCache.getApps(true);
         const app = apps.find(a => a.id === appId);
 
@@ -436,6 +443,12 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/admin/apps/:appId', basePath), adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
+      
+      // Validate appId for security
+      if (!validateIdForPath(appId, 'app', res)) {
+        return;
+      }
+      
       const { data: apps } = configCache.getApps(true);
       const app = apps.find(a => a.id === appId);
 
@@ -534,6 +547,11 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
     try {
       const { appId } = req.params;
       const updatedApp = req.body;
+
+      // Validate appId for security
+      if (!validateIdForPath(appId, 'app', res)) {
+        return;
+      }
 
       if (!updatedApp.id || !updatedApp.name || !updatedApp.description) {
         return sendBadRequest(res, 'Missing required fields');
@@ -635,6 +653,12 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
       if (!newApp.id || !newApp.name || !newApp.description) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
+      
+      // Validate newApp.id for security
+      if (!validateIdForPath(newApp.id, 'app', res)) {
+        return;
+      }
+      
       const rootDir = getRootDir();
       const appFilePath = join(rootDir, 'contents', 'apps', `${newApp.id}.json`);
       try {
@@ -709,6 +733,12 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { appId } = req.params;
+        
+        // Validate appId for security
+        if (!validateIdForPath(appId, 'app', res)) {
+          return;
+        }
+        
         const { data: apps } = configCache.getApps(true);
         const app = apps.find(a => a.id === appId);
         if (!app) {
@@ -811,11 +841,17 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
           return res.status(400).json({ error: 'Missing enabled flag' });
         }
 
+        // Validate appIds for security
+        const ids = validateIdsForPath(appIds, 'app', res);
+        if (!ids) {
+          return;
+        }
+
         const { data: apps } = configCache.getApps(true);
-        const ids = appIds === '*' ? apps.map(a => a.id) : appIds.split(',');
+        const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
         const rootDir = getRootDir();
 
-        for (const id of ids) {
+        for (const id of resolvedIds) {
           const app = apps.find(a => a.id === id);
           if (!app) continue;
           if (app.enabled !== enabled) {
@@ -829,7 +865,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
         res.json({
           message: `Apps ${enabled ? 'enabled' : 'disabled'} successfully`,
           enabled,
-          ids
+          ids: resolvedIds
         });
       } catch (error) {
         console.error('Error toggling apps:', error);
@@ -895,6 +931,12 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
   app.delete(buildServerPath('/api/admin/apps/:appId', basePath), adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
+      
+      // Validate appId for security
+      if (!validateIdForPath(appId, 'app', res)) {
+        return;
+      }
+      
       const rootDir = getRootDir();
       const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
       try {

@@ -6,6 +6,7 @@ import { getLocalizedContent } from '../../../shared/localize.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
 
 export default function registerAdminModelsRoutes(app, basePath = '') {
   /**
@@ -56,6 +57,12 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/admin/models/:modelId', basePath), adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
+      
+      // Validate modelId for security
+      if (!validateIdForPath(modelId, 'model', res)) {
+        return;
+      }
+      
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
       const model = models.find(m => m.id === modelId);
       if (!model) {
@@ -73,6 +80,12 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
     try {
       const { modelId } = req.params;
       const updatedModel = req.body;
+      
+      // Validate modelId for security
+      if (!validateIdForPath(modelId, 'model', res)) {
+        return;
+      }
+      
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       if (
         !updatedModel.id ||
@@ -119,6 +132,12 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
       ) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
+      
+      // Validate newModel.id for security
+      if (!validateIdForPath(newModel.id, 'model', res)) {
+        return;
+      }
+      
       const rootDir = getRootDir();
       const modelFilePath = join(rootDir, 'contents', 'models', `${newModel.id}.json`);
       try {
@@ -153,6 +172,12 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { modelId } = req.params;
+        
+        // Validate modelId for security
+        if (!validateIdForPath(modelId, 'model', res)) {
+          return;
+        }
+        
         const { data: models } = configCache.getModels(true);
         const model = models.find(m => m.id === modelId);
         if (!model) {
@@ -201,11 +226,17 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
           return res.status(400).json({ error: 'Missing enabled flag' });
         }
 
+        // Validate modelIds for security
+        const ids = validateIdsForPath(modelIds, 'model', res);
+        if (!ids) {
+          return;
+        }
+
         const { data: models } = configCache.getModels(true);
-        const ids = modelIds === '*' ? models.map(m => m.id) : modelIds.split(',');
+        const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
         const rootDir = getRootDir();
 
-        for (const id of ids) {
+        for (const id of resolvedIds) {
           const model = models.find(m => m.id === id);
           if (!model) continue;
           model.enabled = enabled;
@@ -228,7 +259,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
         res.json({
           message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
           enabled,
-          ids
+          ids: resolvedIds
         });
       } catch (error) {
         console.error('Error toggling models:', error);
@@ -243,6 +274,12 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { modelId } = req.params;
+        
+        // Validate modelId for security
+        if (!validateIdForPath(modelId, 'model', res)) {
+          return;
+        }
+        
         const { data: models } = configCache.getModels(true);
         const model = models.find(m => m.id === modelId);
         if (!model) {
@@ -282,6 +319,12 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { modelId } = req.params;
+        
+        // Validate modelId for security
+        if (!validateIdForPath(modelId, 'model', res)) {
+          return;
+        }
+        
         const { data: models } = configCache.getModels(true);
         const model = models.find(m => m.id === modelId);
         if (!model) {
