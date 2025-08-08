@@ -10,7 +10,7 @@ import ldapAuthMiddleware from './ldapAuth.js';
 import { teamsAuthMiddleware } from './teamsAuth.js';
 import ntlmAuthMiddleware, { createNtlmMiddleware } from './ntlmAuth.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
-import { normalApiLimiter, adminApiLimiter } from './rateLimiting.js';
+import { createRateLimiters } from './rateLimiting.js';
 import config from '../config.js';
 
 /**
@@ -127,24 +127,31 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Set platform config on app for middleware access
   app.set('platform', platformConfig);
 
+  // Create configurable rate limiters based on platform configuration
+  const rateLimiters = createRateLimiters(platformConfig);
+
   // Rate limiting middleware - apply early to protect all endpoints
-  // Normal API rate limiter for general endpoints
-  app.use('/api/apps', normalApiLimiter);
-  app.use('/api/tools', normalApiLimiter);
-  app.use('/api/models', normalApiLimiter);
-  app.use('/api/prompts', normalApiLimiter);
-  app.use('/api/styles', normalApiLimiter);
-  app.use('/api/translations', normalApiLimiter);
-  app.use('/api/configs', normalApiLimiter);
-  app.use('/api/sessions', normalApiLimiter);
-  app.use('/api/pages', normalApiLimiter);
-  app.use('/api/magic-prompts', normalApiLimiter);
-  app.use('/api/short-links', normalApiLimiter);
-  app.use('/auth', normalApiLimiter);
-  app.use('/inference', normalApiLimiter);
+  // Public API rate limiter for general endpoints
+  app.use('/api/apps', rateLimiters.publicApiLimiter);
+  app.use('/api/tools', rateLimiters.publicApiLimiter);
+  app.use('/api/models', rateLimiters.publicApiLimiter);
+  app.use('/api/prompts', rateLimiters.publicApiLimiter);
+  app.use('/api/styles', rateLimiters.publicApiLimiter);
+  app.use('/api/translations', rateLimiters.publicApiLimiter);
+  app.use('/api/configs', rateLimiters.publicApiLimiter);
+  app.use('/api/sessions', rateLimiters.publicApiLimiter);
+  app.use('/api/pages', rateLimiters.publicApiLimiter);
+  app.use('/api/magic-prompts', rateLimiters.publicApiLimiter);
+  app.use('/api/short-links', rateLimiters.publicApiLimiter);
   
-  // Admin API rate limiter for administrative endpoints (more restrictive)
-  app.use('/api/admin', adminApiLimiter);
+  // Auth API rate limiter for authentication endpoints
+  app.use('/auth', rateLimiters.authApiLimiter);
+  
+  // Inference API rate limiter for AI inference endpoints
+  app.use('/inference', rateLimiters.inferenceApiLimiter);
+  
+  // Admin API rate limiter for administrative endpoints (most restrictive)
+  app.use('/api/admin', rateLimiters.adminApiLimiter);
 
   // Session middleware for OIDC (only needed if OIDC is enabled)
   const oidcConfig = platformConfig.oidcAuth || {};
@@ -207,6 +214,3 @@ export function setupMiddleware(app, platformConfig = {}) {
     next();
   });
 }
-
-// Export rate limiters for use in individual routes if needed
-export { normalApiLimiter, adminApiLimiter };

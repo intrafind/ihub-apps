@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implementation of comprehensive rate limiting for all API endpoints to address GitHub security finding #217 and protect the iHub Apps server against abuse and DoS attacks.
+Implementation of comprehensive, configurable rate limiting for all API endpoints to address GitHub security finding #217 and protect the iHub Apps server against abuse and DoS attacks.
 
 ## Problem Statement
 
@@ -14,17 +14,31 @@ GitHub's security scanning identified missing rate limiting on the `/api/tools/:
 
 ## Solution Design
 
-### Two-Tier Rate Limiting Approach
+### Multi-Tier Configurable Rate Limiting Approach
 
-**Normal API Rate Limiter**
-- Limit: 100 requests per 15 minutes per IP
+**1. Public API Rate Limiter**
+- Default Limit: 100 requests per 15 minutes per IP
 - Applied to: Regular API endpoints (`/api/apps`, `/api/tools`, `/api/models`, etc.)
 - Purpose: Allow generous usage for normal operations while preventing abuse
 
-**Admin API Rate Limiter**  
-- Limit: 50 requests per 15 minutes per IP
+**2. Admin API Rate Limiter**  
+- Default Limit: 50 requests per 15 minutes per IP
 - Applied to: Administrative endpoints (`/api/admin/*`)
 - Purpose: More restrictive limits for sensitive administrative operations
+
+**3. Auth API Rate Limiter**
+- Default Limit: 30 requests per 15 minutes per IP
+- Applied to: Authentication endpoints (`/auth/*`)
+- Purpose: Most restrictive limits for authentication to prevent brute force attacks
+
+**4. Inference API Rate Limiter**
+- Default Limit: 60 requests per 15 minutes per IP  
+- Applied to: AI inference endpoints (`/inference/*`)
+- Purpose: Moderate limits for resource-intensive AI operations
+
+**5. Default Configuration**
+- Base configuration that all other limiters inherit from
+- Provides global defaults that can be overridden per endpoint type
 
 ### Technical Implementation
 
@@ -34,40 +48,70 @@ GitHub's security scanning identified missing rate limiting on the `/api/tools/:
 - Supports standard rate limit headers
 - Memory-based storage (suitable for current architecture)
 
+**Configuration System**:
+- Fully configurable through `platform.json`
+- Inheritance model where specific limiters override default settings
+- Factory pattern for creating configured rate limiters
+
 **Integration Points**:
-- `server/middleware/rateLimiting.js`: Rate limiter configurations
-- `server/middleware/setup.js`: Middleware application to routes
+- `server/middleware/rateLimiting.js`: Configurable rate limiter factory
+- `server/middleware/setup.js`: Middleware application using platform config
+- `server/validators/platformConfigSchema.js`: Configuration validation
 - Applied early in middleware chain for maximum protection
 
 ## Implementation Details
 
 ### Files Modified/Created
 
-1. **`server/middleware/rateLimiting.js`** (NEW)
-   - Defines two rate limiter instances
-   - Configures error messages and headers
-   - Optimizes for different use cases (normal vs admin)
+1. **`server/middleware/rateLimiting.js`** (MODIFIED)
+   - Added configurable rate limiter factory
+   - Supports inheritance from default configuration
+   - Maintains backward compatibility
 
 2. **`server/middleware/setup.js`** (MODIFIED)
-   - Added import for rate limiting middleware
-   - Applied rate limiters to appropriate route patterns
-   - Integrated into existing middleware chain
+   - Updated to use configurable rate limiters
+   - Separated auth and inference endpoints from public API
+   - Applies appropriate limiter to each endpoint type
 
-3. **`server/package.json`** (MODIFIED)
-   - Added `express-rate-limit` dependency
+3. **`server/validators/platformConfigSchema.js`** (MODIFIED)
+   - Added comprehensive rate limiting configuration schema
+   - Validation for all rate limiting parameters
 
-### Rate Limiter Configuration
+4. **Platform Configuration Files** (MODIFIED)
+   - `server/defaults/config/platform.json`: Default rate limiting configuration
+   - `configs/config/platform.json`: User-customizable rate limiting settings
 
-```javascript
-// Normal API: More permissive
-windowMs: 15 * 60 * 1000,  // 15 minutes
-limit: 100,                 // 100 requests per window
-skipFailedRequests: true    // Don't count failed requests
+5. **`docs/rate-limiting.md`** (MODIFIED)
+   - Updated documentation for configurable approach
+   - Added configuration examples and inheritance explanation
 
-// Admin API: More restrictive  
-windowMs: 15 * 60 * 1000,  // 15 minutes
-limit: 50,                  // 50 requests per window
-skipFailedRequests: false   // Count all requests
+### Rate Limiter Configuration Schema
+
+```json
+{
+  "rateLimit": {
+    "default": {
+      "windowMs": 900000,        // 15 minutes in milliseconds
+      "limit": 100,              // Default request limit
+      "standardHeaders": true,    // Return RateLimit-* headers
+      "legacyHeaders": false,     // Don't return X-RateLimit-* headers
+      "skipSuccessfulRequests": false,
+      "skipFailedRequests": true  // Don't count failed requests
+    },
+    "adminApi": {
+      "limit": 50,               // Override: more restrictive
+      "skipFailedRequests": false // Override: count all requests
+    },
+    "publicApi": {},             // Inherits all from default
+    "authApi": {
+      "limit": 30,               // Override: most restrictive
+      "skipFailedRequests": false
+    },
+    "inferenceApi": {
+      "limit": 60                // Override: moderate limit
+    }
+  }
+}
 ```
 
 ## Response Headers
@@ -83,33 +127,49 @@ Standard rate limit headers are provided:
 1. **DoS Protection**: Prevents overwhelming the server with excessive requests
 2. **Resource Conservation**: Ensures fair resource allocation across users
 3. **Abuse Prevention**: Limits automated attacks and scraping attempts
-4. **Compliance**: Addresses GitHub security finding #217
+4. **Endpoint-Specific Security**: Different protection levels for different endpoint types
+5. **Configuration Flexibility**: Allows customization without code changes
+6. **Compliance**: Addresses GitHub security finding #217
 
 ## Testing Results
 
-- ✅ Server startup: No performance impact
-- ✅ Header verification: Correct rate limit headers present
-- ✅ Route coverage: All intended endpoints protected
+- ✅ Server startup: No performance impact with configurable approach
+- ✅ Header verification: Correct rate limit headers for each endpoint type
+- ✅ Route coverage: All intended endpoints protected with appropriate limits
+- ✅ Configuration validation: Schema validation prevents invalid configurations
 - ✅ Development workflow: No interference with normal development
+
+## Configuration Benefits
+
+1. **No Code Changes**: Rate limits can be adjusted via configuration
+2. **Environment-Specific**: Different limits for development, staging, production
+3. **Customer Customization**: Allows customers to adjust limits per their needs
+4. **Inheritance Model**: Reduces configuration duplication through defaults
+5. **Validation**: Schema ensures valid configurations prevent runtime errors
 
 ## Future Considerations
 
 1. **Persistent Storage**: Consider Redis-based storage for multi-instance deployments
-2. **Dynamic Configuration**: Make rate limits configurable via platform settings
-3. **User-Based Limiting**: Implement per-user rate limiting in addition to per-IP
-4. **Monitoring**: Add rate limiting metrics to telemetry system
+2. **User-Based Limiting**: Implement per-user rate limiting in addition to per-IP
+3. **Monitoring**: Add rate limiting metrics to telemetry system
+4. **Advanced Policies**: Implement burst limiting and dynamic rate adjustments
 
 ## Related Files
 
-- `server/middleware/rateLimiting.js`: Rate limiter definitions
-- `server/middleware/setup.js`: Middleware integration
-- `server/routes/toolRoutes.js`: Originally flagged route (now protected)
+- `server/middleware/rateLimiting.js`: Configurable rate limiter factory
+- `server/middleware/setup.js`: Middleware integration with platform config
+- `server/validators/platformConfigSchema.js`: Configuration schema
+- `server/defaults/config/platform.json`: Default configuration
+- `configs/config/platform.json`: User configuration
 - `docs/rate-limiting.md`: User documentation
 
 ## Decision Log
 
 - **express-rate-limit**: Chosen for reliability and industry adoption
-- **Two-tier approach**: Balances usability with security requirements
+- **Multi-tier approach**: Balances different security needs per endpoint type
+- **Configuration-driven**: Enables customization without code deployment
+- **Inheritance model**: Reduces duplication while allowing specific overrides
 - **15-minute window**: Provides reasonable protection without hindering normal usage
 - **Memory storage**: Sufficient for current single-instance architecture
 - **Early middleware**: Applied before authentication for maximum protection
+- **Schema validation**: Ensures configuration integrity and prevents runtime errors

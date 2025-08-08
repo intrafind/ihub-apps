@@ -1,16 +1,18 @@
 # Rate Limiting Implementation
 
-This document describes the rate limiting implementation added to protect the iHub Apps API endpoints.
+This document describes the comprehensive rate limiting implementation added to protect the iHub Apps API endpoints.
 
 ## Overview
 
-Rate limiting has been implemented using the `express-rate-limit` package to protect against abuse and ensure fair usage of API resources. The implementation includes two distinct rate limiters with different restrictions for normal and administrative endpoints.
+Rate limiting has been implemented using the `express-rate-limit` package to protect against abuse and ensure fair usage of API resources. The implementation includes configurable rate limiters with different restrictions for various endpoint types.
 
-## Rate Limiters
+## Rate Limiting Types
 
-### Normal API Rate Limiter
-- **Limit**: 100 requests per 15 minutes per IP address
-- **Applied to**: All regular API endpoints including:
+The system supports five different types of rate limiters, each configurable through the platform configuration:
+
+### 1. Public API Rate Limiter
+- **Default Limit**: 100 requests per 15 minutes per IP address
+- **Applied to**: Regular API endpoints including:
   - `/api/apps`
   - `/api/tools` (including `/api/tools/:toolId`)
   - `/api/models`
@@ -22,23 +24,83 @@ Rate limiting has been implemented using the `express-rate-limit` package to pro
   - `/api/pages`
   - `/api/magic-prompts`
   - `/api/short-links`
-  - `/auth`
-  - `/inference`
 
-### Admin API Rate Limiter
-- **Limit**: 50 requests per 15 minutes per IP address
+### 2. Admin API Rate Limiter
+- **Default Limit**: 50 requests per 15 minutes per IP address (more restrictive)
 - **Applied to**: Administrative endpoints:
   - `/api/admin/*` (all admin routes)
 
+### 3. Auth API Rate Limiter
+- **Default Limit**: 30 requests per 15 minutes per IP address (most restrictive)
+- **Applied to**: Authentication endpoints:
+  - `/auth/*` (all authentication routes)
+
+### 4. Inference API Rate Limiter
+- **Default Limit**: 60 requests per 15 minutes per IP address (moderate)
+- **Applied to**: AI inference endpoints:
+  - `/inference/*` (all inference routes)
+
+### 5. Default Rate Limiter
+- **Default Limit**: 100 requests per 15 minutes per IP address
+- **Purpose**: Base configuration that other limiters inherit from
+
 ## Configuration
 
-The rate limiters are configured in `server/middleware/rateLimiting.js` and applied in `server/middleware/setup.js`.
+Rate limiting is now fully configurable through the `platform.json` configuration file. Add the following section to customize rate limiting:
+
+```json
+{
+  "rateLimit": {
+    "default": {
+      "windowMs": 900000,
+      "limit": 100,
+      "standardHeaders": true,
+      "legacyHeaders": false,
+      "skipSuccessfulRequests": false,
+      "skipFailedRequests": true
+    },
+    "adminApi": {
+      "limit": 50,
+      "skipFailedRequests": false
+    },
+    "publicApi": {},
+    "authApi": {
+      "limit": 30,
+      "skipFailedRequests": false
+    },
+    "inferenceApi": {
+      "limit": 60
+    }
+  }
+}
+```
+
+### Configuration Options
+
+Each rate limiter supports the following configuration options:
+
+- `windowMs`: Time window in milliseconds (default: 900000 = 15 minutes)
+- `limit`: Maximum number of requests per window (varies by type)
+- `standardHeaders`: Return rate limit info in `RateLimit-*` headers (default: true)
+- `legacyHeaders`: Enable legacy `X-RateLimit-*` headers (default: false)
+- `skipSuccessfulRequests`: Don't count successful requests (default: false)
+- `skipFailedRequests`: Don't count failed requests (default: varies by type)
+- `message`: Custom error message when limit exceeded
+
+### Inheritance
+
+All rate limiters inherit from the `default` configuration. You only need to specify the options you want to override for each type. Empty configurations (`{}`) will use the default settings.
+
+## Implementation Details
+
+The rate limiters are implemented in `server/middleware/rateLimiting.js` using a factory pattern that creates configured limiters based on platform settings. They are applied in `server/middleware/setup.js` during application initialization.
 
 ### Features
+- **Configurable Limits**: All parameters can be customized per endpoint type
 - **Standard Headers**: Returns rate limit information in `RateLimit-*` headers
-- **Skip Failed Requests**: Normal API limiter skips failed requests to prevent DoS amplification
-- **Error Messages**: Provides clear error messages when rate limits are exceeded
-- **Sliding Window**: Uses a 15-minute sliding window for fair distribution
+- **Smart Skipping**: Different behaviors for failed requests based on endpoint type
+- **Clear Error Messages**: Provides helpful error messages when limits are exceeded
+- **Sliding Window**: Uses a sliding window approach for fair distribution
 
 ## Response Headers
 
@@ -55,7 +117,7 @@ When rate limits are exceeded, a 429 status code is returned with a JSON error m
 
 ```json
 {
-  "error": "Too many requests from this IP, please try again later.",
+  "error": "Too many [type] requests from this IP, please try again later.",
   "retryAfter": "15 minutes"
 }
 ```
@@ -65,15 +127,21 @@ When rate limits are exceeded, a 429 status code is returned with a JSON error m
 Rate limiting can be tested by making multiple requests to any protected endpoint:
 
 ```bash
-# Test normal API rate limiting
+# Test public API rate limiting
 curl -I http://localhost:3000/api/apps
 
 # Test admin API rate limiting  
 curl -I http://localhost:3000/api/admin/apps
+
+# Test auth API rate limiting
+curl -I http://localhost:3000/auth/login
+
+# Test inference API rate limiting
+curl -I http://localhost:3000/inference/chat
 ```
 
 The response headers will show the current rate limit status.
 
 ## Security Impact
 
-This implementation addresses GitHub security finding #217 by adding comprehensive rate limiting to all API endpoints, preventing abuse and ensuring the server remains available for legitimate users.
+This implementation addresses GitHub security finding #217 by adding comprehensive, configurable rate limiting to all API endpoints, preventing abuse and ensuring the server remains available for legitimate users while allowing fine-tuned control over different endpoint types.
