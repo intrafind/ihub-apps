@@ -6,8 +6,16 @@ import { runToolSchema } from '../validators/index.js';
 import configCache from '../configCache.js';
 import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import { buildServerPath } from '../utils/basePath.js';
-
+import rateLimit from 'express-rate-limit';
 export default function registerToolRoutes(app, basePath = '') {
+  // Rate limiter: max 100 requests per 15 minutes per IP
+  const toolRouteLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    standardHeaders: true, // Return rate limit info in the RateLimit-* headers
+    legacyHeaders: false, // Disable the X-RateLimit-* headers
+  });
+
   app.get(buildServerPath('/api/tools', basePath), authRequired, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
@@ -43,6 +51,7 @@ export default function registerToolRoutes(app, basePath = '') {
   });
 
   app.all(
+    toolRouteLimiter,
     buildServerPath('/api/tools/:toolId', basePath),
     authRequired,
     validate(runToolSchema),
