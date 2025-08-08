@@ -43,7 +43,10 @@ const authDebugSchema = z.object({
 });
 
 const rateLimitConfigSchema = z.object({
-  windowMs: z.number().min(1000).default(15 * 60 * 1000), // 15 minutes default
+  windowMs: z
+    .number()
+    .min(1000)
+    .default(15 * 60 * 1000), // 15 minutes default
   limit: z.number().min(1).default(100), // 100 requests default
   message: z.string().optional(),
   standardHeaders: z.boolean().default(true),

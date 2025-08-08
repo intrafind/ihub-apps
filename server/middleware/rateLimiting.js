@@ -14,7 +14,7 @@ import rateLimit from 'express-rate-limit';
  */
 function createRateLimiter(config = {}, defaults = {}, type = 'API') {
   const finalConfig = { ...defaults, ...config };
-  
+
   return rateLimit({
     windowMs: finalConfig.windowMs || 15 * 60 * 1000, // 15 minutes default
     limit: finalConfig.limit || 100, // 100 requests default
@@ -24,8 +24,10 @@ function createRateLimiter(config = {}, defaults = {}, type = 'API') {
     },
     standardHeaders: finalConfig.standardHeaders !== undefined ? finalConfig.standardHeaders : true,
     legacyHeaders: finalConfig.legacyHeaders !== undefined ? finalConfig.legacyHeaders : false,
-    skipSuccessfulRequests: finalConfig.skipSuccessfulRequests !== undefined ? finalConfig.skipSuccessfulRequests : false,
-    skipFailedRequests: finalConfig.skipFailedRequests !== undefined ? finalConfig.skipFailedRequests : false
+    skipSuccessfulRequests:
+      finalConfig.skipSuccessfulRequests !== undefined ? finalConfig.skipSuccessfulRequests : false,
+    skipFailedRequests:
+      finalConfig.skipFailedRequests !== undefined ? finalConfig.skipFailedRequests : false
   });
 }
 
@@ -36,7 +38,7 @@ function createRateLimiter(config = {}, defaults = {}, type = 'API') {
  */
 export function createRateLimiters(platformConfig = {}) {
   const rateLimitConfig = platformConfig.rateLimit || {};
-  
+
   // Default configuration that all rate limiters inherit from
   const defaultConfig = {
     windowMs: 15 * 60 * 1000, // 15 minutes
