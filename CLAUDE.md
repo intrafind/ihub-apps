@@ -7,12 +7,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Essential Commands
 
 ```bash
-# Install all dependencies (root, client, server)
-npm run install:all
-npx playwright install
+# Quick setup for new developers (copies .env, installs deps)
+npm run setup:dev
 
 # Start development environment (server + client with hot reload)
 npm run dev
+
+# Install all dependencies (root, client, server)
+npm run install:all
+npx playwright install
 
 # Build for production
 npm run prod:build
@@ -21,12 +24,13 @@ npm run prod:build
 npm run start:prod
 
 # Build as standalone binary (requires Node.js 20+)
-./build.sh --binary
-# or
-./build.sh -b
-
-# Alternative: Use npm script
 npm run build:binary
+
+# Check server health
+npm run health
+
+# View server logs
+npm run logs
 ```
 
 ### Code Quality

@@ -14,6 +14,41 @@ The Software is free-of-use and "AS-IS without warranty of any kind. - Check the
 
 **For enterprise-grade support, custom features, or professional services, please contact us at [eMail](mailto:info@intrafind.com).**
 
+## 🚀 Quick Start
+
+### 💻 For Developers
+
+Get up and running in development mode with hot reload:
+
+```bash
+git clone <repository-url>
+cd ihub-apps
+npm run setup:dev
+# Edit .env with your API keys (OpenAI, Anthropic, Google)
+npm run dev
+```
+
+**📖 Need help?** See [Developer Setup Guide](#method-1-npm-installation-development) | [Complete Documentation](docs/README.md)
+
+### 🏭 For Production
+
+Deploy with Docker (recommended for production):
+
+```bash
+# Quick start with Docker
+docker run -d \
+  -p 3000:3000 \
+  -v $(pwd)/contents:/app/contents \
+  -e JWT_SECRET=your-secure-secret \
+  -e OPENAI_API_KEY=your-key \
+  --name ihub-apps \
+  ghcr.io/intrafind/ihub-apps:latest
+```
+
+**🐳 More options:** [Docker Guide](docker/DOCKER.md) | [Binary Downloads](https://github.com/intrafind/ihub-apps/releases) | [Full Installation Guide](#-installation-overview)
+
+---
+
 ## 🎆 **What Makes iHub Apps Special**
 
 - **🤖 Multiple AI Providers**: OpenAI, Anthropic, Google, Mistral with unified interface
@@ -26,11 +61,12 @@ The Software is free-of-use and "AS-IS without warranty of any kind. - Check the
 
 ---
 
-**📚 Documentation**: [docs/README.md](docs/README.md) | **🚀 Quick Start**: [Installation Guide](#-installation-overview) | **📝 Help**: `/help` (after startup)
+**📚 Documentation**: [docs/README.md](docs/README.md) | **🚀 Quick Start**: [Get Started](#-quick-start) | **📝 Help**: `/help` (after startup)
 
 ## 🗺️ Table of Contents
 
-- [🚀 **Installation Overview**](#-installation-overview) - Get started quickly with multiple installation options
+- [🚀 **Quick Start**](#-quick-start) - Get started in 2 minutes (dev or production)
+- [📋 **Installation Overview**](#-installation-overview) - Detailed installation options and system requirements
 - [📱 **Available Applications**](#-available-applications) - Pre-built AI applications for various use cases
 - [✨ **Key Features**](#-key-features) - Core platform capabilities and integrations
 - [🔐 **Authentication & Security**](#-authentication-and-authorization) - Enterprise-grade security setup
@@ -229,7 +265,8 @@ iHub Apps provides multiple installation methods to suit different use cases and
 ```bash
 # npm Installation (Development)
 git clone <repository-url> && cd ihub-apps
-npm run install:all && npm run dev
+npm run setup:dev
+# Edit .env with your API keys, then run: npm run dev
 
 # Docker Installation (Production-ready)
 docker run -p 3000:3000 -e JWT_SECRET=your-secret ghcr.io/intrafind/ihub-apps:latest
@@ -304,17 +341,32 @@ npm run install:all && npm run electron:dev
    cd ihub-apps
    ```
 
-2. Install dependencies:
+2. **Set up the development environment:**
 
    ```bash
-   npm run install:all
+   npm run setup:dev
+   # This will copy .env.example to .env and install all dependencies
+   ```
+
+3. **Configure API keys:**
+
+   Edit the `.env` file with your API keys:
+
+   ```bash
+   # Required API keys
+   OPENAI_API_KEY=sk-...
+   CLAUDE_3_SONNET_API_KEY=sk-ant-...
+   GEMINI_API_KEY=AIza...
+   ```
+
+4. **Optional tools setup:**
+
+   ```bash
    npx playwright install (optional)
    # Selenium tools require Chrome or Chromium in your PATH
    ```
 
-   This will install dependencies for both the client and server components.
-
-3. **Start the application** (automatically sets up default configuration):
+5. **Start the application** (automatically sets up default configuration):
 
    ```bash
    npm run dev

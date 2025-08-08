@@ -242,6 +242,15 @@ http {
             proxy_pass http://ihub_backend;
         }
 
+        # Favicon handling (proxy to subpath)
+        location = /favicon.ico {
+            proxy_pass http://ihub_backend/favicon.ico;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Prefix /ihub;
+            expires 7d;
+            add_header Cache-Control "public, immutable";
+        }
+
         # Default location (redirect to /ihub)
         location / {
             return 301 /ihub/;
@@ -288,6 +297,15 @@ http {
         # Redirect /ihub to /ihub/
         location = /ihub {
             return 301 /ihub/;
+        }
+
+        # Favicon handling (proxy to subpath)
+        location = /favicon.ico {
+            proxy_pass http://ihub_backend/favicon.ico;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Prefix /ihub;
+            expires 7d;
+            add_header Cache-Control "public, immutable";
         }
 
         # Default location
