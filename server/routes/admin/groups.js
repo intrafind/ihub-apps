@@ -5,6 +5,7 @@ import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { validateIdForPath } from '../../utils/pathSecurity.js';
 
 /**
  * @swagger
@@ -467,6 +468,11 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
       if (!id || !name) {
         return res.status(400).json({ error: 'Group ID and name are required' });
       }
+      
+      // Validate group ID for security
+      if (!validateIdForPath(id, 'group', res)) {
+        return;
+      }
 
       // Validate permissions structure
       if (!permissions || typeof permissions !== 'object') {
@@ -597,6 +603,12 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
   app.put(buildServerPath('/api/admin/groups/:groupId', basePath), adminAuth, async (req, res) => {
     try {
       const { groupId } = req.params;
+      
+      // Validate groupId for security (prevents prototype pollution)
+      if (!validateIdForPath(groupId, 'group', res)) {
+        return;
+      }
+      
       const { name, description, permissions, mappings } = req.body;
 
       const rootDir = getRootDir();
@@ -729,6 +741,11 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { groupId } = req.params;
+        
+        // Validate groupId for security (prevents prototype pollution)
+        if (!validateIdForPath(groupId, 'group', res)) {
+          return;
+        }
 
         // Prevent deletion of core system groups
         const protectedGroups = ['admin', 'user', 'anonymous', 'authenticated'];
