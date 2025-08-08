@@ -1,51 +1,72 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import {
+  validateWithSchema,
+  errorsToFieldErrors,
+  validatePasswordConfirmation,
+  isFieldRequired
+} from '../../../utils/schemaValidation';
 
 /**
  * UserFormEditor - Form-based editor for user configuration
  */
-const UserFormEditor = ({ value: user, onChange, onValidationChange, isNewUser = false }) => {
+const UserFormEditor = ({
+  value: user,
+  onChange,
+  onValidationChange,
+  isNewUser = false,
+  jsonSchema
+}) => {
   const { t } = useTranslation();
   const [validationErrors, setValidationErrors] = useState({});
   const [confirmPassword, setConfirmPassword] = useState('');
 
   // Validation function
   const validateUser = userData => {
-    const errors = {};
+    let errors = {};
 
-    // Required field validation
-    if (!userData.username) {
-      errors.username = t('admin.users.validation.usernameRequired', 'Username is required');
-    } else if (!/^[a-zA-Z0-9_.-]+$/.test(userData.username)) {
-      errors.username = t(
-        'admin.users.validation.usernameInvalid',
-        'Username can only contain letters, numbers, periods, hyphens, and underscores'
-      );
+    // Use schema validation if available
+    if (jsonSchema) {
+      const validation = validateWithSchema(userData, jsonSchema);
+      if (!validation.isValid) {
+        errors = errorsToFieldErrors(validation.errors);
+      }
+    } else {
+      // Fallback to manual validation if no schema
+      if (!userData.username) {
+        errors.username = t('admin.users.validation.usernameRequired', 'Username is required');
+      } else if (!/^[a-zA-Z0-9_.-]+$/.test(userData.username)) {
+        errors.username = t(
+          'admin.users.validation.usernameInvalid',
+          'Username can only contain letters, numbers, periods, hyphens, and underscores'
+        );
+      }
+
+      if (!userData.email) {
+        errors.email = t('admin.users.validation.emailRequired', 'Email is required');
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userData.email)) {
+        errors.email = t(
+          'admin.users.validation.emailInvalid',
+          'Please enter a valid email address'
+        );
+      }
+
+      // Password validation for new users or when password is provided
+      if (isNewUser && !userData.password) {
+        errors.password = t('admin.users.validation.passwordRequired', 'Password is required');
+      } else if (userData.password && userData.password.length < 6) {
+        errors.password = t(
+          'admin.users.validation.passwordTooShort',
+          'Password must be at least 6 characters long'
+        );
+      }
     }
 
-    if (!userData.email) {
-      errors.email = t('admin.users.validation.emailRequired', 'Email is required');
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userData.email)) {
-      errors.email = t('admin.users.validation.emailInvalid', 'Please enter a valid email address');
-    }
-
-    // Password validation for new users or when password is provided
-    if (isNewUser && !userData.password) {
-      errors.password = t('admin.users.validation.passwordRequired', 'Password is required');
-    } else if (userData.password && userData.password.length < 6) {
-      errors.password = t(
-        'admin.users.validation.passwordTooShort',
-        'Password must be at least 6 characters long'
-      );
-    }
-
-    // Confirm password validation
-    if (userData.password && userData.password !== confirmPassword) {
-      errors.confirmPassword = t(
-        'admin.users.validation.passwordMismatch',
-        'Passwords do not match'
-      );
+    // Confirm password validation (not part of schema)
+    const passwordError = validatePasswordConfirmation(userData.password, confirmPassword);
+    if (passwordError) {
+      errors.confirmPassword = t('admin.users.validation.passwordMismatch', passwordError);
     }
 
     setValidationErrors(errors);
@@ -70,7 +91,7 @@ const UserFormEditor = ({ value: user, onChange, onValidationChange, isNewUser =
     if (user) {
       validateUser(user);
     }
-  }, [user, confirmPassword]);
+  }, [user, confirmPassword, jsonSchema]);
 
   const handleInputChange = (field, value) => {
     const updatedUser = {
@@ -121,11 +142,13 @@ const UserFormEditor = ({ value: user, onChange, onValidationChange, isNewUser =
               <div className="col-span-6 sm:col-span-3">
                 <label className="block text-sm font-medium text-gray-700">
                   {t('admin.users.username', 'Username')}
-                  <span className="text-red-500 ml-1">*</span>
+                  {isFieldRequired('username', jsonSchema) && (
+                    <span className="text-red-500 ml-1">*</span>
+                  )}
                 </label>
                 <input
                   type="text"
-                  required
+                  required={isFieldRequired('username', jsonSchema)}
                   value={user.username || ''}
                   onChange={e => handleInputChange('username', e.target.value)}
                   disabled={!isNewUser}
@@ -150,11 +173,13 @@ const UserFormEditor = ({ value: user, onChange, onValidationChange, isNewUser =
               <div className="col-span-6 sm:col-span-3">
                 <label className="block text-sm font-medium text-gray-700">
                   {t('admin.users.email', 'Email')}
-                  <span className="text-red-500 ml-1">*</span>
+                  {isFieldRequired('email', jsonSchema) && (
+                    <span className="text-red-500 ml-1">*</span>
+                  )}
                 </label>
                 <input
                   type="email"
-                  required
+                  required={isFieldRequired('email', jsonSchema)}
                   value={user.email || ''}
                   onChange={e => handleInputChange('email', e.target.value)}
                   className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${

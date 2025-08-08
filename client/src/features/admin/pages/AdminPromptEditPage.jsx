@@ -245,7 +245,8 @@ const AdminPromptEditPage = () => {
             formProps={{
               isNewPrompt,
               apps,
-              categories: uiConfig?.promptsList?.categories?.list || []
+              categories: uiConfig?.promptsList?.categories?.list || [],
+              jsonSchema
             }}
             jsonSchema={jsonSchema}
             title={

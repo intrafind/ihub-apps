@@ -216,7 +216,8 @@ const AdminGroupEditPage = () => {
             onChange={handleDataChange}
             formComponent={GroupFormEditor}
             formProps={{
-              resources
+              resources,
+              jsonSchema
             }}
             jsonSchema={jsonSchema}
             title={

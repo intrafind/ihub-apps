@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ResourceSelector from './ResourceSelector';
+import {
+  validateWithSchema,
+  errorsToFieldErrors,
+  isFieldRequired
+} from '../../../utils/schemaValidation';
 
 /**
  * GroupFormEditor - Form-based editor for group configuration
@@ -10,27 +15,36 @@ const GroupFormEditor = ({
   value: group,
   onChange,
   onValidationChange,
-  resources = { apps: [], models: [], prompts: [] }
+  resources = { apps: [], models: [], prompts: [] },
+  jsonSchema
 }) => {
   const { t } = useTranslation();
   const [validationErrors, setValidationErrors] = useState({});
 
   // Validation function
   const validateGroup = groupData => {
-    const errors = {};
+    let errors = {};
 
-    // Required field validation
-    if (!groupData.id) {
-      errors.id = t('admin.groups.validation.idRequired', 'Group ID is required');
-    } else if (!/^[a-zA-Z0-9_-]+$/.test(groupData.id)) {
-      errors.id = t(
-        'admin.groups.validation.idInvalid',
-        'Group ID can only contain letters, numbers, hyphens, and underscores'
-      );
-    }
+    // Use schema validation if available
+    if (jsonSchema) {
+      const validation = validateWithSchema(groupData, jsonSchema);
+      if (!validation.isValid) {
+        errors = errorsToFieldErrors(validation.errors);
+      }
+    } else {
+      // Fallback to manual validation if no schema
+      if (!groupData.id) {
+        errors.id = t('admin.groups.validation.idRequired', 'Group ID is required');
+      } else if (!/^[a-zA-Z0-9_-]+$/.test(groupData.id)) {
+        errors.id = t(
+          'admin.groups.validation.idInvalid',
+          'Group ID can only contain letters, numbers, hyphens, and underscores'
+        );
+      }
 
-    if (!groupData.name) {
-      errors.name = t('admin.groups.validation.nameRequired', 'Group name is required');
+      if (!groupData.name) {
+        errors.name = t('admin.groups.validation.nameRequired', 'Group name is required');
+      }
     }
 
     setValidationErrors(errors);
@@ -118,11 +132,13 @@ const GroupFormEditor = ({
               <div className="col-span-6 sm:col-span-3">
                 <label className="block text-sm font-medium text-gray-700">
                   {t('admin.groups.groupId', 'Group ID')}
-                  <span className="text-red-500 ml-1">*</span>
+                  {isFieldRequired('id', jsonSchema) && (
+                    <span className="text-red-500 ml-1">*</span>
+                  )}
                 </label>
                 <input
                   type="text"
-                  required
+                  required={isFieldRequired('id', jsonSchema)}
                   value={group.id || ''}
                   onChange={e => handleInputChange('id', e.target.value)}
                   disabled={isProtectedGroup(group.id)}
@@ -144,11 +160,13 @@ const GroupFormEditor = ({
               <div className="col-span-6 sm:col-span-3">
                 <label className="block text-sm font-medium text-gray-700">
                   {t('admin.groups.groupName', 'Group Name')}
-                  <span className="text-red-500 ml-1">*</span>
+                  {isFieldRequired('name', jsonSchema) && (
+                    <span className="text-red-500 ml-1">*</span>
+                  )}
                 </label>
                 <input
                   type="text"
-                  required
+                  required={isFieldRequired('name', jsonSchema)}
                   value={group.name || ''}
                   onChange={e => handleInputChange('name', e.target.value)}
                   className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${

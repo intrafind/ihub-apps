@@ -317,7 +317,8 @@ const AdminModelEditPage = () => {
               formProps={{
                 isNewModel,
                 apps,
-                usage
+                usage,
+                jsonSchema
               }}
               jsonSchema={jsonSchema}
               title={isNewModel ? t('admin.models.edit.titleNew') : t('admin.models.edit.title')}

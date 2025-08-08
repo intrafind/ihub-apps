@@ -5,6 +5,11 @@ import ToolsSelector from '../../../shared/components/ToolsSelector';
 import SourcePicker from './SourcePicker';
 import Icon from '../../../shared/components/Icon';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import {
+  validateWithSchema,
+  errorsToFieldErrors,
+  isFieldRequired
+} from '../../../utils/schemaValidation';
 
 /**
  * AppFormEditor - Form-based editor for app configuration
@@ -25,7 +30,8 @@ const AppFormEditor = ({
   onChange,
   onValidationChange,
   availableModels = [],
-  uiConfig = null
+  uiConfig = null,
+  jsonSchema
 }) => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -33,20 +39,28 @@ const AppFormEditor = ({
 
   // Validation function
   const validateApp = appData => {
-    const errors = {};
+    let errors = {};
 
-    // Required field validation
-    if (!appData.id) {
-      errors.id = t('admin.apps.edit.validation.idRequired', 'App ID is required');
-    } else if (!/^[a-zA-Z0-9_-]+$/.test(appData.id)) {
-      errors.id = t(
-        'admin.apps.edit.validation.idInvalid',
-        'App ID can only contain letters, numbers, hyphens, and underscores'
-      );
-    }
+    // Use schema validation if available
+    if (jsonSchema) {
+      const validation = validateWithSchema(appData, jsonSchema);
+      if (!validation.isValid) {
+        errors = errorsToFieldErrors(validation.errors);
+      }
+    } else {
+      // Fallback to manual validation if no schema
+      if (!appData.id) {
+        errors.id = t('admin.apps.edit.validation.idRequired', 'App ID is required');
+      } else if (!/^[a-zA-Z0-9_-]+$/.test(appData.id)) {
+        errors.id = t(
+          'admin.apps.edit.validation.idInvalid',
+          'App ID can only contain letters, numbers, hyphens, and underscores'
+        );
+      }
 
-    if (!appData.name || !Object.keys(appData.name).length) {
-      errors.name = t('admin.apps.edit.validation.nameRequired', 'App name is required');
+      if (!appData.name || !Object.keys(appData.name).length) {
+        errors.name = t('admin.apps.edit.validation.nameRequired', 'App name is required');
+      }
     }
 
     if (!appData.description || !Object.keys(appData.description).length) {
@@ -102,7 +116,7 @@ const AppFormEditor = ({
     if (app) {
       validateApp(app);
     }
-  }, [app]);
+  }, [app, jsonSchema]);
 
   const handleInputChange = (field, value) => {
     const updatedApp = {
@@ -280,11 +294,13 @@ const AppFormEditor = ({
               <div className="col-span-6 sm:col-span-3">
                 <label className="block text-sm font-medium text-gray-700">
                   {t('admin.apps.edit.appId', 'App ID')}
-                  <span className="text-red-500 ml-1">*</span>
+                  {isFieldRequired('id', jsonSchema) && (
+                    <span className="text-red-500 ml-1">*</span>
+                  )}
                 </label>
                 <input
                   type="text"
-                  required
+                  required={isFieldRequired('id', jsonSchema)}
                   value={app.id || ''}
                   onChange={e => handleInputChange('id', e.target.value)}
                   className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${

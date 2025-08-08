@@ -1,8 +1,14 @@
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import SearchableAppsSelector from '../../apps/components/SearchableAppsSelector';
 import Icon from '../../../shared/components/Icon';
+import {
+  validateWithSchema,
+  errorsToFieldErrors,
+  isFieldRequired
+} from '../../../utils/schemaValidation';
 
 /**
  * Form-based editor for prompt configuration
@@ -17,13 +23,60 @@ import Icon from '../../../shared/components/Icon';
 const PromptFormEditor = ({
   value: data,
   onChange,
+  onValidationChange,
   errors = {},
   isNewPrompt = false,
   apps = [],
-  categories = []
+  categories = [],
+  jsonSchema
 }) => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
+  const [validationErrors, setValidationErrors] = useState({});
+
+  // Validation function
+  const validatePrompt = promptData => {
+    let errors = {};
+
+    // Use schema validation if available
+    if (jsonSchema) {
+      const validation = validateWithSchema(promptData, jsonSchema);
+      if (!validation.isValid) {
+        errors = errorsToFieldErrors(validation.errors);
+      }
+    } else {
+      // Fallback to basic validation if no schema
+      if (!promptData.id) {
+        errors.id = 'Prompt ID is required';
+      }
+      if (!promptData.name) {
+        errors.name = 'Prompt name is required';
+      }
+    }
+
+    setValidationErrors(errors);
+
+    const isValid = Object.keys(errors).length === 0;
+    if (onValidationChange) {
+      onValidationChange({
+        isValid,
+        errors: Object.entries(errors).map(([field, message]) => ({
+          field,
+          message,
+          severity: 'error'
+        }))
+      });
+    }
+
+    return isValid;
+  };
+
+  // Validate on data changes
+  useEffect(() => {
+    if (data) {
+      validatePrompt(data);
+    }
+  }, [data, jsonSchema]);
 
   const handleChange = (field, value) => {
     onChange({ ...data, [field]: value });
@@ -89,7 +142,8 @@ const PromptFormEditor = ({
               {/* ID */}
               <div className="col-span-6 sm:col-span-3">
                 <label htmlFor="id" className="block text-sm font-medium text-gray-700">
-                  {t('admin.prompts.edit.id', 'ID')} <span className="text-red-500">*</span>
+                  {t('admin.prompts.edit.id', 'ID')}
+                  {isFieldRequired('id', jsonSchema) && <span className="text-red-500"> *</span>}
                 </label>
                 <input
                   type="text"
@@ -97,13 +151,18 @@ const PromptFormEditor = ({
                   value={data.id || ''}
                   onChange={e => handleChange('id', e.target.value)}
                   disabled={!isNewPrompt}
+                  required={isFieldRequired('id', jsonSchema)}
                   className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 ${
-                    errors.id ? 'border-red-300 text-red-900 placeholder-red-300' : ''
+                    validationErrors.id || errors.id
+                      ? 'border-red-300 text-red-900 placeholder-red-300'
+                      : ''
                   }`}
                   placeholder="unique-prompt-id"
                   autoComplete="off"
                 />
-                {errors.id && <p className="mt-2 text-sm text-red-600">{errors.id}</p>}
+                {(validationErrors.id || errors.id) && (
+                  <p className="mt-2 text-sm text-red-600">{validationErrors.id || errors.id}</p>
+                )}
                 <p className="mt-2 text-sm text-gray-500">
                   {t(
                     'admin.prompts.edit.idDesc',

@@ -227,7 +227,8 @@ const AdminUserEditPage = () => {
             onChange={handleDataChange}
             formComponent={UserFormEditor}
             formProps={{
-              isNewUser
+              isNewUser,
+              jsonSchema
             }}
             jsonSchema={jsonSchema}
             title={

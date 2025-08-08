@@ -1,6 +1,12 @@
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import {
+  validateWithSchema,
+  errorsToFieldErrors,
+  isFieldRequired
+} from '../../../utils/schemaValidation';
 
 /**
  * Form-based editor for model configuration
@@ -10,8 +16,60 @@ import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEdi
  * @param {Object} props.errors - Validation errors object
  * @param {boolean} props.isNewModel - Whether this is a new model
  */
-const ModelFormEditor = ({ value: data, onChange, errors = {}, isNewModel = false }) => {
+const ModelFormEditor = ({
+  value: data,
+  onChange,
+  onValidationChange,
+  errors = {},
+  isNewModel = false,
+  jsonSchema
+}) => {
   const { t } = useTranslation();
+  const [validationErrors, setValidationErrors] = useState({});
+
+  // Validation function
+  const validateModel = modelData => {
+    let errors = {};
+
+    // Use schema validation if available
+    if (jsonSchema) {
+      const validation = validateWithSchema(modelData, jsonSchema);
+      if (!validation.isValid) {
+        errors = errorsToFieldErrors(validation.errors);
+      }
+    } else {
+      // Fallback to basic validation if no schema
+      if (!modelData.id) {
+        errors.id = 'Model ID is required';
+      }
+      if (!modelData.name) {
+        errors.name = 'Model name is required';
+      }
+    }
+
+    setValidationErrors(errors);
+
+    const isValid = Object.keys(errors).length === 0;
+    if (onValidationChange) {
+      onValidationChange({
+        isValid,
+        errors: Object.entries(errors).map(([field, message]) => ({
+          field,
+          message,
+          severity: 'error'
+        }))
+      });
+    }
+
+    return isValid;
+  };
+
+  // Validate on data changes
+  useEffect(() => {
+    if (data) {
+      validateModel(data);
+    }
+  }, [data, jsonSchema]);
 
   const handleChange = (field, value) => {
     onChange({ ...data, [field]: value });
@@ -47,7 +105,8 @@ const ModelFormEditor = ({ value: data, onChange, errors = {}, isNewModel = fals
             <div className="grid grid-cols-6 gap-6">
               <div className="col-span-6 sm:col-span-3">
                 <label htmlFor="id" className="block text-sm font-medium text-gray-700">
-                  {t('admin.models.fields.id')} <span className="text-red-500">*</span>
+                  {t('admin.models.fields.id')}
+                  {isFieldRequired('id', jsonSchema) && <span className="text-red-500"> *</span>}
                 </label>
                 <input
                   type="text"
@@ -57,11 +116,15 @@ const ModelFormEditor = ({ value: data, onChange, errors = {}, isNewModel = fals
                   onChange={handleInputChange}
                   disabled={!isNewModel}
                   className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md disabled:bg-gray-100 ${
-                    errors.id ? 'border-red-300 text-red-900 placeholder-red-300' : ''
+                    validationErrors.id || errors.id
+                      ? 'border-red-300 text-red-900 placeholder-red-300'
+                      : ''
                   }`}
-                  required
+                  required={isFieldRequired('id', jsonSchema)}
                 />
-                {errors.id && <p className="mt-2 text-sm text-red-600">{errors.id}</p>}
+                {(validationErrors.id || errors.id) && (
+                  <p className="mt-2 text-sm text-red-600">{validationErrors.id || errors.id}</p>
+                )}
                 <p className="mt-2 text-sm text-gray-500">{t('admin.models.hints.modelId')}</p>
               </div>
 

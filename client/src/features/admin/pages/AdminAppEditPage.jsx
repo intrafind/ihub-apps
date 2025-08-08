@@ -355,7 +355,8 @@ const AdminAppEditPage = () => {
             formComponent={AppFormEditor}
             formProps={{
               availableModels,
-              uiConfig
+              uiConfig,
+              jsonSchema
             }}
             jsonSchema={jsonSchema}
             defaultMode={editingMode}

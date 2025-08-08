@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './App.css';
 import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
@@ -12,27 +12,32 @@ import Unauthorized from './pages/error/Unauthorized';
 import Forbidden from './pages/error/Forbidden';
 import ServerError from './pages/error/ServerError';
 import UnifiedPage from './pages/UnifiedPage';
-import AdminHome from './features/admin/pages/AdminHome';
-import AdminUsageReports from './features/admin/pages/AdminUsageReports';
-import AdminSystemPage from './features/admin/pages/AdminSystemPage';
-import AdminAppsPage from './features/admin/pages/AdminAppsPage';
-import AdminAppEditPage from './features/admin/pages/AdminAppEditPage';
-import AdminShortLinks from './features/admin/pages/AdminShortLinks';
-import AdminShortLinkEditPage from './features/admin/pages/AdminShortLinkEditPage';
-import AdminModelEditPage from './features/admin/pages/AdminModelEditPage';
-import AdminModelsPage from './features/admin/pages/AdminModelsPage';
-import AdminPromptsPage from './features/admin/pages/AdminPromptsPage';
-import AdminPromptEditPage from './features/admin/pages/AdminPromptEditPage';
-import AdminSourcesPage from './features/admin/pages/AdminSourcesPage';
-import AdminSourceEditPage from './features/admin/pages/AdminSourceEditPage';
-import AdminPagesPage from './features/admin/pages/AdminPagesPage';
-import AdminPageEditPage from './features/admin/pages/AdminPageEditPage';
-import AdminAuthPage from './features/admin/pages/AdminAuthPage';
-import AdminUsersPage from './features/admin/pages/AdminUsersPage';
-import AdminUserEditPage from './features/admin/pages/AdminUserEditPage';
-import AdminGroupsPage from './features/admin/pages/AdminGroupsPage';
-import AdminGroupEditPage from './features/admin/pages/AdminGroupEditPage';
-import AdminUICustomization from './features/admin/pages/AdminUICustomization';
+// Lazy load admin components
+const AdminHome = React.lazy(() => import('./features/admin/pages/AdminHome'));
+const AdminUsageReports = React.lazy(() => import('./features/admin/pages/AdminUsageReports'));
+const AdminSystemPage = React.lazy(() => import('./features/admin/pages/AdminSystemPage'));
+const AdminAppsPage = React.lazy(() => import('./features/admin/pages/AdminAppsPage'));
+const AdminAppEditPage = React.lazy(() => import('./features/admin/pages/AdminAppEditPage'));
+const AdminShortLinks = React.lazy(() => import('./features/admin/pages/AdminShortLinks'));
+const AdminShortLinkEditPage = React.lazy(
+  () => import('./features/admin/pages/AdminShortLinkEditPage')
+);
+const AdminModelEditPage = React.lazy(() => import('./features/admin/pages/AdminModelEditPage'));
+const AdminModelsPage = React.lazy(() => import('./features/admin/pages/AdminModelsPage'));
+const AdminPromptsPage = React.lazy(() => import('./features/admin/pages/AdminPromptsPage'));
+const AdminPromptEditPage = React.lazy(() => import('./features/admin/pages/AdminPromptEditPage'));
+const AdminSourcesPage = React.lazy(() => import('./features/admin/pages/AdminSourcesPage'));
+const AdminSourceEditPage = React.lazy(() => import('./features/admin/pages/AdminSourceEditPage'));
+const AdminPagesPage = React.lazy(() => import('./features/admin/pages/AdminPagesPage'));
+const AdminPageEditPage = React.lazy(() => import('./features/admin/pages/AdminPageEditPage'));
+const AdminAuthPage = React.lazy(() => import('./features/admin/pages/AdminAuthPage'));
+const AdminUsersPage = React.lazy(() => import('./features/admin/pages/AdminUsersPage'));
+const AdminUserEditPage = React.lazy(() => import('./features/admin/pages/AdminUserEditPage'));
+const AdminGroupsPage = React.lazy(() => import('./features/admin/pages/AdminGroupsPage'));
+const AdminGroupEditPage = React.lazy(() => import('./features/admin/pages/AdminGroupEditPage'));
+const AdminUICustomization = React.lazy(
+  () => import('./features/admin/pages/AdminUICustomization')
+);
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
@@ -42,37 +47,32 @@ import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import MarkdownRenderer from './shared/components/MarkdownRenderer';
-import TeamsWrapper from './features/teams/TeamsWrapper';
-import TeamsAuthStart from './features/teams/TeamsAuthStart';
-import TeamsAuthEnd from './features/teams/TeamsAuthEnd';
+// Lazy load Teams features (only needed in Microsoft Teams environment)
+const TeamsWrapper = React.lazy(() => import('./features/teams/TeamsWrapper'));
+const TeamsAuthStart = React.lazy(() => import('./features/teams/TeamsAuthStart'));
+const TeamsAuthEnd = React.lazy(() => import('./features/teams/TeamsAuthEnd'));
 
 // Create safe versions of components that need error boundaries
 const SafeAppsList = withSafeRoute(AppsList);
 const SafeAppChat = withSafeRoute(AppChat);
 const SafeAppCanvas = withSafeRoute(AppCanvas);
 const SafeUnifiedPage = withSafeRoute(UnifiedPage);
-const SafeAdminHome = withSafeRoute(AdminHome);
-const SafeAdminUsage = withSafeRoute(AdminUsageReports);
-const SafeAdminSystem = withSafeRoute(AdminSystemPage);
-const SafeAdminApps = withSafeRoute(AdminAppsPage);
-const SafeAdminAppEdit = withSafeRoute(AdminAppEditPage);
-const SafeAdminShortLinks = withSafeRoute(AdminShortLinks);
-const SafeAdminShortLinkEdit = withSafeRoute(AdminShortLinkEditPage);
-const SafeAdminModels = withSafeRoute(AdminModelsPage);
-const SafeAdminModelEdit = withSafeRoute(AdminModelEditPage);
-const SafeAdminPrompts = withSafeRoute(AdminPromptsPage);
-const SafeAdminPromptEdit = withSafeRoute(AdminPromptEditPage);
-const SafeAdminSources = withSafeRoute(AdminSourcesPage);
-const SafeAdminSourceEdit = withSafeRoute(AdminSourceEditPage);
-const SafeAdminPages = withSafeRoute(AdminPagesPage);
-const SafeAdminPageEdit = withSafeRoute(AdminPageEditPage);
-const SafeAdminAuth = withSafeRoute(AdminAuthPage);
-const SafeAdminUsers = withSafeRoute(AdminUsersPage);
-const SafeAdminUserEdit = withSafeRoute(AdminUserEditPage);
-const SafeAdminGroups = withSafeRoute(AdminGroupsPage);
-const SafeAdminGroupEdit = withSafeRoute(AdminGroupEditPage);
-const SafeAdminUICustomization = withSafeRoute(AdminUICustomization);
 const SafePromptsList = withSafeRoute(PromptsList);
+
+// Loading component for lazy-loaded admin components
+const AdminLoading = () => (
+  <div className="flex items-center justify-center p-8">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    <span className="ml-3 text-gray-600">Loading admin panel...</span>
+  </div>
+);
+
+// Helper to wrap lazy admin components with suspense and error boundary
+const LazyAdminRoute = ({ component: Component }) => (
+  <Suspense fallback={<AdminLoading />}>
+    <Component />
+  </Suspense>
+);
 
 function App() {
   // Use the custom hook for session management
@@ -94,98 +94,189 @@ function App() {
     <AppProviders>
       <AuthProvider>
         <AdminAuthProvider>
-          <TeamsWrapper>
-            <BrowserRouter basename={basename}>
-              {/* Global markdown renderer for Mermaid diagrams and other markdown features */}
-              <MarkdownRenderer />
-              {/* Document title management - must be inside Router for useLocation/useParams */}
-              <DocumentTitle />
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center min-h-screen">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            }
+          >
+            <TeamsWrapper>
+              <BrowserRouter basename={basename}>
+                {/* Global markdown renderer for Mermaid diagrams and other markdown features */}
+                <MarkdownRenderer />
+                {/* Document title management - must be inside Router for useLocation/useParams */}
+                <DocumentTitle />
 
-              <Routes>
-                {/* Teams authentication routes */}
-                <Route path="/teams/auth-start" element={<TeamsAuthStart />} />
-                <Route path="/teams/auth-end" element={<TeamsAuthEnd />} />
-                <Route path="/teams/tab" element={<Layout />}>
-                  <Route index element={<SafeAppsList />} />
-                </Route>
+                <Routes>
+                  {/* Teams authentication routes */}
+                  <Route
+                    path="/teams/auth-start"
+                    element={
+                      <Suspense fallback={<AdminLoading />}>
+                        <TeamsAuthStart />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/teams/auth-end"
+                    element={
+                      <Suspense fallback={<AdminLoading />}>
+                        <TeamsAuthEnd />
+                      </Suspense>
+                    }
+                  />
+                  <Route path="/teams/tab" element={<Layout />}>
+                    <Route index element={<SafeAppsList />} />
+                  </Route>
 
-                {/* Regular application routes */}
-                <Route path="/" element={<Layout />}>
-                  <Route index element={<SafeAppsList />} />
-                  {uiConfig?.promptsList?.enabled !== false && (
-                    <Route path="prompts" element={<SafePromptsList />} />
-                  )}
-                  <Route path="apps/:appId" element={<SafeAppChat />} />
-                  <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
-                  <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
-                  {showAdminPage('home') && <Route path="admin" element={<SafeAdminHome />} />}
-                  {showAdminPage('usage') && (
-                    <Route path="admin/usage" element={<SafeAdminUsage />} />
-                  )}
-                  {showAdminPage('system') && (
-                    <Route path="admin/system" element={<SafeAdminSystem />} />
-                  )}
-                  {showAdminPage('apps') && <Route path="admin/apps" element={<SafeAdminApps />} />}
-                  {showAdminPage('apps') && (
-                    <Route path="admin/apps/:appId" element={<SafeAdminAppEdit />} />
-                  )}
-                  {showAdminPage('shortlinks') && (
-                    <Route path="admin/shortlinks" element={<SafeAdminShortLinks />} />
-                  )}
-                  {showAdminPage('shortlinks') && (
-                    <Route path="admin/shortlinks/:code" element={<SafeAdminShortLinkEdit />} />
-                  )}
-                  {showAdminPage('models') && (
-                    <Route path="admin/models" element={<SafeAdminModels />} />
-                  )}
-                  {showAdminPage('models') && (
-                    <Route path="admin/models/:modelId" element={<SafeAdminModelEdit />} />
-                  )}
-                  {showAdminPage('pages') && (
-                    <Route path="admin/pages" element={<SafeAdminPages />} />
-                  )}
-                  {showAdminPage('pages') && (
-                    <Route path="admin/pages/:pageId" element={<SafeAdminPageEdit />} />
-                  )}
-                  {showAdminPage('prompts') && (
-                    <Route path="admin/prompts" element={<SafeAdminPrompts />} />
-                  )}
-                  {showAdminPage('prompts') && (
-                    <Route path="admin/prompts/:promptId" element={<SafeAdminPromptEdit />} />
-                  )}
-                  {showAdminPage('sources') && (
-                    <Route path="admin/sources" element={<SafeAdminSources />} />
-                  )}
-                  {showAdminPage('sources') && (
-                    <Route path="admin/sources/:id" element={<SafeAdminSourceEdit />} />
-                  )}
-                  {showAdminPage('auth') && <Route path="admin/auth" element={<SafeAdminAuth />} />}
-                  {showAdminPage('users') && (
-                    <Route path="admin/users" element={<SafeAdminUsers />} />
-                  )}
-                  {showAdminPage('users') && (
-                    <Route path="admin/users/new" element={<SafeAdminUserEdit />} />
-                  )}
-                  {showAdminPage('users') && (
-                    <Route path="admin/users/:userId/edit" element={<SafeAdminUserEdit />} />
-                  )}
-                  {showAdminPage('groups') && (
-                    <Route path="admin/groups" element={<SafeAdminGroups />} />
-                  )}
-                  {showAdminPage('groups') && (
-                    <Route path="admin/groups/:groupId" element={<SafeAdminGroupEdit />} />
-                  )}
-                  {showAdminPage('ui') && (
-                    <Route path="admin/ui" element={<SafeAdminUICustomization />} />
-                  )}
-                  <Route path="unauthorized" element={<Unauthorized />} />
-                  <Route path="forbidden" element={<Forbidden />} />
-                  <Route path="server-error" element={<ServerError />} />
-                  <Route path="*" element={<NotFound />} />
-                </Route>
-              </Routes>
-            </BrowserRouter>
-          </TeamsWrapper>
+                  {/* Regular application routes */}
+                  <Route path="/" element={<Layout />}>
+                    <Route index element={<SafeAppsList />} />
+                    {uiConfig?.promptsList?.enabled !== false && (
+                      <Route path="prompts" element={<SafePromptsList />} />
+                    )}
+                    <Route path="apps/:appId" element={<SafeAppChat />} />
+                    <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
+                    <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
+                    {showAdminPage('home') && (
+                      <Route path="admin" element={<LazyAdminRoute component={AdminHome} />} />
+                    )}
+                    {showAdminPage('usage') && (
+                      <Route
+                        path="admin/usage"
+                        element={<LazyAdminRoute component={AdminUsageReports} />}
+                      />
+                    )}
+                    {showAdminPage('system') && (
+                      <Route
+                        path="admin/system"
+                        element={<LazyAdminRoute component={AdminSystemPage} />}
+                      />
+                    )}
+                    {showAdminPage('apps') && (
+                      <Route
+                        path="admin/apps"
+                        element={<LazyAdminRoute component={AdminAppsPage} />}
+                      />
+                    )}
+                    {showAdminPage('apps') && (
+                      <Route
+                        path="admin/apps/:appId"
+                        element={<LazyAdminRoute component={AdminAppEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('shortlinks') && (
+                      <Route
+                        path="admin/shortlinks"
+                        element={<LazyAdminRoute component={AdminShortLinks} />}
+                      />
+                    )}
+                    {showAdminPage('shortlinks') && (
+                      <Route
+                        path="admin/shortlinks/:code"
+                        element={<LazyAdminRoute component={AdminShortLinkEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('models') && (
+                      <Route
+                        path="admin/models"
+                        element={<LazyAdminRoute component={AdminModelsPage} />}
+                      />
+                    )}
+                    {showAdminPage('models') && (
+                      <Route
+                        path="admin/models/:modelId"
+                        element={<LazyAdminRoute component={AdminModelEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('pages') && (
+                      <Route
+                        path="admin/pages"
+                        element={<LazyAdminRoute component={AdminPagesPage} />}
+                      />
+                    )}
+                    {showAdminPage('pages') && (
+                      <Route
+                        path="admin/pages/:pageId"
+                        element={<LazyAdminRoute component={AdminPageEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('prompts') && (
+                      <Route
+                        path="admin/prompts"
+                        element={<LazyAdminRoute component={AdminPromptsPage} />}
+                      />
+                    )}
+                    {showAdminPage('prompts') && (
+                      <Route
+                        path="admin/prompts/:promptId"
+                        element={<LazyAdminRoute component={AdminPromptEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('sources') && (
+                      <Route
+                        path="admin/sources"
+                        element={<LazyAdminRoute component={AdminSourcesPage} />}
+                      />
+                    )}
+                    {showAdminPage('sources') && (
+                      <Route
+                        path="admin/sources/:id"
+                        element={<LazyAdminRoute component={AdminSourceEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('auth') && (
+                      <Route
+                        path="admin/auth"
+                        element={<LazyAdminRoute component={AdminAuthPage} />}
+                      />
+                    )}
+                    {showAdminPage('users') && (
+                      <Route
+                        path="admin/users"
+                        element={<LazyAdminRoute component={AdminUsersPage} />}
+                      />
+                    )}
+                    {showAdminPage('users') && (
+                      <Route
+                        path="admin/users/new"
+                        element={<LazyAdminRoute component={AdminUserEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('users') && (
+                      <Route
+                        path="admin/users/:userId/edit"
+                        element={<LazyAdminRoute component={AdminUserEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('groups') && (
+                      <Route
+                        path="admin/groups"
+                        element={<LazyAdminRoute component={AdminGroupsPage} />}
+                      />
+                    )}
+                    {showAdminPage('groups') && (
+                      <Route
+                        path="admin/groups/:groupId"
+                        element={<LazyAdminRoute component={AdminGroupEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('ui') && (
+                      <Route
+                        path="admin/ui"
+                        element={<LazyAdminRoute component={AdminUICustomization} />}
+                      />
+                    )}
+                    <Route path="unauthorized" element={<Unauthorized />} />
+                    <Route path="forbidden" element={<Forbidden />} />
+                    <Route path="server-error" element={<ServerError />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Route>
+                </Routes>
+              </BrowserRouter>
+            </TeamsWrapper>
+          </Suspense>
         </AdminAuthProvider>
       </AuthProvider>
     </AppProviders>

@@ -1,10 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+// Lazy load PDF.js only when needed
+const loadPdfjs = async () => {
+  const pdfjsLib = await import('pdfjs-dist');
+  // Configure PDF.js worker
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+  return pdfjsLib;
+};
 import Uploader from './Uploader';
 import '../components/ImageUpload.css';
 
@@ -198,6 +202,7 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
 
     if (isPdfFile(file.type)) {
       const arrayBuffer = await file.arrayBuffer();
+      const pdfjsLib = await loadPdfjs();
       const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
       let textContent = '';
 

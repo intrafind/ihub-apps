@@ -6,6 +6,27 @@ export default defineConfig({
   plugins: [react()],
   base: './', // Use relative paths for all assets - works with dynamic base tag
   envDir: '../',
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
+          'vendor-forms': ['react-quill', 'ajv', 'ajv-formats'],
+          'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
+
+          // Heavy dependencies that should be separate
+          mermaid: ['mermaid'],
+          monaco: ['@monaco-editor/react'],
+          teams: ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk'],
+          pdf: ['pdfjs-dist'],
+          babel: ['@babel/standalone']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000
+  },
   server: {
     proxy: (() => {
       const basePath = process.env.VITE_BASE_PATH || '';
