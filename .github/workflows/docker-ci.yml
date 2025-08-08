@@ -37,6 +37,8 @@ jobs:
     steps:
       - name: Check trigger conditions
         id: check
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           should_run=false
           
@@ -53,7 +55,7 @@ jobs:
           # Check for comment trigger with proper escaping
           if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
             # Use environment variable to safely handle multi-line comments
-            echo "${{ github.event.comment.body }}" > comment_body.txt
+            echo "$COMMENT_BODY" > comment_body.txt
             if grep -q "@build docker images" comment_body.txt; then
               should_run=true
             fi
