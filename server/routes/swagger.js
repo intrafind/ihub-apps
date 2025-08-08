@@ -4,6 +4,7 @@ import { authRequired } from '../middleware/authRequired.js';
 import { loadJson } from '../configLoader.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { buildServerPath } from '../utils/basePath.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,9 +15,10 @@ const __dirname = path.dirname(__filename);
  * @param {string} description - API documentation description
  * @param {string} version - API version
  * @param {Array} paths - Array of file paths to scan for documentation
+ * @param {string} basePath - Base path for the API server
  * @returns {Object} Swagger configuration object
  */
-function createSwaggerConfig(title, description, version, paths) {
+function createSwaggerConfig(title, description, version, paths, basePath = '') {
   return {
     definition: {
       openapi: '3.0.0',
@@ -31,7 +33,7 @@ function createSwaggerConfig(title, description, version, paths) {
       },
       servers: [
         {
-          url: '/api',
+          url: buildServerPath('/api', basePath),
           description: 'API Server'
         }
       ],
@@ -65,8 +67,9 @@ function createSwaggerConfig(title, description, version, paths) {
 /**
  * Registers Swagger documentation routes
  * @param {Object} app - Express application instance
+ * @param {string} basePath - Base path for route registration
  */
-export default async function registerSwaggerRoutes(app) {
+export default async function registerSwaggerRoutes(app, basePath = '') {
   // Check if Swagger is enabled in platform configuration
   let platformConfig = {};
   try {
@@ -104,7 +107,8 @@ export default async function registerSwaggerRoutes(app) {
       path.join(__dirname, 'shortLinkRoutes.js'),
       path.join(__dirname, 'auth.js'),
       path.join(__dirname, 'chat/**/*.js')
-    ]
+    ],
+    basePath
   );
 
   // Admin APIs Documentation
@@ -112,7 +116,8 @@ export default async function registerSwaggerRoutes(app) {
     'iHub Apps - Admin APIs',
     'Administrative APIs for managing configurations, users, groups, and system settings',
     '1.0.0',
-    [path.join(__dirname, 'adminRoutes.js'), path.join(__dirname, 'admin/**/*.js')]
+    [path.join(__dirname, 'adminRoutes.js'), path.join(__dirname, 'admin/**/*.js')],
+    basePath
   );
 
   // OpenAI Compatible APIs Documentation
@@ -120,7 +125,8 @@ export default async function registerSwaggerRoutes(app) {
     'iHub Apps - OpenAI Compatible APIs',
     'OpenAI-compatible inference APIs for chat completions and model listings',
     '1.0.0',
-    [path.join(__dirname, 'openaiProxy.js')]
+    [path.join(__dirname, 'openaiProxy.js')],
+    basePath
   );
 
   // Generate Swagger specs
@@ -150,15 +156,15 @@ export default async function registerSwaggerRoutes(app) {
     swaggerOptions: {
       urls: [
         {
-          url: '/api/docs/normal/swagger.json',
+          url: buildServerPath('/api/docs/normal/swagger.json', basePath),
           name: 'Chat & General APIs'
         },
         {
-          url: '/api/docs/admin/swagger.json',
+          url: buildServerPath('/api/docs/admin/swagger.json', basePath),
           name: 'Admin APIs'
         },
         {
-          url: '/api/docs/openai/swagger.json',
+          url: buildServerPath('/api/docs/openai/swagger.json', basePath),
           name: 'OpenAI Compatible APIs'
         }
       ]
@@ -166,61 +172,65 @@ export default async function registerSwaggerRoutes(app) {
   };
 
   // Main Swagger UI route - shows all API categories
-  app.use('/api/docs', ...middleware, swaggerUi.serve);
-  app.get('/api/docs', ...middleware, swaggerUi.setup(null, swaggerOptions));
+  app.use(buildServerPath('/api/docs', basePath), ...middleware, swaggerUi.serve);
+  app.get(
+    buildServerPath('/api/docs', basePath),
+    ...middleware,
+    swaggerUi.setup(null, swaggerOptions)
+  );
 
   // Individual API documentation routes (JSON only)
-  app.get('/api/docs/normal/swagger.json', ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/normal/swagger.json', basePath), ...middleware, (req, res) => {
     res.json(normalApiSpec);
   });
 
-  app.get('/api/docs/admin/swagger.json', ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/admin/swagger.json', basePath), ...middleware, (req, res) => {
     res.json(adminApiSpec);
   });
 
-  app.get('/api/docs/openai/swagger.json', ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/openai/swagger.json', basePath), ...middleware, (req, res) => {
     res.json(openaiApiSpec);
   });
 
   // Create specific UI for each API set using query parameters
-  app.get('/api/docs/normal', ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/normal', basePath), ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
       customSiteTitle: 'iHub Apps - Chat & General APIs',
       swaggerOptions: {
-        url: '/api/docs/normal/swagger.json'
+        url: buildServerPath('/api/docs/normal/swagger.json', basePath)
       }
     };
     res.send(swaggerUi.generateHTML(normalApiSpec, customOptions));
   });
 
-  app.get('/api/docs/admin', ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/admin', basePath), ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
       customSiteTitle: 'iHub Apps - Admin APIs',
       swaggerOptions: {
-        url: '/api/docs/admin/swagger.json'
+        url: buildServerPath('/api/docs/admin/swagger.json', basePath)
       }
     };
     res.send(swaggerUi.generateHTML(adminApiSpec, customOptions));
   });
 
-  app.get('/api/docs/openai', ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/openai', basePath), ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
       customSiteTitle: 'iHub Apps - OpenAI Compatible APIs',
       swaggerOptions: {
-        url: '/api/docs/openai/swagger.json'
+        url: buildServerPath('/api/docs/openai/swagger.json', basePath)
       }
     };
     res.send(swaggerUi.generateHTML(openaiApiSpec, customOptions));
   });
 
   console.log('📚 Swagger documentation available at:');
-  console.log('   📖 All APIs: /api/docs');
-  console.log('   💬 Chat & General: /api/docs/normal');
-  console.log('   🔧 Admin: /api/docs/admin');
-  console.log('   🤖 OpenAI Compatible: /api/docs/openai');
+  console.log(`   📖 All APIs: ${buildServerPath('/api/docs', basePath)}`);
+  console.log(`   💬 Chat & General: ${buildServerPath('/api/docs/normal', basePath)}`);
+  console.log(`   🔧 Admin: ${buildServerPath('/api/docs/admin', basePath)}`);
+  console.log(`   🤖 OpenAI Compatible: ${buildServerPath('/api/docs/openai', basePath)}`);
 
   if (requireAuth) {
     console.log('🔐 Authentication required for Swagger access');

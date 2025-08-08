@@ -1,4 +1,5 @@
 import { apiClient } from './client.js';
+import { buildPath } from '../utils/runtimeBasePath';
 
 // Utility function to make authenticated API calls to admin endpoints
 export const makeAdminApiCall = async (url, options = {}) => {
@@ -111,10 +112,10 @@ export const makeAdminApiCall = async (url, options = {}) => {
         // If we have a regular auth token, this suggests a permission issue
         if (authToken) {
           // User is authenticated but doesn't have admin permissions
-          window.location.href = '/admin'; // Will show appropriate error message
+          window.location.href = buildPath('/admin'); // Will show appropriate error message
         } else {
           // User is not authenticated, redirect to login
-          window.location.href = '/';
+          window.location.href = buildPath('/');
         }
       }
     }

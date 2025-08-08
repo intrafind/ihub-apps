@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import configCache from '../../configCache.js';
 import { authRequired } from '../../middleware/authRequired.js';
+import { buildServerPath } from '../../utils/basePath.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -328,7 +329,7 @@ export async function importConfig(req, res) {
 /**
  * Register backup routes
  */
-export default async function registerBackupRoutes(app) {
+export default async function registerBackupRoutes(app, basePath = '') {
   // Setup multer for file uploads
   const multer = (await import('multer')).default;
   const upload = multer({
@@ -346,8 +347,13 @@ export default async function registerBackupRoutes(app) {
   });
 
   // Export configuration
-  app.get('/api/admin/backup/export', authRequired, exportConfig);
+  app.get(buildServerPath('/api/admin/backup/export', basePath), authRequired, exportConfig);
 
   // Import configuration
-  app.post('/api/admin/backup/import', authRequired, upload.single('backup'), importConfig);
+  app.post(
+    buildServerPath('/api/admin/backup/import', basePath),
+    authRequired,
+    upload.single('backup'),
+    importConfig
+  );
 }

@@ -1,7 +1,9 @@
 import axios from 'axios';
 import { getSessionId, shouldRenewSession, renewSession } from '../utils/sessionManager';
+import { buildApiUrl } from '../utils/runtimeBasePath';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+// Use dynamic API URL based on runtime base path detection
+const API_URL = import.meta.env.VITE_API_URL || buildApiUrl('');
 const API_REQUEST_TIMEOUT = 30000; // 30 seconds timeout
 const STREAMING_REQUEST_TIMEOUT = 120000; // 2 minutes for streaming requests
 

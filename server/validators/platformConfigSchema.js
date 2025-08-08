@@ -71,7 +71,7 @@ export const platformConfigSchema = z
         usersFile: z.string().default('contents/config/users.json'),
         sessionTimeoutMinutes: z.number().min(1).default(480),
         jwtSecret: z.string().default('${JWT_SECRET}'),
-        showDemoAccounts: z.boolean().default(true)
+        showDemoAccounts: z.boolean().default(false)
       })
       .default({}),
     oidcAuth: z

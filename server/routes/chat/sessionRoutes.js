@@ -13,10 +13,11 @@ import {
 import ChatService from '../../services/chat/ChatService.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
+import { buildServerPath } from '../../utils/basePath.js';
 
 export default function registerSessionRoutes(
   app,
-  { verifyApiKey, getLocalizedError, DEFAULT_TIMEOUT }
+  { verifyApiKey, getLocalizedError, DEFAULT_TIMEOUT, basePath = '' }
 ) {
   const chatService = new ChatService();
 
@@ -59,7 +60,7 @@ export default function registerSessionRoutes(
    *         description: Internal server error
    */
   app.get(
-    '/api/models/:modelId/chat/test',
+    buildServerPath('/api/models/:modelId/chat/test', basePath),
     authRequired,
     modelAccessRequired,
     validate(chatTestSchema),
@@ -146,7 +147,7 @@ export default function registerSessionRoutes(
   );
 
   app.get(
-    '/api/apps/:appId/chat/:chatId',
+    buildServerPath('/api/apps/:appId/chat/:chatId', basePath),
     chatAuthRequired,
     validate(chatConnectSchema),
     async (req, res) => {
@@ -264,7 +265,7 @@ export default function registerSessionRoutes(
   }
 
   app.post(
-    '/api/apps/:appId/chat/:chatId',
+    buildServerPath('/api/apps/:appId/chat/:chatId', basePath),
     chatAuthRequired,
     validate(chatPostSchema),
     async (req, res) => {
@@ -425,38 +426,46 @@ export default function registerSessionRoutes(
     }
   );
 
-  app.post('/api/apps/:appId/chat/:chatId/stop', chatAuthRequired, (req, res) => {
-    const { chatId } = req.params;
-    if (clients.has(chatId)) {
-      if (activeRequests.has(chatId)) {
-        try {
-          const controller = activeRequests.get(chatId);
-          controller.abort();
-          activeRequests.delete(chatId);
-          console.log(`Aborted request for chat ID: ${chatId}`);
-        } catch (e) {
-          console.error(`Error aborting request for chat ID: ${chatId}`, e);
+  app.post(
+    buildServerPath('/api/apps/:appId/chat/:chatId/stop', basePath),
+    chatAuthRequired,
+    (req, res) => {
+      const { chatId } = req.params;
+      if (clients.has(chatId)) {
+        if (activeRequests.has(chatId)) {
+          try {
+            const controller = activeRequests.get(chatId);
+            controller.abort();
+            activeRequests.delete(chatId);
+            console.log(`Aborted request for chat ID: ${chatId}`);
+          } catch (e) {
+            console.error(`Error aborting request for chat ID: ${chatId}`, e);
+          }
         }
+        const client = clients.get(chatId);
+        actionTracker.trackDisconnected(chatId, { message: 'Chat stream stopped by client' });
+        client.response.end();
+        clients.delete(chatId);
+        console.log(`Chat stream stopped for chat ID: ${chatId}`);
+        return res.status(200).json({ success: true, message: 'Chat stream stopped' });
       }
-      const client = clients.get(chatId);
-      actionTracker.trackDisconnected(chatId, { message: 'Chat stream stopped by client' });
-      client.response.end();
-      clients.delete(chatId);
-      console.log(`Chat stream stopped for chat ID: ${chatId}`);
-      return res.status(200).json({ success: true, message: 'Chat stream stopped' });
+      return res.status(404).json({ success: false, message: 'Chat session not found' });
     }
-    return res.status(404).json({ success: false, message: 'Chat session not found' });
-  });
+  );
 
-  app.get('/api/apps/:appId/chat/:chatId/status', chatAuthRequired, (req, res) => {
-    const { chatId } = req.params;
-    if (clients.has(chatId)) {
-      return res.status(200).json({
-        active: true,
-        lastActivity: clients.get(chatId).lastActivity,
-        processing: activeRequests.has(chatId)
-      });
+  app.get(
+    buildServerPath('/api/apps/:appId/chat/:chatId/status', basePath),
+    chatAuthRequired,
+    (req, res) => {
+      const { chatId } = req.params;
+      if (clients.has(chatId)) {
+        return res.status(200).json({
+          active: true,
+          lastActivity: clients.get(chatId).lastActivity,
+          processing: activeRequests.has(chatId)
+        });
+      }
+      return res.status(200).json({ active: false });
     }
-    return res.status(200).json({ active: false });
-  });
+  );
 }

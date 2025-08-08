@@ -5,9 +5,10 @@ import validate from '../validators/validate.js';
 import { runToolSchema } from '../validators/index.js';
 import configCache from '../configCache.js';
 import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
+import { buildServerPath } from '../utils/basePath.js';
 
-export default function registerToolRoutes(app) {
-  app.get('/api/tools', authRequired, async (req, res) => {
+export default function registerToolRoutes(app, basePath = '') {
+  app.get(buildServerPath('/api/tools', basePath), authRequired, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
       const authConfig = platformConfig.auth || {};
@@ -41,26 +42,31 @@ export default function registerToolRoutes(app) {
     }
   });
 
-  app.all('/api/tools/:toolId', authRequired, validate(runToolSchema), async (req, res) => {
-    const { toolId } = req.params;
-    const params = req.method === 'GET' ? req.query : req.body;
-    if (req.headers['x-chat-id']) {
-      params.chatId = req.headers['x-chat-id'];
+  app.all(
+    buildServerPath('/api/tools/:toolId', basePath),
+    authRequired,
+    validate(runToolSchema),
+    async (req, res) => {
+      const { toolId } = req.params;
+      const params = req.method === 'GET' ? req.query : req.body;
+      if (req.headers['x-chat-id']) {
+        params.chatId = req.headers['x-chat-id'];
+      }
+      try {
+        const result = await runTool(toolId, params);
+        await logInteraction('tool_usage', {
+          toolId,
+          toolInput: params,
+          toolOutput: result,
+          sessionId: req.headers['x-chat-id'] || 'direct',
+          userSessionId: req.headers['x-session-id'] || 'unknown',
+          user: req.user
+        });
+        res.json(result);
+      } catch (error) {
+        console.error(`Tool ${toolId} error:`, error);
+        res.status(500).json({ error: 'Tool execution failed' });
+      }
     }
-    try {
-      const result = await runTool(toolId, params);
-      await logInteraction('tool_usage', {
-        toolId,
-        toolInput: params,
-        toolOutput: result,
-        sessionId: req.headers['x-chat-id'] || 'direct',
-        userSessionId: req.headers['x-session-id'] || 'unknown',
-        user: req.user
-      });
-      res.json(result);
-    } catch (error) {
-      console.error(`Tool ${toolId} error:`, error);
-      res.status(500).json({ error: 'Tool execution failed' });
-    }
-  });
+  );
 }

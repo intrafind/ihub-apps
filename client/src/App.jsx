@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './App.css';
+import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
 import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
 import PromptsList from './features/prompts/pages/PromptsList';
@@ -81,12 +82,20 @@ function App() {
   const adminPages = platformConfig?.admin?.pages || {};
   const showAdminPage = key => adminPages[key] !== false;
 
+  // Initialize runtime base path detection on app start
+  useEffect(() => {
+    initializeBasePath();
+  }, []);
+
+  // Get base path for React Router
+  const basename = getBasePath();
+
   return (
     <AppProviders>
       <AuthProvider>
         <AdminAuthProvider>
           <TeamsWrapper>
-            <BrowserRouter>
+            <BrowserRouter basename={basename}>
               {/* Global markdown renderer for Mermaid diagrams and other markdown features */}
               <MarkdownRenderer />
               {/* Document title management - must be inside Router for useLocation/useParams */}

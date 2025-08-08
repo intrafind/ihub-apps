@@ -72,3 +72,11 @@ export const fetchToolsBasic = async (options = {}) => {
 
   return handleApiResponse(() => apiClient.get('/tools'), cacheKey, DEFAULT_CACHE_TTL.MEDIUM);
 };
+
+// Authentication status
+export const fetchAuthStatus = async (options = {}) => {
+  const { skipCache = false } = options;
+  const cacheKey = skipCache ? null : CACHE_KEYS.AUTH_STATUS;
+
+  return handleApiResponse(() => apiClient.get('/auth/status'), cacheKey, DEFAULT_CACHE_TTL.MEDIUM);
+};

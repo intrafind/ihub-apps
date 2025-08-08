@@ -12,18 +12,18 @@ import registerAdminUIRoutes from './admin/ui.js';
 import registerBackupRoutes from './admin/backup.js';
 import registerAdminSchemasRoutes from './admin/schemas.js';
 
-export default async function registerAdminRoutes(app) {
-  registerAdminAuthRoutes(app);
-  registerAdminCacheRoutes(app);
-  registerAdminConfigRoutes(app);
-  registerAdminAppsRoutes(app);
-  registerAdminModelsRoutes(app);
-  registerAdminPromptsRoutes(app);
-  registerAdminSourcesRoutes(app);
-  registerAdminGroupRoutes(app);
-  registerAdminTranslateRoute(app);
-  registerAdminPagesRoutes(app);
-  registerAdminUIRoutes(app);
-  await registerBackupRoutes(app);
-  registerAdminSchemasRoutes(app);
+export default async function registerAdminRoutes(app, basePath = '') {
+  registerAdminAuthRoutes(app, basePath);
+  registerAdminCacheRoutes(app, basePath);
+  registerAdminConfigRoutes(app, basePath);
+  registerAdminAppsRoutes(app, basePath);
+  registerAdminModelsRoutes(app, basePath);
+  registerAdminPromptsRoutes(app, basePath);
+  registerAdminSourcesRoutes(app, basePath);
+  registerAdminGroupRoutes(app, basePath);
+  registerAdminTranslateRoute(app, basePath);
+  registerAdminPagesRoutes(app, basePath);
+  registerAdminUIRoutes(app, basePath);
+  await registerBackupRoutes(app, basePath);
+  registerAdminSchemasRoutes(app, basePath);
 }

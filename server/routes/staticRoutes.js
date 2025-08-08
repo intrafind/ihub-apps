@@ -3,8 +3,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
+import {
+  buildServerPath,
+  buildUploadsPath,
+  buildDocsPath,
+  getRelativeRequestPath
+} from '../utils/basePath.js';
 
-export default function registerStaticRoutes(app, { isPackaged, rootDir }) {
+export default function registerStaticRoutes(app, { isPackaged, rootDir, basePath = '' }) {
   fileURLToPath(import.meta.url);
 
   let staticPath;
@@ -17,17 +23,23 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir }) {
   }
 
   console.log(`Serving static files from: ${staticPath}`);
-  app.use(express.static(staticPath));
+
+  // Serve static files at base path
+  if (basePath) {
+    app.use(basePath, express.static(staticPath));
+  } else {
+    app.use(express.static(staticPath));
+  }
 
   // Serve uploaded assets
   const uploadsPath = path.join(rootDir, 'contents/uploads');
-  console.log(`Serving uploaded assets from: ${uploadsPath}`);
-  app.use('/uploads', express.static(uploadsPath));
+  console.log(`Serving uploaded assets from: ${uploadsPath} at ${buildUploadsPath('/')}`);
+  app.use(buildUploadsPath('/'), express.static(uploadsPath));
 
   // Serve documentation with authentication
   const docsPath = path.join(rootDir, 'docs/book');
-  console.log(`Serving documentation from: ${docsPath}`);
-  app.use('/docs', authRequired, express.static(docsPath));
+  console.log(`Serving documentation from: ${docsPath} at ${buildDocsPath('/')}`);
+  app.use(buildDocsPath('/'), authRequired, express.static(docsPath));
 
   // Determine index path once during setup
   let indexPath;
@@ -40,12 +52,20 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir }) {
   }
   console.log(`SPA will be served from: ${indexPath}`);
 
-  // Catch-all for SPA routing (but exclude docs paths)
+  // Catch-all for SPA routing (but exclude API and docs paths)
   app.get('*', (req, res, next) => {
+    const relativePath = getRelativeRequestPath(req.path);
+
+    // Don't serve SPA for API routes
+    if (relativePath.startsWith('/api')) {
+      return next();
+    }
+
     // Don't serve SPA for docs routes if they weren't handled by static middleware
-    if (req.path.startsWith('/docs')) {
+    if (relativePath.startsWith('/docs')) {
       return res.status(404).send('Documentation not found');
     }
+
     res.sendFile(indexPath);
   });
 }

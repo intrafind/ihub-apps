@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { fetchPlatformConfig } from '../../api/api';
+import { fetchAuthStatus, fetchUIConfig } from '../../api/api';
 
 const PlatformConfigContext = createContext({
   platformConfig: null,
@@ -16,8 +16,36 @@ export const PlatformConfigProvider = ({ children }) => {
   const loadConfig = async () => {
     try {
       setIsLoading(true);
-      const data = await fetchPlatformConfig();
-      setPlatformConfig(data);
+
+      // Fetch both auth status and UI config in parallel
+      const [authStatus, uiConfig] = await Promise.all([fetchAuthStatus(), fetchUIConfig()]);
+
+      // Combine both configs into a single object that matches the previous platform config structure
+      const combinedConfig = {
+        // Auth-related fields from auth status
+        auth: {
+          mode: authStatus.authMode
+        },
+        anonymousAuth: authStatus.anonymousAuth,
+        localAuth: authStatus.authMethods?.local,
+        proxyAuth: authStatus.authMethods?.proxy,
+        oidcAuth: authStatus.authMethods?.oidc,
+        ldapAuth: authStatus.authMethods?.ldap,
+        ntlmAuth: authStatus.authMethods?.ntlm,
+
+        // UI-related fields from UI config
+        admin: uiConfig.admin,
+        version: uiConfig.version,
+        computedRefreshSalt: uiConfig.computedRefreshSalt,
+        defaultLanguage: uiConfig.defaultLanguage,
+
+        // Additional auth status fields
+        authenticated: authStatus.authenticated,
+        user: authStatus.user,
+        autoRedirect: authStatus.autoRedirect
+      };
+
+      setPlatformConfig(combinedConfig);
       setError(null);
     } catch (e) {
       console.error('Error fetching platform configuration:', e);

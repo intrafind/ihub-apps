@@ -6,8 +6,9 @@ import {
   sendNotFound,
   sendInternalError
 } from '../utils/responseHelpers.js';
+import { buildServerPath } from '../utils/basePath.js';
 
-export default function registerModelRoutes(app, { getLocalizedError }) {
+export default function registerModelRoutes(app, { getLocalizedError, basePath = '' }) {
   /**
    * @swagger
    * /models:
@@ -52,7 +53,7 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
    *       500:
    *         description: Internal server error
    */
-  app.get('/api/models', authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/models', basePath), authRequired, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
       const authConfig = platformConfig.auth || {};
@@ -84,39 +85,44 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
     }
   });
 
-  app.get('/api/models/:modelId', authRequired, modelAccessRequired, async (req, res) => {
-    try {
-      const { modelId } = req.params;
-      const platform = configCache.getPlatform() || {};
-      const defaultLang = platform?.defaultLanguage || 'en';
-      const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
+  app.get(
+    buildServerPath('/api/models/:modelId', basePath),
+    authRequired,
+    modelAccessRequired,
+    async (req, res) => {
+      try {
+        const { modelId } = req.params;
+        const platform = configCache.getPlatform() || {};
+        const defaultLang = platform?.defaultLanguage || 'en';
+        const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 
-      // Try to get models from cache first
-      const { data: models } = configCache.getModels();
+        // Try to get models from cache first
+        const { data: models } = configCache.getModels();
 
-      if (!models) {
-        return sendFailedOperationError(res, 'load models configuration');
-      }
-      const model = models.find(m => m.id === modelId);
-      if (!model) {
-        const errorMessage = await getLocalizedError('modelNotFound', {}, language);
-        return sendNotFound(res, errorMessage);
-      }
-
-      // Check if user has permission to access this model
-      if (req.user && req.user.permissions) {
-        const allowedModels = req.user.permissions.models || new Set();
-        if (!allowedModels.has('*') && !allowedModels.has(modelId)) {
+        if (!models) {
+          return sendFailedOperationError(res, 'load models configuration');
+        }
+        const model = models.find(m => m.id === modelId);
+        if (!model) {
           const errorMessage = await getLocalizedError('modelNotFound', {}, language);
           return sendNotFound(res, errorMessage);
         }
-      }
 
-      // Transform model to OpenAI API compliant format
-      const transformedModel = transformModelToOpenAIFormat(model);
-      res.json(transformedModel);
-    } catch (error) {
-      sendInternalError(res, error, 'fetching model details');
+        // Check if user has permission to access this model
+        if (req.user && req.user.permissions) {
+          const allowedModels = req.user.permissions.models || new Set();
+          if (!allowedModels.has('*') && !allowedModels.has(modelId)) {
+            const errorMessage = await getLocalizedError('modelNotFound', {}, language);
+            return sendNotFound(res, errorMessage);
+          }
+        }
+
+        // Transform model to OpenAI API compliant format
+        const transformedModel = transformModelToOpenAIFormat(model);
+        res.json(transformedModel);
+      } catch (error) {
+        sendInternalError(res, error, 'fetching model details');
+      }
     }
-  });
+  );
 }

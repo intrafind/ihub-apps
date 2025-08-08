@@ -1,5 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { apiClient } from '../../api/client.js';
+import { buildPath, buildApiUrl } from '../../utils/runtimeBasePath';
 
 // Auth action types
 const AUTH_ACTIONS = {
@@ -334,7 +335,9 @@ export function AuthProvider({ children }) {
       sessionStorage.setItem('oidcReturnUrl', returnUrl);
 
       // Redirect to OIDC provider
-      const authUrl = `/api/auth/oidc/${providerName}?returnUrl=${encodeURIComponent(returnUrl)}`;
+      const authUrl = buildApiUrl(
+        `auth/oidc/${providerName}?returnUrl=${encodeURIComponent(returnUrl)}`
+      );
       window.location.href = authUrl;
     } catch (error) {
       console.error('OIDC login error:', error);
@@ -366,7 +369,7 @@ export function AuthProvider({ children }) {
 
       // Redirect to apps home page with logout parameter to prevent auto redirect
       // This ensures users don't remain on admin or other protected pages after logout
-      window.location.href = '/?logout=true';
+      window.location.href = buildPath('/?logout=true');
     }
   };
 

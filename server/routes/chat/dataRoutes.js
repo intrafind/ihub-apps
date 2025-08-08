@@ -6,6 +6,7 @@ import {
 } from '../../utils/authorization.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
+import { buildServerPath } from '../../utils/basePath.js';
 import crypto from 'crypto';
 
 /**
@@ -166,7 +167,8 @@ import crypto from 'crypto';
  *           example: "1640995200000-abc123def"
  */
 
-export default function registerDataRoutes(app) {
+export default function registerDataRoutes(app, deps = {}) {
+  const { basePath = '' } = deps;
   /**
    * @swagger
    * /api/styles:
@@ -233,7 +235,7 @@ export default function registerDataRoutes(app) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get('/api/styles', authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/styles', basePath), authRequired, async (req, res) => {
     try {
       // Try to get styles from cache first
       let { data: styles = [] } = configCache.getStyles();
@@ -357,7 +359,7 @@ export default function registerDataRoutes(app) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get('/api/prompts', authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/prompts', basePath), authRequired, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
 
@@ -514,7 +516,7 @@ export default function registerDataRoutes(app) {
    *                   error: "Internal server error"
    *                   requestId: "1640995200000-xyz789abc"
    */
-  app.get('/api/translations/:lang', async (req, res) => {
+  app.get(buildServerPath('/api/translations/:lang', basePath), async (req, res) => {
     const originalLang = req.params.lang;
     let requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -705,7 +707,7 @@ export default function registerDataRoutes(app) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get('/api/configs/ui', async (req, res) => {
+  app.get(buildServerPath('/api/configs/ui', basePath), async (req, res) => {
     try {
       // Try to get UI config from cache first
       let { data: uiConfig = {}, etag: uiConfigEtag } = configCache.getUI();
@@ -713,102 +715,9 @@ export default function registerDataRoutes(app) {
       if (!uiConfig) {
         return res.status(500).json({ error: 'Failed to load UI configuration' });
       }
-      res.setHeader('ETag', uiConfigEtag);
-      res.json(uiConfig);
-    } catch (error) {
-      console.error('Error fetching UI configuration:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
 
-  /**
-   * @swagger
-   * /api/configs/platform:
-   *   get:
-   *     summary: Get platform configuration and settings
-   *     description: |
-   *       Retrieves the complete platform configuration including authentication settings,
-   *       version information, and system configuration. Sensitive information is automatically
-   *       sanitized before being sent to the client.
-   *
-   *       **Environment Variable Overrides:**
-   *       The endpoint applies environment variable overrides for:
-   *       - AUTH_MODE: Authentication mode (proxy, local, oidc, anonymous)
-   *       - AUTH_ALLOW_ANONYMOUS: Enable/disable anonymous access
-   *       - PROXY_AUTH_ENABLED: Enable proxy authentication
-   *       - LOCAL_AUTH_ENABLED: Enable local authentication
-   *       - OIDC_AUTH_ENABLED: Enable OIDC authentication
-   *       - JWT_SECRET: JWT secret for local auth (sanitized in response)
-   *
-   *       **Security Features:**
-   *       - Sensitive fields automatically excluded from client response
-   *       - OIDC provider secrets (clientSecret, clientId) filtered out
-   *       - Admin credentials and JWT secrets not exposed
-   *       - Proxy auth headers sanitized for security
-   *
-   *       **Version Information:**
-   *       - Application version read from package.json
-   *       - Computed refresh salt for cache busting (version + admin salt)
-   *     tags:
-   *       - Configuration
-   *       - Platform
-   *     responses:
-   *       200:
-   *         description: Platform configuration successfully retrieved
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/PlatformConfiguration'
-   *             example:
-   *               version: "1.2.3"
-   *               computedRefreshSalt: "1.2.3.42"
-   *               defaultLanguage: "en"
-   *               auth:
-   *                 mode: "proxy"
-   *               anonymousAuth:
-   *                 enabled: true
-   *                 defaultGroups: ["anonymous"]
-   *               proxyAuth:
-   *                 enabled: true
-   *               localAuth:
-   *                 enabled: false
-   *                 sessionTimeoutMinutes: 480
-   *                 showDemoAccounts: false
-   *               oidcAuth:
-   *                 enabled: true
-   *                 providers:
-   *                   - name: "azure"
-   *                     displayName: "Azure AD"
-   *                     authorizationURL: "https://login.microsoftonline.com/..."
-   *                     callbackURL: "https://your-app.com/auth/oidc/callback"
-   *                     scope: "openid profile email"
-   *                     pkce: true
-   *               admin:
-   *                 pages:
-   *                   enabled: true
-   *                   customization: true
-   *       500:
-   *         description: Internal server error
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/DataError'
-   *             examples:
-   *               configError:
-   *                 summary: Configuration loading error
-   *                 value:
-   *                   error: "Failed to load platform configuration"
-   *               versionError:
-   *                 summary: Version read error (gracefully handled)
-   *                 value:
-   *                   error: "Internal server error"
-   */
-  app.get('/api/configs/platform', async (req, res) => {
-    try {
-      let platform = configCache.getPlatform();
-      if (!platform) {
-        return res.status(500).json({ error: 'Failed to load platform configuration' });
-      }
+      // Get platform config for additional UI-related fields
+      const platform = configCache.getPlatform() || {};
 
       // Get app version using the helper
       const appVersion = getAppVersion();
@@ -820,125 +729,27 @@ export default function registerDataRoutes(app) {
       };
       const computedSalt = `${appVersion}.${refreshSalt.salt}`;
 
-      // Apply environment variable overrides for auth configuration
-      const authConfig = {
-        ...platform.auth,
-        mode: process.env.AUTH_MODE || platform.auth?.mode || 'proxy'
-      };
-
-      // Apply environment variable overrides for anonymous auth configuration
-      const anonymousAuthConfig = {
-        ...platform.anonymousAuth,
-        enabled:
-          process.env.AUTH_ALLOW_ANONYMOUS === 'true'
-            ? true
-            : process.env.AUTH_ALLOW_ANONYMOUS === 'false'
-              ? false
-              : (platform.anonymousAuth?.enabled ?? true),
-        defaultGroups: platform.anonymousAuth?.defaultGroups || ['anonymous']
-      };
-
-      // Apply environment variable overrides for proxy auth
-      const proxyAuthConfig = {
-        ...platform.proxyAuth,
-        enabled:
-          process.env.PROXY_AUTH_ENABLED === 'true'
-            ? true
-            : process.env.PROXY_AUTH_ENABLED === 'false'
-              ? false
-              : (platform.proxyAuth?.enabled ?? false),
-        userHeader:
-          process.env.PROXY_AUTH_USER_HEADER ||
-          platform.proxyAuth?.userHeader ||
-          'X-Forwarded-User',
-        groupsHeader:
-          process.env.PROXY_AUTH_GROUPS_HEADER ||
-          platform.proxyAuth?.groupsHeader ||
-          'X-Forwarded-Groups'
-      };
-
-      // Apply environment variable overrides for local auth
-      const localAuthConfig = {
-        ...platform.localAuth,
-        enabled:
-          process.env.LOCAL_AUTH_ENABLED === 'true'
-            ? true
-            : process.env.LOCAL_AUTH_ENABLED === 'false'
-              ? false
-              : (platform.localAuth?.enabled ?? false),
-        sessionTimeoutMinutes:
-          parseInt(process.env.LOCAL_AUTH_SESSION_TIMEOUT) ||
-          platform.localAuth?.sessionTimeoutMinutes ||
-          480,
-        jwtSecret: process.env.JWT_SECRET || platform.localAuth?.jwtSecret || '${JWT_SECRET}'
-      };
-
-      // Apply environment variable overrides for OIDC auth
-      const oidcAuthConfig = {
-        ...platform.oidcAuth,
-        enabled:
-          process.env.OIDC_AUTH_ENABLED === 'true'
-            ? true
-            : process.env.OIDC_AUTH_ENABLED === 'false'
-              ? false
-              : (platform.oidcAuth?.enabled ?? false)
-      };
-
-      // Sanitize configs for client - remove sensitive information
-      const sanitizedLocalAuth = {
-        enabled: localAuthConfig.enabled,
-        sessionTimeoutMinutes: localAuthConfig.sessionTimeoutMinutes,
-        showDemoAccounts: localAuthConfig.showDemoAccounts
-        // Exclude jwtSecret
-      };
-
-      const sanitizedOidcAuth = oidcAuthConfig.enabled
-        ? {
-            enabled: oidcAuthConfig.enabled,
-            providers:
-              oidcAuthConfig.providers
-                ?.filter(provider => provider.enabled !== false) // Only include enabled providers
-                ?.map(provider => ({
-                  name: provider.name,
-                  displayName: provider.displayName,
-                  authorizationURL: provider.authorizationURL,
-                  callbackURL: provider.callbackURL,
-                  scope: provider.scope,
-                  pkce: provider.pkce
-                  // Exclude clientSecret, clientId, tokenURL, userInfoURL
-                })) || []
-          }
-        : { enabled: false };
-
-      const sanitizedProxyAuth = {
-        enabled: proxyAuthConfig.enabled
-        // Exclude userHeader, groupsHeader, anonymousGroup which could be sensitive
-      };
-
-      // Sanitize admin config - remove sensitive admin credentials
+      // Sanitize admin config - include only pages and encrypted status
       const sanitizedAdmin = platform.admin
         ? {
-            pages: platform.admin.pages
-            // Exclude admin.secret
+            pages: platform.admin.pages,
+            encrypted: platform.admin.encrypted
           }
         : {};
 
-      // Add version and computed salt to platform response
-      const enhancedPlatform = {
+      // Enhance UI config with additional platform fields needed by frontend
+      const enhancedUiConfig = {
+        ...uiConfig,
         version: appVersion,
         computedRefreshSalt: computedSalt,
         defaultLanguage: platform.defaultLanguage,
-        auth: authConfig,
-        anonymousAuth: anonymousAuthConfig,
-        proxyAuth: sanitizedProxyAuth,
-        localAuth: sanitizedLocalAuth,
-        oidcAuth: sanitizedOidcAuth,
         admin: sanitizedAdmin
       };
 
-      res.json(enhancedPlatform);
+      res.setHeader('ETag', uiConfigEtag);
+      res.json(enhancedUiConfig);
     } catch (error) {
-      console.error('Error fetching platform configuration:', error);
+      console.error('Error fetching UI configuration:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

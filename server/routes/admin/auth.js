@@ -6,6 +6,7 @@ import configCache from '../../configCache.js';
 import { adminAuth, isAdminAuthRequired, hashPassword } from '../../middleware/adminAuth.js';
 import { hashPasswordWithUserId } from '../../middleware/localAuth.js';
 import { v4 as uuidv4 } from 'uuid';
+import { buildServerPath } from '../../utils/basePath.js';
 
 /**
  * @swagger
@@ -110,7 +111,7 @@ import { v4 as uuidv4 } from 'uuid';
  *           description: Error message
  */
 
-export default function registerAdminAuthRoutes(app) {
+export default function registerAdminAuthRoutes(app, basePath = '') {
   /**
    * @swagger
    * /api/admin/auth/status:
@@ -154,7 +155,7 @@ export default function registerAdminAuthRoutes(app) {
    *       500:
    *         description: Failed to check authentication status
    */
-  app.get('/api/admin/auth/status', async (req, res) => {
+  app.get(buildServerPath('/api/admin/auth/status', basePath), async (req, res) => {
     try {
       // Check if admin auth is required considering current user authentication
       // req.user is populated by the global auth middleware (proxyAuth, localAuth)
@@ -204,7 +205,7 @@ export default function registerAdminAuthRoutes(app) {
    *       500:
    *         description: Failed to test authentication
    */
-  app.get('/api/admin/auth/test', adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/auth/test', basePath), adminAuth, async (req, res) => {
     try {
       res.json({ message: 'Admin authentication successful', authenticated: true });
     } catch (error) {
@@ -266,31 +267,35 @@ export default function registerAdminAuthRoutes(app) {
    *       500:
    *         description: Failed to change password
    */
-  app.post('/api/admin/auth/change-password', adminAuth, async (req, res) => {
-    try {
-      const { newPassword } = req.body;
-      if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 1) {
-        return res.status(400).json({ error: 'New password is required' });
+  app.post(
+    buildServerPath('/api/admin/auth/change-password', basePath),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { newPassword } = req.body;
+        if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 1) {
+          return res.status(400).json({ error: 'New password is required' });
+        }
+        const rootDir = getRootDir();
+        const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
+        const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
+        const platformConfig = JSON.parse(platformConfigData);
+        if (!platformConfig.admin) {
+          platformConfig.admin = {};
+        }
+        const hashedPassword = hashPassword(newPassword);
+        platformConfig.admin.secret = hashedPassword;
+        platformConfig.admin.encrypted = true;
+        await atomicWriteJSON(platformConfigPath, platformConfig);
+        await configCache.refreshCacheEntry('config/platform.json');
+        console.log('🔐 Admin password changed and encrypted');
+        res.json({ message: 'Admin password changed successfully', encrypted: true });
+      } catch (error) {
+        console.error('Error changing admin password:', error);
+        res.status(500).json({ error: 'Failed to change admin password' });
       }
-      const rootDir = getRootDir();
-      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-      const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
-      const platformConfig = JSON.parse(platformConfigData);
-      if (!platformConfig.admin) {
-        platformConfig.admin = {};
-      }
-      const hashedPassword = hashPassword(newPassword);
-      platformConfig.admin.secret = hashedPassword;
-      platformConfig.admin.encrypted = true;
-      await atomicWriteJSON(platformConfigPath, platformConfig);
-      await configCache.refreshCacheEntry('config/platform.json');
-      console.log('🔐 Admin password changed and encrypted');
-      res.json({ message: 'Admin password changed successfully', encrypted: true });
-    } catch (error) {
-      console.error('Error changing admin password:', error);
-      res.status(500).json({ error: 'Failed to change admin password' });
     }
-  });
+  );
 
   // User Management Routes
 
@@ -318,7 +323,7 @@ export default function registerAdminAuthRoutes(app) {
    *       500:
    *         description: Failed to get users
    */
-  app.get('/api/admin/auth/users', adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/auth/users', basePath), adminAuth, async (req, res) => {
     try {
       const rootDir = getRootDir();
       const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
@@ -409,7 +414,7 @@ export default function registerAdminAuthRoutes(app) {
    *       500:
    *         description: Failed to create user
    */
-  app.post('/api/admin/auth/users', adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/auth/users', basePath), adminAuth, async (req, res) => {
     try {
       const { username, email, name, password, internalGroups = [], active = true } = req.body;
 
@@ -545,65 +550,69 @@ export default function registerAdminAuthRoutes(app) {
    *       500:
    *         description: Failed to update user
    */
-  app.put('/api/admin/auth/users/:userId', adminAuth, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { email, name, password, internalGroups, active } = req.body;
-
-      const rootDir = getRootDir();
-      const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
-
-      // Load existing users
-      let usersData = { users: {}, metadata: {} };
+  app.put(
+    buildServerPath('/api/admin/auth/users/:userId', basePath),
+    adminAuth,
+    async (req, res) => {
       try {
-        const usersFileData = await fs.readFile(usersFilePath, 'utf8');
-        usersData = JSON.parse(usersFileData);
-      } catch {
-        return res.status(404).json({ error: 'Users file not found' });
-      }
+        const { userId } = req.params;
+        const { email, name, password, internalGroups, active } = req.body;
 
-      // Check if user exists
-      if (!usersData.users[userId]) {
-        return res.status(404).json({ error: 'User not found' });
-      }
+        const rootDir = getRootDir();
+        const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
 
-      const user = usersData.users[userId];
-
-      // Update fields
-      if (email !== undefined) user.email = email;
-      if (name !== undefined) user.name = name;
-      if (internalGroups !== undefined)
-        user.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
-      if (active !== undefined) user.active = active;
-
-      // Update password if provided
-      if (password) {
-        if (password.length < 6) {
-          return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+        // Load existing users
+        let usersData = { users: {}, metadata: {} };
+        try {
+          const usersFileData = await fs.readFile(usersFilePath, 'utf8');
+          usersData = JSON.parse(usersFileData);
+        } catch {
+          return res.status(404).json({ error: 'Users file not found' });
         }
-        user.passwordHash = await hashPasswordWithUserId(password, userId);
+
+        // Check if user exists
+        if (!usersData.users[userId]) {
+          return res.status(404).json({ error: 'User not found' });
+        }
+
+        const user = usersData.users[userId];
+
+        // Update fields
+        if (email !== undefined) user.email = email;
+        if (name !== undefined) user.name = name;
+        if (internalGroups !== undefined)
+          user.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
+        if (active !== undefined) user.active = active;
+
+        // Update password if provided
+        if (password) {
+          if (password.length < 6) {
+            return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+          }
+          user.passwordHash = await hashPasswordWithUserId(password, userId);
+        }
+
+        user.updatedAt = new Date().toISOString();
+        usersData.metadata.lastUpdated = new Date().toISOString();
+
+        // Save to file
+        await atomicWriteJSON(usersFilePath, usersData);
+
+        // Refresh cache to ensure updated user data is available in cache
+        await configCache.refreshCacheEntry('config/users.json');
+
+        console.log(`👤 Updated user: ${user.username} (${userId})`);
+
+        // Return user without password hash
+        // eslint-disable-next-line no-unused-vars
+        const { passwordHash, ...userResponse } = user;
+        res.json({ user: userResponse });
+      } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ error: 'Failed to update user' });
       }
-
-      user.updatedAt = new Date().toISOString();
-      usersData.metadata.lastUpdated = new Date().toISOString();
-
-      // Save to file
-      await atomicWriteJSON(usersFilePath, usersData);
-
-      // Refresh cache to ensure updated user data is available in cache
-      await configCache.refreshCacheEntry('config/users.json');
-
-      console.log(`👤 Updated user: ${user.username} (${userId})`);
-
-      // Return user without password hash
-      // eslint-disable-next-line no-unused-vars
-      const { passwordHash, ...userResponse } = user;
-      res.json({ user: userResponse });
-    } catch (error) {
-      console.error('Error updating user:', error);
-      res.status(500).json({ error: 'Failed to update user' });
     }
-  });
+  );
 
   /**
    * @swagger
@@ -647,45 +656,49 @@ export default function registerAdminAuthRoutes(app) {
    *       500:
    *         description: Failed to delete user
    */
-  app.delete('/api/admin/auth/users/:userId', adminAuth, async (req, res) => {
-    try {
-      const { userId } = req.params;
-
-      const rootDir = getRootDir();
-      const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
-
-      // Load existing users
-      let usersData = { users: {}, metadata: {} };
+  app.delete(
+    buildServerPath('/api/admin/auth/users/:userId', basePath),
+    adminAuth,
+    async (req, res) => {
       try {
-        const usersFileData = await fs.readFile(usersFilePath, 'utf8');
-        usersData = JSON.parse(usersFileData);
-      } catch {
-        return res.status(404).json({ error: 'Users file not found' });
+        const { userId } = req.params;
+
+        const rootDir = getRootDir();
+        const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
+
+        // Load existing users
+        let usersData = { users: {}, metadata: {} };
+        try {
+          const usersFileData = await fs.readFile(usersFilePath, 'utf8');
+          usersData = JSON.parse(usersFileData);
+        } catch {
+          return res.status(404).json({ error: 'Users file not found' });
+        }
+
+        // Check if user exists
+        if (!usersData.users[userId]) {
+          return res.status(404).json({ error: 'User not found' });
+        }
+
+        const username = usersData.users[userId].username;
+
+        // Remove user
+        delete usersData.users[userId];
+        usersData.metadata.lastUpdated = new Date().toISOString();
+
+        // Save to file
+        await atomicWriteJSON(usersFilePath, usersData);
+
+        // Refresh cache to ensure deleted user is removed from cache
+        await configCache.refreshCacheEntry('config/users.json');
+
+        console.log(`👤 Deleted user: ${username} (${userId})`);
+
+        res.json({ message: 'User deleted successfully' });
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ error: 'Failed to delete user' });
       }
-
-      // Check if user exists
-      if (!usersData.users[userId]) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-
-      const username = usersData.users[userId].username;
-
-      // Remove user
-      delete usersData.users[userId];
-      usersData.metadata.lastUpdated = new Date().toISOString();
-
-      // Save to file
-      await atomicWriteJSON(usersFilePath, usersData);
-
-      // Refresh cache to ensure deleted user is removed from cache
-      await configCache.refreshCacheEntry('config/users.json');
-
-      console.log(`👤 Deleted user: ${username} (${userId})`);
-
-      res.json({ message: 'User deleted successfully' });
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      res.status(500).json({ error: 'Failed to delete user' });
     }
-  });
+  );
 }

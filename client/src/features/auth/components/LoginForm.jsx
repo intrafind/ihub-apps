@@ -52,7 +52,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
   const oidcProviders = authConfig?.authMethods?.oidc?.providers || [];
   const hasOidcProviders = authConfig?.authMethods?.oidc?.enabled && oidcProviders.length > 0;
   const hasLocalAuth = authConfig?.authMethods?.local?.enabled;
-  const showDemoAccounts = platformConfig?.localAuth?.showDemoAccounts !== false;
+  const showDemoAccounts = platformConfig?.localAuth?.showDemoAccounts === true;
 
   // Provider icon mapping
   const getProviderIcon = providerName => {

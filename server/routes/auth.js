@@ -9,8 +9,9 @@ import { loginLdapUser, getConfiguredLdapProviders } from '../middleware/ldapAut
 import { processNtlmLogin, getNtlmConfig } from '../middleware/ntlmAuth.js';
 import { teamsTokenExchange, teamsTabConfigSave } from '../middleware/teamsAuth.js';
 import configCache from '../configCache.js';
+import { buildServerPath } from '../utils/basePath.js';
 
-export default function registerAuthRoutes(app) {
+export default function registerAuthRoutes(app, basePath = '') {
   /**
    * @swagger
    * /auth/login:
@@ -67,7 +68,7 @@ export default function registerAuthRoutes(app) {
    *       500:
    *         description: Internal server error
    */
-  app.post('/api/auth/login', async (req, res) => {
+  app.post(buildServerPath('/api/auth/login', basePath), async (req, res) => {
     try {
       const platform = app.get('platform') || {};
       const localAuthConfig = platform.localAuth || {};
@@ -110,7 +111,7 @@ export default function registerAuthRoutes(app) {
   /**
    * LDAP authentication login
    */
-  app.post('/api/auth/ldap/login', async (req, res) => {
+  app.post(buildServerPath('/api/auth/ldap/login', basePath), async (req, res) => {
     try {
       const platform = app.get('platform') || {};
       const ldapAuthConfig = platform.ldapAuth || {};
@@ -163,7 +164,7 @@ export default function registerAuthRoutes(app) {
   /**
    * NTLM authentication login (for API usage)
    */
-  app.post('/api/auth/ntlm/login', async (req, res) => {
+  app.post(buildServerPath('/api/auth/ntlm/login', basePath), async (req, res) => {
     try {
       const platform = app.get('platform') || {};
       const ntlmAuthConfig = platform.ntlmAuth || {};
@@ -208,7 +209,7 @@ export default function registerAuthRoutes(app) {
   /**
    * Get current user information
    */
-  app.get('/api/auth/user', (req, res) => {
+  app.get(buildServerPath('/api/auth/user', basePath), (req, res) => {
     if (!req.user || req.user.id === 'anonymous') {
       return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -231,7 +232,7 @@ export default function registerAuthRoutes(app) {
   /**
    * Logout (clear cookies and track logout)
    */
-  app.post('/api/auth/logout', (req, res) => {
+  app.post(buildServerPath('/api/auth/logout', basePath), (req, res) => {
     // Clear the authentication cookie
     res.clearCookie('authToken', {
       httpOnly: true,
@@ -254,7 +255,7 @@ export default function registerAuthRoutes(app) {
    * Create new user (admin only)
    */
   app.post(
-    '/api/auth/users',
+    buildServerPath('/api/auth/users', basePath),
     createAuthorizationMiddleware({ requireAdmin: true }),
     async (req, res) => {
       try {
@@ -287,7 +288,7 @@ export default function registerAuthRoutes(app) {
   /**
    * Get authentication status and configuration
    */
-  app.get('/api/auth/status', (req, res) => {
+  app.get(buildServerPath('/api/auth/status', basePath), (req, res) => {
     const platform = configCache.getPlatform() || {};
     const authConfig = platform.auth || {};
     const proxyAuthConfig = platform.proxyAuth || {};
@@ -358,7 +359,8 @@ export default function registerAuthRoutes(app) {
           groupsHeader: proxyAuthConfig.groupsHeader
         },
         local: {
-          enabled: localAuthConfig.enabled ?? false
+          enabled: localAuthConfig.enabled ?? false,
+          showDemoAccounts: localAuthConfig.showDemoAccounts ?? true
         },
         oidc: {
           enabled: oidcAuthConfig.enabled ?? false,
@@ -382,7 +384,7 @@ export default function registerAuthRoutes(app) {
   /**
    * OIDC provider authentication routes
    */
-  app.get('/api/auth/oidc/providers', (req, res) => {
+  app.get(buildServerPath('/api/auth/oidc/providers', basePath), (req, res) => {
     const providers = getConfiguredProviders();
     res.json({
       success: true,
@@ -393,7 +395,7 @@ export default function registerAuthRoutes(app) {
   /**
    * LDAP provider list
    */
-  app.get('/api/auth/ldap/providers', (req, res) => {
+  app.get(buildServerPath('/api/auth/ldap/providers', basePath), (req, res) => {
     const providers = getConfiguredLdapProviders();
     res.json({
       success: true,
@@ -404,7 +406,7 @@ export default function registerAuthRoutes(app) {
   /**
    * NTLM authentication status
    */
-  app.get('/api/auth/ntlm/status', (req, res) => {
+  app.get(buildServerPath('/api/auth/ntlm/status', basePath), (req, res) => {
     const ntlmConfig = getNtlmConfig();
     res.json({
       success: true,
@@ -426,7 +428,7 @@ export default function registerAuthRoutes(app) {
    * OIDC authentication initiation
    * GET /api/auth/oidc/:provider
    */
-  app.get('/api/auth/oidc/:provider', (req, res, next) => {
+  app.get(buildServerPath('/api/auth/oidc/:provider', basePath), (req, res, next) => {
     const providerName = req.params.provider;
     const handler = createOidcAuthHandler(providerName);
     handler(req, res, next);
@@ -436,7 +438,7 @@ export default function registerAuthRoutes(app) {
    * OIDC authentication callback
    * GET /api/auth/oidc/:provider/callback
    */
-  app.get('/api/auth/oidc/:provider/callback', (req, res, next) => {
+  app.get(buildServerPath('/api/auth/oidc/:provider/callback', basePath), (req, res, next) => {
     const providerName = req.params.provider;
     const handler = createOidcCallbackHandler(providerName);
     handler(req, res, next);
@@ -446,11 +448,11 @@ export default function registerAuthRoutes(app) {
    * Teams SSO token exchange
    * POST /api/auth/teams/exchange
    */
-  app.post('/api/auth/teams/exchange', teamsTokenExchange);
+  app.post(buildServerPath('/api/auth/teams/exchange', basePath), teamsTokenExchange);
 
   /**
    * Teams tab configuration save
    * POST /api/auth/teams/config
    */
-  app.post('/api/auth/teams/config', teamsTabConfigSave);
+  app.post(buildServerPath('/api/auth/teams/config', basePath), teamsTabConfigSave);
 }

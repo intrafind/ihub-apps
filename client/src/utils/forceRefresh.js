@@ -8,7 +8,7 @@
  * 4. Preserving the disclaimer acceptance flag during refresh
  */
 
-import { fetchPlatformConfig } from '../api/api';
+import { fetchUIConfig } from '../api/api';
 
 const REFRESH_SALT_KEY = 'ihub-refresh-salt';
 const DISCLAIMER_KEY = 'ihub-disclaimer-acknowledged';
@@ -21,15 +21,15 @@ export const checkForceRefresh = async () => {
   try {
     console.log('🔍 Checking for force refresh...');
 
-    // Fetch current platform configuration
-    const platformConfig = await fetchPlatformConfig({ skipCache: true });
+    // Fetch current UI configuration (which now contains the refresh salt)
+    const uiConfig = await fetchUIConfig({ skipCache: true });
 
-    if (!platformConfig || !platformConfig.computedRefreshSalt) {
-      console.warn('No refresh salt found in platform configuration');
+    if (!uiConfig || !uiConfig.computedRefreshSalt) {
+      console.warn('No refresh salt found in UI configuration');
       return false;
     }
 
-    const currentSalt = platformConfig.computedRefreshSalt;
+    const currentSalt = uiConfig.computedRefreshSalt;
     const storedSalt = localStorage.getItem(REFRESH_SALT_KEY);
 
     console.log(`Current salt: ${currentSalt}, Stored salt: ${storedSalt}`);
@@ -63,9 +63,9 @@ export const performForceRefresh = async () => {
   try {
     console.log('🔄 Performing force refresh...');
 
-    // Get current platform configuration to get the new salt
-    const platformConfig = await fetchPlatformConfig({ skipCache: true });
-    const newSalt = platformConfig?.computedRefreshSalt;
+    // Get current UI configuration to get the new salt
+    const uiConfig = await fetchUIConfig({ skipCache: true });
+    const newSalt = uiConfig?.computedRefreshSalt;
 
     if (newSalt) {
       // Preserve disclaimer acceptance

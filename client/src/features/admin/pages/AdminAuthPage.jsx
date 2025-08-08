@@ -38,7 +38,7 @@ const AdminAuthPage = () => {
       usersFile: 'contents/config/users.json',
       sessionTimeoutMinutes: 480,
       jwtSecret: '$' + '{JWT_SECRET}',
-      showDemoAccounts: true
+      showDemoAccounts: false
     },
     oidcAuth: {
       enabled: false,

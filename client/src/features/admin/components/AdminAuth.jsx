@@ -3,6 +3,7 @@ import { useAdminAuth } from '../hooks/useAdminAuth';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import Icon from '../../../shared/components/Icon';
+import { buildPath } from '../../../utils/runtimeBasePath';
 
 const AdminAuth = ({ children }) => {
   const { isAuthenticated, authRequired, isLoading, login, logout } = useAdminAuth();
@@ -160,7 +161,7 @@ const AdminAuth = ({ children }) => {
         {/* Show return/login link for non-anonymous modes */}
         {authMode !== 'anonymous' && !userIsAuthenticated && (
           <div className="mt-6 text-center">
-            <a href="/" className="text-indigo-600 hover:text-indigo-500 font-medium">
+            <a href={buildPath('/')} className="text-indigo-600 hover:text-indigo-500 font-medium">
               ← Return to login
             </a>
           </div>

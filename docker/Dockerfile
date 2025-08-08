@@ -40,6 +40,14 @@ RUN npm run install:all
 # -----------------------------------------------------------------------------
 FROM dependencies AS builder
 
+# Build arguments for base path configuration
+ARG BASE_PATH=""
+ARG VITE_BASE_PATH=""
+
+# Set environment variables for build
+ENV BASE_PATH=${BASE_PATH}
+ENV VITE_BASE_PATH=${VITE_BASE_PATH}
+
 # Copy source code
 COPY . .
 
@@ -70,8 +78,14 @@ CMD ["npm", "run", "dev"]
 # -----------------------------------------------------------------------------
 FROM node:20-alpine AS production
 
+# Build arguments for runtime configuration
+ARG BASE_PATH=""
+ARG VITE_BASE_PATH=""
+
 # Set production environment
 ENV NODE_ENV=production
+ENV BASE_PATH=${BASE_PATH}
+ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 
 # Install runtime dependencies
 RUN apk add --update --no-cache \
@@ -100,10 +114,13 @@ RUN mkdir -p \
 COPY --chown=ihub:ihub <<EOF /app/healthcheck.js
 import http from 'http';
 
+const basePath = process.env.BASE_PATH || '';
+const healthPath = basePath + '/api/health';
+
 const options = {
   hostname: 'localhost',
   port: process.env.PORT || 3000,
-  path: '/api/health',
+  path: healthPath,
   timeout: 5000
 };
 

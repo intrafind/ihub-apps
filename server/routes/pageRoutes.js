@@ -1,8 +1,9 @@
 import { loadText } from '../configLoader.js';
 import configCache from '../configCache.js';
+import { buildServerPath } from '../utils/basePath.js';
 
-export default function registerPageRoutes(app) {
-  app.get('/api/pages/:pageId', async (req, res) => {
+export default function registerPageRoutes(app, basePath = '') {
+  app.get(buildServerPath('/api/pages/:pageId', basePath), async (req, res) => {
     const { pageId } = req.params;
     const lang = req.query.lang || 'en';
     try {

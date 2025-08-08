@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
 import useEventSource from '../../../shared/hooks/useEventSource';
 import { sendAppChatMessage } from '../../../api/api';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 /**
  * High level hook combining chat message management with streaming
@@ -159,7 +160,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           params
         };
 
-        initEventSource(`/api/apps/${appId}/chat/${chatId}`);
+        initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
       } catch (err) {
         console.error('Error sending message:', err);
         addSystemMessage(

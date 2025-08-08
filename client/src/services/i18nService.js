@@ -89,8 +89,8 @@ class I18nService {
 
   async loadPlatformConfig() {
     try {
-      // Use apiClient instead of fetch
-      const response = await apiClient.get('/configs/platform');
+      // Use apiClient to get UI config instead (which now contains defaultLanguage)
+      const response = await apiClient.get('/configs/ui');
       if (response.status >= 200 && response.status < 300) {
         this.platformConfig = response.data;
         if (this.platformConfig?.defaultLanguage) {
@@ -98,7 +98,7 @@ class I18nService {
         }
       }
     } catch (error) {
-      console.warn('Failed to load platform configuration, using default language en:', error);
+      console.warn('Failed to load UI configuration, using default language en:', error);
     }
   }
 

@@ -10,9 +10,10 @@ import {
   convertToolCallsFromGeneric,
   convertToolsToGeneric
 } from '../adapters/toolCalling/index.js';
+import { buildServerPath } from '../utils/basePath.js';
 
-export default function registerOpenAIProxyRoutes(app, { getLocalizedError } = {}) {
-  const base = '/api/inference';
+export default function registerOpenAIProxyRoutes(app, { getLocalizedError, basePath = '' } = {}) {
+  const base = buildServerPath('/api/inference', basePath);
   app.use(`${base}/v1`, authRequired);
 
   /**

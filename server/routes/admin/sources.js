@@ -14,6 +14,7 @@ import {
   sendBadRequest,
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
+import { buildServerPath } from '../../utils/basePath.js';
 
 /**
  * Initialize source manager singleton
@@ -431,7 +432,7 @@ function getSourceManager() {
  * Register all sources administration routes
  * @param {Express} app - Express application instance
  */
-export default function registerAdminSourcesRoutes(app) {
+export default function registerAdminSourcesRoutes(app, basePath = '') {
   /**
    * @swagger
    * /api/admin/sources:
@@ -475,7 +476,7 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.get('/api/admin/sources', adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/sources', basePath), adminAuth, async (req, res) => {
     try {
       const { data: sources, etag } = configCache.getSources(true);
       res.setHeader('ETag', etag);
@@ -535,7 +536,7 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.get('/api/admin/sources/:id', adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/sources/:id', basePath), adminAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const { data: sources } = configCache.getSources(true);
@@ -644,7 +645,7 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.post('/api/admin/sources', adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/sources', basePath), adminAuth, async (req, res) => {
     try {
       const sourceData = req.body;
 
@@ -755,7 +756,7 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.put('/api/admin/sources/:id', adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/sources/:id', basePath), adminAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const sourceData = req.body;
@@ -871,7 +872,7 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.delete('/api/admin/sources/:id', adminAuth, async (req, res) => {
+  app.delete(buildServerPath('/api/admin/sources/:id', basePath), adminAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const { data: sources } = configCache.getSources(true);
@@ -956,44 +957,48 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.post('/api/admin/sources/:id/test', adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { data: sources } = configCache.getSources(true);
-      const source = sources.find(s => s.id === id);
-
-      if (!source) {
-        return sendNotFound(res, 'Source');
-      }
-
-      const manager = getSourceManager();
-      const startTime = Date.now();
-
+  app.post(
+    buildServerPath('/api/admin/sources/:id/test', basePath),
+    adminAuth,
+    async (req, res) => {
       try {
-        // Test source connection
-        const result = await manager.testSource(source.type, source.config);
-        const duration = Date.now() - startTime;
+        const { id } = req.params;
+        const { data: sources } = configCache.getSources(true);
+        const source = sources.find(s => s.id === id);
 
-        res.json({
-          success: true,
-          result: {
-            connected: true,
-            duration,
-            ...result
-          }
-        });
-      } catch (testError) {
-        const duration = Date.now() - startTime;
-        res.status(400).json({
-          success: false,
-          error: testError.message,
-          duration
-        });
+        if (!source) {
+          return sendNotFound(res, 'Source');
+        }
+
+        const manager = getSourceManager();
+        const startTime = Date.now();
+
+        try {
+          // Test source connection
+          const result = await manager.testSource(source.type, source.config);
+          const duration = Date.now() - startTime;
+
+          res.json({
+            success: true,
+            result: {
+              connected: true,
+              duration,
+              ...result
+            }
+          });
+        } catch (testError) {
+          const duration = Date.now() - startTime;
+          res.status(400).json({
+            success: false,
+            error: testError.message,
+            duration
+          });
+        }
+      } catch (error) {
+        sendFailedOperationError(res, 'test source', error);
       }
-    } catch (error) {
-      sendFailedOperationError(res, 'test source', error);
     }
-  });
+  );
 
   /**
    * @swagger
@@ -1060,42 +1065,46 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.post('/api/admin/sources/:id/preview', adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { limit = 1000 } = req.query;
-      const { data: sources } = configCache.getSources(true);
-      const source = sources.find(s => s.id === id);
-
-      if (!source) {
-        return sendNotFound(res, 'Source');
-      }
-
-      const manager = getSourceManager();
-
+  app.post(
+    buildServerPath('/api/admin/sources/:id/preview', basePath),
+    adminAuth,
+    async (req, res) => {
       try {
-        const content = await manager.loadContent(source.type, source.config);
-        const preview = content.substring(0, parseInt(limit));
+        const { id } = req.params;
+        const { limit = 1000 } = req.query;
+        const { data: sources } = configCache.getSources(true);
+        const source = sources.find(s => s.id === id);
 
-        res.json({
-          success: true,
-          preview,
-          metadata: {
-            totalLength: content.length,
-            truncated: content.length > parseInt(limit),
-            encoding: 'utf-8'
-          }
-        });
-      } catch (previewError) {
-        res.status(400).json({
-          success: false,
-          error: previewError.message
-        });
+        if (!source) {
+          return sendNotFound(res, 'Source');
+        }
+
+        const manager = getSourceManager();
+
+        try {
+          const content = await manager.loadContent(source.type, source.config);
+          const preview = content.substring(0, parseInt(limit));
+
+          res.json({
+            success: true,
+            preview,
+            metadata: {
+              totalLength: content.length,
+              truncated: content.length > parseInt(limit),
+              encoding: 'utf-8'
+            }
+          });
+        } catch (previewError) {
+          res.status(400).json({
+            success: false,
+            error: previewError.message
+          });
+        }
+      } catch (error) {
+        sendFailedOperationError(res, 'preview source', error);
       }
-    } catch (error) {
-      sendFailedOperationError(res, 'preview source', error);
     }
-  });
+  );
 
   /**
    * @swagger
@@ -1152,7 +1161,7 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.post('/api/admin/sources/_toggle', adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/sources/_toggle', basePath), adminAuth, async (req, res) => {
     try {
       const { sourceIds, enabled } = req.body;
 
@@ -1216,7 +1225,7 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.get('/api/admin/sources/_stats', adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/sources/_stats', basePath), adminAuth, async (req, res) => {
     try {
       const { data: sources } = configCache.getSources(true);
 
@@ -1279,7 +1288,7 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.get('/api/admin/sources/_types', adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/sources/_types', basePath), adminAuth, async (req, res) => {
     try {
       const manager = getSourceManager();
       const handlerTypes = manager.getHandlerTypes();
@@ -1341,23 +1350,27 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.get('/api/admin/sources/_dependencies/:id', adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const dependencies = await findSourceDependencies(id);
+  app.get(
+    buildServerPath('/api/admin/sources/_dependencies/:id', basePath),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const dependencies = await findSourceDependencies(id);
 
-      res.json({
-        sourceId: id,
-        dependencies: dependencies.map(dep => ({
-          appId: dep.id,
-          appName: Object.values(dep.name || {})[0] || dep.id,
-          type: 'app'
-        }))
-      });
-    } catch (error) {
-      sendFailedOperationError(res, 'fetch source dependencies', error);
+        res.json({
+          sourceId: id,
+          dependencies: dependencies.map(dep => ({
+            appId: dep.id,
+            appName: Object.values(dep.name || {})[0] || dep.id,
+            type: 'app'
+          }))
+        });
+      } catch (error) {
+        sendFailedOperationError(res, 'fetch source dependencies', error);
+      }
     }
-  });
+  );
 
   // Filesystem source file operations
 
@@ -1424,44 +1437,48 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.get('/api/admin/sources/:id/files', adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { path = '' } = req.query;
-      const { data: sources } = configCache.getSources(true);
-      const source = sources.find(s => s.id === id);
-
-      if (!source) {
-        return sendNotFound(res, 'Source');
-      }
-
-      if (source.type !== 'filesystem') {
-        return sendBadRequest(res, 'File operations only supported for filesystem sources');
-      }
-
-      const manager = getSourceManager();
-      const handler = manager.getHandler('filesystem');
-
+  app.get(
+    buildServerPath('/api/admin/sources/:id/files', basePath),
+    adminAuth,
+    async (req, res) => {
       try {
-        const files = await handler.listFiles(path);
-        const directories = await handler.listDirectories(path);
+        const { id } = req.params;
+        const { path = '' } = req.query;
+        const { data: sources } = configCache.getSources(true);
+        const source = sources.find(s => s.id === id);
 
-        res.json({
-          success: true,
-          path,
-          files,
-          directories
-        });
-      } catch (fileError) {
-        res.status(400).json({
-          success: false,
-          error: fileError.message
-        });
+        if (!source) {
+          return sendNotFound(res, 'Source');
+        }
+
+        if (source.type !== 'filesystem') {
+          return sendBadRequest(res, 'File operations only supported for filesystem sources');
+        }
+
+        const manager = getSourceManager();
+        const handler = manager.getHandler('filesystem');
+
+        try {
+          const files = await handler.listFiles(path);
+          const directories = await handler.listDirectories(path);
+
+          res.json({
+            success: true,
+            path,
+            files,
+            directories
+          });
+        } catch (fileError) {
+          res.status(400).json({
+            success: false,
+            error: fileError.message
+          });
+        }
+      } catch (error) {
+        sendFailedOperationError(res, 'list files', error);
       }
-    } catch (error) {
-      sendFailedOperationError(res, 'list files', error);
     }
-  });
+  );
 
   /**
    * @swagger
@@ -1525,46 +1542,50 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.get('/api/admin/sources/:id/files/content', adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { path } = req.query;
-      const { data: sources } = configCache.getSources(true);
-      const source = sources.find(s => s.id === id);
-
-      if (!source) {
-        return sendNotFound(res, 'Source');
-      }
-
-      if (source.type !== 'filesystem') {
-        return sendBadRequest(res, 'File operations only supported for filesystem sources');
-      }
-
-      if (!path) {
-        return sendBadRequest(res, 'File path is required');
-      }
-
-      const manager = getSourceManager();
-      const handler = manager.getHandler('filesystem');
-
+  app.get(
+    buildServerPath('/api/admin/sources/:id/files/content', basePath),
+    adminAuth,
+    async (req, res) => {
       try {
-        const result = await handler.loadContent({ path });
+        const { id } = req.params;
+        const { path } = req.query;
+        const { data: sources } = configCache.getSources(true);
+        const source = sources.find(s => s.id === id);
 
-        res.json({
-          success: true,
-          content: result.content,
-          metadata: result.metadata
-        });
-      } catch (fileError) {
-        res.status(400).json({
-          success: false,
-          error: fileError.message
-        });
+        if (!source) {
+          return sendNotFound(res, 'Source');
+        }
+
+        if (source.type !== 'filesystem') {
+          return sendBadRequest(res, 'File operations only supported for filesystem sources');
+        }
+
+        if (!path) {
+          return sendBadRequest(res, 'File path is required');
+        }
+
+        const manager = getSourceManager();
+        const handler = manager.getHandler('filesystem');
+
+        try {
+          const result = await handler.loadContent({ path });
+
+          res.json({
+            success: true,
+            content: result.content,
+            metadata: result.metadata
+          });
+        } catch (fileError) {
+          res.status(400).json({
+            success: false,
+            error: fileError.message
+          });
+        }
+      } catch (error) {
+        sendFailedOperationError(res, 'get file content', error);
       }
-    } catch (error) {
-      sendFailedOperationError(res, 'get file content', error);
     }
-  });
+  );
 
   /**
    * @swagger
@@ -1632,46 +1653,50 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.post('/api/admin/sources/:id/files', adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { path, content, encoding = 'utf8' } = req.body;
-      const { data: sources } = configCache.getSources(true);
-      const source = sources.find(s => s.id === id);
-
-      if (!source) {
-        return sendNotFound(res, 'Source');
-      }
-
-      if (source.type !== 'filesystem') {
-        return sendBadRequest(res, 'File operations only supported for filesystem sources');
-      }
-
-      if (!path || content === undefined) {
-        return sendBadRequest(res, 'File path and content are required');
-      }
-
-      const manager = getSourceManager();
-      const handler = manager.getHandler('filesystem');
-
+  app.post(
+    buildServerPath('/api/admin/sources/:id/files', basePath),
+    adminAuth,
+    async (req, res) => {
       try {
-        const result = await handler.writeFile(path, content, encoding);
+        const { id } = req.params;
+        const { path, content, encoding = 'utf8' } = req.body;
+        const { data: sources } = configCache.getSources(true);
+        const source = sources.find(s => s.id === id);
 
-        res.json({
-          success: true,
-          message: 'File written successfully',
-          result
-        });
-      } catch (fileError) {
-        res.status(400).json({
-          success: false,
-          error: fileError.message
-        });
+        if (!source) {
+          return sendNotFound(res, 'Source');
+        }
+
+        if (source.type !== 'filesystem') {
+          return sendBadRequest(res, 'File operations only supported for filesystem sources');
+        }
+
+        if (!path || content === undefined) {
+          return sendBadRequest(res, 'File path and content are required');
+        }
+
+        const manager = getSourceManager();
+        const handler = manager.getHandler('filesystem');
+
+        try {
+          const result = await handler.writeFile(path, content, encoding);
+
+          res.json({
+            success: true,
+            message: 'File written successfully',
+            result
+          });
+        } catch (fileError) {
+          res.status(400).json({
+            success: false,
+            error: fileError.message
+          });
+        }
+      } catch (error) {
+        sendFailedOperationError(res, 'write file', error);
       }
-    } catch (error) {
-      sendFailedOperationError(res, 'write file', error);
     }
-  });
+  );
 
   /**
    * @swagger
@@ -1735,46 +1760,50 @@ export default function registerAdminSourcesRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.delete('/api/admin/sources/:id/files', adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { path } = req.query;
-      const { data: sources } = configCache.getSources(true);
-      const source = sources.find(s => s.id === id);
-
-      if (!source) {
-        return sendNotFound(res, 'Source');
-      }
-
-      if (source.type !== 'filesystem') {
-        return sendBadRequest(res, 'File operations only supported for filesystem sources');
-      }
-
-      if (!path) {
-        return sendBadRequest(res, 'File path is required');
-      }
-
-      const manager = getSourceManager();
-      const handler = manager.getHandler('filesystem');
-
+  app.delete(
+    buildServerPath('/api/admin/sources/:id/files', basePath),
+    adminAuth,
+    async (req, res) => {
       try {
-        const result = await handler.deleteFile(path);
+        const { id } = req.params;
+        const { path } = req.query;
+        const { data: sources } = configCache.getSources(true);
+        const source = sources.find(s => s.id === id);
 
-        res.json({
-          success: true,
-          message: 'File deleted successfully',
-          result
-        });
-      } catch (fileError) {
-        res.status(400).json({
-          success: false,
-          error: fileError.message
-        });
+        if (!source) {
+          return sendNotFound(res, 'Source');
+        }
+
+        if (source.type !== 'filesystem') {
+          return sendBadRequest(res, 'File operations only supported for filesystem sources');
+        }
+
+        if (!path) {
+          return sendBadRequest(res, 'File path is required');
+        }
+
+        const manager = getSourceManager();
+        const handler = manager.getHandler('filesystem');
+
+        try {
+          const result = await handler.deleteFile(path);
+
+          res.json({
+            success: true,
+            message: 'File deleted successfully',
+            result
+          });
+        } catch (fileError) {
+          res.status(400).json({
+            success: false,
+            error: fileError.message
+          });
+        }
+      } catch (error) {
+        sendFailedOperationError(res, 'delete file', error);
       }
-    } catch (error) {
-      sendFailedOperationError(res, 'delete file', error);
     }
-  });
+  );
 }
 
 /**

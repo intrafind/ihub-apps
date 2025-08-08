@@ -1,6 +1,7 @@
 import configCache from '../configCache.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
+import { buildServerPath } from '../utils/basePath.js';
 
 /**
  * @swagger
@@ -75,7 +76,7 @@ import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
  *           description: Error message
  */
 
-export default function registerGeneralRoutes(app, { getLocalizedError }) {
+export default function registerGeneralRoutes(app, { getLocalizedError, basePath = '' }) {
   /**
    * @swagger
    * /api/apps:
@@ -159,7 +160,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get('/api/apps', authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/apps', basePath), authRequired, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
       const authConfig = platformConfig.auth || {};
@@ -300,38 +301,69 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get('/api/apps/:appId', authRequired, appAccessRequired, async (req, res) => {
+  // Health check endpoint with base path information
+  app.get(buildServerPath('/api/health', basePath), async (req, res) => {
     try {
-      const { appId } = req.params;
-      const { data: platform } = configCache.getPlatform() || {};
-      const defaultLang = platform?.defaultLanguage || 'en';
-      const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
+      const { getBasePathInfo } = await import('../utils/basePath.js');
+      const basePathInfo = getBasePathInfo();
 
-      // Try to get apps from cache first
-      const { data: apps } = configCache.getApps();
+      res.json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        version: process.env.npm_package_version || '1.0.0',
+        basePathConfig: basePathInfo,
+        requestPath: req.path,
+        requestUrl: req.url,
+        relativePath: req.path.replace(basePath, '') || '/',
+        environment: process.env.NODE_ENV || 'development'
+      });
+    } catch (error) {
+      console.error('Health check error:', error);
+      res.status(500).json({
+        status: 'ERROR',
+        error: 'Health check failed',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
 
-      if (!apps) {
-        return res.status(500).json({ error: 'Failed to load apps configuration' });
-      }
-      const appData = apps.find(a => a.id === appId);
-      if (!appData) {
-        const errorMessage = await getLocalizedError('appNotFound', {}, language);
-        return res.status(404).json({ error: errorMessage });
-      }
+  app.get(
+    buildServerPath('/api/apps/:appId', basePath),
+    authRequired,
+    appAccessRequired,
+    async (req, res) => {
+      try {
+        const { appId } = req.params;
+        const { data: platform } = configCache.getPlatform() || {};
+        const defaultLang = platform?.defaultLanguage || 'en';
+        const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 
-      // Check if user has permission to access this app
-      if (req.user && req.user.permissions) {
-        const allowedApps = req.user.permissions.apps || new Set();
-        if (!allowedApps.has('*') && !allowedApps.has(appId)) {
+        // Try to get apps from cache first
+        const { data: apps } = configCache.getApps();
+
+        if (!apps) {
+          return res.status(500).json({ error: 'Failed to load apps configuration' });
+        }
+        const appData = apps.find(a => a.id === appId);
+        if (!appData) {
           const errorMessage = await getLocalizedError('appNotFound', {}, language);
           return res.status(404).json({ error: errorMessage });
         }
-      }
 
-      res.json(appData);
-    } catch (error) {
-      console.error('Error fetching app details:', error);
-      res.status(500).json({ error: 'Internal server error' });
+        // Check if user has permission to access this app
+        if (req.user && req.user.permissions) {
+          const allowedApps = req.user.permissions.apps || new Set();
+          if (!allowedApps.has('*') && !allowedApps.has(appId)) {
+            const errorMessage = await getLocalizedError('appNotFound', {}, language);
+            return res.status(404).json({ error: errorMessage });
+          }
+        }
+
+        res.json(appData);
+      } catch (error) {
+        console.error('Error fetching app details:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
     }
-  });
+  );
 }

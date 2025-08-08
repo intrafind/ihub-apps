@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { buildUploadUrl } from '../../../utils/runtimeBasePath';
 
 const AssetManager = ({ t }) => {
   const [assets, setAssets] = useState([]);
@@ -335,7 +336,7 @@ const AssetManager = ({ t }) => {
                 <p className="font-mono text-xs">
                   {t(
                     'admin.ui.assets.usage.example',
-                    'Example: <img src="/uploads/assets/logo-123456.png" alt="Logo" />'
+                    `Example: <img src="${buildUploadUrl('assets/logo-123456.png')}" alt="Logo" />`
                   )}
                 </p>
               </div>

@@ -33,6 +33,12 @@ import {
   cleanupInactiveClients
 } from './serverHelpers.js';
 import { performInitialSetup } from './utils/setupUtils.js';
+import {
+  getBasePath,
+  buildServerPath,
+  basePathDetectionMiddleware,
+  basePathValidationMiddleware
+} from './utils/basePath.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -144,32 +150,40 @@ if (cluster.isPrimary && workerCount > 1) {
   // Middleware
   setupMiddleware(app, platformConfig);
 
+  // Add base path detection and validation middleware
+  app.use(basePathDetectionMiddleware);
+  app.use(basePathValidationMiddleware);
+
   // Helper to verify API key exists for a model and provide a meaningful error
   // Implemented in serverHelpers.js
 
   // --- API Endpoints handled in separate route modules ---
-  registerAuthRoutes(app);
-  registerGeneralRoutes(app, { getLocalizedError });
-  registerModelRoutes(app, { getLocalizedError });
-  registerToolRoutes(app);
-  registerPageRoutes(app);
-  registerSessionRoutes(app);
-  registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT });
+  // All API routes are registered with base path support
+  const basePath = getBasePath();
+
+  registerAuthRoutes(app, basePath);
+  registerGeneralRoutes(app, { getLocalizedError, basePath });
+  registerModelRoutes(app, { getLocalizedError, basePath });
+  registerToolRoutes(app, basePath);
+  registerPageRoutes(app, basePath);
+  registerSessionRoutes(app, basePath);
+  registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT, basePath });
   registerChatRoutes(app, {
     verifyApiKey,
     processMessageTemplates,
     getLocalizedError,
-    DEFAULT_TIMEOUT
+    DEFAULT_TIMEOUT,
+    basePath
   });
-  registerOpenAIProxyRoutes(app, { getLocalizedError });
-  await registerAdminRoutes(app);
-  registerShortLinkRoutes(app);
-  await registerSwaggerRoutes(app);
+  registerOpenAIProxyRoutes(app, { getLocalizedError, basePath });
+  await registerAdminRoutes(app, basePath);
+  registerShortLinkRoutes(app, basePath);
+  await registerSwaggerRoutes(app, basePath);
 
   // --- Session Management handled in sessionRoutes ---
 
   // Register static file and SPA routes after API routes
-  registerStaticRoutes(app, { isPackaged, rootDir });
+  registerStaticRoutes(app, { isPackaged, rootDir, basePath });
 
   // Helper function to extract messages and format them
   // Message template processing implemented in serverHelpers.js

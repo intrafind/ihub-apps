@@ -2,9 +2,10 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { simpleCompletion } from '../../utils.js';
 import { verifyApiKey } from '../../serverHelpers.js';
+import { buildServerPath } from '../../utils/basePath.js';
 
-export default function registerAdminTranslateRoute(app) {
-  app.post('/api/admin/translate', adminAuth, async (req, res) => {
+export default function registerAdminTranslateRoute(app, basePath = '') {
+  app.post(buildServerPath('/api/admin/translate', basePath), adminAuth, async (req, res) => {
     try {
       const { text, from = 'en', to } = req.body || {};
       if (!text || !to) {

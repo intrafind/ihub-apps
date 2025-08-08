@@ -2,6 +2,7 @@ import { Component } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 import Icon from './Icon';
+import { buildPath } from '../../utils/runtimeBasePath';
 
 // Error boundary wrapper component
 class ErrorBoundaryComponent extends Component {
@@ -93,7 +94,7 @@ const ErrorFallback = ({ error, resetErrorBoundary }) => {
         </button>
 
         <button
-          onClick={() => (window.location.href = '/')}
+          onClick={() => (window.location.href = buildPath('/'))}
           className="border border-indigo-600 text-indigo-600 hover:bg-indigo-50 py-2 px-4 rounded transition-colors"
         >
           {t('error.backToHome', 'Back to Home')}

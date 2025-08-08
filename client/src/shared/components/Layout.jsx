@@ -10,6 +10,8 @@ import { updateSettingsFromUrl, saveIntegrationSettings } from '../../utils/inte
 import Icon from './Icon';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
+import { buildAssetUrl } from '../../utils/runtimeBasePath';
 
 const Layout = () => {
   const { t, i18n } = useTranslation();
@@ -33,7 +35,7 @@ const Layout = () => {
 
   // Check if we're viewing an app page to hide footer links
   const isAppPage = useMemo(() => {
-    return location.pathname.startsWith('/apps/');
+    return pathnameStartsWith(location.pathname, '/apps/');
   }, [location.pathname]);
 
   // Store integration settings in localStorage for use by other components
@@ -86,7 +88,7 @@ const Layout = () => {
                 style={uiConfig.header.logo.containerStyle}
               >
                 <img
-                  src={uiConfig.header.logo.url}
+                  src={buildAssetUrl(uiConfig.header.logo.url)}
                   alt={
                     getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) ||
                     'Organization Logo'
@@ -124,7 +126,7 @@ const Layout = () => {
                         key={index}
                         to={link.url}
                         onClick={resetHeaderColor}
-                        className={`hover:text-white/80 ${location.pathname === link.url ? 'underline font-medium' : ''}`}
+                        className={`hover:text-white/80 ${isActivePath(location.pathname, link.url) ? 'underline font-medium' : ''}`}
                         target={link.url.startsWith('http') ? '_blank' : undefined}
                         rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
                       >
@@ -162,7 +164,7 @@ const Layout = () => {
                       <Link
                         key={index}
                         to={link.url}
-                        className={`block py-2 ${location.pathname === link.url ? 'font-medium' : ''}`}
+                        className={`block py-2 ${isActivePath(location.pathname, link.url) ? 'font-medium' : ''}`}
                         target={link.url.startsWith('http') ? '_blank' : undefined}
                         rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
                         onClick={() => {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { buildAssetUrl } from '../../utils/runtimeBasePath';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -192,7 +193,7 @@ const sizeClasses = {
   '2xl': 'w-12 h-12'
 };
 
-const iconBaseUrl = import.meta.env.VITE_ICON_BASE_URL || '/icons';
+// Note: iconBaseUrl is now handled by buildAssetPath utility
 
 const Icon = ({ name, size = 'md', className = '', solid = false }) => {
   const [imgError, setImgError] = useState(false);
@@ -215,7 +216,7 @@ const Icon = ({ name, size = 'md', className = '', solid = false }) => {
 
   return (
     <img
-      src={`${iconBaseUrl}/${name}.svg`}
+      src={buildAssetUrl(`icons/${name}.svg`)}
       alt={name}
       onError={() => setImgError(true)}
       className={`${sizeClasses[size] || sizeClasses.md} ${className}`}

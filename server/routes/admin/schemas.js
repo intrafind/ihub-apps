@@ -1,6 +1,7 @@
 import { getJsonSchemaByType, getAllJsonSchemas } from '../../utils/schemaExport.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { sendFailedOperationError } from '../../utils/responseHelpers.js';
+import { buildServerPath } from '../../utils/basePath.js';
 
 /**
  * @swagger
@@ -44,8 +45,8 @@ import { sendFailedOperationError } from '../../utils/responseHelpers.js';
  *       500:
  *         description: Internal server error
  */
-export default function registerAdminSchemasRoutes(app) {
-  app.get('/api/admin/schemas', adminAuth, async (req, res) => {
+export default function registerAdminSchemasRoutes(app, basePath = '') {
+  app.get(buildServerPath('/api/admin/schemas', basePath), adminAuth, async (req, res) => {
     try {
       const schemas = getAllJsonSchemas();
       res.json(schemas);
@@ -90,7 +91,7 @@ export default function registerAdminSchemasRoutes(app) {
    *       500:
    *         description: Internal server error
    */
-  app.get('/api/admin/schemas/:type', adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/schemas/:type', basePath), adminAuth, async (req, res) => {
     try {
       const { type } = req.params;
 

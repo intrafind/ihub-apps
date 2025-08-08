@@ -2,12 +2,50 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <script>
+      // Dynamically set base tag for proper asset loading when deployed at subpath
+      // This logic is aligned with client/src/utils/runtimeBasePath.js
+      (function () {
+        // Get the current pathname
+        const pathname = window.location.pathname;
+
+        // Find the base path by looking for where index.html is served
+        // Remove any trailing /index.html or just trailing slash
+        let basePath = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+
+        // If we're at a React route (e.g., /ihub/apps/chat), we need to find the base
+        // We can detect this by checking if there's a known React route pattern
+        const knownRoutes = ['/apps', '/admin', '/auth', '/login', '/chat', '/pages', '/s/'];
+        for (const route of knownRoutes) {
+          const routeIndex = basePath.indexOf(route);
+          if (routeIndex > 0) {
+            // Found a route, so everything before it is the base path
+            basePath = basePath.substring(0, routeIndex);
+            break;
+          } else if (routeIndex === 0) {
+            // We're at root with a route
+            basePath = '';
+            break;
+          }
+        }
+
+        // Only add base tag if we're at a subpath
+        if (basePath && basePath !== '/') {
+          const base = document.createElement('base');
+          base.href = basePath + '/';
+          document.head.appendChild(base);
+
+          // Store for debugging (same as runtimeBasePath.js)
+          window.__BASE_PATH__ = basePath;
+        }
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="./favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="A platform for AI-powered applications" />
     <title>iHub Apps</title>
     <!-- Import local font -->
-    <link rel="stylesheet" href="/fonts/Inter Web/inter.css" />
+    <link rel="stylesheet" href="./fonts/Inter Web/inter.css" />
     <style>
       /* Fallback font settings */
       body {
@@ -34,6 +72,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/index.jsx"></script>
+    <script type="module" src="./src/index.jsx"></script>
   </body>
 </html>

@@ -5,9 +5,10 @@ import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
+import { buildServerPath } from '../../utils/basePath.js';
 
-export default function registerAdminPagesRoutes(app) {
-  app.get('/api/admin/pages', adminAuth, async (req, res) => {
+export default function registerAdminPagesRoutes(app, basePath = '') {
+  app.get(buildServerPath('/api/admin/pages', basePath), adminAuth, async (req, res) => {
     try {
       const { data: uiConfig } = configCache.getUI();
       const pages = Object.entries(uiConfig.pages || {}).map(([id, page]) => ({
@@ -24,7 +25,7 @@ export default function registerAdminPagesRoutes(app) {
     }
   });
 
-  app.get('/api/admin/pages/:pageId', adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/pages/:pageId', basePath), adminAuth, async (req, res) => {
     const { pageId } = req.params;
     try {
       const { data: uiConfig } = configCache.getUI();
@@ -56,7 +57,7 @@ export default function registerAdminPagesRoutes(app) {
     }
   });
 
-  app.post('/api/admin/pages', adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/pages', basePath), adminAuth, async (req, res) => {
     try {
       const {
         id,
@@ -94,7 +95,7 @@ export default function registerAdminPagesRoutes(app) {
     }
   });
 
-  app.put('/api/admin/pages/:pageId', adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/pages/:pageId', basePath), adminAuth, async (req, res) => {
     try {
       const { pageId } = req.params;
       const {
@@ -137,7 +138,7 @@ export default function registerAdminPagesRoutes(app) {
     }
   });
 
-  app.delete('/api/admin/pages/:pageId', adminAuth, async (req, res) => {
+  app.delete(buildServerPath('/api/admin/pages/:pageId', basePath), adminAuth, async (req, res) => {
     try {
       const { pageId } = req.params;
       const rootDir = getRootDir();
