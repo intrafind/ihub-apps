@@ -1,8 +1,106 @@
-## App Configuration
+# App Configuration Guide
 
-The app configuration defines the behavior, appearance, and capabilities of each AI application in the iHub Apps. Configuration is managed through the `config/apps.json` file, which contains an array of app objects.
+This comprehensive guide covers how to configure and customize AI applications in iHub Apps, from simple chat interfaces to complex enterprise applications with structured output and tool calling.
 
-### Basic App Structure
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Basic App Structure](#basic-app-structure)
+- [Property Details](#property-details)
+- [Advanced Configuration](#advanced-configuration-options)
+- [Variables and User Input](#variables)
+- [Tool Integration](#tool-integration)
+- [Structured Output](#structured-output)
+- [Upload Features](#upload-features)
+- [UI Customization](#ui-customization)
+- [Complete Examples](#complete-examples)
+- [Troubleshooting](#troubleshooting)
+
+## Quick Start
+
+Create your first AI app in under 5 minutes with this minimal configuration.
+
+### Minimal App Configuration
+
+Add this to your `contents/apps/my-first-app.json`:
+
+```json
+{
+  "id": "my-assistant",
+  "name": {
+    "en": "My Assistant"
+  },
+  "description": {
+    "en": "A helpful AI assistant"
+  },
+  "color": "#4F46E5",
+  "icon": "chat",
+  "system": {
+    "en": "You are a helpful assistant. Answer questions clearly and concisely."
+  },
+  "tokenLimit": 4000
+}
+```
+
+That's it! Your app will:
+- Appear in the app list with the specified name and icon
+- Use the default AI model configured in your system
+- Provide a standard chat interface
+- Apply the system prompt to guide AI behavior
+
+### Quick Examples by Use Case
+
+**Customer Support Bot:**
+```json
+{
+  "id": "support-bot",
+  "name": { "en": "Support Assistant" },
+  "description": { "en": "24/7 customer support" },
+  "system": { "en": "You are a friendly customer support agent. Help users with their questions professionally." },
+  "tokenLimit": 4000,
+  "preferredStyle": "professional",
+  "tools": ["webSearch"]
+}
+```
+
+**Document Analyzer:**
+```json
+{
+  "id": "doc-analyzer",
+  "name": { "en": "Document Analyzer" },
+  "description": { "en": "Extract insights from documents" },
+  "system": { "en": "Analyze uploaded documents and extract key information." },
+  "tokenLimit": 8000,
+  "upload": {
+    "enabled": true,
+    "fileUpload": {
+      "maxFileSizeMB": 10,
+      "supportedPdfFormats": ["application/pdf"]
+    }
+  }
+}
+```
+
+**Data Extractor with Structured Output:**
+```json
+{
+  "id": "data-extractor",
+  "name": { "en": "Data Extractor" },
+  "description": { "en": "Extract structured data from text" },
+  "system": { "en": "Extract information and return it in JSON format." },
+  "tokenLimit": 4000,
+  "preferredOutputFormat": "json",
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "entities": { "type": "array", "items": { "type": "string" } },
+      "summary": { "type": "string" }
+    }
+  }
+}
+```
+
+## Basic App Structure
 
 Each app is defined with the following essential properties:
 
@@ -410,3 +508,41 @@ Here are some practical examples of how to configure the settings for different 
   }
 }
 ```
+
+## Troubleshooting
+
+### Common Configuration Issues
+
+**App not appearing in the list:**
+- Verify JSON syntax is valid (no trailing commas, proper quotes)
+- Check that the app ID is unique
+- Ensure the app file is in `contents/apps/` directory
+- Restart the server after adding new app files
+
+**Variables not working:**
+- Confirm variable names in prompt template match variable definitions
+- Check that variable types are valid (`string`, `text`, `dropdown`)
+- Verify required fields are marked correctly
+
+**Tools not executing:**
+- Ensure tools are defined in `contents/config/tools.json`
+- Check that tool IDs match exactly (case-sensitive)
+- Verify user has permissions for the specified tools
+
+**Structured output validation errors:**
+- Validate your JSON schema syntax
+- Test with simpler schemas first
+- Check provider-specific limitations
+
+## Related Documentation
+
+- **[Tool Calling Guide](tool-calling.md)**: Learn how to add external capabilities to your apps
+- **[Structured Output Guide](structured-output.md)**: Configure apps to return JSON responses
+- **[Models Configuration](models.md)**: Configure AI model settings and providers
+- **[UI Configuration](ui.md)**: Customize the user interface and branding
+- **[Upload Features](file-upload-feature.md)**: Enable file and image upload capabilities
+- **[Localization Guide](localization.md)**: Add multi-language support to your apps
+
+---
+
+*This documentation follows iHub Apps best practices for app configuration. For additional examples and support, consult the community resources or refer to the example configurations in `contents/apps/`.*

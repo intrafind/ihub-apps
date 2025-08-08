@@ -1,4 +1,6 @@
-### Tools
+### Tools (Legacy Documentation)
+
+> **Note**: This is the legacy tools documentation. For comprehensive tool implementation guidance, see the **[Tool Calling Guide](tool-calling.md)**.
 
 Apps can optionally specify a list of tool identifiers via the `tools` property.
 Tool definitions are loaded from `config/tools.json` or discovered from a Model Context Protocol (MCP) server via the `MCP_SERVER_URL` environment variable. Each tool includes a JSON schema for its parameters and the name of the implementation script in `server/tools`. Tools are executed by calling `/api/tools/{id}` with the required parameters. A common example is the built-in `web-search` tool which performs a web search using DuckDuckGo. Additional tools provide direct access to Bing (`bing-search`), Google (`google-search`), and Brave (`brave-search`) when the corresponding API keys are configured.
@@ -50,3 +52,10 @@ Some tools use a method-based approach where a single tool provides multiple rel
 Apps can reference specific methods using dot notation: `"tools": ["iFinder.search", "iFinder.getContent"]`
 
 > **Note**: Tool support is experimental and subject to change.
+
+## Related Documentation
+
+- **[Tool Calling Guide](tool-calling.md)**: Comprehensive guide for implementing and using tools
+- **[Structured Output Guide](structured-output.md)**: Combine tools with structured JSON responses
+- **[App Configuration](apps.md#tool-integration)**: Configure apps to use tools
+- **[Security Guide](security.md)**: Security best practices for tool implementation

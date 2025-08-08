@@ -1,0 +1,156 @@
+# Configuration for GitHub Auto-Labeler
+# https://github.com/actions/labeler
+
+# Frontend related changes
+'frontend':
+  - client/**/*
+  - '*.html'
+  - '*.css'
+  - '*.js'
+  - '*.jsx'
+  - '*.ts'
+  - '*.tsx'
+  - vite.config.js
+  - tailwind.config.js
+
+# Backend related changes
+'backend':
+  - server/**/*
+  - '*.cjs'
+  - package.json
+  - package-lock.json
+
+# Configuration changes
+'configuration':
+  - contents/config/**/*
+  - contents/apps/**/*
+  - contents/models/**/*
+  - contents/prompts/**/*
+  - contents/sources/**/*
+  - configs/**/*
+  - config.env
+  - .env*
+
+# Documentation changes
+'documentation':
+  - docs/**/*
+  - '*.md'
+  - README.md
+  - CLAUDE.md
+  - concepts/**/*
+  - book.toml
+
+# Docker related changes
+'docker':
+  - docker/**/*
+  - Dockerfile
+  - docker-compose*.yml
+  - .dockerignore
+
+# GitHub Actions/Workflows
+'github-actions':
+  - .github/workflows/**/*
+  - .github/**/*
+
+# Authentication & Security
+'auth':
+  - server/middleware/**/*
+  - server/utils/authorization.js
+  - server/routes/auth.js
+  - client/src/features/auth/**/*
+  - contents/config/groups.json
+
+# Admin features
+'admin':
+  - client/src/features/admin/**/*
+  - server/routes/admin/**/*
+
+# Chat features
+'chat':
+  - client/src/features/chat/**/*
+  - server/routes/chat/**/*
+  - server/adapters/**/*
+
+# API changes
+'api':
+  - server/routes/**/*
+  - server/adapters/**/*
+  - openapi.yaml
+
+# Testing
+'testing':
+  - server/tests/**/*
+  - '*.test.js'
+  - '*.spec.js'
+  - jest.config.js
+
+# Dependencies
+'dependencies':
+  - package.json
+  - package-lock.json
+  - client/package.json
+  - client/package-lock.json
+  - server/package.json
+  - server/package-lock.json
+
+# Tools & Utilities
+'tools':
+  - server/tools/**/*
+  - scripts/**/*
+  - '*.sh'
+
+# UI/UX
+'ui':
+  - client/src/shared/components/**/*
+  - contents/config/ui.json
+  - contents/config/styles.json
+
+# Localization
+'i18n':
+  - shared/i18n/**/*
+  - contents/locales/**/*
+  - client/src/i18n/**/*
+
+# Bug fixes (based on commit patterns)
+'bug':
+  - any:
+    - '**/*fix*'
+    - '**/*bug*'
+
+# Features (based on commit patterns)
+'enhancement':
+  - any:
+    - '**/*feature*'
+    - '**/*feat*'
+    - '**/*enhance*'
+
+# Performance improvements
+'performance':
+  - any:
+    - '**/*perf*'
+    - '**/*performance*'
+    - '**/*optimize*'
+
+# AI Assistant related changes
+'ai-claude':
+  - any:
+    - '**/*claude*'
+    - '**/claude/**/*'
+    - CLAUDE.md
+
+'ai-copilot':
+  - any:
+    - '**/*copilot*'
+    - '**/copilot*'
+    - .github/copilot-instructions.md
+
+'ai-codex':
+  - any:
+    - '**/*codex*'
+    - '**/codex*'
+
+'ai-gemini':
+  - any:
+    - '**/*gemini*'
+    - '**/gemini*'
+    - GEMINI.md
