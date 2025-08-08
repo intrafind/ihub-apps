@@ -83,22 +83,6 @@ export function createRateLimiters(platformConfig = {}) {
     adminApiLimiter: createRateLimiter(adminApiConfig, {}, 'admin API'),
     publicApiLimiter: createRateLimiter(publicApiConfig, {}, 'public API'),
     authApiLimiter: createRateLimiter(authApiConfig, {}, 'authentication'),
-    inferenceApiLimiter: createRateLimiter(inferenceApiConfig, {}, 'inference API'),
-    // Keep backward compatibility
-    normalApiLimiter: createRateLimiter(publicApiConfig, {}, 'API')
+    inferenceApiLimiter: createRateLimiter(inferenceApiConfig, {}, 'inference API')
   };
 }
-
-// Export backward compatible rate limiters with default configuration
-// These will be replaced by configured ones in setup.js
-export const normalApiLimiter = createRateLimiter({}, {
-  windowMs: 15 * 60 * 1000,
-  limit: 100,
-  skipFailedRequests: true
-}, 'API');
-
-export const adminApiLimiter = createRateLimiter({}, {
-  windowMs: 15 * 60 * 1000,
-  limit: 50,
-  skipFailedRequests: false
-}, 'admin API');
