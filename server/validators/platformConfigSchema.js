@@ -42,6 +42,27 @@ const authDebugSchema = z.object({
     .default({})
 });
 
+const rateLimitConfigSchema = z.object({
+  windowMs: z
+    .number()
+    .min(1000)
+    .default(15 * 60 * 1000), // 15 minutes default
+  limit: z.number().min(1).default(100), // 100 requests default
+  message: z.string().optional(),
+  standardHeaders: z.boolean().default(true),
+  legacyHeaders: z.boolean().default(false),
+  skipSuccessfulRequests: z.boolean().default(false),
+  skipFailedRequests: z.boolean().default(false)
+});
+
+const rateLimitSchema = z.object({
+  default: rateLimitConfigSchema.default({}),
+  adminApi: rateLimitConfigSchema.partial().default({}),
+  publicApi: rateLimitConfigSchema.partial().default({}),
+  authApi: rateLimitConfigSchema.partial().default({}),
+  inferenceApi: rateLimitConfigSchema.partial().default({})
+});
+
 export const platformConfigSchema = z
   .object({
     auth: z
@@ -81,7 +102,8 @@ export const platformConfigSchema = z
         providers: z.array(oidcProviderSchema).default([])
       })
       .default({}),
-    authDebug: authDebugSchema.default({})
+    authDebug: authDebugSchema.default({}),
+    rateLimit: rateLimitSchema.default({})
   })
   .passthrough();
 

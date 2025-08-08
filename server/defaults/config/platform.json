@@ -64,5 +64,27 @@
   "swagger": {
     "enabled": true,
     "requireAuth": true
+  },
+  "rateLimit": {
+    "default": {
+      "windowMs": 900000,
+      "limit": 100,
+      "standardHeaders": true,
+      "legacyHeaders": false,
+      "skipSuccessfulRequests": false,
+      "skipFailedRequests": true
+    },
+    "adminApi": {
+      "limit": 50,
+      "skipFailedRequests": false
+    },
+    "publicApi": {},
+    "authApi": {
+      "limit": 30,
+      "skipFailedRequests": false
+    },
+    "inferenceApi": {
+      "limit": 60
+    }
   }
 }
