@@ -28,7 +28,7 @@ export async function searchTickets({ jql, maxResults = 50, user }) {
     }
 
     const results = await JiraService.searchTickets({ jql, maxResults, userId });
-    
+
     return {
       success: true,
       ...results,
@@ -36,7 +36,7 @@ export async function searchTickets({ jql, maxResults = 50, user }) {
     };
   } catch (error) {
     console.error('❌ Error in searchTickets:', error.message);
-    
+
     if (error.message.includes('authentication required')) {
       return {
         error: 'JIRA_AUTH_REQUIRED',
@@ -44,7 +44,7 @@ export async function searchTickets({ jql, maxResults = 50, user }) {
         authUrl: '/api/integrations/jira/auth'
       };
     }
-    
+
     return {
       error: 'SEARCH_FAILED',
       message: `Failed to search JIRA tickets: ${error.message}`
@@ -77,7 +77,7 @@ export async function getTicket({ issueKey, includeComments = true, user }) {
     }
 
     const ticket = await JiraService.getTicket({ issueKey, includeComments, userId });
-    
+
     return {
       success: true,
       ticket,
@@ -85,7 +85,7 @@ export async function getTicket({ issueKey, includeComments = true, user }) {
     };
   } catch (error) {
     console.error('❌ Error in getTicket:', error.message);
-    
+
     if (error.message.includes('authentication required')) {
       return {
         error: 'JIRA_AUTH_REQUIRED',
@@ -93,7 +93,7 @@ export async function getTicket({ issueKey, includeComments = true, user }) {
         authUrl: '/api/integrations/jira/auth'
       };
     }
-    
+
     return {
       error: 'GET_TICKET_FAILED',
       message: `Failed to get ticket ${issueKey}: ${error.message}`
@@ -133,7 +133,7 @@ export async function addComment({ issueKey, comment, requireConfirmation = true
     }
 
     const result = await JiraService.addComment({ issueKey, comment, userId });
-    
+
     return {
       success: true,
       comment: result,
@@ -142,7 +142,7 @@ export async function addComment({ issueKey, comment, requireConfirmation = true
     };
   } catch (error) {
     console.error('❌ Error in addComment:', error.message);
-    
+
     if (error.message.includes('authentication required')) {
       return {
         error: 'JIRA_AUTH_REQUIRED',
@@ -150,7 +150,7 @@ export async function addComment({ issueKey, comment, requireConfirmation = true
         authUrl: '/api/integrations/jira/auth'
       };
     }
-    
+
     return {
       error: 'ADD_COMMENT_FAILED',
       message: `Failed to add comment to ${issueKey}: ${error.message}`
@@ -182,7 +182,7 @@ export async function getTransitions({ issueKey, user }) {
     }
 
     const result = await JiraService.getTransitions({ issueKey, userId });
-    
+
     return {
       success: true,
       ...result,
@@ -190,7 +190,7 @@ export async function getTransitions({ issueKey, user }) {
     };
   } catch (error) {
     console.error('❌ Error in getTransitions:', error.message);
-    
+
     if (error.message.includes('authentication required')) {
       return {
         error: 'JIRA_AUTH_REQUIRED',
@@ -198,7 +198,7 @@ export async function getTransitions({ issueKey, user }) {
         authUrl: '/api/integrations/jira/auth'
       };
     }
-    
+
     return {
       error: 'GET_TRANSITIONS_FAILED',
       message: `Failed to get transitions for ${issueKey}: ${error.message}`
@@ -216,7 +216,13 @@ export async function getTransitions({ issueKey, user }) {
  * @param {Object} params.user - User object from authentication context
  * @returns {Object} Transition result
  */
-export async function transitionTicket({ issueKey, transitionId, comment, requireConfirmation = true, user }) {
+export async function transitionTicket({
+  issueKey,
+  transitionId,
+  comment,
+  requireConfirmation = true,
+  user
+}) {
   try {
     if (!user?.id) {
       throw new Error('User authentication required for JIRA access');
@@ -239,7 +245,7 @@ export async function transitionTicket({ issueKey, transitionId, comment, requir
     }
 
     const result = await JiraService.transitionTicket({ issueKey, transitionId, comment, userId });
-    
+
     return {
       success: true,
       ...result,
@@ -247,7 +253,7 @@ export async function transitionTicket({ issueKey, transitionId, comment, requir
     };
   } catch (error) {
     console.error('❌ Error in transitionTicket:', error.message);
-    
+
     if (error.message.includes('authentication required')) {
       return {
         error: 'JIRA_AUTH_REQUIRED',
@@ -255,7 +261,7 @@ export async function transitionTicket({ issueKey, transitionId, comment, requir
         authUrl: '/api/integrations/jira/auth'
       };
     }
-    
+
     return {
       error: 'TRANSITION_FAILED',
       message: `Failed to transition ${issueKey}: ${error.message}`
@@ -288,7 +294,7 @@ export async function getAttachment({ attachmentId, returnBase64 = false, user }
     }
 
     const attachment = await JiraService.getAttachment({ attachmentId, returnBase64, userId });
-    
+
     return {
       success: true,
       attachment,
@@ -296,7 +302,7 @@ export async function getAttachment({ attachmentId, returnBase64 = false, user }
     };
   } catch (error) {
     console.error('❌ Error in getAttachment:', error.message);
-    
+
     if (error.message.includes('authentication required')) {
       return {
         error: 'JIRA_AUTH_REQUIRED',
@@ -304,7 +310,7 @@ export async function getAttachment({ attachmentId, returnBase64 = false, user }
         authUrl: '/api/integrations/jira/auth'
       };
     }
-    
+
     return {
       error: 'GET_ATTACHMENT_FAILED',
       message: `Failed to get attachment ${attachmentId}: ${error.message}`
