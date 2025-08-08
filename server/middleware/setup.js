@@ -10,6 +10,7 @@ import ldapAuthMiddleware from './ldapAuth.js';
 import { teamsAuthMiddleware } from './teamsAuth.js';
 import ntlmAuthMiddleware, { createNtlmMiddleware } from './ntlmAuth.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
+import { normalApiLimiter, adminApiLimiter } from './rateLimiting.js';
 import config from '../config.js';
 
 /**
@@ -126,6 +127,25 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Set platform config on app for middleware access
   app.set('platform', platformConfig);
 
+  // Rate limiting middleware - apply early to protect all endpoints
+  // Normal API rate limiter for general endpoints
+  app.use('/api/apps', normalApiLimiter);
+  app.use('/api/tools', normalApiLimiter);
+  app.use('/api/models', normalApiLimiter);
+  app.use('/api/prompts', normalApiLimiter);
+  app.use('/api/styles', normalApiLimiter);
+  app.use('/api/translations', normalApiLimiter);
+  app.use('/api/configs', normalApiLimiter);
+  app.use('/api/sessions', normalApiLimiter);
+  app.use('/api/pages', normalApiLimiter);
+  app.use('/api/magic-prompts', normalApiLimiter);
+  app.use('/api/short-links', normalApiLimiter);
+  app.use('/auth', normalApiLimiter);
+  app.use('/inference', normalApiLimiter);
+  
+  // Admin API rate limiter for administrative endpoints (more restrictive)
+  app.use('/api/admin', adminApiLimiter);
+
   // Session middleware for OIDC (only needed if OIDC is enabled)
   const oidcConfig = platformConfig.oidcAuth || {};
   if (oidcConfig.enabled) {
@@ -187,3 +207,6 @@ export function setupMiddleware(app, platformConfig = {}) {
     next();
   });
 }
+
+// Export rate limiters for use in individual routes if needed
+export { normalApiLimiter, adminApiLimiter };
