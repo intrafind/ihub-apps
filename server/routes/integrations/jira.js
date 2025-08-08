@@ -29,7 +29,7 @@ router.get('/auth', async (req, res) => {
     const authUrl = JiraService.generateAuthUrl(state, codeVerifier);
 
     console.log(`🔐 Initiating JIRA OAuth for user ${req.user?.id}`);
-    
+
     // Redirect to JIRA OAuth consent screen
     res.redirect(authUrl);
   } catch (error) {
@@ -83,10 +83,10 @@ router.get('/callback', async (req, res) => {
     res.redirect('/settings/integrations?jira_connected=true');
   } catch (error) {
     console.error('❌ Error handling JIRA OAuth callback:', error.message);
-    
+
     // Clear session data on error
     delete req.session.jiraAuth;
-    
+
     res.redirect(`/settings/integrations?jira_error=${encodeURIComponent(error.message)}`);
   }
 });
@@ -102,7 +102,7 @@ router.get('/status', async (req, res) => {
     }
 
     const isAuthenticated = await JiraService.isUserAuthenticated(req.user.id);
-    
+
     if (!isAuthenticated) {
       return res.json({
         connected: false,
@@ -112,7 +112,7 @@ router.get('/status', async (req, res) => {
 
     // Get user info from JIRA
     const userInfo = await JiraService.getUserInfo(req.user.id);
-    
+
     res.json({
       connected: true,
       userInfo: {
@@ -125,14 +125,14 @@ router.get('/status', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error getting JIRA status:', error.message);
-    
+
     if (error.message.includes('authentication required')) {
       return res.json({
         connected: false,
         message: 'JIRA authentication expired'
       });
     }
-    
+
     res.status(500).json({
       error: 'Status check failed',
       message: error.message
@@ -151,7 +151,7 @@ router.post('/disconnect', async (req, res) => {
     }
 
     const success = await JiraService.deleteUserTokens(req.user.id);
-    
+
     if (success) {
       console.log(`🔓 JIRA disconnected for user ${req.user.id}`);
       res.json({
@@ -185,7 +185,7 @@ router.post('/refresh', async (req, res) => {
 
     // This will automatically refresh tokens if expired
     const userInfo = await JiraService.getUserInfo(req.user.id);
-    
+
     res.json({
       success: true,
       userInfo: {
@@ -198,14 +198,14 @@ router.post('/refresh', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error refreshing JIRA connection:', error.message);
-    
+
     if (error.message.includes('authentication required')) {
       return res.status(401).json({
         error: 'Authentication required',
         message: 'Please reconnect your JIRA account'
       });
     }
-    
+
     res.status(500).json({
       error: 'Refresh failed',
       message: error.message
@@ -225,14 +225,14 @@ router.get('/test', async (req, res) => {
 
     // Test connection by getting user info
     const userInfo = await JiraService.getUserInfo(req.user.id);
-    
+
     // Test a simple search
     const testSearch = await JiraService.searchTickets({
       jql: 'assignee = currentUser() ORDER BY updated DESC',
       maxResults: 1,
       userId: req.user.id
     });
-    
+
     res.json({
       success: true,
       userInfo: {
@@ -248,7 +248,7 @@ router.get('/test', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error testing JIRA connection:', error.message);
-    
+
     res.status(500).json({
       success: false,
       error: 'Connection test failed',

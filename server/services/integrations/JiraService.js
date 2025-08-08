@@ -35,10 +35,7 @@ class JiraService {
    * Generate OAuth2 authorization URL with PKCE
    */
   generateAuthUrl(state, codeVerifier) {
-    const codeChallenge = crypto
-      .createHash('sha256')
-      .update(codeVerifier)
-      .digest('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -83,7 +80,10 @@ class JiraService {
         scope: tokens.scope
       };
     } catch (error) {
-      console.error('❌ Error exchanging authorization code:', error.response?.data || error.message);
+      console.error(
+        '❌ Error exchanging authorization code:',
+        error.response?.data || error.message
+      );
       throw new Error('Failed to exchange authorization code for tokens');
     }
   }
@@ -203,7 +203,13 @@ class JiraService {
    */
   async getUserTokens(userId) {
     try {
-      const tokenFile = path.join(process.cwd(), 'contents', 'integrations', 'jira', `${userId}.json`);
+      const tokenFile = path.join(
+        process.cwd(),
+        'contents',
+        'integrations',
+        'jira',
+        `${userId}.json`
+      );
       const tokenData = JSON.parse(await fs.readFile(tokenFile, 'utf8'));
 
       // Check if tokens are expired
@@ -212,10 +218,10 @@ class JiraService {
 
       if (expiresAt <= now) {
         console.log(`🔄 Tokens expired for user ${userId}, attempting refresh...`);
-        
+
         const decryptedTokens = this.decryptTokens(tokenData);
         const refreshedTokens = await this.refreshAccessToken(decryptedTokens.refreshToken);
-        
+
         // Store the refreshed tokens
         await this.storeUserTokens(userId, refreshedTokens);
         return refreshedTokens;
@@ -236,7 +242,13 @@ class JiraService {
    */
   async deleteUserTokens(userId) {
     try {
-      const tokenFile = path.join(process.cwd(), 'contents', 'integrations', 'jira', `${userId}.json`);
+      const tokenFile = path.join(
+        process.cwd(),
+        'contents',
+        'integrations',
+        'jira',
+        `${userId}.json`
+      );
       await fs.unlink(tokenFile);
       console.log(`✅ JIRA tokens deleted for user ${userId}`);
       return true;
@@ -254,13 +266,13 @@ class JiraService {
   async makeApiRequest(endpoint, method = 'GET', data = null, userId) {
     try {
       const tokens = await this.getUserTokens(userId);
-      
+
       const config = {
         method,
         url: `${this.apiUrl}${endpoint}`,
         headers: {
-          'Authorization': `Bearer ${tokens.accessToken}`,
-          'Accept': 'application/json',
+          Authorization: `Bearer ${tokens.accessToken}`,
+          Accept: 'application/json',
           'Content-Type': 'application/json'
         }
       };
@@ -275,9 +287,11 @@ class JiraService {
       if (error.response?.status === 401) {
         throw new Error('JIRA authentication required. Please reconnect your account.');
       }
-      
+
       console.error('❌ JIRA API request failed:', error.response?.data || error.message);
-      throw new Error(`JIRA API error: ${error.response?.data?.errorMessages?.[0] || error.message}`);
+      throw new Error(
+        `JIRA API error: ${error.response?.data?.errorMessages?.[0] || error.message}`
+      );
     }
   }
 
@@ -289,12 +303,13 @@ class JiraService {
       const params = new URLSearchParams({
         jql,
         maxResults: Math.min(maxResults, 100),
-        fields: 'key,summary,status,assignee,reporter,created,updated,priority,issuetype,description',
+        fields:
+          'key,summary,status,assignee,reporter,created,updated,priority,issuetype,description',
         expand: 'renderedFields'
       });
 
       const data = await this.makeApiRequest(`/search?${params}`, 'GET', null, userId);
-      
+
       return {
         total: data.total,
         startAt: data.startAt,
@@ -324,8 +339,13 @@ class JiraService {
   async getTicket({ issueKey, includeComments = true, userId }) {
     try {
       const expand = includeComments ? 'renderedFields,comments' : 'renderedFields';
-      const data = await this.makeApiRequest(`/issue/${issueKey}?expand=${expand}`, 'GET', null, userId);
-      
+      const data = await this.makeApiRequest(
+        `/issue/${issueKey}?expand=${expand}`,
+        'GET',
+        null,
+        userId
+      );
+
       const ticket = {
         key: data.key,
         summary: data.fields.summary,
@@ -341,14 +361,15 @@ class JiraService {
         labels: data.fields.labels || [],
         fixVersions: data.fields.fixVersions?.map(v => v.name) || [],
         components: data.fields.components?.map(c => c.name) || [],
-        attachments: data.fields.attachment?.map(att => ({
-          id: att.id,
-          filename: att.filename,
-          size: att.size,
-          mimeType: att.mimeType,
-          author: att.author?.displayName,
-          created: att.created
-        })) || []
+        attachments:
+          data.fields.attachment?.map(att => ({
+            id: att.id,
+            filename: att.filename,
+            size: att.size,
+            mimeType: att.mimeType,
+            author: att.author?.displayName,
+            created: att.created
+          })) || []
       };
 
       if (includeComments && data.fields.comment?.comments) {
@@ -377,8 +398,13 @@ class JiraService {
         body: comment
       };
 
-      const response = await this.makeApiRequest(`/issue/${issueKey}/comment`, 'POST', commentData, userId);
-      
+      const response = await this.makeApiRequest(
+        `/issue/${issueKey}/comment`,
+        'POST',
+        commentData,
+        userId
+      );
+
       return {
         id: response.id,
         author: response.author?.displayName,
@@ -397,7 +423,7 @@ class JiraService {
   async getTransitions({ issueKey, userId }) {
     try {
       const data = await this.makeApiRequest(`/issue/${issueKey}/transitions`, 'GET', null, userId);
-      
+
       return {
         transitions: data.transitions.map(transition => ({
           id: transition.id,
@@ -439,10 +465,10 @@ class JiraService {
       }
 
       await this.makeApiRequest(`/issue/${issueKey}/transitions`, 'POST', transitionData, userId);
-      
+
       // Get updated ticket information
       const updatedTicket = await this.getTicket({ issueKey, includeComments: false, userId });
-      
+
       return {
         success: true,
         newStatus: updatedTicket.status,
@@ -460,19 +486,19 @@ class JiraService {
   async getAttachment({ attachmentId, returnBase64 = false, userId }) {
     try {
       const tokens = await this.getUserTokens(userId);
-      
+
       const response = await axios.get(`${this.baseUrl}/rest/api/2/attachment/${attachmentId}`, {
         headers: {
-          'Authorization': `Bearer ${tokens.accessToken}`
+          Authorization: `Bearer ${tokens.accessToken}`
         }
       });
 
       const attachmentInfo = response.data;
-      
+
       // Get attachment content
       const contentResponse = await axios.get(attachmentInfo.content, {
         headers: {
-          'Authorization': `Bearer ${tokens.accessToken}`
+          Authorization: `Bearer ${tokens.accessToken}`
         },
         responseType: returnBase64 ? 'arraybuffer' : 'stream'
       });
@@ -517,7 +543,7 @@ class JiraService {
   async getUserInfo(userId) {
     try {
       const data = await this.makeApiRequest('/myself', 'GET', null, userId);
-      
+
       return {
         accountId: data.accountId,
         displayName: data.displayName,
