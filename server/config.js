@@ -3,6 +3,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Configuration supports both provider-specific and model-specific API keys:
+// - Provider-specific: OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.
+// - Model-specific: {MODEL_ID}_API_KEY (e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1")
+// Model-specific keys take precedence over provider-specific keys.
+
 const env = cleanEnv(
   process.env,
   {

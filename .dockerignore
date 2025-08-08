@@ -55,9 +55,11 @@ coverage/
 Thumbs.db
 
 # Documentation (not needed in container)
-docs/
+# docs/ is needed for build process (mdbook build)
+# docs/
 *.md
 !README.md
+!docs/**/*.md
 
 # Package manager files
 npm-debug.log*

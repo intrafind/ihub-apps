@@ -33,7 +33,15 @@ export async function getApiKeyForModel(modelId) {
     // Get the provider for this model
     const provider = model.provider;
 
-    // Check for provider-specific API keys
+    // First, check for model-specific API key (e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1")
+    const modelSpecificKeyName = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
+    const modelSpecificKey = config[modelSpecificKeyName];
+    if (modelSpecificKey) {
+      console.log(`Using model-specific API key: ${modelSpecificKeyName}`);
+      return modelSpecificKey;
+    }
+
+    // Then check for provider-specific API keys
     switch (provider) {
       case 'openai':
         return config.OPENAI_API_KEY;
@@ -60,7 +68,9 @@ export async function getApiKeyForModel(modelId) {
           return config.DEFAULT_API_KEY;
         }
 
-        console.error(`No API key found for provider: ${provider}`);
+        console.error(
+          `No API key found for provider: ${provider} or model-specific key: ${modelSpecificKeyName}`
+        );
         return null;
     }
   } catch (error) {
