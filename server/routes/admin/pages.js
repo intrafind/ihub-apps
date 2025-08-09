@@ -6,6 +6,7 @@ import { atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { validateIdForPath } from '../../utils/pathSecurity.js';
 
 export default function registerAdminPagesRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/admin/pages', basePath), adminAuth, async (req, res) => {
@@ -27,6 +28,12 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
 
   app.get(buildServerPath('/api/admin/pages/:pageId', basePath), adminAuth, async (req, res) => {
     const { pageId } = req.params;
+
+    // Validate pageId for security
+    if (!validateIdForPath(pageId, 'page', res)) {
+      return;
+    }
+
     try {
       const { data: uiConfig } = configCache.getUI();
       const page = uiConfig.pages?.[pageId];
@@ -70,6 +77,12 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
       if (!id) {
         return res.status(400).json({ error: 'Missing page ID' });
       }
+
+      // Validate id for security
+      if (!validateIdForPath(id, 'page', res)) {
+        return;
+      }
+
       const rootDir = getRootDir();
       const uiPath = join(rootDir, 'contents', 'config', 'ui.json');
       const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));
@@ -98,6 +111,12 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
   app.put(buildServerPath('/api/admin/pages/:pageId', basePath), adminAuth, async (req, res) => {
     try {
       const { pageId } = req.params;
+
+      // Validate pageId for security
+      if (!validateIdForPath(pageId, 'page', res)) {
+        return;
+      }
+
       const {
         id,
         title = {},
@@ -141,6 +160,12 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
   app.delete(buildServerPath('/api/admin/pages/:pageId', basePath), adminAuth, async (req, res) => {
     try {
       const { pageId } = req.params;
+
+      // Validate pageId for security
+      if (!validateIdForPath(pageId, 'page', res)) {
+        return;
+      }
+
       const rootDir = getRootDir();
       const uiPath = join(rootDir, 'contents', 'config', 'ui.json');
       const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));

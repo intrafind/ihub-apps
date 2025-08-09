@@ -7,6 +7,7 @@ import { adminAuth, isAdminAuthRequired, hashPassword } from '../../middleware/a
 import { hashPasswordWithUserId } from '../../middleware/localAuth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { buildServerPath } from '../../utils/basePath.js';
+import { validateIdForPath } from '../../utils/pathSecurity.js';
 
 /**
  * @swagger
@@ -556,6 +557,12 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { userId } = req.params;
+
+        // Validate userId for security (prevents prototype pollution)
+        if (!validateIdForPath(userId, 'user', res)) {
+          return;
+        }
+
         const { email, name, password, internalGroups, active } = req.body;
 
         const rootDir = getRootDir();
@@ -662,6 +669,11 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { userId } = req.params;
+
+        // Validate userId for security (prevents prototype pollution)
+        if (!validateIdForPath(userId, 'user', res)) {
+          return;
+        }
 
         const rootDir = getRootDir();
         const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');

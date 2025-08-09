@@ -5,6 +5,7 @@ import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
 
 /**
  * @swagger
@@ -385,6 +386,12 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { promptId } = req.params;
+
+        // Validate promptId for security
+        if (!validateIdForPath(promptId, 'prompt', res)) {
+          return;
+        }
+
         const { data: prompts } = configCache.getPrompts(true);
         const prompt = prompts.find(p => p.id === promptId);
         if (!prompt) {
@@ -509,6 +516,12 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
       try {
         const { promptId } = req.params;
         const updatedPrompt = req.body;
+
+        // Validate promptId for security
+        if (!validateIdForPath(promptId, 'prompt', res)) {
+          return;
+        }
+
         if (!updatedPrompt.id || !updatedPrompt.name || !updatedPrompt.prompt) {
           return res.status(400).json({ error: 'Missing required fields' });
         }
@@ -630,6 +643,12 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
       if (!newPrompt.id || !newPrompt.name || !newPrompt.prompt) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
+
+      // Validate newPrompt.id for security
+      if (!validateIdForPath(newPrompt.id, 'prompt', res)) {
+        return;
+      }
+
       const rootDir = getRootDir();
       const promptFilePath = join(rootDir, 'contents', 'prompts', `${newPrompt.id}.json`);
       try {
@@ -729,6 +748,12 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { promptId } = req.params;
+
+        // Validate promptId for security
+        if (!validateIdForPath(promptId, 'prompt', res)) {
+          return;
+        }
+
         const { data: prompts } = configCache.getPrompts(true);
         const prompt = prompts.find(p => p.id === promptId);
         if (!prompt) {
@@ -868,11 +893,17 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
           return res.status(400).json({ error: 'Missing enabled flag' });
         }
 
+        // Validate promptIds for security
+        const ids = validateIdsForPath(promptIds, 'prompt', res);
+        if (!ids) {
+          return;
+        }
+
         const { data: prompts } = configCache.getPrompts(true);
-        const ids = promptIds === '*' ? prompts.map(p => p.id) : promptIds.split(',');
+        const resolvedIds = ids.includes('*') ? prompts.map(p => p.id) : ids;
         const rootDir = getRootDir();
 
-        for (const id of ids) {
+        for (const id of resolvedIds) {
           const prompt = prompts.find(p => p.id === id);
           if (!prompt) continue;
           if (prompt.enabled !== enabled) {
@@ -886,7 +917,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
         res.json({
           message: `Prompts ${enabled ? 'enabled' : 'disabled'} successfully`,
           enabled,
-          ids
+          ids: resolvedIds
         });
       } catch (error) {
         console.error('Error toggling prompts:', error);
@@ -975,6 +1006,12 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { promptId } = req.params;
+
+        // Validate promptId for security
+        if (!validateIdForPath(promptId, 'prompt', res)) {
+          return;
+        }
+
         const rootDir = getRootDir();
         const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
         if (!existsSync(promptFilePath)) {
