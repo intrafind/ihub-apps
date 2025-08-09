@@ -1,0 +1,475 @@
+import 'dotenv/config';
+import axios from 'axios';
+import crypto from 'crypto';
+import tokenStorage from '../TokenStorageService.js';
+
+/**
+ * JIRA Service for comprehensive ticket management integration
+ * Provides OAuth2 PKCE authentication, secure token storage, and JIRA API access
+ */
+class JiraService {
+  constructor() {
+    this.baseUrl = process.env.JIRA_BASE_URL;
+    this.clientId = process.env.JIRA_OAUTH_CLIENT_ID;
+    this.clientSecret = process.env.JIRA_OAUTH_CLIENT_SECRET;
+    this.redirectUri = process.env.JIRA_OAUTH_REDIRECT_URI;
+    this.serviceName = 'jira';
+
+    if (!this.baseUrl || !this.clientId || !this.clientSecret || !this.redirectUri) {
+      console.warn('⚠️ JIRA OAuth configuration incomplete. Some JIRA features may not work.');
+    }
+
+    this.tokenUrl = `${this.baseUrl}/oauth/token`;
+    this.authUrl = `${this.baseUrl}/oauth/authorize`;
+    this.apiUrl = `${this.baseUrl}/rest/api/2`;
+  }
+
+  /**
+   * Generate OAuth2 authorization URL with PKCE
+   */
+  generateAuthUrl(state, codeVerifier) {
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: this.clientId,
+      redirect_uri: this.redirectUri,
+      state: state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      scope: 'read:jira-user read:jira-work write:jira-work'
+    });
+
+    return `${this.authUrl}?${params.toString()}`;
+  }
+
+  /**
+   * Exchange authorization code for tokens using PKCE
+   */
+  async exchangeCodeForTokens(authCode, codeVerifier) {
+    try {
+      const response = await axios.post(
+        this.tokenUrl,
+        {
+          grant_type: 'authorization_code',
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          code: authCode,
+          redirect_uri: this.redirectUri,
+          code_verifier: codeVerifier
+        },
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }
+      );
+
+      const tokens = response.data;
+      return {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresIn: tokens.expires_in,
+        scope: tokens.scope
+      };
+    } catch (error) {
+      console.error(
+        '❌ Error exchanging authorization code:',
+        error.response?.data || error.message
+      );
+      throw new Error('Failed to exchange authorization code for tokens');
+    }
+  }
+
+  /**
+   * Refresh access token using refresh token
+   */
+  async refreshAccessToken(refreshToken) {
+    try {
+      const response = await axios.post(
+        this.tokenUrl,
+        {
+          grant_type: 'refresh_token',
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          refresh_token: refreshToken
+        },
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }
+      );
+
+      const tokens = response.data;
+      return {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token || refreshToken, // Use new refresh token if provided
+        expiresIn: tokens.expires_in,
+        scope: tokens.scope
+      };
+    } catch (error) {
+      console.error('❌ Error refreshing access token:', error.response?.data || error.message);
+      throw new Error('Failed to refresh access token');
+    }
+  }
+
+  /**
+   * Store encrypted user tokens using centralized token storage
+   */
+  async storeUserTokens(userId, tokens) {
+    try {
+      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
+      console.log(`✅ JIRA tokens stored for user ${userId}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error storing user tokens:', error.message);
+      throw new Error('Failed to store user tokens');
+    }
+  }
+
+  /**
+   * Retrieve and decrypt user tokens using centralized token storage
+   */
+  async getUserTokens(userId) {
+    try {
+      // Check if tokens are expired
+      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName);
+
+      if (expired) {
+        console.log(`🔄 Tokens expired for user ${userId}, attempting refresh...`);
+
+        const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
+        const refreshedTokens = await this.refreshAccessToken(expiredTokens.refreshToken);
+
+        // Store the refreshed tokens
+        await this.storeUserTokens(userId, refreshedTokens);
+        return refreshedTokens;
+      }
+
+      return await tokenStorage.getUserTokens(userId, this.serviceName);
+    } catch (error) {
+      if (error.message.includes('not authenticated')) {
+        throw new Error('User not authenticated with JIRA');
+      }
+      console.error('❌ Error retrieving user tokens:', error.message);
+      throw new Error('Failed to retrieve user tokens');
+    }
+  }
+
+  /**
+   * Delete user tokens using centralized token storage (disconnect)
+   */
+  async deleteUserTokens(userId) {
+    try {
+      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName);
+      if (result) {
+        console.log(`✅ JIRA tokens deleted for user ${userId}`);
+      }
+      return result;
+    } catch (error) {
+      console.error('❌ Error deleting user tokens:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Make authenticated JIRA API request
+   */
+  async makeApiRequest(endpoint, method = 'GET', data = null, userId) {
+    try {
+      const tokens = await this.getUserTokens(userId);
+
+      const config = {
+        method,
+        url: `${this.apiUrl}${endpoint}`,
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        }
+      };
+
+      if (data && (method === 'POST' || method === 'PUT')) {
+        config.data = data;
+      }
+
+      const response = await axios(config);
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        throw new Error('JIRA authentication required. Please reconnect your account.');
+      }
+
+      console.error('❌ JIRA API request failed:', error.response?.data || error.message);
+      throw new Error(
+        `JIRA API error: ${error.response?.data?.errorMessages?.[0] || error.message}`
+      );
+    }
+  }
+
+  /**
+   * Search JIRA tickets using JQL
+   */
+  async searchTickets({ jql, maxResults = 50, userId }) {
+    try {
+      const params = new URLSearchParams({
+        jql,
+        maxResults: Math.min(maxResults, 100),
+        fields:
+          'key,summary,status,assignee,reporter,created,updated,priority,issuetype,description',
+        expand: 'renderedFields'
+      });
+
+      const data = await this.makeApiRequest(`/search?${params}`, 'GET', null, userId);
+
+      return {
+        total: data.total,
+        startAt: data.startAt,
+        maxResults: data.maxResults,
+        issues: data.issues.map(issue => ({
+          key: issue.key,
+          summary: issue.fields.summary,
+          status: issue.fields.status?.name,
+          assignee: issue.fields.assignee?.displayName,
+          reporter: issue.fields.reporter?.displayName,
+          created: issue.fields.created,
+          updated: issue.fields.updated,
+          priority: issue.fields.priority?.name,
+          issueType: issue.fields.issuetype?.name,
+          description: issue.renderedFields?.description || issue.fields.description
+        }))
+      };
+    } catch (error) {
+      console.error('❌ Error searching JIRA tickets:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed information about a JIRA ticket
+   */
+  async getTicket({ issueKey, includeComments = true, userId }) {
+    try {
+      const expand = includeComments ? 'renderedFields,comments' : 'renderedFields';
+      const data = await this.makeApiRequest(
+        `/issue/${issueKey}?expand=${expand}`,
+        'GET',
+        null,
+        userId
+      );
+
+      const ticket = {
+        key: data.key,
+        summary: data.fields.summary,
+        description: data.renderedFields?.description || data.fields.description,
+        status: data.fields.status?.name,
+        assignee: data.fields.assignee?.displayName,
+        reporter: data.fields.reporter?.displayName,
+        created: data.fields.created,
+        updated: data.fields.updated,
+        priority: data.fields.priority?.name,
+        issueType: data.fields.issuetype?.name,
+        project: data.fields.project?.name,
+        labels: data.fields.labels || [],
+        fixVersions: data.fields.fixVersions?.map(v => v.name) || [],
+        components: data.fields.components?.map(c => c.name) || [],
+        attachments:
+          data.fields.attachment?.map(att => ({
+            id: att.id,
+            filename: att.filename,
+            size: att.size,
+            mimeType: att.mimeType,
+            author: att.author?.displayName,
+            created: att.created
+          })) || []
+      };
+
+      if (includeComments && data.fields.comment?.comments) {
+        ticket.comments = data.fields.comment.comments.map(comment => ({
+          id: comment.id,
+          author: comment.author?.displayName,
+          body: comment.body,
+          created: comment.created,
+          updated: comment.updated
+        }));
+      }
+
+      return ticket;
+    } catch (error) {
+      console.error('❌ Error getting JIRA ticket:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Add a comment to a JIRA ticket
+   */
+  async addComment({ issueKey, comment, userId }) {
+    try {
+      const commentData = {
+        body: comment
+      };
+
+      const response = await this.makeApiRequest(
+        `/issue/${issueKey}/comment`,
+        'POST',
+        commentData,
+        userId
+      );
+
+      return {
+        id: response.id,
+        author: response.author?.displayName,
+        body: response.body,
+        created: response.created
+      };
+    } catch (error) {
+      console.error('❌ Error adding comment to JIRA ticket:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get available transitions for a ticket
+   */
+  async getTransitions({ issueKey, userId }) {
+    try {
+      const data = await this.makeApiRequest(`/issue/${issueKey}/transitions`, 'GET', null, userId);
+
+      return {
+        transitions: data.transitions.map(transition => ({
+          id: transition.id,
+          name: transition.name,
+          to: {
+            id: transition.to.id,
+            name: transition.to.name,
+            description: transition.to.description
+          }
+        }))
+      };
+    } catch (error) {
+      console.error('❌ Error getting JIRA ticket transitions:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Transition a ticket to a new status
+   */
+  async transitionTicket({ issueKey, transitionId, comment = null, userId }) {
+    try {
+      const transitionData = {
+        transition: {
+          id: transitionId
+        }
+      };
+
+      if (comment) {
+        transitionData.update = {
+          comment: [
+            {
+              add: {
+                body: comment
+              }
+            }
+          ]
+        };
+      }
+
+      await this.makeApiRequest(`/issue/${issueKey}/transitions`, 'POST', transitionData, userId);
+
+      // Get updated ticket information
+      const updatedTicket = await this.getTicket({ issueKey, includeComments: false, userId });
+
+      return {
+        success: true,
+        newStatus: updatedTicket.status,
+        message: `Ticket ${issueKey} successfully transitioned to ${updatedTicket.status}`
+      };
+    } catch (error) {
+      console.error('❌ Error transitioning JIRA ticket:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get attachment content
+   */
+  async getAttachment({ attachmentId, returnBase64 = false, userId }) {
+    try {
+      const tokens = await this.getUserTokens(userId);
+
+      const response = await axios.get(`${this.baseUrl}/rest/api/2/attachment/${attachmentId}`, {
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`
+        }
+      });
+
+      const attachmentInfo = response.data;
+
+      // Get attachment content
+      const contentResponse = await axios.get(attachmentInfo.content, {
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`
+        },
+        responseType: returnBase64 ? 'arraybuffer' : 'stream'
+      });
+
+      if (returnBase64) {
+        const base64Content = Buffer.from(contentResponse.data).toString('base64');
+        return {
+          filename: attachmentInfo.filename,
+          mimeType: attachmentInfo.mimeType,
+          size: attachmentInfo.size,
+          content: base64Content
+        };
+      } else {
+        return {
+          filename: attachmentInfo.filename,
+          mimeType: attachmentInfo.mimeType,
+          size: attachmentInfo.size,
+          downloadUrl: attachmentInfo.content
+        };
+      }
+    } catch (error) {
+      console.error('❌ Error getting JIRA attachment:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if user has valid JIRA authentication
+   */
+  async isUserAuthenticated(userId) {
+    try {
+      return await tokenStorage.hasValidTokens(userId, this.serviceName);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Get user's JIRA account information
+   */
+  async getUserInfo(userId) {
+    try {
+      const data = await this.makeApiRequest('/myself', 'GET', null, userId);
+
+      return {
+        accountId: data.accountId,
+        displayName: data.displayName,
+        emailAddress: data.emailAddress,
+        avatarUrls: data.avatarUrls,
+        active: data.active,
+        accountType: data.accountType
+      };
+    } catch (error) {
+      console.error('❌ Error getting JIRA user info:', error.message);
+      throw error;
+    }
+  }
+}
+
+// Export singleton instance
+export default new JiraService();
