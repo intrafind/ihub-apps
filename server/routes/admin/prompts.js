@@ -386,12 +386,12 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { promptId } = req.params;
-        
+
         // Validate promptId for security
         if (!validateIdForPath(promptId, 'prompt', res)) {
           return;
         }
-        
+
         const { data: prompts } = configCache.getPrompts(true);
         const prompt = prompts.find(p => p.id === promptId);
         if (!prompt) {
@@ -516,12 +516,12 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
       try {
         const { promptId } = req.params;
         const updatedPrompt = req.body;
-        
+
         // Validate promptId for security
         if (!validateIdForPath(promptId, 'prompt', res)) {
           return;
         }
-        
+
         if (!updatedPrompt.id || !updatedPrompt.name || !updatedPrompt.prompt) {
           return res.status(400).json({ error: 'Missing required fields' });
         }
@@ -643,12 +643,12 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
       if (!newPrompt.id || !newPrompt.name || !newPrompt.prompt) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
-      
+
       // Validate newPrompt.id for security
       if (!validateIdForPath(newPrompt.id, 'prompt', res)) {
         return;
       }
-      
+
       const rootDir = getRootDir();
       const promptFilePath = join(rootDir, 'contents', 'prompts', `${newPrompt.id}.json`);
       try {
@@ -748,12 +748,12 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { promptId } = req.params;
-        
+
         // Validate promptId for security
         if (!validateIdForPath(promptId, 'prompt', res)) {
           return;
         }
-        
+
         const { data: prompts } = configCache.getPrompts(true);
         const prompt = prompts.find(p => p.id === promptId);
         if (!prompt) {
@@ -1006,12 +1006,12 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { promptId } = req.params;
-        
+
         // Validate promptId for security
         if (!validateIdForPath(promptId, 'prompt', res)) {
           return;
         }
-        
+
         const rootDir = getRootDir();
         const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
         if (!existsSync(promptFilePath)) {

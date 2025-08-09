@@ -410,12 +410,12 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { appId } = req.params;
-        
+
         // Validate appId for security
         if (!validateIdForPath(appId, 'app', res)) {
           return;
         }
-        
+
         const { data: apps } = configCache.getApps(true);
         const app = apps.find(a => a.id === appId);
 
@@ -443,12 +443,12 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/admin/apps/:appId', basePath), adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
-      
+
       // Validate appId for security
       if (!validateIdForPath(appId, 'app', res)) {
         return;
       }
-      
+
       const { data: apps } = configCache.getApps(true);
       const app = apps.find(a => a.id === appId);
 
@@ -653,12 +653,12 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
       if (!newApp.id || !newApp.name || !newApp.description) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
-      
+
       // Validate newApp.id for security
       if (!validateIdForPath(newApp.id, 'app', res)) {
         return;
       }
-      
+
       const rootDir = getRootDir();
       const appFilePath = join(rootDir, 'contents', 'apps', `${newApp.id}.json`);
       try {
@@ -733,12 +733,12 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { appId } = req.params;
-        
+
         // Validate appId for security
         if (!validateIdForPath(appId, 'app', res)) {
           return;
         }
-        
+
         const { data: apps } = configCache.getApps(true);
         const app = apps.find(a => a.id === appId);
         if (!app) {
@@ -931,12 +931,12 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
   app.delete(buildServerPath('/api/admin/apps/:appId', basePath), adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
-      
+
       // Validate appId for security
       if (!validateIdForPath(appId, 'app', res)) {
         return;
       }
-      
+
       const rootDir = getRootDir();
       const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
       try {

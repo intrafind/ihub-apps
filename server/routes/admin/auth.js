@@ -557,12 +557,12 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { userId } = req.params;
-        
+
         // Validate userId for security (prevents prototype pollution)
         if (!validateIdForPath(userId, 'user', res)) {
           return;
         }
-        
+
         const { email, name, password, internalGroups, active } = req.body;
 
         const rootDir = getRootDir();
@@ -669,7 +669,7 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { userId } = req.params;
-        
+
         // Validate userId for security (prevents prototype pollution)
         if (!validateIdForPath(userId, 'user', res)) {
           return;

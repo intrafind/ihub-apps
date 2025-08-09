@@ -540,17 +540,17 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/admin/sources/:id', basePath), adminAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       // Validate id for security
       if (!validateIdForPath(id, 'source', res)) {
         return;
       }
-      
+
       // Validate id for security
       if (!validateIdForPath(id, 'source', res)) {
         return;
       }
-      
+
       const { data: sources } = configCache.getSources(true);
       const source = sources.find(s => s.id === id);
 
@@ -660,7 +660,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
   app.post(buildServerPath('/api/admin/sources', basePath), adminAuth, async (req, res) => {
     try {
       const sourceData = req.body;
-      
+
       // Validate source ID for security
       if (sourceData.id && !validateIdForPath(sourceData.id, 'source', res)) {
         return;
@@ -776,17 +776,17 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
   app.put(buildServerPath('/api/admin/sources/:id', basePath), adminAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       // Validate id for security
       if (!validateIdForPath(id, 'source', res)) {
         return;
       }
-      
+
       // Validate id for security
       if (!validateIdForPath(id, 'source', res)) {
         return;
       }
-      
+
       const sourceData = req.body;
 
       // Ensure ID matches
@@ -903,12 +903,12 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
   app.delete(buildServerPath('/api/admin/sources/:id', basePath), adminAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       // Validate id for security
       if (!validateIdForPath(id, 'source', res)) {
         return;
       }
-      
+
       // Validate id for security
       if (!validateIdForPath(id, 'source', res)) {
         return;
@@ -1001,11 +1001,11 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { id } = req.params;
-      
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
-      }
+
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
         const { data: sources } = configCache.getSources(true);
         const source = sources.find(s => s.id === id);
 
@@ -1114,11 +1114,11 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { id } = req.params;
-      
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
-      }
+
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
         const { limit = 1000 } = req.query;
         const { data: sources } = configCache.getSources(true);
         const source = sources.find(s => s.id === id);
@@ -1404,11 +1404,11 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { id } = req.params;
-      
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
-      }
+
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
         const dependencies = await findSourceDependencies(id);
 
         res.json({
@@ -1496,11 +1496,11 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { id } = req.params;
-      
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
-      }
+
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
         const { path = '' } = req.query;
         const { data: sources } = configCache.getSources(true);
         const source = sources.find(s => s.id === id);
@@ -1606,11 +1606,11 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { id } = req.params;
-      
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
-      }
+
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
         const { path } = req.query;
         const { data: sources } = configCache.getSources(true);
         const source = sources.find(s => s.id === id);
@@ -1722,11 +1722,11 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { id } = req.params;
-      
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
-      }
+
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
         const { path, content, encoding = 'utf8' } = req.body;
         const { data: sources } = configCache.getSources(true);
         const source = sources.find(s => s.id === id);
@@ -1834,11 +1834,11 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
     async (req, res) => {
       try {
         const { id } = req.params;
-      
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
-      }
+
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
         const { path } = req.query;
         const { data: sources } = configCache.getSources(true);
         const source = sources.find(s => s.id === id);
