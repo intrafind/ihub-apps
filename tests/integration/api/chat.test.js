@@ -14,7 +14,7 @@ describe('Chat API Integration Tests', () => {
   beforeAll(async () => {
     // Set up test environment
     await TestHelper.setupTestEnvironment();
-    
+
     // Import and start the server (adjust import path as needed)
     const { default: serverApp } = await import('../../server/server.js');
     app = serverApp;
@@ -31,13 +31,13 @@ describe('Chat API Integration Tests', () => {
   describe('POST /api/chat/sessions', () => {
     test('should create a new chat session with valid data', async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      
+
       const response = await request(app)
         .post('/api/chat/sessions')
         .set(headers)
         .send({
           appId: testApps.generalChat.id,
-          modelId: testModels.openai.modelId,
+          modelId: testModels.openai.modelId
         })
         .expect(201);
 
@@ -51,7 +51,7 @@ describe('Chat API Integration Tests', () => {
         .post('/api/chat/sessions')
         .send({
           appId: testApps.generalChat.id,
-          modelId: testModels.openai.modelId,
+          modelId: testModels.openai.modelId
         })
         .expect(401);
 
@@ -60,13 +60,13 @@ describe('Chat API Integration Tests', () => {
 
     test('should reject session creation with invalid app ID', async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      
+
       const response = await request(app)
         .post('/api/chat/sessions')
         .set(headers)
         .send({
           appId: 'invalid-app-id',
-          modelId: testModels.openai.modelId,
+          modelId: testModels.openai.modelId
         })
         .expect(404);
 
@@ -75,13 +75,13 @@ describe('Chat API Integration Tests', () => {
 
     test('should enforce group permissions for app access', async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      
+
       const response = await request(app)
         .post('/api/chat/sessions')
         .set(headers)
         .send({
           appId: testApps.financeApp.id, // Finance app, but user is not in finance group
-          modelId: testModels.openai.modelId,
+          modelId: testModels.openai.modelId
         })
         .expect(403);
 
@@ -95,25 +95,22 @@ describe('Chat API Integration Tests', () => {
     beforeEach(async () => {
       // Create a test session
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      const sessionResponse = await request(app)
-        .post('/api/chat/sessions')
-        .set(headers)
-        .send({
-          appId: testApps.generalChat.id,
-          modelId: testModels.openai.modelId,
-        });
-      
+      const sessionResponse = await request(app).post('/api/chat/sessions').set(headers).send({
+        appId: testApps.generalChat.id,
+        modelId: testModels.openai.modelId
+      });
+
       sessionId = sessionResponse.body.id;
     });
 
     test('should send a message and receive a response', async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      
+
       const response = await request(app)
         .post(`/api/chat/sessions/${sessionId}/messages`)
         .set(headers)
         .send({
-          message: 'Hello, how are you?',
+          message: 'Hello, how are you?'
         })
         .expect(200);
 
@@ -126,26 +123,23 @@ describe('Chat API Integration Tests', () => {
     test('should handle tool calling requests', async () => {
       // Create session with tool-enabled app
       const headers = TestHelper.createAuthHeaders(testUsers.financeUser);
-      const toolSessionResponse = await request(app)
-        .post('/api/chat/sessions')
-        .set(headers)
-        .send({
-          appId: testApps.financeApp.id,
-          modelId: testModels.openai.modelId,
-        });
-      
+      const toolSessionResponse = await request(app).post('/api/chat/sessions').set(headers).send({
+        appId: testApps.financeApp.id,
+        modelId: testModels.openai.modelId
+      });
+
       const toolSessionId = toolSessionResponse.body.id;
 
       const response = await request(app)
         .post(`/api/chat/sessions/${toolSessionId}/messages`)
         .set(headers)
         .send({
-          message: 'Search for financial data about Apple Inc.',
+          message: 'Search for financial data about Apple Inc.'
         })
         .expect(200);
 
       expect(response.body).toHaveProperty('response');
-      
+
       // Check if tool calls were made
       if (response.body.toolCalls) {
         expect(Array.isArray(response.body.toolCalls)).toBe(true);
@@ -158,12 +152,12 @@ describe('Chat API Integration Tests', () => {
 
     test('should reject messages to non-existent sessions', async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      
+
       const response = await request(app)
         .post('/api/chat/sessions/non-existent-session/messages')
         .set(headers)
         .send({
-          message: 'Hello',
+          message: 'Hello'
         })
         .expect(404);
 
@@ -172,12 +166,12 @@ describe('Chat API Integration Tests', () => {
 
     test('should reject empty messages', async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      
+
       const response = await request(app)
         .post(`/api/chat/sessions/${sessionId}/messages`)
         .set(headers)
         .send({
-          message: '',
+          message: ''
         })
         .expect(400);
 
@@ -186,24 +180,26 @@ describe('Chat API Integration Tests', () => {
 
     test('should handle rate limiting', async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      
+
       // Send multiple rapid requests
-      const requests = Array(10).fill().map(() =>
-        request(app)
-          .post(`/api/chat/sessions/${sessionId}/messages`)
-          .set(headers)
-          .send({
-            message: `Rate limit test message ${Date.now()}`,
-          })
-      );
+      const requests = Array(10)
+        .fill()
+        .map(() =>
+          request(app)
+            .post(`/api/chat/sessions/${sessionId}/messages`)
+            .set(headers)
+            .send({
+              message: `Rate limit test message ${Date.now()}`
+            })
+        );
 
       const responses = await Promise.allSettled(requests);
-      
+
       // Check if some requests were rate limited
       const rateLimitedResponses = responses.filter(
         result => result.status === 'fulfilled' && result.value.status === 429
       );
-      
+
       // Expect at least some rate limiting to occur
       expect(rateLimitedResponses.length).toBeGreaterThan(0);
     });
@@ -214,20 +210,17 @@ describe('Chat API Integration Tests', () => {
 
     beforeEach(async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      const sessionResponse = await request(app)
-        .post('/api/chat/sessions')
-        .set(headers)
-        .send({
-          appId: testApps.generalChat.id,
-          modelId: testModels.openai.modelId,
-        });
-      
+      const sessionResponse = await request(app).post('/api/chat/sessions').set(headers).send({
+        appId: testApps.generalChat.id,
+        modelId: testModels.openai.modelId
+      });
+
       sessionId = sessionResponse.body.id;
     });
 
     test('should retrieve session details', async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      
+
       const response = await request(app)
         .get(`/api/chat/sessions/${sessionId}`)
         .set(headers)
@@ -239,7 +232,7 @@ describe('Chat API Integration Tests', () => {
 
     test('should not allow access to other users sessions', async () => {
       const otherUserHeaders = TestHelper.createAuthHeaders(testUsers.financeUser);
-      
+
       const response = await request(app)
         .get(`/api/chat/sessions/${sessionId}`)
         .set(otherUserHeaders)
@@ -252,24 +245,18 @@ describe('Chat API Integration Tests', () => {
   describe('GET /api/chat/sessions', () => {
     test('should list user sessions', async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      
-      // Create a test session first
-      await request(app)
-        .post('/api/chat/sessions')
-        .set(headers)
-        .send({
-          appId: testApps.generalChat.id,
-          modelId: testModels.openai.modelId,
-        });
 
-      const response = await request(app)
-        .get('/api/chat/sessions')
-        .set(headers)
-        .expect(200);
+      // Create a test session first
+      await request(app).post('/api/chat/sessions').set(headers).send({
+        appId: testApps.generalChat.id,
+        modelId: testModels.openai.modelId
+      });
+
+      const response = await request(app).get('/api/chat/sessions').set(headers).expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
-      
+
       response.body.forEach(session => {
         TestValidators.validateChatSession(session);
       });
@@ -278,24 +265,18 @@ describe('Chat API Integration Tests', () => {
     test('should only return user-owned sessions', async () => {
       const user1Headers = TestHelper.createAuthHeaders(testUsers.regularUser);
       const user2Headers = TestHelper.createAuthHeaders(testUsers.financeUser);
-      
+
       // Create session for user 1
-      await request(app)
-        .post('/api/chat/sessions')
-        .set(user1Headers)
-        .send({
-          appId: testApps.generalChat.id,
-          modelId: testModels.openai.modelId,
-        });
+      await request(app).post('/api/chat/sessions').set(user1Headers).send({
+        appId: testApps.generalChat.id,
+        modelId: testModels.openai.modelId
+      });
 
       // Create session for user 2
-      await request(app)
-        .post('/api/chat/sessions')
-        .set(user2Headers)
-        .send({
-          appId: testApps.generalChat.id,
-          modelId: testModels.openai.modelId,
-        });
+      await request(app).post('/api/chat/sessions').set(user2Headers).send({
+        appId: testApps.generalChat.id,
+        modelId: testModels.openai.modelId
+      });
 
       // User 1 should only see their own sessions
       const user1Response = await request(app)
@@ -324,35 +305,26 @@ describe('Chat API Integration Tests', () => {
 
     beforeEach(async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      const sessionResponse = await request(app)
-        .post('/api/chat/sessions')
-        .set(headers)
-        .send({
-          appId: testApps.generalChat.id,
-          modelId: testModels.openai.modelId,
-        });
-      
+      const sessionResponse = await request(app).post('/api/chat/sessions').set(headers).send({
+        appId: testApps.generalChat.id,
+        modelId: testModels.openai.modelId
+      });
+
       sessionId = sessionResponse.body.id;
     });
 
     test('should delete a session', async () => {
       const headers = TestHelper.createAuthHeaders(testUsers.regularUser);
-      
-      await request(app)
-        .delete(`/api/chat/sessions/${sessionId}`)
-        .set(headers)
-        .expect(204);
+
+      await request(app).delete(`/api/chat/sessions/${sessionId}`).set(headers).expect(204);
 
       // Verify session is deleted
-      await request(app)
-        .get(`/api/chat/sessions/${sessionId}`)
-        .set(headers)
-        .expect(404);
+      await request(app).get(`/api/chat/sessions/${sessionId}`).set(headers).expect(404);
     });
 
     test('should not allow deletion of other users sessions', async () => {
       const otherUserHeaders = TestHelper.createAuthHeaders(testUsers.financeUser);
-      
+
       const response = await request(app)
         .delete(`/api/chat/sessions/${sessionId}`)
         .set(otherUserHeaders)

@@ -12,7 +12,7 @@ import '@testing-library/jest-dom';
 const MockChatComponent = ({ onSendMessage, messages = [] }) => {
   const [inputValue, setInputValue] = React.useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = e => {
     e.preventDefault();
     if (inputValue.trim()) {
       onSendMessage(inputValue);
@@ -33,7 +33,7 @@ const MockChatComponent = ({ onSendMessage, messages = [] }) => {
         <input
           data-testid="message-input"
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={e => setInputValue(e.target.value)}
           placeholder="Type a message..."
         />
         <button data-testid="send-button" type="submit">
@@ -45,18 +45,14 @@ const MockChatComponent = ({ onSendMessage, messages = [] }) => {
 };
 
 // Test utility for wrapping components with providers
-const renderWithProviders = (component) => {
-  return render(
-    <BrowserRouter>
-      {component}
-    </BrowserRouter>
-  );
+const renderWithProviders = component => {
+  return render(<BrowserRouter>{component}</BrowserRouter>);
 };
 
 describe('Chat Component Unit Tests', () => {
   test('should render chat interface correctly', () => {
     renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} />);
-    
+
     expect(screen.getByTestId('chat-container')).toBeInTheDocument();
     expect(screen.getByTestId('message-input')).toBeInTheDocument();
     expect(screen.getByTestId('send-button')).toBeInTheDocument();
@@ -68,9 +64,7 @@ describe('Chat Component Unit Tests', () => {
       { role: 'assistant', content: 'Hi there!' }
     ];
 
-    renderWithProviders(
-      <MockChatComponent onSendMessage={jest.fn()} messages={messages} />
-    );
+    renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} messages={messages} />);
 
     expect(screen.getByTestId('user-message')).toHaveTextContent('Hello');
     expect(screen.getByTestId('assistant-message')).toHaveTextContent('Hi there!');
@@ -141,7 +135,7 @@ describe('Chat Component Unit Tests', () => {
 
   test('should be accessible', () => {
     renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} />);
-    
+
     const input = screen.getByTestId('message-input');
     const button = screen.getByTestId('send-button');
 
@@ -163,7 +157,7 @@ describe('Chat Component Integration Tests', () => {
     });
 
     const user = userEvent.setup();
-    
+
     // This would be a more complex component that makes API calls
     renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} />);
 
@@ -180,7 +174,7 @@ describe('Chat Component Integration Tests', () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('API Error'));
 
     const user = userEvent.setup();
-    
+
     renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} />);
 
     const input = screen.getByTestId('message-input');
@@ -196,11 +190,11 @@ describe('Chat Component Integration Tests', () => {
 describe('Chat Component State Management', () => {
   test('should update state correctly', async () => {
     const user = userEvent.setup();
-    
+
     renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} />);
 
     const input = screen.getByTestId('message-input');
-    
+
     // Test that typing updates the input value
     await user.type(input, 'Hello world');
     expect(input).toHaveValue('Hello world');
