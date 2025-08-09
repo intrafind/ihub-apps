@@ -143,6 +143,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use('/api/pages', rateLimiters.publicApiLimiter);
   app.use('/api/magic-prompts', rateLimiters.publicApiLimiter);
   app.use('/api/short-links', rateLimiters.publicApiLimiter);
+  app.use('/api/integrations', rateLimiters.publicApiLimiter);
 
   // Auth API rate limiter for authentication endpoints
   app.use('/auth', rateLimiters.authApiLimiter);
