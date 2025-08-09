@@ -1,0 +1,16 @@
+This is a test document for file upload testing.
+
+It contains basic text content that can be used to test:
+- Document processing functionality
+- File upload endpoints
+- Content extraction features
+- Document analysis tools
+
+The document is intentionally simple to ensure consistent test results.
+
+Content sections:
+1. Introduction
+2. Main body
+3. Conclusion
+
+This test document should be processed reliably by the system.
