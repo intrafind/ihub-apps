@@ -87,6 +87,7 @@
     "test:azure-openai": "cd server && node tests/azure-openai-test.js",
     "test:tool-verification": "cd server && node tests/tool-call-verification.test.js",
     "test:api-documentation": "cd server && node tests/comprehensive-api-documentation.test.js",
+    "test:validate-framework": "./tests/validate-framework.sh",
     "// === CODE QUALITY ===": "",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

@@ -47,6 +47,18 @@ logs/
 # Coverage directory used by tools like istanbul
 coverage/
 
+# Test artifacts and reports
+test-results/
+playwright-report/
+tests/coverage/
+tests/data/
+tests/uploads/
+*.tsbuildinfo
+
+# Test screenshots and videos
+test-results/**/*.png
+test-results/**/*.webm
+
 # Misc
 .cache/
 .temp/
