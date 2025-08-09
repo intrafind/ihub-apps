@@ -17,11 +17,11 @@ global.console = {
   debug: process.env.VERBOSE_TESTS ? console.debug : jest.fn(),
   info: process.env.VERBOSE_TESTS ? console.info : jest.fn(),
   warn: console.warn,
-  error: console.error,
+  error: console.error
 };
 
 // Global test utilities
-global.wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+global.wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // Setup test database or mock services here if needed
 beforeAll(async () => {

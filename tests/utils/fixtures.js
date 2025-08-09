@@ -9,7 +9,7 @@ export const testUsers = {
     email: 'test.admin@ihub.com',
     groups: ['admin', 'users'],
     role: 'admin',
-    isActive: true,
+    isActive: true
   },
   regularUser: {
     id: 'test-user-001',
@@ -17,7 +17,7 @@ export const testUsers = {
     email: 'test.user@ihub.com',
     groups: ['users'],
     role: 'user',
-    isActive: true,
+    isActive: true
   },
   financeUser: {
     id: 'test-finance-001',
@@ -25,15 +25,15 @@ export const testUsers = {
     email: 'test.finance@ihub.com',
     groups: ['finance', 'users'],
     role: 'user',
-    isActive: true,
+    isActive: true
   },
   guest: {
     id: 'test-guest-001',
     username: 'guest',
     groups: [],
     role: 'guest',
-    isActive: true,
-  },
+    isActive: true
+  }
 };
 
 export const testApps = {
@@ -45,7 +45,7 @@ export const testApps = {
     model: 'gpt-4',
     systemPrompt: 'You are a helpful assistant.',
     isActive: true,
-    tools: [],
+    tools: []
   },
   financeApp: {
     id: 'test-finance-app',
@@ -55,7 +55,7 @@ export const testApps = {
     model: 'gpt-4',
     systemPrompt: 'You are a financial analysis expert.',
     isActive: true,
-    tools: ['calculator', 'data_lookup'],
+    tools: ['calculator', 'data_lookup']
   },
   adminApp: {
     id: 'test-admin-app',
@@ -65,8 +65,8 @@ export const testApps = {
     model: 'claude-3-sonnet-20240229',
     systemPrompt: 'You are an administrative assistant.',
     isActive: true,
-    tools: ['user_management', 'system_monitoring'],
-  },
+    tools: ['user_management', 'system_monitoring']
+  }
 };
 
 export const testModels = {
@@ -78,7 +78,7 @@ export const testModels = {
     isActive: true,
     maxTokens: 4096,
     supportsTools: true,
-    supportsStreaming: true,
+    supportsStreaming: true
   },
   anthropic: {
     modelId: 'claude-3-sonnet-20240229',
@@ -88,7 +88,7 @@ export const testModels = {
     isActive: true,
     maxTokens: 4096,
     supportsTools: true,
-    supportsStreaming: true,
+    supportsStreaming: true
   },
   google: {
     modelId: 'gemini-1.5-flash',
@@ -98,7 +98,7 @@ export const testModels = {
     isActive: true,
     maxTokens: 8192,
     supportsTools: true,
-    supportsStreaming: true,
+    supportsStreaming: true
   },
   mistral: {
     modelId: 'mistral-small-latest',
@@ -108,8 +108,8 @@ export const testModels = {
     isActive: true,
     maxTokens: 4096,
     supportsTools: true,
-    supportsStreaming: true,
-  },
+    supportsStreaming: true
+  }
 };
 
 export const testTools = {
@@ -121,11 +121,11 @@ export const testTools = {
       properties: {
         query: {
           type: 'string',
-          description: 'The search query',
-        },
+          description: 'The search query'
+        }
       },
-      required: ['query'],
-    },
+      required: ['query']
+    }
   },
   calculator: {
     name: 'calculator',
@@ -135,11 +135,11 @@ export const testTools = {
       properties: {
         expression: {
           type: 'string',
-          description: 'The mathematical expression to evaluate',
-        },
+          description: 'The mathematical expression to evaluate'
+        }
       },
-      required: ['expression'],
-    },
+      required: ['expression']
+    }
   },
   dataLookup: {
     name: 'data_lookup',
@@ -149,45 +149,46 @@ export const testTools = {
       properties: {
         table: {
           type: 'string',
-          description: 'The table to query',
+          description: 'The table to query'
         },
         filters: {
           type: 'object',
-          description: 'Filter conditions',
-        },
+          description: 'Filter conditions'
+        }
       },
-      required: ['table'],
-    },
-  },
+      required: ['table']
+    }
+  }
 };
 
 export const testMessages = {
   simpleQuestion: [
     {
       role: 'user',
-      content: 'Hello, how are you?',
-    },
+      content: 'Hello, how are you?'
+    }
   ],
   toolCallingRequest: [
     {
       role: 'user',
-      content: 'Search for information about machine learning trends in 2024',
-    },
+      content: 'Search for information about machine learning trends in 2024'
+    }
   ],
   complexConversation: [
     {
       role: 'user',
-      content: 'I need to analyze our Q4 financial data.',
+      content: 'I need to analyze our Q4 financial data.'
     },
     {
       role: 'assistant',
-      content: 'I can help you analyze your Q4 financial data. What specific metrics would you like me to examine?',
+      content:
+        'I can help you analyze your Q4 financial data. What specific metrics would you like me to examine?'
     },
     {
       role: 'user',
-      content: 'Show me the revenue growth compared to Q3.',
-    },
-  ],
+      content: 'Show me the revenue growth compared to Q3.'
+    }
+  ]
 };
 
 export const testApiResponses = {
@@ -201,16 +202,16 @@ export const testApiResponses = {
         index: 0,
         message: {
           role: 'assistant',
-          content: 'This is a test response from the assistant.',
+          content: 'This is a test response from the assistant.'
         },
-        finish_reason: 'stop',
-      },
+        finish_reason: 'stop'
+      }
     ],
     usage: {
       prompt_tokens: 10,
       completion_tokens: 10,
-      total_tokens: 20,
-    },
+      total_tokens: 20
+    }
   },
   toolCallResponse: {
     id: 'chatcmpl-test-456',
@@ -229,20 +230,20 @@ export const testApiResponses = {
               type: 'function',
               function: {
                 name: 'web_search',
-                arguments: '{"query": "machine learning trends 2024"}',
-              },
-            },
-          ],
+                arguments: '{"query": "machine learning trends 2024"}'
+              }
+            }
+          ]
         },
-        finish_reason: 'tool_calls',
-      },
+        finish_reason: 'tool_calls'
+      }
     ],
     usage: {
       prompt_tokens: 15,
       completion_tokens: 5,
-      total_tokens: 20,
-    },
-  },
+      total_tokens: 20
+    }
+  }
 };
 
 export const testEnvironment = {
@@ -250,12 +251,12 @@ export const testEnvironment = {
   frontendUrl: process.env.TEST_FRONTEND_URL || 'http://localhost:5173',
   apiTimeout: parseInt(process.env.TEST_API_TIMEOUT) || 30000,
   enableRealApiCalls: process.env.TEST_REAL_API === 'true',
-  testModelProvider: process.env.TEST_MODEL_PROVIDER || 'mock',
+  testModelProvider: process.env.TEST_MODEL_PROVIDER || 'mock'
 };
 
 export const mockApiKeys = {
   openai: 'sk-test-openai-key-12345',
   anthropic: 'sk-ant-test-key-12345',
   google: 'test-google-api-key-12345',
-  mistral: 'test-mistral-key-12345',
+  mistral: 'test-mistral-key-12345'
 };

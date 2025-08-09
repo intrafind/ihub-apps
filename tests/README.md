@@ -5,6 +5,7 @@ This directory contains the complete testing infrastructure for the ihub-apps pl
 ## Quick Start
 
 ### Prerequisites
+
 ```bash
 # Install all dependencies
 npm run install:all
@@ -16,6 +17,7 @@ npx playwright install
 ### Running Tests
 
 #### Quick Validation (Development)
+
 ```bash
 # Run essential tests before commits
 npm run test:quick
@@ -25,6 +27,7 @@ npm run test:watch
 ```
 
 #### Complete Test Suite
+
 ```bash
 # Run all tests (unit, integration, e2e)
 npm run test:all
@@ -37,6 +40,7 @@ npm run test:models      # Model integration tests
 ```
 
 #### Legacy Tests (Existing)
+
 ```bash
 # Run existing adapter tests
 npm run test:adapters
@@ -74,24 +78,28 @@ tests/
 ## Test Categories
 
 ### 1. Unit Tests (`tests/unit/`)
+
 - **Purpose**: Test individual components and functions in isolation
 - **Framework**: Jest for server, Vitest for client
 - **Coverage**: Aims for 90% statement coverage
 - **Run with**: `npm run test:unit`
 
 ### 2. Integration Tests (`tests/integration/`)
+
 - **Purpose**: Test API endpoints and service interactions
 - **Framework**: Jest + Supertest
 - **Coverage**: All API endpoints
 - **Run with**: `npm run test:integration`
 
 ### 3. End-to-End Tests (`tests/e2e/`)
+
 - **Purpose**: Test complete user journeys through the browser
 - **Framework**: Playwright
 - **Coverage**: Critical user flows
 - **Run with**: `npm run test:e2e`
 
 ### 4. Model Integration Tests (`tests/integration/models/`)
+
 - **Purpose**: Validate LLM provider integrations
 - **Framework**: Jest with real API calls (when keys provided)
 - **Coverage**: All supported model providers
@@ -102,18 +110,21 @@ tests/
 ### Environment Variables
 
 #### Test Environment (`.env.test`)
+
 ```bash
 # Copy and customize for your environment
 cp .env.test.example .env.test
 ```
 
 Key variables:
+
 - `TEST_REAL_API=false` - Use mock responses by default
 - `TEST_BASE_URL=http://localhost:3000` - Server URL for tests
 - `OPENAI_API_KEY` - Required for real model testing
 - `ANTHROPIC_API_KEY` - Required for real model testing
 
 #### Test Modes
+
 ```bash
 # Mock mode (default) - fast, no external dependencies
 npm run test:models
@@ -125,6 +136,7 @@ TEST_REAL_API=true npm run test:models
 ### Browser Configuration
 
 E2E tests run across multiple browsers:
+
 - Chromium (Desktop)
 - Firefox (Desktop)
 - WebKit/Safari (Desktop)
@@ -142,6 +154,7 @@ npm run test:e2e -- --headed
 ## Test Data and Fixtures
 
 ### Predefined Test Data (`tests/utils/fixtures.js`)
+
 ```javascript
 import { testUsers, testApps, testModels } from '../utils/fixtures.js';
 
@@ -152,6 +165,7 @@ const model = testModels.openai;
 ```
 
 ### Test Utilities (`tests/utils/helpers.js`)
+
 ```javascript
 import { TestHelper, MockDataGenerator } from '../utils/helpers.js';
 
@@ -165,6 +179,7 @@ const mockResponse = MockDataGenerator.generateModelResponse();
 ## Writing Tests
 
 ### API Integration Tests
+
 ```javascript
 import request from 'supertest';
 import { TestHelper } from '../utils/helpers.js';
@@ -172,19 +187,20 @@ import { TestHelper } from '../utils/helpers.js';
 describe('Your API Endpoint', () => {
   test('should handle valid requests', async () => {
     const headers = TestHelper.createAuthHeaders();
-    
+
     const response = await request(app)
       .post('/api/your-endpoint')
       .set(headers)
       .send(validData)
       .expect(200);
-      
+
     expect(response.body).toHaveProperty('expectedField');
   });
 });
 ```
 
 ### Frontend Component Tests
+
 ```javascript
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -193,7 +209,7 @@ describe('Your Component', () => {
   test('should render and handle interaction', async () => {
     const user = userEvent.setup();
     render(<YourComponent />);
-    
+
     await user.click(screen.getByTestId('button'));
     expect(screen.getByTestId('result')).toBeInTheDocument();
   });
@@ -201,6 +217,7 @@ describe('Your Component', () => {
 ```
 
 ### E2E Tests
+
 ```javascript
 import { test, expect } from '@playwright/test';
 
@@ -213,6 +230,7 @@ test('complete user journey', async ({ page }) => {
 ```
 
 ### Model Integration Tests
+
 ```javascript
 import { createCompletionRequest } from '../../server/adapters/index.js';
 
@@ -223,7 +241,7 @@ test('should integrate with model provider', async () => {
     headers: request.headers,
     body: JSON.stringify(request.body)
   });
-  
+
   expect(response.ok).toBe(true);
 });
 ```
@@ -231,6 +249,7 @@ test('should integrate with model provider', async () => {
 ## Development Workflow
 
 ### 1. Before Making Changes
+
 ```bash
 # Ensure current tests pass
 npm run test:quick
@@ -240,6 +259,7 @@ npm run test:unit -- --testPathPattern="component-name"
 ```
 
 ### 2. During Development
+
 ```bash
 # Use watch mode for rapid feedback
 npm run test:watch
@@ -249,12 +269,14 @@ npm test -- tests/path/to/your.test.js --watch
 ```
 
 ### 3. Before Committing
+
 ```bash
 # Run comprehensive validation
 npm run test:all && npm run lint:fix && npm run format:fix
 ```
 
 ### 4. Before Pull Request
+
 ```bash
 # Full validation including E2E
 npm run test:all
@@ -264,6 +286,7 @@ npm run test:e2e
 ## Debugging Tests
 
 ### Failed Tests
+
 ```bash
 # Run with verbose output
 VERBOSE_TESTS=true npm test -- --testNamePattern="failing test"
@@ -273,6 +296,7 @@ npm test -- tests/path/to/failing.test.js
 ```
 
 ### E2E Test Debugging
+
 ```bash
 # Run with visible browser
 npm run test:e2e -- --headed --timeout=60000
@@ -285,6 +309,7 @@ npm run test:e2e
 ```
 
 ### Model Integration Debugging
+
 ```bash
 # Use mock responses for debugging
 TEST_REAL_API=false npm run test:models
@@ -321,6 +346,7 @@ npm run lint:fix
 ## Performance and Coverage
 
 ### Test Coverage
+
 ```bash
 # Generate coverage report
 npm run test:coverage
@@ -330,11 +356,13 @@ open tests/coverage/lcov-report/index.html
 ```
 
 ### Performance Monitoring
+
 - API response time: < 5 seconds
 - Model response time: < 30 seconds
 - E2E test duration: < 10 minutes total
 
 ### Quality Metrics
+
 - Test pass rate: > 99%
 - Code coverage: > 80%
 - E2E stability: > 95%
@@ -344,6 +372,7 @@ open tests/coverage/lcov-report/index.html
 ### Common Issues
 
 #### 1. "Module not found" errors
+
 ```bash
 # Ensure all dependencies are installed
 npm run install:all
@@ -353,6 +382,7 @@ cat tests/config/jest.config.js
 ```
 
 #### 2. Authentication test failures
+
 ```bash
 # Check JWT secret
 echo $JWT_SECRET
@@ -362,6 +392,7 @@ cat .env.test
 ```
 
 #### 3. E2E tests timing out
+
 ```bash
 # Increase timeout
 npm run test:e2e -- --timeout=60000
@@ -371,6 +402,7 @@ npm run test:e2e -- --headed
 ```
 
 #### 4. Model integration failures
+
 ```bash
 # Check API keys
 echo $OPENAI_API_KEY
@@ -415,6 +447,7 @@ TEST_REAL_API=false npm run test:models
 ### Regular Tasks
 
 #### Weekly
+
 ```bash
 # Check test health
 npm run test:all
@@ -425,6 +458,7 @@ npm update
 ```
 
 #### Monthly
+
 ```bash
 # Review flaky tests
 npm run test:all --verbose | grep -i "flaky\|timeout"
@@ -434,6 +468,7 @@ npx playwright install
 ```
 
 #### Quarterly
+
 ```bash
 # Review test coverage
 npm run test:coverage
@@ -445,6 +480,7 @@ npm run test:models -- --verbose
 ## Future Enhancements
 
 ### Planned Improvements
+
 - Visual regression testing with screenshot comparison
 - Automated accessibility testing
 - Load testing with multiple concurrent users
@@ -452,6 +488,7 @@ npm run test:models -- --verbose
 - AI-powered test generation and maintenance
 
 ### Experimental Features
+
 - Mutation testing for test quality validation
 - Property-based testing for edge case discovery
 - Contract testing for API versioning

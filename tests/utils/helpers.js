@@ -17,7 +17,7 @@ export class TestHelper {
         username: user.username,
         email: user.email,
         groups: user.groups,
-        role: user.role,
+        role: user.role
       },
       secret,
       { expiresIn }
@@ -36,8 +36,8 @@ export class TestHelper {
    */
   static createAuthHeaders(user = testUsers.regularUser) {
     return {
-      'Authorization': `Bearer ${this.generateTestToken(user)}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${this.generateTestToken(user)}`,
+      'Content-Type': 'application/json'
     };
   }
 
@@ -106,15 +106,15 @@ export class TestHelper {
   static validateApiResponse(response, expectedFields = []) {
     expect(response).toBeDefined();
     expect(response.status).toBeDefined();
-    
+
     if (response.status >= 200 && response.status < 300) {
       expect(response.body).toBeDefined();
-      
+
       expectedFields.forEach(field => {
         expect(response.body).toHaveProperty(field);
       });
     }
-    
+
     return response;
   }
 
@@ -135,15 +135,15 @@ export class TestHelper {
     expect(response).toHaveProperty('choices');
     expect(Array.isArray(response.choices)).toBe(true);
     expect(response.choices.length).toBeGreaterThan(0);
-    
+
     const choice = response.choices[0];
     expect(choice).toHaveProperty('message');
     expect(choice.message).toHaveProperty('role');
-    
+
     if (choice.message.content) {
       expect(typeof choice.message.content).toBe('string');
     }
-    
+
     if (choice.message.tool_calls) {
       expect(Array.isArray(choice.message.tool_calls)).toBe(true);
       choice.message.tool_calls.forEach(toolCall => {
@@ -152,7 +152,7 @@ export class TestHelper {
         expect(toolCall.function).toHaveProperty('arguments');
       });
     }
-    
+
     return response;
   }
 
@@ -172,7 +172,7 @@ export class TestHelper {
     return {
       ...testEnvironment,
       apiKeys: mockApiKeys,
-      isRealApiCall: testEnvironment.enableRealApiCalls,
+      isRealApiCall: testEnvironment.enableRealApiCalls
     };
   }
 
@@ -187,7 +187,7 @@ export class TestHelper {
       model: app.model,
       systemPrompt: app.systemPrompt,
       messages: [],
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
     };
   }
 
@@ -208,7 +208,7 @@ export class TestHelper {
       failed: results.filter(r => r.status === 'failed').length,
       skipped: results.filter(r => r.status === 'skipped').length,
       total: results.length,
-      duration: results.reduce((sum, r) => sum + (r.duration || 0), 0),
+      duration: results.reduce((sum, r) => sum + (r.duration || 0), 0)
     };
   }
 }
@@ -226,7 +226,7 @@ export class MockDataGenerator {
       messages.push({
         role: i % 2 === 0 ? 'user' : 'assistant',
         content: `Test message ${i + 1}`,
-        timestamp: new Date(Date.now() - (count - i) * 60000).toISOString(),
+        timestamp: new Date(Date.now() - (count - i) * 60000).toISOString()
       });
     }
     return messages;
@@ -246,16 +246,16 @@ export class MockDataGenerator {
           index: 0,
           message: {
             role: 'assistant',
-            content: includeToolCalls ? null : 'This is a mock response.',
+            content: includeToolCalls ? null : 'This is a mock response.'
           },
-          finish_reason: includeToolCalls ? 'tool_calls' : 'stop',
-        },
+          finish_reason: includeToolCalls ? 'tool_calls' : 'stop'
+        }
       ],
       usage: {
         prompt_tokens: Math.floor(Math.random() * 100) + 10,
         completion_tokens: Math.floor(Math.random() * 100) + 10,
-        total_tokens: 0,
-      },
+        total_tokens: 0
+      }
     };
 
     response.usage.total_tokens = response.usage.prompt_tokens + response.usage.completion_tokens;
@@ -267,9 +267,9 @@ export class MockDataGenerator {
           type: 'function',
           function: {
             name: 'web_search',
-            arguments: '{"query": "test query"}',
-          },
-        },
+            arguments: '{"query": "test query"}'
+          }
+        }
       ];
     }
 
@@ -284,8 +284,8 @@ export class MockDataGenerator {
       error: {
         message,
         type: 'test_error',
-        code: statusCode,
-      },
+        code: statusCode
+      }
     };
   }
 }

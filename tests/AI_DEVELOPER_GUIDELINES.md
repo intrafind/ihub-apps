@@ -2,7 +2,7 @@
 
 **Date**: 2025-01-24  
 **Status**: Implementation Guide  
-**Priority**: High  
+**Priority**: High
 
 ## Overview
 
@@ -22,6 +22,7 @@ Before making any code changes, AI developers must:
 ### 1. Test-Driven Development (TDD) Approach
 
 #### Step 1: Write Failing Tests First
+
 ```bash
 # Create test file for new feature
 touch tests/unit/server/new-feature.test.js
@@ -31,6 +32,7 @@ npm run test:watch tests/unit/server/new-feature.test.js
 ```
 
 #### Step 2: Implement Feature to Pass Tests
+
 ```bash
 # Implement the minimal code to make tests pass
 # Run tests continuously during development
@@ -38,6 +40,7 @@ npm run test:watch
 ```
 
 #### Step 3: Refactor and Optimize
+
 ```bash
 # Run full test suite to ensure no regressions
 npm run test:all
@@ -46,6 +49,7 @@ npm run test:all
 ### 2. Code Change Validation Process
 
 #### For API Changes
+
 ```bash
 # 1. Run API integration tests
 npm run test:api
@@ -58,6 +62,7 @@ npm run test:legacy
 ```
 
 #### For Frontend Changes
+
 ```bash
 # 1. Run frontend unit tests
 npm run test:ui
@@ -70,6 +75,7 @@ npm run test:e2e -- --project="Mobile Chrome"
 ```
 
 #### For Model Integration Changes
+
 ```bash
 # 1. Test adapter functionality
 npm run test:adapters
@@ -84,7 +90,9 @@ npm run test:tool-calling
 ## Required Tests for Different Change Types
 
 ### API Endpoint Changes
+
 **Must include:**
+
 - Unit tests for business logic
 - Integration tests for endpoint behavior
 - Authentication/authorization tests
@@ -92,6 +100,7 @@ npm run test:tool-calling
 - Input validation tests
 
 **Template:**
+
 ```javascript
 // tests/integration/api/your-endpoint.test.js
 describe('Your Endpoint API', () => {
@@ -102,27 +111,27 @@ describe('Your Endpoint API', () => {
       .set(headers)
       .send(validData)
       .expect(200);
-    
+
     TestValidators.validateApiResponse(response, ['expectedField']);
   });
 
   test('should reject unauthorized requests', async () => {
-    const response = await request(app)
-      .post('/api/your-endpoint')
-      .send(validData)
-      .expect(401);
+    const response = await request(app).post('/api/your-endpoint').send(validData).expect(401);
   });
 });
 ```
 
 ### Frontend Component Changes
+
 **Must include:**
+
 - Component unit tests
 - User interaction tests
 - State management tests
 - Error boundary tests
 
 **Template:**
+
 ```javascript
 // tests/unit/client/YourComponent.test.jsx
 import { render, screen } from '@testing-library/react';
@@ -138,7 +147,7 @@ describe('YourComponent', () => {
   test('should handle user interaction', async () => {
     const user = userEvent.setup();
     render(<YourComponent />);
-    
+
     await user.click(screen.getByTestId('action-button'));
     expect(screen.getByTestId('result')).toBeInTheDocument();
   });
@@ -146,7 +155,9 @@ describe('YourComponent', () => {
 ```
 
 ### Model Integration Changes
+
 **Must include:**
+
 - Adapter unit tests
 - Real API integration tests (when keys available)
 - Tool calling validation
@@ -154,6 +165,7 @@ describe('YourComponent', () => {
 - Response format validation
 
 **Template:**
+
 ```javascript
 // tests/integration/models/your-model.test.js
 describe('Your Model Integration', () => {
@@ -168,16 +180,19 @@ describe('Your Model Integration', () => {
 ## Automated Testing Commands
 
 ### Quick Validation (Use Before Every Commit)
+
 ```bash
 npm run test:quick && npm run lint:fix && npm run format:fix
 ```
 
 ### Complete Validation (Use Before Pull Requests)
+
 ```bash
 npm run test:all && npm run lint:fix && npm run format:fix
 ```
 
 ### Continuous Development Testing
+
 ```bash
 # Watch mode for active development
 npm run test:watch
@@ -191,6 +206,7 @@ npm run test:e2e -- --headed --project=chromium
 ### Common Test Failures and Solutions
 
 #### 1. Authentication Test Failures
+
 ```bash
 # Check JWT secret configuration
 echo $JWT_SECRET
@@ -200,6 +216,7 @@ cat tests/utils/fixtures.js
 ```
 
 #### 2. Model Integration Test Failures
+
 ```bash
 # Check API key availability
 echo $OPENAI_API_KEY
@@ -210,6 +227,7 @@ TEST_REAL_API=false npm run test:models
 ```
 
 #### 3. E2E Test Failures
+
 ```bash
 # Run with visible browser for debugging
 npm run test:e2e -- --headed --timeout=60000
@@ -219,6 +237,7 @@ grep -r "data-testid" client/src/
 ```
 
 ### Debugging Commands
+
 ```bash
 # Run specific test with verbose output
 VERBOSE_TESTS=true npm test -- --testNamePattern="your test name"
@@ -234,6 +253,7 @@ npm run test:e2e -- --trace=on
 ## Test Data Management
 
 ### Using Test Fixtures
+
 ```javascript
 import { testUsers, testApps, testModels } from '../utils/fixtures.js';
 
@@ -244,6 +264,7 @@ const model = testModels.openai;
 ```
 
 ### Creating Custom Test Data
+
 ```javascript
 import { TestHelper } from '../utils/helpers.js';
 
@@ -253,6 +274,7 @@ const authHeaders = TestHelper.createAuthHeaders(customUser);
 ```
 
 ### Cleanup After Tests
+
 ```javascript
 afterEach(async () => {
   await TestHelper.cleanupTestData();
@@ -262,23 +284,27 @@ afterEach(async () => {
 ## Performance Testing Guidelines
 
 ### Response Time Validation
+
 ```javascript
 test('should respond within acceptable time', async () => {
   const startTime = Date.now();
   const response = await makeApiCall();
   const responseTime = Date.now() - startTime;
-  
+
   expect(response.status).toBe(200);
   expect(responseTime).toBeLessThan(5000); // 5 second max
 });
 ```
 
 ### Load Testing
+
 ```javascript
 test('should handle concurrent requests', async () => {
-  const promises = Array(10).fill().map(() => makeApiCall());
+  const promises = Array(10)
+    .fill()
+    .map(() => makeApiCall());
   const responses = await Promise.all(promises);
-  
+
   responses.forEach(response => {
     expect(response.status).toBe(200);
   });
@@ -288,11 +314,10 @@ test('should handle concurrent requests', async () => {
 ## Security Testing Requirements
 
 ### Authentication Tests
+
 ```javascript
 test('should reject requests without valid token', async () => {
-  const response = await request(app)
-    .get('/api/protected-endpoint')
-    .expect(401);
+  const response = await request(app).get('/api/protected-endpoint').expect(401);
 });
 
 test('should reject expired tokens', async () => {
@@ -305,19 +330,18 @@ test('should reject expired tokens', async () => {
 ```
 
 ### Input Validation Tests
+
 ```javascript
 test('should validate input parameters', async () => {
   const invalidData = { maliciousInput: '<script>alert("xss")</script>' };
-  const response = await request(app)
-    .post('/api/endpoint')
-    .send(invalidData)
-    .expect(400);
+  const response = await request(app).post('/api/endpoint').send(invalidData).expect(400);
 });
 ```
 
 ## CI/CD Integration
 
 ### Pre-commit Hook Setup
+
 ```bash
 # Install husky hooks
 npx husky install
@@ -327,6 +351,7 @@ npx husky add .husky/pre-commit "npm run test:quick"
 ```
 
 ### GitHub Actions Workflow
+
 ```yaml
 # .github/workflows/test.yml
 name: Test Suite
@@ -344,26 +369,27 @@ jobs:
 ## Documentation Requirements
 
 ### Test Documentation
+
 - Document complex test scenarios
 - Explain test data setup
 - Document performance expectations
 - Include troubleshooting guides
 
 ### Code Comments in Tests
+
 ```javascript
 // Test covers authentication bypass vulnerability fix
 test('should prevent authentication bypass', async () => {
   // This test ensures that the vulnerability reported in issue #123 is fixed
   // by verifying that all API endpoints require valid authentication
-  const response = await request(app)
-    .get('/api/sensitive-data')
-    .expect(401);
+  const response = await request(app).get('/api/sensitive-data').expect(401);
 });
 ```
 
 ## Quality Gates
 
 ### Minimum Requirements Before Deployment
+
 - [ ] All new features have unit tests
 - [ ] API changes have integration tests
 - [ ] UI changes have E2E tests
@@ -373,6 +399,7 @@ test('should prevent authentication bypass', async () => {
 - [ ] Security tests pass
 
 ### Test Coverage Targets
+
 - **Unit Tests**: 90% statement coverage
 - **Integration Tests**: All API endpoints covered
 - **E2E Tests**: Critical user journeys covered
@@ -381,6 +408,7 @@ test('should prevent authentication bypass', async () => {
 ## Maintenance and Updates
 
 ### Regular Test Maintenance
+
 ```bash
 # Weekly test health check
 npm run test:all
@@ -394,6 +422,7 @@ npm run test:all --verbose | grep -i "flaky\|timeout\|intermittent"
 ```
 
 ### Test Refactoring Guidelines
+
 - Keep tests simple and focused
 - Use descriptive test names
 - Avoid test interdependencies
@@ -403,17 +432,20 @@ npm run test:all --verbose | grep -i "flaky\|timeout\|intermittent"
 ## Success Metrics
 
 ### Development Velocity
+
 - Time to implement and test features
 - Frequency of regressions
 - Time to identify and fix bugs
 
 ### Quality Metrics
+
 - Test pass rate > 99%
 - Code coverage > 80%
 - Mean time to resolution < 24 hours
 - Zero critical security vulnerabilities
 
 ### Reliability Metrics
+
 - Uptime > 99.9%
 - API response time < 500ms
 - E2E test stability > 95%
@@ -422,6 +454,7 @@ npm run test:all --verbose | grep -i "flaky\|timeout\|intermittent"
 ## Emergency Procedures
 
 ### Test Failure Response
+
 1. **Immediate**: Stop deployment pipeline
 2. **Investigate**: Run failed tests locally
 3. **Fix**: Address root cause
@@ -429,6 +462,7 @@ npm run test:all --verbose | grep -i "flaky\|timeout\|intermittent"
 5. **Deploy**: Only after all tests pass
 
 ### Rollback Procedures
+
 ```bash
 # Quick rollback testing
 git checkout previous-working-commit
