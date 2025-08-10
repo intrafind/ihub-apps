@@ -1,0 +1,75 @@
+{
+  "name": "llm-sdk",
+  "version": "1.0.0",
+  "description": "Unified SDK for LLM provider integrations with tool calling, streaming, and multimodal support",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "types/index.d.ts",
+  "files": [
+    "dist/",
+    "types/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "build:watch": "rollup -c --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/ --ext .js",
+    "lint:fix": "eslint src/ --ext .js --fix",
+    "format": "prettier --write 'src/**/*.js' 'tests/**/*.js'",
+    "docs": "jsdoc src/ -r -d docs/",
+    "clean": "rm -rf dist/ coverage/"
+  },
+  "keywords": [
+    "llm",
+    "ai",
+    "openai",
+    "anthropic",
+    "google",
+    "mistral",
+    "vllm",
+    "streaming",
+    "tool-calling",
+    "multimodal"
+  ],
+  "author": "iHub Apps Team",
+  "license": "MIT",
+  "dependencies": {
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "@rollup/plugin-babel": "^6.0.0",
+    "@rollup/plugin-commonjs": "^25.0.0",
+    "@rollup/plugin-node-resolve": "^15.2.0",
+    "@rollup/plugin-terser": "^0.4.0",
+    "eslint": "^8.50.0",
+    "jest": "^29.7.0",
+    "jsdoc": "^4.0.0",
+    "prettier": "^3.0.0",
+    "rollup": "^4.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/**/*.test.js",
+      "!src/**/index.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 95,
+        "functions": 95,
+        "lines": 95,
+        "statements": 95
+      }
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
