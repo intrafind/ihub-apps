@@ -11,7 +11,7 @@ export class Provider {
     this.name = this.constructor.name.toLowerCase().replace('provider', '');
     this.logger = config.logger || defaultLogger.child(`Provider:${this.name}`);
     this._initialized = false;
-    
+
     // Initialize the provider
     this.initialize();
   }
@@ -198,11 +198,7 @@ export class Provider {
    */
   validateConfig(config) {
     if (!config.apiKey) {
-      throw new ConfigurationError(
-        'API key is required',
-        'apiKey',
-        this.name
-      );
+      throw new ConfigurationError('API key is required', 'apiKey', this.name);
     }
 
     return {
@@ -243,7 +239,7 @@ export class Provider {
   validateModel(model) {
     const sanitized = Validator.validateModelName(model, this.name);
     const availableModels = this.getAvailableModels();
-    
+
     if (availableModels.length > 0 && !availableModels.includes(sanitized)) {
       throw new ValidationError(
         `Model '${sanitized}' is not available for provider '${this.name}'`,
@@ -252,7 +248,7 @@ export class Provider {
         this.name
       );
     }
-    
+
     return sanitized;
   }
 
@@ -390,7 +386,7 @@ export class Provider {
    */
   async handleHttpError(response, responseText) {
     const { status, statusText } = response;
-    
+
     switch (status) {
       case 400:
         throw new ValidationError(
@@ -407,29 +403,20 @@ export class Provider {
         );
       case 429:
         const retryAfter = response.headers.get('retry-after');
-        throw new LLMError(
-          'Rate limit exceeded',
-          'RATE_LIMIT_ERROR',
-          this.name,
-          { retryAfter: retryAfter ? parseInt(retryAfter) : null }
-        );
+        throw new LLMError('Rate limit exceeded', 'RATE_LIMIT_ERROR', this.name, {
+          retryAfter: retryAfter ? parseInt(retryAfter) : null
+        });
       case 500:
       case 502:
       case 503:
       case 504:
-        throw new LLMError(
-          `Provider server error: ${statusText}`,
-          'PROVIDER_ERROR',
-          this.name,
-          { statusCode: status }
-        );
+        throw new LLMError(`Provider server error: ${statusText}`, 'PROVIDER_ERROR', this.name, {
+          statusCode: status
+        });
       default:
-        throw new LLMError(
-          `HTTP ${status}: ${statusText}`,
-          'PROVIDER_ERROR',
-          this.name,
-          { statusCode: status }
-        );
+        throw new LLMError(`HTTP ${status}: ${statusText}`, 'PROVIDER_ERROR', this.name, {
+          statusCode: status
+        });
     }
   }
 
@@ -446,7 +433,7 @@ export class Provider {
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         const timer = this.logger.timer(`HTTP Request to ${url}`);
-        
+
         const response = await fetch(url, {
           timeout: this.config.timeout,
           ...options,
@@ -463,7 +450,7 @@ export class Provider {
         return response;
       } catch (error) {
         lastError = error;
-        
+
         if (attempt < retries && this.shouldRetry(error)) {
           const delay = this.calculateRetryDelay(attempt);
           this.logger.warn(`Request failed, retrying in ${delay}ms`, {
@@ -488,8 +475,7 @@ export class Provider {
    */
   shouldRetry(error) {
     // Retry on network errors and 5xx server errors
-    return error.code === 'NETWORK_ERROR' || 
-           (error.statusCode && error.statusCode >= 500);
+    return error.code === 'NETWORK_ERROR' || (error.statusCode && error.statusCode >= 500);
   }
 
   /**

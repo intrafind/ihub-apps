@@ -9,7 +9,14 @@ describe('OpenAIProvider', () => {
   beforeEach(() => {
     mockConfig = {
       apiKey: 'sk-test123456789012345678901234567890',
-      logger: { child: jest.fn(() => ({ info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() })) }
+      logger: {
+        child: jest.fn(() => ({
+          info: jest.fn(),
+          error: jest.fn(),
+          warn: jest.fn(),
+          debug: jest.fn()
+        }))
+      }
     };
   });
 
@@ -78,7 +85,7 @@ describe('OpenAIProvider', () => {
     it('should format simple text message', () => {
       const messages = [Message.user('Hello')];
       const formatted = provider.formatMessages(messages);
-      
+
       expect(formatted).toHaveLength(1);
       expect(formatted[0]).toEqual({
         role: 'user',
@@ -89,7 +96,7 @@ describe('OpenAIProvider', () => {
     it('should format message with images', () => {
       const messages = [Message.userWithImage('Look at this', 'https://example.com/image.jpg')];
       const formatted = provider.formatMessages(messages);
-      
+
       expect(formatted).toHaveLength(1);
       expect(formatted[0].role).toBe('user');
       expect(Array.isArray(formatted[0].content)).toBe(true);
@@ -102,7 +109,7 @@ describe('OpenAIProvider', () => {
       const toolCalls = [new ToolCall('call_1', 'test_tool', { param: 'value' })];
       const messages = [Message.assistantWithToolCalls('I will call a tool', toolCalls)];
       const formatted = provider.formatMessages(messages);
-      
+
       expect(formatted).toHaveLength(1);
       expect(formatted[0].role).toBe('assistant');
       expect(formatted[0].tool_calls).toHaveLength(1);
@@ -119,7 +126,7 @@ describe('OpenAIProvider', () => {
     it('should format tool response message', () => {
       const messages = [Message.toolResponse('call_1', 'Success', 'test_tool')];
       const formatted = provider.formatMessages(messages);
-      
+
       expect(formatted).toHaveLength(1);
       expect(formatted[0]).toEqual({
         role: 'tool',
@@ -136,20 +143,22 @@ describe('OpenAIProvider', () => {
     });
 
     it('should format tools correctly', () => {
-      const tools = [{
-        name: 'test_tool',
-        description: 'A test tool',
-        parameters: {
-          type: 'object',
-          properties: {
-            input: { type: 'string' }
-          },
-          required: ['input']
+      const tools = [
+        {
+          name: 'test_tool',
+          description: 'A test tool',
+          parameters: {
+            type: 'object',
+            properties: {
+              input: { type: 'string' }
+            },
+            required: ['input']
+          }
         }
-      }];
+      ];
 
       const formatted = provider.formatTools(tools);
-      
+
       expect(formatted).toHaveLength(1);
       expect(formatted[0]).toEqual({
         type: 'function',
@@ -177,18 +186,20 @@ describe('OpenAIProvider', () => {
       const openaiMessage = {
         role: 'assistant',
         content: null,
-        tool_calls: [{
-          id: 'call_1',
-          type: 'function',
-          function: {
-            name: 'test_tool',
-            arguments: '{"param":"value"}'
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'test_tool',
+              arguments: '{"param":"value"}'
+            }
           }
-        }]
+        ]
       };
 
       const toolCalls = provider.parseToolCalls(openaiMessage);
-      
+
       expect(toolCalls).toHaveLength(1);
       expect(toolCalls[0]).toBeInstanceOf(ToolCall);
       expect(toolCalls[0].id).toBe('call_1');
@@ -198,17 +209,19 @@ describe('OpenAIProvider', () => {
 
     it('should handle invalid JSON in tool arguments', () => {
       const openaiMessage = {
-        tool_calls: [{
-          id: 'call_1',
-          function: {
-            name: 'test_tool',
-            arguments: 'invalid json'
+        tool_calls: [
+          {
+            id: 'call_1',
+            function: {
+              name: 'test_tool',
+              arguments: 'invalid json'
+            }
           }
-        }]
+        ]
       };
 
       const toolCalls = provider.parseToolCalls(openaiMessage);
-      
+
       expect(toolCalls).toHaveLength(1);
       expect(toolCalls[0].arguments).toEqual({});
     });
@@ -237,7 +250,7 @@ describe('OpenAIProvider', () => {
       };
 
       const httpRequest = provider.buildHttpRequest(request);
-      
+
       expect(httpRequest.url).toBe('https://api.openai.com/v1/chat/completions');
       expect(httpRequest.method).toBe('POST');
       expect(httpRequest.headers).toHaveProperty('Authorization');
@@ -247,11 +260,13 @@ describe('OpenAIProvider', () => {
     });
 
     it('should include tools in request', () => {
-      const tools = [{
-        name: 'test_tool',
-        description: 'A test tool',
-        parameters: { type: 'object', properties: {} }
-      }];
+      const tools = [
+        {
+          name: 'test_tool',
+          description: 'A test tool',
+          parameters: { type: 'object', properties: {} }
+        }
+      ];
 
       const request = {
         model: 'gpt-4',
@@ -261,7 +276,7 @@ describe('OpenAIProvider', () => {
       };
 
       const httpRequest = provider.buildHttpRequest(request);
-      
+
       expect(httpRequest.body.tools).toHaveLength(1);
       expect(httpRequest.body.tool_choice).toBe('auto');
     });
@@ -282,7 +297,7 @@ describe('OpenAIProvider', () => {
       };
 
       const httpRequest = provider.buildHttpRequest(request);
-      
+
       expect(httpRequest.body.response_format).toBeDefined();
       expect(httpRequest.body.response_format.type).toBe('json_schema');
       expect(httpRequest.body.response_format.json_schema.strict).toBe(true);
@@ -308,7 +323,7 @@ describe('OpenAIProvider', () => {
       };
 
       const constrained = provider.enforceSchemaConstraints(schema);
-      
+
       expect(constrained.additionalProperties).toBe(false);
       expect(constrained.properties.nested.additionalProperties).toBe(false);
     });
@@ -325,7 +340,7 @@ describe('OpenAIProvider', () => {
       };
 
       const constrained = provider.enforceSchemaConstraints(schema);
-      
+
       expect(constrained.items.additionalProperties).toBe(false);
     });
   });

@@ -34,13 +34,11 @@ global.createMockResponse = (data, status = 200) => {
     statusText: status === 200 ? 'OK' : 'Error',
     json: () => Promise.resolve(data),
     text: () => Promise.resolve(JSON.stringify(data)),
-    headers: new Map([
-      ['content-type', 'application/json']
-    ])
+    headers: new Map([['content-type', 'application/json']])
   });
 };
 
-global.createMockStreamResponse = (chunks) => {
+global.createMockStreamResponse = chunks => {
   let index = 0;
   return {
     ok: true,
@@ -68,16 +66,17 @@ global.createMockStreamResponse = (chunks) => {
 // Clean up after each test
 afterEach(() => {
   jest.clearAllMocks();
-  
+
   // Reset environment variables
-  const envVarsToClean = Object.keys(process.env).filter(key => 
-    key.startsWith('LLM_SDK_') || 
-    key.startsWith('OPENAI_') ||
-    key.startsWith('ANTHROPIC_') ||
-    key.startsWith('GOOGLE_') ||
-    key.startsWith('MISTRAL_')
+  const envVarsToClean = Object.keys(process.env).filter(
+    key =>
+      key.startsWith('LLM_SDK_') ||
+      key.startsWith('OPENAI_') ||
+      key.startsWith('ANTHROPIC_') ||
+      key.startsWith('GOOGLE_') ||
+      key.startsWith('MISTRAL_')
   );
-  
+
   envVarsToClean.forEach(key => {
     delete process.env[key];
   });

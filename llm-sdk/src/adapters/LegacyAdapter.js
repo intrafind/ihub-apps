@@ -10,7 +10,7 @@ export class LegacyAdapter {
   constructor(config = {}) {
     this.config = config;
     this.logger = config.logger || defaultLogger.child('LegacyAdapter');
-    
+
     // Initialize SDK client
     this.client = new LLMClient({
       providers: config.providers,
@@ -29,10 +29,10 @@ export class LegacyAdapter {
    */
   async createCompletionRequest(model, messages, apiKey, options = {}) {
     await this.client.ready();
-    
+
     // Convert legacy model format to SDK format
     const provider = model.provider || this.client.defaultProvider;
-    
+
     // Convert messages to SDK Message objects
     const sdkMessages = messages.map(msg => {
       if (msg.role === 'tool') {
@@ -59,10 +59,14 @@ export class LegacyAdapter {
       stream: options.stream,
       tools: options.tools,
       toolChoice: options.toolChoice,
-      responseFormat: options.responseSchema ? {
-        type: 'json_schema',
-        schema: options.responseSchema
-      } : (options.responseFormat === 'json' ? { type: 'json_object' } : undefined)
+      responseFormat: options.responseSchema
+        ? {
+            type: 'json_schema',
+            schema: options.responseSchema
+          }
+        : options.responseFormat === 'json'
+          ? { type: 'json_object' }
+          : undefined
     };
 
     // For legacy compatibility, return the old format
@@ -87,7 +91,7 @@ export class LegacyAdapter {
     // This method is used by the existing streaming handler
     // For now, we'll delegate to the provider's parsing logic
     // In a full migration, this would be handled by the SDK's streaming system
-    
+
     try {
       if (!buffer || buffer === '[DONE]') {
         return {
@@ -102,7 +106,7 @@ export class LegacyAdapter {
 
       // Parse the chunk
       const parsed = JSON.parse(buffer);
-      
+
       // Convert to legacy format based on provider
       if (provider === 'openai') {
         return this.processOpenAIChunk(parsed);
@@ -111,7 +115,7 @@ export class LegacyAdapter {
       } else if (provider === 'google') {
         return this.processGoogleChunk(parsed);
       }
-      
+
       // Default processing
       return {
         content: [],
@@ -151,7 +155,7 @@ export class LegacyAdapter {
 
     if (parsed.choices && parsed.choices[0]) {
       const choice = parsed.choices[0];
-      
+
       // Handle delta content
       if (choice.delta) {
         if (choice.delta.content) {
@@ -161,7 +165,7 @@ export class LegacyAdapter {
           result.tool_calls.push(...choice.delta.tool_calls);
         }
       }
-      
+
       // Handle complete message
       if (choice.message) {
         if (choice.message.content) {
@@ -171,7 +175,7 @@ export class LegacyAdapter {
           result.tool_calls.push(...choice.message.tool_calls);
         }
       }
-      
+
       if (choice.finish_reason) {
         result.complete = true;
         result.finishReason = choice.finish_reason;
@@ -203,18 +207,19 @@ export class LegacyAdapter {
           result.content.push(parsed.delta.text);
         }
         break;
-        
+
       case 'message_delta':
         if (parsed.delta && parsed.delta.stop_reason) {
           result.complete = true;
-          result.finishReason = parsed.delta.stop_reason === 'end_turn' ? 'stop' : parsed.delta.stop_reason;
+          result.finishReason =
+            parsed.delta.stop_reason === 'end_turn' ? 'stop' : parsed.delta.stop_reason;
         }
         break;
-        
+
       case 'message_stop':
         result.complete = true;
         break;
-        
+
       case 'content_block_start':
         if (parsed.content_block && parsed.content_block.type === 'tool_use') {
           result.tool_calls.push({
@@ -250,7 +255,7 @@ export class LegacyAdapter {
 
     if (parsed.candidates && parsed.candidates[0]) {
       const candidate = parsed.candidates[0];
-      
+
       if (candidate.content && candidate.content.parts) {
         for (const part of candidate.content.parts) {
           if (part.text) {
@@ -267,7 +272,7 @@ export class LegacyAdapter {
           }
         }
       }
-      
+
       if (candidate.finishReason) {
         result.complete = true;
         result.finishReason = candidate.finishReason.toLowerCase();
@@ -285,11 +290,11 @@ export class LegacyAdapter {
    */
   async formatMessages(provider, messages) {
     await this.client.ready();
-    
+
     const providerInstance = this.client.getProvider(provider);
     const sdkMessages = messages.map(msg => {
       if (msg instanceof Message) return msg;
-      
+
       if (msg.role === 'tool') {
         return Message.toolResponse(msg.tool_call_id, msg.content, msg.name);
       } else if (msg.role === 'assistant' && msg.tool_calls) {
@@ -303,7 +308,7 @@ export class LegacyAdapter {
         return new Message(msg.role, msg.content || '');
       }
     });
-    
+
     return providerInstance.formatMessages(sdkMessages);
   }
 

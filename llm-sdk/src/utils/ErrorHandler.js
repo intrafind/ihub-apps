@@ -96,7 +96,7 @@ export class ErrorHandler {
    */
   handleHttpError(response, provider, responseText) {
     const { status, statusText } = response;
-    
+
     switch (status) {
       case 400:
         return new ValidationError(
@@ -112,17 +112,9 @@ export class ErrorHandler {
           provider
         );
       case 403:
-        return new ProviderError(
-          'Access forbidden - insufficient permissions',
-          status,
-          provider
-        );
+        return new ProviderError('Access forbidden - insufficient permissions', status, provider);
       case 404:
-        return new ProviderError(
-          'Resource not found - check model name',
-          status,
-          provider
-        );
+        return new ProviderError('Resource not found - check model name', status, provider);
       case 429:
         const retryAfter = response.headers.get('retry-after');
         return new RateLimitError(
@@ -134,17 +126,9 @@ export class ErrorHandler {
       case 502:
       case 503:
       case 504:
-        return new ProviderError(
-          `Provider server error: ${statusText}`,
-          status,
-          provider
-        );
+        return new ProviderError(`Provider server error: ${statusText}`, status, provider);
       default:
-        return new ProviderError(
-          `HTTP ${status}: ${statusText}`,
-          status,
-          provider
-        );
+        return new ProviderError(`HTTP ${status}: ${statusText}`, status, provider);
     }
   }
 
@@ -156,7 +140,7 @@ export class ErrorHandler {
    */
   handleNetworkError(error, provider) {
     let message = 'Network request failed';
-    
+
     if (error.code === 'ENOTFOUND') {
       message = 'DNS resolution failed - check network connection';
     } else if (error.code === 'ECONNREFUSED') {
@@ -183,16 +167,16 @@ export class ErrorHandler {
 
     const error = errorData.error;
     const message = error.message || error.code || 'Provider error';
-    
+
     // Handle common provider error patterns
     if (error.type === 'invalid_request_error') {
       return new ValidationError(message, 'request', null, provider);
     }
-    
+
     if (error.type === 'authentication_error') {
       return new ConfigurationError(message, 'apiKey', provider);
     }
-    
+
     if (error.code === 'rate_limit_exceeded') {
       return new RateLimitError(message, null, provider);
     }
@@ -207,11 +191,13 @@ export class ErrorHandler {
    */
   logError(error, context = {}) {
     const logData = {
-      error: error.toJSON ? error.toJSON() : {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      },
+      error: error.toJSON
+        ? error.toJSON()
+        : {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          },
       context,
       timestamp: new Date().toISOString()
     };

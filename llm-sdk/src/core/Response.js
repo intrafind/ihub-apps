@@ -7,7 +7,7 @@ export class Usage {
   constructor(promptTokens = 0, completionTokens = 0, totalTokens = null) {
     this.promptTokens = promptTokens;
     this.completionTokens = completionTokens;
-    this.totalTokens = totalTokens || (promptTokens + completionTokens);
+    this.totalTokens = totalTokens || promptTokens + completionTokens;
   }
 
   /**
@@ -80,8 +80,10 @@ export class ResponseChoice {
    * @returns {boolean} Whether stopped for tool calls
    */
   hasToolCalls() {
-    return this.finishReason === 'tool_calls' || 
-           (this.message && this.message.hasToolCalls && this.message.hasToolCalls());
+    return (
+      this.finishReason === 'tool_calls' ||
+      (this.message && this.message.hasToolCalls && this.message.hasToolCalls())
+    );
   }
 
   /**
@@ -205,7 +207,7 @@ export class Response {
   get content() {
     if (this.choices.length === 0) return '';
     const message = this.choices[0].message;
-    return message?.getTextContent ? message.getTextContent() : (message?.content || '');
+    return message?.getTextContent ? message.getTextContent() : message?.content || '';
   }
 
   /**
@@ -248,8 +250,8 @@ export class Response {
    * @returns {boolean} Whether response completed naturally
    */
   isComplete() {
-    return this.choices.every(choice => 
-      choice.finishReason === 'stop' || choice.finishReason === 'tool_calls'
+    return this.choices.every(
+      choice => choice.finishReason === 'stop' || choice.finishReason === 'tool_calls'
     );
   }
 
@@ -405,15 +407,16 @@ export class ResponseChunk {
       id: data.id,
       model: data.model,
       provider: data.provider,
-      choices: data.choices?.map(choice => ({
-        index: choice.index,
-        delta: new ResponseDelta(
-          choice.delta?.content,
-          choice.delta?.toolCalls,
-          choice.delta?.role
-        ),
-        finishReason: choice.finishReason || choice.finish_reason
-      })) || [],
+      choices:
+        data.choices?.map(choice => ({
+          index: choice.index,
+          delta: new ResponseDelta(
+            choice.delta?.content,
+            choice.delta?.toolCalls,
+            choice.delta?.role
+          ),
+          finishReason: choice.finishReason || choice.finish_reason
+        })) || [],
       usage: data.usage ? Usage.fromJSON(data.usage) : null,
       done: data.done || false,
       timestamp: data.timestamp || Date.now(),
@@ -440,22 +443,22 @@ export class ResponseAggregator {
    */
   addChunk(chunk) {
     this.chunks.push(chunk);
-    
+
     // Aggregate content
     if (chunk.hasContent()) {
       this.content += chunk.content;
     }
-    
+
     // Aggregate tool calls
     if (chunk.hasToolCalls()) {
       this.toolCalls.push(...chunk.toolCalls);
     }
-    
+
     // Update usage (use latest)
     if (chunk.usage) {
       this.usage = chunk.usage;
     }
-    
+
     // Update metadata
     this.metadata.chunkCount = this.chunks.length;
     this.metadata.lastChunkTime = chunk.timestamp;
@@ -480,11 +483,7 @@ export class ResponseAggregator {
       toolCalls: this.toolCalls.length > 0 ? this.toolCalls : undefined
     };
 
-    const choice = new ResponseChoice(
-      0,
-      message,
-      lastChunk.finishReason
-    );
+    const choice = new ResponseChoice(0, message, lastChunk.finishReason);
 
     return new Response({
       id: firstChunk.id,

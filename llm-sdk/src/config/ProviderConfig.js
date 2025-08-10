@@ -33,7 +33,7 @@ export class ProviderConfig {
       try {
         const processedConfig = this.processProviderConfig(providerName, config);
         const validatedConfig = this.validateProviderConfig(processedConfig, providerName);
-        
+
         this.configs.set(providerName, validatedConfig);
         this.logger.debug(`Loaded configuration for provider: ${providerName}`);
       } catch (error) {
@@ -61,45 +61,27 @@ export class ProviderConfig {
 
     // Process environment variables
     if (this.allowEnvOverrides) {
-      processed.apiKey = this.getConfigValue(
-        providerName,
-        'apiKey',
-        processed.apiKey
-      );
-      
-      processed.baseURL = this.getConfigValue(
-        providerName,
-        'baseURL',
-        processed.baseURL
-      );
-      
-      processed.timeout = this.getConfigValue(
-        providerName,
-        'timeout',
-        processed.timeout,
-        'number'
-      );
-      
-      processed.retries = this.getConfigValue(
-        providerName,
-        'retries',
-        processed.retries,
-        'number'
-      );
-      
+      processed.apiKey = this.getConfigValue(providerName, 'apiKey', processed.apiKey);
+
+      processed.baseURL = this.getConfigValue(providerName, 'baseURL', processed.baseURL);
+
+      processed.timeout = this.getConfigValue(providerName, 'timeout', processed.timeout, 'number');
+
+      processed.retries = this.getConfigValue(providerName, 'retries', processed.retries, 'number');
+
       processed.defaultModel = this.getConfigValue(
         providerName,
         'defaultModel',
         processed.defaultModel
       );
-      
+
       processed.maxTokens = this.getConfigValue(
         providerName,
         'maxTokens',
         processed.maxTokens,
         'number'
       );
-      
+
       processed.temperature = this.getConfigValue(
         providerName,
         'temperature',
@@ -242,7 +224,7 @@ export class ProviderConfig {
   setConfig(providerName, config) {
     const processedConfig = this.processProviderConfig(providerName, config);
     const validatedConfig = this.validateProviderConfig(processedConfig, providerName);
-    
+
     this.configs.set(providerName, validatedConfig);
     this.logger.info(`Updated configuration for provider: ${providerName}`);
   }
@@ -274,7 +256,7 @@ export class ProviderConfig {
    */
   validateAll() {
     const results = {};
-    
+
     for (const [providerName, config] of this.configs) {
       try {
         this.validateProviderConfig(config, providerName);
@@ -286,7 +268,7 @@ export class ProviderConfig {
         };
       }
     }
-    
+
     return results;
   }
 
@@ -296,7 +278,7 @@ export class ProviderConfig {
    */
   testApiKeys() {
     const results = {};
-    
+
     for (const [providerName, config] of this.configs) {
       const isValid = Validator.validateApiKeyFormat(config.apiKey, providerName);
       results[providerName] = {
@@ -305,7 +287,7 @@ export class ProviderConfig {
         keyPrefix: config.apiKey ? config.apiKey.substring(0, 8) + '...' : null
       };
     }
-    
+
     return results;
   }
 
@@ -315,11 +297,11 @@ export class ProviderConfig {
    */
   getEnvInfo() {
     const envVars = {};
-    
+
     for (const providerName of this.getProviders()) {
       const providerEnv = {};
       const keys = ['apiKey', 'baseURL', 'timeout', 'retries'];
-      
+
       for (const key of keys) {
         const envKey = `${this.envPrefix}_${providerName.toUpperCase()}_${key.toUpperCase()}`;
         providerEnv[key] = {
@@ -328,10 +310,10 @@ export class ProviderConfig {
           value: process.env[envKey] ? '[REDACTED]' : null
         };
       }
-      
+
       envVars[providerName] = providerEnv;
     }
-    
+
     return envVars;
   }
 
@@ -342,7 +324,7 @@ export class ProviderConfig {
    */
   static createTemplate(providers = ['openai', 'anthropic', 'google']) {
     const template = {};
-    
+
     for (const provider of providers) {
       template[provider] = {
         apiKey: `\${${provider.toUpperCase()}_API_KEY}`,
@@ -354,7 +336,7 @@ export class ProviderConfig {
         temperature: 0.7
       };
     }
-    
+
     return template;
   }
 
@@ -365,10 +347,10 @@ export class ProviderConfig {
   generateEnvDocs() {
     const docs = [];
     docs.push('# Environment Variables for LLM SDK Providers\n');
-    
+
     for (const providerName of this.getProviders()) {
       docs.push(`## ${providerName.toUpperCase()} Provider\n`);
-      
+
       const envKeys = [
         'API_KEY',
         'BASE_URL',
@@ -378,15 +360,15 @@ export class ProviderConfig {
         'MAX_TOKENS',
         'TEMPERATURE'
       ];
-      
+
       for (const key of envKeys) {
         const envKey = `${this.envPrefix}_${providerName.toUpperCase()}_${key}`;
         docs.push(`- \`${envKey}\`: ${this.getKeyDescription(key)}`);
       }
-      
+
       docs.push('');
     }
-    
+
     return docs.join('\n');
   }
 
@@ -405,7 +387,7 @@ export class ProviderConfig {
       MAX_TOKENS: 'Maximum tokens for responses',
       TEMPERATURE: 'Default temperature for requests'
     };
-    
+
     return descriptions[key] || 'Configuration value';
   }
 
@@ -419,14 +401,14 @@ export class ProviderConfig {
       envPrefix: this.envPrefix,
       allowEnvOverrides: this.allowEnvOverrides
     };
-    
+
     for (const [name, config] of this.configs) {
       result.providers[name] = {
         ...config,
         apiKey: config.apiKey ? '[REDACTED]' : null
       };
     }
-    
+
     return result;
   }
 

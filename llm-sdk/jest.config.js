@@ -1,15 +1,8 @@
 export default {
   testEnvironment: 'node',
   roots: ['<rootDir>/src/', '<rootDir>/tests/'],
-  testMatch: [
-    '<rootDir>/tests/**/*.test.js',
-    '<rootDir>/src/**/*.test.js'
-  ],
-  collectCoverageFrom: [
-    'src/**/*.js',
-    '!src/**/*.test.js',
-    '!src/**/index.js'
-  ],
+  testMatch: ['<rootDir>/tests/**/*.test.js', '<rootDir>/src/**/*.test.js'],
+  collectCoverageFrom: ['src/**/*.js', '!src/**/*.test.js', '!src/**/index.js'],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   coverageThreshold: {

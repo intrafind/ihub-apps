@@ -14,7 +14,7 @@ export class LLMClient {
     this.defaultProvider = config.defaultProvider || 'openai';
     this.logger = config.logger || defaultLogger.child('LLMClient');
     this._initialized = false;
-    
+
     // Initialize providers asynchronously
     this._initPromise = this._initialize(config.providers || {});
   }
@@ -46,10 +46,7 @@ export class LLMClient {
    */
   validateConfig(config) {
     if (!config.providers || Object.keys(config.providers).length === 0) {
-      throw new ConfigurationError(
-        'At least one provider must be configured',
-        'providers'
-      );
+      throw new ConfigurationError('At least one provider must be configured', 'providers');
     }
 
     return {
@@ -74,7 +71,7 @@ export class LLMClient {
           ...providerConfig,
           logger: this.logger.child(`Provider:${providerName}`)
         });
-        
+
         this.providers.set(providerName, provider);
         this.logger.info(`Initialized provider: ${providerName}`);
       } catch (error) {
@@ -158,18 +155,18 @@ export class LLMClient {
   async chat(request) {
     await this.ready(); // Ensure initialization
     const timer = this.logger.timer('chat');
-    
+
     try {
       // Validate request
       const validatedRequest = Validator.validateChatRequest(request);
-      
+
       // Determine provider
       const providerName = request.provider || this.defaultProvider;
       const provider = this.getProvider(providerName);
-      
+
       // Validate request for specific provider
       const providerRequest = provider.validateRequest(validatedRequest);
-      
+
       this.logger.debug('Sending chat request', {
         provider: providerName,
         model: providerRequest.model,
@@ -177,31 +174,31 @@ export class LLMClient {
         hasTools: !!(providerRequest.tools && providerRequest.tools.length > 0),
         stream: providerRequest.stream
       });
-      
+
       // Send request
       const response = await provider.chat(providerRequest);
-      
+
       this.logger.debug('Received chat response', {
         provider: providerName,
         responseId: response.id,
         choices: response.choices.length,
         usage: response.usage.toJSON()
       });
-      
-      timer({ 
+
+      timer({
         provider: providerName,
         success: true,
         tokens: response.usage.totalTokens
       });
-      
+
       return response;
     } catch (error) {
-      timer({ 
+      timer({
         provider: request.provider || this.defaultProvider,
         success: false,
         error: error.message
       });
-      
+
       this.logger.error('Chat request failed', { error: error.message });
       throw error;
     }
@@ -215,18 +212,18 @@ export class LLMClient {
   async stream(request) {
     await this.ready(); // Ensure initialization
     const timer = this.logger.timer('stream');
-    
+
     try {
       // Validate request
       const validatedRequest = Validator.validateChatRequest({
         ...request,
         stream: true
       });
-      
+
       // Determine provider
       const providerName = request.provider || this.defaultProvider;
       const provider = this.getProvider(providerName);
-      
+
       // Check streaming support
       if (!provider.supportsStreaming()) {
         throw new ValidationError(
@@ -236,33 +233,33 @@ export class LLMClient {
           providerName
         );
       }
-      
+
       // Validate request for specific provider
       const providerRequest = provider.validateRequest(validatedRequest);
-      
+
       this.logger.debug('Starting streaming chat request', {
         provider: providerName,
         model: providerRequest.model,
         messageCount: providerRequest.messages.length
       });
-      
+
       // Start streaming
       const stream = await provider.stream(providerRequest);
-      
-      timer({ 
+
+      timer({
         provider: providerName,
         success: true,
         streaming: true
       });
-      
+
       return this.wrapStream(stream, providerName);
     } catch (error) {
-      timer({ 
+      timer({
         provider: request.provider || this.defaultProvider,
         success: false,
         error: error.message
       });
-      
+
       this.logger.error('Streaming request failed', { error: error.message });
       throw error;
     }
@@ -274,26 +271,26 @@ export class LLMClient {
    * @param {string} providerName - Provider name
    * @returns {AsyncIterator<ResponseChunk>} Wrapped stream
    */
-  async* wrapStream(stream, providerName) {
+  async *wrapStream(stream, providerName) {
     let chunkCount = 0;
     let totalTokens = 0;
-    
+
     try {
       for await (const chunk of stream) {
         chunkCount++;
         if (chunk.usage) {
           totalTokens = chunk.usage.totalTokens || totalTokens;
         }
-        
+
         this.logger.debug(`Stream chunk ${chunkCount}`, {
           provider: providerName,
           hasContent: chunk.hasContent(),
           isFinal: chunk.isFinal()
         });
-        
+
         yield chunk;
       }
-      
+
       this.logger.debug('Stream completed', {
         provider: providerName,
         chunks: chunkCount,
@@ -316,10 +313,10 @@ export class LLMClient {
    */
   getAvailableModels(providerName = null) {
     const models = [];
-    const providersToCheck = providerName ? 
-      [this.getProvider(providerName)] : 
-      Array.from(this.providers.values());
-    
+    const providersToCheck = providerName
+      ? [this.getProvider(providerName)]
+      : Array.from(this.providers.values());
+
     for (const provider of providersToCheck) {
       const providerModels = provider.getAvailableModels();
       for (const model of providerModels) {
@@ -336,7 +333,7 @@ export class LLMClient {
         });
       }
     }
-    
+
     return models;
   }
 
@@ -351,7 +348,7 @@ export class LLMClient {
       const provider = this.getProvider(providerName);
       return provider.getModelInfo(modelName);
     }
-    
+
     // Search across all providers
     for (const provider of this.providers.values()) {
       const modelInfo = provider.getModelInfo(modelName);
@@ -362,7 +359,7 @@ export class LLMClient {
         };
       }
     }
-    
+
     return null;
   }
 
@@ -384,7 +381,7 @@ export class LLMClient {
       const provider = this.getProvider(providerName);
       return provider.getInfo();
     }
-    
+
     const info = {};
     for (const [name, provider] of this.providers) {
       info[name] = provider.getInfo();
@@ -414,9 +411,9 @@ export class LLMClient {
         ...config,
         logger: this.logger.child(`Provider:${providerName}`)
       });
-      
+
       this.providers.set(providerName, provider);
-      
+
       // Add proxy getter
       Object.defineProperty(this, providerName, {
         get() {
@@ -425,7 +422,7 @@ export class LLMClient {
         enumerable: true,
         configurable: true
       });
-      
+
       this.logger.info(`Added provider: ${providerName}`);
     } catch (error) {
       throw new ConfigurationError(
@@ -444,13 +441,9 @@ export class LLMClient {
    */
   removeProvider(providerName) {
     if (providerName === this.defaultProvider) {
-      throw new ConfigurationError(
-        'Cannot remove default provider',
-        'provider',
-        providerName
-      );
+      throw new ConfigurationError('Cannot remove default provider', 'provider', providerName);
     }
-    
+
     if (!this.providers.has(providerName)) {
       throw new ConfigurationError(
         `Provider '${providerName}' not found`,
@@ -458,7 +451,7 @@ export class LLMClient {
         providerName
       );
     }
-    
+
     this.providers.delete(providerName);
     delete this[providerName];
     this.logger.info(`Removed provider: ${providerName}`);
@@ -477,7 +470,7 @@ export class LLMClient {
         providerName
       );
     }
-    
+
     this.defaultProvider = providerName;
     this.logger.info(`Set default provider: ${providerName}`);
   }
@@ -488,12 +481,12 @@ export class LLMClient {
    * @returns {Promise<Object>} Test result
    */
   async testProvider(providerName = null) {
-    const provider = providerName ? 
-      this.getProvider(providerName) : 
-      this.getProvider(this.defaultProvider);
-    
+    const provider = providerName
+      ? this.getProvider(providerName)
+      : this.getProvider(this.defaultProvider);
+
     const testMessages = [Message.user('Hello, this is a test message.')];
-    
+
     try {
       const startTime = Date.now();
       const response = await provider.chat({
@@ -503,7 +496,7 @@ export class LLMClient {
         temperature: 0
       });
       const duration = Date.now() - startTime;
-      
+
       return {
         provider: provider.name,
         success: true,
@@ -562,14 +555,14 @@ export class LLMClient {
    */
   async close() {
     this.logger.info('Closing LLM client');
-    
+
     // Clean up providers if they have cleanup methods
     for (const provider of this.providers.values()) {
       if (typeof provider.close === 'function') {
         await provider.close();
       }
     }
-    
+
     this.providers.clear();
   }
 }

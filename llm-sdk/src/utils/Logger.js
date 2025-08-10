@@ -36,17 +36,17 @@ export class Logger {
    */
   formatMessage(level, args) {
     const parts = [];
-    
+
     if (this.timestamp) {
       parts.push(new Date().toISOString());
     }
-    
+
     if (this.prefix) {
       parts.push(this.prefix);
     }
-    
+
     parts.push(`[${level}]`);
-    
+
     return [...parts, ...args];
   }
 
@@ -63,9 +63,9 @@ export class Logger {
 
     const colors = {
       DEBUG: '\x1b[36m', // Cyan
-      INFO: '\x1b[32m',  // Green
-      WARN: '\x1b[33m',  // Yellow
-      ERROR: '\x1b[31m'  // Red
+      INFO: '\x1b[32m', // Green
+      WARN: '\x1b[33m', // Yellow
+      ERROR: '\x1b[31m' // Red
     };
 
     const reset = '\x1b[0m';
@@ -84,7 +84,7 @@ export class Logger {
    */
   debug(...args) {
     if (!this.shouldLog(LogLevel.DEBUG)) return;
-    
+
     const formatted = this.formatMessage('DEBUG', args);
     const colored = this.applyColors('DEBUG', formatted);
     this.output.debug(...colored);
@@ -96,7 +96,7 @@ export class Logger {
    */
   info(...args) {
     if (!this.shouldLog(LogLevel.INFO)) return;
-    
+
     const formatted = this.formatMessage('INFO', args);
     const colored = this.applyColors('INFO', formatted);
     this.output.info(...colored);
@@ -108,7 +108,7 @@ export class Logger {
    */
   warn(...args) {
     if (!this.shouldLog(LogLevel.WARN)) return;
-    
+
     const formatted = this.formatMessage('WARN', args);
     const colored = this.applyColors('WARN', formatted);
     this.output.warn(...colored);
@@ -120,7 +120,7 @@ export class Logger {
    */
   error(...args) {
     if (!this.shouldLog(LogLevel.ERROR)) return;
-    
+
     const formatted = this.formatMessage('ERROR', args);
     const colored = this.applyColors('ERROR', formatted);
     this.output.error(...colored);
@@ -167,7 +167,7 @@ export class Logger {
    */
   timing(operation, startTime, metadata = {}) {
     if (!this.shouldLog(LogLevel.DEBUG)) return;
-    
+
     const duration = performance.now() - startTime;
     this.debug(`Performance: ${operation} took ${duration.toFixed(2)}ms`, metadata);
   }
@@ -209,9 +209,9 @@ export class Logger {
 export function createLogger(options = {}) {
   // Default configuration based on environment
   const defaults = {
-    level: process.env.LOG_LEVEL ? 
-      LogLevel[process.env.LOG_LEVEL.toUpperCase()] ?? LogLevel.INFO : 
-      LogLevel.INFO,
+    level: process.env.LOG_LEVEL
+      ? (LogLevel[process.env.LOG_LEVEL.toUpperCase()] ?? LogLevel.INFO)
+      : LogLevel.INFO,
     colors: process.env.NO_COLOR ? false : true,
     timestamp: process.env.LOG_TIMESTAMP !== 'false'
   };

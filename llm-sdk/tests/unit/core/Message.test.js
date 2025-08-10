@@ -1,4 +1,10 @@
-import { Message, ContentPart, ToolCall, createConversation, estimateTokenCount } from '../../../src/core/Message.js';
+import {
+  Message,
+  ContentPart,
+  ToolCall,
+  createConversation,
+  estimateTokenCount
+} from '../../../src/core/Message.js';
 
 describe('ContentPart', () => {
   describe('text', () => {
@@ -18,7 +24,8 @@ describe('ContentPart', () => {
 
     it('should create image content part from base64', () => {
       const imageData = {
-        base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
+        base64:
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
         mimeType: 'image/png'
       };
       const part = ContentPart.image(imageData);
@@ -387,10 +394,7 @@ describe('utility functions', () => {
 
   describe('estimateTokenCount', () => {
     it('should estimate tokens for simple messages', () => {
-      const messages = [
-        Message.user('Hello world'),
-        Message.assistant('Hi there!')
-      ];
+      const messages = [Message.user('Hello world'), Message.assistant('Hi there!')];
       const count = estimateTokenCount(messages);
       expect(count).toBeGreaterThan(0);
       expect(count).toBeLessThan(50); // Should be reasonable estimate
@@ -400,20 +404,20 @@ describe('utility functions', () => {
       const toolCalls = [new ToolCall('1', 'test', {})];
       const messageWithTools = Message.assistantWithToolCalls('Hello', toolCalls);
       const messageWithoutTools = Message.assistant('Hello');
-      
+
       const countWithTools = estimateTokenCount([messageWithTools]);
       const countWithoutTools = estimateTokenCount([messageWithoutTools]);
-      
+
       expect(countWithTools).toBeGreaterThan(countWithoutTools);
     });
 
     it('should add extra tokens for images', () => {
       const messageWithImage = Message.userWithImage('Look', 'https://example.com/img.jpg');
       const messageWithoutImage = Message.user('Look');
-      
+
       const countWithImage = estimateTokenCount([messageWithImage]);
       const countWithoutImage = estimateTokenCount([messageWithoutImage]);
-      
+
       expect(countWithImage).toBeGreaterThan(countWithoutImage);
     });
   });

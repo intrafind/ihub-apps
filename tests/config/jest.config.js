@@ -12,15 +12,18 @@ export default {
     '<rootDir>/server/node_modules'
   ],
   transform: {
-    '^.+\\.(js|jsx)$': ['babel-jest', { 
-      presets: [
-        ['@babel/preset-env', { targets: { node: 'current' } }],
-        ['@babel/preset-react', { runtime: 'automatic' }]
-      ]
-    }]
+    '^.+\\.(js|jsx)$': [
+      'babel-jest',
+      {
+        presets: [
+          ['@babel/preset-env', { targets: { node: 'current' } }],
+          ['@babel/preset-react', { runtime: 'automatic' }]
+        ]
+      }
+    ]
   },
   testMatch: [
-    '**/tests/integration/**/*.test.js', 
+    '**/tests/integration/**/*.test.js',
     '**/tests/unit/server/**/*.test.js',
     '**/tests/unit/client/**/*.test.jsx'
   ],

@@ -1,6 +1,6 @@
 /**
  * Type definitions and interfaces for LLM SDK
- * 
+ *
  * This file provides JavaScript implementations of types that would
  * typically be defined in TypeScript definition files.
  */
@@ -103,17 +103,17 @@ export const WellKnownModels = {
   GPT_4_TURBO: 'gpt-4-turbo',
   GPT_4_VISION: 'gpt-4-vision-preview',
   GPT_3_5_TURBO: 'gpt-3.5-turbo',
-  
+
   // Anthropic
   CLAUDE_3_5_SONNET: 'claude-3-5-sonnet-20241022',
   CLAUDE_3_HAIKU: 'claude-3-haiku-20240307',
   CLAUDE_3_OPUS: 'claude-3-opus-20240229',
-  
+
   // Google
   GEMINI_PRO: 'gemini-pro',
   GEMINI_PRO_VISION: 'gemini-pro-vision',
   GEMINI_1_5_PRO: 'gemini-1.5-pro',
-  
+
   // Mistral
   MISTRAL_LARGE: 'mistral-large',
   MISTRAL_MEDIUM: 'mistral-medium',
@@ -157,11 +157,13 @@ export const TypeGuards = {
    * @returns {boolean} Whether object looks like a message
    */
   isMessage(obj) {
-    return obj &&
-           typeof obj === 'object' &&
-           typeof obj.role === 'string' &&
-           this.isValidRole(obj.role) &&
-           (typeof obj.content === 'string' || Array.isArray(obj.content));
+    return (
+      obj &&
+      typeof obj === 'object' &&
+      typeof obj.role === 'string' &&
+      this.isValidRole(obj.role) &&
+      (typeof obj.content === 'string' || Array.isArray(obj.content))
+    );
   },
 
   /**
@@ -170,11 +172,13 @@ export const TypeGuards = {
    * @returns {boolean} Whether object looks like a tool call
    */
   isToolCall(obj) {
-    return obj &&
-           typeof obj === 'object' &&
-           typeof obj.id === 'string' &&
-           typeof obj.name === 'string' &&
-           typeof obj.arguments === 'object';
+    return (
+      obj &&
+      typeof obj === 'object' &&
+      typeof obj.id === 'string' &&
+      typeof obj.name === 'string' &&
+      typeof obj.arguments === 'object'
+    );
   },
 
   /**
@@ -183,11 +187,13 @@ export const TypeGuards = {
    * @returns {boolean} Whether object looks like a response
    */
   isResponse(obj) {
-    return obj &&
-           typeof obj === 'object' &&
-           typeof obj.id === 'string' &&
-           Array.isArray(obj.choices) &&
-           typeof obj.usage === 'object';
+    return (
+      obj &&
+      typeof obj === 'object' &&
+      typeof obj.id === 'string' &&
+      Array.isArray(obj.choices) &&
+      typeof obj.usage === 'object'
+    );
   },
 
   /**
@@ -196,10 +202,9 @@ export const TypeGuards = {
    * @returns {boolean} Whether object looks like a response chunk
    */
   isResponseChunk(obj) {
-    return obj &&
-           typeof obj === 'object' &&
-           Array.isArray(obj.choices) &&
-           typeof obj.done === 'boolean';
+    return (
+      obj && typeof obj === 'object' && Array.isArray(obj.choices) && typeof obj.done === 'boolean'
+    );
   }
 };
 
@@ -212,14 +217,7 @@ export const ModelInfo = {
    * @param {Object} params - Model parameters
    * @returns {Object} Model info object
    */
-  create({
-    id,
-    name,
-    provider,
-    capabilities = {},
-    limits = {},
-    pricing = {}
-  }) {
+  create({ id, name, provider, capabilities = {}, limits = {}, pricing = {} }) {
     return {
       id,
       name,

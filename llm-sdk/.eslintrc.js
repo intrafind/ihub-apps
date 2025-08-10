@@ -20,9 +20,9 @@ module.exports = {
     'no-trailing-spaces': 'error',
     'eol-last': 'error',
     'comma-dangle': ['error', 'never'],
-    'semi': ['error', 'always'],
-    'quotes': ['error', 'single', { avoidEscape: true }],
-    'indent': ['error', 2],
+    semi: ['error', 'always'],
+    quotes: ['error', 'single', { avoidEscape: true }],
+    indent: ['error', 2],
     'max-len': ['error', { code: 100, ignoreUrls: true }]
   }
 };

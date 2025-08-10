@@ -1,6 +1,13 @@
 import { Provider } from '../core/Provider.js';
 import { Message, ToolCall } from '../core/Message.js';
-import { Response, ResponseChoice, ResponseChunk, ResponseChoiceDelta, ResponseDelta, Usage } from '../core/Response.js';
+import {
+  Response,
+  ResponseChoice,
+  ResponseChunk,
+  ResponseChoiceDelta,
+  ResponseDelta,
+  Usage
+} from '../core/Response.js';
 import { ConfigurationError, ProviderError, NetworkError } from '../utils/ErrorHandler.js';
 import { Validator } from '../utils/Validator.js';
 
@@ -156,7 +163,9 @@ export class OpenAIProvider extends Provider {
             return {
               type: 'image_url',
               image_url: {
-                url: part.data.url || `data:${part.data.mimeType || 'image/jpeg'};base64,${part.data.base64}`,
+                url:
+                  part.data.url ||
+                  `data:${part.data.mimeType || 'image/jpeg'};base64,${part.data.base64}`,
                 detail: 'high'
               }
             };
@@ -206,11 +215,13 @@ export class OpenAIProvider extends Provider {
       );
     });
 
-    const usage = response.usage ? new Usage(
-      response.usage.prompt_tokens,
-      response.usage.completion_tokens,
-      response.usage.total_tokens
-    ) : new Usage();
+    const usage = response.usage
+      ? new Usage(
+          response.usage.prompt_tokens,
+          response.usage.completion_tokens,
+          response.usage.total_tokens
+        )
+      : new Usage();
 
     return new Response({
       id: response.id,
@@ -232,7 +243,7 @@ export class OpenAIProvider extends Provider {
    * @param {Object} originalRequest - Original request
    * @returns {AsyncIterator<ResponseChunk>} Streaming chunks
    */
-  async* parseStreamResponse(response, originalRequest) {
+  async *parseStreamResponse(response, originalRequest) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -295,7 +306,7 @@ export class OpenAIProvider extends Provider {
    */
   parseToolCalls(message) {
     if (!message.tool_calls) return [];
-    
+
     return message.tool_calls.map(tc => {
       let args = {};
       try {
@@ -304,7 +315,7 @@ export class OpenAIProvider extends Provider {
         this.logger.warn('Failed to parse tool call arguments:', tc.function.arguments);
         args = {};
       }
-      
+
       return new ToolCall(tc.id, tc.function.name, args);
     });
   }
@@ -319,9 +330,11 @@ export class OpenAIProvider extends Provider {
       role: 'tool',
       tool_call_id: result.toolCallId,
       name: result.name,
-      content: result.isSuccess ? 
-        (typeof result.result === 'string' ? result.result : JSON.stringify(result.result)) :
-        `Error: ${result.error?.message || 'Tool execution failed'}`
+      content: result.isSuccess
+        ? typeof result.result === 'string'
+          ? result.result
+          : JSON.stringify(result.result)
+        : `Error: ${result.error?.message || 'Tool execution failed'}`
     }));
   }
 
@@ -335,10 +348,11 @@ export class OpenAIProvider extends Provider {
 
   getModelInfo(modelName) {
     if (!this.models.includes(modelName)) return null;
-    
+
     const isVisionModel = modelName.includes('vision') || modelName.includes('gpt-4');
-    const isTurbo = modelName.includes('turbo') || modelName.includes('1106') || modelName.includes('0125');
-    
+    const isTurbo =
+      modelName.includes('turbo') || modelName.includes('1106') || modelName.includes('0125');
+
     return {
       id: modelName,
       name: modelName,
@@ -364,7 +378,7 @@ export class OpenAIProvider extends Provider {
 
   validateConfig(config) {
     const validated = super.validateConfig(config);
-    
+
     if (!Validator.validateApiKeyFormat(validated.apiKey, 'openai')) {
       throw new ConfigurationError(
         'Invalid OpenAI API key format. Key should start with "sk-"',
@@ -372,7 +386,7 @@ export class OpenAIProvider extends Provider {
         this.name
       );
     }
-    
+
     return validated;
   }
 
@@ -448,24 +462,24 @@ export class OpenAIProvider extends Provider {
    */
   enforceSchemaConstraints(schema) {
     const cloned = JSON.parse(JSON.stringify(schema));
-    
-    const enforceConstraints = (node) => {
+
+    const enforceConstraints = node => {
       if (node && typeof node === 'object') {
         if (node.type === 'object') {
           node.additionalProperties = false;
         }
-        
+
         if (node.properties) {
           Object.values(node.properties).forEach(enforceConstraints);
         }
-        
+
         if (node.items) {
           const items = Array.isArray(node.items) ? node.items : [node.items];
           items.forEach(enforceConstraints);
         }
       }
     };
-    
+
     enforceConstraints(cloned);
     return cloned;
   }
@@ -477,15 +491,11 @@ export class OpenAIProvider extends Provider {
    */
   parseMessage(openaiMessage) {
     const toolCalls = this.parseToolCalls(openaiMessage);
-    
-    return new Message(
-      openaiMessage.role,
-      openaiMessage.content || '',
-      {
-        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-        name: openaiMessage.name
-      }
-    );
+
+    return new Message(openaiMessage.role, openaiMessage.content || '', {
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      name: openaiMessage.name
+    });
   }
 
   /**
@@ -499,7 +509,7 @@ export class OpenAIProvider extends Provider {
 
     const choice = chunk.choices[0];
     const delta = choice.delta || {};
-    
+
     const responseDelta = new ResponseDelta(
       delta.content || '',
       delta.tool_calls ? this.parseStreamToolCalls(delta.tool_calls) : null,
@@ -512,11 +522,13 @@ export class OpenAIProvider extends Provider {
       this.normalizeFinishReason(choice.finish_reason)
     );
 
-    const usage = chunk.usage ? new Usage(
-      chunk.usage.prompt_tokens,
-      chunk.usage.completion_tokens,
-      chunk.usage.total_tokens
-    ) : null;
+    const usage = chunk.usage
+      ? new Usage(
+          chunk.usage.prompt_tokens,
+          chunk.usage.completion_tokens,
+          chunk.usage.total_tokens
+        )
+      : null;
 
     return new ResponseChunk({
       id: chunk.id,
@@ -543,12 +555,8 @@ export class OpenAIProvider extends Provider {
           args = { _partial: tc.function.arguments };
         }
       }
-      
-      return new ToolCall(
-        tc.id || '',
-        tc.function?.name || '',
-        args
-      );
+
+      return new ToolCall(tc.id || '', tc.function?.name || '', args);
     });
   }
 
@@ -559,14 +567,14 @@ export class OpenAIProvider extends Provider {
    */
   normalizeFinishReason(reason) {
     if (!reason) return null;
-    
+
     const mapping = {
-      'stop': 'stop',
-      'length': 'length',
-      'tool_calls': 'tool_calls',
-      'content_filter': 'content_filter'
+      stop: 'stop',
+      length: 'length',
+      tool_calls: 'tool_calls',
+      content_filter: 'content_filter'
     };
-    
+
     return mapping[reason] || reason;
   }
 
@@ -589,7 +597,7 @@ export class OpenAIProvider extends Provider {
       'gpt-3.5-turbo-1106': { input: 1, output: 2 },
       'gpt-3.5-turbo-0125': { input: 0.5, output: 1.5 }
     };
-    
+
     return pricing[modelName] || null;
   }
 }

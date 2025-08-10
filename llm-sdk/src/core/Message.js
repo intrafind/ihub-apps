@@ -19,8 +19,8 @@ export class ContentPart {
       return new ContentPart('image', { url: imageData });
     } else if (imageData.base64) {
       // Base64 data
-      return new ContentPart('image', { 
-        base64: imageData.base64, 
+      return new ContentPart('image', {
+        base64: imageData.base64,
         mimeType: imageData.mimeType || 'image/jpeg'
       });
     } else if (imageData.url) {
@@ -78,7 +78,7 @@ export class Message {
     this.content = content;
     this.name = options.name;
     this.toolCallId = options.toolCallId;
-    this.toolCalls = options.toolCalls?.map(tc => 
+    this.toolCalls = options.toolCalls?.map(tc =>
       tc instanceof ToolCall ? tc : ToolCall.fromJSON(tc)
     );
     this.timestamp = options.timestamp || new Date().toISOString();
@@ -121,10 +121,7 @@ export class Message {
    * @returns {Message} User message with image
    */
   static userWithImage(text, imageData, options = {}) {
-    const content = [
-      ContentPart.text(text),
-      ContentPart.image(imageData)
-    ];
+    const content = [ContentPart.text(text), ContentPart.image(imageData)];
     return new Message('user', content, options);
   }
 
@@ -159,10 +156,10 @@ export class Message {
    */
   static toolResponse(toolCallId, result, toolName, options = {}) {
     const content = typeof result === 'string' ? result : JSON.stringify(result);
-    return new Message('tool', content, { 
-      ...options, 
-      toolCallId, 
-      name: toolName 
+    return new Message('tool', content, {
+      ...options,
+      toolCallId,
+      name: toolName
     });
   }
 
@@ -214,9 +211,7 @@ export class Message {
       return [];
     }
     if (Array.isArray(this.content)) {
-      return this.content
-        .filter(part => part.type === 'image')
-        .map(part => part.data);
+      return this.content.filter(part => part.type === 'image').map(part => part.data);
     }
     return [];
   }
@@ -227,17 +222,13 @@ export class Message {
    * @returns {Message} Cloned message
    */
   clone(changes = {}) {
-    return new Message(
-      changes.role || this.role,
-      changes.content || this.content,
-      {
-        name: changes.name || this.name,
-        toolCallId: changes.toolCallId || this.toolCallId,
-        toolCalls: changes.toolCalls || this.toolCalls,
-        timestamp: changes.timestamp || this.timestamp,
-        id: changes.id || this.id
-      }
-    );
+    return new Message(changes.role || this.role, changes.content || this.content, {
+      name: changes.name || this.name,
+      toolCallId: changes.toolCallId || this.toolCallId,
+      toolCalls: changes.toolCalls || this.toolCalls,
+      timestamp: changes.timestamp || this.timestamp,
+      id: changes.id || this.id
+    });
   }
 
   /**
@@ -248,9 +239,7 @@ export class Message {
     const json = {
       id: this.id,
       role: this.role,
-      content: Array.isArray(this.content) ? 
-        this.content.map(part => part.toJSON()) : 
-        this.content,
+      content: Array.isArray(this.content) ? this.content.map(part => part.toJSON()) : this.content,
       timestamp: this.timestamp
     };
 
@@ -268,7 +257,7 @@ export class Message {
    */
   static fromJSON(data) {
     let content = data.content;
-    
+
     // Convert content parts if it's an array
     if (Array.isArray(content)) {
       content = content.map(part => {
@@ -302,11 +291,7 @@ export class Message {
     // Role validation
     const validRoles = ['system', 'user', 'assistant', 'tool'];
     if (!validRoles.includes(this.role)) {
-      throw new ValidationError(
-        `Invalid message role: ${this.role}`,
-        'role',
-        this.role
-      );
+      throw new ValidationError(`Invalid message role: ${this.role}`, 'role', this.role);
     }
 
     // Content validation
@@ -349,9 +334,7 @@ export class Message {
  * @returns {Array<Message>} Array of Message instances
  */
 export function createConversation(messages) {
-  return messages.map(msg => 
-    msg instanceof Message ? msg : Message.fromJSON(msg)
-  );
+  return messages.map(msg => (msg instanceof Message ? msg : Message.fromJSON(msg)));
 }
 
 /**
@@ -361,25 +344,25 @@ export function createConversation(messages) {
  */
 export function estimateTokenCount(messages) {
   let totalTokens = 0;
-  
+
   for (const message of messages) {
     const content = message.getTextContent();
     // Rough token estimation: ~4 characters per token
     totalTokens += Math.ceil(content.length / 4);
-    
+
     // Add tokens for role and formatting
     totalTokens += 4;
-    
+
     // Add tokens for tool calls
     if (message.hasToolCalls()) {
       totalTokens += message.toolCalls.length * 10;
     }
-    
+
     // Add tokens for images (rough estimate)
     if (message.hasImages()) {
       totalTokens += message.getImageContent().length * 85; // ~85 tokens per image
     }
   }
-  
+
   return totalTokens;
 }

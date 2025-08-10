@@ -52,11 +52,15 @@ const messageSchema = z.object({
   content: z.union([z.string(), z.array(contentPartSchema)]),
   name: z.string().optional(),
   toolCallId: z.string().optional(),
-  toolCalls: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    arguments: z.record(z.any())
-  })).optional()
+  toolCalls: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        arguments: z.record(z.any())
+      })
+    )
+    .optional()
 });
 
 // Tool definition schema
@@ -70,7 +74,11 @@ const toolParameterSchema = z.object({
 });
 
 const toolDefinitionSchema = z.object({
-  name: z.string().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/),
+  name: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z0-9_-]+$/),
   description: z.string().min(1).max(1024),
   parameters: z.object({
     type: z.literal('object'),
@@ -89,18 +97,22 @@ const chatRequestSchema = z.object({
   maxTokens: z.number().min(1).max(100000).optional(),
   stream: z.boolean().optional(),
   tools: z.array(z.union([z.string(), toolDefinitionSchema])).optional(),
-  toolChoice: z.union([
-    z.literal('auto'),
-    z.literal('none'),
-    z.object({
-      type: z.literal('function'),
-      function: z.object({ name: z.string() })
+  toolChoice: z
+    .union([
+      z.literal('auto'),
+      z.literal('none'),
+      z.object({
+        type: z.literal('function'),
+        function: z.object({ name: z.string() })
+      })
+    ])
+    .optional(),
+  responseFormat: z
+    .object({
+      type: z.enum(['text', 'json_object', 'json_schema']),
+      schema: z.record(z.any()).optional()
     })
-  ]).optional(),
-  responseFormat: z.object({
-    type: z.enum(['text', 'json_object', 'json_schema']),
-    schema: z.record(z.any()).optional()
-  }).optional(),
+    .optional(),
   stop: z.union([z.string(), z.array(z.string())]).optional(),
   presencePenalty: z.number().min(-2).max(2).optional(),
   frequencyPenalty: z.number().min(-2).max(2).optional(),
@@ -114,10 +126,12 @@ const providerConfigSchema = z.object({
   baseURL: z.string().url().optional(),
   timeout: z.number().min(1000).max(300000).optional(),
   retries: z.number().min(0).max(10).optional(),
-  rateLimit: z.object({
-    requests: z.number().min(1),
-    period: z.number().min(1000)
-  }).optional(),
+  rateLimit: z
+    .object({
+      requests: z.number().min(1),
+      period: z.number().min(1000)
+    })
+    .optional(),
   defaultModel: z.string().optional(),
   maxTokens: z.number().min(1).max(100000).optional(),
   temperature: z.number().min(0).max(2).optional()
@@ -128,20 +142,26 @@ const modelConfigSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   provider: z.string().min(1),
-  capabilities: z.object({
-    tools: z.boolean().optional(),
-    images: z.boolean().optional(),
-    structuredOutput: z.boolean().optional(),
-    streaming: z.boolean().optional()
-  }).optional(),
-  limits: z.object({
-    maxTokens: z.number().min(1).optional(),
-    contextLength: z.number().min(1).optional()
-  }).optional(),
-  pricing: z.object({
-    input: z.number().min(0).optional(),
-    output: z.number().min(0).optional()
-  }).optional()
+  capabilities: z
+    .object({
+      tools: z.boolean().optional(),
+      images: z.boolean().optional(),
+      structuredOutput: z.boolean().optional(),
+      streaming: z.boolean().optional()
+    })
+    .optional(),
+  limits: z
+    .object({
+      maxTokens: z.number().min(1).optional(),
+      contextLength: z.number().min(1).optional()
+    })
+    .optional(),
+  pricing: z
+    .object({
+      input: z.number().min(0).optional(),
+      output: z.number().min(0).optional()
+    })
+    .optional()
 });
 
 /**
@@ -310,17 +330,12 @@ export class Validator {
    */
   static validateModelName(model, provider) {
     if (!model || typeof model !== 'string') {
-      throw new ValidationError(
-        'Model name must be a non-empty string',
-        'model',
-        model,
-        provider
-      );
+      throw new ValidationError('Model name must be a non-empty string', 'model', model, provider);
     }
 
     // Sanitize model name (remove potentially dangerous characters)
     const sanitized = model.trim().replace(/[^\w.-]/g, '');
-    
+
     if (sanitized.length === 0) {
       throw new ValidationError(
         'Model name contains no valid characters',

@@ -1,6 +1,13 @@
 import { Provider } from '../core/Provider.js';
 import { Message, ToolCall } from '../core/Message.js';
-import { Response, ResponseChoice, ResponseChunk, ResponseChoiceDelta, ResponseDelta, Usage } from '../core/Response.js';
+import {
+  Response,
+  ResponseChoice,
+  ResponseChunk,
+  ResponseChoiceDelta,
+  ResponseDelta,
+  Usage
+} from '../core/Response.js';
 import { ConfigurationError, ProviderError } from '../utils/ErrorHandler.js';
 import { Validator } from '../utils/Validator.js';
 
@@ -23,7 +30,7 @@ export class AnthropicProvider extends Provider {
     return [
       'claude-3-5-sonnet-20241022',
       'claude-3-5-sonnet-20240620',
-      'claude-3-5-haiku-20241022', 
+      'claude-3-5-haiku-20241022',
       'claude-3-opus-20240229',
       'claude-3-sonnet-20240229',
       'claude-3-haiku-20240307'
@@ -127,29 +134,32 @@ export class AnthropicProvider extends Provider {
     // Separate system message from conversation messages
     const systemMessages = messages.filter(msg => msg.role === 'system');
     const conversationMessages = messages.filter(msg => msg.role !== 'system');
-    
+
     const systemPrompt = systemMessages.map(msg => msg.content).join('\n\n');
 
     const formattedMessages = [];
-    
+
     for (const message of conversationMessages) {
       if (message.role === 'tool') {
         // Convert tool response to user message with tool result
         formattedMessages.push({
           role: 'user',
-          content: [{
-            type: 'tool_result',
-            tool_use_id: message.toolCallId,
-            content: typeof message.content === 'string' ? 
-              message.content : 
-              JSON.stringify(message.content),
-            is_error: message.isError || false
-          }]
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: message.toolCallId,
+              content:
+                typeof message.content === 'string'
+                  ? message.content
+                  : JSON.stringify(message.content),
+              is_error: message.isError || false
+            }
+          ]
         });
       } else if (message.role === 'assistant' && message.hasToolCalls()) {
         // Format assistant message with tool calls
         const content = [];
-        
+
         // Add text content if present
         if (message.content && message.content.trim()) {
           content.push({
@@ -157,7 +167,7 @@ export class AnthropicProvider extends Provider {
             text: message.content
           });
         }
-        
+
         // Add tool use blocks
         for (const toolCall of message.toolCalls) {
           content.push({
@@ -167,7 +177,7 @@ export class AnthropicProvider extends Provider {
             input: toolCall.arguments
           });
         }
-        
+
         formattedMessages.push({
           role: 'assistant',
           content
@@ -175,7 +185,7 @@ export class AnthropicProvider extends Provider {
       } else if (message.hasImages()) {
         // Handle image content
         const content = [];
-        
+
         if (Array.isArray(message.content)) {
           for (const part of message.content) {
             if (part.type === 'text') {
@@ -203,11 +213,11 @@ export class AnthropicProvider extends Provider {
               text: message.content
             });
           }
-          
+
           // This case should not happen with proper Message construction,
           // but handle it for robustness
         }
-        
+
         formattedMessages.push({
           role: message.role,
           content
@@ -241,10 +251,7 @@ export class AnthropicProvider extends Provider {
       this.normalizeFinishReason(response.stop_reason)
     );
 
-    const usage = new Usage(
-      response.usage?.input_tokens || 0,
-      response.usage?.output_tokens || 0
-    );
+    const usage = new Usage(response.usage?.input_tokens || 0, response.usage?.output_tokens || 0);
 
     return new Response({
       id: response.id,
@@ -266,7 +273,7 @@ export class AnthropicProvider extends Provider {
    * @param {Object} originalRequest - Original request
    * @returns {AsyncIterator<ResponseChunk>} Streaming chunks
    */
-  async* parseStreamResponse(response, originalRequest) {
+  async *parseStreamResponse(response, originalRequest) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -288,24 +295,22 @@ export class AnthropicProvider extends Provider {
         for (const line of lines) {
           const trimmedLine = line.trim();
           if (trimmedLine === '' || !trimmedLine.startsWith('data: ')) continue;
-          
+
           const jsonData = trimmedLine.slice(6);
           if (jsonData === '[DONE]') continue;
-          
+
           try {
             const parsed = JSON.parse(jsonData);
-            const chunk = this.parseStreamChunk(
-              parsed, 
-              originalRequest, 
-              toolCallsState,
-              { messageId, currentContent }
-            );
-            
+            const chunk = this.parseStreamChunk(parsed, originalRequest, toolCallsState, {
+              messageId,
+              currentContent
+            });
+
             if (chunk) {
               // Update state
               if (parsed.message?.id) messageId = parsed.message.id;
               if (chunk.content) currentContent += chunk.content;
-              
+
               yield chunk;
             }
           } catch (error) {
@@ -342,7 +347,7 @@ export class AnthropicProvider extends Provider {
    */
   parseToolCalls(content) {
     if (!Array.isArray(content)) return [];
-    
+
     return content
       .filter(item => item.type === 'tool_use')
       .map(item => new ToolCall(item.id, item.name, item.input || {}));
@@ -356,14 +361,18 @@ export class AnthropicProvider extends Provider {
   formatToolResponses(results) {
     return results.map(result => ({
       role: 'user',
-      content: [{
-        type: 'tool_result',
-        tool_use_id: result.toolCallId,
-        content: result.isSuccess ? 
-          (typeof result.result === 'string' ? result.result : JSON.stringify(result.result)) :
-          `Error: ${result.error?.message || 'Tool execution failed'}`,
-        is_error: !result.isSuccess
-      }]
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: result.toolCallId,
+          content: result.isSuccess
+            ? typeof result.result === 'string'
+              ? result.result
+              : JSON.stringify(result.result)
+            : `Error: ${result.error?.message || 'Tool execution failed'}`,
+          is_error: !result.isSuccess
+        }
+      ]
     }));
   }
 
@@ -377,11 +386,11 @@ export class AnthropicProvider extends Provider {
 
   getModelInfo(modelName) {
     if (!this.models.includes(modelName)) return null;
-    
+
     const isHaiku = modelName.includes('haiku');
     const isSonnet = modelName.includes('sonnet');
     const isOpus = modelName.includes('opus');
-    
+
     return {
       id: modelName,
       name: modelName,
@@ -407,7 +416,7 @@ export class AnthropicProvider extends Provider {
 
   validateConfig(config) {
     const validated = super.validateConfig(config);
-    
+
     if (!Validator.validateApiKeyFormat(validated.apiKey, 'anthropic')) {
       throw new ConfigurationError(
         'Invalid Anthropic API key format. Key should start with "sk-ant-"',
@@ -415,7 +424,7 @@ export class AnthropicProvider extends Provider {
         this.name
       );
     }
-    
+
     return validated;
   }
 
@@ -430,7 +439,7 @@ export class AnthropicProvider extends Provider {
    */
   buildHttpRequest(request) {
     const { messages, systemPrompt } = this.formatMessages(request.messages);
-    
+
     const body = {
       model: request.model,
       messages,
@@ -446,7 +455,7 @@ export class AnthropicProvider extends Provider {
 
     // Handle tools
     let finalTools = request.tools ? [...request.tools] : [];
-    
+
     // Add structured output as a tool if requested
     if (request.responseFormat && request.responseFormat.type === 'json_schema') {
       finalTools.push({
@@ -459,7 +468,7 @@ export class AnthropicProvider extends Provider {
 
     if (finalTools.length > 0) {
       body.tools = this.formatTools(finalTools);
-      
+
       if (request.toolChoice && !body.tool_choice) {
         if (typeof request.toolChoice === 'string') {
           if (request.toolChoice === 'auto') {
@@ -468,9 +477,9 @@ export class AnthropicProvider extends Provider {
             // Don't set tool_choice, Anthropic will not use tools
           }
         } else if (request.toolChoice.type === 'function') {
-          body.tool_choice = { 
-            type: 'tool', 
-            name: request.toolChoice.function.name 
+          body.tool_choice = {
+            type: 'tool',
+            name: request.toolChoice.function.name
           };
         }
       }
@@ -527,13 +536,9 @@ export class AnthropicProvider extends Provider {
       }
     }
 
-    return new Message(
-      'assistant',
-      textContent,
-      {
-        toolCalls: toolCalls.length > 0 ? toolCalls : undefined
-      }
-    );
+    return new Message('assistant', textContent, {
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined
+    });
   }
 
   /**
@@ -553,7 +558,7 @@ export class AnthropicProvider extends Provider {
       case 'message_start':
         messageState.messageId = chunk.message.id;
         break;
-        
+
       case 'content_block_delta':
         if (chunk.delta?.text) {
           content = chunk.delta.text;
@@ -566,7 +571,7 @@ export class AnthropicProvider extends Provider {
           toolCallsState.get(index).arguments += chunk.delta.partial_json || '';
         }
         break;
-        
+
       case 'content_block_start':
         if (chunk.content_block?.type === 'tool_use') {
           const toolBlock = chunk.content_block;
@@ -577,13 +582,13 @@ export class AnthropicProvider extends Provider {
           });
         }
         break;
-        
+
       case 'message_delta':
         if (chunk.delta?.stop_reason) {
           finishReason = this.normalizeFinishReason(chunk.delta.stop_reason);
         }
         break;
-        
+
       case 'message_stop':
         finishReason = finishReason || 'stop';
         // Convert accumulated tool calls
@@ -597,7 +602,7 @@ export class AnthropicProvider extends Provider {
           toolCalls.push(new ToolCall(toolData.id, toolData.name, args));
         }
         break;
-        
+
       default:
         // Ignore other event types
         return null;
@@ -626,14 +631,14 @@ export class AnthropicProvider extends Provider {
    */
   normalizeFinishReason(reason) {
     if (!reason) return null;
-    
+
     const mapping = {
-      'end_turn': 'stop',
-      'max_tokens': 'length',
-      'tool_use': 'tool_calls',
-      'stop_sequence': 'stop'
+      end_turn: 'stop',
+      max_tokens: 'length',
+      tool_use: 'tool_calls',
+      stop_sequence: 'stop'
     };
-    
+
     return mapping[reason] || reason;
   }
 
@@ -662,7 +667,7 @@ export class AnthropicProvider extends Provider {
       'claude-3-sonnet-20240229': { input: 3, output: 15 },
       'claude-3-haiku-20240307': { input: 0.25, output: 1.25 }
     };
-    
+
     return pricing[modelName] || null;
   }
 }

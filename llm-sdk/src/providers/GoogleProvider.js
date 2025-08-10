@@ -1,6 +1,13 @@
 import { Provider } from '../core/Provider.js';
 import { Message, ToolCall } from '../core/Message.js';
-import { Response, ResponseChoice, ResponseChunk, ResponseChoiceDelta, ResponseDelta, Usage } from '../core/Response.js';
+import {
+  Response,
+  ResponseChoice,
+  ResponseChunk,
+  ResponseChoiceDelta,
+  ResponseDelta,
+  Usage
+} from '../core/Response.js';
 import { ConfigurationError, ProviderError } from '../utils/ErrorHandler.js';
 
 /**
@@ -122,13 +129,13 @@ export class GoogleProvider extends Provider {
     // Separate system messages
     const systemMessages = messages.filter(msg => msg.role === 'system');
     const conversationMessages = messages.filter(msg => msg.role !== 'system');
-    
+
     const systemInstruction = systemMessages
       .map(msg => ({ text: msg.content }))
       .reduce((acc, curr) => acc.concat(curr), []);
 
     const contents = [];
-    
+
     for (const message of conversationMessages) {
       const role = this.mapRole(message.role);
       const parts = [];
@@ -140,9 +147,10 @@ export class GoogleProvider extends Provider {
             name: message.name,
             response: {
               name: message.name,
-              content: typeof message.content === 'string' ? 
-                message.content : 
-                JSON.stringify(message.content)
+              content:
+                typeof message.content === 'string'
+                  ? message.content
+                  : JSON.stringify(message.content)
             }
           }
         });
@@ -155,10 +163,10 @@ export class GoogleProvider extends Provider {
             } else if (part.type === 'image') {
               const imageData = part.data;
               if (imageData.url) {
-                parts.push({ 
-                  fileData: { 
+                parts.push({
+                  fileData: {
                     mimeType: 'image/jpeg',
-                    fileUri: imageData.url 
+                    fileUri: imageData.url
                   }
                 });
               } else if (imageData.base64) {
@@ -213,7 +221,7 @@ export class GoogleProvider extends Provider {
     const choices = response.candidates.map((candidate, index) => {
       const message = this.parseGoogleMessage(candidate);
       const finishReason = this.normalizeFinishReason(candidate.finishReason);
-      
+
       return new ResponseChoice(index, message, finishReason);
     });
 
@@ -238,7 +246,7 @@ export class GoogleProvider extends Provider {
    * @param {Object} originalRequest - Original request
    * @returns {AsyncIterator<ResponseChunk>} Streaming chunks
    */
-  async* parseStreamResponse(response, originalRequest) {
+  async *parseStreamResponse(response, originalRequest) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -255,10 +263,10 @@ export class GoogleProvider extends Provider {
         for (const line of lines) {
           const trimmedLine = line.trim();
           if (trimmedLine === '' || !trimmedLine.startsWith('data: ')) continue;
-          
+
           const jsonData = trimmedLine.slice(6);
           if (jsonData === '[DONE]') continue;
-          
+
           try {
             const parsed = JSON.parse(jsonData);
             const chunk = this.parseStreamChunk(parsed, originalRequest);
@@ -285,13 +293,15 @@ export class GoogleProvider extends Provider {
    * @returns {Array<Object>} Formatted tools
    */
   formatTools(tools) {
-    return [{
-      functionDeclarations: tools.map(tool => ({
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters
-      }))
-    }];
+    return [
+      {
+        functionDeclarations: tools.map(tool => ({
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters
+        }))
+      }
+    ];
   }
 
   /**
@@ -301,14 +311,17 @@ export class GoogleProvider extends Provider {
    */
   parseToolCalls(parts) {
     if (!Array.isArray(parts)) return [];
-    
+
     return parts
       .filter(part => part.functionCall)
-      .map((part, index) => new ToolCall(
-        `call_${Date.now()}_${index}`, // Google doesn't provide IDs
-        part.functionCall.name,
-        part.functionCall.args || {}
-      ));
+      .map(
+        (part, index) =>
+          new ToolCall(
+            `call_${Date.now()}_${index}`, // Google doesn't provide IDs
+            part.functionCall.name,
+            part.functionCall.args || {}
+          )
+      );
   }
 
   /**
@@ -319,17 +332,21 @@ export class GoogleProvider extends Provider {
   formatToolResponses(results) {
     return results.map(result => ({
       role: 'function',
-      parts: [{
-        functionResponse: {
-          name: result.name,
-          response: {
+      parts: [
+        {
+          functionResponse: {
             name: result.name,
-            content: result.isSuccess ? 
-              (typeof result.result === 'string' ? result.result : JSON.stringify(result.result)) :
-              `Error: ${result.error?.message || 'Tool execution failed'}`
+            response: {
+              name: result.name,
+              content: result.isSuccess
+                ? typeof result.result === 'string'
+                  ? result.result
+                  : JSON.stringify(result.result)
+                : `Error: ${result.error?.message || 'Tool execution failed'}`
+            }
           }
         }
-      }]
+      ]
     }));
   }
 
@@ -343,10 +360,10 @@ export class GoogleProvider extends Provider {
 
   getModelInfo(modelName) {
     if (!this.models.includes(modelName)) return null;
-    
+
     const isVision = modelName.includes('vision');
     const isPro = modelName.includes('pro');
-    
+
     return {
       id: modelName,
       name: modelName,
@@ -378,7 +395,7 @@ export class GoogleProvider extends Provider {
    */
   buildHttpRequest(request, streaming = false) {
     const { contents, systemInstruction } = this.formatMessages(request.messages);
-    
+
     const body = {
       contents,
       generationConfig: {
@@ -399,7 +416,10 @@ export class GoogleProvider extends Provider {
 
     // Add generation config options
     if (request.topP) body.generationConfig.topP = request.topP;
-    if (request.stop) body.generationConfig.stopSequences = Array.isArray(request.stop) ? request.stop : [request.stop];
+    if (request.stop)
+      body.generationConfig.stopSequences = Array.isArray(request.stop)
+        ? request.stop
+        : [request.stop];
 
     // Safety settings (optional - can be configured)
     body.safetySettings = [
@@ -408,7 +428,7 @@ export class GoogleProvider extends Provider {
         threshold: 'BLOCK_MEDIUM_AND_ABOVE'
       },
       {
-        category: 'HARM_CATEGORY_HATE_SPEECH', 
+        category: 'HARM_CATEGORY_HATE_SPEECH',
         threshold: 'BLOCK_MEDIUM_AND_ABOVE'
       },
       {
@@ -442,9 +462,9 @@ export class GoogleProvider extends Provider {
    */
   mapRole(role) {
     const mapping = {
-      'user': 'user',
-      'assistant': 'model',
-      'tool': 'function'
+      user: 'user',
+      assistant: 'model',
+      tool: 'function'
     };
     return mapping[role] || 'user';
   }
@@ -466,21 +486,19 @@ export class GoogleProvider extends Provider {
       if (part.text) {
         textContent += part.text;
       } else if (part.functionCall) {
-        toolCalls.push(new ToolCall(
-          `call_${Date.now()}_${toolCalls.length}`,
-          part.functionCall.name,
-          part.functionCall.args || {}
-        ));
+        toolCalls.push(
+          new ToolCall(
+            `call_${Date.now()}_${toolCalls.length}`,
+            part.functionCall.name,
+            part.functionCall.args || {}
+          )
+        );
       }
     }
 
-    return new Message(
-      'assistant',
-      textContent,
-      {
-        toolCalls: toolCalls.length > 0 ? toolCalls : undefined
-      }
-    );
+    return new Message('assistant', textContent, {
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined
+    });
   }
 
   /**
@@ -502,18 +520,17 @@ export class GoogleProvider extends Provider {
       if (part.text) {
         content += part.text;
       } else if (part.functionCall) {
-        toolCalls.push(new ToolCall(
-          `call_${Date.now()}_${toolCalls.length}`,
-          part.functionCall.name,
-          part.functionCall.args || {}
-        ));
+        toolCalls.push(
+          new ToolCall(
+            `call_${Date.now()}_${toolCalls.length}`,
+            part.functionCall.name,
+            part.functionCall.args || {}
+          )
+        );
       }
     }
 
-    const responseDelta = new ResponseDelta(
-      content,
-      toolCalls.length > 0 ? toolCalls : null
-    );
+    const responseDelta = new ResponseDelta(content, toolCalls.length > 0 ? toolCalls : null);
 
     const choiceDelta = new ResponseChoiceDelta(
       0,
@@ -540,7 +557,7 @@ export class GoogleProvider extends Provider {
    */
   parseUsage(usageMetadata) {
     if (!usageMetadata) return new Usage();
-    
+
     return new Usage(
       usageMetadata.promptTokenCount || 0,
       usageMetadata.candidatesTokenCount || 0,
@@ -555,15 +572,15 @@ export class GoogleProvider extends Provider {
    */
   normalizeFinishReason(reason) {
     if (!reason) return null;
-    
+
     const mapping = {
-      'STOP': 'stop',
-      'MAX_TOKENS': 'length',
-      'SAFETY': 'content_filter',
-      'RECITATION': 'content_filter',
-      'OTHER': 'stop'
+      STOP: 'stop',
+      MAX_TOKENS: 'length',
+      SAFETY: 'content_filter',
+      RECITATION: 'content_filter',
+      OTHER: 'stop'
     };
-    
+
     return mapping[reason] || reason.toLowerCase();
   }
 
@@ -599,7 +616,7 @@ export class GoogleProvider extends Provider {
       'gemini-pro': { input: 0.5, output: 1.5 },
       'gemini-pro-vision': { input: 0.25, output: 0.5 }
     };
-    
+
     return pricing[modelName] || null;
   }
 }

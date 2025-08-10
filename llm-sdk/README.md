@@ -16,15 +16,15 @@ A unified, extensible SDK for integrating multiple Large Language Model (LLM) pr
 
 ## Supported Providers
 
-| Provider | Models | Tools | Streaming | Images | Structured Output |
-|----------|--------|-------|-----------|--------|-------------------|
-| OpenAI | GPT-4, GPT-3.5-turbo | ✅ | ✅ | ✅ | ✅ |
-| Anthropic | Claude 3.x series | ✅ | ✅ | ✅ | ✅* |
-| Google | Gemini Pro/Flash | ✅ | ✅ | ✅ | ❌ |
-| Mistral | Mistral models | ✅ | ✅ | ❌ | ❌ |
-| VLLM | Custom endpoints | ✅ | ✅ | ❌ | ❌ |
+| Provider  | Models               | Tools | Streaming | Images | Structured Output |
+| --------- | -------------------- | ----- | --------- | ------ | ----------------- |
+| OpenAI    | GPT-4, GPT-3.5-turbo | ✅    | ✅        | ✅     | ✅                |
+| Anthropic | Claude 3.x series    | ✅    | ✅        | ✅     | ✅\*              |
+| Google    | Gemini Pro/Flash     | ✅    | ✅        | ✅     | ❌                |
+| Mistral   | Mistral models       | ✅    | ✅        | ❌     | ❌                |
+| VLLM      | Custom endpoints     | ✅    | ✅        | ❌     | ❌                |
 
-*via tool calling approach
+\*via tool calling approach
 
 ## Installation
 
@@ -85,7 +85,7 @@ const openaiResponse = await client.chat({
 });
 
 const claudeResponse = await client.chat({
-  provider: 'anthropic', 
+  provider: 'anthropic',
   model: 'claude-3-5-sonnet-20241022',
   messages: [Message.user('Hello from Claude!')]
 });
@@ -104,7 +104,7 @@ for await (const chunk of stream) {
   if (chunk.content) {
     process.stdout.write(chunk.content);
   }
-  
+
   if (chunk.isFinal()) {
     console.log('\nStream completed!');
     break;
@@ -115,22 +115,24 @@ for await (const chunk of stream) {
 ### Tool Calling
 
 ```javascript
-const tools = [{
-  name: 'get_weather',
-  description: 'Get weather information for a location',
-  parameters: {
-    type: 'object',
-    properties: {
-      location: { type: 'string', description: 'City name' },
-      unit: { type: 'string', enum: ['celsius', 'fahrenheit'] }
-    },
-    required: ['location']
+const tools = [
+  {
+    name: 'get_weather',
+    description: 'Get weather information for a location',
+    parameters: {
+      type: 'object',
+      properties: {
+        location: { type: 'string', description: 'City name' },
+        unit: { type: 'string', enum: ['celsius', 'fahrenheit'] }
+      },
+      required: ['location']
+    }
   }
-}];
+];
 
 const response = await client.chat({
   model: 'gpt-4',
-  messages: [Message.user('What\'s the weather in London?')],
+  messages: [Message.user("What's the weather in London?")],
   tools,
   toolChoice: 'auto'
 });
@@ -176,10 +178,7 @@ console.log(analysis); // { sentiment: "positive", confidence: 0.95, keywords: [
 const response = await client.chat({
   model: 'gpt-4-vision-preview',
   messages: [
-    Message.userWithImage(
-      'What do you see in this image?',
-      'https://example.com/image.jpg'
-    )
+    Message.userWithImage('What do you see in this image?', 'https://example.com/image.jpg')
   ]
 });
 
@@ -187,13 +186,11 @@ const response = await client.chat({
 const response = await client.chat({
   model: 'claude-3-5-sonnet-20241022',
   messages: [
-    Message.userWithImage(
-      'Describe this image',
-      {
-        base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-        mimeType: 'image/png'
-      }
-    )
+    Message.userWithImage('Describe this image', {
+      base64:
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      mimeType: 'image/png'
+    })
   ]
 });
 ```
@@ -243,7 +240,7 @@ providerConfig.load({
   }
 });
 
-// Load model configurations  
+// Load model configurations
 const modelConfig = new ModelConfig();
 await modelConfig.load('./models.json');
 
@@ -262,10 +259,11 @@ The main SDK client class.
 #### Constructor
 
 ```javascript
-new LLMClient(config)
+new LLMClient(config);
 ```
 
 **Parameters:**
+
 - `config.providers` - Provider configurations object
 - `config.defaultProvider` - Default provider name (default: 'openai')
 - `config.timeout` - Request timeout in ms (default: 30000)
@@ -276,7 +274,7 @@ new LLMClient(config)
 
 - `async ready()` - Wait for client initialization
 - `async chat(request)` - Send chat completion request
-- `async stream(request)` - Send streaming chat request  
+- `async stream(request)` - Send streaming chat request
 - `getAvailableModels(provider?)` - Get available models
 - `getProviders()` - Get configured providers
 - `getProvider(name)` - Get specific provider instance
@@ -309,7 +307,7 @@ const provider = new OpenAIProvider({
 });
 ```
 
-#### AnthropicProvider  
+#### AnthropicProvider
 
 ```javascript
 import { AnthropicProvider } from 'llm-sdk';
@@ -335,12 +333,12 @@ const provider = new GoogleProvider({
 The SDK provides comprehensive error handling with specific error types:
 
 ```javascript
-import { 
-  ConfigurationError, 
-  ValidationError, 
-  ProviderError, 
-  NetworkError, 
-  RateLimitError 
+import {
+  ConfigurationError,
+  ValidationError,
+  ProviderError,
+  NetworkError,
+  RateLimitError
 } from 'llm-sdk';
 
 try {
@@ -365,10 +363,7 @@ import { createMockProvider } from 'llm-sdk/testing';
 
 // Create mock provider for testing
 const mockProvider = createMockProvider({
-  responses: [
-    { content: 'Mocked response 1' },
-    { content: 'Mocked response 2' }
-  ]
+  responses: [{ content: 'Mocked response 1' }, { content: 'Mocked response 2' }]
 });
 
 const client = new LLMClient({

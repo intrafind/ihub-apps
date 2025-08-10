@@ -25,7 +25,7 @@ export class ModelConfig {
   async load(source) {
     try {
       let modelsData;
-      
+
       if (typeof source === 'string') {
         // Load from file
         this.configPath = source;
@@ -37,17 +37,13 @@ export class ModelConfig {
         // Load from object
         modelsData = source.models || [source];
       } else {
-        throw new ConfigurationError(
-          'Invalid model configuration source',
-          'source',
-          null
-        );
+        throw new ConfigurationError('Invalid model configuration source', 'source', null);
       }
 
       this.parseModels(modelsData);
-      
+
       this.logger.info(`Loaded ${this.models.size} model configurations`);
-      
+
       if (this.autoReload && this.configPath) {
         this.startAutoReload();
       }
@@ -90,20 +86,19 @@ export class ModelConfig {
    */
   parseModels(modelsData) {
     this.models.clear();
-    
+
     // Handle both array format and object format
-    const modelList = Array.isArray(modelsData) ? modelsData : 
-                     modelsData.models || [modelsData];
+    const modelList = Array.isArray(modelsData) ? modelsData : modelsData.models || [modelsData];
 
     for (const [index, modelData] of modelList.entries()) {
       try {
         const validatedModel = Validator.validateModelConfig(modelData);
         const modelInstance = new Model(validatedModel);
-        
+
         if (this.models.has(modelInstance.id)) {
           this.logger.warn(`Duplicate model ID: ${modelInstance.id}`);
         }
-        
+
         this.models.set(modelInstance.id, modelInstance);
       } catch (error) {
         this.logger.error(`Failed to parse model at index ${index}:`, error);
@@ -132,8 +127,7 @@ export class ModelConfig {
    * @returns {Array<Model>} Models for the provider
    */
   getModelsByProvider(provider) {
-    return Array.from(this.models.values())
-      .filter(model => model.provider === provider);
+    return Array.from(this.models.values()).filter(model => model.provider === provider);
   }
 
   /**
@@ -169,10 +163,10 @@ export class ModelConfig {
   addModel(modelData) {
     const validatedModel = Validator.validateModelConfig(modelData);
     const modelInstance = new Model(validatedModel);
-    
+
     this.models.set(modelInstance.id, modelInstance);
     this.logger.info(`Added model: ${modelInstance.id}`);
-    
+
     return modelInstance;
   }
 
@@ -196,18 +190,15 @@ export class ModelConfig {
    */
   async save(filePath = null) {
     const targetPath = filePath || this.configPath;
-    
+
     if (!targetPath) {
-      throw new ConfigurationError(
-        'No file path specified for saving models',
-        'filePath'
-      );
+      throw new ConfigurationError('No file path specified for saving models', 'filePath');
     }
 
     try {
       const modelsData = this.getAllModels().map(model => model.toJSON());
       const jsonData = JSON.stringify({ models: modelsData }, null, 2);
-      
+
       await writeFile(targetPath, jsonData, 'utf8');
       this.logger.info(`Saved ${modelsData.length} models to ${targetPath}`);
     } catch (error) {
@@ -227,7 +218,7 @@ export class ModelConfig {
     if (this.watchTimeout) {
       clearInterval(this.watchTimeout);
     }
-    
+
     this.watchTimeout = setInterval(async () => {
       try {
         this.logger.debug('Auto-reloading model configurations');
@@ -236,7 +227,7 @@ export class ModelConfig {
         this.logger.error('Auto-reload failed:', error);
       }
     }, this.reloadInterval);
-    
+
     this.logger.info(`Started auto-reload with ${this.reloadInterval}ms interval`);
   }
 
@@ -257,15 +248,12 @@ export class ModelConfig {
    */
   async reload() {
     if (!this.configPath) {
-      throw new ConfigurationError(
-        'No configuration path set for reload',
-        'configPath'
-      );
+      throw new ConfigurationError('No configuration path set for reload', 'configPath');
     }
-    
+
     const oldModelCount = this.models.size;
     await this.load(this.configPath);
-    
+
     this.logger.info(`Reloaded models: ${oldModelCount} -> ${this.models.size}`);
   }
 
@@ -416,12 +404,12 @@ export class Model {
   calculateCost(inputTokens, outputTokens) {
     const inputPrice = this.getPrice('input');
     const outputPrice = this.getPrice('output');
-    
+
     if (inputPrice === null || outputPrice === null) {
       return null;
     }
-    
-    return (inputTokens * inputPrice) + (outputTokens * outputPrice);
+
+    return inputTokens * inputPrice + outputTokens * outputPrice;
   }
 
   /**
