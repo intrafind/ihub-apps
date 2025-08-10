@@ -13,12 +13,29 @@ export class LLMClient {
     this.providers = new Map();
     this.defaultProvider = config.defaultProvider || 'openai';
     this.logger = config.logger || defaultLogger.child('LLMClient');
+    this._initialized = false;
     
-    // Initialize providers
-    this.initializeProviders(config.providers || {});
-    
-    // Create provider proxy getters
+    // Initialize providers asynchronously
+    this._initPromise = this._initialize(config.providers || {});
+  }
+
+  /**
+   * Internal initialization method
+   * @param {Object} providersConfig - Providers configuration
+   * @returns {Promise<void>} Initialization promise
+   */
+  async _initialize(providersConfig) {
+    await this.initializeProviders(providersConfig);
     this.createProviderProxies();
+    this._initialized = true;
+  }
+
+  /**
+   * Wait for client to be initialized
+   * @returns {Promise<void>} Initialization promise
+   */
+  async ready() {
+    await this._initPromise;
   }
 
   /**
@@ -49,10 +66,10 @@ export class LLMClient {
    * Initialize provider instances
    * @param {Object} providersConfig - Providers configuration
    */
-  initializeProviders(providersConfig) {
+  async initializeProviders(providersConfig) {
     for (const [providerName, providerConfig] of Object.entries(providersConfig)) {
       try {
-        const ProviderClass = this.getProviderClass(providerName);
+        const ProviderClass = await this.getProviderClass(providerName);
         const provider = new ProviderClass({
           ...providerConfig,
           logger: this.logger.child(`Provider:${providerName}`)
@@ -83,17 +100,21 @@ export class LLMClient {
   /**
    * Get provider class by name
    * @param {string} providerName - Provider name
-   * @returns {Class} Provider class constructor
+   * @returns {Promise<Class>} Provider class constructor
    * @throws {ConfigurationError} If provider not found
    */
-  getProviderClass(providerName) {
-    // Dynamic imports would be used here in real implementation
-    // For now, we'll throw an error indicating this needs to be implemented
-    throw new ConfigurationError(
-      `Provider '${providerName}' not found. Provider classes need to be imported.`,
-      'provider',
-      providerName
-    );
+  async getProviderClass(providerName) {
+    const { getProviderClass } = await import('../providers/index.js');
+    try {
+      return await getProviderClass(providerName);
+    } catch (error) {
+      throw new ConfigurationError(
+        `Provider '${providerName}' not found: ${error.message}`,
+        'provider',
+        providerName,
+        error
+      );
+    }
   }
 
   /**
@@ -135,6 +156,7 @@ export class LLMClient {
    * @returns {Promise<Response>} Chat response
    */
   async chat(request) {
+    await this.ready(); // Ensure initialization
     const timer = this.logger.timer('chat');
     
     try {
@@ -191,6 +213,7 @@ export class LLMClient {
    * @returns {Promise<AsyncIterator<ResponseChunk>>} Streaming response
    */
   async stream(request) {
+    await this.ready(); // Ensure initialization
     const timer = this.logger.timer('stream');
     
     try {
