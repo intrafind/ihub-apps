@@ -108,12 +108,14 @@ export class LegacyAdapter {
       const parsed = JSON.parse(buffer);
 
       // Convert to legacy format based on provider
-      if (provider === 'openai') {
+      if (provider === 'openai' || provider === 'vllm') {
         return this.processOpenAIChunk(parsed);
       } else if (provider === 'anthropic') {
         return this.processAnthropicChunk(parsed);
       } else if (provider === 'google') {
         return this.processGoogleChunk(parsed);
+      } else if (provider === 'mistral') {
+        return this.processMistralChunk(parsed);
       }
 
       // Default processing
@@ -276,6 +278,85 @@ export class LegacyAdapter {
       if (candidate.finishReason) {
         result.complete = true;
         result.finishReason = candidate.finishReason.toLowerCase();
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Process Mistral chunk in legacy format
+   * @param {Object} parsed - Parsed chunk
+   * @returns {Object} Legacy format result
+   */
+  processMistralChunk(parsed) {
+    const result = {
+      content: [],
+      tool_calls: [],
+      complete: false,
+      error: false,
+      errorMessage: null,
+      finishReason: null
+    };
+
+    if (parsed.choices && parsed.choices[0]) {
+      const choice = parsed.choices[0];
+
+      // Handle delta content (streaming)
+      if (choice.delta) {
+        if (choice.delta.content) {
+          // Mistral can have complex content format
+          if (Array.isArray(choice.delta.content)) {
+            for (const part of choice.delta.content) {
+              if (typeof part === 'string') {
+                result.content.push(part);
+              } else if (part && part.type === 'text' && part.text) {
+                result.content.push(part.text);
+              }
+            }
+          } else if (
+            typeof choice.delta.content === 'object' &&
+            choice.delta.content.type === 'text'
+          ) {
+            result.content.push(choice.delta.content.text);
+          } else {
+            result.content.push(choice.delta.content || '');
+          }
+        }
+        if (choice.delta.tool_calls) {
+          result.tool_calls.push(...choice.delta.tool_calls);
+        }
+      }
+
+      // Handle complete message (non-streaming)
+      if (choice.message) {
+        if (choice.message.content) {
+          // Similar complex content handling for non-streaming
+          if (Array.isArray(choice.message.content)) {
+            for (const part of choice.message.content) {
+              if (typeof part === 'string') {
+                result.content.push(part);
+              } else if (part && part.type === 'text' && part.text) {
+                result.content.push(part.text);
+              }
+            }
+          } else if (
+            typeof choice.message.content === 'object' &&
+            choice.message.content.type === 'text'
+          ) {
+            result.content.push(choice.message.content.text);
+          } else {
+            result.content.push(choice.message.content || '');
+          }
+        }
+        if (choice.message.tool_calls) {
+          result.tool_calls.push(...choice.message.tool_calls);
+        }
+      }
+
+      if (choice.finish_reason) {
+        result.complete = true;
+        result.finishReason = choice.finish_reason;
       }
     }
 

@@ -3,6 +3,8 @@ import { Validator } from '../utils/Validator.js';
 import { ConfigurationError, ValidationError, LLMError } from '../utils/ErrorHandler.js';
 import { defaultLogger } from '../utils/Logger.js';
 import { Message } from './Message.js';
+import { ToolRegistry, ToolExecutor } from '../tools/index.js';
+import { StreamingClient } from '../streaming/index.js';
 
 /**
  * Main LLM SDK client class
@@ -14,6 +16,19 @@ export class LLMClient {
     this.defaultProvider = config.defaultProvider || 'openai';
     this.logger = config.logger || defaultLogger.child('LLMClient');
     this._initialized = false;
+
+    // Initialize tool system
+    this.toolRegistry = config.toolRegistry || new ToolRegistry(this.logger.child('ToolRegistry'));
+    this.toolExecutor =
+      config.toolExecutor ||
+      new ToolExecutor(this.toolRegistry, {
+        logger: this.logger.child('ToolExecutor'),
+        timeout: config.toolTimeout || 30000,
+        maxConcurrent: config.maxConcurrentTools || 3
+      });
+
+    // Initialize streaming client
+    this.streamingClient = new StreamingClient(this.logger.child('StreamingClient'));
 
     // Initialize providers asynchronously
     this._initPromise = this._initialize(config.providers || {});
@@ -455,6 +470,192 @@ export class LLMClient {
     this.providers.delete(providerName);
     delete this[providerName];
     this.logger.info(`Removed provider: ${providerName}`);
+  }
+
+  // ============================================================================
+  // TOOL CALLING METHODS
+  // ============================================================================
+
+  /**
+   * Register a tool for use with LLM calls
+   * @param {Object} toolDefinition - Tool definition
+   * @returns {LLMClient} Self for chaining
+   */
+  registerTool(toolDefinition) {
+    this.toolRegistry.registerTool(toolDefinition);
+    return this;
+  }
+
+  /**
+   * Register multiple tools
+   * @param {Array<Object>} toolDefinitions - Array of tool definitions
+   * @returns {LLMClient} Self for chaining
+   */
+  registerTools(toolDefinitions) {
+    this.toolRegistry.registerTools(toolDefinitions);
+    return this;
+  }
+
+  /**
+   * Unregister a tool
+   * @param {string} toolName - Tool name to unregister
+   * @returns {boolean} True if tool was removed
+   */
+  unregisterTool(toolName) {
+    return this.toolRegistry.unregisterTool(toolName);
+  }
+
+  /**
+   * List available tools
+   * @returns {Array<string>} Array of tool names
+   */
+  getAvailableTools() {
+    return this.toolRegistry.listTools();
+  }
+
+  /**
+   * Get tool definition
+   * @param {string} toolName - Tool name
+   * @returns {Object|null} Tool definition or null
+   */
+  getTool(toolName) {
+    return this.toolRegistry.getTool(toolName);
+  }
+
+  /**
+   * Execute tools from tool calls
+   * @param {Array<Object>} toolCalls - Tool calls to execute
+   * @param {Object} [context] - Execution context
+   * @returns {Promise<Array<Object>>} Tool execution results
+   */
+  async executeTools(toolCalls, context = {}) {
+    return await this.toolExecutor.executeTools(toolCalls, context);
+  }
+
+  /**
+   * Send chat request with automatic tool calling support
+   * @param {Object} request - Chat request
+   * @param {Object} [options] - Tool calling options
+   * @returns {Promise<Response>} Final response after tool executions
+   */
+  async chatWithTools(request, options = {}) {
+    const { maxToolIterations = 5, toolExecutionContext = {}, autoExecuteTools = true } = options;
+
+    let currentMessages = [...(request.messages || [])];
+    let iteration = 0;
+
+    while (iteration < maxToolIterations) {
+      // Send chat request
+      const response = await this.chat({
+        ...request,
+        messages: currentMessages
+      });
+
+      // Check if response contains tool calls
+      const toolCalls = response.getToolCalls();
+      if (!toolCalls || toolCalls.length === 0 || !autoExecuteTools) {
+        return response;
+      }
+
+      // Execute tools
+      const toolResults = await this.executeTools(toolCalls, toolExecutionContext);
+
+      // Add assistant message with tool calls
+      currentMessages.push({
+        role: 'assistant',
+        content: response.content,
+        toolCalls: toolCalls
+      });
+
+      // Add tool results as messages
+      const provider = this.getProvider(request.provider || this.defaultProvider);
+      const toolResponseMessages = provider.formatToolResponses(toolResults);
+      currentMessages.push(...toolResponseMessages);
+
+      iteration++;
+    }
+
+    // If we hit max iterations, send one final request
+    if (iteration >= maxToolIterations) {
+      this.logger.warn('Max tool iterations reached', { maxToolIterations });
+      return await this.chat({
+        ...request,
+        messages: currentMessages
+      });
+    }
+  }
+
+  /**
+   * Send streaming chat request with tool calling support
+   * @param {Object} request - Chat request
+   * @param {Object} [options] - Tool calling and streaming options
+   * @returns {Promise<AsyncIterator>} Enhanced streaming response with tool execution
+   */
+  async streamWithTools(request, options = {}) {
+    const { onToolCall = null, onToolResult = null, toolExecutionContext = {} } = options;
+
+    const stream = await this.stream(request);
+    const provider = this.getProvider(request.provider || this.defaultProvider);
+
+    return this.wrapStreamWithTools(stream, provider, {
+      onToolCall,
+      onToolResult,
+      toolExecutionContext
+    });
+  }
+
+  /**
+   * Wrap a stream with tool calling support
+   * @param {AsyncIterator} stream - Original stream
+   * @param {Provider} provider - Provider instance
+   * @param {Object} options - Tool options
+   * @returns {AsyncIterator} Enhanced stream
+   */
+  async *wrapStreamWithTools(stream, provider, options) {
+    const { onToolCall, onToolResult, toolExecutionContext } = options;
+    let toolCalls = [];
+    let pendingToolCall = null;
+
+    try {
+      for await (const chunk of stream) {
+        // Check for tool calls in chunk
+        const chunkToolCalls = chunk.getToolCalls();
+
+        if (chunkToolCalls && chunkToolCalls.length > 0) {
+          toolCalls.push(...chunkToolCalls);
+
+          if (onToolCall) {
+            try {
+              await onToolCall(chunkToolCalls);
+            } catch (error) {
+              this.logger.error('Tool call handler error:', error);
+            }
+          }
+        }
+
+        yield chunk;
+
+        // If stream is complete and we have tool calls, execute them
+        if (chunk.done && toolCalls.length > 0) {
+          try {
+            const toolResults = await this.executeTools(toolCalls, toolExecutionContext);
+
+            if (onToolResult) {
+              try {
+                await onToolResult(toolResults);
+              } catch (error) {
+                this.logger.error('Tool result handler error:', error);
+              }
+            }
+          } catch (error) {
+            this.logger.error('Tool execution error in stream:', error);
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error('Stream with tools error:', error);
+      throw error;
+    }
   }
 
   /**

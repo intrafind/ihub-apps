@@ -104,7 +104,7 @@ class RequestBuilder {
 
       const context = { user, chatId, language };
       const tools = await getToolsForApp(app, language, context);
-      const request = createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
+      const request = await createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
         temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
         maxTokens: finalTokens,
         stream: !!clientRes,
