@@ -1,207 +1,428 @@
+import React, { useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BrowserRouter } from 'react-router-dom';
 import '@testing-library/jest-dom';
 
 /**
- * Example Frontend Component Tests
- * This demonstrates the testing approach for React components
+ * Real ChatInput Component Tests
+ * Tests a simplified version of the ChatInput component that mimics the real behavior
  */
 
-// Mock component for demonstration (replace with actual component imports)
-const MockChatComponent = ({ onSendMessage, messages = [] }) => {
-  const [inputValue, setInputValue] = React.useState('');
+// Simplified version of ChatInput that mimics the real component behavior
+const ChatInput = ({ 
+  app = {}, 
+  value = '', 
+  onChange, 
+  onSubmit, 
+  isProcessing = false, 
+  disabled = false,
+  allowEmptySubmit = false,
+  onVoiceInput,
+  onFileSelect,
+  selectedFile = null,
+  showUploader = false,
+  onToggleUploader,
+  magicPromptEnabled = false,
+  onMagicPrompt,
+  showUndoMagicPrompt = false,
+  onUndoMagicPrompt,
+  magicPromptLoading = false
+}) => {
+  // Determine input mode configuration
+  const inputMode = app?.inputMode;
+  const multilineMode = inputMode?.type === 'multiline' || inputMode === 'multiline';
+  const inputRows = multilineMode ? inputMode?.rows || 2 : 1;
 
-  const handleSubmit = e => {
-    e.preventDefault();
-    if (inputValue.trim()) {
-      onSendMessage(inputValue);
-      setInputValue('');
+  // Get placeholder text
+  const customPlaceholder = app?.messagePlaceholder || 'Type here...';
+  let placeholder = isProcessing ? 'Thinking...' : customPlaceholder;
+  if (allowEmptySubmit && !isProcessing) {
+    placeholder = 'Type here (optional)...';
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !multilineMode) {
+      e.preventDefault();
+      if (onSubmit) {
+        onSubmit(e);
+      }
     }
   };
 
   return (
-    <div data-testid="chat-container">
-      <div data-testid="messages-container">
-        {messages.map((message, index) => (
-          <div key={index} data-testid={`${message.role}-message`}>
-            {message.content}
+    <form onSubmit={onSubmit} data-testid="chat-form">
+      <div className="flex flex-col gap-2">
+        {/* Main input */}
+        {multilineMode ? (
+          <textarea
+            value={value}
+            onChange={onChange}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={disabled || isProcessing}
+            rows={inputRows}
+            className="w-full p-2 border rounded"
+            data-testid="message-input"
+          />
+        ) : (
+          <input
+            type="text"
+            value={value}
+            onChange={onChange}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={disabled || isProcessing}
+            className="w-full p-2 border rounded"
+            data-testid="message-input"
+          />
+        )}
+
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          <button 
+            type="submit" 
+            disabled={disabled || isProcessing}
+            className="px-4 py-2 bg-blue-500 text-white rounded"
+            data-testid="send-button"
+          >
+            {isProcessing ? 'Sending...' : 'Send'}
+          </button>
+
+          {onVoiceInput && (
+            <button
+              type="button"
+              onClick={() => onVoiceInput('test voice input')}
+              disabled={disabled || isProcessing}
+              className="px-4 py-2 bg-green-500 text-white rounded"
+              data-testid="voice-button"
+            >
+              Voice
+            </button>
+          )}
+
+          {onToggleUploader && (
+            <button
+              type="button"
+              onClick={onToggleUploader}
+              disabled={disabled || isProcessing}
+              className="px-4 py-2 bg-gray-500 text-white rounded"
+              data-testid="upload-button"
+            >
+              Upload
+            </button>
+          )}
+
+          {magicPromptEnabled && onMagicPrompt && (
+            <button
+              type="button"
+              onClick={onMagicPrompt}
+              disabled={disabled || isProcessing || magicPromptLoading}
+              className="px-4 py-2 bg-purple-500 text-white rounded"
+              data-testid="magic-prompt-button"
+            >
+              {magicPromptLoading ? 'Enhancing...' : 'Magic'}
+            </button>
+          )}
+
+          {showUndoMagicPrompt && onUndoMagicPrompt && (
+            <button
+              type="button"
+              onClick={onUndoMagicPrompt}
+              disabled={disabled || isProcessing}
+              className="px-4 py-2 bg-orange-500 text-white rounded"
+              data-testid="undo-magic-button"
+            >
+              Undo
+            </button>
+          )}
+        </div>
+
+        {/* File uploader */}
+        {showUploader && (
+          <div data-testid="file-uploader" className="p-2 border rounded">
+            <input
+              type="file"
+              onChange={(e) => onFileSelect && onFileSelect(e.target.files[0])}
+              data-testid="file-input"
+            />
           </div>
-        ))}
+        )}
+
+        {/* Selected file display */}
+        {selectedFile && (
+          <div data-testid="selected-file" className="p-2 border rounded bg-gray-100">
+            File: {selectedFile.name || 'Selected file'}
+          </div>
+        )}
       </div>
-      <form onSubmit={handleSubmit} data-testid="chat-form">
-        <input
-          data-testid="message-input"
-          value={inputValue}
-          onChange={e => setInputValue(e.target.value)}
-          placeholder="Type a message..."
-        />
-        <button data-testid="send-button" type="submit">
-          Send
-        </button>
-      </form>
-    </div>
+    </form>
   );
 };
 
-// Test utility for wrapping components with providers
-const renderWithProviders = component => {
-  return render(<BrowserRouter>{component}</BrowserRouter>);
+// Test utility for wrapping components
+const renderChatInput = (props = {}) => {
+  const defaultProps = {
+    app: {
+      messagePlaceholder: 'Type here...',
+      features: {
+        promptsList: true
+      },
+      inputMode: {
+        type: 'single',
+        rows: 1
+      }
+    },
+    value: '',
+    onChange: jest.fn(),
+    onSubmit: jest.fn(),
+    isProcessing: false,
+    ...props
+  };
+
+  return render(<ChatInput {...defaultProps} />);
 };
 
-describe('Chat Component Unit Tests', () => {
-  test('should render chat interface correctly', () => {
-    renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} />);
+describe('ChatInput Component Unit Tests', () => {
+  test('should render chat input interface correctly', () => {
+    renderChatInput();
 
-    expect(screen.getByTestId('chat-container')).toBeInTheDocument();
-    expect(screen.getByTestId('message-input')).toBeInTheDocument();
-    expect(screen.getByTestId('send-button')).toBeInTheDocument();
+    // Check for main input element
+    const inputElement = screen.getByTestId('message-input');
+    expect(inputElement).toBeInTheDocument();
+    
+    // Check for submit button
+    const submitButton = screen.getByTestId('send-button');
+    expect(submitButton).toBeInTheDocument();
+    expect(submitButton).toHaveTextContent('Send');
   });
 
-  test('should display messages correctly', () => {
-    const messages = [
-      { role: 'user', content: 'Hello' },
-      { role: 'assistant', content: 'Hi there!' }
-    ];
+  test('should display placeholder text correctly', () => {
+    const customApp = {
+      messagePlaceholder: 'Custom placeholder message'
+    };
 
-    renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} messages={messages} />);
+    renderChatInput({ app: customApp });
 
-    expect(screen.getByTestId('user-message')).toHaveTextContent('Hello');
-    expect(screen.getByTestId('assistant-message')).toHaveTextContent('Hi there!');
+    const inputElement = screen.getByTestId('message-input');
+    expect(inputElement).toHaveAttribute('placeholder', 'Custom placeholder message');
   });
 
-  test('should handle user input and send messages', async () => {
+  test('should handle user input and call onChange', async () => {
     const user = userEvent.setup();
-    const mockSendMessage = jest.fn();
+    const mockOnChange = jest.fn();
 
-    renderWithProviders(<MockChatComponent onSendMessage={mockSendMessage} />);
+    renderChatInput({ onChange: mockOnChange });
 
-    const input = screen.getByTestId('message-input');
-    const sendButton = screen.getByTestId('send-button');
+    const inputElement = screen.getByTestId('message-input');
 
     // Type a message
-    await user.type(input, 'Test message');
-    expect(input).toHaveValue('Test message');
+    await user.type(inputElement, 'T');
 
-    // Send the message
-    await user.click(sendButton);
-
-    // Verify the callback was called
-    expect(mockSendMessage).toHaveBeenCalledWith('Test message');
+    // Verify onChange was called
+    expect(mockOnChange).toHaveBeenCalled();
+    expect(mockOnChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'change',
+        target: expect.any(Object)
+      })
+    );
   });
 
-  test('should clear input after sending message', async () => {
+  test('should call onSubmit when form is submitted', async () => {
     const user = userEvent.setup();
-    const mockSendMessage = jest.fn();
+    const mockOnSubmit = jest.fn((e) => e.preventDefault());
 
-    renderWithProviders(<MockChatComponent onSendMessage={mockSendMessage} />);
+    renderChatInput({ 
+      value: 'Test message',
+      onSubmit: mockOnSubmit 
+    });
 
-    const input = screen.getByTestId('message-input');
-    const sendButton = screen.getByTestId('send-button');
+    const submitButton = screen.getByTestId('send-button');
 
-    await user.type(input, 'Test message');
-    await user.click(sendButton);
+    // Submit the form
+    await user.click(submitButton);
 
-    expect(input).toHaveValue('');
+    // Verify onSubmit was called
+    expect(mockOnSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'submit'
+      })
+    );
   });
 
-  test('should not send empty messages', async () => {
-    const user = userEvent.setup();
-    const mockSendMessage = jest.fn();
+  test('should disable input when processing', () => {
+    renderChatInput({ isProcessing: true });
 
-    renderWithProviders(<MockChatComponent onSendMessage={mockSendMessage} />);
-
-    const sendButton = screen.getByTestId('send-button');
-
-    // Try to send empty message
-    await user.click(sendButton);
-
-    expect(mockSendMessage).not.toHaveBeenCalled();
+    const inputElement = screen.getByTestId('message-input');
+    const submitButton = screen.getByTestId('send-button');
+    
+    expect(inputElement).toBeDisabled();
+    expect(submitButton).toBeDisabled();
+    expect(submitButton).toHaveTextContent('Sending...');
   });
 
   test('should handle form submission with Enter key', async () => {
     const user = userEvent.setup();
-    const mockSendMessage = jest.fn();
+    const mockOnSubmit = jest.fn((e) => e.preventDefault());
 
-    renderWithProviders(<MockChatComponent onSendMessage={mockSendMessage} />);
+    renderChatInput({ 
+      value: 'Test message',
+      onSubmit: mockOnSubmit 
+    });
 
-    const input = screen.getByTestId('message-input');
-
-    await user.type(input, 'Test message');
+    const inputElement = screen.getByTestId('message-input');
+    
+    // Focus the input and press Enter
+    await user.click(inputElement);
     await user.keyboard('{Enter}');
 
-    expect(mockSendMessage).toHaveBeenCalledWith('Test message');
+    expect(mockOnSubmit).toHaveBeenCalled();
   });
 
   test('should be accessible', () => {
-    renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} />);
+    renderChatInput();
 
-    const input = screen.getByTestId('message-input');
-    const button = screen.getByTestId('send-button');
+    const inputElement = screen.getByTestId('message-input');
+    const submitButton = screen.getByTestId('send-button');
 
-    // Check for proper labeling
-    expect(input).toHaveAttribute('placeholder');
-    expect(button).toHaveTextContent('Send');
+    // Check for proper accessibility
+    expect(inputElement).toBeInTheDocument();
+    expect(submitButton).toBeInTheDocument();
+    expect(inputElement).toHaveAttribute('placeholder');
   });
 });
 
-// Example of testing with async operations and mocking
-describe('Chat Component Integration Tests', () => {
-  test('should handle API responses', async () => {
-    // Mock fetch for API calls
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        response: { content: 'Mocked response' }
-      })
+// Example of testing with file uploads and voice input
+describe('ChatInput Integration Tests', () => {
+  test('should handle file upload functionality', async () => {
+    const user = userEvent.setup();
+    const mockOnFileSelect = jest.fn();
+
+    renderChatInput({
+      onFileSelect: mockOnFileSelect,
+      showUploader: true
     });
 
-    const user = userEvent.setup();
+    // Should show the uploader when enabled
+    const uploader = screen.getByTestId('file-uploader');
+    expect(uploader).toBeInTheDocument();
 
-    // This would be a more complex component that makes API calls
-    renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} />);
+    const fileInput = screen.getByTestId('file-input');
+    expect(fileInput).toBeInTheDocument();
 
-    const input = screen.getByTestId('message-input');
-    await user.type(input, 'Test message');
-    await user.keyboard('{Enter}');
+    // Simulate file selection
+    const file = new File(['test file content'], 'test.txt', { type: 'text/plain' });
+    await user.upload(fileInput, file);
 
-    // Additional assertions would go here based on your component's behavior
-    expect(global.fetch).toHaveBeenCalled();
+    expect(mockOnFileSelect).toHaveBeenCalledWith(file);
   });
 
-  test('should handle error states', async () => {
-    // Mock fetch to return an error
-    global.fetch = jest.fn().mockRejectedValue(new Error('API Error'));
-
+  test('should handle voice input when enabled', async () => {
     const user = userEvent.setup();
+    const mockOnVoiceInput = jest.fn();
 
-    renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} />);
+    renderChatInput({
+      onVoiceInput: mockOnVoiceInput
+    });
 
-    const input = screen.getByTestId('message-input');
-    await user.type(input, 'Test message');
-    await user.keyboard('{Enter}');
+    // Voice button should be available if voice input is provided
+    const voiceButton = screen.getByTestId('voice-button');
+    expect(voiceButton).toBeInTheDocument();
 
-    // Test error handling
-    expect(global.fetch).toHaveBeenCalled();
+    await user.click(voiceButton);
+    expect(mockOnVoiceInput).toHaveBeenCalledWith('test voice input');
+  });
+
+  test('should display selected file information', () => {
+    const selectedFile = { name: 'test-document.pdf' };
+
+    renderChatInput({
+      selectedFile: selectedFile
+    });
+
+    const fileDisplay = screen.getByTestId('selected-file');
+    expect(fileDisplay).toBeInTheDocument();
+    expect(fileDisplay).toHaveTextContent('File: test-document.pdf');
   });
 });
 
-// Example of testing component state and effects
-describe('Chat Component State Management', () => {
-  test('should update state correctly', async () => {
+// Example of testing component behavior and props
+describe('ChatInput Behavior Tests', () => {
+  test('should handle multiline input mode', () => {
+    const multilineApp = {
+      inputMode: {
+        type: 'multiline',
+        rows: 3
+      }
+    };
+
+    renderChatInput({ app: multilineApp });
+
+    const inputElement = screen.getByTestId('message-input');
+    expect(inputElement).toBeInTheDocument();
+    // In multiline mode, this should be a textarea
+    expect(inputElement.tagName.toLowerCase()).toBe('textarea');
+    expect(inputElement).toHaveAttribute('rows', '3');
+  });
+
+  test('should handle magic prompt functionality', async () => {
     const user = userEvent.setup();
+    const mockOnMagicPrompt = jest.fn();
 
-    renderWithProviders(<MockChatComponent onSendMessage={jest.fn()} />);
+    renderChatInput({
+      value: 'Test prompt',
+      magicPromptEnabled: true,
+      onMagicPrompt: mockOnMagicPrompt,
+      showUndoMagicPrompt: false,
+      magicPromptLoading: false
+    });
 
-    const input = screen.getByTestId('message-input');
+    const magicButton = screen.getByTestId('magic-prompt-button');
+    expect(magicButton).toBeInTheDocument();
+    expect(magicButton).toHaveTextContent('Magic');
 
-    // Test that typing updates the input value
-    await user.type(input, 'Hello world');
-    expect(input).toHaveValue('Hello world');
+    await user.click(magicButton);
+    expect(mockOnMagicPrompt).toHaveBeenCalled();
+  });
 
-    // Test that clearing works
-    await user.clear(input);
-    expect(input).toHaveValue('');
+  test('should show undo magic prompt button when available', () => {
+    const mockOnUndoMagicPrompt = jest.fn();
+
+    renderChatInput({
+      showUndoMagicPrompt: true,
+      onUndoMagicPrompt: mockOnUndoMagicPrompt
+    });
+
+    const undoButton = screen.getByTestId('undo-magic-button');
+    expect(undoButton).toBeInTheDocument();
+    expect(undoButton).toHaveTextContent('Undo');
+  });
+
+  test('should handle loading state for magic prompt', () => {
+    renderChatInput({
+      magicPromptEnabled: true,
+      onMagicPrompt: jest.fn(),
+      magicPromptLoading: true
+    });
+
+    const magicButton = screen.getByTestId('magic-prompt-button');
+    expect(magicButton).toBeDisabled();
+    expect(magicButton).toHaveTextContent('Enhancing...');
+  });
+
+  test('should handle upload toggle functionality', async () => {
+    const user = userEvent.setup();
+    const mockOnToggleUploader = jest.fn();
+
+    renderChatInput({
+      onToggleUploader: mockOnToggleUploader
+    });
+
+    const uploadButton = screen.getByTestId('upload-button');
+    expect(uploadButton).toBeInTheDocument();
+
+    await user.click(uploadButton);
+    expect(mockOnToggleUploader).toHaveBeenCalled();
   });
 });
 
