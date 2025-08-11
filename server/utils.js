@@ -58,7 +58,7 @@ export async function getApiKeyForModel(modelId) {
       case 'iassistant':
         // iAssistant uses JWT tokens generated per-user, not static API keys
         // Return a placeholder that indicates JWT auth should be used
-        return 'JWT_AUTH_REQUIRED';
+        return JWT_AUTH_REQUIRED;
       default:
         // Try to find a generic API key based on provider name (e.g., COHERE_API_KEY for provider 'cohere')
         const genericKey = config[`${provider.toUpperCase()}_API_KEY`];
