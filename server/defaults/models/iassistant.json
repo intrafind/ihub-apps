@@ -10,6 +10,7 @@
     "en": "iAssistant knowledge base search with RAG capabilities",
     "de": "iAssistant Wissensdatenbank-Suche mit RAG-Funktionen"
   },
+  "url": "http://localhost:8080",
   "provider": "iassistant",
   "tokenLimit": null,
   "supportsTools": false,
