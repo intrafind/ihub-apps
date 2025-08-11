@@ -12,6 +12,11 @@ class ApiKeyVerifier {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
     const lang = language || defaultLang;
 
+    // Skip API key verification for providers that don't need keys
+    if (model.provider && model.provider.toLowerCase() === 'iassistant') {
+      return { success: true, apiKey: null };
+    }
+
     try {
       const apiKey = await getApiKeyForModel(model.id);
 
@@ -92,6 +97,13 @@ class ApiKeyVerifier {
       if (!model.provider) continue;
 
       const provider = model.provider.toLowerCase();
+
+      // Skip providers that don't need API keys
+      if (provider === 'iassistant') {
+        validKeys.add(provider);
+        continue;
+      }
+
       const envVar = `${provider.toUpperCase()}_API_KEY`;
 
       // Skip if we already checked this provider

@@ -240,13 +240,7 @@ function App() {
                     )}
                     {showAdminPage('users') && (
                       <Route
-                        path="admin/users/new"
-                        element={<LazyAdminRoute component={AdminUserEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('users') && (
-                      <Route
-                        path="admin/users/:userId/edit"
+                        path="admin/users/:userId"
                         element={<LazyAdminRoute component={AdminUserEditPage} />}
                       />
                     )}

@@ -11,6 +11,7 @@ import * as AnthropicConverter from './AnthropicConverter.js';
 import * as GoogleConverter from './GoogleConverter.js';
 import * as MistralConverter from './MistralConverter.js';
 import * as VLLMConverter from './VLLMConverter.js';
+import * as IAssistantConverter from './IAssistantConverter.js';
 
 import { createGenericStreamingResponse, normalizeFinishReason } from './GenericToolCalling.js';
 
@@ -22,7 +23,8 @@ const CONVERTERS = {
   anthropic: AnthropicConverter,
   google: GoogleConverter,
   mistral: MistralConverter,
-  local: VLLMConverter // vLLM uses dedicated converter with schema sanitization
+  local: VLLMConverter, // vLLM uses dedicated converter with schema sanitization
+  iassistant: IAssistantConverter
 };
 
 /**
@@ -261,6 +263,8 @@ function capitalize(str) {
       return 'OpenAI';
     case 'local':
       return 'VLLM'; // Local uses VLLM converter functions
+    case 'iassistant':
+      return 'Iassistant'; // Keep consistent with existing function name
     default:
       return str.charAt(0).toUpperCase() + str.slice(1);
   }

@@ -1,0 +1,38 @@
+{
+  "id": "iassistant",
+  "enabled": false,
+  "modelId": "iassistant",
+  "name": {
+    "en": "iAssistant",
+    "de": "iAssistant"
+  },
+  "description": {
+    "en": "iAssistant knowledge base search with RAG capabilities",
+    "de": "iAssistant Wissensdatenbank-Suche mit RAG-Funktionen"
+  },
+  "url": "http://localhost:8080",
+  "provider": "iassistant",
+  "tokenLimit": null,
+  "supportsTools": false,
+  "supportsImages": false,
+  "default": false,
+  "config": {
+    "baseUrl": "http://localhost:8080",
+    "searchFields": {},
+    "searchMode": "multiword",
+    "searchDistance": "",
+    "profileId": "c2VhcmNocHJvZmlsZS1zdGFuZGFyZA==",
+    "filter": [
+      {
+        "key": "application.keyword",
+        "values": ["PDF"],
+        "isNegated": false
+      },
+      {
+        "key": "query",
+        "values": ["*"],
+        "isNegated": false
+      }
+    ]
+  }
+}

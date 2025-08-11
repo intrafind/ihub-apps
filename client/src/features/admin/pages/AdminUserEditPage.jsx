@@ -24,20 +24,47 @@ const AdminUserEditPage = () => {
 
   useEffect(() => {
     loadSchema();
+
     if (isNewUser) {
       // Initialize new user
       setUser({
-        id: '',
         username: '',
         email: '',
         fullName: '',
+        name: '',
         password: '',
         groups: [],
-        enabled: true
+        internalGroups: [],
+        enabled: true,
+        active: true
       });
       setLoading(false);
+      setError(null); // Clear any previous errors
     } else {
-      loadUser();
+      // Call loadUser directly for existing users
+      const loadExistingUser = async () => {
+        try {
+          setLoading(true);
+          const response = await makeAdminApiCall('/admin/auth/users');
+          const data = response.data;
+
+          // Find the user by ID in the users object
+          const userData = Object.values(data.users || {}).find(u => u.id === userId);
+          if (!userData) {
+            throw new Error('User not found');
+          }
+
+          setUser({
+            ...userData,
+            password: ''
+          });
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadExistingUser();
     }
   }, [userId]);
 
@@ -49,29 +76,6 @@ const AdminUserEditPage = () => {
       console.error('Failed to load user schema:', error);
     }
   };
-
-  const loadUser = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await makeAdminApiCall('/admin/auth/users');
-      const data = response.data;
-
-      // Find the user by ID in the users object
-      const userData = Object.values(data.users || {}).find(u => u.id === userId);
-      if (!userData) {
-        throw new Error('User not found');
-      }
-
-      setUser({
-        ...userData,
-        password: ''
-      });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
 
   const handleSave = async data => {
     if (!data) data = user;
@@ -90,9 +94,9 @@ const AdminUserEditPage = () => {
       const apiData = {
         username: data.username,
         email: data.email,
-        fullName: data.fullName,
-        groups: data.groups || [],
-        enabled: data.enabled !== false
+        name: data.fullName || data.name || '',
+        internalGroups: data.groups || data.internalGroups || [],
+        active: data.enabled !== false
       };
 
       // Only include password if it's provided
@@ -100,14 +104,9 @@ const AdminUserEditPage = () => {
         apiData.password = data.password;
       }
 
-      // For existing users, use different field names that match the API
-      if (!isNewUser) {
-        apiData.name = data.fullName;
-        apiData.internalGroups = data.groups || [];
-        apiData.active = data.enabled !== false;
-        delete apiData.fullName;
-        delete apiData.groups;
-        delete apiData.enabled;
+      // For new users, ensure password is provided
+      if (isNewUser && !data.password) {
+        throw new Error('Password is required for new users');
       }
 
       const response = await makeAdminApiCall(url, {

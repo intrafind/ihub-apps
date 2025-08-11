@@ -55,6 +55,10 @@ export async function getApiKeyForModel(modelId) {
         // For local models, check if there's a specific LOCAL_API_KEY or return a default empty string
         // This allows local models to work without authentication in many cases
         return config.LOCAL_API_KEY || '';
+      case 'iassistant':
+        // iAssistant uses JWT tokens generated per-user, not static API keys
+        // Return a placeholder that indicates JWT auth should be used
+        return JWT_AUTH_REQUIRED;
       default:
         // Try to find a generic API key based on provider name (e.g., COHERE_API_KEY for provider 'cohere')
         const genericKey = config[`${provider.toUpperCase()}_API_KEY`];
@@ -191,8 +195,9 @@ export async function logInteraction(interactionType, data) {
       userSessionId: data.userSessionId, // This is the browser session ID
       user: data.user
         ? {
-            username: data.user.username || 'anonymous',
-            id: data.user.id || 'anonymous'
+            username: data.user.username || data.user.email || 'anonymous',
+            id: data.user.id || data.user.email || 'anonymous',
+            email: data.user.email
           }
         : null
     };
@@ -233,7 +238,7 @@ export async function logInteraction(interactionType, data) {
 
     // For debugging purposes, log to console with appropriate type prefix
     const userInfo = logEntry.user
-      ? `| User: ${logEntry.user.username || logEntry.user.id || 'unknown'}`
+      ? `| User: ${logEntry.user.username || logEntry.user.id || logEntry.user.email || 'unknown'}`
       : '| User: anonymous';
 
     if (logType === 'feedback') {
