@@ -799,7 +799,7 @@ class ToolExecutor {
             app
           );
 
-          if (toolResult.streaming) {
+          if (toolResult.passthrough) {
             // For streaming tools, add the result as assistant message and stop processing
             llmMessages.push(toolResult.message);
 
