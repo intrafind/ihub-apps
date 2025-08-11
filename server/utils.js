@@ -195,8 +195,9 @@ export async function logInteraction(interactionType, data) {
       userSessionId: data.userSessionId, // This is the browser session ID
       user: data.user
         ? {
-            username: data.user.username || 'anonymous',
-            id: data.user.id || 'anonymous'
+            username: data.user.username || data.user.email || 'anonymous',
+            id: data.user.id || data.user.email || 'anonymous',
+            email: data.user.email
           }
         : null
     };
@@ -237,7 +238,7 @@ export async function logInteraction(interactionType, data) {
 
     // For debugging purposes, log to console with appropriate type prefix
     const userInfo = logEntry.user
-      ? `| User: ${logEntry.user.username || logEntry.user.id || 'unknown'}`
+      ? `| User: ${logEntry.user.username || logEntry.user.id || logEntry.user.email || 'unknown'}`
       : '| User: anonymous';
 
     if (logType === 'feedback') {

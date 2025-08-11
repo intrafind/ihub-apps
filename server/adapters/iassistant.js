@@ -5,6 +5,7 @@
  */
 import { BaseAdapter } from './BaseAdapter.js';
 import { getIFinderAuthorizationHeader } from '../utils/iFinderJwt.js';
+import iAssistantService from '../services/integrations/iAssistantService.js';
 
 class IAssistantAdapterClass extends BaseAdapter {
   /**
@@ -12,7 +13,7 @@ class IAssistantAdapterClass extends BaseAdapter {
    * iAssistant only supports one-shot queries, so we only use the last user message
    */
   formatMessages(messages) {
-    // Find the last user message (iFinder doesn't support chat history)
+    // Find the last user message (iAssistant doesn't support chat history)
     const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
 
     if (!lastUserMessage) {
@@ -36,27 +37,30 @@ class IAssistantAdapterClass extends BaseAdapter {
     // Extract iAssistant-specific configuration from app config first, then fall back to model config
     const appConfig = options.appConfig?.iassistant || {};
     const modelConfig = model.config || {};
+    const config = { ...modelConfig, ...appConfig };
 
-    const {
-      baseUrl = 'https://dama.dev.intrafind.io',
-      uuid = `ifs-ihub-chat-request-${Date.now()}`,
-      searchFields = {},
-      searchMode = 'multiword',
-      searchDistance = '',
-      profileId = 'c2VhcmNocHJvZmlsZS1zdGFuZGFyZA==',
-      filter = [{ key: 'application.keyword', values: ['PDF'], isNegated: false }]
-    } = { ...modelConfig, ...appConfig };
+    // Get configuration from service
+    const serviceConfig = iAssistantService.getConfig();
+    const actualProfileId = iAssistantService.encodeProfileId(
+      config.profileId || serviceConfig.defaultProfileId
+    );
+    const actualFilter = config.filter || serviceConfig.defaultFilter;
+    const actualSearchMode = config.searchMode || serviceConfig.defaultSearchMode;
+    const actualSearchDistance = config.searchDistance || serviceConfig.defaultSearchDistance;
+    const actualSearchFields = config.searchFields || serviceConfig.defaultSearchFields;
 
-    const url = new URL(`${baseUrl}/internal-api/v2/rag/ask`);
+    // Construct URL
+    const uuid = `ifs-ihub-chat-request-${Date.now()}`;
+    const url = new URL(`${serviceConfig.baseUrl}${serviceConfig.endpoint}`);
     url.searchParams.set('uuid', uuid);
-    url.searchParams.set('searchFields', JSON.stringify(searchFields));
-    url.searchParams.set('sSearchMode', searchMode);
-    url.searchParams.set('sSearchDistance', searchDistance);
+    url.searchParams.set('searchFields', JSON.stringify(actualSearchFields));
+    url.searchParams.set('sSearchMode', actualSearchMode);
+    url.searchParams.set('sSearchDistance', actualSearchDistance);
 
     const requestBody = {
       question,
-      filter,
-      profileId,
+      filter: actualFilter,
+      profileId: actualProfileId,
       metaData: true,
       telemetry: true
     };
@@ -66,7 +70,7 @@ class IAssistantAdapterClass extends BaseAdapter {
       'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,de;q=0.7',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
-      Origin: baseUrl,
+      Origin: serviceConfig.baseUrl,
       Pragma: 'no-cache',
       'Sec-Fetch-Dest': 'empty',
       'Sec-Fetch-Mode': 'cors',
@@ -80,11 +84,13 @@ class IAssistantAdapterClass extends BaseAdapter {
 
     // Add JWT authentication based on user context
     const { user } = options;
-    if (user && user.id !== 'anonymous') {
+    const userId = user?.id || user?.email;
+
+    if (user && userId && userId !== 'anonymous') {
       try {
         // Generate JWT token for the authenticated user
         const authHeader = getIFinderAuthorizationHeader(user, {
-          scope: appConfig.scope || modelConfig.scope || 'fa_index_read'
+          scope: config.scope || 'fa_index_read'
         });
         headers['Authorization'] = authHeader;
       } catch (error) {
@@ -92,9 +98,11 @@ class IAssistantAdapterClass extends BaseAdapter {
         throw new Error(`iAssistant authentication failed: ${error.message}`);
       }
     } else {
-      throw new Error(
-        'iAssistant requires authenticated user access - anonymous access not supported'
-      );
+      const errorMsg = user
+        ? `iAssistant requires authenticated user access - received anonymous user (ID: ${userId})`
+        : 'iAssistant requires authenticated user access - no user context provided';
+      console.error('iAssistant authentication error:', errorMsg);
+      throw new Error(errorMsg);
     }
 
     return {
@@ -110,51 +118,10 @@ class IAssistantAdapterClass extends BaseAdapter {
    * iAssistant uses custom SSE format that needs special handling
    */
   processResponseBuffer(buffer) {
-    const result = {
-      content: [],
-      complete: false,
-      finishReason: null,
-      tool_calls: [],
-      passages: [],
-      telemetry: null
-    };
+    const result = iAssistantService.processStreamingBuffer(buffer);
 
-    // Split buffer by lines and process each SSE event
-    const lines = buffer.split('\n');
-    let currentEvent = null;
-    let currentData = '';
-
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-
-      if (trimmedLine.startsWith('event:')) {
-        // New event type
-        if (currentEvent && currentData) {
-          this.processEvent(currentEvent, currentData, result);
-        }
-        currentEvent = trimmedLine.substring(6).trim();
-        currentData = '';
-      } else if (trimmedLine.startsWith('data:')) {
-        // Event data
-        const data = trimmedLine.substring(5).trim();
-        currentData += data;
-      } else if (trimmedLine.startsWith('id:')) {
-        // Event ID (we don't need to process this for now)
-        continue;
-      } else if (trimmedLine === '') {
-        // Empty line indicates end of event
-        if (currentEvent && currentData) {
-          this.processEvent(currentEvent, currentData, result);
-          currentEvent = null;
-          currentData = '';
-        }
-      }
-    }
-
-    // Process final event if buffer doesn't end with empty line
-    if (currentEvent && currentData) {
-      this.processEvent(currentEvent, currentData, result);
-    }
+    // Add tool_calls array for adapter compatibility
+    result.tool_calls = [];
 
     return result;
   }
@@ -163,56 +130,7 @@ class IAssistantAdapterClass extends BaseAdapter {
    * Process individual SSE event
    */
   processEvent(eventType, data, result) {
-    try {
-      switch (eventType) {
-        case 'telemetry':
-          const telemetryData = JSON.parse(data);
-          result.telemetry = telemetryData.telemetry
-            ? JSON.parse(telemetryData.telemetry)
-            : telemetryData;
-          break;
-
-        case 'passages':
-          const passagesData = JSON.parse(data);
-          if (passagesData.passages && Array.isArray(passagesData.passages)) {
-            result.passages = passagesData.passages;
-          }
-          break;
-
-        case 'answer':
-          const answerData = JSON.parse(data);
-          if (answerData.answer) {
-            result.content.push(answerData.answer);
-          }
-          break;
-
-        case 'done':
-        case 'end':
-        case 'complete':
-          result.complete = true;
-          result.finishReason = 'stop';
-          break;
-
-        default:
-          // Check if the data itself contains completion info
-          try {
-            const parsed = JSON.parse(data);
-            if (
-              parsed.eventType === 'complete' ||
-              parsed.eventType === 'done' ||
-              parsed.eventType === 'end'
-            ) {
-              result.complete = true;
-              result.finishReason = 'stop';
-            }
-          } catch (parseError) {
-            // Ignore parsing errors for unknown event types
-          }
-          break;
-      }
-    } catch (error) {
-      console.error(`Error processing iAssistant event ${eventType}:`, error.message);
-    }
+    return iAssistantService.processStreamingEvent(eventType, data, result);
   }
 
   /**

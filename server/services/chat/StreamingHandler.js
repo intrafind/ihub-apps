@@ -112,13 +112,12 @@ class StreamingHandler {
       const decoder = new TextDecoder();
       let fullResponse = '';
 
-      // Check if the adapter has custom processResponseBuffer method
+      // Check if the adapter needs custom SSE processing (only iAssistant for now)
       const adapter = getAdapter(model.provider);
-      const hasCustomBufferProcessor =
-        adapter && typeof adapter.processResponseBuffer === 'function';
+      const hasCustomBufferProcessor = model.provider === 'iassistant';
 
       if (hasCustomBufferProcessor) {
-        // For providers like iFinder with custom SSE format
+        // For providers like iAssistant with custom SSE format
         let buffer = '';
 
         while (true) {

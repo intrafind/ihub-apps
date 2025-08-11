@@ -60,7 +60,7 @@ function expandToolFunctions(tools = []) {
         expanded.push({
           ...tool,
           id: `${tool.id}_${fn}`,
-          name: cfg.name || `${tool.name} ${fn}`,
+          name: cfg.name || `${tool.name}_${fn}`,
           description: cfg.description || tool.description,
           parameters: cfg.parameters || {},
           method: fn
