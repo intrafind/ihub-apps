@@ -1,0 +1,38 @@
+{
+  "id": "iassistant-dama-dev",
+  "modelId": "iassistant-dama-dev",
+  "name": {
+    "en": "iAssistant DAMA Dev",
+    "de": "iAssistant DAMA Dev"
+  },
+  "description": {
+    "en": "iAssistant knowledge base search with RAG capabilities for DAMA development environment",
+    "de": "iAssistant Wissensdatenbank-Suche mit RAG-Funktionen für DAMA Entwicklungsumgebung"
+  },
+  "url": "https://dama.dev.intrafind.io/internal-api/v2/rag/ask",
+  "provider": "iassistant",
+  "tokenLimit": null,
+  "supportsTools": false,
+  "supportsImages": false,
+  "enabled": true,
+  "default": false,
+  "config": {
+    "baseUrl": "https://dama.dev.intrafind.io",
+    "searchFields": {},
+    "searchMode": "multiword",
+    "searchDistance": "",
+    "profileId": "c2VhcmNocHJvZmlsZS1zdGFuZGFyZA==",
+    "filter": [
+      {
+        "key": "application.keyword",
+        "values": ["PDF"],
+        "isNegated": false
+      },
+      {
+        "key": "query",
+        "values": ["adverse drug reactions"],
+        "isNegated": false
+      }
+    ]
+  }
+}

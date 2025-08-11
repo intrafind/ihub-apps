@@ -28,16 +28,18 @@ export const modelConfigSchema = z
     name: localizedStringSchema,
     description: localizedStringSchema,
     url: z.string().url('URL must be a valid URI format'),
-    provider: z.enum(['openai', 'anthropic', 'google', 'mistral', 'local'], {
+    provider: z.enum(['openai', 'anthropic', 'google', 'mistral', 'local', 'iassistant'], {
       errorMap: () => ({
-        message: 'Provider must be one of: openai, anthropic, google, mistral, local'
+        message: 'Provider must be one of: openai, anthropic, google, mistral, local, iassistant'
       })
     }),
     tokenLimit: z
       .number()
       .int()
       .min(1, 'Token limit must be at least 1')
-      .max(1000000, 'Token limit cannot exceed 1,000,000'),
+      .max(1000000, 'Token limit cannot exceed 1,000,000')
+      .nullable()
+      .optional(),
 
     // Optional fields with validation
     default: z.boolean().optional().default(false),
@@ -55,7 +57,11 @@ export const modelConfigSchema = z
       .max(10000, 'Request delay cannot exceed 10 seconds')
       .optional(),
     enabled: z.boolean().optional().default(true),
-    thinking: thinkingSchema.optional()
+    thinking: thinkingSchema.optional(),
+
+    // Additional fields for specific providers
+    supportsImages: z.boolean().optional(),
+    config: z.record(z.any()).optional() // Allow provider-specific configuration
   })
   .strict(); // Use strict instead of passthrough for better validation
 
