@@ -169,6 +169,7 @@ class IAssistantService {
         telemetry: true
       };
 
+      // same as in iassistant.js
       const headers = {
         Accept: 'text/event-stream', // iAssistant always uses SSE streaming
         'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,de;q=0.7',
@@ -176,14 +177,8 @@ class IAssistantService {
         Connection: 'keep-alive',
         Origin: effectiveConfig.baseUrl,
         Pragma: 'no-cache',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-origin',
-        'User-Agent': 'Mozilla/5.0 (compatible; iHub-Apps/1.0)',
+        'User-Agent': 'ihub/4.0.0', //replace with real version
         'content-type': 'application/json',
-        'sec-ch-ua': '"iHub-Apps";v="1.0"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Server"',
         Authorization: authHeader
       };
 
