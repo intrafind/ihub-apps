@@ -16,7 +16,7 @@ class ToolExecutor {
     this.streamingHandler = new StreamingHandler();
   }
 
-  async executeToolCall(toolCall, tools, chatId, buildLogData, user) {
+  async executeToolCall(toolCall, tools, chatId, buildLogData, user, app) {
     const toolId =
       tools.find(t => normalizeToolName(t.id) === toolCall.function.name)?.id ||
       toolCall.function.name;
@@ -47,7 +47,21 @@ class ToolExecutor {
     actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
 
     try {
-      const result = await runTool(toolId, { ...args, chatId, user });
+      // Check if this is a passthrough tool (streams directly to client)
+      if (this.isPassthroughTool(toolId, tools)) {
+        return await this.executePassthroughTool(
+          toolCall,
+          toolId,
+          args,
+          chatId,
+          buildLogData,
+          user,
+          app
+        );
+      }
+
+      // Regular tool execution
+      const result = await runTool(toolId, { ...args, chatId, user, appConfig: app });
       actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: result });
 
       await logInteraction(
@@ -105,6 +119,171 @@ class ToolExecutor {
     }
   }
 
+  /**
+   * Check if a tool supports passthrough/streaming responses
+   */
+  isPassthroughTool(toolId, tools) {
+    // Find the tool by ID (tools are already expanded from functions)
+    const tool = tools?.find(t => t.id === toolId);
+    if (!tool) return false;
+
+    // Check if the tool has passthrough flag (inherited from function definition)
+    return tool.passthrough === true;
+  }
+
+  /**
+   * Execute a passthrough tool and return result as assistant message
+   * Passthrough tools stream their responses directly to the client
+   */
+  async executePassthroughTool(toolCall, toolId, args, chatId, buildLogData, user, app) {
+    try {
+      // Call the tool with streaming/passthrough enabled
+      // The tool should return a streaming response object when passthrough is true
+      const streamingResponse = await runTool(toolId, {
+        ...args,
+        chatId,
+        user,
+        passthrough: true, // Signal to the tool to return streaming response
+        appConfig: app
+      });
+
+      let fullContent = '';
+
+      // Check if the response is an async iterator (for streaming)
+      if (streamingResponse && typeof streamingResponse[Symbol.asyncIterator] === 'function') {
+        // Handle async iterator response
+        for await (const chunk of streamingResponse) {
+          if (chunk) {
+            actionTracker.trackChunk(chatId, { content: chunk, source: 'tool', toolName: toolId });
+            fullContent += chunk;
+          }
+        }
+      } else if (
+        streamingResponse &&
+        streamingResponse.body &&
+        typeof streamingResponse.body.getReader === 'function'
+      ) {
+        // Handle raw streaming response (Response object)
+        const reader = streamingResponse.body.getReader();
+        const decoder = new TextDecoder();
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+
+            // For raw streams, just pass through the content
+            if (chunk) {
+              actionTracker.trackChunk(chatId, {
+                content: chunk,
+                source: 'tool',
+                toolName: toolId
+              });
+              fullContent += chunk;
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      } else if (typeof streamingResponse === 'string') {
+        // Non-streaming response - just use the string directly
+        fullContent = streamingResponse;
+        actionTracker.trackChunk(chatId, {
+          content: fullContent,
+          source: 'tool',
+          toolName: toolId
+        });
+      } else if (streamingResponse && typeof streamingResponse === 'object') {
+        // Handle object responses (convert to string)
+        fullContent =
+          typeof streamingResponse.answer === 'string'
+            ? streamingResponse.answer
+            : JSON.stringify(streamingResponse, null, 2);
+        actionTracker.trackChunk(chatId, {
+          content: fullContent,
+          source: 'tool',
+          toolName: toolId
+        });
+      } else {
+        // Fallback for unexpected response types
+        fullContent = String(streamingResponse);
+        actionTracker.trackChunk(chatId, {
+          content: fullContent,
+          source: 'tool',
+          toolName: toolId
+        });
+      }
+
+      // Signal completion of tool streaming
+      actionTracker.trackToolStreamComplete(chatId, { toolName: toolId, content: fullContent });
+
+      actionTracker.trackToolCallEnd(chatId, {
+        toolName: toolId,
+        toolOutput: { answer: fullContent }
+      });
+
+      await logInteraction(
+        'tool_usage',
+        buildLogData(true, {
+          toolId,
+          toolInput: args,
+          toolOutput: { answer: fullContent, streaming: true }
+        })
+      );
+
+      // Return the result as an assistant message instead of a tool message
+      return {
+        success: true,
+        passthrough: true,
+        message: {
+          role: 'assistant',
+          content: fullContent,
+          tool_source: toolId, // Metadata to indicate this came from a tool
+          tool_call_id: toolCall.id
+        }
+      };
+    } catch (toolError) {
+      console.error(`Passthrough tool execution failed for ${toolId}:`, toolError);
+
+      const errorResult = {
+        error: true,
+        message: `Passthrough tool execution failed: ${toolError.message || 'Unknown error'}`,
+        toolId,
+        details: toolError.stack || toolError.toString()
+      };
+
+      actionTracker.trackToolCallEnd(chatId, {
+        toolName: toolId,
+        toolOutput: errorResult,
+        error: true
+      });
+
+      await logInteraction(
+        'tool_error',
+        buildLogData(true, {
+          toolId,
+          toolInput: args,
+          error: errorResult
+        })
+      );
+
+      // For passthrough tool errors, also return as assistant message
+      return {
+        success: false,
+        passthrough: true,
+        message: {
+          role: 'assistant',
+          content: `I encountered an error while processing your request: ${errorResult.message}`,
+          tool_source: toolId,
+          tool_call_id: toolCall.id,
+          error: true
+        }
+      };
+    }
+  }
+
   async processChatWithTools({
     prep,
     chatId,
@@ -123,7 +302,8 @@ class ToolExecutor {
       temperature,
       maxTokens,
       responseFormat,
-      responseSchema
+      responseSchema,
+      app
     } = prep;
     const controller = new AbortController();
 
@@ -335,9 +515,44 @@ class ToolExecutor {
       assistantMessage.content = assistantContent || null;
       llmMessages.push(assistantMessage);
 
+      let hasStreamingTools = false;
       for (const call of validToolCalls) {
-        const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData, user);
-        llmMessages.push(toolResult.message);
+        const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData, user, app);
+
+        if (toolResult.passthrough) {
+          // For passthrough tools, add the result as assistant message and stop processing
+          hasStreamingTools = true;
+          llmMessages.push(toolResult.message);
+
+          // Log the streaming tool completion
+          await logInteraction(
+            'chat_response',
+            buildLogData(true, {
+              responseType: 'success',
+              response: toolResult.message.content.substring(0, 1000),
+              source: 'passthrough_tool',
+              toolName: toolResult.message.tool_source
+            })
+          );
+
+          // Signal that we're done - user needs to send next message for LLM to continue
+          actionTracker.trackDone(chatId, {
+            finishReason: 'tool_passthrough_complete',
+            toolName: toolResult.message.tool_source
+          });
+        } else {
+          // Regular tool result
+          llmMessages.push(toolResult.message);
+        }
+      }
+
+      // If we had streaming tools, don't continue with LLM - wait for next user input
+      if (hasStreamingTools) {
+        clearTimeout(timeoutId);
+        if (activeRequests.get(chatId) === controller) {
+          activeRequests.delete(chatId);
+        }
+        return;
       }
 
       // Recursively continue with tool execution until we get a final response
@@ -575,9 +790,49 @@ class ToolExecutor {
         llmMessages.push(assistantMessage);
 
         for (const call of collectedToolCalls) {
-          const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData, user);
-          llmMessages.push(toolResult.message);
+          const toolResult = await this.executeToolCall(
+            call,
+            tools,
+            chatId,
+            buildLogData,
+            user,
+            app
+          );
+
+          if (toolResult.streaming) {
+            // For streaming tools, add the result as assistant message and stop processing
+            llmMessages.push(toolResult.message);
+
+            // Log the streaming tool completion
+            await logInteraction(
+              'chat_response',
+              buildLogData(true, {
+                responseType: 'success',
+                response: toolResult.message.content.substring(0, 1000),
+                source: 'passthrough_tool',
+                toolName: toolResult.message.tool_source
+              })
+            );
+
+            // Signal that we're done - user needs to send next message for LLM to continue
+            actionTracker.trackDone(chatId, {
+              finishReason: 'tool_passthrough_complete',
+              toolName: toolResult.message.tool_source
+            });
+
+            // Exit the iteration and function - we don't continue with more tools or LLM
+            clearTimeout(timeoutId);
+            if (activeRequests.get(chatId) === controller) {
+              activeRequests.delete(chatId);
+            }
+            return;
+          } else {
+            // Regular tool result
+            llmMessages.push(toolResult.message);
+          }
         }
+
+        // Continue to next iteration for non-streaming tools
 
         console.log(`--- Tool execution iteration ${iteration} complete ---`);
         // Continue the loop for the next iteration

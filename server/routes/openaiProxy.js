@@ -255,21 +255,31 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
       }
     }
 
-    const request = createCompletionRequest(model, messages, apiKey, {
-      stream,
-      temperature,
-      maxTokens,
-      tools: genericTools,
-      toolChoice
-    });
-
-    console.log(`[OpenAI Proxy] Request prepared for ${model.provider}:`, {
-      url: request.url,
-      bodySize: JSON.stringify(request.body).length,
-      stream
-    });
-
     try {
+      // Debug logging for user context
+      if (model.provider === 'iassistant') {
+        console.log('[OpenAI Proxy] User context for iAssistant:', {
+          hasUser: !!req.user,
+          userId: req.user?.id,
+          userEmail: req.user?.email,
+          userName: req.user?.name
+        });
+      }
+
+      const request = createCompletionRequest(model, messages, apiKey, {
+        stream,
+        temperature,
+        maxTokens,
+        tools: genericTools,
+        toolChoice,
+        user: req.user // Pass user context to adapters that need it
+      });
+
+      console.log(`[OpenAI Proxy] Request prepared for ${model.provider}:`, {
+        url: request.url,
+        bodySize: JSON.stringify(request.body).length,
+        stream
+      });
       const startTime = Date.now();
       const llmResponse = await throttledFetch(model.id, request.url, {
         method: 'POST',
@@ -358,13 +368,26 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
               }
 
               try {
+                // Debug logging for iAssistant
+                if (model.provider === 'iassistant') {
+                  console.log(
+                    '[OpenAI Proxy] Processing iAssistant data:',
+                    data.substring(0, 200) + '...'
+                  );
+                }
+
                 // Use generic tool calling system to normalize response
-                console.log(`[OpenAI Proxy] Raw ${model.provider} data:`, data);
                 const genericResult = convertResponseToGeneric(data, model.provider, streamId);
-                console.log(
-                  `[OpenAI Proxy] Generic result:`,
-                  JSON.stringify(genericResult, null, 2)
-                );
+
+                // Debug logging for iAssistant result
+                if (model.provider === 'iassistant') {
+                  console.log('[OpenAI Proxy] iAssistant generic result:', {
+                    contentChunks: genericResult.content?.length || 0,
+                    complete: genericResult.complete,
+                    finishReason: genericResult.finishReason,
+                    hasMetadata: !!genericResult.metadata
+                  });
+                }
 
                 // Handle first chunk with tool calls - need to send separate chunks for OpenAI compatibility
                 const hasToolCalls =
@@ -385,10 +408,6 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
 
                   if (roleChunk) {
                     chunkCount++;
-                    console.log(
-                      `[OpenAI Proxy] Sending role chunk:`,
-                      JSON.stringify(roleChunk, null, 2)
-                    );
                     res.write(`data: ${JSON.stringify(roleChunk)}\n\n`);
                   }
 
@@ -406,11 +425,14 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
 
                   if (toolChunk) {
                     chunkCount++;
-                    console.log(
-                      `[OpenAI Proxy] Sending tool chunk:`,
-                      JSON.stringify(toolChunk, null, 2)
-                    );
                     res.write(`data: ${JSON.stringify(toolChunk)}\n\n`);
+                  }
+
+                  // Check if this chunk indicates completion
+                  if (genericResult.complete) {
+                    res.write('data: [DONE]\n\n');
+                    res.end();
+                    return; // Exit the entire streaming function
                   }
 
                   isFirstChunk = false;
@@ -430,11 +452,14 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
                   ) {
                     chunkCount++;
                     isFirstChunk = false;
-                    console.log(
-                      `[OpenAI Proxy] Sending OpenAI chunk:`,
-                      JSON.stringify(openAIChunk, null, 2)
-                    );
                     res.write(`data: ${JSON.stringify(openAIChunk)}\n\n`);
+
+                    // Check if this chunk indicates completion
+                    if (genericResult.complete) {
+                      res.write('data: [DONE]\n\n');
+                      res.end();
+                      return; // Exit the entire streaming function
+                    }
                   }
                 }
               } catch (error) {
@@ -460,12 +485,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
               // Process if it's not empty or a special marker
               if (data && data !== '[DONE]') {
                 try {
-                  console.log(`[OpenAI Proxy] Raw ${model.provider} buffer data:`, data);
                   const genericResult = convertResponseToGeneric(data, model.provider, streamId);
-                  console.log(
-                    `[OpenAI Proxy] Generic buffer result:`,
-                    JSON.stringify(genericResult, null, 2)
-                  );
 
                   const openAIChunk = convertResponseFromGeneric(genericResult, 'openai', {
                     completionId,
@@ -478,10 +498,6 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
                     (genericResult.content.length > 0 || genericResult.tool_calls.length > 0)
                   ) {
                     chunkCount++;
-                    console.log(
-                      `[OpenAI Proxy] Sending buffer chunk to client:`,
-                      JSON.stringify(openAIChunk, null, 2)
-                    );
                     res.write(`data: ${JSON.stringify(openAIChunk)}\n\n`);
                   }
                 } catch (error) {
@@ -494,9 +510,6 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
           reader.releaseLock();
         }
 
-        console.log(
-          `[OpenAI Proxy] ${model.provider} streaming complete. Total chunks: ${chunkCount}`
-        );
         res.write('data: [DONE]\n\n');
         res.end();
       } else {
@@ -549,10 +562,6 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
             openAIResponse.choices[0].message.tool_calls = openAIToolCalls;
           }
 
-          console.log(
-            `[OpenAI Proxy] Sending non-streaming response to client:`,
-            JSON.stringify(openAIResponse, null, 2)
-          );
           res.json(openAIResponse);
         } catch (error) {
           console.error('[OpenAI Proxy] Error processing non-streaming response:', error);

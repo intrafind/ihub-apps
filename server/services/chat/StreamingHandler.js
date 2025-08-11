@@ -79,6 +79,12 @@ class StreamingHandler {
       clearTimeout(timeoutId);
 
       if (!llmResponse.ok) {
+        console.error(`StreamingHandler: HTTP error from ${model.provider}:`, {
+          status: llmResponse.status,
+          statusText: llmResponse.statusText,
+          url: request.url
+        });
+
         const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
           llmResponse,
           model,
@@ -122,11 +128,14 @@ class StreamingHandler {
 
         while (true) {
           const { done, value } = await reader.read();
+
           if (!activeRequests.has(chatId)) {
             reader.cancel();
             break;
           }
-          if (done) break;
+          if (done) {
+            break;
+          }
 
           const chunk = decoder.decode(value, { stream: true });
           buffer += chunk;
@@ -141,7 +150,21 @@ class StreamingHandler {
             let result = null;
             if (completeEvents) {
               // Add back the delimiter for processing
-              result = adapter.processResponseBuffer(completeEvents + '\n\n');
+              try {
+                result = adapter.processResponseBuffer(completeEvents + '\n\n');
+              } catch (processingError) {
+                console.error(
+                  `StreamingHandler: Error processing buffer with ${model.provider} adapter:`,
+                  processingError.message
+                );
+                result = {
+                  content: [],
+                  complete: false,
+                  finishReason: 'error',
+                  error: true,
+                  errorMessage: `Processing error: ${processingError.message}`
+                };
+              }
 
               // Keep the remaining incomplete data in buffer
               buffer = remainingData;
@@ -318,7 +341,34 @@ class StreamingHandler {
     } catch (error) {
       clearTimeout(timeoutId);
 
-      if (error.name !== 'AbortError') {
+      console.error(
+        'StreamingHandler: Caught error in executeStreamingResponse:',
+        error.name,
+        error.message
+      );
+      console.error('StreamingHandler: Full error:', error);
+
+      // Handle connection termination by remote server specifically for iAssistant
+      if (
+        error.message === 'terminated' &&
+        error.cause?.code === 'UND_ERR_SOCKET' &&
+        model.provider === 'iassistant'
+      ) {
+        console.error('iAssistant: Connection terminated by remote server. This may indicate:');
+        console.error('- Authentication/authorization failure');
+        console.error('- Invalid request format');
+        console.error('- Server-side error');
+        console.error('- Network connectivity issue');
+
+        const errorMessage = await getLocalizedError(
+          'responseStreamError',
+          {
+            error: 'iAssistant server closed connection. Check authentication and request format.'
+          },
+          clientLanguage
+        );
+        actionTracker.trackError(chatId, { message: errorMessage });
+      } else if (error.name !== 'AbortError') {
         const errorMessage = await getLocalizedError(
           'responseStreamError',
           { error: error.message },

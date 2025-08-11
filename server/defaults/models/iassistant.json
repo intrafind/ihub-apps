@@ -1,23 +1,22 @@
 {
-  "id": "iassistant-dama-dev",
-  "modelId": "iassistant-dama-dev",
+  "id": "iassistant",
+  "enabled": false,
+  "modelId": "iassistant",
   "name": {
-    "en": "iAssistant DAMA Dev",
-    "de": "iAssistant DAMA Dev"
+    "en": "iAssistant",
+    "de": "iAssistant"
   },
   "description": {
-    "en": "iAssistant knowledge base search with RAG capabilities for DAMA development environment",
-    "de": "iAssistant Wissensdatenbank-Suche mit RAG-Funktionen für DAMA Entwicklungsumgebung"
+    "en": "iAssistant knowledge base search with RAG capabilities",
+    "de": "iAssistant Wissensdatenbank-Suche mit RAG-Funktionen"
   },
-  "url": "https://dama.dev.intrafind.io/internal-api/v2/rag/ask",
   "provider": "iassistant",
   "tokenLimit": null,
   "supportsTools": false,
   "supportsImages": false,
-  "enabled": true,
   "default": false,
   "config": {
-    "baseUrl": "https://dama.dev.intrafind.io",
+    "baseUrl": "http://localhost:8080",
     "searchFields": {},
     "searchMode": "multiword",
     "searchDistance": "",
@@ -30,7 +29,7 @@
       },
       {
         "key": "query",
-        "values": ["adverse drug reactions"],
+        "values": ["*"],
         "isNegated": false
       }
     ]

@@ -63,7 +63,9 @@ function expandToolFunctions(tools = []) {
           name: cfg.name || `${tool.name}_${fn}`,
           description: cfg.description || tool.description,
           parameters: cfg.parameters || {},
-          method: fn
+          method: fn,
+          // Inherit passthrough setting from function definition or tool
+          passthrough: cfg.passthrough || tool.passthrough || false
         });
       }
     } else {

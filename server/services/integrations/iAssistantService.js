@@ -28,9 +28,7 @@ class IAssistantService {
 
       this.config = {
         baseUrl:
-          config.IASSISTANT_API_URL ||
-          process.env.IASSISTANT_API_URL ||
-          iAssistantConfig.baseUrl,
+          config.IASSISTANT_API_URL || process.env.IASSISTANT_API_URL || iAssistantConfig.baseUrl,
         endpoint: iAssistantConfig.endpoint || '/internal-api/v2/rag/ask',
         defaultProfileId:
           iAssistantConfig.defaultProfileId ||
@@ -101,7 +99,8 @@ class IAssistantService {
     searchDistance,
     searchFields,
     scope,
-    streaming = false
+    streaming = false,
+    appConfig = null
   }) {
     if (!question) {
       throw new Error('Question parameter is required');
@@ -109,13 +108,27 @@ class IAssistantService {
     this.validateCommon(user, chatId);
 
     const config = this.getConfig();
-    const rawProfileId = profileId || config.defaultProfileId;
-    const actualProfileId = this.encodeProfileId(rawProfileId);
-    const actualFilter = filter || config.defaultFilter;
-    const actualSearchMode = searchMode || config.defaultSearchMode;
-    const actualSearchDistance = searchDistance || config.defaultSearchDistance;
-    const actualSearchFields = searchFields || config.defaultSearchFields;
 
+    // Merge app config overrides if provided
+    const appIAssistantConfig = appConfig?.iassistant || {};
+
+    // Override config with app-specific settings
+    const effectiveConfig = {
+      ...config,
+      baseUrl: appIAssistantConfig.baseUrl || config.baseUrl,
+      defaultProfileId: appIAssistantConfig.profileId || config.defaultProfileId,
+      defaultFilter: appIAssistantConfig.filter || config.defaultFilter,
+      defaultSearchMode: appIAssistantConfig.searchMode || config.defaultSearchMode,
+      defaultSearchDistance: appIAssistantConfig.searchDistance || config.defaultSearchDistance,
+      defaultSearchFields: appIAssistantConfig.searchFields || config.defaultSearchFields
+    };
+
+    const rawProfileId = profileId || effectiveConfig.defaultProfileId;
+    const actualProfileId = this.encodeProfileId(rawProfileId);
+    const actualFilter = filter || effectiveConfig.defaultFilter;
+    const actualSearchMode = searchMode || effectiveConfig.defaultSearchMode;
+    const actualSearchDistance = searchDistance || effectiveConfig.defaultSearchDistance;
+    const actualSearchFields = searchFields || effectiveConfig.defaultSearchFields;
 
     // Track the action
     actionTracker.trackAction(chatId, {
@@ -142,7 +155,7 @@ class IAssistantService {
 
       // Construct URL
       const uuid = `ifs-ihub-chat-request-${Date.now()}`;
-      const url = new URL(`${config.baseUrl}${config.endpoint}`);
+      const url = new URL(`${effectiveConfig.baseUrl}${effectiveConfig.endpoint}`);
       url.searchParams.set('uuid', uuid);
       url.searchParams.set('searchFields', JSON.stringify(actualSearchFields));
       url.searchParams.set('sSearchMode', actualSearchMode);
@@ -161,7 +174,7 @@ class IAssistantService {
         'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,de;q=0.7',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
-        Origin: config.baseUrl,
+        Origin: effectiveConfig.baseUrl,
         Pragma: 'no-cache',
         'Sec-Fetch-Dest': 'empty',
         'Sec-Fetch-Mode': 'cors',
@@ -179,7 +192,7 @@ class IAssistantService {
         method: 'POST',
         headers,
         body: JSON.stringify(requestBody),
-        timeout: config.timeout
+        timeout: effectiveConfig.timeout
       });
 
       if (!response.ok) {
@@ -225,6 +238,8 @@ class IAssistantService {
    * @returns {Object} Complete collected response
    */
   async collectStreamingResponse(response) {
+    // Delegate to the new consolidated method
+    // return this.collectCompleteResponse(response);
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -310,9 +325,11 @@ class IAssistantService {
   /**
    * Process Server-Sent Events streaming data
    * @param {string} buffer - SSE buffer content
+   * @param {Object} options - Processing options
+   * @param {boolean} options.includeToolCalls - Include tool_calls array for adapter compatibility
    * @returns {Object} Processed streaming result
    */
-  processStreamingBuffer(buffer) {
+  processStreamingBuffer(buffer, options = {}) {
     const result = {
       content: [],
       complete: false,
@@ -321,44 +338,59 @@ class IAssistantService {
       telemetry: null
     };
 
-    // Split buffer by lines and process each SSE event
-    const lines = buffer.split('\n');
-    let currentEvent = null;
-    let currentData = '';
+    try {
+      // Handle empty or invalid buffer
+      if (!buffer || typeof buffer !== 'string') {
+        console.warn('iAssistant: Empty or invalid buffer received');
+        return result;
+      }
 
-    for (const line of lines) {
-      const trimmedLine = line.trim();
+      // Split buffer by lines and process each SSE event
+      const lines = buffer.split('\n');
+      let currentEvent = null;
+      let currentData = '';
 
-      if (trimmedLine.startsWith('event:')) {
-        // New event type
-        if (currentEvent && currentData) {
-          this.processStreamingEvent(currentEvent, currentData, result);
-        }
-        currentEvent = trimmedLine.substring(6).trim();
-        currentData = '';
-      } else if (trimmedLine.startsWith('data:')) {
-        // Event data
-        const data = trimmedLine.substring(5).trim();
-        currentData += data;
-      } else if (trimmedLine.startsWith('id:')) {
-        // Event ID (we don't need to process this for now)
-        continue;
-      } else if (trimmedLine === '') {
-        // Empty line indicates end of event
-        if (currentEvent && currentData) {
-          this.processStreamingEvent(currentEvent, currentData, result);
-          currentEvent = null;
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+
+        if (trimmedLine.startsWith('event:')) {
+          // New event type
+          if (currentEvent && currentData) {
+            this.processStreamingEvent(currentEvent, currentData, result);
+          }
+          currentEvent = trimmedLine.substring(6).trim();
           currentData = '';
+        } else if (trimmedLine.startsWith('data:')) {
+          // Event data
+          const data = trimmedLine.substring(5).trim();
+          currentData += data;
+        } else if (trimmedLine.startsWith('id:')) {
+          // Event ID (we don't need to process this for now)
+          continue;
+        } else if (trimmedLine === '') {
+          // Empty line indicates end of event
+          if (currentEvent && currentData) {
+            this.processStreamingEvent(currentEvent, currentData, result);
+            currentEvent = null;
+            currentData = '';
+          }
         }
       }
-    }
 
-    // Process final event if buffer doesn't end with empty line
-    if (currentEvent && currentData) {
-      this.processStreamingEvent(currentEvent, currentData, result);
-    }
+      // Process final event if buffer doesn't end with empty line
+      if (currentEvent && currentData) {
+        this.processStreamingEvent(currentEvent, currentData, result);
+      }
 
-    return result;
+      return result;
+    } catch (error) {
+      console.error('iAssistant: Error processing streaming buffer:', error.message);
+      return {
+        ...result,
+        error: true,
+        errorMessage: `Buffer processing error: ${error.message}`
+      };
+    }
   }
 
   /**
@@ -417,6 +449,191 @@ class IAssistantService {
       }
     } catch (error) {
       console.error(`Error processing iAssistant event ${eventType}:`, error.message);
+    }
+  }
+
+  /**
+   * Extract complete SSE events from buffer
+   * @param {string} buffer - Buffer containing SSE data
+   * @returns {Object} Object containing complete events and remaining buffer
+   */
+  extractCompleteEvents(buffer) {
+    const events = [];
+    let remainingBuffer = buffer;
+
+    // Split by event boundaries (\n\n)
+    if (buffer.includes('\n\n')) {
+      const parts = buffer.split('\n\n');
+      const completeEventStrings = parts.slice(0, -1);
+      remainingBuffer = parts[parts.length - 1];
+
+      // Process complete events
+      for (const eventString of completeEventStrings) {
+        if (eventString.trim()) {
+          events.push(eventString + '\n\n');
+        }
+      }
+    }
+
+    return {
+      events,
+      remainingBuffer
+    };
+  }
+
+  /**
+   * Create streaming iterator for tool passthrough functionality
+   * @param {Response} response - Fetch response object
+   * @param {Object} options - Iterator options
+   * @param {boolean} options.contentOnly - Only yield content chunks (default: true)
+   * @returns {Object} Async iterator for streaming content
+   */
+  createStreamingIterator(response, options = {}) {
+    const { contentOnly = true } = options;
+
+    return {
+      [Symbol.asyncIterator]: async function* () {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+
+            // Extract complete events
+            const { events, remainingBuffer } = this.extractCompleteEvents(buffer);
+            buffer = remainingBuffer;
+
+            // Process each complete event
+            for (const eventString of events) {
+              const result = this.processStreamingBuffer(eventString);
+
+              if (contentOnly) {
+                // Only yield content chunks for passthrough mode
+                if (result && result.content && result.content.length > 0) {
+                  for (const textContent of result.content) {
+                    yield textContent;
+                  }
+                }
+              } else {
+                // Yield full result object
+                yield result;
+              }
+
+              // Check if stream is complete
+              if (result && result.complete) {
+                return;
+              }
+            }
+          }
+
+          // Process any remaining buffer
+          if (buffer.trim()) {
+            const result = this.processStreamingBuffer(buffer);
+
+            if (contentOnly) {
+              if (result && result.content && result.content.length > 0) {
+                for (const textContent of result.content) {
+                  yield textContent;
+                }
+              }
+            } else {
+              yield result;
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }.bind(this)
+    };
+  }
+
+  /**
+   * Collect complete response from streaming source
+   * @param {Response} response - Fetch response object
+   * @returns {Object} Complete collected response
+   */
+  async collectCompleteResponse(response) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const result = {
+      answer: '',
+      passages: [],
+      telemetry: null,
+      metadata: {},
+      complete: false
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+
+        // Extract complete events
+        const { events, remainingBuffer } = this.extractCompleteEvents(buffer);
+        buffer = remainingBuffer;
+
+        // Process each complete event
+        for (const eventString of events) {
+          const streamingResult = this.processStreamingBuffer(eventString);
+
+          // Accumulate content
+          if (streamingResult.content && streamingResult.content.length > 0) {
+            result.answer += streamingResult.content.join('');
+          }
+
+          // Store other data
+          if (streamingResult.passages && streamingResult.passages.length > 0) {
+            result.passages = streamingResult.passages;
+          }
+
+          if (streamingResult.telemetry) {
+            result.telemetry = streamingResult.telemetry;
+          }
+
+          // Check if complete
+          if (streamingResult.complete) {
+            result.complete = true;
+            return result;
+          }
+        }
+      }
+
+      // Process any remaining data
+      if (buffer.trim() && !result.complete) {
+        const streamingResult = this.processStreamingBuffer(buffer);
+
+        if (streamingResult.content && streamingResult.content.length > 0) {
+          result.answer += streamingResult.content.join('');
+        }
+
+        if (streamingResult.passages && streamingResult.passages.length > 0) {
+          result.passages = streamingResult.passages;
+        }
+
+        if (streamingResult.telemetry) {
+          result.telemetry = streamingResult.telemetry;
+        }
+
+        result.complete = true;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('iAssistant: Error collecting complete response:', error);
+      throw error;
+    } finally {
+      reader.releaseLock();
     }
   }
 

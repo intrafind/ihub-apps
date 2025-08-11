@@ -49,9 +49,10 @@ class IAssistantAdapterClass extends BaseAdapter {
     const actualSearchDistance = config.searchDistance || serviceConfig.defaultSearchDistance;
     const actualSearchFields = config.searchFields || serviceConfig.defaultSearchFields;
 
-    // Construct URL
+    // Construct URL - use baseUrl from config (model or app) or fall back to service default
     const uuid = `ifs-ihub-chat-request-${Date.now()}`;
-    const url = new URL(`${serviceConfig.baseUrl}${serviceConfig.endpoint}`);
+    const baseUrl = config.baseUrl || serviceConfig.baseUrl;
+    const url = new URL(`${baseUrl}${serviceConfig.endpoint}`);
     url.searchParams.set('uuid', uuid);
     url.searchParams.set('searchFields', JSON.stringify(actualSearchFields));
     url.searchParams.set('sSearchMode', actualSearchMode);
@@ -66,25 +67,34 @@ class IAssistantAdapterClass extends BaseAdapter {
     };
 
     const headers = {
-      Accept: 'text/event-stream',
+      Accept: 'text/event-stream', // Keep SSE for streaming
       'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,de;q=0.7',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
-      Origin: serviceConfig.baseUrl,
+      DNT: '1',
+      Origin: baseUrl,
       Pragma: 'no-cache',
       'Sec-Fetch-Dest': 'empty',
       'Sec-Fetch-Mode': 'cors',
       'Sec-Fetch-Site': 'same-origin',
-      'User-Agent': 'Mozilla/5.0 (compatible; iHub-Apps/1.0)',
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
       'content-type': 'application/json',
-      'sec-ch-ua': '"iHub-Apps";v="1.0"',
+      'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
       'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Server"'
+      'sec-ch-ua-platform': '"macOS"'
     };
 
     // Add JWT authentication based on user context
     const { user } = options;
     const userId = user?.id || user?.email;
+
+    console.log('iAssistant: Received user context:', {
+      hasUser: !!user,
+      userId: userId,
+      userEmail: user?.email,
+      userName: user?.name
+    });
 
     if (user && userId && userId !== 'anonymous') {
       try {
@@ -94,7 +104,7 @@ class IAssistantAdapterClass extends BaseAdapter {
         });
         headers['Authorization'] = authHeader;
       } catch (error) {
-        console.error('Failed to generate iAssistant JWT token:', error.message);
+        console.error('iAssistant: JWT generation failed:', error.message);
         throw new Error(`iAssistant authentication failed: ${error.message}`);
       }
     } else {
@@ -105,12 +115,14 @@ class IAssistantAdapterClass extends BaseAdapter {
       throw new Error(errorMsg);
     }
 
-    return {
+    const request = {
       url: url.toString(),
       method: 'POST',
       headers,
       body: requestBody // Return raw object - StreamingHandler will JSON.stringify it
     };
+
+    return request;
   }
 
   /**
@@ -118,12 +130,40 @@ class IAssistantAdapterClass extends BaseAdapter {
    * iAssistant uses custom SSE format that needs special handling
    */
   processResponseBuffer(buffer) {
-    const result = iAssistantService.processStreamingBuffer(buffer);
+    try {
+      const result = iAssistantService.processStreamingBuffer(buffer);
 
-    // Add tool_calls array for adapter compatibility
-    result.tool_calls = [];
+      // Ensure we have a valid result object
+      if (!result || typeof result !== 'object') {
+        console.error('iAssistant: Invalid result from processStreamingBuffer:', result);
+        return {
+          content: [],
+          complete: false,
+          finishReason: null,
+          passages: [],
+          telemetry: null,
+          tool_calls: []
+        };
+      }
 
-    return result;
+      // Add tool_calls array for adapter compatibility
+      result.tool_calls = [];
+
+      return result;
+    } catch (error) {
+      console.error('iAssistant: Error processing response buffer:', error.message);
+      console.error('iAssistant: Buffer content:', buffer.substring(0, 200) + '...');
+      return {
+        content: [],
+        complete: false,
+        finishReason: 'error',
+        passages: [],
+        telemetry: null,
+        tool_calls: [],
+        error: true,
+        errorMessage: `Processing error: ${error.message}`
+      };
+    }
   }
 
   /**
