@@ -38,7 +38,6 @@ export const modelConfigSchema = z
       .int()
       .min(1, 'Token limit must be at least 1')
       .max(1000000, 'Token limit cannot exceed 1,000,000')
-      .nullable()
       .optional(),
 
     // Optional fields with validation
