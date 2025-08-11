@@ -9,12 +9,12 @@ import '@testing-library/jest-dom';
  */
 
 // Simplified version of ChatInput that mimics the real component behavior
-const ChatInput = ({ 
-  app = {}, 
-  value = '', 
-  onChange, 
-  onSubmit, 
-  isProcessing = false, 
+const ChatInput = ({
+  app = {},
+  value = '',
+  onChange,
+  onSubmit,
+  isProcessing = false,
   disabled = false,
   allowEmptySubmit = false,
   onVoiceInput,
@@ -40,7 +40,7 @@ const ChatInput = ({
     placeholder = 'Type here (optional)...';
   }
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = e => {
     if (e.key === 'Enter' && !e.shiftKey && !multilineMode) {
       e.preventDefault();
       if (onSubmit) {
@@ -79,8 +79,8 @@ const ChatInput = ({
 
         {/* Action buttons */}
         <div className="flex gap-2">
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={disabled || isProcessing}
             className="px-4 py-2 bg-blue-500 text-white rounded"
             data-testid="send-button"
@@ -142,7 +142,7 @@ const ChatInput = ({
           <div data-testid="file-uploader" className="p-2 border rounded">
             <input
               type="file"
-              onChange={(e) => onFileSelect && onFileSelect(e.target.files[0])}
+              onChange={e => onFileSelect && onFileSelect(e.target.files[0])}
               data-testid="file-input"
             />
           </div>
@@ -189,7 +189,7 @@ describe('ChatInput Component Unit Tests', () => {
     // Check for main input element
     const inputElement = screen.getByTestId('message-input');
     expect(inputElement).toBeInTheDocument();
-    
+
     // Check for submit button
     const submitButton = screen.getByTestId('send-button');
     expect(submitButton).toBeInTheDocument();
@@ -230,11 +230,11 @@ describe('ChatInput Component Unit Tests', () => {
 
   test('should call onSubmit when form is submitted', async () => {
     const user = userEvent.setup();
-    const mockOnSubmit = jest.fn((e) => e.preventDefault());
+    const mockOnSubmit = jest.fn(e => e.preventDefault());
 
-    renderChatInput({ 
+    renderChatInput({
       value: 'Test message',
-      onSubmit: mockOnSubmit 
+      onSubmit: mockOnSubmit
     });
 
     const submitButton = screen.getByTestId('send-button');
@@ -255,7 +255,7 @@ describe('ChatInput Component Unit Tests', () => {
 
     const inputElement = screen.getByTestId('message-input');
     const submitButton = screen.getByTestId('send-button');
-    
+
     expect(inputElement).toBeDisabled();
     expect(submitButton).toBeDisabled();
     expect(submitButton).toHaveTextContent('Sending...');
@@ -263,15 +263,15 @@ describe('ChatInput Component Unit Tests', () => {
 
   test('should handle form submission with Enter key', async () => {
     const user = userEvent.setup();
-    const mockOnSubmit = jest.fn((e) => e.preventDefault());
+    const mockOnSubmit = jest.fn(e => e.preventDefault());
 
-    renderChatInput({ 
+    renderChatInput({
       value: 'Test message',
-      onSubmit: mockOnSubmit 
+      onSubmit: mockOnSubmit
     });
 
     const inputElement = screen.getByTestId('message-input');
-    
+
     // Focus the input and press Enter
     await user.click(inputElement);
     await user.keyboard('{Enter}');

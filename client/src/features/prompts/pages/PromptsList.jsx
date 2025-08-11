@@ -90,7 +90,7 @@ const PromptsList = () => {
         setLoading(false);
       }
     })();
-  }, [t, i18n.language, getFavoritePrompts]);
+  }, [t, i18n.language]);
 
   // Open modal if id parameter is present
   useEffect(() => {

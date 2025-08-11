@@ -13,22 +13,20 @@ import {
 export default function registerStaticRoutes(app, { isPackaged, rootDir, basePath = '' }) {
   fileURLToPath(import.meta.url);
 
-  let staticPath;
-  if (isPackaged) {
-    staticPath = path.join(rootDir, 'public');
-  } else if (config.NODE_ENV === 'production') {
-    staticPath = path.join(rootDir, 'public');
-  } else {
-    staticPath = path.join(rootDir, 'client/dist');
-  }
+  // Only serve static files in production or packaged mode
+  // In development, Vite serves the frontend directly
+  if (isPackaged || config.NODE_ENV === 'production') {
+    const staticPath = path.join(rootDir, 'public');
+    console.log(`Serving static files from: ${staticPath}`);
 
-  console.log(`Serving static files from: ${staticPath}`);
-
-  // Serve static files at base path
-  if (basePath) {
-    app.use(basePath, express.static(staticPath));
+    // Serve static files at base path
+    if (basePath) {
+      app.use(basePath, express.static(staticPath));
+    } else {
+      app.use(express.static(staticPath));
+    }
   } else {
-    app.use(express.static(staticPath));
+    console.log('Development mode: Static files served by Vite on port 5173');
   }
 
   // Serve uploaded assets
@@ -41,31 +39,29 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
   console.log(`Serving documentation from: ${docsPath} at ${buildDocsPath('/')}`);
   app.use(buildDocsPath('/'), authRequired, express.static(docsPath));
 
-  // Determine index path once during setup
-  let indexPath;
-  if (isPackaged) {
-    indexPath = path.join(rootDir, 'public/index.html');
-  } else if (config.NODE_ENV === 'production') {
-    indexPath = path.join(rootDir, 'public/index.html');
+  // Only set up SPA routing in production or packaged mode
+  // In development, Vite handles all frontend routing
+  if (isPackaged || config.NODE_ENV === 'production') {
+    const indexPath = path.join(rootDir, 'public/index.html');
+    console.log(`SPA will be served from: ${indexPath}`);
+
+    // Catch-all for SPA routing (but exclude API and docs paths)
+    app.get('*', (req, res, next) => {
+      const relativePath = getRelativeRequestPath(req.path);
+
+      // Don't serve SPA for API routes
+      if (relativePath.startsWith('/api')) {
+        return next();
+      }
+
+      // Don't serve SPA for docs routes if they weren't handled by static middleware
+      if (relativePath.startsWith('/docs')) {
+        return res.status(404).send('Documentation not found');
+      }
+
+      res.sendFile(indexPath);
+    });
   } else {
-    indexPath = path.join(rootDir, 'client/dist/index.html');
+    console.log('Development mode: SPA routing handled by Vite on port 5173');
   }
-  console.log(`SPA will be served from: ${indexPath}`);
-
-  // Catch-all for SPA routing (but exclude API and docs paths)
-  app.get('*', (req, res, next) => {
-    const relativePath = getRelativeRequestPath(req.path);
-
-    // Don't serve SPA for API routes
-    if (relativePath.startsWith('/api')) {
-      return next();
-    }
-
-    // Don't serve SPA for docs routes if they weren't handled by static middleware
-    if (relativePath.startsWith('/docs')) {
-      return res.status(404).send('Documentation not found');
-    }
-
-    res.sendFile(indexPath);
-  });
 }
