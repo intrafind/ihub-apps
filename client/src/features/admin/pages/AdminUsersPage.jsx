@@ -306,7 +306,7 @@ const AdminUsersPage = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex space-x-2">
                             <button
-                              onClick={() => navigate(`/admin/users/${user.id}/edit`)}
+                              onClick={() => navigate(`/admin/users/${user.id}`)}
                               className="text-blue-600 hover:text-blue-900"
                             >
                               <Icon name="edit" size="sm" />

@@ -28,9 +28,16 @@ const UserFormEditor = ({
 
     // Use schema validation if available
     if (jsonSchema) {
-      const validation = validateWithSchema(userData, jsonSchema);
+      // For new users, create a copy of userData with a temporary ID to satisfy schema validation
+      const dataToValidate = isNewUser ? { ...userData, id: 'temp-id' } : userData;
+
+      const validation = validateWithSchema(dataToValidate, jsonSchema);
       if (!validation.isValid) {
         errors = errorsToFieldErrors(validation.errors);
+        // Remove the ID error for new users since it's temporary
+        if (isNewUser && errors.id) {
+          delete errors.id;
+        }
       }
     } else {
       // Fallback to manual validation if no schema
