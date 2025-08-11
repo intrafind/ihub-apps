@@ -72,7 +72,7 @@ class IAssistantAdapterClass extends BaseAdapter {
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
       Origin: baseUrl,
-      Pragma: 'no-cache'
+      Pragma: 'no-cache',
       'User-Agent': 'ihub/4.0.0', //replace with real version
       'content-type': 'application/json'
     };
