@@ -738,5 +738,40 @@
         }
       }
     }
+  },
+  {
+    "id": "iAssistant",
+    "name": "iAssistant",
+    "title": {
+      "en": "iAssistant RAG Question Answering",
+      "de": "iAssistant RAG-Fragenbeantwortung"
+    },
+    "description": {
+      "en": "AI-powered question answering using Retrieval-Augmented Generation (RAG) with document search and intelligent response synthesis",
+      "de": "KI-gestützte Fragenbeantwortung mit Retrieval-Augmented Generation (RAG) mit Dokumentensuche und intelligenter Antwortsynthese"
+    },
+    "script": "iAssistant.js",
+    "functions": {
+      "ask": {
+        "passthrough": true,
+        "description": {
+          "en": "Ask a question using RAG-based intelligent document search and answer synthesis",
+          "de": "Eine Frage mit RAG-basierter intelligenter Dokumentensuche und Antwortsynthese stellen"
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string",
+              "description": {
+                "en": "The question to ask. The system will search relevant documents and synthesize an intelligent answer. Example: 'What is the company policy on remote work?'",
+                "de": "Die zu stellende Frage. Das System wird relevante Dokumente durchsuchen und eine intelligente Antwort synthetisieren. Beispiel: 'Was ist die Unternehmensrichtlinie für Homeoffice?'"
+              }
+            }
+          },
+          "required": ["question"]
+        }
+      }
+    }
   }
 ]

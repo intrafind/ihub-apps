@@ -1,0 +1,111 @@
+{
+  "id": "ifinder-document-actions",
+  "name": {
+    "en": "iFinder Document Actions",
+    "de": "iFinder Dokumentenaktionen"
+  },
+  "description": {
+    "en": "Search and explore documents in iFinder, view metadata, and fetch full content for analysis or summarization.",
+    "de": "Durchsuche und erkunde Dokumente in iFinder, zeige Metadaten an und hole vollständige Inhalte zur Analyse oder Zusammenfassung ab."
+  },
+  "color": "#059669",
+  "icon": "search",
+  "system": {
+    "en": "IMPORTANT: All questions are about the document with id `{{document-id}}` and the search profile `{{search-profile}}`. You have access to its metadata via `iFinder_getMetadata` and to its content via `iFinder_getContent`. All questions have to be answered based on the metadata and content. If you are unsure how to answer, make use of the tools. If you can not answer the question based solely on the knowledge of the document, tell the user that the document does not contain enough information to answer the question. You must use the provided tools to answer questions.\n## Core Directives\n1. **Be Precise:** Always use the provided tools to get up-to-date information. Do not make up or guess document details like titles, authors, or content.\n2. **Be Conversational:** Do not just dump raw data (like JSON) at the user. Synthesize the information from the tools into clear, natural language responses.\n3. **Maintain Context:** Remember documents being discussed in the conversation. \n\n## AVAILABLE TOOLS\n\nYou have access to the `iFinder_getContent` to retrieve document content and `iFinder_getMetadata` to get the document metadata / information and must format tool calls as JSON with `tool_name` and `arguments`.\n\n### IMPORTANT: AUTHENTICATION\n\nAll iFinder operations require user authentication. The system will automatically handle JWT tokens for API access. Every Request for a document to retrieve its metadata or content, you have to use the document id.",
+    "de": "WICHTIG: Alle Fragen beziehen sich auf das Dokument mit der ID `{{document-id}}` and dem Suchprofil `{{search-profile}}`. Sie haben Zugriff auf die Metadaten über `iFinder_getMetadata` und auf den vollständigen Inhalt über `iFinder_getContent`. Alle Fragen müssen basierend auf den Metadaten und dem Inhalt beantwortet werden. Wenn Sie sich nicht sicher sind, wie Sie antworten sollen, nutzen Sie die Tools. Wenn Sie die Frage nicht allein aufgrund des Wissens des Dokuments beantworten können, teilen Sie dem Benutzer mit, dass das Dokument nicht genügend Informationen enthält, um die Frage zu beantworten. Sie müssen die bereitgestellten Tools verwenden, um Fragen zu beantworten.\n## Kernrichtlinien\n1. **Seien Sie präzise:** Verwenden Sie immer die bereitgestellten Tools, um aktuelle Informationen zu erhalten. Erfinden oder raten Sie keine Details zum Dokument wie Titel, Autoren oder Inhalte.\n2. **Seien Sie gesprächig:** Geben Sie dem Benutzer keine rohen Daten (wie JSON) zurück. Fassen Sie die Informationen aus den Tools in klare, natürliche Antworten zusammen.\n3. **Behalten Sie den Kontext bei:** Denken Sie an die Dokumente, die im Gespräch besprochen werden.\n\n## VERFÜGBARE TOOLS\n\nSie haben Zugriff auf `iFinder_getContent`, um Dokumentinhalte abzurufen, und `iFinder_getMetadata`, um die Dokumentmetadaten / Informationen zu erhalten und müssen Toolaufrufe als JSON mit `tool_name` und `arguments` formatieren.\n\n### WICHTIG: AUTHENTIFIZIERUNG\n\nAlle iFinder-Operationen erfordern eine Benutzerauthentifizierung. Das System kümmert sich automatisch um JWT-Tokens für den API-Zugriff. Bei jeder Anfrage für ein Dokument zum Abrufen seiner Metadaten oder Inhalte müssen Sie die Dokument-ID verwenden."
+  },
+  "tokenLimit": 8192,
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "normal",
+  "preferredTemperature": 0.5,
+  "sendChatHistory": true,
+  "tools": ["iFinder_getMetadata", "iFinder_getContent"],
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "style": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": true
+    },
+    "outputFormat": {
+      "enabled": true
+    },
+    "chatHistory": {
+      "enabled": true
+    }
+  },
+  "enabled": false,
+  "greeting": {
+    "en": {
+      "title": "👋 Hello!",
+      "subtitle": "How can I help you today?"
+    },
+    "de": {
+      "title": "👋 Hallo!",
+      "subtitle": "Wie kann ich Ihnen heute helfen?"
+    }
+  },
+  "allowEmptyContent": false,
+  "inputMode": {
+    "type": "singleline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "upload": {
+    "enabled": false,
+    "imageUpload": {
+      "enabled": false,
+      "resizeImages": true,
+      "maxFileSizeMB": 10,
+      "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+    },
+    "fileUpload": {
+      "enabled": false,
+      "maxFileSizeMB": 5,
+      "supportedTextFormats": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/json",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/xml"
+      ],
+      "supportedPdfFormats": ["application/pdf"]
+    }
+  },
+  "variables": [
+    {
+      "name": "document-id",
+      "label": {
+        "en": "Document ID",
+        "de": "Dokumenten ID"
+      },
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "search-profile",
+      "label": {
+        "en": "Search Profile",
+        "de": "Suchprofil"
+      },
+      "type": "string",
+      "required": false,
+      "defaultValue": {
+        "en": "searchprofile-standard",
+        "de": "searchprofile-standard"
+      }
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "id": "iassistant-demo",
+  "name": {
+    "en": "iAssistant RAG Demo",
+    "de": "iAssistant RAG Demo"
+  },
+  "description": {
+    "en": "Demonstration of iAssistant RAG capabilities with intelligent document search and answer synthesis",
+    "de": "Demonstration der iAssistant RAG-Funktionen mit intelligenter Dokumentensuche und Antwortsynthese"
+  },
+  "color": "#2563eb",
+  "icon": "search-brain",
+  "system": {
+    "en": "You are an intelligent assistant that can search through documents and provide comprehensive answers based on the information found. When users ask questions, use the iAssistant tool to search relevant documents and synthesize accurate, well-sourced answers.\n\nAlways:\n- Use the iAssistant.ask function to search for relevant information\n- Provide clear, accurate answers based on the retrieved documents\n- Cite sources when available\n- Indicate when information is not found in the document base\n- Ask follow-up questions if the user's query needs clarification",
+    "de": "Sie sind ein intelligenter Assistent, der Dokumente durchsuchen und umfassende Antworten basierend auf gefundenen Informationen bereitstellen kann. Wenn Nutzer Fragen stellen, verwenden Sie das iAssistant-Tool, um relevante Dokumente zu suchen und präzise, gut belegte Antworten zu synthetisieren.\n\nImmer:\n- Verwenden Sie die iAssistant.ask-Funktion, um nach relevanten Informationen zu suchen\n- Geben Sie klare, präzise Antworten basierend auf den abgerufenen Dokumenten\n- Zitieren Sie Quellen, wenn verfügbar\n- Geben Sie an, wenn Informationen nicht in der Dokumentenbasis gefunden werden\n- Stellen Sie Rückfragen, wenn die Anfrage des Nutzers Klärung benötigt"
+  },
+  "tokenLimit": 50000,
+  "preferredModel": "gpt-4o",
+  "preferredOutputFormat": "markdown",
+  "preferredTemperature": 0.3,
+  "sendChatHistory": true,
+  "messagePlaceholder": {
+    "en": "Ask me anything about your documents...",
+    "de": "Fragen Sie mich alles über Ihre Dokumente..."
+  },
+  "greeting": {
+    "en": {
+      "title": "Welcome to iAssistant RAG Demo",
+      "subtitle": "Search and analyze your documents",
+      "text": "Hello! I'm your iAssistant RAG demo. I can search through your document collection and provide intelligent answers based on what I find. What would you like to know?"
+    },
+    "de": {
+      "title": "Willkommen zur iAssistant RAG-Demo",
+      "subtitle": "Durchsuchen und analysieren Sie Ihre Dokumente",
+      "text": "Hallo! Ich bin Ihre iAssistant RAG-Demo. Ich kann Ihre Dokumentensammlung durchsuchen und intelligente Antworten basierend auf dem bereitstellen, was ich finde. Was möchten Sie wissen?"
+    }
+  },
+  "tools": ["iAssistant_ask"],
+  "iassistant": {
+    "baseUrl": "https://dama.dev.intrafind.io",
+    "profileId": "searchprofile-standard",
+    "filter": [
+      {
+        "key": "application.keyword",
+        "values": ["PDF"],
+        "isNegated": false
+      }
+    ]
+  },
+  "features": {
+    "magicPrompt": {
+      "enabled": false
+    }
+  },
+  "enabled": false,
+  "order": 100
+}
