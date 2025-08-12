@@ -19,13 +19,18 @@ const variableSchema = z.object({
   name: z
     .string()
     .regex(
-      /^[a-zA-Z_][a-zA-Z0-9_]*$/,
-      'Variable name must start with letter/underscore and contain only alphanumeric characters and underscores'
+      /^[a-zA-Z_][a-zA-Z0-9_-]*$/,
+      'Variable name must start with letter/underscore and contain only alphanumeric characters, underscores, and hyphens'
     ),
   label: localizedStringSchema,
   type: z.enum(['string', 'text', 'number', 'boolean', 'date', 'select']),
   required: z.boolean().optional().default(false),
-  defaultValue: localizedStringSchema.optional(),
+  defaultValue: z
+    .record(
+      z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/),
+      z.string() // Allow empty strings for default values
+    )
+    .optional(),
   predefinedValues: z.array(predefinedValueSchema).optional()
 });
 

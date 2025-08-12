@@ -22,8 +22,8 @@ const variableSchema = z
     name: z
       .string()
       .regex(
-        /^[a-zA-Z_][a-zA-Z0-9_]*$/,
-        'Variable name must start with letter/underscore and contain only alphanumeric characters and underscores'
+        /^[a-zA-Z_][a-zA-Z0-9_-]*$/,
+        'Variable name must start with letter/underscore and contain only alphanumeric characters, underscores, and hyphens'
       ),
     label: localizedStringSchema,
     type: z.enum(['string', 'number', 'boolean', 'select', 'textarea']).default('string'),

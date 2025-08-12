@@ -138,11 +138,14 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
             type="text"
             value={config.logo?.url || ''}
             onChange={e => handleLogoUrlChange(e.target.value)}
-            placeholder="/logo.svg"
+            placeholder="/header_company_logo.svg"
             className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
           />
           <p className="mt-1 text-sm text-gray-500">
-            {t('admin.ui.header.logoUrlHint', 'Enter the path to your logo file (e.g., /logo.svg)')}
+            {t(
+              'admin.ui.header.logoUrlHint',
+              'Enter the path to your logo file (e.g., /header_company_logo.svg)'
+            )}
           </p>
         </div>
 

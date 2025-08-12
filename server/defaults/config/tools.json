@@ -690,8 +690,8 @@
       },
       "getMetadata": {
         "description": {
-          "en": "Fetch detailed metadata for a specific document from iFinder",
-          "de": "Detaillierte Metadaten für ein spezifisches Dokument aus iFinder abrufen"
+          "en": "Fetch detailed metadata for a specific document from iFinder using search endpoint",
+          "de": "Detaillierte Metadaten für ein spezifisches Dokument aus iFinder über Suchendpunkt abrufen"
         },
         "parameters": {
           "type": "object",
@@ -699,8 +699,8 @@
             "documentId": {
               "type": "string",
               "description": {
-                "en": "Document ID to fetch metadata for. Example: 'doc123456'",
-                "de": "Dokument-ID für die Metadaten abgerufen werden sollen. Beispiel: 'doc123456'"
+                "en": "Document ID to fetch metadata for. Example: 'onedrive-d4HF8X5AZOWTbeGW'",
+                "de": "Dokument-ID für die Metadaten abgerufen werden sollen. Beispiel: 'onedrive-d4HF8X5AZOWTbeGW'"
               }
             },
             "searchProfile": {
@@ -709,6 +709,29 @@
                 "en": "Search profile ID (optional, uses default if not specified)",
                 "de": "Suchprofil-ID (optional, verwendet Standard wenn nicht angegeben)"
               }
+            },
+            "returnFields": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": {
+                "en": "Fields to return in metadata response. Default: ['title', 'language', 'accessInfo.*', 'mediaType', 'sourceType', 'file.*', 'sourceLocations.*', 'navigationTree', 'modificationDate', 'indexingDate', 'application', 'contentLength', 'sourceName']",
+                "de": "In Metadatenantwort zurückzugebende Felder. Standard: ['title', 'language', 'accessInfo.*', 'mediaType', 'sourceType', 'file.*', 'sourceLocations.*', 'navigationTree', 'modificationDate', 'indexingDate', 'application', 'contentLength', 'sourceName']"
+              },
+              "default": [
+                "title",
+                "language",
+                "accessInfo.*",
+                "mediaType",
+                "sourceType",
+                "file.*",
+                "sourceLocations.*",
+                "navigationTree",
+                "modificationDate",
+                "indexingDate",
+                "application",
+                "contentLength",
+                "sourceName"
+              ]
             }
           },
           "required": ["documentId"]

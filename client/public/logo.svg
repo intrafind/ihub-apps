@@ -1,1 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="331.021" height="36.785" viewBox="0 0 331.021 36.785"><defs><style>.a{fill:#a3a3a3;}.b{fill:#9a000c;}</style></defs><g transform="translate(-125.05 -250.583)"><g transform="translate(267.597 250.583)"><path class="a" d="M404.189,264.976a5.643,5.643,0,0,0-6.46-2.582l-17.838,30.079h7.923l16.375-27.5Z" transform="translate(-379.891 -255.688)"/><path class="b" d="M434.211,287.368h8.2l-19.282-33.191c-.706-1.193-2.236-3.594-4.842-3.594s-4.017,2.537-4.655,3.593l-1.846,3.113a5.643,5.643,0,0,1,6.46,2.582Z" transform="translate(-393.944 -250.583)"/></g><g transform="translate(125.05 250.9)"><rect class="a" width="6.307" height="36.468" transform="translate(0 0)"/><path class="a" d="M224.222,257.456h14.729v30.162h6.307V257.456h14.878V251.15H224.222Z" transform="translate(-168.749 -251.15)"/><path class="a" d="M328.356,276.491a13.534,13.534,0,0,0,7.781-4.917,12.637,12.637,0,0,0,2.275-7.692,11.547,11.547,0,0,0-3.734-8.785c-2.825-2.658-6.981-3.947-12.464-3.947H298.437v36.468h6.247V277.234h15.56l10.334,10.384h8.9Zm-23.672-5.484V257.456h18.49c5.516,0,8.627,2.143,8.627,6.419a6.637,6.637,0,0,1-1.867,4.964q-2.322,2.169-6.76,2.169Z" transform="translate(-201.452 -251.15)"/><path class="a" d="M179.718,276.17l-23.26-23.311c-1.211-1.244-1.826-1.7-3.382-1.7H150.15v36.46h6.308v-25.55l23.259,23.382c1.445,1.444,2.287,2,3.737,2h2.57V251.164h-6.307Z" transform="translate(-136.11 -251.156)"/></g><g transform="translate(320.577 250.9)"><path class="b" d="M599.057,276.161l-23.264-23.315c-1.212-1.245-1.826-1.7-3.384-1.7h-2.926v36.468h6.309V262.062l23.264,23.387c1.445,1.445,2.287,2.169,3.737,2.169h2.571V251.15h-6.308Z" transform="translate(-516.415 -251.15)"/><path class="b" d="M474.608,287.618h6.307V271.013h23.432V265.1H480.915V257.46h25.033v-6.309h-31.34Z" transform="translate(-474.608 -251.151)"/><rect class="b" width="6.309" height="36.467" transform="translate(38.882 0.001)"/><path class="b" d="M681.857,256.7q-5.048-5.549-13.778-5.551H647.59l-.041,36.467h20.488q8.478,0,13.626-5.8a18.647,18.647,0,0,0,4.644-12.718A17.814,17.814,0,0,0,681.857,256.7Zm-4.633,20.774a11.534,11.534,0,0,1-9.187,3.834h-14.18l.041-23.85H668.08a11.422,11.422,0,0,1,8.781,3.584A11.96,11.96,0,0,1,680,269.1,11.589,11.589,0,0,1,677.224,277.477Z" transform="translate(-550.814 -251.15)"/></g></g></svg>
+<ns0:svg xmlns:ns0="http://www.w3.org/2000/svg" id="Ebene_1" data-name="Ebene 1" viewBox="0 0 72 72" width="72" height="72">
+  <ns0:defs>
+    <ns0:style>
+      .cls-1 {
+        fill: #575756;
+        font-family: DINPro-Bold, DINPro;
+        font-weight: 700;
+      }
+
+      .cls-2 {
+        fill: url(#Unbenannter_Verlauf_5);
+      }
+
+      .cls-3 {
+        font-size: 48px;
+        letter-spacing: -.05em;
+      }
+
+      .cls-4 {
+        font-size: 65.6px;
+        letter-spacing: -.05em;
+      }
+
+      .cls-5 {
+        fill: #a2a1a1;
+      }
+    </ns0:style>
+    <ns0:linearGradient id="Unbenannter_Verlauf_5" data-name="Unbenannter Verlauf 5" x1="43.28" y1="112.78" x2="43.28" y2="53.23" gradientTransform="translate(0 109.41) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <ns0:stop offset="0" stop-color="#329248" />
+      <ns0:stop offset="1" stop-color="#008fba" />
+    </ns0:linearGradient>
+  </ns0:defs>
+  <ns0:g>
+    <ns0:path class="cls-5" d="M31.72,20.75c-.83-1.4-2.11-2.5-3.64-3.1-1.53-.6-3.22-.68-4.8-.23L0,56.17h10.34L31.72,20.75h0Z" />
+    <ns0:path class="cls-2" d="M63.27,56.17h-10.7L31.72,20.75c-.83-1.4-2.11-2.5-3.64-3.1-1.53-.6-3.22-.68-4.8-.23l2.41-4.01.11-.18c.88-1.45,2.71-4.45,5.97-4.45s5.4,3.09,6.32,4.63l25.17,42.76Z" />
+  </ns0:g>
+</ns0:svg>
