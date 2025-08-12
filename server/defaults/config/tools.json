@@ -741,8 +741,7 @@
   },
   {
     "id": "iAssistant",
-    "name": "iAssistant",
-    "title": {
+    "name": {
       "en": "iAssistant RAG Question Answering",
       "de": "iAssistant RAG-Fragenbeantwortung"
     },

@@ -55,7 +55,7 @@ export function formatToolsForOpenAI(tools = []) {
   return tools.map(t => ({
     type: 'function',
     function: {
-      name: normalizeName(t.id || t.name),
+      name: normalizeName(t.id || t.name || 'unnamed_tool'),
       description: t.description || '',
       parameters: t.parameters || { type: 'object', properties: {} }
     }
@@ -75,7 +75,7 @@ export function formatToolsForAnthropic(tools = []) {
 
     // Handle flat tool format
     return {
-      name: normalizeName(t.id || t.name),
+      name: normalizeName(t.id),
       description: t.description || '',
       input_schema: sanitizeSchemaForProvider(t.parameters, 'anthropic')
     };
@@ -97,7 +97,7 @@ export function formatToolsForGoogle(tools = []) {
 
         // Handle flat tool format
         return {
-          name: normalizeName(t.id || t.name),
+          name: normalizeName(t.id),
           description: t.description || '',
           parameters: sanitizeSchemaForProvider(t.parameters, 'google')
         };
