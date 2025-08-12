@@ -57,10 +57,20 @@ function expandToolFunctions(tools = []) {
   for (const tool of tools) {
     if (tool.functions && typeof tool.functions === 'object') {
       for (const [fn, cfg] of Object.entries(tool.functions)) {
+        // Always extract string value from name (support both string and multilingual object)
+        let toolName = tool.name;
+        if (typeof toolName === 'object') {
+          // Extract from multilingual object
+          toolName = toolName.en || toolName.de || Object.values(toolName)[0] || tool.id;
+        } else if (typeof toolName !== 'string') {
+          // Fallback to ID if name is neither string nor object
+          toolName = tool.id;
+        }
+
         expanded.push({
           ...tool,
           id: `${tool.id}_${fn}`,
-          name: cfg.name || `${tool.name}_${fn}`,
+          name: cfg.name || `${toolName}_${fn}`,
           description: cfg.description || tool.description,
           parameters: cfg.parameters || {},
           method: fn,

@@ -56,8 +56,11 @@ function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = null
   if (obj && typeof obj === 'object') {
     const result = {};
     for (const [key, value] of Object.entries(obj)) {
-      if (
-        (key === 'description' || key === 'title') &&
+      // Skip processing for certain fields that should remain unchanged
+      if (key === 'id' || key === 'script' || key === 'enabled') {
+        result[key] = value;
+      } else if (
+        (key === 'description' || key === 'title' || key === 'name') &&
         value &&
         typeof value === 'object' &&
         !Array.isArray(value) &&

@@ -22,7 +22,7 @@ export function convertGenericToolsToOpenAI(genericTools = []) {
   return genericTools.map(tool => ({
     type: 'function',
     function: {
-      name: tool.name,
+      name: tool.id || tool.name,
       description: tool.description,
       parameters: sanitizeSchemaForProvider(tool.parameters, 'openai')
     }

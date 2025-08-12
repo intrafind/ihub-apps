@@ -171,8 +171,8 @@ function useChatMessages(chatId = 'default') {
               ...msg,
               content:
                 preserveContent && msg.content
-                  ? `${msg.content}\n\n_Error: ${errorMessage}_`
-                  : `_Error: ${errorMessage}_`,
+                  ? `${msg.content}\n\n_${errorMessage}_`
+                  : `_${errorMessage}_`,
               loading: false,
               error: true
             }
