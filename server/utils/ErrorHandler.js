@@ -132,6 +132,56 @@ class ErrorHandler {
     return new LLMApiError(message, status, provider, errorKey.toUpperCase(), details);
   }
 
+  /**
+   * Detects if an error is related to context window/token limits
+   * @param {string} errorBody - The error message body
+   * @param {number} status - HTTP status code
+   * @returns {boolean} True if it's a context window error
+   */
+  isContextWindowError(errorBody, status) {
+    if (!errorBody) return false;
+
+    const errorBodyLower = errorBody.toLowerCase();
+
+    // Common patterns for context window errors across providers
+    const contextPatterns = [
+      // OpenAI patterns
+      'context_length_exceeded',
+      'maximum context length',
+      'max_tokens',
+      'token limit',
+      'reduce the length of the messages',
+
+      // Anthropic patterns
+      'max_tokens_to_sample',
+      'token limit exceeded',
+      'prompt is too long',
+      'maximum number of tokens',
+
+      // Google patterns
+      'invalid_argument',
+      'token limit',
+      'maximum input length',
+      'request entity too large',
+      'prompt size exceeds',
+
+      // Azure OpenAI patterns
+      'invalidrequesterror',
+      'token limit exceeded',
+      'context length exceeded',
+
+      // General patterns
+      'too many tokens',
+      'exceeds the limit',
+      'context too long',
+      'message too long',
+      'payload too large'
+    ];
+
+    // Check if any pattern matches
+    return contextPatterns.some(pattern => errorBodyLower.includes(pattern));
+  }
+
   async createEnhancedLLMApiError(llmResponse, model, language) {
     const errorBody = await llmResponse.text();
     let errorMessage = await this.getLocalizedError(
@@ -139,6 +189,7 @@ class ErrorHandler {
       { status: llmResponse.status },
       language
     );
+    let errorCode = llmResponse.status.toString();
 
     if (llmResponse.status === 401) {
       errorMessage = await this.getLocalizedError(
@@ -146,15 +197,39 @@ class ErrorHandler {
         { provider: model.provider },
         language
       );
-    } else if (llmResponse.status === 400) {
-      // Check if it's an API key error based on the error body
+      errorCode = 'AUTH_FAILED';
+    } else if (llmResponse.status === 400 || llmResponse.status === 413) {
       const errorBodyLower = errorBody.toLowerCase();
-      if (errorBodyLower.includes('api key') || errorBodyLower.includes('api_key')) {
+
+      // Check for context window errors first
+      if (this.isContextWindowError(errorBody, llmResponse.status)) {
+        errorMessage = await this.getLocalizedError(
+          'contextWindowExceeded',
+          {
+            provider: model.provider,
+            modelId: model.id,
+            tokenLimit: model.tokenLimit || 'unknown'
+          },
+          language
+        );
+        errorCode = 'CONTEXT_WINDOW_EXCEEDED';
+      }
+      // Check if it's an API key error
+      else if (errorBodyLower.includes('api key') || errorBodyLower.includes('api_key')) {
         errorMessage = await this.getLocalizedError(
           'authenticationFailed',
           { provider: model.provider },
           language
         );
+        errorCode = 'AUTH_FAILED';
+      } else {
+        // Generic bad request
+        errorMessage = await this.getLocalizedError(
+          'invalidRequest',
+          { provider: model.provider },
+          language
+        );
+        errorCode = 'INVALID_REQUEST';
       }
     } else if (llmResponse.status === 429) {
       errorMessage = await this.getLocalizedError(
@@ -162,18 +237,43 @@ class ErrorHandler {
         { provider: model.provider },
         language
       );
+      errorCode = 'RATE_LIMIT';
+    } else if (llmResponse.status === 503) {
+      // Check if the 503 might be due to context size
+      if (this.isContextWindowError(errorBody, llmResponse.status)) {
+        errorMessage = await this.getLocalizedError(
+          'contextWindowExceeded',
+          {
+            provider: model.provider,
+            modelId: model.id,
+            tokenLimit: model.tokenLimit || 'unknown'
+          },
+          language
+        );
+        errorCode = 'CONTEXT_WINDOW_EXCEEDED';
+      } else {
+        errorMessage = await this.getLocalizedError(
+          'serviceUnavailable',
+          { provider: model.provider },
+          language
+        );
+        errorCode = 'SERVICE_UNAVAILABLE';
+      }
     } else if (llmResponse.status >= 500) {
       errorMessage = await this.getLocalizedError(
         'serviceError',
         { provider: model.provider },
         language
       );
+      errorCode = 'SERVICE_ERROR';
     }
 
     return {
       message: errorMessage,
-      code: llmResponse.status.toString(),
-      details: errorBody
+      code: errorCode,
+      httpStatus: llmResponse.status,
+      details: errorBody,
+      isContextWindowError: this.isContextWindowError(errorBody, llmResponse.status)
     };
   }
 

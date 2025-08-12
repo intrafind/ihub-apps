@@ -43,7 +43,9 @@ class IFinderService {
             '/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}'
         },
         defaultSearchProfile:
-          iFinderConfig.defaultSearchProfile || process.env.IFINDER_SEARCH_PROFILE || 'default',
+          iFinderConfig.defaultSearchProfile ||
+          process.env.IFINDER_SEARCH_PROFILE ||
+          'searchprofile-standard',
         downloadDir:
           iFinderConfig.downloadDir || config.IFINDER_DOWNLOAD_DIR || '/tmp/ifinder-downloads',
         timeout: iFinderConfig.timeout || config.IFINDER_TIMEOUT || 30000
@@ -185,46 +187,94 @@ class IFinderService {
         facets: data.facets || null
       };
 
-      // Normalize result format
+      // Helper function to get array field values (iFinder returns most fields as arrays)
+      const getFieldValue = (doc, fieldName, defaultValue = null) => {
+        const value = doc[fieldName];
+        if (Array.isArray(value)) {
+          return value.length === 1 ? value[0] : value;
+        }
+        return value || defaultValue;
+      };
+
+      // Helper function to get nested dot-notation fields and group them
+      const getNestedFields = (doc, prefix) => {
+        const nested = {};
+        Object.keys(doc).forEach(key => {
+          if (key.startsWith(prefix + '.')) {
+            const subKey = key.substring(prefix.length + 1);
+            nested[subKey] = getFieldValue(doc, key);
+          }
+        });
+        return Object.keys(nested).length > 0 ? nested : null;
+      };
+
+      // Normalize result format with enhanced field processing
       if (data.results && Array.isArray(data.results)) {
         results.results = data.results.map(hit => {
           const doc = hit.document || {};
-          const metadata = hit.metadata || {};
+          const hitMetadata = hit.metadata || {};
 
           return {
             // Document identification
-            id: doc.id,
-            score: metadata.score,
+            id: getFieldValue(doc, 'id'),
+            score: hitMetadata.score,
 
-            // Basic document fields
-            title: doc.title,
-            content: doc.content,
-            url: doc.url || metadata.url,
-            filename: doc.filename || doc.file?.name,
-            source: doc.source || doc.sourceName || metadata.sourceName,
-            breadcrumbs: doc.navigationTree || metadata.navigationTree || [],
+            // Basic document fields (iFinder returns these as arrays)
+            title: getFieldValue(doc, 'title'),
+            sourceName: getFieldValue(doc, 'sourceName'),
+            language: getFieldValue(doc, 'language'),
+            mediaType: getFieldValue(doc, 'mediaType'),
+            sourceType: getFieldValue(doc, 'sourceType'),
+            application: getFieldValue(doc, 'application'),
+            contentLength: getFieldValue(doc, 'contentLength'),
 
-            // Document text fields
-            description_texts: doc.description_texts || [],
-            summary_texts: doc.summary_texts || [],
-            application: doc.application || metadata.application,
+            // Timestamps (iFinder format)
+            modificationDate: getFieldValue(doc, 'modificationDate'),
+            indexingDate: getFieldValue(doc, 'indexingDate'),
 
-            // Document metadata fields
-            documentType: doc.documentType || doc.type,
-            mimeType: doc.mimeType || doc.mediaType,
-            language: doc.language || metadata.language,
-            size: doc.size,
-            author: doc.author || doc.creator,
-            createdDate: doc.createdDate || doc.created,
-            lastModified: doc.lastModified || doc.modified,
+            // Navigation (iFinder returns as array)
+            navigationTree: getFieldValue(doc, 'navigationTree', []),
+
+            // Nested objects from dot-notation fields
+            accessInfo: getNestedFields(doc, 'accessInfo'),
+            file: getNestedFields(doc, 'file'),
+            sourceLocations: {
+              url: getFieldValue(doc, 'sourceLocations.url', []),
+              label: getFieldValue(doc, 'sourceLocations.label', [])
+            },
+
+            // Backward compatibility fields
+            filename: getFieldValue(doc, 'file.name'),
+            size: getFieldValue(doc, 'file.size'),
+            extension: getFieldValue(doc, 'file.extension'),
+            sizeFormatted: this._formatFileSize(
+              getFieldValue(doc, 'file.size') || getFieldValue(doc, 'contentLength')
+            ),
+
+            // Legacy/fallback fields for backward compatibility
+            url: getFieldValue(doc, 'url'),
+            deepLink: getFieldValue(doc, 'accessInfo.deepLink'),
+            documentType: getFieldValue(doc, 'documentType'),
+            mimeType: getFieldValue(doc, 'mediaType'), // Legacy alias
+            content: getFieldValue(doc, 'content'),
+            source: getFieldValue(doc, 'sourceName'), // Legacy alias
+            breadcrumbs: getFieldValue(doc, 'navigationTree', []), // Legacy alias
+            createdDate: getFieldValue(doc, 'createdDate'),
+            lastModified:
+              getFieldValue(doc, 'lastModified') || getFieldValue(doc, 'modificationDate'),
+            author: getFieldValue(doc, 'author'),
+            owner: getFieldValue(doc, 'owner'),
+
+            // Document text fields (if available)
+            description_texts: getFieldValue(doc, 'description_texts', []),
+            summary_texts: getFieldValue(doc, 'summary_texts', []),
 
             // Search-specific metadata
-            teasers: metadata.teasers || []
+            teasers: hitMetadata.teasers || [],
 
-            // Raw document data for advanced use
-            // TODO: we should pass them, but remove the ones we have already extracted, so we save space
-            // rawDocument: doc,
-            // rawMetadata: metadata
+            // Raw document data
+            rawDocument: doc,
+            rawHitMetadata: hitMetadata
           };
         });
       }
@@ -355,119 +405,73 @@ class IFinderService {
   }
 
   /**
-   * Fetch metadata for a specific document
+   * Fetch metadata for a specific document using search endpoint
    * @param {Object} params - Metadata fetch parameters
    * @returns {Object} Document metadata
    */
-  async getMetadata({ documentId, chatId, user, searchProfile }) {
+  async getMetadata({
+    documentId,
+    chatId,
+    user,
+    searchProfile,
+    returnFields = [
+      'title',
+      'language',
+      'accessInfo.*',
+      'mediaType',
+      'sourceType',
+      'file.*',
+      'sourceLocations.*',
+      'navigationTree',
+      'modificationDate',
+      'indexingDate',
+      'application',
+      'contentLength',
+      'sourceName'
+    ]
+  }) {
     if (!documentId) {
       throw new Error('Document ID parameter is required');
     }
-    this.validateCommon(user, chatId);
 
-    const config = this.getConfig();
-    const profileId = searchProfile || config.defaultSearchProfile;
-
-    // Track the action
-    actionTracker.trackAction(chatId, {
-      action: 'ifinder_metadata',
-      documentId: documentId,
-      searchProfile: profileId,
-      user: user.email
+    // Use the search method with _id:documentId query
+    const searchResult = await this.search({
+      query: `_id:${documentId}`,
+      chatId,
+      user,
+      maxResults: 1,
+      searchProfile,
+      returnFields
     });
 
-    try {
-      // Generate JWT token for the user
-      const authHeader = getIFinderAuthorizationHeader(user);
-
-      // Construct document URL
-      const documentEndpoint = config.endpoints.document
-        .replace('{profileId}', encodeURIComponent(profileId))
-        .replace('{docId}', encodeURIComponent(documentId));
-      const documentUrl = `${config.baseUrl}${documentEndpoint}`;
-
-      console.log(
-        `iFinder Metadata: Fetching document ${documentId} from profile "${profileId}" as user ${user.email || user.id}`
-      );
-
-      // Make API request
-      const response = await throttledFetch('iFinderMetadata', documentUrl, {
-        method: 'GET',
-        headers: {
-          Authorization: authHeader,
-          Accept: 'application/json'
-        },
-        timeout: config.timeout
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        if (response.status === 404) throw new Error(`Document not found: ${documentId}`);
-        if (response.status === 403) throw new Error(`Access denied to document: ${documentId}`);
-        throw new Error(
-          `iFinder metadata fetch failed with status ${response.status}: ${errorText}`
-        );
-      }
-
-      const data = await response.json();
-      const doc = data.document || {};
-      const apiMetadata = data.metadata || {};
-
-      const metadata = {
-        // API response metadata
-        searchProfile: profileId,
-        took: apiMetadata.took,
-
-        // Document identification
-        documentId: doc.id || documentId,
-
-        // Basic document fields
-        title: doc.title,
-        content: doc.content,
-        url: doc.url,
-        filename: doc.filename,
-
-        // Document metadata fields
-        documentType: doc.documentType || doc.type,
-        mimeType: doc.mimeType,
-        language: doc.language,
-        size: doc.size,
-        sizeFormatted: this._formatFileSize(doc.size),
-
-        // Timestamps
-        createdDate: doc.createdDate || doc.created,
-        lastModified: doc.lastModified || doc.modified,
-        indexedDate: doc.indexedDate || doc.indexed,
-
-        // Author/ownership
-        author: doc.author || doc.creator,
-        owner: doc.owner,
-
-        // Content information
-        pageCount: doc.pageCount || doc.pages,
-        wordCount: doc.wordCount || doc.words,
-
-        // Additional URLs
-        downloadUrl: doc.downloadUrl,
-        thumbnailUrl: doc.thumbnailUrl || doc.preview,
-
-        // Tags and categories
-        tags: doc.tags || [],
-        categories: doc.categories || [],
-
-        // Raw document data
-        rawDocument: doc,
-        rawApiMetadata: apiMetadata
-      };
-
-      console.log(
-        `iFinder Metadata: Successfully fetched document ${documentId} metadata in ${metadata.took || 'unknown time'}`
-      );
-      return metadata;
-    } catch (error) {
-      console.error('iFinder metadata fetch error:', error);
-      this._handleError(error);
+    // Check if document was found
+    if (!searchResult.results || searchResult.results.length === 0) {
+      throw new Error(`Document not found: ${documentId}`);
     }
+
+    // Get the single result and enhance it for metadata use case
+    const result = searchResult.results[0];
+
+    // Add metadata-specific fields and logging
+    const metadata = {
+      ...result,
+      // Ensure we have the document ID
+      documentId: result.id || documentId,
+
+      // Add search metadata
+      searchProfile: searchResult.searchProfile,
+      took: searchResult.took,
+      totalFound: searchResult.totalFound,
+
+      // Keep raw data from search result
+      rawSearchResult: searchResult
+    };
+
+    console.log(
+      `iFinder Metadata: Successfully fetched document ${documentId} metadata in ${metadata.took || 'unknown time'} (score: ${metadata.score})`
+    );
+
+    return metadata;
   }
 
   /**

@@ -98,14 +98,28 @@ class StreamingHandler {
             error: {
               message: errorInfo.message,
               code: errorInfo.code,
-              details: errorInfo.details
+              httpStatus: errorInfo.httpStatus,
+              details: errorInfo.details,
+              isContextWindowError: errorInfo.isContextWindowError
             }
           })
         );
 
+        // Log additional info for context window errors
+        if (errorInfo.isContextWindowError) {
+          console.warn(`Context window exceeded for model ${model.id} in streaming:`, {
+            modelId: model.id,
+            tokenLimit: model.tokenLimit,
+            httpStatus: errorInfo.httpStatus,
+            errorCode: errorInfo.code
+          });
+        }
+
         actionTracker.trackError(chatId, {
           message: errorInfo.message,
-          details: errorInfo.details
+          code: errorInfo.code,
+          details: errorInfo.details,
+          isContextWindowError: errorInfo.isContextWindowError
         });
 
         if (activeRequests.get(chatId) === controller) {

@@ -208,6 +208,36 @@ const AdminAppEditPage = () => {
     }
   }, [appId]);
 
+  const cleanAppData = appData => {
+    // Clean up variables - remove empty defaultValue and predefinedValues
+    const cleanedApp = { ...appData };
+
+    if (cleanedApp.variables) {
+      cleanedApp.variables = cleanedApp.variables.map(variable => {
+        const cleanedVariable = { ...variable };
+
+        // Remove defaultValue if all language values are empty
+        if (cleanedVariable.defaultValue) {
+          const hasNonEmptyValue = Object.values(cleanedVariable.defaultValue).some(
+            val => val && val !== ''
+          );
+          if (!hasNonEmptyValue) {
+            delete cleanedVariable.defaultValue;
+          }
+        }
+
+        // Remove predefinedValues if empty array
+        if (cleanedVariable.predefinedValues && cleanedVariable.predefinedValues.length === 0) {
+          delete cleanedVariable.predefinedValues;
+        }
+
+        return cleanedVariable;
+      });
+    }
+
+    return cleanedApp;
+  };
+
   const handleSave = async e => {
     e.preventDefault();
 
@@ -229,9 +259,12 @@ const AdminAppEditPage = () => {
       const method = appId === 'new' ? 'POST' : 'PUT';
       const url = appId === 'new' ? '/admin/apps' : `/admin/apps/${appId}`;
 
+      // Clean the app data before saving
+      const cleanedApp = cleanAppData(app);
+
       await makeAdminApiCall(url, {
         method,
-        body: JSON.stringify(app)
+        body: JSON.stringify(cleanedApp)
       });
 
       navigate('/admin/apps');

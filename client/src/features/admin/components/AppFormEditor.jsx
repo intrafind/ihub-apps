@@ -206,9 +206,8 @@ const AppFormEditor = ({
           name: '',
           label: { en: '' },
           type: 'string',
-          required: false,
-          defaultValue: { en: '' },
-          predefinedValues: []
+          required: false
+          // Don't initialize defaultValue and predefinedValues - they'll be added only when needed
         }
       ]
     };

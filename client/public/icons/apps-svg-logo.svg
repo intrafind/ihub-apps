@@ -1,20 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="51" height="39" xml:space="preserve">
-  <defs>
-    <style>
+<ns0:svg xmlns:ns0="http://www.w3.org/2000/svg" id="Ebene_1" data-name="Ebene 1" viewBox="0 0 72 72" width="72" height="72">
+  <ns0:defs>
+    <ns0:style>
       .cls-1 {
-        fill: #a2a1a1;
+        fill: #575756;
+        font-family: DINPro-Bold, DINPro;
+        font-weight: 700;
       }
 
       .cls-2 {
-        fill: url(#gradient);
+        fill: url(#Unbenannter_Verlauf_5);
       }
-    </style>
-    <linearGradient id="gradient" data-name="gradient" gradientTransform="translate(0 109.41) scale(1 -1)" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#329248"/>
-      <stop offset="1" stop-color="#008fba"/>
-    </linearGradient>
-  </defs>
-    <path fill="#999999" d="M25.639 10.251C24.63 8.53 22.766 7.37 20.625 7.37c-.56 0-1.1.084-1.612.232L.714 38.458h8.128l16.797-28.207z"/>
-    <path class="cls-2"
-          d="M42.021 38.458h8.409L30.647 4.411C29.924 3.187 28.355.725 25.681.725c-2.671 0-4.119 2.601-4.775 3.684l-1.893 3.193c.511-.148 1.051-.231 1.611-.231 2.142 0 4.005 1.159 5.015 2.88l16.382 28.207z"/>
-    </svg>
+
+      .cls-3 {
+        font-size: 48px;
+        letter-spacing: -.05em;
+      }
+
+      .cls-4 {
+        font-size: 65.6px;
+        letter-spacing: -.05em;
+      }
+
+      .cls-5 {
+        fill: #a2a1a1;
+      }
+    </ns0:style>
+    <ns0:linearGradient id="Unbenannter_Verlauf_5" data-name="Unbenannter Verlauf 5" x1="43.28" y1="112.78" x2="43.28" y2="53.23" gradientTransform="translate(0 109.41) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <ns0:stop offset="0" stop-color="#329248" />
+      <ns0:stop offset="1" stop-color="#008fba" />
+    </ns0:linearGradient>
+  </ns0:defs>
+  <ns0:g>
+    <ns0:path class="cls-5" d="M31.72,20.75c-.83-1.4-2.11-2.5-3.64-3.1-1.53-.6-3.22-.68-4.8-.23L0,56.17h10.34L31.72,20.75h0Z" />
+    <ns0:path class="cls-2" d="M63.27,56.17h-10.7L31.72,20.75c-.83-1.4-2.11-2.5-3.64-3.1-1.53-.6-3.22-.68-4.8-.23l2.41-4.01.11-.18c.88-1.45,2.71-4.45,5.97-4.45s5.4,3.09,6.32,4.63l25.17,42.76Z" />
+  </ns0:g>
+</ns0:svg>

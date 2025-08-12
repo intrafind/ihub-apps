@@ -43,57 +43,41 @@ class NonStreamingHandler {
       clearTimeout(timeoutId);
 
       if (!llmResponse.ok) {
-        const errorBody = await llmResponse.text();
-        let errorMessage = await getLocalizedError(
-          'llmApiError',
-          { status: llmResponse.status },
+        // Use enhanced error handler for better error detection
+        const errorResult = await this.errorHandler.createEnhancedLLMApiError(
+          llmResponse,
+          model,
           clientLanguage
         );
-
-        if (llmResponse.status === 401) {
-          errorMessage = await getLocalizedError(
-            'authenticationFailed',
-            { provider: model.provider },
-            clientLanguage
-          );
-        } else if (llmResponse.status === 400) {
-          // Check if it's an API key error based on the error body
-          const errorBodyLower = errorBody.toLowerCase();
-          if (errorBodyLower.includes('api key') || errorBodyLower.includes('api_key')) {
-            errorMessage = await getLocalizedError(
-              'authenticationFailed',
-              { provider: model.provider },
-              clientLanguage
-            );
-          }
-        } else if (llmResponse.status === 429) {
-          errorMessage = await getLocalizedError(
-            'rateLimitExceeded',
-            { provider: model.provider },
-            clientLanguage
-          );
-        } else if (llmResponse.status >= 500) {
-          errorMessage = await getLocalizedError(
-            'serviceError',
-            { provider: model.provider },
-            clientLanguage
-          );
-        }
 
         const errorLog = buildLogData(false, {
           responseType: 'error',
           error: {
-            message: errorMessage,
-            code: llmResponse.status.toString(),
-            details: errorBody
+            message: errorResult.message,
+            code: errorResult.code,
+            httpStatus: errorResult.httpStatus,
+            details: errorResult.details,
+            isContextWindowError: errorResult.isContextWindowError
           }
         });
 
         await logInteraction('chat_error', errorLog);
 
+        // Log additional info for context window errors
+        if (errorResult.isContextWindowError) {
+          console.warn(`Context window exceeded for model ${model.id}:`, {
+            modelId: model.id,
+            tokenLimit: model.tokenLimit,
+            httpStatus: errorResult.httpStatus,
+            errorCode: errorResult.code
+          });
+        }
+
         return res.status(llmResponse.status).json({
-          error: errorMessage,
-          details: errorBody
+          error: errorResult.message,
+          code: errorResult.code,
+          details: errorResult.details,
+          isContextWindowError: errorResult.isContextWindowError
         });
       }
 
