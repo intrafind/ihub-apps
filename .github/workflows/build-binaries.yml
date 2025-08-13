@@ -182,6 +182,39 @@ jobs:
           cd ..
         shell: bash
 
+      - name: Create base64 encoded archives
+        run: |
+          # Create base64 encoded versions for customers who cannot download zip files
+          # These text files contain the entire binary archive encoded as base64
+          # Customers can download the .txt file and decode it to get the original archive
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            ARCHIVE_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.zip"
+            BASE64_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.zip.base64.txt"
+          else
+            ARCHIVE_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz"
+            BASE64_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz.base64.txt"
+          fi
+          
+          # Generate base64 encoded version
+          echo "Creating base64 encoded version of $ARCHIVE_FILE..."
+          base64 "$ARCHIVE_FILE" > "$BASE64_FILE"
+          
+          # Verify the base64 file was created and has content
+          if [ -f "$BASE64_FILE" ] && [ -s "$BASE64_FILE" ]; then
+            echo "✅ Successfully created base64 encoded file: $BASE64_FILE"
+            echo "File size: $(wc -c < "$BASE64_FILE") bytes"
+            echo "First 100 characters:"
+            head -c 100 "$BASE64_FILE"
+            echo ""
+          else
+            echo "❌ Failed to create base64 encoded file"
+            exit 1
+          fi
+          
+          # Set environment variable for the base64 file name
+          echo "BASE64_FILE=$BASE64_FILE" >> $GITHUB_ENV
+        shell: bash
+
       - name: Upload archive artifact
         uses: actions/upload-artifact@v4
         with:
@@ -189,6 +222,7 @@ jobs:
           path: |
             ${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz
             ${{ env.VERSIONED_ARCHIVE_NAME }}.zip
+            ${{ env.BASE64_FILE }}
 
   # Commit version changes back to repository
   commit-version:
