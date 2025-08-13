@@ -254,11 +254,12 @@ iHub Apps provides multiple installation methods to suit different use cases and
 
 ### Installation Methods Comparison
 
-| Method     | Best For                               | Setup Time | System Requirements                      | Auto-Updates      |
-| ---------- | -------------------------------------- | ---------- | ---------------------------------------- | ----------------- |
-| **npm**    | Development, customization             | ~5 min     | Node.js 20+, npm 8+                      | Manual            |
-| **Docker** | Production, containerized environments | ~2 min     | Docker Engine 24.0+, Docker Compose 2.0+ | Container restart |
-| **Binary** | Quick deployment, no dependencies      | ~1 min     | OS-specific (Windows, macOS, Linux)      | Manual download   |
+| Method              | Best For                               | Setup Time | System Requirements                        | Auto-Updates      |
+| ------------------- | -------------------------------------- | ---------- | ------------------------------------------ | ----------------- |
+| **npm**             | Development, customization             | ~5 min     | Node.js 20+, npm 8+                        | Manual            |
+| **Docker**          | Production, containerized environments | ~2 min     | Docker Engine 24.0+, Docker Compose 2.0+   | Container restart |
+| **Binary**          | Quick deployment, no dependencies      | ~1 min     | OS-specific (Windows, macOS, Linux)        | Manual download   |
+| **Windows Service** | Windows production, automatic startup  | ~3 min     | Windows 10+, Node.js 20+, Admin privileges | Manual            |
 
 ### Quick Start Commands
 
@@ -277,6 +278,10 @@ docker run -p 3000:3000 -e JWT_SECRET=your-secret ghcr.io/intrafind/ihub-apps:la
 
 # Electron Desktop App
 npm run install:all && npm run electron:dev
+
+# Windows Service (Windows Production)
+# Run as Administrator:
+npm run install:all && npm run service:install && npm run service:start
 ```
 
 ### Choosing Your Installation Method
@@ -525,6 +530,109 @@ For comprehensive Docker documentation, see [docker/DOCKER.md](docker/DOCKER.md)
 - ✅ **Offline capable** - Can work without internet connection
 - ✅ **Cross-platform** - Windows, macOS, and Linux applications
 - ✅ **Remote server support** - Connect to existing iHub Apps deployments
+
+### Method 5: Windows Service Installation
+
+**Best for:** Windows production environments, automatic startup, system service integration
+
+**Prerequisites:**
+
+- Windows 10 or higher
+- Administrator privileges for service installation
+- Node.js 20.x or higher installed on the system
+
+#### Installation Steps
+
+1. **Install dependencies:**
+
+   ```bash
+   git clone <repository-url>
+   cd ihub-apps
+   npm run install:all
+   ```
+
+2. **Configure environment:**
+
+   ```bash
+   # Copy and edit .env file
+   cp .env.example .env
+   # Edit .env with your API keys and configuration
+   ```
+
+3. **Install as Windows Service:**
+
+   ```bash
+   # Run as Administrator
+   npm run service:install
+   ```
+
+4. **Start the service:**
+
+   ```bash
+   npm run service:start
+   # or use Windows Services manager
+   # or: sc start "iHub Apps"
+   ```
+
+#### Service Management Commands
+
+```bash
+# Install the service
+npm run service:install
+
+# Uninstall the service
+npm run service:uninstall
+
+# Start the service
+npm run service:start
+
+# Stop the service
+npm run service:stop
+
+# Restart the service
+npm run service:restart
+
+# Check service configuration
+npm run service:status
+```
+
+#### Alternative Service Management
+
+You can also manage the service using Windows built-in tools:
+
+```cmd
+# Windows Command Prompt (as Administrator)
+sc start "iHub Apps"
+sc stop "iHub Apps"
+sc query "iHub Apps"
+
+# Or use the Windows Services management console
+services.msc
+```
+
+**Windows Service Features:**
+
+- ✅ **Automatic startup** - Service starts automatically with Windows
+- ✅ **Background operation** - Runs without user login
+- ✅ **System integration** - Full Windows Service integration
+- ✅ **Auto-recovery** - Service restarts automatically on failure
+- ✅ **Proper logging** - Windows Event Log integration
+- ✅ **Security** - Runs under system account or custom service account
+
+**Service Configuration:**
+
+- **Service Name:** `iHub Apps`
+- **Display Name:** `iHub Apps - AI-powered applications platform`
+- **Default Port:** 3000 (configurable via .env)
+- **Log Location:** Windows Event Log and server logs
+- **Auto-restart:** Yes, on failure
+
+**Important Notes:**
+
+- Administrator privileges are required for service installation and management
+- The service uses the Node.js installation and .env configuration from the installation directory
+- Service logs are available in Windows Event Viewer under "iHub Apps"
+- To update the application, stop the service, update files, and restart
 
 ### Automatic Configuration Setup
 
