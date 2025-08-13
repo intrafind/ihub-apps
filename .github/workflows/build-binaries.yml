@@ -301,6 +301,13 @@ jobs:
         with:
           path: ./artifacts
 
+      - name: Add decode helper script to release
+        run: |
+          # Copy the decode script to artifacts so it's included in the release
+          cp scripts/decode-base64-binary.sh ./artifacts/
+          echo "✅ Added decode-base64-binary.sh to release artifacts"
+        shell: bash
+
       - name: Display structure of downloaded files
         run: ls -R ./artifacts
         shell: bash
