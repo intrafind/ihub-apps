@@ -170,9 +170,9 @@ function useChatMessages(chatId = 'default') {
           ? {
               ...msg,
               content:
-                preserveContent && msg.content
-                  ? `${msg.content}\n\n_${errorMessage}_`
-                  : `_${errorMessage}_`,
+                preserveContent && msg.content && !msg.content.includes(errorMessage)
+                  ? `${msg.content}\n\n${errorMessage}`
+                  : errorMessage,
               loading: false,
               error: true
             }

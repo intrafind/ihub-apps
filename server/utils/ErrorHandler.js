@@ -58,18 +58,22 @@ class ErrorHandler {
     const lang = language || defaultLang;
 
     try {
-      let translations = configCache.getLocalizations(lang);
+      let localeData = configCache.getLocalizations(lang);
+
+      // The locale data is wrapped in { data: {...}, etag: ... }
+      let translations = localeData?.data;
 
       const hasServer = translations?.serverErrors && translations.serverErrors[errorKey];
       const hasTool = translations?.toolErrors && translations.toolErrors[errorKey];
 
       if (!translations || (!hasServer && !hasTool)) {
         if (lang !== defaultLang) {
-          let enTranslations = configCache.getLocalizations(defaultLang);
-          if (!enTranslations) {
+          let enLocaleData = configCache.getLocalizations(defaultLang);
+          if (!enLocaleData) {
             await configCache.loadAndCacheLocale(defaultLang);
-            enTranslations = configCache.getLocalizations(defaultLang);
+            enLocaleData = configCache.getLocalizations(defaultLang);
           }
+          let enTranslations = enLocaleData?.data;
           const enServer = enTranslations?.serverErrors?.[errorKey];
           const enTool = enTranslations?.toolErrors?.[errorKey];
           if (enServer || enTool) {
@@ -143,6 +147,18 @@ class ErrorHandler {
 
     const errorBodyLower = errorBody.toLowerCase();
 
+    // First, exclude API key errors - these should NOT be treated as context window errors
+    if (
+      errorBodyLower.includes('api key') ||
+      errorBodyLower.includes('api_key') ||
+      errorBodyLower.includes('apikey') ||
+      errorBodyLower.includes('api-key') ||
+      errorBodyLower.includes('authentication') ||
+      errorBodyLower.includes('unauthorized')
+    ) {
+      return false;
+    }
+
     // Common patterns for context window errors across providers
     const contextPatterns = [
       // OpenAI patterns
@@ -158,8 +174,7 @@ class ErrorHandler {
       'prompt is too long',
       'maximum number of tokens',
 
-      // Google patterns
-      'invalid_argument',
+      // Google patterns - removed 'invalid_argument' as it's too generic
       'token limit',
       'maximum input length',
       'request entity too large',
@@ -201,8 +216,23 @@ class ErrorHandler {
     } else if (llmResponse.status === 400 || llmResponse.status === 413) {
       const errorBodyLower = errorBody.toLowerCase();
 
-      // Check for context window errors first
-      if (this.isContextWindowError(errorBody, llmResponse.status)) {
+      // Check if it's an API key error FIRST (before context window check)
+      if (
+        errorBodyLower.includes('api key') ||
+        errorBodyLower.includes('api_key') ||
+        errorBodyLower.includes('apikey') ||
+        errorBodyLower.includes('api-key') ||
+        (errorBodyLower.includes('invalid_argument') && errorBodyLower.includes('key'))
+      ) {
+        errorMessage = await this.getLocalizedError(
+          'authenticationFailed',
+          { provider: model.provider },
+          language
+        );
+        errorCode = 'AUTH_FAILED';
+      }
+      // Check for context window errors second
+      else if (this.isContextWindowError(errorBody, llmResponse.status)) {
         errorMessage = await this.getLocalizedError(
           'contextWindowExceeded',
           {
@@ -213,15 +243,6 @@ class ErrorHandler {
           language
         );
         errorCode = 'CONTEXT_WINDOW_EXCEEDED';
-      }
-      // Check if it's an API key error
-      else if (errorBodyLower.includes('api key') || errorBodyLower.includes('api_key')) {
-        errorMessage = await this.getLocalizedError(
-          'authenticationFailed',
-          { provider: model.provider },
-          language
-        );
-        errorCode = 'AUTH_FAILED';
       } else {
         // Generic bad request
         errorMessage = await this.getLocalizedError(
