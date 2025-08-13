@@ -285,5 +285,8 @@
     "inferenceApi": {
       "limit": 60
     }
+  },
+  "ssl": {
+    "ignoreInvalidCertificates": false
   }
 }

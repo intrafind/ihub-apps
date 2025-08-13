@@ -3,6 +3,7 @@ import https from 'https';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { throttledFetch } from '../requestThrottler.js';
 import { actionTracker } from '../actionTracker.js';
+import configCache from '../configCache.js';
 
 function createError(message, code) {
   const err = new Error(message);
@@ -19,7 +20,7 @@ export default async function webContentExtractor({
   uri,
   link,
   maxLength = 5000,
-  ignoreSSL = false,
+  ignoreSSL = null,
   chatId
 }) {
   actionTracker.trackToolCallStart(chatId, {
@@ -50,15 +51,20 @@ export default async function webContentExtractor({
   }
 
   try {
+    // Determine SSL ignore setting: explicit parameter > global config > default false
+    const platformConfig = configCache.getPlatform() || {};
+    const shouldIgnoreSSL = ignoreSSL !== null ? ignoreSSL : 
+      (platformConfig.ssl?.ignoreInvalidCertificates || false);
+
     // Fetch the webpage with appropriate headers and timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
     const dispatcher =
-      ignoreSSL && validUrl.protocol === 'https:'
+      shouldIgnoreSSL && validUrl.protocol === 'https:'
         ? new https.Agent({ rejectUnauthorized: false })
         : undefined;
-    // Ignoring SSL certificate errors if requested
+    // Ignoring SSL certificate errors if requested or configured globally
     const response = await throttledFetch('webContentExtractor', targetUrl, {
       headers: {
         'User-Agent':
@@ -309,9 +315,9 @@ export default async function webContentExtractor({
   } catch (error) {
     if (error.name === 'AbortError') {
     }
-    if (/certificate|SSL/i.test(error.message) && !ignoreSSL) {
+    if (/certificate|SSL/i.test(error.message) && !shouldIgnoreSSL) {
       throw createError(
-        `TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates.`,
+        `TLS certificate error: ${error.message}. Please contact your administrator to resolve invalid certificates or enable global SSL ignore in platform configuration.`,
         'TLS_ERROR'
       );
     }
