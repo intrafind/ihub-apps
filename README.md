@@ -438,6 +438,16 @@ For comprehensive Docker documentation, see [docker/DOCKER.md](docker/DOCKER.md)
    Visit [GitHub Releases](https://github.com/intrafind/ihub-apps/releases) and download:
    - **Complete package** (recommended): `ihub-apps-v<version>-<platform>.tar.gz` or `.zip`
    - **Standalone executable**: `ihub-apps-v<version>-<platform>`
+   - **Base64 encoded** (for restricted environments): `ihub-apps-v<version>-<platform>.tar.gz.base64.txt` or `.zip.base64.txt`
+
+   💡 **Tip for restricted environments:** If you cannot download zip/tar.gz files directly, use the `.base64.txt` files:
+
+   ```bash
+   # Download the base64 file and decode it
+   base64 -d ihub-apps-v*-linux.tar.gz.base64.txt > ihub-apps-v*-linux.tar.gz
+   # Then extract normally
+   tar -xzf ihub-apps-v*-linux.tar.gz
+   ```
 
 2. **Extract and run:**
 
