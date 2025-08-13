@@ -1,0 +1,50 @@
+[Unit]
+Description=iHub Apps - AI Applications Platform
+Documentation=https://github.com/intrafind/ihub-apps
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=ihub-apps
+Group=ihub-apps
+WorkingDirectory=/opt/ihub-apps
+ExecStart=/usr/bin/env node -r dotenv/config server/server.js dotenv_config_path=.env
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Environment
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOST=0.0.0.0
+
+# Security
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/ihub-apps/data /opt/ihub-apps/contents
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ihub-apps
+
+[Install]
+WantedBy=multi-user.target
