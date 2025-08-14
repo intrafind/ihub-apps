@@ -26,25 +26,52 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = dirname(__dirname);
 
+// Detect if we're running in a binary distribution or source
+const isBinaryDistribution = existsSync(join(projectRoot, 'launcher.cjs'));
+
+let serviceScript, nodeExecutable, configPath;
+
+if (isBinaryDistribution) {
+  console.log('Detected binary distribution, using launcher.cjs');
+  // In binary distribution, use the launcher script and bundled node.exe
+  serviceScript = join(projectRoot, 'launcher.cjs');
+  nodeExecutable = join(projectRoot, 'node.exe');
+  configPath = join(projectRoot, 'config.env');
+} else {
+  console.log('Detected source installation, using server/server.js');
+  // In source installation, use the server script directly
+  serviceScript = join(projectRoot, 'server', 'server.js');
+  nodeExecutable = process.execPath; // Use the current Node.js executable
+  configPath = join(projectRoot, '.env');
+}
+
 // Load environment variables
-dotenv.config({ path: join(projectRoot, '.env') });
+if (existsSync(configPath)) {
+  dotenv.config({ path: configPath });
+}
 
 // Service configuration
 const SERVICE_CONFIG = {
   name: 'iHub Apps',
   description: 'iHub Apps - AI-powered applications platform',
-  script: join(projectRoot, 'server', 'server.js'),
-  nodeOptions: ['-r', 'dotenv/config'],
+  script: serviceScript,
+  nodeOptions: isBinaryDistribution ? [] : ['-r', 'dotenv/config'], // No need for dotenv in binary as launcher handles config
+  execPath: nodeExecutable, // Use the correct Node.js executable
   env: [
-    {
-      name: 'dotenv_config_path',
-      value: join(projectRoot, '.env')
-    },
     {
       name: 'NODE_ENV',
       value: process.env.NODE_ENV || 'production'
+    },
+    {
+      name: 'APP_ROOT_DIR',
+      value: projectRoot
     }
-  ],
+  ].concat(isBinaryDistribution ? [] : [
+    {
+      name: 'dotenv_config_path',
+      value: configPath
+    }
+  ]),
   // Service will auto-restart on failure
   wait: 2,
   grow: 0.5,
@@ -110,14 +137,24 @@ function validateEnvironment() {
   // Check if server script exists
   if (!existsSync(SERVICE_CONFIG.script)) {
     console.error('❌ Server script not found:', SERVICE_CONFIG.script);
-    console.error('Please make sure you are running this from the project root directory');
+    if (isBinaryDistribution) {
+      console.error('Please make sure you are running this from the binary distribution directory');
+      console.error('Expected files: launcher.cjs, node.exe');
+    } else {
+      console.error('Please make sure you are running this from the project root directory');
+    }
     process.exit(1);
   }
 
-  // Check if .env file exists (warn but don't fail)
-  const envPath = join(projectRoot, '.env');
-  if (!existsSync(envPath)) {
-    console.warn('⚠️  .env file not found at:', envPath);
+  // Check if Node.js executable exists
+  if (!existsSync(SERVICE_CONFIG.execPath)) {
+    console.error('❌ Node.js executable not found:', SERVICE_CONFIG.execPath);
+    process.exit(1);
+  }
+
+  // Check if config file exists (warn but don't fail)
+  if (!existsSync(configPath)) {
+    console.warn(`⚠️  Configuration file not found at: ${configPath}`);
     console.warn('The service may not have access to environment variables');
   }
 

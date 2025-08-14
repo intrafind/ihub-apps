@@ -445,6 +445,48 @@ try {
     fs.cpSync(docsBookDir, path.join(outputDir, 'docs'), { recursive: true });
   }
 
+  // Copy Windows service scripts for Windows builds
+  if (currentPlatform.platform === 'windows') {
+    console.log('Copying Windows service scripts...');
+    const scriptsDir = path.join(__dirname, 'scripts');
+    const outputScriptsDir = path.join(outputDir, 'scripts');
+    
+    // Create scripts directory
+    fs.mkdirSync(outputScriptsDir, { recursive: true });
+    
+    // Copy the Windows service script
+    const serviceScriptPath = path.join(scriptsDir, 'windows-service.js');
+    if (fs.existsSync(serviceScriptPath)) {
+      fs.copyFileSync(serviceScriptPath, path.join(outputScriptsDir, 'windows-service.js'));
+      console.log('✅ Copied windows-service.js');
+    }
+    
+    // Copy package.json for the scripts directory (needed for ES modules)
+    const rootPackageJson = require('./package.json');
+    const scriptsPackageJson = {
+      name: 'ihub-apps-scripts',
+      version: rootPackageJson.version,
+      type: 'module',
+      private: true,
+      dependencies: {
+        'dotenv': rootPackageJson.dependencies.dotenv,
+        'node-windows': require('./server/package.json').dependencies['node-windows']
+      }
+    };
+    
+    fs.writeFileSync(
+      path.join(outputScriptsDir, 'package.json'),
+      JSON.stringify(scriptsPackageJson, null, 2)
+    );
+    
+    // Install dependencies for scripts
+    console.log('Installing dependencies for Windows service scripts...');
+    execSync('npm install --omit=dev', {
+      cwd: outputScriptsDir,
+      stdio: 'inherit'
+    });
+  }
+
   // Create a simple launcher shell script on Unix platforms
   if (os.platform() !== 'win32') {
     const shellLauncher = `#!/bin/bash
@@ -475,6 +517,32 @@ if not exist "%DIR%node.exe" (
   exit /b 1
 )
 
+REM Check for service commands
+if "%1"=="service:install" (
+  "%DIR%node.exe" "%DIR%scripts\\windows-service.js" install
+  exit /b %ERRORLEVEL%
+)
+if "%1"=="service:uninstall" (
+  "%DIR%node.exe" "%DIR%scripts\\windows-service.js" uninstall
+  exit /b %ERRORLEVEL%
+)
+if "%1"=="service:start" (
+  "%DIR%node.exe" "%DIR%scripts\\windows-service.js" start
+  exit /b %ERRORLEVEL%
+)
+if "%1"=="service:stop" (
+  "%DIR%node.exe" "%DIR%scripts\\windows-service.js" stop
+  exit /b %ERRORLEVEL%
+)
+if "%1"=="service:restart" (
+  "%DIR%node.exe" "%DIR%scripts\\windows-service.js" restart
+  exit /b %ERRORLEVEL%
+)
+if "%1"=="service:status" (
+  "%DIR%node.exe" "%DIR%scripts\\windows-service.js" status
+  exit /b %ERRORLEVEL%
+)
+
 REM Use the bundled Node.js to run the server
 "%DIR%node.exe" "%DIR%launcher.cjs" %*
 
@@ -495,6 +563,85 @@ if %ERRORLEVEL% neq 0 (
   // Create version file for binary
   fs.writeFileSync(path.join(outputDir, 'version.txt'), version);
   console.log(`Created version file: ${version}`);
+
+  // Create README for Windows distribution
+  if (currentPlatform.platform === 'windows') {
+    const windowsReadme = `# iHub Apps Windows Distribution
+
+## Quick Start
+
+1. Extract this package to a directory (e.g., C:\\Program Files\\iHub Apps)
+2. Run the application: ${outputName}
+3. Open your browser to http://localhost:3001
+
+## Configuration
+
+Edit config.env to customize settings:
+- PORT: Change the port (default: 3001)
+- API keys for LLM providers
+- Authentication settings
+
+## Windows Service Installation
+
+Install and run iHub Apps as a Windows Service for production use:
+
+### Install Service (Run as Administrator)
+\`\`\`cmd
+${outputName} service:install
+${outputName} service:start
+\`\`\`
+
+### Manage Service
+\`\`\`cmd
+${outputName} service:stop      # Stop the service
+${outputName} service:restart   # Restart the service  
+${outputName} service:status    # Check service status
+${outputName} service:uninstall # Remove the service
+\`\`\`
+
+### Service Features
+- **Automatic Startup**: Service starts with Windows boot
+- **Background Operation**: Runs without user login
+- **Auto-Recovery**: Service restarts automatically on failure
+- **Event Log Integration**: Logs to Windows Event Log
+- **Administrator Protection**: Requires admin privileges to install
+
+### Alternative Service Management
+You can also use Windows Service Manager or command line:
+\`\`\`cmd
+sc start "iHub Apps"     # Start service
+sc stop "iHub Apps"      # Stop service
+sc query "iHub Apps"     # Check service status
+\`\`\`
+
+## Files Structure
+- \`${outputName}\` - Main launcher (supports service commands)
+- \`launcher.cjs\` - Application launcher script
+- \`node.exe\` - Bundled Node.js runtime
+- \`scripts/\` - Windows service management scripts
+- \`server/\` - Server application files
+- \`public/\` - Web interface files
+- \`config.env\` - Configuration file
+
+## Troubleshooting
+
+### Port Conflicts
+If you see "Port already in use" errors:
+1. Change PORT in config.env
+2. Or kill the process using the port in Task Manager
+
+### Service Issues
+- Ensure you run service commands as Administrator
+- Check Windows Event Log for service-related errors
+- Verify config.env has correct settings
+
+### Support
+For support, visit: https://github.com/intrafind/ihub-apps
+`;
+
+    fs.writeFileSync(path.join(outputDir, 'README.txt'), windowsReadme);
+    console.log('✅ Created README.txt for Windows distribution');
+  }
 
   // Copy Node.js binary with platform-specific name
   console.log('Copying Node.js executable...');
