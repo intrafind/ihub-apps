@@ -450,17 +450,17 @@ try {
     console.log('Copying Windows service scripts...');
     const scriptsDir = path.join(__dirname, 'scripts');
     const outputScriptsDir = path.join(outputDir, 'scripts');
-    
+
     // Create scripts directory
     fs.mkdirSync(outputScriptsDir, { recursive: true });
-    
+
     // Copy the Windows service script
     const serviceScriptPath = path.join(scriptsDir, 'windows-service.js');
     if (fs.existsSync(serviceScriptPath)) {
       fs.copyFileSync(serviceScriptPath, path.join(outputScriptsDir, 'windows-service.js'));
       console.log('✅ Copied windows-service.js');
     }
-    
+
     // Copy package.json for the scripts directory (needed for ES modules)
     const rootPackageJson = require('./package.json');
     const scriptsPackageJson = {
@@ -469,16 +469,16 @@ try {
       type: 'module',
       private: true,
       dependencies: {
-        'dotenv': rootPackageJson.dependencies.dotenv,
+        dotenv: rootPackageJson.dependencies.dotenv,
         'node-windows': require('./server/package.json').dependencies['node-windows']
       }
     };
-    
+
     fs.writeFileSync(
       path.join(outputScriptsDir, 'package.json'),
       JSON.stringify(scriptsPackageJson, null, 2)
     );
-    
+
     // Install dependencies for scripts
     console.log('Installing dependencies for Windows service scripts...');
     execSync('npm install --omit=dev', {

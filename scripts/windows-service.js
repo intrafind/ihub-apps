@@ -66,12 +66,16 @@ const SERVICE_CONFIG = {
       name: 'APP_ROOT_DIR',
       value: projectRoot
     }
-  ].concat(isBinaryDistribution ? [] : [
-    {
-      name: 'dotenv_config_path',
-      value: configPath
-    }
-  ]),
+  ].concat(
+    isBinaryDistribution
+      ? []
+      : [
+          {
+            name: 'dotenv_config_path',
+            value: configPath
+          }
+        ]
+  ),
   // Service will auto-restart on failure
   wait: 2,
   grow: 0.5,
