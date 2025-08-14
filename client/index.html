@@ -15,7 +15,16 @@
 
         // If we're at a React route (e.g., /ihub/apps/chat), we need to find the base
         // We can detect this by checking if there's a known React route pattern
-        const knownRoutes = ['/apps', '/admin', '/auth', '/login', '/chat', '/pages', '/s/'];
+        const knownRoutes = [
+          '/apps',
+          '/admin',
+          '/auth',
+          '/login',
+          '/chat',
+          '/pages',
+          '/settings',
+          '/s/'
+        ];
         for (const route of knownRoutes) {
           const routeIndex = basePath.indexOf(route);
           if (routeIndex > 0) {

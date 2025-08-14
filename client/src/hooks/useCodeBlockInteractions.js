@@ -37,12 +37,21 @@ export const useCodeBlockInteractions = () => {
 
       // Get code content from data attribute or fallback to DOM extraction
       let codeContent = button.dataset.codeContent;
-      if (!codeContent || codeContent === '[object Object]') {
-        const codeEl = button.closest('.code-block-container')?.querySelector('pre code');
+      if (!codeContent || codeContent === '[object Object]' || codeContent === 'undefined') {
+        const codeEl = button.closest('.code-block-container')?.querySelector('pre > code');
         codeContent = codeEl ? codeEl.textContent : '';
       } else {
-        codeContent = decodeURIComponent(codeContent);
+        try {
+          codeContent = decodeURIComponent(codeContent);
+        } catch (err) {
+          console.warn('Failed to decode code content:', err);
+          const codeEl = button.closest('.code-block-container')?.querySelector('pre > code');
+          codeContent = codeEl ? codeEl.textContent : '';
+        }
       }
+
+      // Clean up the extracted content
+      codeContent = codeContent.trim();
 
       if (isCopyBtn) {
         navigator.clipboard

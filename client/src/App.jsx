@@ -38,6 +38,7 @@ const AdminGroupEditPage = React.lazy(() => import('./features/admin/pages/Admin
 const AdminUICustomization = React.lazy(
   () => import('./features/admin/pages/AdminUICustomization')
 );
+const IntegrationsPage = React.lazy(() => import('./features/settings/pages/IntegrationsPage'));
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
@@ -262,6 +263,10 @@ function App() {
                         element={<LazyAdminRoute component={AdminUICustomization} />}
                       />
                     )}
+                    <Route
+                      path="settings/integrations"
+                      element={<LazyAdminRoute component={IntegrationsPage} />}
+                    />
                     <Route path="unauthorized" element={<Unauthorized />} />
                     <Route path="forbidden" element={<Forbidden />} />
                     <Route path="server-error" element={<ServerError />} />

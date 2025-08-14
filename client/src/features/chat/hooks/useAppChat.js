@@ -26,6 +26,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   const lastMessageIdRef = useRef(null);
   const pendingMessageDataRef = useRef(null);
   const lastUserMessageRef = useRef(null);
+  const isCancellingRef = useRef(false);
 
   const {
     messages,
@@ -54,16 +55,25 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
               await sendAppChatMessage(appId, chatId, messages, params);
               pendingMessageDataRef.current = null;
             } catch (error) {
-              if (lastMessageIdRef.current) {
+              if (lastMessageIdRef.current && !isCancellingRef.current) {
+                // Only show error if this wasn't a manual cancellation
                 // Use the userFriendlyMessage from the enhanced error, or fall back to a generic message
                 const errorMessage =
                   error.userFriendlyMessage ||
                   error.message ||
                   t(
                     'error.failedToGenerateResponse',
-                    'Error: Failed to generate response. Please try again or select a different model.'
+                    'Failed to generate response. Please try again or select a different model.'
                   );
-                setMessageError(lastMessageIdRef.current, errorMessage);
+                // Preserve any streamed content that might have been accumulated
+                const currentMessage = messagesRef.current.find(
+                  m => m.id === lastMessageIdRef.current
+                );
+                updateAssistantMessage(
+                  lastMessageIdRef.current,
+                  (currentMessage?.content || '') + '\n\n' + errorMessage,
+                  false
+                );
               }
               cleanupEventSourceRef.current?.();
               setProcessing(false);
@@ -87,8 +97,17 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           setProcessing(false);
           break;
         case 'error':
-          if (lastMessageIdRef.current) {
-            setMessageError(lastMessageIdRef.current, data?.message || 'Error');
+          if (lastMessageIdRef.current && !isCancellingRef.current) {
+            // Only show error if this wasn't a manual cancellation
+            // Preserve any streamed content that was accumulated before the error
+            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const errorMessage =
+              data?.message || t('error.streamingError', 'An error occurred during streaming');
+            updateAssistantMessage(
+              lastMessageIdRef.current,
+              (currentMessage?.content || '') + '\n\n' + errorMessage,
+              false
+            );
           }
           setProcessing(false);
           break;
@@ -100,7 +119,14 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           console.log('🔍 Unknown event type:', type, data);
       }
     },
-    [pendingMessageDataRef, setMessageError, updateAssistantMessage, onMessageComplete, t]
+    [
+      pendingMessageDataRef,
+      setMessageError,
+      updateAssistantMessage,
+      onMessageComplete,
+      t,
+      messagesRef
+    ]
   );
 
   const { initEventSource, cleanupEventSource } = useEventSource({
@@ -124,6 +150,9 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   const sendMessage = useCallback(
     ({ displayMessage, apiMessage, params, sendChatHistory = true }) => {
       try {
+        // Reset cancellation flag when starting a new message
+        isCancellingRef.current = false;
+
         cleanupEventSource();
         setProcessing(true);
         const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -231,7 +260,11 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   );
 
   const cancelGeneration = useCallback(() => {
+    // Set flag to prevent error messages during manual cancellation
+    isCancellingRef.current = true;
+
     cleanupEventSource();
+
     if (lastMessageIdRef.current) {
       const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
       updateAssistantMessage(
@@ -241,7 +274,13 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         false
       );
     }
+
     setProcessing(false);
+
+    // Reset the cancellation flag after a short delay to allow cleanup to complete
+    setTimeout(() => {
+      isCancellingRef.current = false;
+    }, 100);
   }, [cleanupEventSource, updateAssistantMessage, t, messagesRef]);
 
   return {

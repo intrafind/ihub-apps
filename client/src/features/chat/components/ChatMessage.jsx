@@ -97,23 +97,22 @@ const ChatMessage = ({
   }, [outputFormat, isUser, isEditing, message.content]);
 
   const handleCopy = (format = 'text') => {
+    // Use the original streamed content directly
     const raw = typeof message.content === 'string' ? message.content : message.content || '';
-    let html = isMarkdown(raw) ? markdownToHtml(raw) : raw;
-    let markdown = isMarkdown(raw) ? raw : htmlToMarkdown(raw);
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
-    const plain = temp.textContent || temp.innerText || '';
 
     let data;
     switch (format) {
       case 'html':
-        data = html;
+        // Only convert to HTML if specifically requested
+        data = isMarkdown(raw) ? markdownToHtml(raw) : raw;
         break;
       case 'markdown':
-        data = markdown;
+        // For markdown format, return the raw content if it's already markdown, otherwise convert
+        data = isMarkdown(raw) ? raw : htmlToMarkdown(raw);
         break;
       default:
-        data = plain;
+        // For text format, always return the original raw content
+        data = raw;
     }
 
     const hasClipboardWrite = navigator.clipboard && navigator.clipboard.write;
@@ -121,8 +120,8 @@ const ChatMessage = ({
 
     if (format === 'html' && hasClipboardWrite) {
       const item = new ClipboardItem({
-        'text/html': new Blob([html], { type: 'text/html' }),
-        'text/plain': new Blob([plain], { type: 'text/plain' })
+        'text/html': new Blob([data], { type: 'text/html' }),
+        'text/plain': new Blob([raw], { type: 'text/plain' })
       });
       copyPromise = navigator.clipboard.write([item]);
     } else {

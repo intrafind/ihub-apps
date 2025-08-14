@@ -17,23 +17,42 @@ class AnthropicAdapterClass extends BaseAdapter {
     const processedMessages = [];
     for (const msg of filteredMessages) {
       if (msg.role === 'tool') {
-        // let toolContent;
-        // try {
-        //   toolContent = JSON.parse(msg.content);
-        // } catch {
-        //   toolContent = msg.content;
-        // }
+        const toolContent = [];
+
+        // If tool message contains imageData, prioritize the image for vision analysis
+        if (this.hasImageData(msg)) {
+          console.log(`🖼️ Anthropic adapter: Processing image from tool message`);
+
+          // Add simple tool result acknowledgment
+          toolContent.push({
+            type: 'tool_result',
+            tool_use_id: msg.tool_call_id,
+            content: msg.content, // Already simplified in ToolExecutor
+            is_error: msg.is_error || false
+          });
+
+          // Add the image for analysis
+          toolContent.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: msg.imageData.format || 'image/jpeg',
+              data: this.cleanBase64Data(msg.imageData.base64)
+            }
+          });
+        } else {
+          // Regular tool result without images
+          toolContent.push({
+            type: 'tool_result',
+            tool_use_id: msg.tool_call_id,
+            content: msg.content,
+            is_error: msg.is_error || false
+          });
+        }
+
         processedMessages.push({
           role: 'user',
-          content: [
-            {
-              type: 'tool_result',
-              tool_use_id: msg.tool_call_id,
-              //content: toolContent
-              content: msg.content, // Pass the content directly as a string
-              is_error: msg.is_error || false
-            }
-          ]
+          content: toolContent
         });
       } else if (msg.role === 'assistant' && msg.tool_calls) {
         const content = [];

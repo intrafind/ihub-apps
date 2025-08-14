@@ -158,7 +158,15 @@ export async function getToolsForApp(app, language = null, context = {}) {
   let appTools = [];
 
   if (Array.isArray(app.tools) && app.tools.length > 0) {
-    appTools = allTools.filter(t => app.tools.includes(t.id));
+    appTools = allTools.filter(t => {
+      // Check if tool ID matches directly
+      if (app.tools.includes(t.id)) {
+        return true;
+      }
+      // For function-based tools (e.g., jira_searchTickets), check if base tool (e.g., jira) is requested
+      const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
+      return app.tools.includes(baseToolId);
+    });
   }
 
   // Add source-generated tools

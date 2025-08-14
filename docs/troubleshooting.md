@@ -12,8 +12,9 @@ This comprehensive troubleshooting guide helps you diagnose and resolve common i
 6. [Source Handlers Issues](#source-handlers-issues)
 7. [LLM Provider Problems](#llm-provider-problems)
 8. [Browser/Client Issues](#browserclient-issues)
-9. [Docker/Deployment Issues](#dockerdeployment-issues)
-10. [Development Environment](#development-environment)
+9. [SSL/TLS Certificate Issues](#ssltls-certificate-issues)
+10. [Docker/Deployment Issues](#dockerdeployment-issues)
+11. [Development Environment](#development-environment)
 
 ---
 
@@ -943,7 +944,363 @@ function UserComponent(props) {
 
 ---
 
-## Docker/Deployment Issues
+## SSL/TLS Certificate Issues
+
+### Custom CA/PKI Certificate Problems
+
+**Symptoms:**
+- `UNABLE_TO_VERIFY_LEAF_SIGNATURE` errors when calling external services
+- `certificate verify failed` errors from Node.js
+- SSL handshake failures with internal/corporate services
+- TLS connection errors in enterprise environments with custom PKI
+
+**Root Cause:**
+Node.js cannot build a trust chain to a Certificate Authority (CA) it knows about. This commonly occurs in corporate environments with private/internal CAs that aren't included in Node.js's default trust store.
+
+**Debugging Steps:**
+
+1. **Identify Certificate Issues:**
+```bash
+# Test connection to the problematic service
+openssl s_client -connect your.internal.host:443 -servername your.internal.host -showcerts
+
+# Check if server provides full certificate chain
+openssl s_client -connect your.internal.host:443 -servername your.internal.host -showcerts | grep -E "s:|i:"
+
+# Verify certificate chain completeness
+curl -v https://your.internal.host/api
+```
+
+2. **Check Current Certificate Trust:**
+```bash
+# View Node.js's default CAs (truncated output expected)
+node -e "console.log(require('tls').rootCertificates.length + ' root certificates loaded')"
+
+# Test specific certificate verification
+node -e "
+const https = require('https');
+https.get('https://your.internal.host/api', (res) => {
+  console.log('Success:', res.statusCode);
+}).on('error', (err) => {
+  console.error('Error:', err.message);
+});
+"
+```
+
+### Solution 1: NODE_EXTRA_CA_CERTS (Recommended)
+
+**Process-wide Trust Store Enhancement:**
+
+This is the cleanest and most secure solution. It adds your custom CA(s) to Node.js's trust store without disabling TLS verification.
+
+1. **Obtain Certificate Chain:**
+```bash
+# Extract server certificate chain
+echo | openssl s_client -connect your.internal.host:443 -servername your.internal.host -showcerts 2>/dev/null | sed -n '/BEGIN CERTIFICATE/,/END CERTIFICATE/p' > server-chain.pem
+
+# Or get CA certificate from your IT department
+# Save as company-ca.pem containing:
+# - Root CA certificate
+# - Any intermediate CA certificates
+```
+
+2. **Create CA Certificate File:**
+```bash
+# Example company-ca.pem content:
+-----BEGIN CERTIFICATE-----
+[Your Root CA Certificate Base64 Content]
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+[Your Intermediate CA Certificate Base64 Content (if applicable)]
+-----END CERTIFICATE-----
+```
+
+3. **Configure NODE_EXTRA_CA_CERTS:**
+
+**For Development:**
+```bash
+# Linux/macOS
+export NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem
+node server/server.js
+
+# Windows (PowerShell)
+$env:NODE_EXTRA_CA_CERTS="C:\path\to\company-ca.pem"
+node server/server.js
+
+# Windows (CMD)
+set NODE_EXTRA_CA_CERTS=C:\path\to\company-ca.pem
+node server/server.js
+```
+
+**For Production (.env file):**
+```bash
+# Add to your .env file
+NODE_EXTRA_CA_CERTS=/etc/ssl/certs/company-ca.pem
+
+# Or absolute path
+NODE_EXTRA_CA_CERTS=/opt/ihub-apps/certs/company-ca.pem
+```
+
+**For Binary/Standalone Deployments:**
+```bash
+# In config.env for binary distribution
+NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem
+
+# Or set as system environment variable
+export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/company-ca.pem
+./ihub-apps-binary
+```
+
+4. **Verify Configuration:**
+```bash
+# Test that the custom CA is trusted
+NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem node -e "
+const https = require('https');
+console.log('Testing connection with custom CA...');
+https.get('https://your.internal.host/api', (res) => {
+  console.log('✅ Success! Status:', res.statusCode);
+  console.log('Certificate verified successfully');
+}).on('error', (err) => {
+  console.error('❌ Error:', err.message);
+});
+"
+```
+
+### Solution 2: Programmatic Certificate Trust
+
+**For specific HTTP clients or limited scope:**
+
+1. **Native fetch/undici:**
+```javascript
+import fs from 'node:fs';
+import { Agent, setGlobalDispatcher } from 'undici';
+
+const ca = fs.readFileSync('/etc/ssl/certs/company-ca.pem', 'utf8');
+
+// Process-wide configuration
+setGlobalDispatcher(new Agent({ connect: { ca } }));
+
+// Or per-request:
+const dispatcher = new Agent({ connect: { ca } });
+const response = await fetch('https://your.internal.host/api', { dispatcher });
+```
+
+2. **Axios/native https:**
+```javascript
+const fs = require('fs');
+const https = require('https');
+const axios = require('axios');
+
+const agent = new https.Agent({
+  ca: fs.readFileSync('/etc/ssl/certs/company-ca.pem', 'utf8'),
+  // Keep verification enabled (default: true)
+  rejectUnauthorized: true
+});
+
+const response = await axios.get('https://your.internal.host/api', { 
+  httpsAgent: agent 
+});
+```
+
+### Solution 3: System-wide CA Trust (Optional)
+
+**Adding CA to Operating System trust store:**
+
+1. **Linux (Ubuntu/Debian):**
+```bash
+# Copy CA certificate to system CA directory
+sudo cp company-ca.pem /usr/local/share/ca-certificates/company-ca.crt
+
+# Update system CA bundle
+sudo update-ca-certificates
+
+# Configure Node.js to use system CAs
+export NODE_OPTIONS="--use-openssl-ca"
+node server/server.js
+```
+
+2. **Linux (RHEL/CentOS):**
+```bash
+# Copy CA certificate
+sudo cp company-ca.pem /etc/pki/ca-trust/source/anchors/company-ca.crt
+
+# Update trust bundle
+sudo update-ca-trust extract
+
+# Use with Node.js
+export NODE_OPTIONS="--use-openssl-ca"
+```
+
+3. **Windows:**
+```bash
+# Import to Windows Certificate Store (Run as Administrator)
+certlm.msc  # Open certificate manager
+# Import to "Trusted Root Certification Authorities"
+
+# Or use PowerShell
+Import-Certificate -FilePath "company-ca.pem" -CertStoreLocation "Cert:\LocalMachine\Root"
+```
+
+### Docker/Container Considerations
+
+**For containerized deployments:**
+
+1. **Copy CA into container:**
+```dockerfile
+# In Dockerfile
+COPY company-ca.pem /etc/ssl/certs/company-ca.pem
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/company-ca.pem
+```
+
+2. **Mount CA as volume:**
+```yaml
+# docker-compose.yml
+services:
+  server:
+    volumes:
+      - ./certs/company-ca.pem:/etc/ssl/certs/company-ca.pem:ro
+    environment:
+      - NODE_EXTRA_CA_CERTS=/etc/ssl/certs/company-ca.pem
+```
+
+3. **Update system CA in container:**
+```dockerfile
+# Multi-stage approach
+COPY company-ca.pem /usr/local/share/ca-certificates/company-ca.crt
+RUN update-ca-certificates
+ENV NODE_OPTIONS="--use-openssl-ca"
+```
+
+### Certificate Chain Validation
+
+**Ensure complete certificate chain:**
+
+1. **Verify Server Certificate Chain:**
+```bash
+# Check if server provides intermediates
+openssl s_client -connect your.internal.host:443 -servername your.internal.host -showcerts | grep -E "s:|i:"
+
+# Expected output should show chain: Server -> Intermediate(s) -> Root
+```
+
+2. **Test Certificate Chain:**
+```bash
+# Verify chain with custom CA
+openssl verify -CAfile company-ca.pem server-cert.pem
+```
+
+### Common Mistakes to Avoid
+
+**❌ DO NOT disable TLS verification:**
+```bash
+# NEVER do this - it's insecure
+export NODE_TLS_REJECT_UNAUTHORIZED=0
+```
+
+**❌ DO NOT use server certificate as CA:**
+```bash
+# Wrong: Using server cert instead of CA cert
+NODE_EXTRA_CA_CERTS=server-certificate.pem  # ❌
+```
+
+**✅ DO use proper CA certificate:**
+```bash
+# Correct: Using issuing CA certificate(s)
+NODE_EXTRA_CA_CERTS=company-root-ca.pem     # ✅
+```
+
+### Troubleshooting Certificate Issues
+
+1. **Verify Certificate Format:**
+```bash
+# Check certificate format and validity
+openssl x509 -in company-ca.pem -text -noout
+
+# Check if multiple certificates in file
+grep -c "BEGIN CERTIFICATE" company-ca.pem
+```
+
+2. **Test Certificate Authority:**
+```bash
+# Verify CA can validate the server certificate
+openssl verify -CAfile company-ca.pem -untrusted intermediate.pem server.pem
+```
+
+3. **Debug Node.js TLS:**
+```bash
+# Enable TLS debugging
+export NODE_DEBUG=tls
+node server/server.js
+```
+
+### Binary/Standalone Application Configuration
+
+**For pre-built binary distributions:**
+
+1. **Using config.env:**
+```bash
+# In config.env file alongside binary
+NODE_EXTRA_CA_CERTS=/path/to/company-ca.pem
+REQUEST_TIMEOUT=60000
+```
+
+2. **Command Line:**
+```bash
+# Set environment variable before running binary
+export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/company-ca.pem
+./ihub-apps-linux
+
+# Windows
+set NODE_EXTRA_CA_CERTS=C:\certs\company-ca.pem
+ihub-apps.exe
+```
+
+3. **Systemd Service (Linux):**
+```ini
+# /etc/systemd/system/ihub-apps.service
+[Unit]
+Description=iHub Apps
+After=network.target
+
+[Service]
+Type=simple
+User=ihub
+WorkingDirectory=/opt/ihub-apps
+ExecStart=/opt/ihub-apps/ihub-apps-linux
+Environment=NODE_EXTRA_CA_CERTS=/etc/ssl/certs/company-ca.pem
+Environment=NODE_ENV=production
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Prevention and Best Practices
+
+1. **Certificate Management:**
+- Keep CA certificates updated with IT security team
+- Monitor certificate expiration dates
+- Test certificate changes in staging environment
+- Document certificate sources and update procedures
+
+2. **Configuration Management:**
+- Use consistent certificate paths across environments
+- Store certificates securely with appropriate permissions (644)
+- Backup certificate files as part of deployment artifacts
+- Version control certificate update procedures
+
+3. **Monitoring:**
+```bash
+# Monitor certificate expiration
+openssl x509 -in company-ca.pem -noout -dates
+
+# Set up alerts for certificate expiration
+# Add to monitoring scripts or cron jobs
+```
+
+This solution ensures secure communication with corporate/internal services while maintaining proper TLS verification practices.
+
+---
 
 ### Container Build Failures
 

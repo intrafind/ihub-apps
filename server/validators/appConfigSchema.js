@@ -178,8 +178,8 @@ export const appConfigSchema = z
     id: z
       .string()
       .regex(
-        /^[a-zA-Z0-9_-]+$/,
-        'ID must contain only alphanumeric characters, underscores, and hyphens'
+        /^[a-zA-Z0-9._-]+$/,
+        'ID must contain only alphanumeric characters, underscores, dots, and hyphens'
       )
       .min(1, 'ID cannot be empty')
       .max(50, 'ID cannot exceed 50 characters'),

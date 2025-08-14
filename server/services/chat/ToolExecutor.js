@@ -73,14 +73,24 @@ class ToolExecutor {
         })
       );
 
+      // Extract imageData if present in tool result for LLM vision processing
+      const message = {
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        name: toolCall.function.name,
+        content: JSON.stringify(result)
+      };
+
+      // Check for imageData in the result and extract it to message level
+      if (this.extractImageDataFromResult(result, message)) {
+        console.log(`🖼️ Tool ${toolId} returned image data for vision analysis`);
+        // For image analysis, replace verbose tool result with simple message
+        message.content = `Retrieved image: ${message.imageData?.filename || 'attachment'}`;
+      }
+
       return {
         success: true,
-        message: {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          name: toolCall.function.name,
-          content: JSON.stringify(result)
-        }
+        message
       };
     } catch (toolError) {
       console.error(`Tool execution failed for ${toolId}:`, toolError);
@@ -129,6 +139,47 @@ class ToolExecutor {
 
     // Check if the tool has passthrough flag (inherited from function definition)
     return tool.passthrough === true;
+  }
+
+  /**
+   * Extract imageData from tool results and attach to message for vision processing
+   * @param {Object} result - Tool result object
+   * @param {Object} message - Tool message object to modify
+   * @returns {boolean} - True if imageData was found and extracted
+   */
+  extractImageDataFromResult(result, message) {
+    let imageDataFound = false;
+
+    // Recursively search for imageData in the result object
+    const searchForImageData = (obj, path = '') => {
+      if (!obj || typeof obj !== 'object') return;
+
+      // Check if this object has imageData structure
+      if (obj.imageData && obj.imageData.type === 'image' && obj.imageData.base64) {
+        console.log(`🔍 Found imageData at path: ${path}`);
+
+        // Move imageData to message level for adapter processing
+        message.imageData = {
+          type: 'image',
+          format: obj.imageData.format || 'image/jpeg',
+          base64: obj.imageData.base64,
+          filename: obj.imageData.filename || 'attachment'
+        };
+
+        imageDataFound = true;
+        return;
+      }
+
+      // Recursively search nested objects
+      for (const [key, value] of Object.entries(obj)) {
+        if (typeof value === 'object' && value !== null) {
+          searchForImageData(value, path ? `${path}.${key}` : key);
+        }
+      }
+    };
+
+    searchForImageData(result);
+    return imageDataFound;
   }
 
   /**

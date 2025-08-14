@@ -92,7 +92,11 @@ function useEventSource({ appId, chatId, timeoutDuration = 10000, onEvent, onPro
           console.error('SSE connection timeout');
           eventSource.close();
           if (onEvent)
-            onEvent({ type: 'error', data: { message: 'Connection timeout. Please try again.' } });
+            onEvent({
+              type: 'error',
+              data: { message: 'Connection timeout. Please try again.' },
+              fullContent: fullContentRef.current
+            });
           if (onProcessingChange) onProcessingChange(false);
         }
       }, timeoutDuration);
