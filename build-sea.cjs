@@ -445,6 +445,12 @@ try {
     fs.cpSync(docsBookDir, path.join(outputDir, 'docs'), { recursive: true });
   }
 
+  // Copy systemd service file for Linux distributions
+  const systemdDir = path.join(__dirname, 'systemd');
+  if (fs.existsSync(systemdDir)) {
+    fs.cpSync(systemdDir, path.join(outputDir, 'systemd'), { recursive: true });
+  }
+
   // Create a simple launcher shell script on Unix platforms
   if (os.platform() !== 'win32') {
     const shellLauncher = `#!/bin/bash
