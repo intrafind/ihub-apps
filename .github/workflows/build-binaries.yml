@@ -197,7 +197,14 @@ jobs:
           
           # Generate base64 encoded version
           echo "Creating base64 encoded version of $ARCHIVE_FILE..."
-          base64 "$ARCHIVE_FILE" > "$BASE64_FILE"
+          # Use platform-specific base64 command syntax
+          if [ "${{ matrix.os }}" == "macos-latest" ]; then
+            # macOS requires -i flag for input file
+            base64 -i "$ARCHIVE_FILE" -o "$BASE64_FILE"
+          else
+            # Linux and Windows (Git Bash) use standard syntax
+            base64 "$ARCHIVE_FILE" > "$BASE64_FILE"
+          fi
           
           # Verify the base64 file was created and has content
           if [ -f "$BASE64_FILE" ] && [ -s "$BASE64_FILE" ]; then
