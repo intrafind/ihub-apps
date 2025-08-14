@@ -30,27 +30,20 @@ Install iHub Apps to the system directory:
 sudo mkdir -p /opt/ihub-apps
 sudo chown ihub-apps:ihub-apps /opt/ihub-apps
 
-# Copy application files (adjust source path as needed)
-sudo cp -r /path/to/ihub-apps/* /opt/ihub-apps/
+# Extract the Linux distribution archive (adjust source path as needed)
+# For example, if you have ihub-apps-v1.0.0-linux.tar.gz:
+sudo tar -xzf /path/to/ihub-apps-v1.0.0-linux.tar.gz -C /opt/ihub-apps --strip-components=1
 sudo chown -R ihub-apps:ihub-apps /opt/ihub-apps
-
-# Install dependencies
-cd /opt/ihub-apps
-sudo -u ihub-apps npm run install:all
 ```
 
 ### 3. Configure Environment
 
-Set up the environment file:
+The Linux distribution includes a `config.env` file. Set up your environment:
 
 ```bash
-# Copy and configure environment file
-sudo cp /opt/ihub-apps/.env.example /opt/ihub-apps/.env
-sudo chown ihub-apps:ihub-apps /opt/ihub-apps/.env
-sudo chmod 600 /opt/ihub-apps/.env
-
 # Edit the environment file with your API keys and configuration
-sudo -u ihub-apps nano /opt/ihub-apps/.env
+sudo -u ihub-apps nano /opt/ihub-apps/config.env
+sudo chmod 600 /opt/ihub-apps/config.env
 ```
 
 ### 4. Install Service File
@@ -132,7 +125,7 @@ The service file includes several configuration options:
 
 ### Environment Variables
 
-Key environment variables in `/opt/ihub-apps/.env`:
+Key environment variables in `/opt/ihub-apps/config.env`:
 
 ```bash
 # Server configuration
@@ -165,19 +158,15 @@ The service has restricted file system access for security:
 
 To change the port:
 
-1. Edit `/opt/ihub-apps/.env`:
+1. Edit `/opt/ihub-apps/config.env`:
    ```bash
    PORT=8080
    ```
 
 2. If using a port < 1024, grant capability:
    ```bash
-   # Find your node executable path first
-   which node
-   # Then grant the capability (example paths)
-   sudo setcap 'cap_net_bind_service=+ep' /usr/bin/node
-   # Or if node is in /usr/local/bin:
-   sudo setcap 'cap_net_bind_service=+ep' /usr/local/bin/node
+   # Grant capability to the bundled Node.js executable
+   sudo setcap 'cap_net_bind_service=+ep' /opt/ihub-apps/node
    ```
 
 3. Restart the service:
@@ -197,7 +186,7 @@ To adjust limits, edit `/etc/systemd/system/ihub-apps.service` and modify the `L
 
 ### Worker Processes
 
-Configure worker processes in `.env`:
+Configure worker processes in `config.env`:
 
 ```bash
 # Number of worker processes (default: 1)
@@ -235,19 +224,19 @@ WORKERS=4
    sudo chmod 755 /opt/ihub-apps/data
    ```
 
-### Node.js Issues
+### Application Issues
 
-1. Verify Node.js version:
-   ```bash
-   node --version
-   # Should be 20.0.0 or higher
-   ```
-
-2. Test application manually:
+1. Test application manually using the bundled Node.js:
    ```bash
    sudo -u ihub-apps bash
    cd /opt/ihub-apps
-   node -r dotenv/config server/server.js dotenv_config_path=.env
+   ./node launcher.cjs
+   ```
+
+2. Check if the bundled Node.js executable has proper permissions:
+   ```bash
+   ls -la /opt/ihub-apps/node
+   # Should be executable (-rwxr-xr-x)
    ```
 
 ### Network Issues

@@ -9,7 +9,7 @@ Type=simple
 User=ihub-apps
 Group=ihub-apps
 WorkingDirectory=/opt/ihub-apps
-ExecStart=/usr/bin/env node -r dotenv/config server/server.js dotenv_config_path=.env
+ExecStart=/opt/ihub-apps/node /opt/ihub-apps/launcher.cjs
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=60
