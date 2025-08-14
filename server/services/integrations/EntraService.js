@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import axios from 'axios';
+import { enhanceAxiosConfig } from '../../utils/httpConfig.js';
 
 /**
  * Entra ID (Azure AD) Service for Microsoft Graph API integration
@@ -34,9 +35,10 @@ class EntraService {
     params.append('grant_type', 'client_credentials');
 
     try {
-      const response = await axios.post(this.tokenUrl, params, {
+      const axiosConfig = enhanceAxiosConfig({
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
+      const response = await axios.post(this.tokenUrl, params, axiosConfig);
       const tokenData = response.data;
       this.accessToken = tokenData.access_token;
       this.tokenExpiry = Date.now() + tokenData.expires_in * 1000;
@@ -52,10 +54,11 @@ class EntraService {
     const token = await this._getAccessToken();
     const url = `${this.graphUrl}${endpoint}`;
     try {
-      const response = await axios.get(url, {
+      const axiosConfig = enhanceAxiosConfig({
         headers: { Authorization: `Bearer ${token}` },
         ...options
       });
+      const response = await axios.get(url, axiosConfig);
       return response.data;
     } catch (error) {
       if (error.response?.status === 404) {

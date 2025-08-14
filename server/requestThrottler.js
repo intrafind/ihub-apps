@@ -3,6 +3,7 @@
  * Keeps an in-memory queue for each identifier so provider rate limits are not exceeded.
  */
 import configCache from './configCache.js';
+import { enhanceFetchOptions } from './utils/httpConfig.js';
 
 const lastCompleted = new Map(); // id -> timestamp when last request finished
 
@@ -62,7 +63,10 @@ export function throttledFetch(id, url, options = {}) {
           await new Promise(r => setTimeout(r, wait));
         }
 
-        const res = await fetch(url, options);
+        // Apply global SSL configuration
+        const requestOptions = enhanceFetchOptions(options, url);
+
+        const res = await fetch(url, requestOptions);
         resolve(res);
       } catch (err) {
         reject(err);

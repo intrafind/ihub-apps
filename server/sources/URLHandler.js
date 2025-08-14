@@ -1,4 +1,6 @@
 import SourceHandler from './SourceHandler.js';
+import configCache from '../configCache.js';
+import { enhanceFetchOptions } from '../utils/httpConfig.js';
 
 /**
  * URL Source Handler
@@ -33,13 +35,21 @@ class URLHandler extends SourceHandler {
       // Import the webContentExtractor tool dynamically
       const webContentExtractor = await this.getWebContentExtractor();
 
+      // Apply global SSL configuration if not explicitly overridden
+      const platformConfig = configCache.getPlatform() || {};
+      const shouldIgnoreSSL =
+        options.ignoreSSL !== undefined
+          ? options.ignoreSSL
+          : platformConfig.ssl?.ignoreInvalidCertificates || false;
+
       // Extract content using the existing tool
       const result = await webContentExtractor.extract({
         url,
         maxContentLength: options.maxContentLength || 50000,
         includeMetadata: true,
         cleanContent: options.cleanContent !== false,
-        followRedirects: options.followRedirects !== false
+        followRedirects: options.followRedirects !== false,
+        ignoreSSL: shouldIgnoreSSL
       });
 
       return {
@@ -116,7 +126,7 @@ class URLHandler extends SourceHandler {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-          const response = await fetch(url, {
+          const baseOptions = {
             method: 'GET',
             headers: {
               'User-Agent': 'ihub-Apps/1.0 (+https://github.com/intrafind/ihub-apps)',
@@ -127,7 +137,12 @@ class URLHandler extends SourceHandler {
             },
             signal: controller.signal,
             redirect: followRedirects ? 'follow' : 'manual'
-          });
+          };
+
+          // Apply global SSL configuration
+          const fetchOptions = enhanceFetchOptions(baseOptions, url);
+
+          const response = await fetch(url, fetchOptions);
 
           clearTimeout(timeoutId);
 
