@@ -93,7 +93,14 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
-    "lint-format:fix": "npm run lint:fix && npm run format:fix"
+    "lint-format:fix": "npm run lint:fix && npm run format:fix",
+    "// === WINDOWS SERVICE ===": "",
+    "service:install": "node scripts/windows-service.js install",
+    "service:uninstall": "node scripts/windows-service.js uninstall",
+    "service:start": "node scripts/windows-service.js start",
+    "service:stop": "node scripts/windows-service.js stop",
+    "service:restart": "node scripts/windows-service.js restart",
+    "service:status": "node scripts/windows-service.js status"
   },
   "keywords": [
     "ai",

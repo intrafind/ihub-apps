@@ -41,6 +41,7 @@
     "ldap-authentication": "^3.3.4",
     "multer": "^2.0.2",
     "node-fetch": "^3.3.0",
+    "node-windows": "^1.0.0-beta.8",
     "passport": "^0.7.0",
     "passport-oauth2": "^1.8.0",
     "pdfjs-dist": "^5.3.31",
