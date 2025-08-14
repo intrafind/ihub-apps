@@ -22,12 +22,13 @@ export function getSSLConfig() {
  * @returns {https.Agent|undefined} HTTPS agent if SSL ignore is enabled, undefined otherwise
  */
 export function createHTTPSAgent(forceIgnoreSSL = null) {
-  const shouldIgnoreSSL = forceIgnoreSSL !== null ? forceIgnoreSSL : getSSLConfig().ignoreInvalidCertificates;
-  
+  const shouldIgnoreSSL =
+    forceIgnoreSSL !== null ? forceIgnoreSSL : getSSLConfig().ignoreInvalidCertificates;
+
   if (shouldIgnoreSSL) {
     return new https.Agent({ rejectUnauthorized: false });
   }
-  
+
   return undefined;
 }
 
@@ -40,7 +41,7 @@ export function createHTTPSAgent(forceIgnoreSSL = null) {
  */
 export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = null) {
   const enhancedOptions = { ...options };
-  
+
   // Only add agent for HTTPS URLs and if not already specified
   if (url.startsWith('https://') && !enhancedOptions.agent) {
     const agent = createHTTPSAgent(forceIgnoreSSL);
@@ -48,7 +49,7 @@ export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = nul
       enhancedOptions.agent = agent;
     }
   }
-  
+
   return enhancedOptions;
 }
 
@@ -60,7 +61,7 @@ export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = nul
  */
 export function enhanceAxiosConfig(config = {}, forceIgnoreSSL = null) {
   const enhancedConfig = { ...config };
-  
+
   // Only add httpsAgent if not already specified
   if (!enhancedConfig.httpsAgent) {
     const agent = createHTTPSAgent(forceIgnoreSSL);
@@ -68,6 +69,6 @@ export function enhanceAxiosConfig(config = {}, forceIgnoreSSL = null) {
       enhancedConfig.httpsAgent = agent;
     }
   }
-  
+
   return enhancedConfig;
 }

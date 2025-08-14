@@ -37,8 +37,10 @@ class URLHandler extends SourceHandler {
 
       // Apply global SSL configuration if not explicitly overridden
       const platformConfig = configCache.getPlatform() || {};
-      const shouldIgnoreSSL = options.ignoreSSL !== undefined ? options.ignoreSSL : 
-        (platformConfig.ssl?.ignoreInvalidCertificates || false);
+      const shouldIgnoreSSL =
+        options.ignoreSSL !== undefined
+          ? options.ignoreSSL
+          : platformConfig.ssl?.ignoreInvalidCertificates || false;
 
       // Extract content using the existing tool
       const result = await webContentExtractor.extract({
@@ -136,7 +138,7 @@ class URLHandler extends SourceHandler {
             signal: controller.signal,
             redirect: followRedirects ? 'follow' : 'manual'
           };
-          
+
           // Apply global SSL configuration
           const fetchOptions = enhanceFetchOptions(baseOptions, url);
 

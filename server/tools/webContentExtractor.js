@@ -53,8 +53,8 @@ export default async function webContentExtractor({
   try {
     // Determine SSL ignore setting: explicit parameter > global config > default false
     const platformConfig = configCache.getPlatform() || {};
-    const shouldIgnoreSSL = ignoreSSL !== null ? ignoreSSL : 
-      (platformConfig.ssl?.ignoreInvalidCertificates || false);
+    const shouldIgnoreSSL =
+      ignoreSSL !== null ? ignoreSSL : platformConfig.ssl?.ignoreInvalidCertificates || false;
 
     // Fetch the webpage with appropriate headers and timeout
     const controller = new AbortController();
