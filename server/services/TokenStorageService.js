@@ -2,6 +2,8 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
+import { getRootDir } from '../pathUtils.js';
+import config from '../config.js';
 
 /**
  * Centralized Token Storage Service
@@ -19,7 +21,7 @@ class TokenStorageService {
     }
 
     this.algorithm = 'aes-256-gcm';
-    this.storageBasePath = path.join(process.cwd(), 'contents', 'integrations');
+    this.storageBasePath = path.join(getRootDir(), config.CONTENTS_DIR, 'integrations');
   }
 
   /**
@@ -106,11 +108,12 @@ class TokenStorageService {
   async storeUserTokens(userId, serviceName, tokens) {
     try {
       const encryptedTokens = this.encryptTokens(tokens, userId, serviceName);
+      const now = new Date();
       const tokenData = {
         ...encryptedTokens,
-        createdAt: new Date().toISOString(),
+        createdAt: now.toISOString(),
         expiresAt: tokens.expiresIn
-          ? new Date(Date.now() + tokens.expiresIn * 1000).toISOString()
+          ? new Date(now.getTime() + tokens.expiresIn * 1000).toISOString()
           : null
       };
 
@@ -149,6 +152,7 @@ class TokenStorageService {
 
   /**
    * Check if tokens are expired based on stored expiration time
+   * Includes a 2-minute buffer for proactive refresh
    */
   async areTokensExpired(userId, serviceName) {
     try {
@@ -162,7 +166,13 @@ class TokenStorageService {
       const expiresAt = new Date(tokenData.expiresAt);
       const now = new Date();
 
-      return expiresAt <= now;
+      // Add 2-minute buffer for proactive refresh before tokens actually expire
+      const bufferTime = 2 * 60 * 1000; // 2 minutes in milliseconds
+      const expirationWithBuffer = new Date(expiresAt.getTime() - bufferTime);
+
+      const isExpired = expirationWithBuffer <= now;
+
+      return isExpired;
     } catch (error) {
       if (error.code === 'ENOENT') {
         return true; // No tokens means expired

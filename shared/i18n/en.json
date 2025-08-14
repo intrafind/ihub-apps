@@ -844,7 +844,12 @@
     "apiKeyMissing": "API key not found for model",
     "modelNotFound": "Model not found",
     "appNotFound": "Application not found",
-    "missingRequiredFields": "Missing required fields:"
+    "missingRequiredFields": "Missing required fields:",
+    "streamingError": "An error occurred during streaming",
+    "failedToGenerateResponse": "Failed to generate response. Please try again or select a different model."
+  },
+  "message": {
+    "generationCancelled": " [Generation cancelled]"
   },
   "languages": {
     "en": "English",

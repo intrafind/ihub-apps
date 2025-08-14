@@ -6,8 +6,8 @@ export const groupConfigSchema = z
       .string()
       .min(1)
       .regex(
-        /^[a-zA-Z0-9_-]+$/,
-        'Group ID can only contain letters, numbers, hyphens, and underscores'
+        /^[a-zA-Z0-9._-]+$/,
+        'Group ID can only contain letters, numbers, dots, hyphens, and underscores'
       ),
     name: z.string().min(1, 'Group name is required'),
     description: z.string().optional(),

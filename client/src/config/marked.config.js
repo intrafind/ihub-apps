@@ -64,11 +64,11 @@ export const configureMarked = t => {
     return `
       <div class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-sm">
         <pre class="bg-gray-900 text-gray-100 rounded-t-lg p-4 overflow-x-auto"><code class="language-${lang}">${highlightedCode}</code></pre>
-        <div class="flex items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
+        <div class="code-block-toolbar flex items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
           <span class="text-xs font-medium text-gray-600">${displayLanguage}</span>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-row items-center gap-2">
             <button
-              class="code-copy-btn p-1.5 rounded text-xs text-gray-600 hover:bg-gray-200 flex items-center gap-1"
+              class="code-copy-btn p-1.5 rounded text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
               data-code-content="${encodeURIComponent(actualCode)}"
               type="button"
               title="${t ? t('common.copyCode', 'Copy code') : 'Copy code'}"
@@ -77,7 +77,7 @@ export const configureMarked = t => {
               <span class="hidden sm:inline">${t ? t('common.copy', 'Copy') : 'Copy'}</span>
             </button>
             <button
-              class="code-download-btn p-1.5 rounded text-xs text-gray-600 hover:bg-gray-200 flex items-center gap-1"
+              class="code-download-btn p-1.5 rounded text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
               data-code-content="${encodeURIComponent(actualCode)}"
               data-code-language="${lang}"
               type="button"

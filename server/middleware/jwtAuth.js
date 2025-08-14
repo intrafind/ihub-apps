@@ -13,10 +13,12 @@ export default function jwtAuthMiddleware(req, res, next) {
 
   // Check for token in cookies first (preferred for SSE), then Authorization header
   let token = null;
+  let tokenSource = 'none';
 
   // Check HTTP-only cookie first
   if (req.cookies && req.cookies.authToken) {
     token = req.cookies.authToken;
+    tokenSource = 'cookie';
   }
   // Fallback to Authorization header for API calls
   else {
@@ -24,6 +26,7 @@ export default function jwtAuthMiddleware(req, res, next) {
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.substring(7);
+      tokenSource = 'header';
     }
   }
 
@@ -45,6 +48,15 @@ export default function jwtAuthMiddleware(req, res, next) {
       maxAge: '7d'
     });
 
+    // Debug: Log JWT payload in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔐 JWT User authenticated:', {
+        userId: decoded.sub || decoded.username || decoded.id,
+        name: decoded.name,
+        authMode: decoded.authMode
+      });
+    }
+
     const now = Math.floor(Date.now() / 1000);
     if (decoded.exp && decoded.exp < now) {
       return res.status(401).json({
@@ -57,10 +69,12 @@ export default function jwtAuthMiddleware(req, res, next) {
     // Create user object based on token payload
     let user;
     if (decoded.authMode === 'local') {
+      // For local auth, the user ID is stored in the 'sub' field
+      const userId = decoded.sub || decoded.username || decoded.id;
       user = {
-        id: decoded.username,
-        username: decoded.username,
-        name: decoded.name || decoded.username,
+        id: userId,
+        username: decoded.username || userId,
+        name: decoded.name || decoded.username || userId,
         email: decoded.email || '',
         groups: decoded.groups || [],
         authMode: 'local',
@@ -110,7 +124,6 @@ export default function jwtAuthMiddleware(req, res, next) {
     }
 
     req.user = user;
-
     return next();
   } catch (err) {
     console.warn('🔐 jwtAuth: Token validation failed:', err.message);

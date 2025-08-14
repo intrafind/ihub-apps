@@ -16,8 +16,8 @@ const baseSourceSchema = z.object({
   id: z
     .string()
     .regex(
-      /^[a-zA-Z0-9_-]+$/,
-      'Source ID must contain only alphanumeric characters, underscores, and hyphens'
+      /^[a-zA-Z0-9._-]+$/,
+      'Source ID must contain only alphanumeric characters, underscores, dots, and hyphens'
     )
     .min(1, 'Source ID cannot be empty')
     .max(50, 'Source ID cannot exceed 50 characters'),
@@ -89,8 +89,8 @@ const pageConfigSchema = z
       .string()
       .min(1, 'Page ID is required')
       .regex(
-        /^[a-zA-Z0-9_-]+$/,
-        'Page ID must contain only letters, numbers, underscores, and hyphens'
+        /^[a-zA-Z0-9._-]+$/,
+        'Page ID must contain only letters, numbers, underscores, dots, and hyphens'
       ),
     language: z.string().default('en')
   })

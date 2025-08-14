@@ -210,7 +210,7 @@ export async function getTransitions({ issueKey, user }) {
  * Change the status of a JIRA ticket
  * @param {Object} params - Transition parameters
  * @param {string} params.issueKey - JIRA issue key (e.g., 'PROJ-123')
- * @param {string} params.transitionId - ID of the transition to perform
+ * @param {string} params.transitionId - ID or name of the transition to perform
  * @param {string} [params.comment] - Optional comment to add with transition
  * @param {boolean} [params.requireConfirmation=true] - Require user confirmation
  * @param {Object} params.user - User object from authentication context
@@ -244,7 +244,33 @@ export async function transitionTicket({
       console.log(`⚠️ Transitioning ${issueKey} requires user confirmation`);
     }
 
-    const result = await JiraService.transitionTicket({ issueKey, transitionId, comment, userId });
+    // If transitionId is not a number, try to find the transition by name
+    let actualTransitionId = transitionId;
+    if (isNaN(parseInt(transitionId))) {
+      const transitions = await JiraService.getTransitions({ issueKey, userId });
+      const matchingTransition = transitions.transitions.find(
+        t =>
+          t.name.toLowerCase() === transitionId.toLowerCase() ||
+          t.to.name.toLowerCase() === transitionId.toLowerCase()
+      );
+
+      if (matchingTransition) {
+        actualTransitionId = matchingTransition.id;
+        console.log(`🔄 Resolved transition "${transitionId}" to ID: ${actualTransitionId}`);
+      } else {
+        return {
+          error: 'INVALID_TRANSITION',
+          message: `Transition "${transitionId}" not found for ticket ${issueKey}. Available transitions: ${transitions.transitions.map(t => t.name).join(', ')}`
+        };
+      }
+    }
+
+    const result = await JiraService.transitionTicket({
+      issueKey,
+      transitionId: actualTransitionId,
+      comment,
+      userId
+    });
 
     return {
       success: true,
@@ -273,9 +299,9 @@ export async function transitionTicket({
  * Download and access ticket attachments
  * @param {Object} params - Attachment parameters
  * @param {string} params.attachmentId - JIRA attachment ID
- * @param {boolean} [params.returnBase64=false] - Return attachment content as Base64
+ * @param {boolean} [params.returnBase64=false] - Return attachment content as Base64 for LLM image analysis
  * @param {Object} params.user - User object from authentication context
- * @returns {Object} Attachment information and content
+ * @returns {Object} Attachment information with passthrough URL or base64 for analysis
  */
 export async function getAttachment({ attachmentId, returnBase64 = false, user }) {
   try {
@@ -293,12 +319,63 @@ export async function getAttachment({ attachmentId, returnBase64 = false, user }
       };
     }
 
-    const attachment = await JiraService.getAttachment({ attachmentId, returnBase64, userId });
+    // Get attachment with base64 if requested (for image analysis)
+    const attachment = await JiraService.getAttachment({
+      attachmentId,
+      returnBase64: returnBase64,
+      userId
+    });
 
+    // Create a passthrough URL that the frontend can use directly
+    const passthroughUrl = `/api/integrations/jira/attachment/${attachmentId}`;
+
+    // If base64 is requested and it's an image, prepare for LLM vision analysis
+    if (returnBase64 && attachment.mimeType?.startsWith('image/')) {
+      return {
+        success: true,
+        attachment: {
+          ...attachment,
+          // Include base64 for LLM vision analysis
+          imageData: {
+            type: 'image',
+            format: attachment.mimeType,
+            base64: attachment.content,
+            filename: attachment.filename
+          },
+          // Also include passthrough for frontend display
+          passthrough: {
+            type: 'image',
+            url: passthroughUrl,
+            filename: attachment.filename,
+            mimeType: attachment.mimeType,
+            size: attachment.size,
+            attachmentId: attachmentId
+          }
+        },
+        message: `Retrieved image ${attachment.filename} for analysis.`
+      };
+    }
+
+    // For non-analysis cases or non-images, use passthrough only
     return {
       success: true,
-      attachment,
-      message: `Retrieved attachment ${attachment.filename}`
+      attachment: {
+        ...attachment,
+        // Add passthrough information for frontend handling
+        passthrough: {
+          type: attachment.mimeType?.startsWith('image/') ? 'image' : 'file',
+          url: passthroughUrl,
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+          size: attachment.size,
+          attachmentId: attachmentId
+        }
+      },
+      message: `Retrieved attachment ${attachment.filename}. ${
+        attachment.mimeType?.startsWith('image/')
+          ? 'The image can be displayed inline.'
+          : 'The file can be downloaded.'
+      }`
     };
   } catch (error) {
     console.error('❌ Error in getAttachment:', error.message);

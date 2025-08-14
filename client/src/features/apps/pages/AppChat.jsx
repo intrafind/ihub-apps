@@ -14,6 +14,7 @@ import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
+import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import StarterPromptsView from '../../chat/components/StarterPromptsView';
@@ -219,6 +220,14 @@ const AppChat = () => {
   const fileUploadHandler = useFileUploadHandler();
   const magicPromptHandler = useMagicPrompt();
 
+  // Integration authentication detection
+  const {
+    monitorChatMessages,
+    connectIntegration,
+    checkConnectionStatus,
+    getRequiredIntegrations
+  } = useIntegrationAuth();
+
   const inputRef = useRef(null);
   const chatId = useRef(getOrCreateChatId(appId));
 
@@ -305,6 +314,33 @@ const AppChat = () => {
     chatId: chatId.current,
     onMessageComplete: handleMessageComplete
   });
+
+  // Determine which integrations this app uses
+  const appIntegrations = useMemo(() => {
+    if (!app?.tools) return [];
+
+    const integrations = [];
+
+    // Check for JIRA tools
+    if (app.tools.some(tool => tool === 'jira')) {
+      integrations.push('jira');
+    }
+
+    // Future integrations can be detected here
+    // if (app.tools.some(tool => tool.startsWith('microsoft_'))) {
+    //   integrations.push('microsoftGraph');
+    // }
+
+    return integrations;
+  }, [app?.tools]);
+
+  // Monitor messages for integration authentication errors
+  useEffect(() => {
+    monitorChatMessages(messages, appIntegrations);
+  }, [messages, appIntegrations, monitorChatMessages]);
+
+  // Get required integrations for display
+  const requiredIntegrations = getRequiredIntegrations();
 
   // Set up voice commands
   const { handleVoiceInput, handleVoiceCommand } = useVoiceCommands({
@@ -896,6 +932,8 @@ const AppChat = () => {
                         modelId={selectedModel}
                         onOpenInCanvas={handleOpenInCanvas}
                         canvasEnabled={app?.features?.canvas === true}
+                        requiredIntegrations={requiredIntegrations}
+                        onConnectIntegration={connectIntegration}
                       />
                     </div>
                   ) : (
@@ -963,6 +1001,8 @@ const AppChat = () => {
                         modelId={selectedModel}
                         onOpenInCanvas={handleOpenInCanvas}
                         canvasEnabled={app?.features?.canvas === true}
+                        requiredIntegrations={requiredIntegrations}
+                        onConnectIntegration={connectIntegration}
                       />
                     </div>
                   ) : (
@@ -1029,6 +1069,8 @@ const AppChat = () => {
                     showCenteredInput={shouldCenterInput}
                     onOpenInCanvas={handleOpenInCanvas}
                     canvasEnabled={app?.features?.canvas === true}
+                    requiredIntegrations={requiredIntegrations}
+                    onConnectIntegration={connectIntegration}
                   />
                 </div>
                 <div className="flex-shrink-0 px-4 pt-2">
@@ -1085,6 +1127,8 @@ const AppChat = () => {
                   showCenteredInput={shouldCenterInput}
                   onOpenInCanvas={handleOpenInCanvas}
                   canvasEnabled={app?.features?.canvas === true}
+                  requiredIntegrations={requiredIntegrations}
+                  onConnectIntegration={connectIntegration}
                 />
 
                 <ChatInput

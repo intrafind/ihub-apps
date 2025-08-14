@@ -182,6 +182,7 @@ if (cluster.isPrimary && workerCount > 1) {
   await registerSwaggerRoutes(app, basePath);
 
   // --- Integration Routes ---
+  // Note: These must be registered after authentication middleware is set up
   app.use('/api/integrations/jira', jiraRoutes);
 
   // --- Session Management handled in sessionRoutes ---

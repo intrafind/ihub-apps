@@ -56,7 +56,10 @@ export const promptConfigSchema = z
     // Required fields
     id: z
       .string()
-      .regex(/^[a-z0-9-]+$/, 'ID must contain only lowercase letters, numbers, and hyphens')
+      .regex(
+        /^[a-z0-9._-]+$/,
+        'ID must contain only lowercase letters, numbers, underscores, dots, and hyphens'
+      )
       .min(1, 'ID cannot be empty'),
     name: localizedStringSchema,
     description: localizedStringSchema,

@@ -9,63 +9,81 @@ import tokenStorage from '../TokenStorageService.js';
  */
 class JiraService {
   constructor() {
-    this.baseUrl = process.env.JIRA_BASE_URL;
+    this.jiraSiteUrl = process.env.JIRA_BASE_URL; // Your site URL (for reference only)
     this.clientId = process.env.JIRA_OAUTH_CLIENT_ID;
     this.clientSecret = process.env.JIRA_OAUTH_CLIENT_SECRET;
     this.redirectUri = process.env.JIRA_OAUTH_REDIRECT_URI;
     this.serviceName = 'jira';
 
-    if (!this.baseUrl || !this.clientId || !this.clientSecret || !this.redirectUri) {
+    if (!this.jiraSiteUrl || !this.clientId || !this.clientSecret || !this.redirectUri) {
       console.warn('⚠️ JIRA OAuth configuration incomplete. Some JIRA features may not work.');
     }
 
-    this.tokenUrl = `${this.baseUrl}/oauth/token`;
-    this.authUrl = `${this.baseUrl}/oauth/authorize`;
-    this.apiUrl = `${this.baseUrl}/rest/api/2`;
+    // Use Atlassian Cloud OAuth endpoints (NOT your site URL)
+    this.tokenUrl = 'https://auth.atlassian.com/oauth/token';
+    this.authUrl = 'https://auth.atlassian.com/authorize';
+    this.resourcesUrl = 'https://api.atlassian.com/oauth/token/accessible-resources';
+
+    // API base will be determined after getting cloudId
+    this.apiUrlBase = 'https://api.atlassian.com/ex/jira';
   }
 
   /**
-   * Generate OAuth2 authorization URL with PKCE
+   * Generate OAuth2 authorization URL for Atlassian Cloud
+   * Note: PKCE may not be fully supported by Atlassian Cloud, but we'll try
    */
-  generateAuthUrl(state, codeVerifier) {
-    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-
+  generateAuthUrl(state, codeVerifier = null) {
     const params = new URLSearchParams({
-      response_type: 'code',
+      audience: 'api.atlassian.com', // Required for Atlassian Cloud
       client_id: this.clientId,
+      scope: 'read:jira-user read:jira-work write:jira-work offline_access', // offline_access is REQUIRED for refresh tokens
       redirect_uri: this.redirectUri,
       state: state,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-      scope: 'read:jira-user read:jira-work write:jira-work'
+      response_type: 'code',
+      access_type: 'offline', // Explicitly request offline access for refresh tokens
+      prompt: 'consent' // Force consent screen to ensure offline_access is granted
     });
+
+    // Add PKCE parameters if provided (may be ignored by Atlassian Cloud)
+    if (codeVerifier) {
+      const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+      params.append('code_challenge', codeChallenge);
+      params.append('code_challenge_method', 'S256');
+    }
 
     return `${this.authUrl}?${params.toString()}`;
   }
 
   /**
-   * Exchange authorization code for tokens using PKCE
+   * Exchange authorization code for tokens (Atlassian Cloud)
    */
-  async exchangeCodeForTokens(authCode, codeVerifier) {
+  async exchangeCodeForTokens(authCode, codeVerifier = null) {
     try {
-      const response = await axios.post(
-        this.tokenUrl,
-        {
-          grant_type: 'authorization_code',
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-          code: authCode,
-          redirect_uri: this.redirectUri,
-          code_verifier: codeVerifier
-        },
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
+      const tokenData = new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        code: authCode,
+        redirect_uri: this.redirectUri
+      });
+
+      // Add code_verifier only if provided (PKCE may not be supported)
+      if (codeVerifier) {
+        tokenData.append('code_verifier', codeVerifier);
+      }
+
+      const response = await axios.post(this.tokenUrl, tokenData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
         }
-      );
+      });
 
       const tokens = response.data;
+
+      if (!tokens.refresh_token) {
+        console.warn('⚠️ WARNING: No refresh token received from Atlassian OAuth');
+      }
+
       return {
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
@@ -82,26 +100,78 @@ class JiraService {
   }
 
   /**
+   * Get accessible Atlassian resources (to find cloudId)
+   */
+  async getAccessibleResources(accessToken) {
+    try {
+      const response = await axios.get(this.resourcesUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json'
+        }
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error(
+        '❌ Error fetching accessible resources:',
+        error.response?.data || error.message
+      );
+      throw new Error('Failed to fetch accessible resources');
+    }
+  }
+
+  /**
+   * Get the JIRA cloud ID for API calls
+   */
+  async getJiraCloudId(accessToken) {
+    const resources = await this.getAccessibleResources(accessToken);
+
+    // Find JIRA resource
+    const jiraResource = resources.find(
+      resource =>
+        (resource.name && resource.name.toLowerCase().includes('jira')) ||
+        (resource.scopes && resource.scopes.includes('read:jira-user'))
+    );
+
+    if (!jiraResource) {
+      throw new Error('No JIRA resource found in accessible resources');
+    }
+
+    return jiraResource.id;
+  }
+
+  /**
+   * Build API URL for JIRA Cloud calls
+   */
+  async buildApiUrl(accessToken, endpoint) {
+    const cloudId = await this.getJiraCloudId(accessToken);
+    return `${this.apiUrlBase}/${cloudId}/rest/api/3${endpoint}`;
+  }
+
+  /**
    * Refresh access token using refresh token
    */
   async refreshAccessToken(refreshToken) {
     try {
-      const response = await axios.post(
-        this.tokenUrl,
-        {
-          grant_type: 'refresh_token',
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-          refresh_token: refreshToken
-        },
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
+      console.log('🔄 Attempting to refresh JIRA access token...');
+
+      const tokenData = new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        refresh_token: refreshToken
+      });
+
+      const response = await axios.post(this.tokenUrl, tokenData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
         }
-      );
+      });
 
       const tokens = response.data;
+      console.log('✅ JIRA token refresh successful');
+
       return {
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token || refreshToken, // Use new refresh token if provided
@@ -109,8 +179,19 @@ class JiraService {
         scope: tokens.scope
       };
     } catch (error) {
-      console.error('❌ Error refreshing access token:', error.response?.data || error.message);
-      throw new Error('Failed to refresh access token');
+      const errorDetails = error.response?.data || error.message;
+      console.error('❌ Error refreshing JIRA access token:', errorDetails);
+
+      // Check if it's a specific type of error
+      if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        if (errorData.error === 'invalid_grant') {
+          throw new Error('Refresh token expired or invalid - user needs to reconnect');
+        }
+        throw new Error(`Token refresh failed: ${errorData.error_description || errorData.error}`);
+      }
+
+      throw new Error(`Failed to refresh access token: ${error.message}`);
     }
   }
 
@@ -119,8 +200,16 @@ class JiraService {
    */
   async storeUserTokens(userId, tokens) {
     try {
+      if (!tokens.refreshToken) {
+        console.warn(
+          '⚠️ WARNING: No refresh token - user will need to reconnect when access token expires'
+        );
+      }
+
       await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
-      console.log(`✅ JIRA tokens stored for user ${userId}`);
+      console.log(
+        `✅ JIRA tokens stored for user ${userId}${!tokens.refreshToken ? ' (NO REFRESH CAPABILITY)' : ''}`
+      );
       return true;
     } catch (error) {
       console.error('❌ Error storing user tokens:', error.message);
@@ -139,12 +228,30 @@ class JiraService {
       if (expired) {
         console.log(`🔄 Tokens expired for user ${userId}, attempting refresh...`);
 
-        const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
-        const refreshedTokens = await this.refreshAccessToken(expiredTokens.refreshToken);
+        try {
+          const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
 
-        // Store the refreshed tokens
-        await this.storeUserTokens(userId, refreshedTokens);
-        return refreshedTokens;
+          if (!expiredTokens.refreshToken) {
+            console.error('❌ No refresh token available for user:', userId);
+            console.error('   This means the initial OAuth did not provide offline_access');
+            console.error('   The user must reconnect their JIRA account to get new tokens');
+            throw new Error('No refresh token available - user needs to reconnect JIRA account');
+          }
+
+          const refreshedTokens = await this.refreshAccessToken(expiredTokens.refreshToken);
+
+          // Store the refreshed tokens
+          await this.storeUserTokens(userId, refreshedTokens);
+          console.log(`✅ Successfully refreshed and stored JIRA tokens for user ${userId}`);
+          return refreshedTokens;
+        } catch (refreshError) {
+          console.error(`❌ Failed to refresh tokens for user ${userId}:`, refreshError.message);
+
+          // If refresh fails, delete the invalid tokens so user can reconnect
+          await this.deleteUserTokens(userId);
+
+          throw new Error('JIRA authentication expired. Please reconnect your account.');
+        }
       }
 
       return await tokenStorage.getUserTokens(userId, this.serviceName);
@@ -174,15 +281,20 @@ class JiraService {
   }
 
   /**
-   * Make authenticated JIRA API request
+   * Make authenticated JIRA Cloud API request using the cloud gateway
    */
-  async makeApiRequest(endpoint, method = 'GET', data = null, userId) {
+  async makeApiRequest(endpoint, method = 'GET', data = null, userId, retryCount = 0) {
+    const maxRetries = 1; // Allow one retry for token refresh
+
     try {
       const tokens = await this.getUserTokens(userId);
 
+      // Build the full API URL using cloud gateway
+      const apiUrl = await this.buildApiUrl(tokens.accessToken, endpoint);
+
       const config = {
         method,
-        url: `${this.apiUrl}${endpoint}`,
+        url: apiUrl,
         headers: {
           Authorization: `Bearer ${tokens.accessToken}`,
           Accept: 'application/json',
@@ -197,7 +309,35 @@ class JiraService {
       const response = await axios(config);
       return response.data;
     } catch (error) {
-      if (error.response?.status === 401) {
+      if (error.response?.status === 401 && retryCount < maxRetries) {
+        console.log(
+          `🔄 Received 401 error, attempting to force token refresh and retry (attempt ${retryCount + 1}/${maxRetries + 1})`
+        );
+
+        try {
+          // Force refresh tokens by getting them directly and refreshing them
+          const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
+
+          if (!expiredTokens.refreshToken) {
+            throw new Error('No refresh token available');
+          }
+
+          const refreshedTokens = await this.refreshAccessToken(expiredTokens.refreshToken);
+
+          await this.storeUserTokens(userId, refreshedTokens);
+
+          console.log(`✅ Forced token refresh successful for user ${userId}`);
+
+          // Retry the request with fresh tokens
+          return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
+        } catch (refreshError) {
+          console.error(`❌ Forced token refresh failed:`, refreshError.message);
+
+          // Clean up invalid tokens
+          await this.deleteUserTokens(userId);
+          throw new Error('JIRA authentication expired. Please reconnect your account.');
+        }
+      } else if (error.response?.status === 401) {
         throw new Error('JIRA authentication required. Please reconnect your account.');
       }
 
@@ -307,8 +447,23 @@ class JiraService {
    */
   async addComment({ issueKey, comment, userId }) {
     try {
+      // JIRA Cloud requires comments in Atlassian Document Format (ADF)
       const commentData = {
-        body: comment
+        body: {
+          version: 1,
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: comment
+                }
+              ]
+            }
+          ]
+        }
       };
 
       const response = await this.makeApiRequest(
@@ -361,16 +516,31 @@ class JiraService {
     try {
       const transitionData = {
         transition: {
-          id: transitionId
+          id: parseInt(transitionId, 10) // Convert to integer as required by JIRA API
         }
       };
 
       if (comment) {
+        // JIRA Cloud requires comments in Atlassian Document Format (ADF)
         transitionData.update = {
           comment: [
             {
               add: {
-                body: comment
+                body: {
+                  version: 1,
+                  type: 'doc',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [
+                        {
+                          type: 'text',
+                          text: comment
+                        }
+                      ]
+                    }
+                  ]
+                }
               }
             }
           ]
@@ -394,26 +564,88 @@ class JiraService {
   }
 
   /**
+   * Get attachment content for proxy streaming
+   */
+  async getAttachmentProxy({ attachmentId, userId }) {
+    try {
+      const tokens = await this.getUserTokens(userId);
+
+      // Get attachment metadata using the cloud API
+      const apiUrl = await this.buildApiUrl(tokens.accessToken, `/attachment/${attachmentId}`);
+      const response = await axios.get(apiUrl, {
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+          Accept: 'application/json'
+        }
+      });
+
+      const attachmentInfo = response.data;
+
+      // Get attachment content as stream
+      const contentResponse = await axios.get(attachmentInfo.content, {
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+          Accept: '*/*'
+        },
+        responseType: 'stream',
+        timeout: 60000 // 60 second timeout for large files
+      });
+
+      return {
+        filename: attachmentInfo.filename,
+        mimeType: attachmentInfo.mimeType,
+        size: attachmentInfo.size,
+        stream: contentResponse.data
+      };
+    } catch (error) {
+      console.error('❌ Error getting JIRA attachment for proxy:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Get attachment content
    */
   async getAttachment({ attachmentId, returnBase64 = false, userId }) {
     try {
       const tokens = await this.getUserTokens(userId);
 
-      const response = await axios.get(`${this.baseUrl}/rest/api/2/attachment/${attachmentId}`, {
+      // Get attachment metadata using the cloud API
+      const apiUrl = await this.buildApiUrl(tokens.accessToken, `/attachment/${attachmentId}`);
+      const response = await axios.get(apiUrl, {
         headers: {
-          Authorization: `Bearer ${tokens.accessToken}`
+          Authorization: `Bearer ${tokens.accessToken}`,
+          Accept: 'application/json'
         }
       });
 
       const attachmentInfo = response.data;
 
-      // Get attachment content
-      const contentResponse = await axios.get(attachmentInfo.content, {
+      console.log(`📎 Attachment metadata for ${attachmentId}:`, {
+        filename: attachmentInfo.filename,
+        mimeType: attachmentInfo.mimeType,
+        size: attachmentInfo.size,
+        content: attachmentInfo.content
+      });
+
+      // JIRA Cloud API returns attachment content URLs that need special handling
+      let contentUrl = attachmentInfo.content;
+
+      // Validate and potentially fix the content URL
+      if (!contentUrl || !contentUrl.startsWith('http')) {
+        throw new Error(`Invalid attachment content URL: ${contentUrl}`);
+      }
+
+      console.log(`📎 Downloading attachment: ${attachmentInfo.filename} from ${contentUrl}`);
+
+      // Get attachment content with proper authorization
+      const contentResponse = await axios.get(contentUrl, {
         headers: {
-          Authorization: `Bearer ${tokens.accessToken}`
+          Authorization: `Bearer ${tokens.accessToken}`,
+          Accept: '*/*'
         },
-        responseType: returnBase64 ? 'arraybuffer' : 'stream'
+        responseType: returnBase64 ? 'arraybuffer' : 'stream',
+        timeout: 30000 // 30 second timeout for large files
       });
 
       if (returnBase64) {
@@ -429,22 +661,38 @@ class JiraService {
           filename: attachmentInfo.filename,
           mimeType: attachmentInfo.mimeType,
           size: attachmentInfo.size,
-          downloadUrl: attachmentInfo.content
+          downloadUrl: contentUrl
         };
       }
     } catch (error) {
       console.error('❌ Error getting JIRA attachment:', error.message);
+
+      // Provide more detailed error information
+      if (error.response) {
+        console.error('❌ Response status:', error.response.status);
+        console.error('❌ Response data:', error.response.data);
+      }
+
       throw error;
     }
   }
 
   /**
    * Check if user has valid JIRA authentication
+   * This method attempts to get tokens and refresh if needed
    */
   async isUserAuthenticated(userId) {
     try {
-      return await tokenStorage.hasValidTokens(userId, this.serviceName);
+      // Try to get tokens - this will attempt refresh if expired
+      await this.getUserTokens(userId);
+
+      // Double-check by trying to make a lightweight API call
+      await this.makeApiRequest('/myself', 'GET', null, userId);
+
+      console.log(`✅ User ${userId} has valid JIRA authentication`);
+      return true;
     } catch (error) {
+      console.log(`❌ User ${userId} authentication failed: ${error.message}`);
       return false;
     }
   }
@@ -467,6 +715,32 @@ class JiraService {
     } catch (error) {
       console.error('❌ Error getting JIRA user info:', error.message);
       throw error;
+    }
+  }
+
+  /**
+   * Get token expiration info for monitoring
+   */
+  async getTokenExpirationInfo(userId) {
+    try {
+      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName);
+      const now = new Date();
+      const expiresAt = new Date(metadata.expiresAt);
+      const minutesUntilExpiry = Math.floor((expiresAt - now) / (1000 * 60));
+
+      return {
+        expiresAt: metadata.expiresAt,
+        minutesUntilExpiry,
+        isExpiring: minutesUntilExpiry <= 10, // Consider expiring if less than 10 minutes
+        isExpired: metadata.expired
+      };
+    } catch (error) {
+      return {
+        expiresAt: null,
+        minutesUntilExpiry: 0,
+        isExpiring: true,
+        isExpired: true
+      };
     }
   }
 }

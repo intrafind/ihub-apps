@@ -291,6 +291,22 @@ export function createValidator(requiredFields = []) {
 }
 
 /**
+ * Helper function to extract resource type from file path
+ * @param {string} source - File path or source string
+ * @returns {string} Resource type (app, model, prompt, tool, source, etc.)
+ */
+function extractResourceType(source) {
+  if (source.includes('/apps/')) return 'app';
+  if (source.includes('/models/')) return 'model';
+  if (source.includes('/prompts/')) return 'prompt';
+  if (source.includes('/tools/')) return 'tool';
+  if (source.includes('/sources/')) return 'source';
+  if (source.includes('/config/groups')) return 'group';
+  if (source.includes('/config/')) return 'config';
+  return 'resource';
+}
+
+/**
  * Helper function to create a schema validation function
  * @param {Object} schema - Zod schema object
  * @param {Array} knownKeys - Array of known valid keys
@@ -298,12 +314,15 @@ export function createValidator(requiredFields = []) {
  */
 export function createSchemaValidator(schema, knownKeys = []) {
   return function (item, source) {
+    const resourceType = extractResourceType(source);
+    const resourceId = item.id || 'unknown';
+
     // Validate with schema if provided
     if (schema) {
       const { success, error } = schema.safeParse(item);
       if (!success && error) {
         const messages = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
-        console.warn(`⚠️  Validation issues in ${source}: ${messages}`);
+        console.warn(`⚠️  ${resourceType}: ${resourceId} - validation issues: ${messages}`);
       }
     }
 
@@ -311,7 +330,7 @@ export function createSchemaValidator(schema, knownKeys = []) {
     if (knownKeys.length > 0) {
       const unknown = Object.keys(item).filter(key => !knownKeys.includes(key));
       if (unknown.length > 0) {
-        console.warn(`⚠️  Unknown keys in ${source}: ${unknown.join(', ')}`);
+        console.warn(`⚠️  ${resourceType}: ${resourceId} - unknown keys: ${unknown.join(', ')}`);
       }
     }
   };

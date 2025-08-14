@@ -35,7 +35,7 @@ class OpenAIAdapterClass extends BaseAdapter {
           {
             type: 'image_url',
             image_url: {
-              url: message.imageData.base64,
+              url: `data:${message.imageData.format || 'image/jpeg'};base64,${this.cleanBase64Data(message.imageData.base64)}`,
               detail: 'high'
             }
           }

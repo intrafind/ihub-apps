@@ -26,21 +26,48 @@ The JIRA Connector provides comprehensive integration with Atlassian JIRA, enabl
 ```bash
 # JIRA OAuth Configuration
 JIRA_BASE_URL=https://your-company.atlassian.net
-JIRA_OAUTH_CLIENT_ID=your-oauth-client-id
-JIRA_OAUTH_CLIENT_SECRET=your-oauth-client-secret
+JIRA_OAUTH_CLIENT_ID=your-oauth-client-id-from-console
+JIRA_OAUTH_CLIENT_SECRET=your-oauth-client-secret-from-console
 JIRA_OAUTH_REDIRECT_URI=https://ihub.company.com/api/integrations/jira/callback
+
+# For development:
+# JIRA_OAUTH_REDIRECT_URI=http://localhost:5173/api/integrations/jira/callback
 
 # Security Configuration
 TOKEN_ENCRYPTION_KEY=your-256-bit-encryption-key-in-hex
 ```
 
-### JIRA OAuth Application Setup
+### Atlassian OAuth Application Setup
 
-1. Go to your JIRA instance's Applications settings
-2. Create a new OAuth2 application
-3. Set the redirect URI to match your iHub Apps instance
-4. Configure scopes: `read:jira-user`, `read:jira-work`, `write:jira-work`
-5. Copy the Client ID and Client Secret to your environment variables
+1. **Go to Atlassian Developer Console**: 
+   - Navigate to [https://developer.atlassian.com/console/myapps/](https://developer.atlassian.com/console/myapps/)
+   - Sign in with your Atlassian account
+
+2. **Create OAuth 2.0 (3LO) App**:
+   - Click "Create" → "OAuth 2.0 integration"
+   - **App Type**: OAuth 2.0 (3LO)
+   - **App Name**: iHub Apps JIRA Integration
+   - **App Description**: AI-powered JIRA integration for iHub Apps
+
+3. **Configure Authorization**:
+   - **Callback URL**: Add your redirect URI
+     - Development: `http://localhost:5173/api/integrations/jira/callback`
+     - Production: `https://your-domain.com/api/integrations/jira/callback`
+   - **Permissions/Scopes**: 
+     - `read:jira-user` - Access user profile information
+     - `read:jira-work` - Read issues, projects, comments
+     - `write:jira-work` - Create/update issues, add comments
+     - `offline_access` - Required for refresh tokens
+
+4. **Save Credentials**:
+   - Copy the **Client ID** → `JIRA_OAUTH_CLIENT_ID`
+   - Copy the **Client Secret** → `JIRA_OAUTH_CLIENT_SECRET`
+
+5. **Important OAuth2 Settings**:
+   - The integration uses Atlassian's centralized OAuth endpoints:
+     - Authorization: `https://auth.atlassian.com/authorize`
+     - Token: `https://auth.atlassian.com/oauth/token`
+   - API calls use: `https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3/`
 
 ## Usage
 
@@ -110,11 +137,33 @@ Download ticket attachments.
 
 ## Authentication Flow
 
-1. **First Use**: User attempts to use JIRA tool without connection
+### OAuth 2.0 Flow Details
+
+1. **Initial Request**: User attempts to use JIRA tool without connection
 2. **Auth Prompt**: System shows connection prompt with "Connect to JIRA" button
-3. **OAuth Flow**: User redirects to JIRA OAuth consent screen
-4. **Token Storage**: Encrypted tokens stored for future use
-5. **Tool Execution**: Original JIRA request executes seamlessly
+3. **OAuth Initiation**: 
+   - Generates PKCE code verifier and challenge for enhanced security
+   - Redirects to: `https://auth.atlassian.com/authorize`
+   - Required parameters:
+     - `audience=api.atlassian.com` (mandatory for Atlassian Cloud)
+     - `prompt=consent` (ensures offline_access is granted)
+     - `access_type=offline` (requests refresh token)
+4. **User Authorization**: 
+   - User logs into Atlassian account
+   - Grants permissions to iHub Apps
+   - Must approve offline_access for automatic token refresh
+5. **Token Exchange**: 
+   - Callback receives authorization code
+   - Exchanges code for tokens at `https://auth.atlassian.com/oauth/token`
+   - Receives access token (1 hour) and refresh token
+6. **Token Storage**: 
+   - Tokens encrypted using AES-256-GCM
+   - Stored in `contents/integrations/jira/`
+   - Automatic refresh before expiration
+7. **API Access**: 
+   - Discovers user's cloudId from accessible resources
+   - Makes API calls to `https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3/`
+8. **Tool Execution**: Original JIRA request executes seamlessly
 
 ## Error Handling
 
@@ -136,11 +185,22 @@ The JIRA connector provides comprehensive error handling:
 
 ## Implementation Details
 
-### Architecture
+### Technical Architecture
+
+#### Core Components
 - **JiraService**: Core service handling OAuth and API operations
+- **TokenStorageService**: Centralized encrypted token management
 - **Tool Wrapper**: Unified tool interface following iHub Apps patterns
 - **Route Integration**: OAuth flow endpoints for authentication
 - **Error Handling**: Comprehensive error responses with auth prompts
+
+#### Key Technical Details
+- **PKCE Support**: Implements Proof Key for Code Exchange for enhanced security
+- **API Version**: Uses JIRA REST API v3 (latest stable version)
+- **Cloud Gateway**: All API calls routed through `api.atlassian.com`
+- **Session Isolation**: Integration sessions separate from user auth sessions
+- **Token Refresh**: Automatic refresh with 2-minute buffer before expiration
+- **Encryption**: AES-256-GCM for token storage with context-aware keys
 
 ### Files Structure
 ```
@@ -158,27 +218,109 @@ contents/
 
 ### Common Issues
 
-1. **"JIRA OAuth configuration incomplete"**
-   - Ensure all environment variables are set
-   - Verify JIRA OAuth application is properly configured
+#### 1. OAuth Configuration Issues
 
-2. **"Authentication required"**
-   - User needs to connect their JIRA account
-   - Check if tokens have expired and need refresh
+**"JIRA OAuth configuration incomplete"**
+- Ensure all environment variables are set correctly
+- Verify OAuth app is created in Atlassian Developer Console (not JIRA instance)
+- Check that redirect URI matches exactly (including protocol and port)
 
-3. **"Permission denied"**
-   - User doesn't have access to requested tickets
-   - Verify user's JIRA permissions
+**404 Error on Authorization**
+- ❌ Wrong: `https://your-site.atlassian.net/oauth/authorize`
+- ✅ Correct: `https://auth.atlassian.com/authorize`
+- Ensure using Atlassian's centralized OAuth endpoints
 
-4. **"Invalid JQL query"**
-   - Check JQL syntax in search requests
-   - Ensure user has permission to access queried fields
+**Missing `audience` Parameter**
+- The `audience=api.atlassian.com` parameter is mandatory
+- Without it, Atlassian will reject the authorization request
+
+#### 2. Token Refresh Issues
+
+**No Refresh Token Received**
+- **Problem**: Users need to reconnect every hour
+- **Symptoms**: 
+  - Server logs: `No refresh token available - user needs to reconnect`
+  - Token data missing `refreshToken` field
+- **Causes**:
+  - App not configured for offline access in Atlassian
+  - User denied offline_access during consent
+  - `offline_access` scope not included in request
+- **Solutions**:
+  - Ensure `offline_access` scope is in OAuth request
+  - User must grant all permissions during authorization
+  - Check app has offline access enabled in Developer Console
+  - Re-authenticate with proper consent
+
+**Token Expiration Handling**
+- Tokens expire after 1 hour
+- System refreshes automatically with 2-minute buffer
+- If refresh fails, user must reconnect
+
+#### 3. API Access Issues
+
+**"Permission denied"**
+- User doesn't have access to requested JIRA resources
+- Verify user's JIRA permissions in JIRA admin
+- Check if user can access the resource directly in JIRA
+
+**"Invalid JQL query"**
+- Verify JQL syntax is correct
+- Ensure fields exist and user has permission to query them
+- Test query directly in JIRA's issue search
+
+**CloudId Discovery Failed**
+- User may not have access to any JIRA sites
+- Check user is part of at least one Atlassian site
+- Verify OAuth app is installed on the JIRA instance
+
+#### 4. Connection Issues
+
+**SSL/TLS Errors**
+- Verify network allows HTTPS to:
+  - `https://auth.atlassian.com`
+  - `https://api.atlassian.com`
+  - Your JIRA instance URL
+
+**Rate Limiting**
+- Default: 100 requests per 15 minutes per user
+- Monitor server logs for rate limit warnings
+- Adjust `JIRA_RATE_LIMIT_*` environment variables if needed
+
+### Testing the Integration
+
+1. **Start Development Server**: 
+   ```bash
+   npm run dev
+   ```
+
+2. **Navigate to JIRA Assistant**: 
+   ```
+   http://localhost:5173/apps/jira-assistant
+   ```
+
+3. **Test Connection**:
+   - Ask: "Show me my assigned tickets"
+   - Connection prompt should appear
+   - Click "Connect JIRA Account"
+   - Complete OAuth flow
+   - Tickets should display
 
 ### Debug Mode
-Enable debug logging by setting environment variable:
+
+Enable detailed logging:
 ```bash
+# In your .env file
 DEBUG=jira:*
+
+# Or when starting the server
+DEBUG=jira:* npm run dev
 ```
+
+Monitor server console for:
+- OAuth flow details
+- Token refresh attempts
+- API request/response data
+- Error details with stack traces
 
 ## Compliance & Audit
 
@@ -187,3 +329,24 @@ DEBUG=jira:*
 - No system-level access that bypasses user permissions
 - Encrypted token storage meets enterprise security requirements
 - Comprehensive logging for all integration activities
+
+## Important Implementation Notes
+
+### Atlassian Cloud vs Server/Data Center
+- This integration is designed for **Atlassian Cloud** (SaaS)
+- Uses OAuth 2.0 (3LO) - Three-Legged OAuth
+- Not compatible with JIRA Server or Data Center (on-premise)
+- Server/DC would require different authentication (Basic Auth, OAuth 1.0a, or PAT)
+
+### Known Limitations
+- **Token Refresh**: Some Atlassian configurations may not provide refresh tokens despite requesting `offline_access`. This is a known Atlassian limitation.
+- **PKCE Support**: Atlassian Cloud may not fully honor PKCE parameters, but the implementation includes them for compatibility
+- **Rate Limits**: JIRA APIs have rate limits that vary by endpoint and subscription tier
+- **Attachment Size**: Large attachments may timeout or exceed memory limits
+
+### Best Practices
+1. **Always request `offline_access`** scope for refresh tokens
+2. **Monitor token refresh logs** to identify authentication issues early
+3. **Test OAuth flow** after any Atlassian app configuration changes
+4. **Keep redirect URIs synchronized** between environments and Atlassian console
+5. **Use production encryption keys** - never reuse development keys in production

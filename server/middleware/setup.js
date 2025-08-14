@@ -84,6 +84,94 @@ function processCorsOrigins(origins) {
 }
 
 /**
+ * Setup session middleware for different authentication flows
+ * @param {import('express').Application} app - Express application
+ * @param {Object} platformConfig - Platform configuration
+ */
+function setupSessionMiddleware(app, platformConfig) {
+  const oidcConfig = platformConfig.oidcAuth || {};
+  const needsOidcSessions = oidcConfig.enabled;
+
+  // Check for OAuth-based external integrations that need sessions
+  const jiraEnabled = process.env.JIRA_BASE_URL && process.env.JIRA_OAUTH_CLIENT_ID;
+  // Future integrations can be added here:
+  // const microsoftEnabled = process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET;
+  // const googleEnabled = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
+
+  const needsIntegrationSessions = jiraEnabled; // || microsoftEnabled || googleEnabled;
+
+  // Setup OIDC user authentication sessions
+  if (needsOidcSessions) {
+    console.log('🔐 Enabling session middleware for OIDC user authentication');
+    app.use(
+      '/auth/oidc',
+      session({
+        secret: config.JWT_SECRET || 'fallback-session-secret',
+        resave: false,
+        saveUninitialized: false, // Only create session when needed for OIDC
+        name: 'oidc.session',
+        cookie: {
+          secure: config.USE_HTTPS === 'true',
+          httpOnly: true,
+          maxAge: 30 * 60 * 1000, // 30 minutes for user auth
+          sameSite: 'lax',
+          path: '/auth/oidc'
+        }
+      })
+    );
+  }
+
+  // Setup external integration OAuth sessions (separate from user auth)
+  if (needsIntegrationSessions) {
+    const enabledIntegrations = [];
+    if (jiraEnabled) enabledIntegrations.push('JIRA');
+
+    console.log(
+      `🔗 Enabling session middleware for OAuth integrations: ${enabledIntegrations.join(', ')}`
+    );
+    app.use(
+      '/api/integrations',
+      session({
+        secret: config.JWT_SECRET || 'fallback-session-secret',
+        resave: false,
+        saveUninitialized: true, // Required for OAuth2 PKCE state persistence
+        name: 'integration.session',
+        cookie: {
+          secure: config.USE_HTTPS === 'true',
+          httpOnly: true,
+          maxAge: 15 * 60 * 1000, // 15 minutes for OAuth flows
+          sameSite: 'lax',
+          path: '/api/integrations'
+        }
+      })
+    );
+  }
+
+  // If no specific session middleware is needed, but we still have some auth method,
+  // we might need basic session support for other features
+  if (!needsOidcSessions && !needsIntegrationSessions) {
+    const authConfig = platformConfig.auth || {};
+    if (authConfig.mode === 'local' || authConfig.mode === 'ldap') {
+      console.log('🍪 Enabling minimal session middleware for local/LDAP authentication');
+      app.use(
+        session({
+          secret: config.JWT_SECRET || 'fallback-session-secret',
+          resave: false,
+          saveUninitialized: false,
+          name: 'app.session',
+          cookie: {
+            secure: config.USE_HTTPS === 'true',
+            httpOnly: true,
+            maxAge: 24 * 60 * 60 * 1000, // 24 hours for regular app sessions
+            sameSite: 'lax'
+          }
+        })
+      );
+    }
+  }
+}
+
+/**
  * Configure Express middleware.
  * Body parser limits are controlled by the `requestBodyLimitMB` option in
  * `platform.json`.
@@ -154,26 +242,8 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Admin API rate limiter for administrative endpoints (most restrictive)
   app.use('/api/admin', rateLimiters.adminApiLimiter);
 
-  // Session middleware for OIDC (only needed if OIDC is enabled)
-  const oidcConfig = platformConfig.oidcAuth || {};
-  if (oidcConfig.enabled) {
-    app.use(
-      session({
-        secret: config.JWT_SECRET || 'fallback-session-secret',
-        resave: false,
-        saveUninitialized: true, // Changed to true for OAuth2 state persistence
-        name: 'oidc.session',
-        cookie: {
-          secure: config.USE_HTTPS === 'true', // Set to false for HTTP localhost development
-          httpOnly: true,
-          maxAge: 10 * 60 * 1000, // 10 minutes for OIDC flow
-          sameSite: 'lax', // Always use 'lax' for better compatibility
-          path: '/', // Ensure cookie is available for all paths
-          domain: undefined // Let browser handle domain for better localhost compatibility
-        }
-      })
-    );
-  }
+  // Setup session middleware for different use cases
+  setupSessionMiddleware(app, platformConfig);
 
   // Initialize Passport for OIDC authentication
   initializePassport(app);

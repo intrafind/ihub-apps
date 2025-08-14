@@ -4,33 +4,53 @@
 import express from 'express';
 import crypto from 'crypto';
 import JiraService from '../../services/integrations/JiraService.js';
+import { authOptional, authRequired } from '../../middleware/authRequired.js';
 
 const router = express.Router();
 
 /**
- * Initiate JIRA OAuth2 flow with PKCE
+ * Initiate JIRA OAuth2 flow for Atlassian Cloud
  * GET /api/integrations/jira/auth
  */
-router.get('/auth', async (req, res) => {
+router.get('/auth', authRequired, async (req, res) => {
   try {
-    // Generate state and PKCE parameters
+    console.log('🔍 JIRA Auth Debug:', {
+      hasUser: !!req.user,
+      userId: req.user?.id,
+      userGroups: req.user?.groups,
+      hasSession: !!req.session,
+      cookies: Object.keys(req.cookies || {}),
+      authHeader: req.headers.authorization ? 'present' : 'missing'
+    });
+
+    // Check if session is available
+    if (!req.session) {
+      return res.status(500).json({
+        error: 'Session not available',
+        message: 'Session middleware is required for JIRA OAuth integrations.'
+      });
+    }
+
+    // Generate state for CSRF protection
     const state = crypto.randomBytes(32).toString('hex');
+
+    // Generate PKCE parameters (may be ignored by Atlassian Cloud)
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
 
-    // Store PKCE parameters in session
+    // Store OAuth parameters in session
     req.session.jiraAuth = {
       state,
       codeVerifier,
-      userId: req.user?.id, // Assuming user is authenticated
+      userId: req.user?.id || 'fallback-user',
       timestamp: Date.now()
     };
 
-    // Generate authorization URL
+    // Generate authorization URL for Atlassian Cloud
     const authUrl = JiraService.generateAuthUrl(state, codeVerifier);
 
-    console.log(`🔐 Initiating JIRA OAuth for user ${req.user?.id}`);
+    console.log(`🔗 Initiating JIRA OAuth for user ${req.user?.id} - URL: ${authUrl}`);
 
-    // Redirect to JIRA OAuth consent screen
+    // Redirect to Atlassian OAuth consent screen
     res.redirect(authUrl);
   } catch (error) {
     console.error('❌ Error initiating JIRA OAuth:', error.message);
@@ -45,7 +65,7 @@ router.get('/auth', async (req, res) => {
  * Handle JIRA OAuth callback
  * GET /api/integrations/jira/callback
  */
-router.get('/callback', async (req, res) => {
+router.get('/callback', authOptional, async (req, res) => {
   try {
     const { code, state, error } = req.query;
 
@@ -53,6 +73,12 @@ router.get('/callback', async (req, res) => {
     if (error) {
       console.error('❌ JIRA OAuth error:', error);
       return res.redirect(`/settings/integrations?jira_error=${encodeURIComponent(error)}`);
+    }
+
+    // Check if session is available
+    if (!req.session) {
+      console.error('❌ No session available for JIRA OAuth callback');
+      return res.redirect('/settings/integrations?jira_error=no_session');
     }
 
     // Validate state parameter
@@ -71,6 +97,23 @@ router.get('/callback', async (req, res) => {
     // Exchange authorization code for tokens
     const tokens = await JiraService.exchangeCodeForTokens(code, storedAuth.codeVerifier);
 
+    // Verify we received a refresh token (required for long-term access)
+    if (!tokens.refreshToken) {
+      console.error('❌ CRITICAL: No refresh token received from JIRA OAuth.');
+      console.error(
+        '   This means the user will need to re-authenticate when the access token expires (usually within 1 hour).'
+      );
+      console.error('   This can happen if:');
+      console.error('   - The JIRA app configuration does not support offline access');
+      console.error('   - The user denied the offline_access scope');
+      console.error('   - Atlassian OAuth server configuration issue');
+
+      // Still store the tokens but with a clear warning in logs
+      console.warn(
+        '⚠️ Storing tokens WITHOUT refresh capability - user will need to reconnect every hour'
+      );
+    }
+
     // Store encrypted tokens for user
     await JiraService.storeUserTokens(storedAuth.userId, tokens);
 
@@ -85,7 +128,9 @@ router.get('/callback', async (req, res) => {
     console.error('❌ Error handling JIRA OAuth callback:', error.message);
 
     // Clear session data on error
-    delete req.session.jiraAuth;
+    if (req.session) {
+      delete req.session.jiraAuth;
+    }
 
     res.redirect(`/settings/integrations?jira_error=${encodeURIComponent(error.message)}`);
   }
@@ -95,7 +140,7 @@ router.get('/callback', async (req, res) => {
  * Get JIRA connection status for current user
  * GET /api/integrations/jira/status
  */
-router.get('/status', async (req, res) => {
+router.get('/status', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -113,6 +158,9 @@ router.get('/status', async (req, res) => {
     // Get user info from JIRA
     const userInfo = await JiraService.getUserInfo(req.user.id);
 
+    // Get token expiration info
+    const tokenInfo = await JiraService.getTokenExpirationInfo(req.user.id);
+
     res.json({
       connected: true,
       userInfo: {
@@ -121,7 +169,15 @@ router.get('/status', async (req, res) => {
         accountType: userInfo.accountType,
         active: userInfo.active
       },
-      message: 'JIRA account connected successfully'
+      tokenInfo: {
+        expiresAt: tokenInfo.expiresAt,
+        minutesUntilExpiry: tokenInfo.minutesUntilExpiry,
+        isExpiring: tokenInfo.isExpiring,
+        isExpired: tokenInfo.isExpired
+      },
+      message: tokenInfo.isExpiring
+        ? 'JIRA account connected (tokens expiring soon)'
+        : 'JIRA account connected successfully'
     });
   } catch (error) {
     console.error('❌ Error getting JIRA status:', error.message);
@@ -144,7 +200,7 @@ router.get('/status', async (req, res) => {
  * Disconnect JIRA account
  * POST /api/integrations/jira/disconnect
  */
-router.post('/disconnect', async (req, res) => {
+router.post('/disconnect', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -174,17 +230,32 @@ router.post('/disconnect', async (req, res) => {
 });
 
 /**
- * Refresh JIRA connection
+ * Refresh JIRA connection and force token refresh
  * POST /api/integrations/jira/refresh
  */
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    // This will automatically refresh tokens if expired
+    console.log(`🔄 Manual JIRA refresh requested for user ${req.user.id}`);
+
+    // Force a fresh check of authentication which will trigger refresh if needed
+    const isAuthenticated = await JiraService.isUserAuthenticated(req.user.id);
+
+    if (!isAuthenticated) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Please reconnect your JIRA account'
+      });
+    }
+
+    // Get user info to confirm everything is working
     const userInfo = await JiraService.getUserInfo(req.user.id);
+
+    // Get updated token info
+    const tokenInfo = await JiraService.getTokenExpirationInfo(req.user.id);
 
     res.json({
       success: true,
@@ -194,12 +265,18 @@ router.post('/refresh', async (req, res) => {
         accountType: userInfo.accountType,
         active: userInfo.active
       },
+      tokenInfo: {
+        expiresAt: tokenInfo.expiresAt,
+        minutesUntilExpiry: tokenInfo.minutesUntilExpiry,
+        isExpiring: tokenInfo.isExpiring,
+        isExpired: tokenInfo.isExpired
+      },
       message: 'JIRA connection refreshed successfully'
     });
   } catch (error) {
     console.error('❌ Error refreshing JIRA connection:', error.message);
 
-    if (error.message.includes('authentication required')) {
+    if (error.message.includes('authentication required') || error.message.includes('expired')) {
       return res.status(401).json({
         error: 'Authentication required',
         message: 'Please reconnect your JIRA account'
@@ -214,10 +291,60 @@ router.post('/refresh', async (req, res) => {
 });
 
 /**
+ * Proxy endpoint for downloading JIRA attachments
+ * GET /api/integrations/jira/attachment/:attachmentId
+ */
+router.get('/attachment/:attachmentId', authRequired, async (req, res) => {
+  try {
+    const { attachmentId } = req.params;
+    const { download } = req.query;
+
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Get attachment metadata and content
+    const attachment = await JiraService.getAttachmentProxy({
+      attachmentId,
+      userId: req.user.id
+    });
+
+    // Set appropriate headers
+    res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Length', attachment.size);
+
+    // If download is requested or it's not an image, force download
+    if (download === 'true' || !attachment.mimeType?.startsWith('image/')) {
+      res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
+    } else {
+      // For images, allow inline display
+      res.setHeader('Content-Disposition', `inline; filename="${attachment.filename}"`);
+    }
+
+    // Stream the attachment content directly to the response
+    attachment.stream.pipe(res);
+  } catch (error) {
+    console.error('❌ Error proxying JIRA attachment:', error.message);
+
+    if (error.message.includes('authentication required')) {
+      return res.status(401).json({
+        error: 'Authentication expired',
+        message: 'Please reconnect your JIRA account'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Failed to retrieve attachment',
+      message: error.message
+    });
+  }
+});
+
+/**
  * Test JIRA connection
  * GET /api/integrations/jira/test
  */
-router.get('/test', async (req, res) => {
+router.get('/test', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
       return res.status(401).json({ error: 'Authentication required' });
