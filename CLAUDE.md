@@ -357,11 +357,67 @@ The system automatically resolves group inheritance at startup:
 
 ### LLM Provider Integration
 
+#### Adding Custom LLM Providers
+
 To add a new LLM provider:
 
 1. Create adapter in `server/adapters/` implementing standard interface
 2. Add model configurations as individual JSON files in `contents/models/`
 3. Register adapter in `server/adapters/index.js`
+
+#### Local LLM Providers
+
+iHub Apps supports local LLM providers for privacy-focused, offline AI capabilities:
+
+**Supported Local Providers:**
+
+- **LM Studio** (Desktop app with GUI, CLI support)
+- **Jan.ai** (Open-source desktop app with MCP tool support)
+- **vLLM** (High-performance inference server)
+
+**Key Benefits:**
+
+- Complete privacy - models run locally
+- No API costs
+- Offline operation
+- Custom model support (GGUF/GGML)
+
+**Integration Steps:**
+
+1. Install and configure your chosen local provider
+2. Create model configuration file in `contents/models/`
+3. Set `provider: "openai"` (all local providers use OpenAI-compatible APIs)
+4. Configure endpoint URL (e.g., `http://localhost:1234/v1/chat/completions`)
+5. Set environment variable `OPENAI_API_KEY` to any value
+
+**Example Configuration:**
+
+```json
+{
+  "id": "lm-studio-gpt-oss",
+  "modelId": "gpt-oss",
+  "name": { "en": "GPT-OSS (LM Studio)" },
+  "url": "http://localhost:1234/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 8192,
+  "supportsTools": true,
+  "enabled": true
+}
+```
+
+**Recommended Models:**
+
+- **gpt-oss**: GPT-4 class performance with excellent tool calling
+- **mistralai/Mistral-Small-Instruct-2409**: Mistral Small 3.2, optimized for function calling
+- **microsoft/Phi-3-medium-4k-instruct**: Efficient model with good tool support
+
+**Important Notes:**
+
+- **vLLM**: Requires `--enable-auto-tool-choice` parameter for tool calling support
+- **Jan.ai**: Tool calling available via experimental MCP (Model Context Protocol) support
+- **Per-Model API Keys**: Configure different API keys per model for multi-environment setups
+
+For detailed setup instructions, see `docs/local-llm-providers.md`.
 
 ### Configuration Changes
 
