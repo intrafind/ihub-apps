@@ -15,15 +15,27 @@ modification, are permitted provided that the following conditions are met:
    and the disclaimer below in the documentation and/or other materials
    provided with the distribution.
 
-3. All products, services, or derivative works that include or are derived
-   from this software must display the following attribution prominently
-   in the user interface and in any documentation, about pages, or
-   marketing materials:
-       "Powered by IntraFind – https://intrafind.com/"
+3. Attribution Requirements:
+   a) All products, services, or derivative works must display the 
+      following attribution prominently in user interfaces, documentation, 
+      and about pages: "Powered by IntraFind – https://intrafind.com/"
+   
+   b) For commercial use, monetization, or revenue-generating activities, 
+      additional attribution is required in:
+      - All marketing materials, sales documents, contracts, agreements, and legal documents: 
+        "Powered by IntraFind – https://intrafind.com/"
+         or 
+        "This product/service includes technology provided by IntraFind Software AG (https://intrafind.com/)"
+      - Sublicensing agreements (attribution requirements must be 
+        passed through)
 
 4. Neither the name of IntraFind Software AG nor the names of its
    contributors may be used to endorse or promote products derived from
    this software without specific prior written permission.
+
+5. Attribution Compliance: Failure to comply with attribution requirements 
+   may result in immediate termination of this license. Upon termination, 
+   the licensee must cease all use of the software and destroy all copies.
 
 DISCLAIMER:
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
