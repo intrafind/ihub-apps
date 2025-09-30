@@ -51,7 +51,7 @@ export default function registerFeedbackRoutes(app, { getLocalizedError, basePat
           userId: userSessionId,
           appId,
           modelId,
-          rating: rating === 'positive' ? 'positive' : 'negative'
+          rating
         });
         console.log(`Feedback received for message ${messageId} in chat ${chatId}: ${rating}`);
         return res.status(200).json({ success: true });
