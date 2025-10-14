@@ -1,0 +1,178 @@
+{
+  "id": "nda-risk-analyzer",
+  "order": 15,
+  "category": "legal",
+  "name": {
+    "en": "NDA Risk Analyzer",
+    "de": "NDA-Risikoanalyse"
+  },
+  "description": {
+    "en": "Analyze NDA documents and identify potential legal risks",
+    "de": "Analysiere NDA-Dokumente und identifiziere potenzielle rechtliche Risiken"
+  },
+  "color": "#DC2626",
+  "icon": "shield-alert",
+  "system": {
+    "en": "You are an expert legal analyst specializing in Non-Disclosure Agreements (NDAs). Your role is to carefully analyze NDA documents and identify clauses that may present legal risks or unfavorable terms. For each identified risk, provide:\n\n1. The exact clause text or reference\n2. The risk category (confidentiality, liability, termination, intellectual property, non-compete, jurisdiction, or other)\n3. Severity level (low, medium, high, or critical)\n4. Clear explanation of why this clause is problematic\n5. Specific recommendation for negotiation or mitigation\n\nBe thorough, objective, and focus on practical business implications. Consider both immediate and long-term consequences of each clause.",
+    "de": "Du bist ein Experte für rechtliche Analysen, spezialisiert auf Geheimhaltungsvereinbarungen (NDAs). Deine Aufgabe ist es, NDA-Dokumente sorgfältig zu analysieren und Klauseln zu identifizieren, die rechtliche Risiken oder ungünstige Bedingungen darstellen könnten. Für jedes identifizierte Risiko gib an:\n\n1. Den genauen Klauseltext oder die Referenz\n2. Die Risikokategorie (Vertraulichkeit, Haftung, Kündigung, geistiges Eigentum, Wettbewerbsverbot, Gerichtsstand oder andere)\n3. Schweregrad (niedrig, mittel, hoch oder kritisch)\n4. Klare Erklärung, warum diese Klausel problematisch ist\n5. Spezifische Empfehlung zur Verhandlung oder Risikominderung\n\nSei gründlich, objektiv und konzentriere dich auf praktische geschäftliche Auswirkungen. Berücksichtige sowohl unmittelbare als auch langfristige Konsequenzen jeder Klausel."
+  },
+  "tokenLimit": 128000,
+  "preferredModel": "gpt-4o-mini",
+  "preferredOutputFormat": "json",
+  "preferredTemperature": 0.3,
+  "preferredStyle": "professional",
+  "sendChatHistory": false,
+  "messagePlaceholder": {
+    "en": "Paste NDA text here or upload a document...",
+    "de": "NDA-Text hier einfügen oder Dokument hochladen..."
+  },
+  "greeting": {
+    "en": {
+      "title": "⚖️ NDA Risk Analyzer",
+      "subtitle": "Upload or paste your NDA document to identify potential legal risks and unfavorable terms."
+    },
+    "de": {
+      "title": "⚖️ NDA-Risikoanalyse",
+      "subtitle": "Laden Sie Ihr NDA-Dokument hoch oder fügen Sie es ein, um potenzielle rechtliche Risiken und ungünstige Bedingungen zu identifizieren."
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "overall_risk": {
+        "type": "string",
+        "enum": ["low", "medium", "high", "critical"],
+        "description": "Overall risk assessment of the NDA"
+      },
+      "summary": {
+        "type": "string",
+        "description": "Brief summary of the NDA analysis"
+      },
+      "flagged_clauses": {
+        "type": "array",
+        "description": "List of clauses that present potential risks",
+        "items": {
+          "type": "object",
+          "properties": {
+            "clause_reference": {
+              "type": "string",
+              "description": "Section number or identifier of the clause"
+            },
+            "clause_text": {
+              "type": "string",
+              "description": "Exact text of the problematic clause"
+            },
+            "risk_category": {
+              "type": "string",
+              "enum": [
+                "confidentiality",
+                "liability",
+                "termination",
+                "intellectual_property",
+                "non_compete",
+                "jurisdiction",
+                "duration",
+                "scope",
+                "other"
+              ],
+              "description": "Category of legal risk"
+            },
+            "severity": {
+              "type": "string",
+              "enum": ["low", "medium", "high", "critical"],
+              "description": "Severity level of the risk"
+            },
+            "explanation": {
+              "type": "string",
+              "description": "Detailed explanation of why this clause is problematic"
+            },
+            "recommendation": {
+              "type": "string",
+              "description": "Specific recommendation for addressing this risk"
+            }
+          },
+          "required": [
+            "clause_text",
+            "risk_category",
+            "severity",
+            "explanation",
+            "recommendation"
+          ]
+        }
+      },
+      "positive_terms": {
+        "type": "array",
+        "description": "Favorable terms or protective clauses found in the NDA",
+        "items": {
+          "type": "object",
+          "properties": {
+            "clause_reference": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "recommendations": {
+        "type": "array",
+        "description": "Overall recommendations for negotiation",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "overall_risk",
+      "summary",
+      "flagged_clauses",
+      "recommendations"
+    ]
+  },
+  "upload": {
+    "enabled": true,
+    "fileUpload": {
+      "enabled": true,
+      "maxFileSizeMB": 10,
+      "supportedTextFormats": [
+        "text/plain",
+        "text/markdown"
+      ],
+      "supportedPdfFormats": [
+        "application/pdf"
+      ]
+    },
+    "imageUpload": {
+      "enabled": false
+    }
+  },
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": false
+    },
+    "outputFormat": {
+      "enabled": false
+    },
+    "chatHistory": {
+      "enabled": false
+    },
+    "style": {
+      "enabled": false
+    }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 8,
+    "microphone": {
+      "enabled": false
+    }
+  },
+  "allowEmptyContent": false,
+  "disallowModelSelection": false,
+  "enabled": true
+}
