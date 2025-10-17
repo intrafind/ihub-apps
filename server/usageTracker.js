@@ -62,6 +62,51 @@ async function loadConfig() {
   configLoaded = true;
 }
 
+function migrateLegacyFeedback(feedbackObj) {
+  if (!feedbackObj || typeof feedbackObj !== 'object') return;
+
+  // Initialize structure if missing
+  if (!feedbackObj.ratings) {
+    feedbackObj.ratings = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    feedbackObj.total = feedbackObj.total || 0;
+    feedbackObj.averageRating = feedbackObj.averageRating || 0;
+  }
+
+  const good = feedbackObj.good || 0;
+  const bad = feedbackObj.bad || 0;
+  const legacyTotal = good + bad;
+
+  // Only migrate if we have legacy data that hasn't been migrated yet
+  // Check if total is 0 but we have good/bad counts, OR if ratings are all 0 but we have good/bad
+  const hasLegacyData = good > 0 || bad > 0;
+  const hasEmptyRatings =
+    feedbackObj.ratings[1] === 0 &&
+    feedbackObj.ratings[2] === 0 &&
+    feedbackObj.ratings[3] === 0 &&
+    feedbackObj.ratings[4] === 0 &&
+    feedbackObj.ratings[5] === 0;
+  const needsMigration = hasLegacyData && (feedbackObj.total === 0 || hasEmptyRatings);
+
+  if (needsMigration) {
+    // Map legacy "good" to rating 5 and "bad" to rating 1
+    feedbackObj.ratings[5] += good;
+    feedbackObj.ratings[1] += bad;
+    feedbackObj.total = legacyTotal;
+
+    // Calculate weighted average: (5*good + 1*bad) / total
+    if (feedbackObj.total > 0) {
+      const weightedSum = 5 * good + 1 * bad;
+      feedbackObj.averageRating = weightedSum / feedbackObj.total;
+    } else {
+      feedbackObj.averageRating = 0;
+    }
+  }
+
+  // Keep legacy fields for backward compatibility
+  feedbackObj.good = feedbackObj.good || 0;
+  feedbackObj.bad = feedbackObj.bad || 0;
+}
+
 async function loadUsage() {
   if (usage) return usage;
   try {
@@ -69,6 +114,25 @@ async function loadUsage() {
     usage = JSON.parse(data);
     usage.lastUpdated = usage.lastUpdated || now();
     usage.lastReset = usage.lastReset || now();
+
+    // Migrate top-level feedback
+    if (usage.feedback) {
+      migrateLegacyFeedback(usage.feedback);
+
+      // Migrate all nested feedback objects (perUser, perApp, perModel)
+      ['perUser', 'perApp', 'perModel'].forEach(key => {
+        if (usage.feedback[key]) {
+          Object.keys(usage.feedback[key]).forEach(id => {
+            const feedbackItem = usage.feedback[key][id];
+            migrateLegacyFeedback(feedbackItem);
+          });
+        }
+      });
+
+      // Mark as migrated by saving immediately
+      dirty = true;
+      await saveUsage();
+    }
   } catch {
     usage = createDefaultUsage();
   }
