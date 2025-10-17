@@ -14,7 +14,13 @@ export const feedbackSchema = {
     appId: z.string().min(1),
     chatId: z.string().min(1),
     messageContent: z.string().optional(),
-    rating: z.number().min(1).max(5),
+    rating: z
+      .number()
+      .min(0.5, 'Rating must be at least 0.5')
+      .max(5, 'Rating must be at most 5')
+      .refine(val => val % 0.5 === 0, {
+        message: 'Rating must be in 0.5 increments (0.5, 1.0, 1.5, ..., 5.0)'
+      }),
     feedback: z.string().optional(),
     modelId: z.string().optional()
   })
