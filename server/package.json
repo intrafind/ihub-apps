@@ -44,7 +44,7 @@
     "passport": "^0.7.0",
     "passport-oauth2": "^1.8.0",
     "pdfjs-dist": "^5.3.31",
-    "playwright": "^1.41.2",
+    "playwright": "^1.55.1",
     "selenium-webdriver": "^4.20.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
