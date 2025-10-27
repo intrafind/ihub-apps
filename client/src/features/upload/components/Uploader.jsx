@@ -53,7 +53,7 @@ const Uploader = ({
 
     try {
       setIsProcessing(true);
-      
+
       if (allowMultiple) {
         // Process multiple files
         const results = [];
@@ -63,7 +63,7 @@ const Uploader = ({
             results.push(result);
           }
         }
-        
+
         if (results.length > 0) {
           setPreview(results.map(r => r.preview || null));
           if (onSelect) {

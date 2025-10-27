@@ -360,11 +360,9 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
                     {t('common.removeAll', 'Remove All')}
                   </button>
                   <div className="text-xs text-gray-500 mt-1 text-center">
-                    {t(
-                      'components.uploader.filesSelected',
-                      '{{count}} file(s) selected',
-                      { count: preview.length }
-                    )}
+                    {t('components.uploader.filesSelected', '{{count}} file(s) selected', {
+                      count: preview.length
+                    })}
                   </div>
                 </div>
               ) : preview.type === 'image' ? (
