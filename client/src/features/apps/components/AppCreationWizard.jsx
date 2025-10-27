@@ -33,12 +33,6 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     variables: [],
     starterPrompts: [],
     tools: [],
-    greeting: {
-      en: {
-        title: '👋 Hello!',
-        subtitle: 'How can I help you today?'
-      }
-    },
     allowEmptyContent: false,
     sendChatHistory: true,
     category: 'utility',
@@ -56,41 +50,16 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
       temperature: { enabled: true },
       outputFormat: { enabled: true },
       chatHistory: { enabled: true },
-      style: { enabled: true },
-      speechRecognition: {
-        service: 'default',
-        host: ''
-      }
+      style: { enabled: true }
     },
     inputMode: {
-      type: 'multiline',
-      rows: 5,
+      type: 'singleline',
       microphone: {
-        enabled: true,
-        mode: 'manual',
-        showTranscript: true
+        enabled: false
       }
     },
     imageUpload: {
-      enabled: false,
-      resizeImages: true,
-      maxFileSizeMB: 10,
-      supportedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-    },
-    fileUpload: {
-      maxFileSizeMB: 5,
-      supportedTextFormats: [
-        'text/plain',
-        'text/markdown',
-        'text/csv',
-        'application/json',
-        'text/html',
-        'text/css',
-        'text/javascript',
-        'application/javascript',
-        'text/xml'
-      ],
-      supportedPdfFormats: ['application/pdf']
+      enabled: false
     },
     // Creation method flags
     useAI: false,
