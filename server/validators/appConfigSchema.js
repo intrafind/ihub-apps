@@ -98,6 +98,7 @@ const inputModeSchema = z
 const uploadSchema = z
   .object({
     enabled: z.boolean().optional().default(false),
+    allowMultiple: z.boolean().optional().default(false),
     imageUpload: z
       .object({
         enabled: z.boolean().optional().default(false),

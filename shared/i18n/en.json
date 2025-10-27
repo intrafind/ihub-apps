@@ -60,6 +60,8 @@
     "required": "required",
     "clear": "Clear",
     "clearSearch": "Clear search",
+    "remove": "Remove file",
+    "removeAll": "Remove All",
     "preview": "Preview",
     "uploadedImage": "Uploaded image",
     "toggleMenu": "Toggle menu",
@@ -745,8 +747,10 @@
     "uploader": {
       "imageSelected": "Image selected",
       "fileSelected": "File selected and processed",
+      "filesSelected": "{{count}} file(s) selected",
       "processing": "Processing file...",
       "uploadFile": "Upload File",
+      "uploadFiles": "Upload Files",
       "supportedFormats": "Supported: {{formats}} (max {{maxSize}}MB)"
     }
   },
