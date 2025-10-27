@@ -33,16 +33,18 @@ class AnthropicAdapterClass extends BaseAdapter {
 
           // Handle multiple images
           if (Array.isArray(msg.imageData)) {
-            msg.imageData.filter(img => img && img.base64).forEach(img => {
-              toolContent.push({
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: img.format || img.fileType || 'image/jpeg',
-                  data: this.cleanBase64Data(img.base64)
-                }
+            msg.imageData
+              .filter(img => img && img.base64)
+              .forEach(img => {
+                toolContent.push({
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: img.format || img.fileType || 'image/jpeg',
+                    data: this.cleanBase64Data(img.base64)
+                  }
+                });
               });
-            });
           } else {
             // Handle single image (legacy behavior)
             toolContent.push({
@@ -92,19 +94,21 @@ class AnthropicAdapterClass extends BaseAdapter {
             text: msg.content
           });
         }
-        
+
         // Handle multiple images
         if (Array.isArray(msg.imageData)) {
-          msg.imageData.filter(img => img && img.base64).forEach(img => {
-            contentArray.push({
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: img.fileType || 'image/jpeg',
-                data: this.cleanBase64Data(img.base64)
-              }
+          msg.imageData
+            .filter(img => img && img.base64)
+            .forEach(img => {
+              contentArray.push({
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: img.fileType || 'image/jpeg',
+                  data: this.cleanBase64Data(img.base64)
+                }
+              });
             });
-          });
         } else {
           // Handle single image (legacy behavior)
           contentArray.push({
@@ -116,7 +120,7 @@ class AnthropicAdapterClass extends BaseAdapter {
             }
           });
         }
-        
+
         processedMessages.push({
           role: msg.role,
           content: contentArray

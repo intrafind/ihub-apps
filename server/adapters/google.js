@@ -84,14 +84,16 @@ class GoogleAdapterClass extends BaseAdapter {
 
             // Handle multiple images
             if (Array.isArray(message.imageData)) {
-              message.imageData.filter(img => img && img.base64).forEach(img => {
-                parts.push({
-                  inlineData: {
-                    mimeType: img.fileType || 'image/jpeg',
-                    data: this.cleanBase64Data(img.base64)
-                  }
+              message.imageData
+                .filter(img => img && img.base64)
+                .forEach(img => {
+                  parts.push({
+                    inlineData: {
+                      mimeType: img.fileType || 'image/jpeg',
+                      data: this.cleanBase64Data(img.base64)
+                    }
+                  });
                 });
-              });
             } else {
               // Handle single image (legacy behavior)
               parts.push({
