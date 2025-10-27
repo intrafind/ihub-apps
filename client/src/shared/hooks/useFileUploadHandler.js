@@ -57,6 +57,7 @@ export const useFileUploadHandler = () => {
         enabled: imageUploadEnabled,
         resizeImages: imageConfig?.resizeImages !== false,
         maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
+        allowMultiple: imageConfig?.allowMultiple || false,
         supportedFormats: imageConfig?.supportedFormats || [
           'image/jpeg',
           'image/jpg',
@@ -69,6 +70,7 @@ export const useFileUploadHandler = () => {
       // File-specific settings
       fileUpload: {
         enabled: fileUploadEnabled,
+        allowMultiple: fileConfig?.allowMultiple || false,
         maxFileSizeMB: fileConfig?.maxFileSizeMB || 5,
         supportedTextFormats: fileConfig?.supportedTextFormats || [
           'text/plain',
