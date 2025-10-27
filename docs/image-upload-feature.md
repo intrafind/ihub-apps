@@ -11,7 +11,8 @@ Enable the feature in an app by adding an `imageUpload` object with an `enabled`
 ```json
 "imageUpload": {
   "enabled": true,
-  "resizeImages": true
+  "resizeImages": true,
+  "allowMultiple": false
 }
 ```
 
@@ -25,3 +26,13 @@ Enable the feature in an app by adding an `imageUpload` object with an `enabled`
 ## Usage
 
 When enabled a camera icon appears next to the chat input. Clicking it lets the user select an image which will be previewed before sending.
+
+**imageUpload.allowMultiple** (boolean)
+
+- When `true`, allows users to select and upload multiple images at once
+- Default: `false`
+- All selected images will be processed individually and sent with the message
+
+## Extended Usage
+
+When multiple image upload is enabled, users can select multiple images at once from the file picker. Each image will be individually validated, processed, and displayed in a preview before sending.

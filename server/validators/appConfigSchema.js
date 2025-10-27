@@ -103,6 +103,7 @@ const uploadSchema = z
         enabled: z.boolean().optional().default(false),
         resizeImages: z.boolean().optional().default(true),
         maxFileSizeMB: z.number().int().min(1).max(100).optional().default(10),
+        allowMultiple: z.boolean().optional().default(false),
         supportedFormats: z
           .array(z.string().regex(/^image\//))
           .optional()
@@ -113,6 +114,7 @@ const uploadSchema = z
       .object({
         enabled: z.boolean().optional().default(false),
         maxFileSizeMB: z.number().int().min(1).max(100).optional().default(5),
+        allowMultiple: z.boolean().optional().default(false),
         supportedTextFormats: z
           .array(z.string())
           .optional()

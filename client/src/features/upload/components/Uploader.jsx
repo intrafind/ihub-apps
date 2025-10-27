@@ -11,6 +11,7 @@ const Uploader = ({
   data = null,
   onSelect,
   onProcessFile,
+  allowMultiple = false,
   children
 }) => {
   const [preview, setPreview] = useState(null);
@@ -29,18 +30,21 @@ const Uploader = ({
   }, [data, preview]);
 
   const handleFileChange = async e => {
-    const file = e.target.files[0];
+    const files = allowMultiple ? Array.from(e.target.files) : [e.target.files[0]];
     setError(null);
-    if (!file) return;
+    if (!files.length || !files[0]) return;
 
-    if (file.size > maxSizeMB * 1024 * 1024) {
-      setError('file-too-large');
-      return;
-    }
+    // Validate all files first
+    for (const file of files) {
+      if (file.size > maxSizeMB * 1024 * 1024) {
+        setError('file-too-large');
+        return;
+      }
 
-    if (accept.length && !accept.includes(file.type)) {
-      setError('unsupported-format');
-      return;
+      if (accept.length && !accept.includes(file.type)) {
+        setError('unsupported-format');
+        return;
+      }
     }
 
     if (!onProcessFile) {
@@ -49,11 +53,31 @@ const Uploader = ({
 
     try {
       setIsProcessing(true);
-      const result = await onProcessFile(file);
-      if (result && typeof result === 'object') {
-        setPreview(result.preview || null);
-        if (onSelect) {
-          onSelect(result.data);
+      
+      if (allowMultiple) {
+        // Process multiple files
+        const results = [];
+        for (const file of files) {
+          const result = await onProcessFile(file);
+          if (result && typeof result === 'object') {
+            results.push(result);
+          }
+        }
+        
+        if (results.length > 0) {
+          setPreview(results.map(r => r.preview || null));
+          if (onSelect) {
+            onSelect(results.map(r => r.data));
+          }
+        }
+      } else {
+        // Process single file (legacy behavior)
+        const result = await onProcessFile(files[0]);
+        if (result && typeof result === 'object') {
+          setPreview(result.preview || null);
+          if (onSelect) {
+            onSelect(result.data);
+          }
         }
       }
     } catch (err) {
@@ -94,7 +118,8 @@ const Uploader = ({
       onChange: handleFileChange,
       accept: accept.join(','),
       disabled: disabled || isProcessing,
-      className: 'hidden'
+      className: 'hidden',
+      multiple: allowMultiple
     }
   });
 };
