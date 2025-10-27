@@ -58,9 +58,6 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
         enabled: false
       }
     },
-    imageUpload: {
-      enabled: false
-    },
     // Creation method flags
     useAI: false,
     useTemplate: false,
