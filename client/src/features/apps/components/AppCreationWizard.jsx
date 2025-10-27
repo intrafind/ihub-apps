@@ -33,12 +33,6 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     variables: [],
     starterPrompts: [],
     tools: [],
-    greeting: {
-      en: {
-        title: '👋 Hello!',
-        subtitle: 'How can I help you today?'
-      }
-    },
     allowEmptyContent: false,
     sendChatHistory: true,
     category: 'utility',
@@ -56,41 +50,13 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
       temperature: { enabled: true },
       outputFormat: { enabled: true },
       chatHistory: { enabled: true },
-      style: { enabled: true },
-      speechRecognition: {
-        service: 'default',
-        host: ''
-      }
+      style: { enabled: true }
     },
     inputMode: {
-      type: 'multiline',
-      rows: 5,
+      type: 'singleline',
       microphone: {
-        enabled: true,
-        mode: 'manual',
-        showTranscript: true
+        enabled: false
       }
-    },
-    imageUpload: {
-      enabled: false,
-      resizeImages: true,
-      maxFileSizeMB: 10,
-      supportedFormats: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-    },
-    fileUpload: {
-      maxFileSizeMB: 5,
-      supportedTextFormats: [
-        'text/plain',
-        'text/markdown',
-        'text/csv',
-        'application/json',
-        'text/html',
-        'text/css',
-        'text/javascript',
-        'application/javascript',
-        'text/xml'
-      ],
-      supportedPdfFormats: ['application/pdf']
     },
     // Creation method flags
     useAI: false,
@@ -1581,9 +1547,11 @@ const AdvancedSettingsStep = ({ appData, updateAppData }) => {
         <div className="flex items-center">
           <input
             type="checkbox"
-            checked={appData.imageUpload?.enabled}
+            checked={appData.imageUpload?.enabled || false}
             onChange={e =>
-              updateAppData({ imageUpload: { ...appData.imageUpload, enabled: e.target.checked } })
+              updateAppData({
+                imageUpload: { ...(appData.imageUpload || {}), enabled: e.target.checked }
+              })
             }
             className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
           />
