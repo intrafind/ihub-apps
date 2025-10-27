@@ -1224,7 +1224,9 @@ const AppFormEditor = ({
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 >
-                  <option value="single">{t('admin.apps.edit.singleLine', 'Single Line')}</option>
+                  <option value="singleline">
+                    {t('admin.apps.edit.singleLine', 'Single Line')}
+                  </option>
                   <option value="multiline">{t('admin.apps.edit.multiLine', 'Multi Line')}</option>
                 </select>
               </div>
