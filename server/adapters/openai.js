@@ -41,10 +41,7 @@ class OpenAIAdapterClass extends BaseAdapter {
 
         return {
           ...base,
-          content: [
-            ...(content ? [{ type: 'text', text: content }] : []),
-            ...imageContent
-          ]
+          content: [...(content ? [{ type: 'text', text: content }] : []), ...imageContent]
         };
       }
 
