@@ -22,9 +22,7 @@ Added a configuration option `allowMultiple` to both `imageUpload` and `fileUplo
 
 **File:** `server/validators/appConfigSchema.js`
 
-Added `allowMultiple` boolean field to:
-- `imageUpload` configuration (default: `false`)
-- `fileUpload` configuration (default: `false`)
+Added `allowMultiple` boolean field to the `upload` configuration (default: `false`). This is a single top-level setting that applies to both image and file uploads.
 
 ### Component Changes
 
@@ -35,7 +33,7 @@ Added `allowMultiple` boolean field to:
 - Validates all files before processing
 
 **File:** `client/src/features/upload/components/UnifiedUploader.jsx`
-- Reads `allowMultiple` configuration from both `imageUpload` and `fileUpload` configs
+- Reads `allowMultiple` configuration from the top-level `upload` config
 - Updated preview rendering to handle arrays of files
 - Displays multiple file previews with a "Remove All" button
 - Shows count of selected files
@@ -46,13 +44,16 @@ Added `allowMultiple` boolean field to:
 - Generates appropriate HTML indicators for each file type
 - Sends arrays to the API when multiple files are selected
 
+**File:** `client/src/shared/hooks/useFileUploadHandler.js`
+- Updated to pass `allowMultiple` from the top-level upload configuration
+- Removed separate allowMultiple properties from imageUpload and fileUpload objects
+
 ### Admin Interface Changes
 
 **File:** `client/src/features/admin/components/AppFormEditor.jsx`
 
-Added checkboxes in the Upload Configuration section:
-- "Allow Multiple Images" for image uploads
-- "Allow Multiple Files" for file uploads
+Added a single checkbox in the Upload Configuration section:
+- "Allow Multiple Files" - applies to both images and files
 
 ### Translations
 
@@ -91,7 +92,7 @@ The feature is fully backward compatible:
 
 ## Technical Decisions
 
-1. **Separate configuration for images and files**: Allows administrators to enable multiple upload for one type while keeping the other as single upload only.
+1. **Unified configuration**: A single `allowMultiple` setting at the upload level applies to both images and files, simplifying configuration and avoiding confusion.
 
 2. **Array-based handling**: When multiple files are selected, components handle them as arrays throughout the pipeline for consistency.
 

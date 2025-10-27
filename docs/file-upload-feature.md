@@ -85,6 +85,13 @@ Enable file upload for an app by adding to the app configuration:
 - Enables or disables the file upload feature for the app
 - Default: `false`
 
+**upload.allowMultiple** (boolean)
+
+- When `true`, allows users to select and upload multiple files/images at once
+- Default: `false`
+- All selected files will be processed individually and sent with the message
+- This setting applies to both image and file uploads
+
 **fileUpload.maxFileSizeMB** (number)
 
 - Maximum file size in megabytes
@@ -111,21 +118,18 @@ Enable file upload for an app by adding to the app configuration:
 - Default: `["application/pdf"]`
 - Typically only includes `"application/pdf"`
 
-**fileUpload.allowMultiple** (boolean)
-
-- When `true`, allows users to select and upload multiple files at once
-- Default: `false`
-- All selected files will be processed individually and sent with the message
-
 #### Example Configurations
 
 **Full-featured file upload (AI Chat app):**
 
 ```json
 {
+  "upload": {
+    "enabled": true,
+    "allowMultiple": false
+  },
   "fileUpload": {
     "maxFileSizeMB": 15,
-    "allowMultiple": false,
     "supportedTextFormats": [
       "text/plain",
       "text/markdown",
@@ -146,9 +150,12 @@ Enable file upload for an app by adding to the app configuration:
 
 ```json
 {
+  "upload": {
+    "enabled": true,
+    "allowMultiple": true
+  },
   "fileUpload": {
     "maxFileSizeMB": 10,
-    "allowMultiple": true,
     "supportedTextFormats": ["text/plain", "text/markdown", "text/html"],
     "supportedPdfFormats": ["application/pdf"]
   }
@@ -159,6 +166,9 @@ Enable file upload for an app by adding to the app configuration:
 
 ```json
 {
+  "upload": {
+    "enabled": true
+  },
   "fileUpload": {
     "maxFileSizeMB": 5,
     "supportedTextFormats": ["text/plain", "text/markdown", "text/html"],

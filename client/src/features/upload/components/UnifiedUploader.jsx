@@ -27,10 +27,8 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   const fileConfig = config.fileUpload || {};
   const isFileUploadEnabled = fileConfig.enabled !== false && config.fileUploadEnabled !== false;
 
-  // Multiple file upload configuration
-  const allowMultipleImages = imageConfig.allowMultiple || false;
-  const allowMultipleFiles = fileConfig.allowMultiple || false;
-  const allowMultiple = allowMultipleImages || allowMultipleFiles;
+  // Multiple file upload configuration - read from top-level upload config
+  const allowMultiple = config.allowMultiple || false;
 
   // Configuration with defaults
   const MAX_FILE_SIZE_MB =

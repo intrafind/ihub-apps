@@ -858,6 +858,23 @@ const AppFormEditor = ({
 
               {app.upload?.enabled && (
                 <div className="space-y-4 pl-6">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={app.upload?.allowMultiple || false}
+                      onChange={e =>
+                        handleInputChange('upload', {
+                          ...app.upload,
+                          allowMultiple: e.target.checked
+                        })
+                      }
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900">
+                      {t('admin.apps.edit.allowMultiple', 'Allow Multiple Files')}
+                    </label>
+                  </div>
+
                   <div>
                     <div className="flex items-center mb-2">
                       <input
@@ -915,25 +932,6 @@ const AppFormEditor = ({
                           />
                           <label className="ml-2 block text-xs text-gray-700">
                             {t('admin.apps.edit.resizeImages', 'Resize Images')}
-                          </label>
-                        </div>
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={app.upload?.imageUpload?.allowMultiple || false}
-                            onChange={e =>
-                              handleInputChange('upload', {
-                                ...app.upload,
-                                imageUpload: {
-                                  ...app.upload.imageUpload,
-                                  allowMultiple: e.target.checked
-                                }
-                              })
-                            }
-                            className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                          />
-                          <label className="ml-2 block text-xs text-gray-700">
-                            {t('admin.apps.edit.allowMultipleImages', 'Allow Multiple Images')}
                           </label>
                         </div>
                         <div>
@@ -1027,25 +1025,6 @@ const AppFormEditor = ({
                             }
                             className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
                           />
-                        </div>
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={app.upload?.fileUpload?.allowMultiple || false}
-                            onChange={e =>
-                              handleInputChange('upload', {
-                                ...app.upload,
-                                fileUpload: {
-                                  ...app.upload.fileUpload,
-                                  allowMultiple: e.target.checked
-                                }
-                              })
-                            }
-                            className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                          />
-                          <label className="ml-2 block text-xs text-gray-700">
-                            {t('admin.apps.edit.allowMultipleFiles', 'Allow Multiple Files')}
-                          </label>
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-700">
