@@ -142,6 +142,29 @@ class PromptService {
             );
           }
         }
+        // Ensure user content is always included: if template is empty or doesn't contain {{content}},
+        // append the user's actual content to make sure it's not lost
+        if (msg.content && msg.content.trim()) {
+          const templateHadContentPlaceholder =
+            (msg.promptTemplate &&
+              ((typeof msg.promptTemplate === 'object' &&
+                Object.values(msg.promptTemplate).some(
+                  v => typeof v === 'string' && v.includes('{{content}}')
+                )) ||
+                (typeof msg.promptTemplate === 'string' &&
+                  msg.promptTemplate.includes('{{content}}')))) ||
+            false;
+
+          // If template was empty or didn't have {{content}}, append user content
+          if (
+            !processedContent.trim() ||
+            (!templateHadContentPlaceholder && !processedContent.includes(msg.content))
+          ) {
+            processedContent = processedContent.trim()
+              ? `${processedContent}\n\n${msg.content}`
+              : msg.content;
+          }
+        }
         const processedMsg = { role: 'user', content: processedContent };
         if (msg.imageData) processedMsg.imageData = msg.imageData;
         if (msg.fileData) processedMsg.fileData = msg.fileData;

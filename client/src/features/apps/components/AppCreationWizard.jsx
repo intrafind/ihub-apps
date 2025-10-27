@@ -29,7 +29,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     enabled: true,
     order: 0,
     messagePlaceholder: { en: '' },
-    prompt: { en: '' },
+    prompt: { en: '{{content}}' },
     variables: [],
     starterPrompts: [],
     tools: [],
