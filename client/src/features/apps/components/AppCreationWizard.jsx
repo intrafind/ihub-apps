@@ -1547,9 +1547,11 @@ const AdvancedSettingsStep = ({ appData, updateAppData }) => {
         <div className="flex items-center">
           <input
             type="checkbox"
-            checked={appData.imageUpload?.enabled}
+            checked={appData.imageUpload?.enabled || false}
             onChange={e =>
-              updateAppData({ imageUpload: { ...appData.imageUpload, enabled: e.target.checked } })
+              updateAppData({
+                imageUpload: { ...(appData.imageUpload || {}), enabled: e.target.checked }
+              })
             }
             className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
           />
