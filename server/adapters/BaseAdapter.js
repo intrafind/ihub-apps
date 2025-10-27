@@ -62,6 +62,11 @@ export class BaseAdapter {
    * @returns {boolean} Whether message contains image data
    */
   hasImageData(message) {
+    // Check if imageData is an array (multiple images)
+    if (Array.isArray(message.imageData)) {
+      return message.imageData.length > 0 && message.imageData.some(img => img && img.base64);
+    }
+    // Check for single image (legacy)
     return !!(message.imageData && message.imageData.base64);
   }
 

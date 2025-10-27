@@ -82,13 +82,25 @@ class GoogleAdapterClass extends BaseAdapter {
               parts.push({ text: textContent });
             }
 
-            // Add image part
-            parts.push({
-              inlineData: {
-                mimeType: message.imageData.fileType || 'image/jpeg',
-                data: this.cleanBase64Data(message.imageData.base64) // Remove data URL prefix if present
-              }
-            });
+            // Handle multiple images
+            if (Array.isArray(message.imageData)) {
+              message.imageData.filter(img => img && img.base64).forEach(img => {
+                parts.push({
+                  inlineData: {
+                    mimeType: img.fileType || 'image/jpeg',
+                    data: this.cleanBase64Data(img.base64)
+                  }
+                });
+              });
+            } else {
+              // Handle single image (legacy behavior)
+              parts.push({
+                inlineData: {
+                  mimeType: message.imageData.fileType || 'image/jpeg',
+                  data: this.cleanBase64Data(message.imageData.base64)
+                }
+              });
+            }
 
             geminiContents.push({ role: geminiRole, parts });
           } else {
