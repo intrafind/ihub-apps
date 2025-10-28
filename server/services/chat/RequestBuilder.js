@@ -17,19 +17,19 @@ function preprocessMessagesWithFileData(messages) {
         })
         .filter(Boolean)
         .join('');
-      
+
       if (filesInfo) {
         return { ...msg, content: filesInfo + (msg.content || '') };
       }
       return msg;
     }
-    
+
     // Handle single file (legacy behavior)
     if (msg.fileData && msg.fileData.content) {
       const fileInfo = `[File: ${msg.fileData.fileName || msg.fileData.name} (${msg.fileData.displayType || msg.fileData.fileType || msg.fileData.type})]\n\n${msg.fileData.content}\n\n`;
       return { ...msg, content: fileInfo + (msg.content || '') };
     }
-    
+
     return msg;
   });
 }
