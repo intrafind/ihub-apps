@@ -134,13 +134,20 @@ export function AuthProvider({ children }) {
 
           dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
         } else {
+          // If we had a token but auth status says not authenticated,
+          // it means the token was invalidated or expired - clear it immediately
+          const hadToken = !!localStorage.getItem('authToken');
+          if (hadToken) {
+            console.log('🔐 Token invalidated by server (expired or auth mode change)');
+            localStorage.removeItem('authToken');
+          }
+
           // Check for auto-redirect scenario
-          // Only redirect if user is not authenticated AND has no valid token AND not just logged out
-          const hasValidToken = !!localStorage.getItem('authToken');
+          // Only redirect if user is not authenticated AND not just logged out
           const urlParams = new URLSearchParams(window.location.search);
           const isLogoutPage = urlParams.get('logout') === 'true';
 
-          if (data.autoRedirect && !data.authenticated && !hasValidToken && !isLogoutPage) {
+          if (data.autoRedirect && !data.authenticated && !isLogoutPage) {
             // Prevent infinite redirect loops by checking if we've already attempted a redirect
             const redirectAttemptKey = `autoRedirect_${data.autoRedirect.provider}`;
             const lastRedirectAttempt = sessionStorage.getItem(redirectAttemptKey);
@@ -161,13 +168,6 @@ export function AuthProvider({ children }) {
             console.log('🚫 Skipping auto-redirect - user just logged out');
           }
 
-          // If we had a token but auth status says not authenticated,
-          // it means the token was invalidated (possibly due to auth mode change)
-          const hadToken = !!localStorage.getItem('authToken');
-          if (hadToken) {
-            console.log('🔐 Token invalidated by server (possibly due to auth mode change)');
-            localStorage.removeItem('authToken');
-          }
           dispatch({ type: AUTH_ACTIONS.SET_USER, payload: null });
         }
       } else {

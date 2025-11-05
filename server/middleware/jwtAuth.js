@@ -59,6 +59,13 @@ export default function jwtAuthMiddleware(req, res, next) {
 
     const now = Math.floor(Date.now() / 1000);
     if (decoded.exp && decoded.exp < now) {
+      // For /api/auth/status endpoint, don't return 401 on expired token
+      // Allow the endpoint to respond with proper auth status and auto-redirect info
+      if (req.path === '/api/auth/status') {
+        console.log('🔐 JWT Auth: Token expired, continuing to status endpoint');
+        return next();
+      }
+
       return res.status(401).json({
         error: 'Token expired',
         code: 'TOKEN_EXPIRED',
@@ -126,6 +133,13 @@ export default function jwtAuthMiddleware(req, res, next) {
     req.user = user;
     return next();
   } catch (err) {
+    // For /api/auth/status endpoint, allow expired/invalid tokens to pass through
+    // so the endpoint can respond with proper auth status and auto-redirect info
+    if (req.path === '/api/auth/status' && err.name === 'TokenExpiredError') {
+      console.log('🔐 JWT Auth: Expired token on status endpoint, continuing');
+      return next();
+    }
+
     console.warn('🔐 jwtAuth: Token validation failed:', err.message);
     return next();
   }
