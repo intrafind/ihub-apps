@@ -47,7 +47,7 @@
     "mode": "local",
     "authenticatedGroup": "authenticated",
     "sessionTimeoutMinutes": 480,
-    "jwtSecret": "magic-secret"
+    "jwtSecret": "${JWT_SECRET}"
   },
   "anonymousAuth": {
     "enabled": true,

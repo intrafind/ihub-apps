@@ -753,4 +753,150 @@ export default function registerDataRoutes(app, deps = {}) {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+  /**
+   * @swagger
+   * /api/configs/platform:
+   *   get:
+   *     summary: Get public platform configuration
+   *     description: |
+   *       Retrieves public platform configuration without sensitive data.
+   *       Sensitive fields like JWT secrets, admin secrets, and OAuth credentials are excluded.
+   *       This endpoint is publicly accessible for frontend configuration needs.
+   *     tags:
+   *       - Configuration
+   *     security:
+   *       - bearerAuth: []
+   *       - cookieAuth: []
+   *       - anonymousAuth: []
+   *     responses:
+   *       200:
+   *         description: Public platform configuration retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/PlatformConfiguration'
+   *             example:
+   *               defaultLanguage: "en"
+   *               features:
+   *                 usageTracking: true
+   *               auth:
+   *                 mode: "oidc"
+   *                 authenticatedGroup: "authenticated"
+   *                 sessionTimeoutMinutes: 480
+   *               anonymousAuth:
+   *                 enabled: true
+   *                 defaultGroups: ["anonymous"]
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/DataError'
+   *             example:
+   *               error: "Failed to load platform configuration"
+   */
+  app.get(buildServerPath('/api/configs/platform', basePath), async (req, res) => {
+    try {
+      // Get platform config from cache
+      const { data: platform } = configCache.getPlatform() || {};
+
+      if (!platform) {
+        return res.status(500).json({ error: 'Failed to load platform configuration' });
+      }
+
+      // Sanitize platform config - remove all sensitive fields
+      const sanitizedConfig = {
+        defaultLanguage: platform.defaultLanguage,
+        features: platform.features,
+        requestBodyLimitMB: platform.requestBodyLimitMB,
+        requestConcurrency: platform.requestConcurrency,
+        pdfExport: platform.pdfExport,
+        globalPromptVariables: platform.globalPromptVariables,
+        telemetry: platform.telemetry
+          ? {
+              enabled: platform.telemetry.enabled,
+              metrics: platform.telemetry.metrics,
+              traces: platform.telemetry.traces,
+              logs: platform.telemetry.logs
+            }
+          : undefined,
+        auth: platform.auth
+          ? {
+              mode: platform.auth.mode,
+              authenticatedGroup: platform.auth.authenticatedGroup,
+              sessionTimeoutMinutes: platform.auth.sessionTimeoutMinutes
+              // Exclude jwtSecret
+            }
+          : undefined,
+        anonymousAuth: platform.anonymousAuth,
+        proxyAuth: platform.proxyAuth
+          ? {
+              enabled: platform.proxyAuth.enabled,
+              allowSelfSignup: platform.proxyAuth.allowSelfSignup,
+              userHeader: platform.proxyAuth.userHeader,
+              groupsHeader: platform.proxyAuth.groupsHeader
+              // Exclude jwtProviders as they may contain sensitive data
+            }
+          : undefined,
+        localAuth: platform.localAuth
+          ? {
+              enabled: platform.localAuth.enabled,
+              showDemoAccounts: platform.localAuth.showDemoAccounts
+              // Exclude usersFile path, jwtSecret
+            }
+          : undefined,
+        oidcAuth: platform.oidcAuth
+          ? {
+              enabled: platform.oidcAuth.enabled,
+              allowSelfSignup: platform.oidcAuth.allowSelfSignup
+              // Exclude providers as they contain clientId and clientSecret
+            }
+          : undefined,
+        ldapAuth: platform.ldapAuth
+          ? {
+              enabled: platform.ldapAuth.enabled
+              // Exclude providers as they contain credentials
+            }
+          : undefined,
+        ntlmAuth: platform.ntlmAuth
+          ? {
+              enabled: platform.ntlmAuth.enabled,
+              domain: platform.ntlmAuth.domain,
+              type: platform.ntlmAuth.type
+              // Exclude domainController and credentials
+            }
+          : undefined,
+        rateLimit: platform.rateLimit,
+        swagger: platform.swagger
+          ? {
+              enabled: platform.swagger.enabled,
+              requireAuth: platform.swagger.requireAuth
+            }
+          : undefined,
+        ssl: platform.ssl
+          ? {
+              ignoreInvalidCertificates: platform.ssl.ignoreInvalidCertificates
+            }
+          : undefined,
+        cors: platform.cors
+          ? {
+              methods: platform.cors.methods,
+              credentials: platform.cors.credentials
+              // Exclude origin for security
+            }
+          : undefined
+      };
+
+      // Remove undefined fields
+      Object.keys(sanitizedConfig).forEach(
+        key => sanitizedConfig[key] === undefined && delete sanitizedConfig[key]
+      );
+
+      res.json(sanitizedConfig);
+    } catch (error) {
+      console.error('Error fetching platform configuration:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
 }
