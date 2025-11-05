@@ -174,7 +174,7 @@ export default function registerAuthRoutes(app, basePath = '') {
       }
 
       // Check if NTLM data is available from the middleware
-      if (!req.ntlm || !req.ntlm.authenticated) {
+      if (!req.ntlm || !req.ntlm.Authenticated) {
         return res.status(401).json({
           error:
             'NTLM authentication required. This endpoint requires Windows Integrated Authentication.'
@@ -413,8 +413,8 @@ export default function registerAuthRoutes(app, basePath = '') {
       enabled: ntlmConfig?.enabled ?? false,
       domain: ntlmConfig?.domain,
       type: ntlmConfig?.type || 'ntlm',
-      authenticated: req.ntlm?.authenticated ?? false,
-      user: req.ntlm?.authenticated
+      authenticated: req.ntlm?.Authenticated ?? false,
+      user: req.ntlm?.Authenticated
         ? {
             username: req.ntlm.username,
             domain: req.ntlm.domain,
