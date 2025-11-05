@@ -207,8 +207,11 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         sanitizedConfig.proxyAuth = {
           ...sanitizedConfig.proxyAuth,
           jwtProviders: sanitizedConfig.proxyAuth.jwtProviders.map(provider => ({
-            ...provider
-            // Keep the structure but redact any potential secrets in the provider config
+            name: provider.name,
+            header: provider.header,
+            issuer: provider.issuer,
+            audience: provider.audience
+            // Exclude jwkUrl and any other potentially sensitive configuration
           }))
         };
       }

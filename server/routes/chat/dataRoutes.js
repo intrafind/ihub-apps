@@ -883,17 +883,17 @@ export default function registerDataRoutes(app, deps = {}) {
           ? {
               methods: platform.cors.methods,
               credentials: platform.cors.credentials
-              // Exclude origin for security
+              // Note: origin is intentionally excluded as it may contain internal URLs
             }
           : undefined
       };
 
-      // Remove undefined fields
-      Object.keys(sanitizedConfig).forEach(
-        key => sanitizedConfig[key] === undefined && delete sanitizedConfig[key]
+      // Remove undefined fields for cleaner response
+      const cleanedConfig = Object.fromEntries(
+        Object.entries(sanitizedConfig).filter(([, value]) => value !== undefined)
       );
 
-      res.json(sanitizedConfig);
+      res.json(cleanedConfig);
     } catch (error) {
       console.error('Error fetching platform configuration:', error);
       res.status(500).json({ error: 'Internal server error' });
