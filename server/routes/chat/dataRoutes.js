@@ -799,7 +799,7 @@ export default function registerDataRoutes(app, deps = {}) {
   app.get(buildServerPath('/api/configs/platform', basePath), async (req, res) => {
     try {
       // Get platform config from cache
-      const { data: platform } = configCache.getPlatform() || {};
+      const platform = configCache.getPlatform();
 
       if (!platform) {
         return res.status(500).json({ error: 'Failed to load platform configuration' });
