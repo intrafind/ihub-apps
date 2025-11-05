@@ -753,4 +753,101 @@ export default function registerDataRoutes(app, deps = {}) {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+  /**
+   * @swagger
+   * /api/configs/platform:
+   *   get:
+   *     summary: Get public platform configuration
+   *     description: |
+   *       Retrieves public platform configuration without sensitive data.
+   *       This endpoint provides general platform settings like features, rate limits, and telemetry.
+   *       Authentication-related configuration is available via /api/auth/status endpoint.
+   *       This endpoint is publicly accessible for frontend configuration needs.
+   *     tags:
+   *       - Configuration
+   *     security:
+   *       - bearerAuth: []
+   *       - cookieAuth: []
+   *       - anonymousAuth: []
+   *     responses:
+   *       200:
+   *         description: Public platform configuration retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/PlatformConfiguration'
+   *             example:
+   *               defaultLanguage: "en"
+   *               features:
+   *                 usageTracking: true
+   *               requestBodyLimitMB: 50
+   *               requestConcurrency: 5
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/DataError'
+   *             example:
+   *               error: "Failed to load platform configuration"
+   */
+  app.get(buildServerPath('/api/configs/platform', basePath), async (req, res) => {
+    try {
+      // Get platform config from cache
+      const platform = configCache.getPlatform();
+
+      if (!platform) {
+        return res.status(500).json({ error: 'Failed to load platform configuration' });
+      }
+
+      // Sanitize platform config - remove all sensitive fields and auth-related data
+      // Note: Auth configuration is available via /api/auth/status endpoint
+      const sanitizedConfig = {
+        defaultLanguage: platform.defaultLanguage,
+        features: platform.features,
+        requestBodyLimitMB: platform.requestBodyLimitMB,
+        requestConcurrency: platform.requestConcurrency,
+        pdfExport: platform.pdfExport,
+        globalPromptVariables: platform.globalPromptVariables,
+        telemetry: platform.telemetry
+          ? {
+              enabled: platform.telemetry.enabled,
+              metrics: platform.telemetry.metrics,
+              traces: platform.telemetry.traces,
+              logs: platform.telemetry.logs
+            }
+          : undefined,
+        rateLimit: platform.rateLimit,
+        swagger: platform.swagger
+          ? {
+              enabled: platform.swagger.enabled,
+              requireAuth: platform.swagger.requireAuth
+            }
+          : undefined,
+        ssl: platform.ssl
+          ? {
+              ignoreInvalidCertificates: platform.ssl.ignoreInvalidCertificates
+            }
+          : undefined,
+        cors: platform.cors
+          ? {
+              methods: platform.cors.methods,
+              credentials: platform.cors.credentials
+              // Note: origin is intentionally excluded as it may contain internal URLs
+            }
+          : undefined
+      };
+
+      // Remove undefined fields for cleaner response
+      const cleanedConfig = Object.fromEntries(
+        Object.entries(sanitizedConfig).filter(([, value]) => value !== undefined)
+      );
+
+      res.json(cleanedConfig);
+    } catch (error) {
+      console.error('Error fetching platform configuration:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
 }

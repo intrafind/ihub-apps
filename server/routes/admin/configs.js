@@ -152,7 +152,71 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         };
       }
 
-      res.json(platformConfig);
+      // Sanitize sensitive fields even for admin endpoint
+      // JWT secrets should never be exposed via API
+      const sanitizedConfig = { ...platformConfig };
+
+      // Remove JWT secret from auth config
+      if (sanitizedConfig.auth?.jwtSecret) {
+        sanitizedConfig.auth = {
+          ...sanitizedConfig.auth,
+          jwtSecret: sanitizedConfig.auth.jwtSecret ? '${JWT_SECRET}' : undefined
+        };
+      }
+
+      // Remove JWT secret from localAuth config
+      if (sanitizedConfig.localAuth?.jwtSecret) {
+        sanitizedConfig.localAuth = {
+          ...sanitizedConfig.localAuth,
+          jwtSecret: sanitizedConfig.localAuth.jwtSecret ? '${JWT_SECRET}' : undefined
+        };
+      }
+
+      // Sanitize admin secret
+      if (sanitizedConfig.admin?.secret) {
+        sanitizedConfig.admin = {
+          ...sanitizedConfig.admin,
+          secret: '***REDACTED***'
+        };
+      }
+
+      // Sanitize OIDC provider secrets
+      if (sanitizedConfig.oidcAuth?.providers) {
+        sanitizedConfig.oidcAuth = {
+          ...sanitizedConfig.oidcAuth,
+          providers: sanitizedConfig.oidcAuth.providers.map(provider => ({
+            ...provider,
+            clientSecret: provider.clientSecret ? '***REDACTED***' : undefined
+          }))
+        };
+      }
+
+      // Sanitize LDAP provider secrets
+      if (sanitizedConfig.ldapAuth?.providers) {
+        sanitizedConfig.ldapAuth = {
+          ...sanitizedConfig.ldapAuth,
+          providers: sanitizedConfig.ldapAuth.providers.map(provider => ({
+            ...provider,
+            adminPassword: provider.adminPassword ? '***REDACTED***' : undefined
+          }))
+        };
+      }
+
+      // Sanitize proxy auth JWT provider secrets
+      if (sanitizedConfig.proxyAuth?.jwtProviders) {
+        sanitizedConfig.proxyAuth = {
+          ...sanitizedConfig.proxyAuth,
+          jwtProviders: sanitizedConfig.proxyAuth.jwtProviders.map(provider => ({
+            name: provider.name,
+            header: provider.header,
+            issuer: provider.issuer,
+            audience: provider.audience
+            // Exclude jwkUrl and any other potentially sensitive configuration
+          }))
+        };
+      }
+
+      res.json(sanitizedConfig);
     } catch (error) {
       console.error('Error getting platform configuration:', error);
       res.status(500).json({ error: 'Failed to get platform configuration' });
