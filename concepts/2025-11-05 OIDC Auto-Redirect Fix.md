@@ -15,7 +15,11 @@ The hypothesis was that the browser still had the old (expired) JWT token in loc
 
 ## Root Cause
 
-The issue was in the `loadAuthStatus` function in `client/src/shared/contexts/AuthContext.jsx` (lines 139-143):
+The issue had two parts:
+
+### Client-Side Issue
+
+The `loadAuthStatus` function in `client/src/shared/contexts/AuthContext.jsx` (lines 139-143) had a problematic check:
 
 ```javascript
 // OLD CODE - PROBLEMATIC
@@ -28,25 +32,44 @@ if (data.autoRedirect && !data.authenticated && !hasValidToken && !isLogoutPage)
 }
 ```
 
-The problem was the `!hasValidToken` check. This check only verified if a token **exists** in localStorage, not whether it's **valid**. When an expired token was present in localStorage:
+The `!hasValidToken` check only verified if a token **exists** in localStorage, not whether it's **valid**. When an expired token was present:
 
 1. `hasValidToken` would be `true` (token exists)
 2. `!hasValidToken` would be `false`
 3. The auto-redirect condition would fail
 4. User would see the login dialog instead of being auto-redirected
 
+### Server-Side Issue
+
+The JWT middleware in `server/middleware/jwtAuth.js` was returning a 401 error for expired tokens on ALL endpoints, including `/api/auth/status`. This prevented the status endpoint from responding with proper authentication status and auto-redirect information.
+
+```javascript
+// OLD CODE - PROBLEMATIC
+if (decoded.exp && decoded.exp < now) {
+  return res.status(401).json({
+    error: 'Token expired',
+    code: 'TOKEN_EXPIRED',
+    message: 'Your session has expired. Please log in again.'
+  });
+}
+```
+
+When a user with an expired token called `/api/auth/status`, the middleware would return 401 before the endpoint could execute, preventing the frontend from receiving the `autoRedirect` information.
+
 ## Solution Implemented
 
-The fix involves two key changes:
+The fix involves changes on both client and server:
 
-### 1. Remove the `hasValidToken` check from auto-redirect condition
+### Client-Side Fixes
+
+#### 1. Remove the `hasValidToken` check from auto-redirect condition
 
 The server's `/api/auth/status` endpoint already tells us if the user is authenticated via the `data.authenticated` field. This is more reliable than checking localStorage because:
 - The server validates the JWT token
 - The server checks if the token is expired
 - The server handles all authentication modes consistently
 
-### 2. Clear expired tokens immediately
+#### 2. Clear expired tokens immediately
 
 Move the token cleanup logic **before** the auto-redirect check to ensure expired tokens don't interfere:
 
@@ -70,14 +93,60 @@ if (data.autoRedirect && !data.authenticated && !isLogoutPage) {
 }
 ```
 
+### Server-Side Fixes
+
+#### 3. Allow expired tokens to pass through to `/api/auth/status` endpoint
+
+Modified the JWT middleware to allow expired tokens to continue to the `/api/auth/status` endpoint, so it can properly respond with authentication status and auto-redirect information:
+
+```javascript
+// NEW CODE - FIXED
+const now = Math.floor(Date.now() / 1000);
+if (decoded.exp && decoded.exp < now) {
+  // For /api/auth/status endpoint, don't return 401 on expired token
+  // Allow the endpoint to respond with proper auth status and auto-redirect info
+  if (req.path === '/api/auth/status') {
+    console.log('🔐 JWT Auth: Token expired, continuing to status endpoint');
+    return next();
+  }
+  
+  return res.status(401).json({
+    error: 'Token expired',
+    code: 'TOKEN_EXPIRED',
+    message: 'Your session has expired. Please log in again.'
+  });
+}
+```
+
+Also handle the case where `jwt.verify()` throws a `TokenExpiredError`:
+
+```javascript
+catch (err) {
+  // For /api/auth/status endpoint, allow expired/invalid tokens to pass through
+  // so the endpoint can respond with proper auth status and auto-redirect info
+  if (req.path === '/api/auth/status' && err.name === 'TokenExpiredError') {
+    console.log('🔐 JWT Auth: Expired token on status endpoint, continuing');
+    return next();
+  }
+  
+  console.warn('🔐 jwtAuth: Token validation failed:', err.message);
+  return next();
+}
+```
+
 ## Code Changes
 
-**File:** `client/src/shared/contexts/AuthContext.jsx`
+**Files Modified:**
 
-**Changes:**
-1. Moved token cleanup before auto-redirect check (lines 137-143)
-2. Removed the `!hasValidToken` condition from the auto-redirect check (line 150)
-3. Updated the auto-redirect condition to rely solely on `!data.authenticated` and `!isLogoutPage`
+1. **`client/src/shared/contexts/AuthContext.jsx`**
+   - Moved token cleanup before auto-redirect check (lines 137-143)
+   - Removed the `!hasValidToken` condition from the auto-redirect check (line 150)
+   - Updated the auto-redirect condition to rely solely on `!data.authenticated` and `!isLogoutPage`
+
+2. **`server/middleware/jwtAuth.js`**
+   - Added special handling for `/api/auth/status` endpoint when token is expired
+   - Expired tokens on status endpoint now continue to next middleware instead of returning 401
+   - Handles both manual expiration check and `TokenExpiredError` from jwt.verify()
 
 ## Testing
 
@@ -89,10 +158,10 @@ The fix ensures that:
 
 ## Related Files
 
-- `client/src/shared/contexts/AuthContext.jsx` - Main authentication context with auto-redirect logic
+- `client/src/shared/contexts/AuthContext.jsx` - Main authentication context with auto-redirect logic (CLIENT FIX)
+- `server/middleware/jwtAuth.js` - JWT token validation middleware (SERVER FIX)
 - `client/src/api/client.js` - API client with 401 error handling
 - `server/routes/auth.js` - `/api/auth/status` endpoint that returns authentication status
-- `server/middleware/jwtAuth.js` - JWT token validation middleware
 
 ## Security Considerations
 
