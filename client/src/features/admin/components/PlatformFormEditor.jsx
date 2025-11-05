@@ -340,6 +340,21 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 </p>
               </div>
             </div>
+
+            <div className="flex items-start space-x-3">
+              <div className="flex items-center h-5">
+                <input
+                  type="checkbox"
+                  checked={config.ntlmAuth?.enabled || false}
+                  onChange={e => toggleAuthMethod('ntlmAuth', e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-sm font-medium text-gray-900">NTLM Authentication</label>
+                <p className="text-xs text-gray-500">Windows Integrated Authentication (NTLM)</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -835,6 +850,161 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* NTLM Configuration */}
+      {config.ntlmAuth?.enabled && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">NTLM Authentication Settings</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Configure Windows Integrated Authentication (NTLM) for domain users.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Domain Name</label>
+              <input
+                type="text"
+                value={config.ntlmAuth?.domain || ''}
+                onChange={e => updateNestedConfig('ntlmAuth', 'domain', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="EXAMPLE"
+              />
+              <p className="text-xs text-gray-500 mt-1">Windows domain name (e.g., EXAMPLE, MUC)</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Domain Controller URL
+              </label>
+              <input
+                type="text"
+                value={config.ntlmAuth?.domainController || ''}
+                onChange={e => updateNestedConfig('ntlmAuth', 'domainController', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="ldap://dc.example.com:389"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                LDAP URL of domain controller (e.g., ldap://dc.example.com:389)
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Authentication Type
+              </label>
+              <select
+                value={config.ntlmAuth?.type || 'ntlm'}
+                onChange={e => updateNestedConfig('ntlmAuth', 'type', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              >
+                <option value="ntlm">NTLM</option>
+                <option value="negotiate">Negotiate</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Protocol to use for Windows authentication
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Session Timeout (minutes)
+              </label>
+              <input
+                type="number"
+                value={config.ntlmAuth?.sessionTimeoutMinutes || 480}
+                onChange={e =>
+                  updateNestedConfig('ntlmAuth', 'sessionTimeoutMinutes', parseInt(e.target.value))
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="480"
+              />
+              <p className="text-xs text-gray-500 mt-1">JWT token expiration time</p>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Default Groups (comma-separated)
+              </label>
+              <input
+                type="text"
+                value={
+                  Array.isArray(config.ntlmAuth?.defaultGroups)
+                    ? config.ntlmAuth.defaultGroups.join(', ')
+                    : ''
+                }
+                onChange={e =>
+                  updateNestedConfig(
+                    'ntlmAuth',
+                    'defaultGroups',
+                    e.target.value
+                      .split(',')
+                      .map(g => g.trim())
+                      .filter(g => g)
+                  )
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="ntlm-users, domain-users"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Groups automatically assigned to NTLM authenticated users
+              </p>
+            </div>
+            <div>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={config.ntlmAuth?.debug || false}
+                  onChange={e => updateNestedConfig('ntlmAuth', 'debug', e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">Enable Debug Logging</span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Log detailed NTLM authentication information
+              </p>
+            </div>
+            <div>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={config.ntlmAuth?.getUserInfo !== false}
+                  onChange={e => updateNestedConfig('ntlmAuth', 'getUserInfo', e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">Get User Info</span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Retrieve additional user information from domain
+              </p>
+            </div>
+            <div>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={config.ntlmAuth?.getGroups !== false}
+                  onChange={e => updateNestedConfig('ntlmAuth', 'getGroups', e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">Get Groups</span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Retrieve user group memberships from domain
+              </p>
+            </div>
+            <div>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={config.ntlmAuth?.generateJwtToken !== false}
+                  onChange={e =>
+                    updateNestedConfig('ntlmAuth', 'generateJwtToken', e.target.checked)
+                  }
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">Generate JWT Token</span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Generate JWT tokens for API access after NTLM authentication
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

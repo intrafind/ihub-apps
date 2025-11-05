@@ -123,7 +123,7 @@ Add NTLM configuration to your `contents/config/platform.json`:
   "ntlmAuth": {
     "enabled": true,
     "domain": "EXAMPLE",
-    "domainController": "dc.example.com",
+    "domainController": "ldap://dc.example.com:389",
     "type": "ntlm",
     "debug": false,
     "getUserInfo": true,
@@ -137,18 +137,18 @@ Add NTLM configuration to your `contents/config/platform.json`:
 
 ### Configuration Options
 
-| Option                  | Description                                 | Required | Default |
-| ----------------------- | ------------------------------------------- | -------- | ------- |
-| `enabled`               | Enable NTLM authentication                  | Yes      | `false` |
-| `domain`                | Windows domain name                         | No       | -       |
-| `domainController`      | Domain controller hostname                  | No       | -       |
-| `type`                  | Authentication type (`ntlm` or `negotiate`) | No       | `ntlm`  |
-| `debug`                 | Enable debug logging                        | No       | `false` |
-| `getUserInfo`           | Retrieve user information                   | No       | `true`  |
-| `getGroups`             | Retrieve user groups                        | No       | `true`  |
-| `defaultGroups`         | Default groups for authenticated users      | No       | `[]`    |
-| `sessionTimeoutMinutes` | JWT token timeout                           | No       | `480`   |
-| `generateJwtToken`      | Generate JWT for API access                 | No       | `true`  |
+| Option                  | Description                                                    | Required | Default |
+| ----------------------- | -------------------------------------------------------------- | -------- | ------- |
+| `enabled`               | Enable NTLM authentication                                     | Yes      | `false` |
+| `domain`                | Windows domain name                                            | No       | -       |
+| `domainController`      | Domain controller URL (e.g., `ldap://dc.example.com:389`)      | No       | -       |
+| `type`                  | Authentication type (`ntlm` or `negotiate`)                    | No       | `ntlm`  |
+| `debug`                 | Enable debug logging                                           | No       | `false` |
+| `getUserInfo`           | Retrieve user information                                      | No       | `true`  |
+| `getGroups`             | Retrieve user groups                                           | No       | `true`  |
+| `defaultGroups`         | Default groups for authenticated users                         | No       | `[]`    |
+| `sessionTimeoutMinutes` | JWT token timeout                                              | No       | `480`   |
+| `generateJwtToken`      | Generate JWT for API access                                    | No       | `true`  |
 
 ### Platform Requirements
 

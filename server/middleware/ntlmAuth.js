@@ -47,12 +47,16 @@ function processNtlmUser(req, ntlmConfig) {
   const ntlmUser = req.ntlm;
 
   // Check if user is authenticated
-  if (!ntlmUser.authenticated) {
-    console.warn(`[NTLM Auth] User not authenticated: ${ntlmUser.username || 'unknown'}`);
+  if (!ntlmUser.Authenticated) {
+    console.warn(
+      `[NTLM Auth] User not authenticated: ${ntlmUser.UserName || ntlmUser.username || 'unknown'}`
+    );
     return null;
   }
 
-  console.log(`[NTLM Auth] Processing authenticated user: ${ntlmUser.username}`);
+  console.log(
+    `[NTLM Auth] Processing authenticated user: ${ntlmUser.UserName || ntlmUser.username}`
+  );
 
   // Extract user information
   const userId = ntlmUser.username || ntlmUser.UserName;
@@ -186,7 +190,7 @@ export function getNtlmConfig() {
  * @returns {Object} Login result with user and token
  */
 export function processNtlmLogin(req, ntlmConfig) {
-  if (!req.ntlm || !req.ntlm.authenticated) {
+  if (!req.ntlm || !req.ntlm.Authenticated) {
     throw new Error('NTLM authentication required');
   }
 
