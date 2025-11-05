@@ -761,7 +761,8 @@ export default function registerDataRoutes(app, deps = {}) {
    *     summary: Get public platform configuration
    *     description: |
    *       Retrieves public platform configuration without sensitive data.
-   *       Sensitive fields like JWT secrets, admin secrets, and OAuth credentials are excluded.
+   *       This endpoint provides general platform settings like features, rate limits, and telemetry.
+   *       Authentication-related configuration is available via /api/auth/status endpoint.
    *       This endpoint is publicly accessible for frontend configuration needs.
    *     tags:
    *       - Configuration
@@ -780,13 +781,8 @@ export default function registerDataRoutes(app, deps = {}) {
    *               defaultLanguage: "en"
    *               features:
    *                 usageTracking: true
-   *               auth:
-   *                 mode: "oidc"
-   *                 authenticatedGroup: "authenticated"
-   *                 sessionTimeoutMinutes: 480
-   *               anonymousAuth:
-   *                 enabled: true
-   *                 defaultGroups: ["anonymous"]
+   *               requestBodyLimitMB: 50
+   *               requestConcurrency: 5
    *       500:
    *         description: Internal server error
    *         content:
@@ -805,7 +801,8 @@ export default function registerDataRoutes(app, deps = {}) {
         return res.status(500).json({ error: 'Failed to load platform configuration' });
       }
 
-      // Sanitize platform config - remove all sensitive fields
+      // Sanitize platform config - remove all sensitive fields and auth-related data
+      // Note: Auth configuration is available via /api/auth/status endpoint
       const sanitizedConfig = {
         defaultLanguage: platform.defaultLanguage,
         features: platform.features,
@@ -819,52 +816,6 @@ export default function registerDataRoutes(app, deps = {}) {
               metrics: platform.telemetry.metrics,
               traces: platform.telemetry.traces,
               logs: platform.telemetry.logs
-            }
-          : undefined,
-        auth: platform.auth
-          ? {
-              mode: platform.auth.mode,
-              authenticatedGroup: platform.auth.authenticatedGroup,
-              sessionTimeoutMinutes: platform.auth.sessionTimeoutMinutes
-              // Exclude jwtSecret
-            }
-          : undefined,
-        anonymousAuth: platform.anonymousAuth,
-        proxyAuth: platform.proxyAuth
-          ? {
-              enabled: platform.proxyAuth.enabled,
-              allowSelfSignup: platform.proxyAuth.allowSelfSignup,
-              userHeader: platform.proxyAuth.userHeader,
-              groupsHeader: platform.proxyAuth.groupsHeader
-              // Exclude jwtProviders as they may contain sensitive data
-            }
-          : undefined,
-        localAuth: platform.localAuth
-          ? {
-              enabled: platform.localAuth.enabled,
-              showDemoAccounts: platform.localAuth.showDemoAccounts
-              // Exclude usersFile path, jwtSecret
-            }
-          : undefined,
-        oidcAuth: platform.oidcAuth
-          ? {
-              enabled: platform.oidcAuth.enabled,
-              allowSelfSignup: platform.oidcAuth.allowSelfSignup
-              // Exclude providers as they contain clientId and clientSecret
-            }
-          : undefined,
-        ldapAuth: platform.ldapAuth
-          ? {
-              enabled: platform.ldapAuth.enabled
-              // Exclude providers as they contain credentials
-            }
-          : undefined,
-        ntlmAuth: platform.ntlmAuth
-          ? {
-              enabled: platform.ntlmAuth.enabled,
-              domain: platform.ntlmAuth.domain,
-              type: platform.ntlmAuth.type
-              // Exclude domainController and credentials
             }
           : undefined,
         rateLimit: platform.rateLimit,
