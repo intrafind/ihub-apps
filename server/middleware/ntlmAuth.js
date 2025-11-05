@@ -48,11 +48,15 @@ function processNtlmUser(req, ntlmConfig) {
 
   // Check if user is authenticated
   if (!ntlmUser.Authenticated) {
-    console.warn(`[NTLM Auth] User not authenticated: ${ntlmUser.username || 'unknown'}`);
+    console.warn(
+      `[NTLM Auth] User not authenticated: ${ntlmUser.UserName || ntlmUser.username || 'unknown'}`
+    );
     return null;
   }
 
-  console.log(`[NTLM Auth] Processing authenticated user: ${ntlmUser.username}`);
+  console.log(
+    `[NTLM Auth] Processing authenticated user: ${ntlmUser.UserName || ntlmUser.username}`
+  );
 
   // Extract user information
   const userId = ntlmUser.username || ntlmUser.UserName;

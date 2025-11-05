@@ -416,9 +416,9 @@ export default function registerAuthRoutes(app, basePath = '') {
       authenticated: req.ntlm?.Authenticated ?? false,
       user: req.ntlm?.Authenticated
         ? {
-            username: req.ntlm.username,
-            domain: req.ntlm.domain,
-            workstation: req.ntlm.workstation
+            username: req.ntlm.UserName || req.ntlm.username,
+            domain: req.ntlm.Domain || req.ntlm.domain,
+            workstation: req.ntlm.Workstation || req.ntlm.workstation
           }
         : null
     });
