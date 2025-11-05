@@ -55,6 +55,22 @@ const rateLimitConfigSchema = z.object({
   skipFailedRequests: z.boolean().default(false)
 });
 
+const ldapProviderSchema = z.object({
+  name: z.string(),
+  displayName: z.string(),
+  url: z.string(),
+  adminDn: z.string().optional(),
+  adminPassword: z.string().optional(),
+  userSearchBase: z.string(),
+  usernameAttribute: z.string().default('uid'),
+  userDn: z.string().optional(),
+  groupSearchBase: z.string().optional(),
+  groupClass: z.string().optional(),
+  defaultGroups: z.array(z.string()).default([]),
+  sessionTimeoutMinutes: z.number().min(1).default(480),
+  tlsOptions: z.record(z.any()).optional()
+});
+
 const rateLimitSchema = z.object({
   default: rateLimitConfigSchema.default({}),
   adminApi: rateLimitConfigSchema.partial().default({}),
@@ -67,7 +83,7 @@ export const platformConfigSchema = z
   .object({
     auth: z
       .object({
-        mode: z.enum(['proxy', 'local', 'oidc', 'anonymous']).default('proxy'),
+        mode: z.enum(['proxy', 'local', 'oidc', 'ldap', 'ntlm', 'anonymous']).default('proxy'),
         authenticatedGroup: z.string().default('authenticated')
       })
       .default({}),
@@ -100,6 +116,27 @@ export const platformConfigSchema = z
         enabled: z.boolean().default(false),
         allowSelfSignup: z.boolean().default(false),
         providers: z.array(oidcProviderSchema).default([])
+      })
+      .default({}),
+    ldapAuth: z
+      .object({
+        enabled: z.boolean().default(false),
+        providers: z.array(ldapProviderSchema).default([])
+      })
+      .default({}),
+    ntlmAuth: z
+      .object({
+        enabled: z.boolean().default(false),
+        domain: z.string().optional(),
+        domainController: z.string().optional(),
+        type: z.enum(['ntlm', 'negotiate']).default('ntlm'),
+        debug: z.boolean().default(false),
+        getUserInfo: z.boolean().default(true),
+        getGroups: z.boolean().default(true),
+        defaultGroups: z.array(z.string()).default([]),
+        sessionTimeoutMinutes: z.number().min(1).default(480),
+        generateJwtToken: z.boolean().default(true),
+        options: z.record(z.any()).optional()
       })
       .default({}),
     authDebug: authDebugSchema.default({}),
