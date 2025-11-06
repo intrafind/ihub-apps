@@ -38,6 +38,7 @@ const variableSchema = z.object({
 const starterPromptSchema = z.object({
   title: localizedStringSchema,
   message: localizedStringSchema,
+  description: localizedStringSchema.optional(),
   variables: z.record(z.any()).optional()
 });
 

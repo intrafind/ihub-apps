@@ -176,6 +176,10 @@
         "en": "Friendly intro email",
         "de": "Freundliche Einleitungs-E-Mail"
       },
+      "description": {
+        "en": "Create a warm and welcoming introduction email with a friendly tone",
+        "de": "Erstelle eine herzliche und einladende Einleitungs-E-Mail mit freundlichem Ton"
+      },
       "message": {
         "en": "Write an introduction email.",
         "de": "Schreibe eine Einleitungs-E-Mail."
