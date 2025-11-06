@@ -155,7 +155,9 @@ export function ntlmAuthMiddleware(req, res, next) {
 
   if (isViteProxy) {
     if (isDev) {
-      console.log('[NTLM Debug] Skipping NTLM for Vite proxy (set SKIP_NTLM_VITE_PROXY=false to test NTLM through Vite)');
+      console.log(
+        '[NTLM Debug] Skipping NTLM for Vite proxy (set SKIP_NTLM_VITE_PROXY=false to test NTLM through Vite)'
+      );
     }
     return next();
   }
