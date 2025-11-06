@@ -168,6 +168,57 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
     });
   };
 
+  const addLdapProvider = () => {
+    const newProvider = {
+      name: '',
+      displayName: '',
+      url: '',
+      adminDn: '',
+      adminPassword: '',
+      userSearchBase: '',
+      usernameAttribute: 'uid',
+      userDn: '',
+      groupSearchBase: '',
+      groupClass: 'groupOfNames',
+      defaultGroups: [],
+      sessionTimeoutMinutes: 480
+    };
+
+    onChange({
+      ...config,
+      ldapAuth: {
+        ...config.ldapAuth,
+        providers: [...(config.ldapAuth?.providers || []), newProvider]
+      }
+    });
+  };
+
+  const updateLdapProvider = (index, field, value) => {
+    const providers = [...(config.ldapAuth?.providers || [])];
+    providers[index] = { ...providers[index], [field]: value };
+
+    onChange({
+      ...config,
+      ldapAuth: {
+        ...config.ldapAuth,
+        providers
+      }
+    });
+  };
+
+  const removeLdapProvider = index => {
+    const providers = [...(config.ldapAuth?.providers || [])];
+    providers.splice(index, 1);
+
+    onChange({
+      ...config,
+      ldapAuth: {
+        ...config.ldapAuth,
+        providers
+      }
+    });
+  };
+
   const updateAuthDebugConfig = (field, value) => {
     onChange({
       ...config,
@@ -214,7 +265,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
           Select the primary authentication mode for default behavior and routing.
         </p>
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               {
                 mode: 'proxy',
@@ -230,6 +281,16 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 mode: 'oidc',
                 title: 'OIDC Mode',
                 desc: 'OpenID Connect with external providers'
+              },
+              {
+                mode: 'ldap',
+                title: 'LDAP Mode',
+                desc: 'LDAP/Active Directory authentication'
+              },
+              {
+                mode: 'ntlm',
+                title: 'NTLM Mode',
+                desc: 'Windows Integrated Authentication (NTLM/Kerberos)'
               },
               {
                 mode: 'anonymous',
@@ -326,17 +387,15 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               <div className="flex items-center h-5">
                 <input
                   type="checkbox"
-                  checked={config.anonymousAuth?.enabled || false}
-                  onChange={e => toggleAuthMethod('anonymousAuth', e.target.checked)}
+                  checked={config.ldapAuth?.enabled || false}
+                  onChange={e => toggleAuthMethod('ldapAuth', e.target.checked)}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
               </div>
               <div className="flex-1">
-                <label className="text-sm font-medium text-gray-900">
-                  {t('admin.auth.anonymousAccess', 'Anonymous Access')}
-                </label>
+                <label className="text-sm font-medium text-gray-900">LDAP Authentication</label>
                 <p className="text-xs text-gray-500">
-                  Allow users to access without authentication
+                  LDAP/Active Directory authentication with multiple providers
                 </p>
               </div>
             </div>
@@ -353,6 +412,25 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               <div className="flex-1">
                 <label className="text-sm font-medium text-gray-900">NTLM Authentication</label>
                 <p className="text-xs text-gray-500">Windows Integrated Authentication (NTLM)</p>
+              </div>
+            </div>
+
+            <div className="flex items-start space-x-3">
+              <div className="flex items-center h-5">
+                <input
+                  type="checkbox"
+                  checked={config.anonymousAuth?.enabled || false}
+                  onChange={e => toggleAuthMethod('anonymousAuth', e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-sm font-medium text-gray-900">
+                  {t('admin.auth.anonymousAccess', 'Anonymous Access')}
+                </label>
+                <p className="text-xs text-gray-500">
+                  Allow users to access without authentication
+                </p>
               </div>
             </div>
           </div>
@@ -850,6 +928,252 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* LDAP Configuration */}
+      {config.ldapAuth?.enabled && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">LDAP Authentication Settings</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Configure LDAP/Active Directory authentication providers
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={addLdapProvider}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm font-medium"
+            >
+              <Icon name="plus" className="h-4 w-4 inline-block mr-1" />
+              Add LDAP Provider
+            </button>
+          </div>
+
+          {config.ldapAuth?.providers?.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <Icon name="server" className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+              <p>No LDAP providers configured</p>
+              <p className="text-sm mt-1">Click "Add LDAP Provider" to get started</p>
+            </div>
+          )}
+
+          {config.ldapAuth?.providers?.map((provider, index) => (
+            <div key={index} className="mb-6 p-6 border border-gray-200 rounded-lg">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center space-x-2">
+                  <h4 className="text-md font-semibold text-gray-900">
+                    LDAP Provider {index + 1}
+                    {provider.displayName && `: ${provider.displayName}`}
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeLdapProvider(index)}
+                  className="text-red-600 hover:text-red-800 text-sm font-medium"
+                >
+                  <Icon name="trash" className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Provider Name
+                  </label>
+                  <input
+                    type="text"
+                    value={provider.name || ''}
+                    onChange={e => updateLdapProvider(index, 'name', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="corporate-ldap"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Internal identifier for this provider
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Display Name
+                  </label>
+                  <input
+                    type="text"
+                    value={provider.displayName || ''}
+                    onChange={e => updateLdapProvider(index, 'displayName', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="Corporate LDAP"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">User-friendly name shown in login</p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">LDAP URL</label>
+                  <input
+                    type="text"
+                    value={provider.url || ''}
+                    onChange={e => updateLdapProvider(index, 'url', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="ldap://ldap.example.com:389"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    LDAP server URL (e.g., ldap://ldap.example.com:389 or
+                    ldaps://ldap.example.com:636)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Admin DN</label>
+                  <input
+                    type="text"
+                    value={provider.adminDn || ''}
+                    onChange={e => updateLdapProvider(index, 'adminDn', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="cn=admin,dc=example,dc=org"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Admin Distinguished Name for binding
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Admin Password
+                  </label>
+                  <input
+                    type="password"
+                    value={provider.adminPassword || ''}
+                    onChange={e => updateLdapProvider(index, 'adminPassword', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="${LDAP_ADMIN_PASSWORD}"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Password for admin DN (use env vars for security)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    User Search Base
+                  </label>
+                  <input
+                    type="text"
+                    value={provider.userSearchBase || ''}
+                    onChange={e => updateLdapProvider(index, 'userSearchBase', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="ou=people,dc=example,dc=org"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Base DN for user searches</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Username Attribute
+                  </label>
+                  <input
+                    type="text"
+                    value={provider.usernameAttribute || 'uid'}
+                    onChange={e => updateLdapProvider(index, 'usernameAttribute', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="uid"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    LDAP attribute for username (uid or sAMAccountName)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">User DN</label>
+                  <input
+                    type="text"
+                    value={provider.userDn || ''}
+                    onChange={e => updateLdapProvider(index, 'userDn', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="uid={{username}},ou=people,dc=example,dc=org"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    User DN template (use {'{{username}}'} placeholder)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Group Search Base
+                  </label>
+                  <input
+                    type="text"
+                    value={provider.groupSearchBase || ''}
+                    onChange={e => updateLdapProvider(index, 'groupSearchBase', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="ou=groups,dc=example,dc=org"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Base DN for group searches</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Group Class
+                  </label>
+                  <input
+                    type="text"
+                    value={provider.groupClass || 'groupOfNames'}
+                    onChange={e => updateLdapProvider(index, 'groupClass', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="groupOfNames"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    LDAP group object class (groupOfNames or group for AD)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Session Timeout (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    value={provider.sessionTimeoutMinutes || 480}
+                    onChange={e =>
+                      updateLdapProvider(index, 'sessionTimeoutMinutes', parseInt(e.target.value))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="480"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">JWT token expiration time</p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Default Groups (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={
+                      Array.isArray(provider.defaultGroups)
+                        ? provider.defaultGroups.join(', ')
+                        : ''
+                    }
+                    onChange={e =>
+                      updateLdapProvider(
+                        index,
+                        'defaultGroups',
+                        e.target.value
+                          .split(',')
+                          .map(g => g.trim())
+                          .filter(g => g)
+                      )
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="ldap-users, employees"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Groups automatically assigned to LDAP users
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
