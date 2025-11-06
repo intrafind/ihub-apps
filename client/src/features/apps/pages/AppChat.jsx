@@ -552,11 +552,31 @@ const AppChat = () => {
       if (prompt.variables) {
         setVariables(prev => ({ ...prev, ...prompt.variables }));
       }
+
+      // If autoSend is enabled, automatically submit the form
+      if (prompt.autoSend) {
+        // Use setTimeout to ensure state updates are applied before submission
+        setTimeout(() => {
+          const form = document.querySelector('form');
+          if (form) {
+            const submitEvent = new Event('submit', {
+              cancelable: true,
+              bubbles: true
+            });
+            form.dispatchEvent(submitEvent);
+          }
+        }, 0);
+      } else {
+        // Only focus input if not auto-sending
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }
     } else {
       setInput(prompt);
-    }
-    if (inputRef.current) {
-      inputRef.current.focus();
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
     }
   };
 
