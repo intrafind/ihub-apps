@@ -117,6 +117,10 @@
         "en": "Translate to German",
         "de": "Auf Deutsch übersetzen"
       },
+      "description": {
+        "en": "Translate your text into German while maintaining meaning and context",
+        "de": "Übersetze deinen Text ins Deutsche unter Beibehaltung von Bedeutung und Kontext"
+      },
       "message": {
         "en": "Translate the following text.",
         "de": "Übersetze den folgenden Text."
@@ -129,6 +133,10 @@
       "title": {
         "en": "Translate to English",
         "de": "Auf Englisch übersetzen"
+      },
+      "description": {
+        "en": "Translate your text into English while maintaining meaning and context",
+        "de": "Übersetze deinen Text ins Englische unter Beibehaltung von Bedeutung und Kontext"
       },
       "message": {
         "en": "Translate the following text.",

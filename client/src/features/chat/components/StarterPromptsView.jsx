@@ -50,7 +50,7 @@ const StarterPromptsView = ({ starterPrompts = [], onSelectPrompt }) => {
                     WebkitBoxOrient: 'vertical'
                   }}
                 >
-                  {getLocalizedContent(sp.message, i18n.language)}
+                  {getLocalizedContent(sp.description || sp.message, i18n.language)}
                 </p>
               </div>
             </div>
