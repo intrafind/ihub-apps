@@ -1032,9 +1032,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="cn=admin,dc=example,dc=org"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Admin Distinguished Name for binding
-                  </p>
+                  <p className="text-xs text-gray-500 mt-1">Admin Distinguished Name for binding</p>
                 </div>
 
                 <div>
@@ -1150,9 +1148,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                   <input
                     type="text"
                     value={
-                      Array.isArray(provider.defaultGroups)
-                        ? provider.defaultGroups.join(', ')
-                        : ''
+                      Array.isArray(provider.defaultGroups) ? provider.defaultGroups.join(', ') : ''
                     }
                     onChange={e =>
                       updateLdapProvider(

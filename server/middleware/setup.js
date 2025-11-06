@@ -267,7 +267,6 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(ldapAuthMiddleware); // LDAP auth placeholder for any LDAP-specific logic
   app.use(ntlmAuthMiddleware); // NTLM handles its own initialization internally
 
-
   // Enhance user with permissions after authentication
   app.use((req, res, next) => {
     if (req.user && !req.user.permissions) {
