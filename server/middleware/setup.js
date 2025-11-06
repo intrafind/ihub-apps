@@ -8,7 +8,7 @@ import { initializePassport, configureOidcProviders } from './oidcAuth.js';
 import jwtAuthMiddleware from './jwtAuth.js';
 import ldapAuthMiddleware from './ldapAuth.js';
 import { teamsAuthMiddleware } from './teamsAuth.js';
-import ntlmAuthMiddleware, { createNtlmMiddleware } from './ntlmAuth.js';
+import ntlmAuthMiddleware from './ntlmAuth.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
 import config from '../config.js';
@@ -180,6 +180,14 @@ export function setupMiddleware(app, platformConfig = {}) {
   const limitMb = parseInt(platformConfig.requestBodyLimitMB || '50', 10);
   const limit = limitMb * 1024 * 1024;
 
+  // Debug middleware - log all requests (helpful for debugging NTLM/proxy issues)
+  if (process.env.NODE_ENV === 'development') {
+    app.use((req, res, next) => {
+      console.log(`[Debug] ${req.method} ${req.url} - Origin: ${req.get('origin') || 'none'}`);
+      next();
+    });
+  }
+
   // Trust proxy for proper IP and protocol detection
   app.set('trust proxy', 1);
 
@@ -251,20 +259,14 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Configure OIDC providers based on platform configuration
   configureOidcProviders();
 
-  // NTLM middleware setup (must come before other auth middlewares)
-  const ntlmConfig = platformConfig.ntlmAuth || {};
-  if (ntlmConfig.enabled) {
-    console.log('[Server] Configuring NTLM authentication middleware');
-    app.use(createNtlmMiddleware(ntlmConfig));
-    app.use(ntlmAuthMiddleware);
-  }
-
   // Authentication middleware (order matters: proxy auth first, then unified JWT validation)
   app.use(proxyAuth);
   app.use(teamsAuthMiddleware);
   app.use(jwtAuthMiddleware);
   app.use(localAuthMiddleware); // Now mainly a placeholder for local auth specific logic
   app.use(ldapAuthMiddleware); // LDAP auth placeholder for any LDAP-specific logic
+  app.use(ntlmAuthMiddleware); // NTLM handles its own initialization internally
+
 
   // Enhance user with permissions after authentication
   app.use((req, res, next) => {
