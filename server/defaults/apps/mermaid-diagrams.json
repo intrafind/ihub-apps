@@ -61,7 +61,8 @@
       "message": {
         "en": "Create a flowchart showing the steps for user authentication including login, password reset, and account creation.",
         "de": "Erstelle ein Flussdiagramm, das die Schritte für die Benutzeranmeldung einschließlich Login, Passwortzurücksetzung und Kontoerstellung zeigt."
-      }
+      },
+      "autoSend": true
     },
     {
       "title": {
