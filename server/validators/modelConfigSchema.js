@@ -30,10 +30,13 @@ export const modelConfigSchema = z
     modelId: z.string().min(1, 'Model ID cannot be empty'),
     name: localizedStringSchema,
     description: localizedStringSchema,
-    url: z.string().min(1, 'URL cannot be empty').refine(
-      (val) => val.includes('${') || val.startsWith('http://') || val.startsWith('https://'),
-      'URL must be a valid URI format or environment variable reference'
-    ),
+    url: z
+      .string()
+      .min(1, 'URL cannot be empty')
+      .refine(
+        val => val.includes('${') || val.startsWith('http://') || val.startsWith('https://'),
+        'URL must be a valid URI format or environment variable reference'
+      ),
     provider: z.enum(['openai', 'anthropic', 'google', 'mistral', 'local', 'iassistant'], {
       errorMap: () => ({
         message: 'Provider must be one of: openai, anthropic, google, mistral, local, iassistant'
