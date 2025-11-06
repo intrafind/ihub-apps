@@ -229,6 +229,7 @@ const AppChat = () => {
   } = useIntegrationAuth();
 
   const inputRef = useRef(null);
+  const formRef = useRef(null);
   const chatId = useRef(getOrCreateChatId(appId));
 
   // Restore existing chat ID when the appId changes
@@ -557,13 +558,8 @@ const AppChat = () => {
       if (prompt.autoSend) {
         // Use setTimeout to ensure state updates are applied before submission
         setTimeout(() => {
-          const form = document.querySelector('form');
-          if (form) {
-            const submitEvent = new Event('submit', {
-              cancelable: true,
-              bubbles: true
-            });
-            form.dispatchEvent(submitEvent);
+          if (formRef.current) {
+            formRef.current.requestSubmit();
           }
         }, 0);
       } else {
@@ -1032,6 +1028,7 @@ const AppChat = () => {
                         app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
                       }
                       inputRef={inputRef}
+                      formRef={formRef}
                       selectedFile={fileUploadHandler.selectedFile}
                       showUploader={fileUploadHandler.showUploader}
                       onToggleUploader={fileUploadHandler.toggleUploader}
@@ -1095,6 +1092,7 @@ const AppChat = () => {
                         app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
                       }
                       inputRef={inputRef}
+                      formRef={formRef}
                       selectedFile={fileUploadHandler.selectedFile}
                       showUploader={fileUploadHandler.showUploader}
                       onToggleUploader={fileUploadHandler.toggleUploader}
@@ -1158,6 +1156,7 @@ const AppChat = () => {
                       app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
                     }
                     inputRef={inputRef}
+                    formRef={formRef}
                     selectedFile={fileUploadHandler.selectedFile}
                     showUploader={fileUploadHandler.showUploader}
                     onToggleUploader={fileUploadHandler.toggleUploader}
@@ -1215,6 +1214,7 @@ const AppChat = () => {
                     app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
                   }
                   inputRef={inputRef}
+                  formRef={formRef}
                   selectedFile={fileUploadHandler.selectedFile}
                   showUploader={fileUploadHandler.showUploader}
                   onToggleUploader={fileUploadHandler.toggleUploader}
