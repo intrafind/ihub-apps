@@ -22,6 +22,7 @@ const ChatInput = ({
   onFileSelect,
   allowEmptySubmit = false,
   inputRef = null,
+  formRef = null,
   disabled = false,
   uploadConfig = {},
   selectedFile = null, // Add this prop to pass from parent
@@ -204,7 +205,12 @@ const ChatInput = ({
         />
       )}
 
-      <form onSubmit={handleSubmit} autoComplete="off" className="flex space-x-2 items-center">
+      <form
+        ref={formRef}
+        onSubmit={handleSubmit}
+        autoComplete="off"
+        className="flex space-x-2 items-center"
+      >
         <textarea
           autoComplete="off"
           data-lpignore="true"

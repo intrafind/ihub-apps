@@ -7,14 +7,18 @@ import { generateJwt } from '../utils/tokenService.js';
  * NTLM/Windows Authentication middleware and utilities
  */
 
+// Cache for the express-ntlm middleware instance
+let ntlmMiddlewareInstance = null;
+let ntlmMiddlewareConfig = null;
+
 /**
  * Create NTLM middleware with configuration
  * @param {Object} ntlmConfig - NTLM configuration
  * @returns {Function} Express middleware
  */
-export function createNtlmMiddleware(ntlmConfig = {}) {
+function createNtlmMiddleware(ntlmConfig = {}) {
   const options = {
-    debug: ntlmConfig.debug || false,
+    //debug: ntlmConfig.debug || false,
     domain: ntlmConfig.domain,
     domaincontroller: ntlmConfig.domainController,
     // Optional: specify which fields to return
@@ -31,6 +35,21 @@ export function createNtlmMiddleware(ntlmConfig = {}) {
   );
 
   return expressNtlm(options);
+}
+
+/**
+ * Get or create the NTLM middleware instance
+ * @param {Object} ntlmConfig - NTLM configuration
+ * @returns {Function} Express middleware instance
+ */
+function getNtlmMiddleware(ntlmConfig) {
+  // Check if config changed, if so, recreate middleware
+  const configHash = JSON.stringify(ntlmConfig);
+  if (!ntlmMiddlewareInstance || ntlmMiddlewareConfig !== configHash) {
+    ntlmMiddlewareInstance = createNtlmMiddleware(ntlmConfig);
+    ntlmMiddlewareConfig = configHash;
+  }
+  return ntlmMiddlewareInstance;
 }
 
 /**
@@ -97,7 +116,8 @@ function processNtlmUser(req, ntlmConfig) {
 }
 
 /**
- * NTLM authentication middleware
+ * NTLM authentication middleware - self-contained like other auth middlewares
+ * Handles both express-ntlm initialization and user processing
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  * @param {Function} next - Express next function
@@ -106,70 +126,192 @@ export function ntlmAuthMiddleware(req, res, next) {
   const platform = configCache.getPlatform() || {};
   const ntlmAuth = platform.ntlmAuth || {};
 
+  // Not enabled - skip
   if (!ntlmAuth.enabled) {
     return next();
   }
 
-  // Check if NTLM data is available (should be set by express-ntlm middleware)
-  if (!req.ntlm) {
-    console.warn(
-      '[NTLM Auth] No NTLM data found in request. Make sure express-ntlm middleware is configured.'
-    );
+  // Debug logging in development
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) {
+    console.log('[NTLM Debug] Request:', {
+      url: req.url,
+      hostname: req.hostname,
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+      userAgent: req.headers['user-agent']
+    });
+  }
+
+  // Skip NTLM for Vite proxy in development to avoid authentication loops
+  // NTLM requires multiple round trips with specific headers that Vite proxy doesn't handle well
+  // Set SKIP_NTLM_VITE_PROXY=false to test NTLM through Vite (may cause issues)
+  const skipNtlmForVite = process.env.SKIP_NTLM_VITE_PROXY !== 'false';
+  const isViteProxy =
+    skipNtlmForVite &&
+    process.env.NODE_ENV === 'development' &&
+    (req.hostname === 'localhost' || req.hostname === '127.0.0.1') &&
+    (req.headers.origin?.includes('5173') || req.headers.referer?.includes('5173'));
+
+  if (isViteProxy) {
+    if (isDev) {
+      console.log(
+        '[NTLM Debug] Skipping NTLM for Vite proxy (set SKIP_NTLM_VITE_PROXY=false to test NTLM through Vite)'
+      );
+    }
     return next();
   }
 
-  try {
-    // Process NTLM user data
-    let user = processNtlmUser(req, ntlmAuth);
+  if (isDev) {
+    console.log('[NTLM Debug] Applying NTLM middleware');
+  }
 
-    if (!user) {
-      req.user = null;
-      return next();
-    }
+  // Get or create the express-ntlm middleware instance
+  const ntlmMiddleware = getNtlmMiddleware(ntlmAuth);
 
-    // Enhance user with authenticated group
-    const authConfig = platform.auth || {};
-    user = enhanceUserGroups(user, authConfig, ntlmAuth);
+  // Track if response was sent by express-ntlm
+  let responseSent = false;
+  const originalEnd = res.end;
+  const originalSend = res.send;
 
-    // Set user in request
-    req.user = user;
-
-    // Optional: Generate JWT token for stateless operation
-    if (ntlmAuth.generateJwtToken) {
-      try {
-        const sessionTimeout =
-          ntlmAuth.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
-        const { token, expiresIn } = generateJwt(user, {
-          authMode: 'ntlm',
-          authProvider: user.provider,
-          expiresInMinutes: sessionTimeout,
-          additionalClaims: {
-            domain: user.domain
-          }
-        });
-        req.jwtToken = token;
-        req.jwtExpiresIn = expiresIn;
-
-        // Set HTTP-only cookie for authentication
-        res.cookie('authToken', token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: expiresIn * 1000
-        });
-      } catch (tokenError) {
-        console.error('[NTLM Auth] JWT token generation failed:', tokenError.message);
-        // Continue without token - NTLM auth still valid
+  // Intercept response to detect if express-ntlm sent it
+  res.end = function (...args) {
+    responseSent = true;
+    if (isDev) {
+      console.log('[NTLM Debug] Response sent by express-ntlm, status:', res.statusCode);
+      if (res.statusCode === 401) {
+        console.log('[NTLM Debug] NTLM challenge sent, headers:', res.getHeaders());
       }
     }
+    return originalEnd.apply(this, args);
+  };
 
-    console.log(
-      `[NTLM Auth] User authenticated: ${user.id} with groups: ${user.groups.join(', ')}`
-    );
-    next();
+  res.send = function (...args) {
+    responseSent = true;
+    if (isDev) {
+      console.log('[NTLM Debug] Response sent by express-ntlm (via send), status:', res.statusCode);
+      if (res.statusCode === 500 && args.length > 0) {
+        console.error('[NTLM Debug] 500 Error body:', args[0]);
+      }
+    }
+    return originalSend.apply(this, args);
+  };
+
+  // Set a timeout to prevent hanging
+  const timeout = setTimeout(() => {
+    if (!responseSent) {
+      console.error('[NTLM Auth] express-ntlm middleware timed out after 5 seconds');
+      res.end = originalEnd;
+      res.send = originalSend;
+      if (!res.headersSent) {
+        return next();
+      }
+    }
+  }, 5000);
+
+  // Apply express-ntlm middleware first to populate req.ntlm
+  try {
+    ntlmMiddleware(req, res, err => {
+      clearTimeout(timeout);
+      res.end = originalEnd;
+      res.send = originalSend;
+
+      if (responseSent) {
+        if (isDev) {
+          console.log('[NTLM Debug] express-ntlm sent response directly, not calling next()');
+        }
+        return; // Don't call next() if response was already sent
+      }
+
+      if (err) {
+        console.error('[NTLM Auth] Error in express-ntlm middleware:', err.message);
+        console.error('[NTLM Auth] Error stack:', err.stack);
+        console.error('[NTLM Auth] Request details:', {
+          url: req.url,
+          method: req.method,
+          headers: req.headers
+        });
+        // Continue without NTLM authentication on error
+        return next();
+      }
+
+      // Now process the NTLM data if available
+      try {
+        if (isDev) {
+          console.log('[NTLM Debug] After express-ntlm, req.ntlm:', req.ntlm);
+        }
+
+        // Check if NTLM data is available (should be set by express-ntlm middleware)
+        if (!req.ntlm) {
+          // This is normal for public endpoints - just continue without authentication
+          if (isDev) {
+            console.log('[NTLM Debug] No NTLM data, continuing without auth');
+          }
+          return next();
+        }
+
+        // Process NTLM user data
+        let user = processNtlmUser(req, ntlmAuth);
+
+        if (!user) {
+          // User not authenticated via NTLM - continue without setting req.user
+          return next();
+        }
+
+        // Enhance user with authenticated group
+        const authConfig = platform.auth || {};
+        user = enhanceUserGroups(user, authConfig, ntlmAuth);
+
+        // Set user in request
+        req.user = user;
+
+        // Optional: Generate JWT token for stateless operation
+        if (ntlmAuth.generateJwtToken) {
+          try {
+            const sessionTimeout =
+              ntlmAuth.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
+            const { token, expiresIn } = generateJwt(user, {
+              authMode: 'ntlm',
+              authProvider: user.provider,
+              expiresInMinutes: sessionTimeout,
+              additionalClaims: {
+                domain: user.domain
+              }
+            });
+            req.jwtToken = token;
+            req.jwtExpiresIn = expiresIn;
+
+            // Set HTTP-only cookie for authentication
+            res.cookie('authToken', token, {
+              httpOnly: true,
+              secure: process.env.NODE_ENV === 'production',
+              sameSite: 'lax',
+              maxAge: expiresIn * 1000
+            });
+          } catch (tokenError) {
+            console.error('[NTLM Auth] JWT token generation failed:', tokenError.message);
+            // Continue without token - NTLM auth still valid
+          }
+        }
+
+        console.log(
+          `[NTLM Auth] User authenticated: ${user.id} with groups: ${user.groups.join(', ')}`
+        );
+        next();
+      } catch (error) {
+        console.error('[NTLM Auth] Error processing NTLM authentication:', error);
+        console.error('[NTLM Auth] Stack trace:', error.stack);
+        // Don't block the request - continue without authentication
+        next();
+      }
+    });
   } catch (error) {
-    console.error('[NTLM Auth] Error processing NTLM authentication:', error);
-    req.user = null;
+    clearTimeout(timeout);
+    res.end = originalEnd;
+    res.send = originalSend;
+    console.error('[NTLM Auth] Unexpected error in NTLM middleware:', error.message);
+    console.error('[NTLM Auth] Stack trace:', error.stack);
+    // Continue without NTLM authentication on error
     next();
   }
 }

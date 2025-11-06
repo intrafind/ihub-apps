@@ -39,7 +39,8 @@ const starterPromptSchema = z.object({
   title: localizedStringSchema,
   message: localizedStringSchema,
   description: localizedStringSchema.optional(),
-  variables: z.record(z.any()).optional()
+  variables: z.record(z.any()).optional(),
+  autoSend: z.boolean().optional().default(false)
 });
 
 // Settings configuration schema
