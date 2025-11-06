@@ -27,7 +27,25 @@ class OpenAIAdapterClass extends BaseAdapter {
         return { ...base, content: finalContent };
       }
 
-      // Format messages with image content for vision models
+      // Handle multiple images
+      if (Array.isArray(message.imageData)) {
+        const imageContent = message.imageData
+          .filter(img => img && img.base64)
+          .map(img => ({
+            type: 'image_url',
+            image_url: {
+              url: `data:${img.fileType || 'image/jpeg'};base64,${this.cleanBase64Data(img.base64)}`,
+              detail: 'high'
+            }
+          }));
+
+        return {
+          ...base,
+          content: [...(content ? [{ type: 'text', text: content }] : []), ...imageContent]
+        };
+      }
+
+      // Handle single image (legacy behavior)
       return {
         ...base,
         content: [
@@ -35,7 +53,7 @@ class OpenAIAdapterClass extends BaseAdapter {
           {
             type: 'image_url',
             image_url: {
-              url: `data:${message.imageData.format || 'image/jpeg'};base64,${this.cleanBase64Data(message.imageData.base64)}`,
+              url: `data:${message.imageData.format || message.imageData.fileType || 'image/jpeg'};base64,${this.cleanBase64Data(message.imageData.base64)}`,
               detail: 'high'
             }
           }

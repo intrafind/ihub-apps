@@ -45,6 +45,18 @@ const AdminAuthPage = () => {
       allowSelfSignup: false,
       providers: []
     },
+    ntlmAuth: {
+      enabled: false,
+      domain: '',
+      domainController: '',
+      type: 'ntlm',
+      debug: false,
+      getUserInfo: true,
+      getGroups: true,
+      defaultGroups: [],
+      sessionTimeoutMinutes: 480,
+      generateJwtToken: true
+    },
     authDebug: {
       enabled: false,
       maskTokens: true,

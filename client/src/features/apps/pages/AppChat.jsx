@@ -229,6 +229,7 @@ const AppChat = () => {
   } = useIntegrationAuth();
 
   const inputRef = useRef(null);
+  const formRef = useRef(null);
   const chatId = useRef(getOrCreateChatId(appId));
 
   // Restore existing chat ID when the appId changes
@@ -552,11 +553,26 @@ const AppChat = () => {
       if (prompt.variables) {
         setVariables(prev => ({ ...prev, ...prompt.variables }));
       }
+
+      // If autoSend is enabled, automatically submit the form
+      if (prompt.autoSend) {
+        // Use setTimeout to ensure state updates are applied before submission
+        setTimeout(() => {
+          if (formRef.current) {
+            formRef.current.requestSubmit();
+          }
+        }, 0);
+      } else {
+        // Only focus input if not auto-sending
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }
     } else {
       setInput(prompt);
-    }
-    if (inputRef.current) {
-      inputRef.current.focus();
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
     }
   };
 
@@ -693,14 +709,51 @@ const AppChat = () => {
     let messageData = null;
 
     if (fileUploadHandler.selectedFile) {
-      if (fileUploadHandler.selectedFile.type === 'image') {
-        const imgPreview = `<img src="${fileUploadHandler.selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
-        messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
-        messageData = { imageData: fileUploadHandler.selectedFile };
+      // Handle multiple files
+      if (Array.isArray(fileUploadHandler.selectedFile)) {
+        const images = fileUploadHandler.selectedFile.filter(f => f.type === 'image');
+        const documents = fileUploadHandler.selectedFile.filter(f => f.type === 'document');
+
+        let contentParts = [finalInput];
+
+        // Add image previews
+        if (images.length > 0) {
+          const imgPreviews = images
+            .map(
+              img =>
+                `<img src="${img.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`
+            )
+            .join('\n');
+          contentParts.push(imgPreviews);
+        }
+
+        // Add file indicators
+        if (documents.length > 0) {
+          const fileIndicators = documents
+            .map(
+              doc =>
+                `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin: 4px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${doc.fileName}</span>\n      </div>`
+            )
+            .join('');
+          contentParts.push(fileIndicators);
+        }
+
+        messageContent = contentParts.filter(Boolean).join('\n\n');
+        messageData = {
+          imageData: images.length > 0 ? images : undefined,
+          fileData: documents.length > 0 ? documents : undefined
+        };
       } else {
-        const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
-        messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
-        messageData = { fileData: fileUploadHandler.selectedFile };
+        // Handle single file (legacy behavior)
+        if (fileUploadHandler.selectedFile.type === 'image') {
+          const imgPreview = `<img src="${fileUploadHandler.selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
+          messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
+          messageData = { imageData: fileUploadHandler.selectedFile };
+        } else {
+          const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
+          messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
+          messageData = { fileData: fileUploadHandler.selectedFile };
+        }
       }
     }
 
@@ -717,10 +770,14 @@ const AppChat = () => {
         content: input,
         promptTemplate: app?.prompt || null,
         variables: { ...variables },
-        imageData:
-          fileUploadHandler.selectedFile?.type === 'image' ? fileUploadHandler.selectedFile : null,
-        fileData:
-          fileUploadHandler.selectedFile?.type === 'document'
+        imageData: Array.isArray(fileUploadHandler.selectedFile)
+          ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
+          : fileUploadHandler.selectedFile?.type === 'image'
+            ? fileUploadHandler.selectedFile
+            : null,
+        fileData: Array.isArray(fileUploadHandler.selectedFile)
+          ? fileUploadHandler.selectedFile.filter(f => f.type === 'document')
+          : fileUploadHandler.selectedFile?.type === 'document'
             ? fileUploadHandler.selectedFile
             : null
       },
@@ -971,6 +1028,7 @@ const AppChat = () => {
                         app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
                       }
                       inputRef={inputRef}
+                      formRef={formRef}
                       selectedFile={fileUploadHandler.selectedFile}
                       showUploader={fileUploadHandler.showUploader}
                       onToggleUploader={fileUploadHandler.toggleUploader}
@@ -1034,6 +1092,7 @@ const AppChat = () => {
                         app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
                       }
                       inputRef={inputRef}
+                      formRef={formRef}
                       selectedFile={fileUploadHandler.selectedFile}
                       showUploader={fileUploadHandler.showUploader}
                       onToggleUploader={fileUploadHandler.toggleUploader}
@@ -1097,6 +1156,7 @@ const AppChat = () => {
                       app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
                     }
                     inputRef={inputRef}
+                    formRef={formRef}
                     selectedFile={fileUploadHandler.selectedFile}
                     showUploader={fileUploadHandler.showUploader}
                     onToggleUploader={fileUploadHandler.toggleUploader}
@@ -1154,6 +1214,7 @@ const AppChat = () => {
                     app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
                   }
                   inputRef={inputRef}
+                  formRef={formRef}
                   selectedFile={fileUploadHandler.selectedFile}
                   showUploader={fileUploadHandler.showUploader}
                   onToggleUploader={fileUploadHandler.toggleUploader}

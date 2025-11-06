@@ -27,13 +27,13 @@ const StatCard = ({ title, value, icon, color, change, changeType }) => (
   </div>
 );
 
-const TopUsersCard = ({ title, data, color }) => {
+const TopUsersCard = ({ title, data, color, showRating = false }) => {
   const sortedData = Object.entries(data || {})
-    .sort(
-      ([, a], [, b]) =>
-        (typeof a === 'object' ? (a.good || 0) + (a.bad || 0) : a) -
-        (typeof b === 'object' ? (b.good || 0) + (b.bad || 0) : b)
-    )
+    .sort(([, a], [, b]) => {
+      const valueA = typeof a === 'object' ? a.total || (a.good || 0) + (a.bad || 0) : a;
+      const valueB = typeof b === 'object' ? b.total || (b.good || 0) + (b.bad || 0) : b;
+      return valueA - valueB;
+    })
     .reverse()
     .slice(0, 5);
 
@@ -43,11 +43,15 @@ const TopUsersCard = ({ title, data, color }) => {
       <div className="space-y-3">
         {sortedData.map(([key, value], index) => {
           const displayValue =
-            typeof value === 'object' ? (value.good || 0) + (value.bad || 0) : value;
+            typeof value === 'object' ? value.total || (value.good || 0) + (value.bad || 0) : value;
           const maxValue = Math.max(
-            ...sortedData.map(([, v]) => (typeof v === 'object' ? (v.good || 0) + (v.bad || 0) : v))
+            ...sortedData.map(([, v]) => {
+              const val = typeof v === 'object' ? v.total || (v.good || 0) + (v.bad || 0) : v;
+              return val;
+            })
           );
           const percentage = maxValue > 0 ? (displayValue / maxValue) * 100 : 0;
+          const averageRating = typeof value === 'object' ? value.averageRating || 0 : 0;
 
           return (
             <div key={key} className="flex items-center justify-between">
@@ -69,8 +73,18 @@ const TopUsersCard = ({ title, data, color }) => {
                   </div>
                 </div>
               </div>
-              <div className="text-sm font-semibold text-gray-900 ml-3">
-                {new Intl.NumberFormat().format(displayValue)}
+              <div className="text-right ml-3">
+                <div className="text-sm font-semibold text-gray-900">
+                  {new Intl.NumberFormat().format(displayValue)}
+                </div>
+                {showRating && averageRating > 0 && (
+                  <div className="flex items-center text-xs text-amber-600">
+                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                    {averageRating.toFixed(1)}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -85,7 +99,8 @@ const AppUsageCard = ({ data }) => {
   const apps = Object.entries(data || {});
   const total = apps.reduce(
     (sum, [, value]) =>
-      sum + (typeof value === 'object' ? (value.good || 0) + (value.bad || 0) : value),
+      sum +
+      (typeof value === 'object' ? value.total || (value.good || 0) + (value.bad || 0) : value),
     0
   );
 
@@ -97,7 +112,7 @@ const AppUsageCard = ({ data }) => {
       <div className="space-y-4">
         {apps.map(([app, value]) => {
           const displayValue =
-            typeof value === 'object' ? (value.good || 0) + (value.bad || 0) : value;
+            typeof value === 'object' ? value.total || (value.good || 0) + (value.bad || 0) : value;
           const percentage = total > 0 ? (displayValue / total) * 100 : 0;
 
           return (
@@ -127,14 +142,28 @@ const AppUsageCard = ({ data }) => {
 
 const FeedbackCard = ({ data }) => {
   const { t } = useTranslation();
-  const totalFeedback = (data.good || 0) + (data.bad || 0);
-  const goodPercentage = totalFeedback > 0 ? ((data.good || 0) / totalFeedback) * 100 : 0;
-  const badPercentage = totalFeedback > 0 ? ((data.bad || 0) / totalFeedback) * 100 : 0;
 
-  // New star rating data
-  const starRatings = data.ratings || {};
-  const totalStarRatings = data.total || 0;
-  const averageRating = data.averageRating || 0;
+  // New star rating data (merge with legacy feedback)
+  const starRatings = { ...(data.ratings || {}) };
+
+  // Map legacy feedback: good -> 5 stars, bad -> 1 star
+  const legacyGood = data.good || 0;
+  const legacyBad = data.bad || 0;
+
+  if (legacyGood > 0) {
+    starRatings[5] = (starRatings[5] || 0) + legacyGood;
+  }
+  if (legacyBad > 0) {
+    starRatings[1] = (starRatings[1] || 0) + legacyBad;
+  }
+
+  // Calculate total and average including legacy data
+  const totalStarRatings = Object.values(starRatings).reduce((sum, count) => sum + count, 0);
+  const weightedSum = Object.entries(starRatings).reduce(
+    (sum, [rating, count]) => sum + parseInt(rating) * count,
+    0
+  );
+  const averageRating = totalStarRatings > 0 ? weightedSum / totalStarRatings : 0;
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -142,9 +171,8 @@ const FeedbackCard = ({ data }) => {
         {t('admin.dashboard.feedbackOverview', 'Feedback Overview')}
       </h3>
 
-      {/* Star Rating Summary (if available) */}
-      {totalStarRatings > 0 && (
-        <div className="mb-6 p-4 bg-amber-50 rounded-lg">
+      {totalStarRatings > 0 ? (
+        <div className="p-4 bg-amber-50 rounded-lg">
           <div className="flex items-center justify-center space-x-2 mb-3">
             <div className="flex items-center">
               {[1, 2, 3, 4, 5].map(star => (
@@ -188,51 +216,22 @@ const FeedbackCard = ({ data }) => {
             })}
           </div>
         </div>
+      ) : (
+        <div className="text-center p-8 text-gray-500">
+          <svg
+            className="w-12 h-12 mx-auto mb-4 text-gray-300"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
+          <div className="text-lg font-medium mb-2">No feedback available</div>
+          <div className="text-sm">No user ratings have been submitted yet.</div>
+        </div>
       )}
 
-      {/* Legacy positive/negative stats (for backward compatibility) */}
-      {totalFeedback > 0 && (
-        <>
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="text-3xl font-bold text-green-600">{data.good || 0}</div>
-              <div className="text-sm text-green-600 font-medium">
-                {t('admin.dashboard.positive', 'Positive')}
-              </div>
-              <div className="text-xs text-green-500">{goodPercentage.toFixed(1)}%</div>
-            </div>
-            <div className="text-center p-4 bg-red-50 rounded-lg">
-              <div className="text-3xl font-bold text-red-600">{data.bad || 0}</div>
-              <div className="text-sm text-red-600 font-medium">
-                {t('admin.dashboard.negative', 'Negative')}
-              </div>
-              <div className="text-xs text-red-500">{badPercentage.toFixed(1)}%</div>
-            </div>
-          </div>
-          {/* Visual Progress Bar */}
-          <div className="mb-4">
-            <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-              <span>{t('admin.dashboard.satisfactionRate', 'Satisfaction Rate')}</span>
-              <span>{goodPercentage.toFixed(1)}% positive</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-              <div className="h-full flex">
-                <div
-                  className="bg-green-500 transition-all duration-300"
-                  style={{ width: `${goodPercentage}%` }}
-                ></div>
-                <div
-                  className="bg-red-500 transition-all duration-300"
-                  style={{ width: `${badPercentage}%` }}
-                ></div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      <div className="text-center text-sm text-gray-600">
-        Total feedback: {Math.max(totalFeedback, totalStarRatings)} responses
+      <div className="text-center text-sm text-gray-600 mt-4">
+        Total feedback: {totalStarRatings} responses
       </div>
     </div>
   );
@@ -373,9 +372,9 @@ const AdminUsageReports = () => {
           color="bg-purple-500"
         />
         <StatCard
-          title={t('admin.usage.feedbackScore', 'Feedback Score')}
-          value={`${feedback.good}/${feedback.good + feedback.bad}`}
-          icon={<Icon name="thumbs-up" size="lg" className="text-white" />}
+          title={t('admin.usage.feedbackScore', 'Average Rating')}
+          value={feedback.averageRating ? `${feedback.averageRating.toFixed(1)} ★` : 'N/A'}
+          icon={<Icon name="star" size="lg" className="text-white" />}
           color="bg-amber-500"
         />
       </div>
@@ -444,6 +443,7 @@ const AdminUsageReports = () => {
         title={t('admin.dashboard.userFeedback', 'User Feedback')}
         data={feedback.perUser}
         color="bg-amber-500"
+        showRating={true}
       />
     </div>
   );
@@ -597,9 +597,8 @@ const AdminUsageReports = () => {
           </h3>
           <div className="space-y-4">
             {Object.entries(feedback.perUser || {}).map(([user, userFeedback]) => {
-              const totalUserFeedback = (userFeedback.good || 0) + (userFeedback.bad || 0);
-              const userGoodPercentage =
-                totalUserFeedback > 0 ? ((userFeedback.good || 0) / totalUserFeedback) * 100 : 0;
+              const totalUserFeedback = userFeedback.total || 0;
+              const averageRating = userFeedback.averageRating || 0;
 
               return (
                 <div key={user} className="p-3 bg-gray-50 rounded-lg">
@@ -609,17 +608,27 @@ const AdminUsageReports = () => {
                     </span>
                     <span className="text-sm text-gray-600">{totalUserFeedback} responses</span>
                   </div>
-                  <div className="flex items-center space-x-4 text-sm">
-                    <div className="flex items-center space-x-1">
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <span>{userFeedback.good || 0}</span>
+                  {totalUserFeedback > 0 && (
+                    <div className="flex items-center space-x-2 text-sm">
+                      <div className="flex items-center">
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <svg
+                            key={star}
+                            className={`w-3 h-3 ${
+                              star <= Math.round(averageRating)
+                                ? 'text-yellow-400'
+                                : 'text-gray-300'
+                            }`}
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        ))}
+                      </div>
+                      <span className="text-amber-600 font-medium">{averageRating.toFixed(1)}</span>
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                      <span>{userFeedback.bad || 0}</span>
-                    </div>
-                    <div className="text-gray-600">{userGoodPercentage.toFixed(1)}% positive</div>
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -635,33 +644,38 @@ const AdminUsageReports = () => {
           </h3>
           <div className="space-y-4">
             {Object.entries(feedback.perApp || {}).map(([app, appFeedback]) => {
-              const totalAppFeedback = (appFeedback.good || 0) + (appFeedback.bad || 0);
-              const appGoodPercentage =
-                totalAppFeedback > 0 ? ((appFeedback.good || 0) / totalAppFeedback) * 100 : 0;
+              const totalAppFeedback = appFeedback.total || 0;
+              const averageRating = appFeedback.averageRating || 0;
 
               return (
-                <div key={app} className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium capitalize">{app.replace('-', ' ')}</span>
+                <div key={app} className="p-3 bg-gray-50 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-medium text-gray-900 capitalize">
+                      {app.replace('-', ' ')}
+                    </span>
                     <span className="text-sm text-gray-600">{totalAppFeedback} responses</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                    <div className="h-full flex">
-                      <div
-                        className="bg-green-500"
-                        style={{ width: `${appGoodPercentage}%` }}
-                      ></div>
-                      <div
-                        className="bg-red-500"
-                        style={{ width: `${100 - appGoodPercentage}%` }}
-                      ></div>
+                  {totalAppFeedback > 0 && (
+                    <div className="flex items-center space-x-2 text-sm">
+                      <div className="flex items-center">
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <svg
+                            key={star}
+                            className={`w-3 h-3 ${
+                              star <= Math.round(averageRating)
+                                ? 'text-yellow-400'
+                                : 'text-gray-300'
+                            }`}
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        ))}
+                      </div>
+                      <span className="text-amber-600 font-medium">{averageRating.toFixed(1)}</span>
                     </div>
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-600">
-                    <span>👍 {appFeedback.good || 0}</span>
-                    <span>{appGoodPercentage.toFixed(1)}% positive</span>
-                    <span>👎 {appFeedback.bad || 0}</span>
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -674,35 +688,36 @@ const AdminUsageReports = () => {
           </h3>
           <div className="space-y-4">
             {Object.entries(feedback.perModel || {}).map(([model, modelFeedback]) => {
-              const totalModelFeedback = (modelFeedback.good || 0) + (modelFeedback.bad || 0);
-              const modelGoodPercentage =
-                totalModelFeedback > 0 ? ((modelFeedback.good || 0) / totalModelFeedback) * 100 : 0;
+              const totalModelFeedback = modelFeedback.total || 0;
+              const averageRating = modelFeedback.averageRating || 0;
 
               return (
-                <div key={model} className="p-4 border rounded-lg">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="font-medium">{model}</span>
+                <div key={model} className="p-3 bg-gray-50 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-medium text-gray-900">{model}</span>
                     <span className="text-sm text-gray-600">{totalModelFeedback} responses</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 text-center">
-                    <div className="p-2 bg-green-50 rounded">
-                      <div className="text-lg font-bold text-green-600">
-                        {modelFeedback.good || 0}
+                  {totalModelFeedback > 0 && (
+                    <div className="flex items-center space-x-2 text-sm">
+                      <div className="flex items-center">
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <svg
+                            key={star}
+                            className={`w-3 h-3 ${
+                              star <= Math.round(averageRating)
+                                ? 'text-yellow-400'
+                                : 'text-gray-300'
+                            }`}
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        ))}
                       </div>
-                      <div className="text-xs text-green-600">
-                        {t('admin.dashboard.positive', 'Positive')}
-                      </div>
+                      <span className="text-amber-600 font-medium">{averageRating.toFixed(1)}</span>
                     </div>
-                    <div className="p-2 bg-red-50 rounded">
-                      <div className="text-lg font-bold text-red-600">{modelFeedback.bad || 0}</div>
-                      <div className="text-xs text-red-600">
-                        {t('admin.dashboard.negative', 'Negative')}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-center text-sm text-gray-600">
-                    {modelGoodPercentage.toFixed(1)}% satisfaction rate
-                  </div>
+                  )}
                 </div>
               );
             })}

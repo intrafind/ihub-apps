@@ -240,7 +240,8 @@ const AppFormEditor = ({
         {
           title: { en: '' },
           message: { en: '' },
-          variables: {}
+          variables: {},
+          autoSend: false
         }
       ]
     };
@@ -812,6 +813,20 @@ const AppFormEditor = ({
                         de: 'Prompt-Nachricht auf Deutsch eingeben'
                       }}
                     />
+
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={prompt.autoSend || false}
+                        onChange={e =>
+                          handleStarterPromptChange(index, 'autoSend', e.target.checked)
+                        }
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 block text-sm text-gray-900">
+                        {t('admin.apps.edit.autoSendPrompt', 'Send immediately when clicked')}
+                      </label>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -858,6 +873,23 @@ const AppFormEditor = ({
 
               {app.upload?.enabled && (
                 <div className="space-y-4 pl-6">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={app.upload?.allowMultiple || false}
+                      onChange={e =>
+                        handleInputChange('upload', {
+                          ...app.upload,
+                          allowMultiple: e.target.checked
+                        })
+                      }
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900">
+                      {t('admin.apps.edit.allowMultiple', 'Allow Multiple Files')}
+                    </label>
+                  </div>
+
                   <div>
                     <div className="flex items-center mb-2">
                       <input
@@ -1224,7 +1256,9 @@ const AppFormEditor = ({
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 >
-                  <option value="single">{t('admin.apps.edit.singleLine', 'Single Line')}</option>
+                  <option value="singleline">
+                    {t('admin.apps.edit.singleLine', 'Single Line')}
+                  </option>
                   <option value="multiline">{t('admin.apps.edit.multiLine', 'Multi Line')}</option>
                 </select>
               </div>

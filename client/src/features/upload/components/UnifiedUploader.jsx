@@ -27,6 +27,9 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   const fileConfig = config.fileUpload || {};
   const isFileUploadEnabled = fileConfig.enabled !== false && config.fileUploadEnabled !== false;
 
+  // Multiple file upload configuration - read from top-level upload config
+  const allowMultiple = config.allowMultiple || false;
+
   // Configuration with defaults
   const MAX_FILE_SIZE_MB =
     config.maxFileSizeMB ||
@@ -303,62 +306,118 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
       onSelect={onFileSelect}
       onProcessFile={processFile}
       data={fileData}
+      allowMultiple={allowMultiple}
     >
       {({ preview, error, isProcessing, handleButtonClick, handleClear, inputProps }) => (
         <div className="unified-uploader">
           <input {...inputProps} />
           {preview ? (
             <div className="relative mt-2 mb-4">
-              {preview.type === 'image' ? (
-                // Image preview
-                <div className="relative rounded-lg overflow-hidden border border-gray-300">
-                  <img
-                    src={preview.url}
-                    alt={t('common.preview', 'Preview')}
-                    className="max-w-full max-h-60 mx-auto"
-                  />
+              {Array.isArray(preview) ? (
+                // Multiple files preview
+                <div className="space-y-2">
+                  {preview.map((item, index) => (
+                    <div key={index}>
+                      {item.type === 'image' ? (
+                        // Image preview
+                        <div className="relative rounded-lg overflow-hidden border border-gray-300">
+                          <img
+                            src={item.url}
+                            alt={t('common.preview', 'Preview')}
+                            className="max-w-full max-h-60 mx-auto"
+                          />
+                        </div>
+                      ) : (
+                        // Document preview
+                        <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
+                          <div className="flex items-start gap-3">
+                            <Icon
+                              name="document-text"
+                              className="w-8 h-8 text-blue-500 flex-shrink-0 mt-1"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm text-gray-900 truncate">
+                                {item.fileName}
+                              </div>
+                              <div className="text-xs text-gray-500 mb-2">{item.fileType} file</div>
+                              <div className="text-xs text-gray-700 bg-white p-2 rounded border max-h-20 overflow-y-auto">
+                                {item.content}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                   <button
                     type="button"
                     onClick={handleClear}
-                    className="absolute top-2 right-2 bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90"
-                    title={t('common.remove', 'Remove file')}
+                    className="w-full mt-2 px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
+                    title={t('common.remove', 'Remove files')}
                   >
-                    <Icon name="x" className="w-4 h-4" />
+                    {t('common.removeAll', 'Remove All')}
                   </button>
+                  <div className="text-xs text-gray-500 mt-1 text-center">
+                    {t('components.uploader.filesSelected', '{{count}} file(s) selected', {
+                      count: preview.length
+                    })}
+                  </div>
                 </div>
-              ) : (
-                // Document preview
-                <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
-                  <div className="flex items-start gap-3">
-                    <Icon
-                      name="document-text"
-                      className="w-8 h-8 text-blue-500 flex-shrink-0 mt-1"
+              ) : preview.type === 'image' ? (
+                // Single image preview
+                <div>
+                  <div className="relative rounded-lg overflow-hidden border border-gray-300">
+                    <img
+                      src={preview.url}
+                      alt={t('common.preview', 'Preview')}
+                      className="max-w-full max-h-60 mx-auto"
                     />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-gray-900 truncate">
-                        {preview.fileName}
-                      </div>
-                      <div className="text-xs text-gray-500 mb-2">{preview.fileType} file</div>
-                      <div className="text-xs text-gray-700 bg-white p-2 rounded border max-h-20 overflow-y-auto">
-                        {preview.content}
-                      </div>
-                    </div>
                     <button
                       type="button"
                       onClick={handleClear}
-                      className="bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90 flex-shrink-0"
+                      className="absolute top-2 right-2 bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90"
                       title={t('common.remove', 'Remove file')}
                     >
                       <Icon name="x" className="w-4 h-4" />
                     </button>
                   </div>
+                  <div className="text-xs text-gray-500 mt-1 text-center">
+                    {t('components.uploader.imageSelected', 'Image selected')}
+                  </div>
+                </div>
+              ) : (
+                // Single document preview
+                <div>
+                  <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
+                    <div className="flex items-start gap-3">
+                      <Icon
+                        name="document-text"
+                        className="w-8 h-8 text-blue-500 flex-shrink-0 mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-gray-900 truncate">
+                          {preview.fileName}
+                        </div>
+                        <div className="text-xs text-gray-500 mb-2">{preview.fileType} file</div>
+                        <div className="text-xs text-gray-700 bg-white p-2 rounded border max-h-20 overflow-y-auto">
+                          {preview.content}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleClear}
+                        className="bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90 flex-shrink-0"
+                        title={t('common.remove', 'Remove file')}
+                      >
+                        <Icon name="x" className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1 text-center">
+                    {t('components.uploader.fileSelected', 'File selected and processed')}
+                  </div>
                 </div>
               )}
-              <div className="text-xs text-gray-500 mt-1 text-center">
-                {preview.type === 'image'
-                  ? t('components.uploader.imageSelected', 'Image selected')
-                  : t('components.uploader.fileSelected', 'File selected and processed')}
-              </div>
             </div>
           ) : (
             <div className="mt-2 mb-4">
@@ -382,7 +441,11 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
                 ) : (
                   <>
                     <Icon name="paper-clip" className="mr-2" />
-                    <span>{t('components.uploader.uploadFile', 'Upload File')}</span>
+                    <span>
+                      {allowMultiple
+                        ? t('components.uploader.uploadFiles', 'Upload Files')
+                        : t('components.uploader.uploadFile', 'Upload File')}
+                    </span>
                   </>
                 )}
               </button>

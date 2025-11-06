@@ -82,7 +82,7 @@
     "mode": "oidc",
     "authenticatedGroup": "authenticated",
     "sessionTimeoutMinutes": 480,
-    "jwtSecret": "magic-secret"
+    "jwtSecret": "${JWT_SECRET}"
   },
   "authDebug": {
     "enabled": true,

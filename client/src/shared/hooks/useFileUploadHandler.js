@@ -50,6 +50,7 @@ export const useFileUploadHandler = () => {
       enabled: true,
       imageUploadEnabled,
       fileUploadEnabled,
+      allowMultiple: uploadConfig?.allowMultiple || false,
       maxFileSizeMB:
         Math.max(imageConfig?.maxFileSizeMB || 0, fileConfig?.maxFileSizeMB || 0) || 10,
       // Image-specific settings

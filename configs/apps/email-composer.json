@@ -17,7 +17,6 @@
     "de": "Du bist ein Assistent für das Schreiben von E-Mails. Hilf Nutzern, professionelle, klare und effektive E-Mails für verschiedene geschäftliche und persönliche Kontexte zu verfassen. Stelle sicher, dass der Ton für die Zielgruppe geeignet ist."
   },
   "tokenLimit": 4000,
-
   "preferredOutputFormat": "markdown",
   "preferredStyle": "professional",
   "preferredTemperature": 0.6,
@@ -177,6 +176,10 @@
         "en": "Friendly intro email",
         "de": "Freundliche Einleitungs-E-Mail"
       },
+      "description": {
+        "en": "Create a warm and welcoming introduction email with a friendly tone",
+        "de": "Erstelle eine herzliche und einladende Einleitungs-E-Mail mit freundlichem Ton"
+      },
       "message": {
         "en": "Write an introduction email.",
         "de": "Schreibe eine Einleitungs-E-Mail."
@@ -234,7 +237,10 @@
         "text/css",
         "text/javascript",
         "application/javascript",
-        "text/xml"
+        "text/xml",
+        "message/rfc822",
+        "message/rfc2822",
+        "application/eml"
       ],
       "supportedPdfFormats": ["application/pdf"]
     }

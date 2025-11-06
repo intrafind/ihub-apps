@@ -34,7 +34,10 @@
         "text/css",
         "text/javascript",
         "application/javascript",
-        "text/xml"
+        "text/xml",
+        "message/rfc822",
+        "message/rfc2822",
+        "application/eml"
       ],
       "supportedPdfFormats": ["application/pdf"]
     },

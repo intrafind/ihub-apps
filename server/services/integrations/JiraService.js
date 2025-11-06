@@ -361,7 +361,7 @@ class JiraService {
         expand: 'renderedFields'
       });
 
-      const data = await this.makeApiRequest(`/search?${params}`, 'GET', null, userId);
+      const data = await this.makeApiRequest(`/search/jql?${params}`, 'GET', null, userId);
 
       return {
         total: data.total,

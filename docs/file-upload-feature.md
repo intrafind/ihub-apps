@@ -85,6 +85,13 @@ Enable file upload for an app by adding to the app configuration:
 - Enables or disables the file upload feature for the app
 - Default: `false`
 
+**upload.allowMultiple** (boolean)
+
+- When `true`, allows users to select and upload multiple files/images at once
+- Default: `false`
+- All selected files will be processed individually and sent with the message
+- This setting applies to both image and file uploads
+
 **fileUpload.maxFileSizeMB** (number)
 
 - Maximum file size in megabytes
@@ -117,6 +124,10 @@ Enable file upload for an app by adding to the app configuration:
 
 ```json
 {
+  "upload": {
+    "enabled": true,
+    "allowMultiple": false
+  },
   "fileUpload": {
     "maxFileSizeMB": 15,
     "supportedTextFormats": [
@@ -135,10 +146,29 @@ Enable file upload for an app by adding to the app configuration:
 }
 ```
 
+**Multiple file upload enabled:**
+
+```json
+{
+  "upload": {
+    "enabled": true,
+    "allowMultiple": true
+  },
+  "fileUpload": {
+    "maxFileSizeMB": 10,
+    "supportedTextFormats": ["text/plain", "text/markdown", "text/html"],
+    "supportedPdfFormats": ["application/pdf"]
+  }
+}
+```
+
 **Text-only file upload (Summarizer app):**
 
 ```json
 {
+  "upload": {
+    "enabled": true
+  },
   "fileUpload": {
     "maxFileSizeMB": 5,
     "supportedTextFormats": ["text/plain", "text/markdown", "text/html"],

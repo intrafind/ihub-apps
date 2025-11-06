@@ -31,15 +31,31 @@ class AnthropicAdapterClass extends BaseAdapter {
             is_error: msg.is_error || false
           });
 
-          // Add the image for analysis
-          toolContent.push({
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: msg.imageData.format || 'image/jpeg',
-              data: this.cleanBase64Data(msg.imageData.base64)
-            }
-          });
+          // Handle multiple images
+          if (Array.isArray(msg.imageData)) {
+            msg.imageData
+              .filter(img => img && img.base64)
+              .forEach(img => {
+                toolContent.push({
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: img.format || img.fileType || 'image/jpeg',
+                    data: this.cleanBase64Data(img.base64)
+                  }
+                });
+              });
+          } else {
+            // Handle single image (legacy behavior)
+            toolContent.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: msg.imageData.format || 'image/jpeg',
+                data: this.cleanBase64Data(msg.imageData.base64)
+              }
+            });
+          }
         } else {
           // Regular tool result without images
           toolContent.push({
@@ -78,14 +94,33 @@ class AnthropicAdapterClass extends BaseAdapter {
             text: msg.content
           });
         }
-        contentArray.push({
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: msg.imageData.fileType || 'image/jpeg',
-            data: this.cleanBase64Data(msg.imageData.base64)
-          }
-        });
+
+        // Handle multiple images
+        if (Array.isArray(msg.imageData)) {
+          msg.imageData
+            .filter(img => img && img.base64)
+            .forEach(img => {
+              contentArray.push({
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: img.fileType || 'image/jpeg',
+                  data: this.cleanBase64Data(img.base64)
+                }
+              });
+            });
+        } else {
+          // Handle single image (legacy behavior)
+          contentArray.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: msg.imageData.fileType || 'image/jpeg',
+              data: this.cleanBase64Data(msg.imageData.base64)
+            }
+          });
+        }
+
         processedMessages.push({
           role: msg.role,
           content: contentArray

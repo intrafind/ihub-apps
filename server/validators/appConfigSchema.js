@@ -38,7 +38,9 @@ const variableSchema = z.object({
 const starterPromptSchema = z.object({
   title: localizedStringSchema,
   message: localizedStringSchema,
-  variables: z.record(z.any()).optional()
+  description: localizedStringSchema.optional(),
+  variables: z.record(z.any()).optional(),
+  autoSend: z.boolean().optional().default(false)
 });
 
 // Settings configuration schema
@@ -98,6 +100,7 @@ const inputModeSchema = z
 const uploadSchema = z
   .object({
     enabled: z.boolean().optional().default(false),
+    allowMultiple: z.boolean().optional().default(false),
     imageUpload: z
       .object({
         enabled: z.boolean().optional().default(false),

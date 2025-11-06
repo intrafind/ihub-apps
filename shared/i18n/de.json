@@ -62,6 +62,8 @@
     "required": "erforderlich",
     "clear": "Löschen",
     "clearSearch": "Suche löschen",
+    "remove": "Datei entfernen",
+    "removeAll": "Alle entfernen",
     "preview": "Vorschau",
     "uploadedImage": "Hochgeladenes Bild",
     "toggleMenu": "Menü umschalten",
@@ -859,8 +861,10 @@
     "uploader": {
       "imageSelected": "Bild ausgewählt",
       "fileSelected": "Datei ausgewählt und verarbeitet",
+      "filesSelected": "{{count}} Datei(en) ausgewählt",
       "processing": "Datei wird verarbeitet...",
       "uploadFile": "Datei hochladen",
+      "uploadFiles": "Dateien hochladen",
       "supportedFormats": "Unterstützt: {{formats}} (max {{maxSize}}MB)"
     }
   },

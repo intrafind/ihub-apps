@@ -235,6 +235,45 @@ const AdminAppEditPage = () => {
       });
     }
 
+    // Clean up upload configuration when disabled
+    if (cleanedApp.upload) {
+      const upload = { ...cleanedApp.upload };
+
+      // Remove imageUpload configuration if disabled
+      if (upload.imageUpload && upload.imageUpload.enabled === false) {
+        delete upload.imageUpload;
+      }
+
+      // Remove fileUpload configuration if disabled
+      if (upload.fileUpload && upload.fileUpload.enabled === false) {
+        delete upload.fileUpload;
+      }
+
+      // Remove entire upload configuration if main upload is disabled
+      if (upload.enabled === false) {
+        delete cleanedApp.upload;
+      } else {
+        cleanedApp.upload = upload;
+      }
+    }
+
+    // Clean up features configuration when disabled
+    if (cleanedApp.features) {
+      const features = { ...cleanedApp.features };
+
+      // Remove magicPrompt configuration if disabled
+      if (features.magicPrompt && features.magicPrompt.enabled === false) {
+        delete features.magicPrompt;
+      }
+
+      // Remove entire features object if empty
+      if (Object.keys(features).length === 0) {
+        delete cleanedApp.features;
+      } else {
+        cleanedApp.features = features;
+      }
+    }
+
     return cleanedApp;
   };
 

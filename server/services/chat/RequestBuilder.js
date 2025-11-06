@@ -6,10 +6,30 @@ import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 
 function preprocessMessagesWithFileData(messages) {
   return messages.map(msg => {
+    // Handle array of files (multiple file upload)
+    if (Array.isArray(msg.fileData)) {
+      const filesInfo = msg.fileData
+        .map(file => {
+          if (file.content) {
+            return `[File: ${file.fileName} (${file.displayType || file.fileType})]\n\n${file.content}\n\n`;
+          }
+          return '';
+        })
+        .filter(Boolean)
+        .join('');
+
+      if (filesInfo) {
+        return { ...msg, content: filesInfo + (msg.content || '') };
+      }
+      return msg;
+    }
+
+    // Handle single file (legacy behavior)
     if (msg.fileData && msg.fileData.content) {
-      const fileInfo = `[File: ${msg.fileData.name} (${msg.fileData.type})]\n\n${msg.fileData.content}\n\n`;
+      const fileInfo = `[File: ${msg.fileData.fileName || msg.fileData.name} (${msg.fileData.displayType || msg.fileData.fileType || msg.fileData.type})]\n\n${msg.fileData.content}\n\n`;
       return { ...msg, content: fileInfo + (msg.content || '') };
     }
+
     return msg;
   });
 }
