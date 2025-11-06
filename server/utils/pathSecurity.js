@@ -11,8 +11,9 @@
  * - Numbers (0-9)
  * - Underscores (_)
  * - Hyphens (-)
+ * - Dots (.) - for version numbers like "2.5" in model names
  */
-const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
 /**
  * Validates that an ID contains only safe characters and cannot be used for path traversal.
@@ -27,6 +28,11 @@ export function isValidId(id) {
 
   // Check length to prevent extremely long IDs
   if (id.length === 0 || id.length > 100) {
+    return false;
+  }
+
+  // Prevent path traversal sequences like ".." or "/.."
+  if (id.includes('..') || id.includes('/') || id.includes('\\')) {
     return false;
   }
 
@@ -45,7 +51,7 @@ export function isValidId(id) {
 export function validateIdForPath(id, idType, res) {
   if (!isValidId(id)) {
     res.status(400).json({
-      error: `Invalid ${idType} ID. Only alphanumeric characters, underscores, and hyphens are allowed.`
+      error: `Invalid ${idType} ID. Only alphanumeric characters, dots, underscores, and hyphens are allowed.`
     });
     return false;
   }
@@ -83,7 +89,7 @@ export function validateIdsForPath(ids, idType, res) {
   for (const id of idArray) {
     if (!isValidId(id)) {
       res.status(400).json({
-        error: `Invalid ${idType} ID '${id}'. Only alphanumeric characters, underscores, and hyphens are allowed.`
+        error: `Invalid ${idType} ID '${id}'. Only alphanumeric characters, dots, underscores, and hyphens are allowed.`
       });
       return false;
     }
