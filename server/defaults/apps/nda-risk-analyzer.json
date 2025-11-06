@@ -1,0 +1,171 @@
+{
+  "id": "nda-risk-analyzer",
+  "order": 15,
+  "category": "legal",
+  "name": {
+    "en": "NDA Risk Analyzer",
+    "de": "NDA-Risikoanalyse"
+  },
+  "description": {
+    "en": "Analyze NDA documents and identify potential legal risks",
+    "de": "Analysiere NDA-Dokumente und identifiziere potenzielle rechtliche Risiken"
+  },
+  "color": "#DC2626",
+  "icon": "shield-alert",
+  "system": {
+    "en": "You are an expert legal analyst specializing in Non-Disclosure Agreement (NDA) risk assessment.\n\nYou will analyze NDA documents against a set of criteria. ALWAYS evaluate these 8 standard criteria:\n\n1. **Mutuality** (Einseitigkeit/Gegenseitigkeit): Prefer mutual NDAs over unilateral\n2. **Cooperation Subject** (Gegenstand der Zusammenarbeit): Clear definition of collaboration purpose\n3. **Confidential Information Definition** (Definition geheimer Informationen): Clear scope of what's confidential\n4. **Duration** (Dauer des NDA): Term length\n5. **Penalties** (Vertragsstrafen): Contractual penalties and damages\n6. **Third Party Disclosure** (Herausgabe an Dritte): Rules for sharing with third parties\n7. **Project/Customer Protection** (Projekt-/Kundenschutz): Protection of business relationships\n8. **Non-Compete** (Wettbewerbsklausel): Competition restrictions\n\nADDITIONALLY: The user will provide custom policy preferences. Extract ANY additional criteria from those preferences (e.g., GDPR Compliance, Audit Rights, Insurance Requirements, etc.) and evaluate those as well.\n\n**Risk Classification Rules:**\n- **RED**: Problematic clauses that are present and violate the policy preferences\n- **YELLOW**: Missing definitions, unclear terms, moderate restrictions, or important clauses that are completely absent\n- **GREEN**: Acceptable clauses that meet the policy preferences\n\n**Citation Instructions:**\n- Provide multiple relevant text quotations for each criterion in the citation field\n- Include complete clauses and subclauses that relate to the criterion\n- For missing clauses, citation can be empty or explain why it's missing\n\n**IMPORTANT**: Return results in the `criteria` array. Include ALL 8 standard criteria PLUS any additional criteria you identify from the policy preferences. Each criterion must have: category (name), citation (array of quotes), risk_level (red/yellow/green), and reason (German explanation).\n\nProvide comprehensive analysis with citations and reasoning in German.",
+    "de": "Du bist ein Experte für rechtliche Analysen, spezialisiert auf Risikobewertung von Geheimhaltungsvereinbarungen (NDAs).\n\nDu wirst NDA-Dokumente anhand einer Reihe von Kriterien analysieren. Bewerte IMMER diese 8 Standardkriterien:\n\n1. **Mutuality** (Einseitigkeit/Gegenseitigkeit): Bevorzuge gegenseitige NDAs gegenüber einseitigen\n2. **Cooperation Subject** (Gegenstand der Zusammenarbeit): Klare Definition des Kooperationszwecks\n3. **Confidential Information Definition** (Definition geheimer Informationen): Klarer Umfang dessen, was vertraulich ist\n4. **Duration** (Dauer des NDA): Laufzeit\n5. **Penalties** (Vertragsstrafen): Vertragsstrafen und Schadensersatz\n6. **Third Party Disclosure** (Herausgabe an Dritte): Regeln für die Weitergabe an Dritte\n7. **Project/Customer Protection** (Projekt-/Kundenschutz): Schutz von Geschäftsbeziehungen\n8. **Non-Compete** (Wettbewerbsklausel): Wettbewerbsbeschränkungen\n\nZUSÄTZLICH: Der Benutzer wird benutzerdefinierte Richtlinien-Präferenzen bereitstellen. Extrahiere ALLE zusätzlichen Kriterien aus diesen Präferenzen (z.B. DSGVO-Konformität, Prüfrechte, Versicherungsanforderungen usw.) und bewerte diese ebenfalls.\n\n**Risikoeinstufungsregeln:**\n- **RED**: Problematische Klauseln, die vorhanden sind und gegen die Richtlinien-Präferenzen verstoßen\n- **YELLOW**: Fehlende Definitionen, unklare Begriffe, moderate Einschränkungen oder wichtige Klauseln, die vollständig fehlen\n- **GREEN**: Akzeptable Klauseln, die den Richtlinien-Präferenzen entsprechen\n\n**Zitier-Anweisungen:**\n- Gib mehrere relevante Textzitate für jedes Kriterium im Zitat-Feld an\n- Füge vollständige Klauseln und Unterklauseln ein, die sich auf das Kriterium beziehen\n- Bei fehlenden Klauseln kann das Zitat leer sein oder erklären, warum es fehlt\n\n**WICHTIG**: Gib die Ergebnisse im `criteria`-Array zurück. Füge ALLE 8 Standardkriterien PLUS alle zusätzlichen Kriterien hinzu, die du aus den Richtlinien-Präferenzen identifizierst. Jedes Kriterium muss haben: category (Name), citation (Array von Zitaten), risk_level (red/yellow/green) und reason (deutsche Erklärung).\n\nGib eine umfassende Analyse mit Zitaten und Begründung auf Deutsch an."
+  },
+  "prompt": {
+    "en": "**Policy Preferences to Apply:**\n{{custom_rules}}\n\n**NDA Document to Analyze:**\n{{content}}",
+    "de": "**Anzuwendende Richtlinien-Präferenzen:**\n{{custom_rules}}\n\n**Zu analysierendes NDA-Dokument:**\n{{content}}"
+  },
+  "tokenLimit": 16000,
+  "preferredModel": "gpt-oss-vllm",
+  "preferredOutputFormat": "json",
+  "preferredStyle": "professional",
+  "sendChatHistory": false,
+  "messagePlaceholder": {
+    "en": "Paste NDA text here or upload a document...",
+    "de": "NDA-Text hier einfügen oder Dokument hochladen..."
+  },
+  "greeting": {
+    "en": {
+      "title": "⚖️ NDA Risk Analyzer",
+      "subtitle": "Upload your NDA document for comprehensive 8-criteria risk assessment: Mutuality, Cooperation Subject, Confidential Info Definition, Duration, Penalties, Third Party Disclosure, Project/Customer Protection, and Non-Compete."
+    },
+    "de": {
+      "title": "⚖️ NDA-Risikoanalyse",
+      "subtitle": "Laden Sie Ihr NDA-Dokument hoch für eine umfassende 8-Kriterien-Risikobewertung: Gegenseitigkeit, Kooperationsgegenstand, Definition vertraulicher Informationen, Laufzeit, Vertragsstrafen, Weitergabe an Dritte, Projekt-/Kundenschutz und Wettbewerbsklausel."
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "overall_risk": {
+        "type": "string",
+        "enum": [
+          "red",
+          "yellow",
+          "green"
+        ],
+        "description": "Overall risk assessment based on all criteria (red if any red, yellow if any yellow but no red, otherwise green)"
+      },
+      "criteria": {
+        "type": "array",
+        "description": "List of all criteria evaluated - always include the standard 8 criteria (Mutuality, Cooperation Subject, Confidential Information Definition, Duration, Penalties, Third Party Disclosure, Project/Customer Protection, Non-Compete) plus any additional criteria from custom policy rules",
+        "items": {
+          "type": "object",
+          "properties": {
+            "category": {
+              "type": "string",
+              "description": "Name of the criterion (e.g., 'Mutuality', 'Duration', 'GDPR Compliance', etc.)"
+            },
+            "citation": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of exact full-sentence or full-paragraph quotations from NDA text related to this criterion"
+            },
+            "risk_level": {
+              "type": "string",
+              "enum": [
+                "red",
+                "yellow",
+                "green"
+              ],
+              "description": "Risk classification for this criterion"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Detailed explanation in German of why this risk level was assigned"
+            }
+          },
+          "required": [
+            "category",
+            "citation",
+            "risk_level",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 8
+      }
+    },
+    "required": [
+      "overall_risk",
+      "criteria"
+    ],
+    "additionalProperties": false
+  },
+  "upload": {
+    "enabled": true,
+    "fileUpload": {
+      "enabled": true,
+      "maxFileSizeMB": 10,
+      "supportedTextFormats": [
+        "text/plain",
+        "text/markdown",
+        "text/x-markdown"
+      ],
+      "supportedPdfFormats": [
+        "application/pdf"
+      ]
+    },
+    "imageUpload": {
+      "enabled": false
+    }
+  },
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": false
+    },
+    "outputFormat": {
+      "enabled": false
+    },
+    "chatHistory": {
+      "enabled": false
+    },
+    "style": {
+      "enabled": false
+    }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 8,
+    "microphone": {
+      "enabled": false
+    }
+  },
+  "variables": [
+    {
+      "name": "custom_rules",
+      "label": {
+        "en": "Custom Policy Rules",
+        "de": "Benutzerdefinierte Richtlinien"
+      },
+      "type": "text",
+      "defaultValue": {
+        "en": " ",
+        "de": " "
+      },
+      "description": {
+        "en": "Define your organization's NDA policy preferences. These rules will be used to evaluate the risk level of each criterion.",
+        "de": "Definieren Sie die NDA-Richtlinien Ihrer Organisation. Diese Regeln werden verwendet, um das Risikoniveau jedes Kriteriums zu bewerten."
+      },
+      "placeholder": {
+        "en": "Enter your custom policy rules, one per line...",
+        "de": "Geben Sie Ihre benutzerdefinierten Richtlinien ein, eine pro Zeile..."
+      },
+      "required": false
+    }
+  ],
+  "allowEmptyContent": false,
+  "disallowModelSelection": false,
+  "enabled": true
+}
