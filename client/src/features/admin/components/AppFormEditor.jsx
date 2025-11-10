@@ -1056,12 +1056,25 @@ const AppFormEditor = ({
                               { mime: 'text/javascript', label: 'JS' },
                               { mime: 'application/javascript', label: 'JS' },
                               { mime: 'text/xml', label: 'XML' },
+                              { mime: 'message/rfc822', label: 'EML' },
                               { mime: 'application/pdf', label: 'PDF' },
                               {
                                 mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                                 label: 'DOCX'
                               },
-                              { mime: 'application/vnd.ms-outlook', label: 'MSG' }
+                              { mime: 'application/vnd.ms-outlook', label: 'MSG' },
+                              {
+                                mime: 'application/vnd.oasis.opendocument.text',
+                                label: 'ODT'
+                              },
+                              {
+                                mime: 'application/vnd.oasis.opendocument.spreadsheet',
+                                label: 'ODS'
+                              },
+                              {
+                                mime: 'application/vnd.oasis.opendocument.presentation',
+                                label: 'ODP'
+                              }
                             ].map(({ mime, label }) => (
                               <div key={mime} className="flex items-center">
                                 <input
@@ -1082,9 +1095,13 @@ const AppFormEditor = ({
                                       'text/javascript',
                                       'application/javascript',
                                       'text/xml',
+                                      'message/rfc822',
                                       'application/pdf',
                                       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                      'application/vnd.ms-outlook'
+                                      'application/vnd.ms-outlook',
+                                      'application/vnd.oasis.opendocument.text',
+                                      'application/vnd.oasis.opendocument.spreadsheet',
+                                      'application/vnd.oasis.opendocument.presentation'
                                     ];
                                     const newFormats = e.target.checked
                                       ? [...currentFormats.filter(f => f !== mime), mime]

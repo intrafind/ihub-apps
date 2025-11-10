@@ -23,8 +23,14 @@ const loadMsgReader = async () => {
   return MsgReader;
 };
 
+// Lazy load JSZip only when needed for OpenOffice formats
+const loadJSZip = async () => {
+  const JSZip = await import('jszip');
+  return JSZip.default;
+};
+
 /**
- * Lightweight wrapper for uploading text, PDF, DOCX, and MSG files.
+ * Lightweight wrapper for uploading text, PDF, DOCX, MSG, EML, and OpenOffice files.
  */
 const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config = {} }) => {
   const { t } = useTranslation();
@@ -40,9 +46,13 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
     'text/javascript',
     'application/javascript',
     'text/xml',
+    'message/rfc822',
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-outlook'
+    'application/vnd.ms-outlook',
+    'application/vnd.oasis.opendocument.text',
+    'application/vnd.oasis.opendocument.spreadsheet',
+    'application/vnd.oasis.opendocument.presentation'
   ];
 
   const getFileTypeDisplay = mimeType => {
@@ -62,12 +72,22 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
       case 'text/javascript':
       case 'application/javascript':
         return 'JS';
+      case 'text/xml':
+        return 'XML';
+      case 'message/rfc822':
+        return 'EML';
       case 'application/pdf':
         return 'PDF';
       case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
         return 'DOCX';
       case 'application/vnd.ms-outlook':
         return 'MSG';
+      case 'application/vnd.oasis.opendocument.text':
+        return 'ODT';
+      case 'application/vnd.oasis.opendocument.spreadsheet':
+        return 'ODS';
+      case 'application/vnd.oasis.opendocument.presentation':
+        return 'ODP';
       default:
         return 'FILE';
     }
@@ -144,6 +164,49 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
 
       processedContent = textContent.trim();
       content = processedContent;
+    } else if (
+      file.type === 'application/vnd.oasis.opendocument.text' ||
+      file.type === 'application/vnd.oasis.opendocument.spreadsheet' ||
+      file.type === 'application/vnd.oasis.opendocument.presentation'
+    ) {
+      // OpenOffice/LibreOffice format processing
+      const arrayBuffer = await file.arrayBuffer();
+      const JSZip = await loadJSZip();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+
+      // Extract content.xml which contains the text content
+      const contentXml = await zip.file('content.xml')?.async('string');
+
+      if (contentXml) {
+        // Parse XML and extract text content
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(contentXml, 'text/xml');
+
+        // Extract all text nodes
+        const extractText = node => {
+          let text = '';
+          if (node.nodeType === Node.TEXT_NODE) {
+            text = node.textContent;
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            // Add line breaks for paragraphs
+            if (node.nodeName === 'text:p' || node.nodeName === 'text:h') {
+              text = '\n';
+            }
+            for (const child of node.childNodes) {
+              text += extractText(child);
+            }
+            if (node.nodeName === 'text:p' || node.nodeName === 'text:h') {
+              text += '\n';
+            }
+          }
+          return text;
+        };
+
+        processedContent = extractText(xmlDoc.documentElement).trim();
+        content = processedContent;
+      } else {
+        throw new Error('Unable to extract content from OpenOffice document');
+      }
     } else {
       // Text file processing (default for all other supported formats)
       content = await readTextFile(file);
@@ -188,12 +251,20 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
           return 'JS';
         case 'text/xml':
           return 'XML';
+        case 'message/rfc822':
+          return 'EML';
         case 'application/pdf':
           return 'PDF';
         case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
           return 'DOCX';
         case 'application/vnd.ms-outlook':
           return 'MSG';
+        case 'application/vnd.oasis.opendocument.text':
+          return 'ODT';
+        case 'application/vnd.oasis.opendocument.spreadsheet':
+          return 'ODS';
+        case 'application/vnd.oasis.opendocument.presentation':
+          return 'ODP';
         default:
           return format;
       }

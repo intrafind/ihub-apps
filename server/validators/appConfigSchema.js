@@ -129,9 +129,13 @@ const uploadSchema = z
             'text/javascript',
             'application/javascript',
             'text/xml',
+            'message/rfc822',
             'application/pdf',
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.ms-outlook'
+            'application/vnd.ms-outlook',
+            'application/vnd.oasis.opendocument.text',
+            'application/vnd.oasis.opendocument.spreadsheet',
+            'application/vnd.oasis.opendocument.presentation'
           ])
       })
       .optional()
