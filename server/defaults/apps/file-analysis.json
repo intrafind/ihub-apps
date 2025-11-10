@@ -45,7 +45,11 @@
         "message/rfc2822",
         "application/eml"
       ],
-      "supportedPdfFormats": ["application/pdf"]
+      "supportedPdfFormats": ["application/pdf"],
+      "supportedDocxFormats": [
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "supportedMsgFormats": ["application/vnd.ms-outlook"]
     }
   },
   "enabled": true
