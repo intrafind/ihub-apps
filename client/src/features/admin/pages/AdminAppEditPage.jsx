@@ -72,7 +72,7 @@ const AdminAppEditPage = () => {
         icon: 'chat-bubbles',
         system: { en: '' },
         tokenLimit: 4096,
-        preferredModel: 'gpt-4',
+        preferredModel: undefined,
         preferredOutputFormat: 'markdown',
         preferredStyle: 'keep',
         preferredTemperature: 0.7,

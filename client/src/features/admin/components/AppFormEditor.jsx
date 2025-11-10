@@ -1168,15 +1168,16 @@ const AppFormEditor = ({
                       {t('admin.apps.edit.magicPromptModel', 'Magic Prompt Model')}
                     </label>
                     <select
-                      value={app.features?.magicPrompt?.model || 'gpt-4'}
+                      value={app.features?.magicPrompt?.model || ''}
                       onChange={e =>
                         handleInputChange('features', {
                           ...app.features,
-                          magicPrompt: { ...app.features?.magicPrompt, model: e.target.value }
+                          magicPrompt: { ...app.features?.magicPrompt, model: e.target.value || undefined }
                         })
                       }
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     >
+                      <option value="">{t('admin.apps.edit.selectModel', 'Select model...')}</option>
                       {availableModels.map(model => (
                         <option key={model.id} value={model.id}>
                           {getLocalizedContent(model.name, currentLanguage)}

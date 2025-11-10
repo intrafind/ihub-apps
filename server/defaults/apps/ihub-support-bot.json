@@ -75,7 +75,7 @@
     },
     "fileUpload": {
       "maxFileSizeMB": 5,
-      "supportedTextFormats": [
+      "supportedFormats": [
         "text/plain",
         "text/markdown",
         "text/csv",
@@ -84,9 +84,9 @@
         "text/css",
         "text/javascript",
         "application/javascript",
-        "text/xml"
-      ],
-      "supportedPdfFormats": ["application/pdf"]
+        "text/xml",
+        "application/pdf"
+      ]
     }
   }
 }
