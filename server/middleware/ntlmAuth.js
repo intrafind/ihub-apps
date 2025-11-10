@@ -39,38 +39,50 @@ function createNtlmMiddleware(ntlmConfig = {}) {
   console.log(
     `[NTLM Auth] Configuring NTLM middleware with domain: ${options.domain || 'default'}`
   );
-  console.log(
-    `[NTLM Auth] Domain controller: ${options.domaincontroller || 'NOT CONFIGURED'}`
-  );
-  console.log(
-    `[NTLM Auth] Get groups enabled: ${options.getGroups}`
-  );
+  console.log(`[NTLM Auth] Domain controller: ${options.domaincontroller || 'NOT CONFIGURED'}`);
+  console.log(`[NTLM Auth] Get groups enabled: ${options.getGroups}`);
   console.log(
     `[NTLM Auth] LDAP bind user: ${options.domaincontrolleruser ? '✓ Configured' : '✗ NOT CONFIGURED'}`
   );
   console.log(
     `[NTLM Auth] LDAP bind password: ${options.domaincontrollerpassword ? '✓ Configured' : '✗ NOT CONFIGURED'}`
   );
-  console.log(
-    `[NTLM Auth] Debug mode: ${options.debug}`
-  );
+  console.log(`[NTLM Auth] Debug mode: ${options.debug}`);
 
   // Warn if getGroups is enabled but no domain controller is configured
   if (options.getGroups && !options.domaincontroller) {
-    console.warn('⚠️  [NTLM Auth] WARNING: getGroups is enabled but no domain controller is configured.');
+    console.warn(
+      '⚠️  [NTLM Auth] WARNING: getGroups is enabled but no domain controller is configured.'
+    );
     console.warn('⚠️  [NTLM Auth] Group retrieval requires a domain controller for LDAP queries.');
     console.warn('⚠️  [NTLM Auth] Users will be assigned default groups only.');
-    console.warn('⚠️  [NTLM Auth] To fix: Configure "domainController" in platform.json ntlmAuth section');
+    console.warn(
+      '⚠️  [NTLM Auth] To fix: Configure "domainController" in platform.json ntlmAuth section'
+    );
     console.warn('⚠️  [NTLM Auth] Example: "domainController": "ldap://dc.yourdomain.com"');
   }
 
   // Warn if getGroups is enabled but LDAP credentials are missing
-  if (options.getGroups && options.domaincontroller && (!options.domaincontrolleruser || !options.domaincontrollerpassword)) {
-    console.warn('⚠️  [NTLM Auth] WARNING: getGroups is enabled with domain controller, but LDAP credentials are missing.');
-    console.warn('⚠️  [NTLM Auth] Group retrieval requires LDAP bind credentials to query Active Directory.');
-    console.warn('⚠️  [NTLM Auth] Configure "domainControllerUser" and "domainControllerPassword" in platform.json');
-    console.warn('⚠️  [NTLM Auth] Example: "domainControllerUser": "CN=Service Account,OU=Users,DC=muc,DC=intrafind,DC=de"');
-    console.warn('⚠️  [NTLM Auth] Or use environment variables: NTLM_LDAP_USER and NTLM_LDAP_PASSWORD');
+  if (
+    options.getGroups &&
+    options.domaincontroller &&
+    (!options.domaincontrolleruser || !options.domaincontrollerpassword)
+  ) {
+    console.warn(
+      '⚠️  [NTLM Auth] WARNING: getGroups is enabled with domain controller, but LDAP credentials are missing.'
+    );
+    console.warn(
+      '⚠️  [NTLM Auth] Group retrieval requires LDAP bind credentials to query Active Directory.'
+    );
+    console.warn(
+      '⚠️  [NTLM Auth] Configure "domainControllerUser" and "domainControllerPassword" in platform.json'
+    );
+    console.warn(
+      '⚠️  [NTLM Auth] Example: "domainControllerUser": "CN=Service Account,OU=Users,DC=muc,DC=intrafind,DC=de"'
+    );
+    console.warn(
+      '⚠️  [NTLM Auth] Or use environment variables: NTLM_LDAP_USER and NTLM_LDAP_PASSWORD'
+    );
   }
 
   return expressNtlm(options);
@@ -133,12 +145,20 @@ function processNtlmUser(req, ntlmConfig) {
     groups = ntlmUser.Groups;
     console.debug('[NTLM Auth] Found groups in ntlmUser.Groups:', groups);
   } else {
-    console.debug('[NTLM Auth] No groups found in NTLM data. Available fields:', Object.keys(ntlmUser));
+    console.debug(
+      '[NTLM Auth] No groups found in NTLM data. Available fields:',
+      Object.keys(ntlmUser)
+    );
     console.debug('[NTLM Auth] NTLM config getGroups setting:', ntlmConfig.getGroups);
-    console.debug('[NTLM Auth] NTLM config domainController:', ntlmConfig.domainController || 'NOT CONFIGURED');
+    console.debug(
+      '[NTLM Auth] NTLM config domainController:',
+      ntlmConfig.domainController || 'NOT CONFIGURED'
+    );
 
     if (ntlmConfig.getGroups && !ntlmConfig.domainController) {
-      console.warn('⚠️  [NTLM Auth] Groups cannot be retrieved without a domain controller configuration');
+      console.warn(
+        '⚠️  [NTLM Auth] Groups cannot be retrieved without a domain controller configuration'
+      );
     }
   }
 

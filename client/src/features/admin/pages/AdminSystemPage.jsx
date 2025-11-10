@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
@@ -21,6 +21,29 @@ const AdminSystemPage = () => {
   const [exportLoading, setExportLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [importMessage, setImportMessage] = useState('');
+  const [versionInfo, setVersionInfo] = useState(null);
+  const [versionLoading, setVersionLoading] = useState(true);
+  const [versionError, setVersionError] = useState('');
+
+  // Fetch version information on mount
+  useEffect(() => {
+    const fetchVersionInfo = async () => {
+      try {
+        const response = await makeAdminApiCall('/admin/version', {
+          method: 'GET'
+        });
+        setVersionInfo(response.data);
+        setVersionError('');
+      } catch (error) {
+        console.error('Error fetching version info:', error);
+        setVersionError(error.message || 'Failed to load version information');
+      } finally {
+        setVersionLoading(false);
+      }
+    };
+
+    fetchVersionInfo();
+  }, []);
 
   const handleForceRefresh = async () => {
     setForceRefreshLoading(true);
@@ -717,6 +740,107 @@ const AdminSystemPage = () => {
                       )}
                     </p>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Version Information Section */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0 mt-1">
+                  <div className="p-3 rounded-full bg-blue-100">
+                    <Icon name="information-circle" size="lg" className="text-blue-600" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    {t('admin.system.versionTitle', 'Version Information')}
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    {t(
+                      'admin.system.versionDesc',
+                      'Current version information for the application, frontend, and backend components.'
+                    )}
+                  </p>
+
+                  {versionLoading ? (
+                    <div className="flex items-center text-gray-600">
+                      <svg
+                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      {t('admin.system.versionLoading', 'Loading version information...')}
+                    </div>
+                  ) : versionError ? (
+                    <div className="p-4 rounded-md bg-red-50 border border-red-200">
+                      <div className="flex">
+                        <Icon name="warning" size="md" className="text-red-500 mt-0.5 mr-3" />
+                        <p className="text-sm text-red-700">
+                          {t('admin.system.versionError', 'Failed to load version information')}:{' '}
+                          {versionError}
+                        </p>
+                      </div>
+                    </div>
+                  ) : versionInfo ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-gray-50 rounded-md p-4 border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">
+                            {t('admin.system.versionApp', 'Application Version')}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900">
+                            {versionInfo.app}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-md p-4 border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">
+                            {t('admin.system.versionClient', 'Frontend Version')}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900">
+                            {versionInfo.client}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-md p-4 border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">
+                            {t('admin.system.versionServer', 'Backend Version')}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900">
+                            {versionInfo.server}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-md p-4 border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">
+                            {t('admin.system.versionNode', 'Node.js Version')}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900">
+                            {versionInfo.node}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
