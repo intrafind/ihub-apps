@@ -585,6 +585,8 @@ const AppChat = () => {
   };
 
   const handleResendMessage = (messageId, editedContent, useMaxTokens = false) => {
+    console.log('🔄 handleResendMessage called with useMaxTokens:', useMaxTokens);
+
     const resendData = prepareResend(messageId, editedContent);
     const {
       content: contentToResend,
@@ -604,19 +606,43 @@ const AppChat = () => {
       setVariables(variablesToRestore);
     }
 
-    // Restore image data if it exists
-    if (imageDataToRestore) {
-      setSelectedImage(imageDataToRestore);
+    // Clear any existing selected files first
+    fileUploadHandler.clearSelectedFile();
+
+    // Restore file data (images and/or documents) if they exist
+    if (imageDataToRestore || fileDataToRestore) {
+      // Reconstruct the selectedFile state from imageData and fileData
+      let filesToRestore = [];
+
+      // Add images to the array
+      if (imageDataToRestore) {
+        if (Array.isArray(imageDataToRestore)) {
+          filesToRestore = [...filesToRestore, ...imageDataToRestore];
+        } else {
+          filesToRestore.push(imageDataToRestore);
+        }
+      }
+
+      // Add documents to the array
+      if (fileDataToRestore) {
+        if (Array.isArray(fileDataToRestore)) {
+          filesToRestore = [...filesToRestore, ...fileDataToRestore];
+        } else {
+          filesToRestore.push(fileDataToRestore);
+        }
+      }
+
+      // Set the selected file(s)
+      if (filesToRestore.length === 1) {
+        fileUploadHandler.setSelectedFile(filesToRestore[0]);
+      } else if (filesToRestore.length > 1) {
+        fileUploadHandler.setSelectedFile(filesToRestore);
+      }
     }
 
-    // Restore file data if it exists
-    if (fileDataToRestore) {
-      setSelectedFile(fileDataToRestore);
-    }
-
-    if (useMaxTokens) {
-      setUseMaxTokens(true);
-    }
+    // Always set the useMaxTokens state based on the parameter
+    console.log(`Setting useMaxTokens to: ${useMaxTokens}`);
+    setUseMaxTokens(useMaxTokens);
 
     setTimeout(() => {
       const form = document.querySelector('form');
@@ -706,7 +732,6 @@ const AppChat = () => {
 
     let finalInput = input.trim();
     let messageContent = finalInput;
-    let messageData = null;
 
     if (fileUploadHandler.selectedFile) {
       // Handle multiple files
@@ -739,31 +764,39 @@ const AppChat = () => {
         }
 
         messageContent = contentParts.filter(Boolean).join('\n\n');
-        messageData = {
-          imageData: images.length > 0 ? images : undefined,
-          fileData: documents.length > 0 ? documents : undefined
-        };
       } else {
         // Handle single file (legacy behavior)
         if (fileUploadHandler.selectedFile.type === 'image') {
           const imgPreview = `<img src="${fileUploadHandler.selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
           messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
-          messageData = { imageData: fileUploadHandler.selectedFile };
         } else {
           const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
           messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
-          messageData = { fileData: fileUploadHandler.selectedFile };
         }
       }
     }
+
+    const params = {
+      modelId: selectedModel,
+      style: selectedStyle,
+      temperature,
+      outputFormat: selectedOutputFormat,
+      language: currentLanguage,
+      ...(useMaxTokens ? { useMaxTokens: true } : {}),
+      ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
+      ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+      ...(thinkingThoughts !== null ? { thinkingThoughts } : {})
+    };
+
+    console.log('📤 Sending message with params:', params);
+    console.log('🔢 useMaxTokens state:', useMaxTokens);
 
     sendChatMessage({
       displayMessage: {
         content: messageContent,
         meta: {
           rawContent: input,
-          variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined,
-          ...messageData
+          variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined
         }
       },
       apiMessage: {
@@ -781,21 +814,12 @@ const AppChat = () => {
             ? fileUploadHandler.selectedFile
             : null
       },
-      params: {
-        modelId: selectedModel,
-        style: selectedStyle,
-        temperature,
-        outputFormat: selectedOutputFormat,
-        language: currentLanguage,
-        ...(useMaxTokens ? { useMaxTokens: true } : {}),
-        ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
-        ...(thinkingBudget !== null ? { thinkingBudget } : {}),
-        ...(thinkingThoughts !== null ? { thinkingThoughts } : {})
-      },
+      params,
       sendChatHistory
     });
 
     setInput('');
+    setUseMaxTokens(false); // Reset to use app token limit for next message
     magicPromptHandler.resetMagicPrompt();
     fileUploadHandler.clearSelectedFile();
     fileUploadHandler.hideUploader();
