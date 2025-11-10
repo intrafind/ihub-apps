@@ -9,7 +9,7 @@
   "scripts": {
     "// === DEVELOPMENT ===": "",
     "setup:dev": "cp .env.example .env && npm run install:all && echo '\\n✅ Setup complete! Edit .env with your API keys, then run: npm run dev'",
-    "dev": "concurrently --kill-others-on-fail \"npm run server\" \"sleep 2 && npm run client\"",
+    "dev": "NODE_ENV=development concurrently --kill-others-on-fail \"npm run server\" \"sleep 2 && npm run client\"",
     "server": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
     "client": "cd client && npm run dev",
     "start": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
