@@ -289,7 +289,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
       });
 
       // Create the app
-      const response = await makeAdminApiCall('admin/apps', {
+      const response = await makeAdminApiCall('/admin/apps', {
         method: 'POST',
         body: JSON.stringify(cleanedAppData)
       });
@@ -634,7 +634,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
       try {
         setLoadingPrompt(true);
         const response = await makeAdminApiCall(
-          buildApiUrl(`admin/prompts/app-generator?lang=${selectedLanguage}`)
+          buildApiUrl(`/admin/prompts/app-generator?lang=${selectedLanguage}`)
         );
         if (response.ok) {
           const data = await response.json();
@@ -644,7 +644,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
           // Fallback to default language if the selected language fails
           if (selectedLanguage !== DEFAULT_LANGUAGE) {
             const fallbackResponse = await makeAdminApiCall(
-              buildApiUrl(`admin/prompts/app-generator?lang=${DEFAULT_LANGUAGE}`)
+              buildApiUrl(`/admin/prompts/app-generator?lang=${DEFAULT_LANGUAGE}`)
             );
             if (fallbackResponse.ok) {
               const fallbackData = await fallbackResponse.json();
@@ -669,7 +669,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
       setGenerating(true);
 
       // Use OpenAI completion directly for app generation
-      const response = await makeAdminApiCall('completions', {
+      const response = await makeAdminApiCall('/completions', {
         method: 'POST',
         body: JSON.stringify({
           messages: [

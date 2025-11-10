@@ -456,11 +456,15 @@
         "review": {
           "title": "Review & Create",
           "description": "Review your app configuration before creating",
+          "instruction": "Review your app configuration before creating it.",
           "basicInfo": "Basic Information",
           "systemPrompt": "System Prompt",
           "settings": "Settings",
           "selectedTools": "Selected Tools",
-          "noTools": "No tools selected"
+          "noTools": "No tools selected",
+          "basedOn": "Based on template: {templateName}",
+          "overridden": "Overridden fields: {fields}",
+          "warning": "Once created, you can edit the app configuration but cannot change its ID. Make sure the ID is unique and descriptive."
         },
         "error": {
           "missingFields": "Please fill in all required fields before proceeding.",
