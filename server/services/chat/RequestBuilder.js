@@ -113,7 +113,9 @@ class RequestBuilder {
       );
       llmMessages = preprocessMessagesWithFileData(llmMessages);
 
-      console.log(`Preparing request for App: ${app.id}, Model: ${model.id}, Max Tokens: ${useMaxTokens ? 'Max' : 'Calculated'}`);
+      console.log(
+        `Preparing request for App: ${app.id}, Model: ${model.id}, Max Tokens: ${useMaxTokens ? 'Max' : 'Calculated'}`
+      );
       const appTokenLimit = app.tokenLimit || 1024;
       console.log(`App Token Limit: ${appTokenLimit}`);
       const modelTokenLimit = model.tokenLimit || appTokenLimit;
