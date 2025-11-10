@@ -113,7 +113,7 @@ const AdminAppEditPage = () => {
           fileUpload: {
             enabled: false,
             maxFileSizeMB: 5,
-            supportedTextFormats: [
+            supportedFormats: [
               'text/plain',
               'text/markdown',
               'text/csv',
@@ -122,9 +122,11 @@ const AdminAppEditPage = () => {
               'text/css',
               'text/javascript',
               'application/javascript',
-              'text/xml'
-            ],
-            supportedPdfFormats: ['application/pdf']
+              'text/xml',
+              'application/pdf',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              'application/vnd.ms-outlook'
+            ]
           }
         }
       });
@@ -183,7 +185,7 @@ const AdminAppEditPage = () => {
           fileUpload: {
             enabled: data.upload?.fileUpload?.enabled || false,
             maxFileSizeMB: data.upload?.fileUpload?.maxFileSizeMB || 5,
-            supportedTextFormats: data.upload?.fileUpload?.supportedTextFormats || [
+            supportedFormats: data.upload?.fileUpload?.supportedFormats || [
               'text/plain',
               'text/markdown',
               'text/csv',
@@ -192,9 +194,11 @@ const AdminAppEditPage = () => {
               'text/css',
               'text/javascript',
               'application/javascript',
-              'text/xml'
-            ],
-            supportedPdfFormats: data.upload?.fileUpload?.supportedPdfFormats || ['application/pdf']
+              'text/xml',
+              'application/pdf',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              'application/vnd.ms-outlook'
+            ]
           },
           ...(data.upload || {})
         }

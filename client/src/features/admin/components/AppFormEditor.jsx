@@ -1043,31 +1043,36 @@ const AppFormEditor = ({
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-700">
-                            {t('admin.apps.edit.supportedTextFormats', 'Supported Text Formats')}
+                            {t('admin.apps.edit.supportedFormats', 'Supported File Formats')}
                           </label>
                           <div className="mt-1 space-y-1">
                             {[
-                              'text/plain',
-                              'text/markdown',
-                              'text/csv',
-                              'application/json',
-                              'text/html',
-                              'text/css',
-                              'text/javascript',
-                              'application/javascript',
-                              'text/xml'
-                            ].map(format => (
-                              <div key={format} className="flex items-center">
+                              { mime: 'text/plain', label: 'TXT' },
+                              { mime: 'text/markdown', label: 'MD' },
+                              { mime: 'text/csv', label: 'CSV' },
+                              { mime: 'application/json', label: 'JSON' },
+                              { mime: 'text/html', label: 'HTML' },
+                              { mime: 'text/css', label: 'CSS' },
+                              { mime: 'text/javascript', label: 'JS' },
+                              { mime: 'application/javascript', label: 'JS' },
+                              { mime: 'text/xml', label: 'XML' },
+                              { mime: 'application/pdf', label: 'PDF' },
+                              {
+                                mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                label: 'DOCX'
+                              },
+                              { mime: 'application/vnd.ms-outlook', label: 'MSG' }
+                            ].map(({ mime, label }) => (
+                              <div key={mime} className="flex items-center">
                                 <input
                                   type="checkbox"
                                   checked={
-                                    app.upload?.fileUpload?.supportedTextFormats?.includes(
-                                      format
-                                    ) !== false
+                                    app.upload?.fileUpload?.supportedFormats?.includes(mime) !==
+                                    false
                                   }
                                   onChange={e => {
                                     const currentFormats = app.upload?.fileUpload
-                                      ?.supportedTextFormats || [
+                                      ?.supportedFormats || [
                                       'text/plain',
                                       'text/markdown',
                                       'text/csv',
@@ -1076,60 +1081,27 @@ const AppFormEditor = ({
                                       'text/css',
                                       'text/javascript',
                                       'application/javascript',
-                                      'text/xml'
+                                      'text/xml',
+                                      'application/pdf',
+                                      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                      'application/vnd.ms-outlook'
                                     ];
                                     const newFormats = e.target.checked
-                                      ? [...currentFormats.filter(f => f !== format), format]
-                                      : currentFormats.filter(f => f !== format);
+                                      ? [...currentFormats.filter(f => f !== mime), mime]
+                                      : currentFormats.filter(f => f !== mime);
                                     handleInputChange('upload', {
                                       ...app.upload,
                                       fileUpload: {
                                         ...app.upload.fileUpload,
-                                        supportedTextFormats: newFormats
+                                        supportedFormats: newFormats
                                       }
                                     });
                                   }}
                                   className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                 />
-                                <label className="ml-2 block text-xs text-gray-700">
-                                  {format
-                                    .replace('text/', '')
-                                    .replace('application/', '')
-                                    .toUpperCase()}
-                                </label>
+                                <label className="ml-2 block text-xs text-gray-700">{label}</label>
                               </div>
                             ))}
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700">
-                            {t('admin.apps.edit.supportedPdfFormats', 'PDF Support')}
-                          </label>
-                          <div className="mt-1">
-                            <div className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={
-                                  app.upload?.fileUpload?.supportedPdfFormats?.includes(
-                                    'application/pdf'
-                                  ) !== false
-                                }
-                                onChange={e => {
-                                  const newFormats = e.target.checked ? ['application/pdf'] : [];
-                                  handleInputChange('upload', {
-                                    ...app.upload,
-                                    fileUpload: {
-                                      ...app.upload.fileUpload,
-                                      supportedPdfFormats: newFormats
-                                    }
-                                  });
-                                }}
-                                className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                              />
-                              <label className="ml-2 block text-xs text-gray-700">
-                                {t('admin.apps.edit.enablePdfUpload', 'Enable PDF Upload')}
-                              </label>
-                            </div>
                           </div>
                         </div>
                       </div>
