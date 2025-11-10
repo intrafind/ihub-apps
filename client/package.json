@@ -11,6 +11,7 @@
   "dependencies": {
     "@babel/standalone": "^7.28.1",
     "@heroicons/react": "2.2.0",
+    "@kenjiuno/msgreader": "^1.27.0-alpha.3",
     "@microsoft/teams-js": "^2.19.0",
     "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/typography": "^0.5.16",
@@ -22,6 +23,8 @@
     "html-to-image": "^1.11.13",
     "i18next": "^24.2.3",
     "i18next-browser-languagedetector": "^8.0.4",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.11.0",
     "marked": "^15.0.8",
     "mermaid": "^11.10.0",
     "microsoft-cognitiveservices-speech-sdk": "^1.44.0",

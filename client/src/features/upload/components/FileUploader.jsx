@@ -11,14 +11,32 @@ const loadPdfjs = async () => {
   return pdfjsLib;
 };
 
+// Lazy load Mammoth only when needed
+const loadMammoth = async () => {
+  const mammoth = await import('mammoth');
+  return mammoth;
+};
+
+// Lazy load MSGReader only when needed
+const loadMsgReader = async () => {
+  const MsgReader = await import('@kenjiuno/msgreader');
+  return MsgReader;
+};
+
+// Lazy load JSZip only when needed for OpenOffice formats
+const loadJSZip = async () => {
+  const JSZip = await import('jszip');
+  return JSZip.default;
+};
+
 /**
- * Lightweight wrapper for uploading text or PDF files.
+ * Lightweight wrapper for uploading text, PDF, DOCX, MSG, EML, and OpenOffice files.
  */
 const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config = {} }) => {
   const { t } = useTranslation();
 
   const MAX_FILE_SIZE_MB = config.maxFileSizeMB || 10;
-  const SUPPORTED_TEXT_FORMATS = config.supportedTextFormats || [
+  const SUPPORTED_FORMATS = config.supportedFormats || [
     'text/plain',
     'text/markdown',
     'text/csv',
@@ -26,10 +44,16 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
     'text/html',
     'text/css',
     'text/javascript',
-    'application/javascript'
+    'application/javascript',
+    'text/xml',
+    'message/rfc822',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-outlook',
+    'application/vnd.oasis.opendocument.text',
+    'application/vnd.oasis.opendocument.spreadsheet',
+    'application/vnd.oasis.opendocument.presentation'
   ];
-  const SUPPORTED_PDF_FORMATS = config.supportedPdfFormats || ['application/pdf'];
-  const ALL_SUPPORTED_FORMATS = [...SUPPORTED_TEXT_FORMATS, ...SUPPORTED_PDF_FORMATS];
 
   const getFileTypeDisplay = mimeType => {
     switch (mimeType) {
@@ -48,8 +72,22 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
       case 'text/javascript':
       case 'application/javascript':
         return 'JS';
+      case 'text/xml':
+        return 'XML';
+      case 'message/rfc822':
+        return 'EML';
       case 'application/pdf':
         return 'PDF';
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+        return 'DOCX';
+      case 'application/vnd.ms-outlook':
+        return 'MSG';
+      case 'application/vnd.oasis.opendocument.text':
+        return 'ODT';
+      case 'application/vnd.oasis.opendocument.spreadsheet':
+        return 'ODS';
+      case 'application/vnd.oasis.opendocument.presentation':
+        return 'ODP';
       default:
         return 'FILE';
     }
@@ -68,7 +106,9 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
     let content = '';
     let processedContent = '';
 
-    if (SUPPORTED_PDF_FORMATS.includes(file.type)) {
+    // Determine processing method based on MIME type
+    if (file.type === 'application/pdf') {
+      // PDF processing
       const arrayBuffer = await file.arrayBuffer();
       const pdfjsLib = await loadPdfjs();
       const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
@@ -83,7 +123,92 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
 
       processedContent = textContent.trim();
       content = processedContent;
-    } else if (SUPPORTED_TEXT_FORMATS.includes(file.type)) {
+    } else if (
+      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
+      // DOCX processing
+      const arrayBuffer = await file.arrayBuffer();
+      const mammoth = await loadMammoth();
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+
+      // Extract plain text from HTML for better readability
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = result.value;
+      processedContent = tempDiv.textContent || tempDiv.innerText || '';
+      content = processedContent;
+    } else if (file.type === 'application/vnd.ms-outlook') {
+      // MSG processing
+      const arrayBuffer = await file.arrayBuffer();
+      const MsgReader = await loadMsgReader();
+      const msgReader = new MsgReader.default(arrayBuffer);
+      const fileData = msgReader.getFileData();
+
+      // Extract text content from MSG file
+      let textContent = '';
+      if (fileData.subject) {
+        textContent += `Subject: ${fileData.subject}\n\n`;
+      }
+      if (fileData.senderName) {
+        textContent += `From: ${fileData.senderName}`;
+        if (fileData.senderEmail) {
+          textContent += ` <${fileData.senderEmail}>`;
+        }
+        textContent += '\n';
+      }
+      if (fileData.recipients && fileData.recipients.length > 0) {
+        textContent += `To: ${fileData.recipients.map(r => r.name || r.email).join(', ')}\n`;
+      }
+      if (fileData.body) {
+        textContent += `\n${fileData.body}`;
+      }
+
+      processedContent = textContent.trim();
+      content = processedContent;
+    } else if (
+      file.type === 'application/vnd.oasis.opendocument.text' ||
+      file.type === 'application/vnd.oasis.opendocument.spreadsheet' ||
+      file.type === 'application/vnd.oasis.opendocument.presentation'
+    ) {
+      // OpenOffice/LibreOffice format processing
+      const arrayBuffer = await file.arrayBuffer();
+      const JSZip = await loadJSZip();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+
+      // Extract content.xml which contains the text content
+      const contentXml = await zip.file('content.xml')?.async('string');
+
+      if (contentXml) {
+        // Parse XML and extract text content
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(contentXml, 'text/xml');
+
+        // Extract all text nodes
+        const extractText = node => {
+          let text = '';
+          if (node.nodeType === Node.TEXT_NODE) {
+            text = node.textContent;
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            // Add line breaks for paragraphs
+            if (node.nodeName === 'text:p' || node.nodeName === 'text:h') {
+              text = '\n';
+            }
+            for (const child of node.childNodes) {
+              text += extractText(child);
+            }
+            if (node.nodeName === 'text:p' || node.nodeName === 'text:h') {
+              text += '\n';
+            }
+          }
+          return text;
+        };
+
+        processedContent = extractText(xmlDoc.documentElement).trim();
+        content = processedContent;
+      } else {
+        throw new Error('Unable to extract content from OpenOffice document');
+      }
+    } else {
+      // Text file processing (default for all other supported formats)
       content = await readTextFile(file);
       processedContent = content;
     }
@@ -107,7 +232,7 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
   };
 
   const formatList = (() => {
-    const textFormats = SUPPORTED_TEXT_FORMATS.map(format => {
+    const displayFormats = SUPPORTED_FORMATS.map(format => {
       switch (format) {
         case 'text/plain':
           return 'TXT';
@@ -126,12 +251,25 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
           return 'JS';
         case 'text/xml':
           return 'XML';
+        case 'message/rfc822':
+          return 'EML';
+        case 'application/pdf':
+          return 'PDF';
+        case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+          return 'DOCX';
+        case 'application/vnd.ms-outlook':
+          return 'MSG';
+        case 'application/vnd.oasis.opendocument.text':
+          return 'ODT';
+        case 'application/vnd.oasis.opendocument.spreadsheet':
+          return 'ODS';
+        case 'application/vnd.oasis.opendocument.presentation':
+          return 'ODP';
         default:
           return format;
       }
     });
-    const pdfFormats = SUPPORTED_PDF_FORMATS.map(f => (f === 'application/pdf' ? 'PDF' : f));
-    return [...new Set([...textFormats, ...pdfFormats])].join(', ');
+    return [...new Set(displayFormats)].join(', ');
   })();
 
   const getErrorMessage = code => {
@@ -155,7 +293,7 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
 
   return (
     <Uploader
-      accept={ALL_SUPPORTED_FORMATS}
+      accept={SUPPORTED_FORMATS}
       maxSizeMB={MAX_FILE_SIZE_MB}
       disabled={disabled}
       onSelect={onFileSelect}

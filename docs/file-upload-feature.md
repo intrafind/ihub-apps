@@ -2,7 +2,7 @@
 
 ## Overview
 
-The file upload feature allows users to upload text files and PDF documents to the iHub Apps chat interface. The uploaded content is automatically processed and included in the AI conversation.
+The file upload feature allows users to upload text files, PDF documents, Microsoft Office documents (.docx), OpenOffice/LibreOffice documents (.odt, .ods, .odp), and email files (.msg, .eml) to the iHub Apps chat interface. The uploaded content is automatically processed and included in the AI conversation.
 
 ## Supported File Types
 
@@ -15,10 +15,26 @@ The file upload feature allows users to upload text files and PDF documents to t
 - `.html` - HTML files
 - `.css` - CSS files
 - `.js` - JavaScript files
+- `.xml` - XML files
 
 ### PDF Files
 
-- `.pdf` - PDF documents (automatically converted to markdown)
+- `.pdf` - PDF documents (automatically converted to text)
+
+### Microsoft Office Documents
+
+- `.docx` - Microsoft Word documents (automatically converted to text)
+
+### OpenOffice/LibreOffice Documents
+
+- `.odt` - OpenDocument Text (Writer documents, automatically converted to text)
+- `.ods` - OpenDocument Spreadsheet (Calc spreadsheets, text content extracted)
+- `.odp` - OpenDocument Presentation (Impress presentations, text content extracted)
+
+### Email Files
+
+- `.msg` - Microsoft Outlook email messages (subject, sender, recipients, and body extracted)
+- `.eml` - Standard email format (RFC 822)
 
 ## File Size Limits
 
@@ -29,7 +45,11 @@ The file upload feature allows users to upload text files and PDF documents to t
 1. **File Selection**: Users click the paper-clip icon to open the file uploader
 2. **File Processing**:
    - Text files are read directly
-   - PDF files are converted to markdown using `@opendocsg/pdf2md`
+   - PDF files are converted to text using `pdfjs-dist`
+   - DOCX files are converted to text using `mammoth`
+   - MSG files are parsed using `@kenjiuno/msgreader` to extract subject, sender, recipients, and body
+   - EML files are read as text (RFC 822 format)
+   - OpenOffice/LibreOffice files (ODT, ODS, ODP) are processed using `jszip` to extract text from the XML content
 3. **Preview**: The first 200 characters of the file content are shown as a preview
 4. **AI Integration**: File content is prepended to the user's message and sent to the AI
 5. **Content Format**: Files are formatted as `[File: filename.ext (type)] content`
@@ -41,6 +61,13 @@ The file upload feature allows users to upload text files and PDF documents to t
 - `FileUploader.jsx` - Handles file selection and processing
 - `ChatInput.jsx` - Integrates file upload with chat input
 - `AppChat.jsx` - Manages file upload state
+
+### Frontend Libraries
+
+- `pdfjs-dist` - PDF text extraction
+- `mammoth` - DOCX to HTML/text conversion
+- `@kenjiuno/msgreader` - MSG file parsing
+- `jszip` - OpenOffice/LibreOffice document processing (ODT, ODS, ODP)
 
 ### Backend Processing
 
@@ -62,7 +89,7 @@ Enable file upload for an app by adding to the app configuration:
   },
   "fileUpload": {
     "maxFileSizeMB": 15,
-    "supportedTextFormats": [
+    "supportedFormats": [
       "text/plain",
       "text/markdown",
       "text/csv",
@@ -71,9 +98,11 @@ Enable file upload for an app by adding to the app configuration:
       "text/css",
       "text/javascript",
       "application/javascript",
-      "text/xml"
-    ],
-    "supportedPdfFormats": ["application/pdf"]
+      "text/xml",
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-outlook"
+    ]
   }
 }
 ```
@@ -98,10 +127,11 @@ Enable file upload for an app by adding to the app configuration:
 - Default: `10`
 - Range: 1-50 (limited by the `requestBodyLimitMB` setting)
 
-**fileUpload.supportedTextFormats** (array)
+**fileUpload.supportedFormats** (array)
 
-- List of supported MIME types for text files
-- Default: `["text/plain", "text/markdown", "text/csv", "application/json", "text/html", "text/css", "text/javascript", "application/javascript"]`
+- List of supported MIME types for file uploads
+- Default: All supported formats including text, PDF, DOCX, and MSG files
+- The system automatically selects the appropriate processing tool based on the MIME type
 - Common values:
   - `"text/plain"` - .txt files
   - `"text/markdown"` - .md files
@@ -111,12 +141,13 @@ Enable file upload for an app by adding to the app configuration:
   - `"text/css"` - .css files
   - `"text/javascript"` or `"application/javascript"` - .js files
   - `"text/xml"` - .xml files
-
-**fileUpload.supportedPdfFormats** (array)
-
-- List of supported MIME types for PDF files
-- Default: `["application/pdf"]`
-- Typically only includes `"application/pdf"`
+  - `"message/rfc822"` - .eml files (standard email format)
+  - `"application/pdf"` - .pdf files (processed with PDF.js)
+  - `"application/vnd.openxmlformats-officedocument.wordprocessingml.document"` - .docx files (processed with mammoth)
+  - `"application/vnd.ms-outlook"` - .msg files (processed with msgreader)
+  - `"application/vnd.oasis.opendocument.text"` - .odt files (processed with jszip)
+  - `"application/vnd.oasis.opendocument.spreadsheet"` - .ods files (processed with jszip)
+  - `"application/vnd.oasis.opendocument.presentation"` - .odp files (processed with jszip)
 
 #### Example Configurations
 
@@ -130,7 +161,7 @@ Enable file upload for an app by adding to the app configuration:
   },
   "fileUpload": {
     "maxFileSizeMB": 15,
-    "supportedTextFormats": [
+    "supportedFormats": [
       "text/plain",
       "text/markdown",
       "text/csv",
@@ -139,9 +170,11 @@ Enable file upload for an app by adding to the app configuration:
       "text/css",
       "text/javascript",
       "application/javascript",
-      "text/xml"
-    ],
-    "supportedPdfFormats": ["application/pdf"]
+      "text/xml",
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-outlook"
+    ]
   }
 }
 ```
@@ -156,13 +189,19 @@ Enable file upload for an app by adding to the app configuration:
   },
   "fileUpload": {
     "maxFileSizeMB": 10,
-    "supportedTextFormats": ["text/plain", "text/markdown", "text/html"],
-    "supportedPdfFormats": ["application/pdf"]
+    "supportedFormats": [
+      "text/plain",
+      "text/markdown",
+      "text/html",
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-outlook"
+    ]
   }
 }
 ```
 
-**Text-only file upload (Summarizer app):**
+**Text and PDF only (Summarizer app):**
 
 ```json
 {
@@ -171,8 +210,7 @@ Enable file upload for an app by adding to the app configuration:
   },
   "fileUpload": {
     "maxFileSizeMB": 5,
-    "supportedTextFormats": ["text/plain", "text/markdown", "text/html"],
-    "supportedPdfFormats": ["application/pdf"]
+    "supportedFormats": ["text/plain", "text/markdown", "text/html", "application/pdf"]
   }
 }
 ```

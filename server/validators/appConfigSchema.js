@@ -116,7 +116,7 @@ const uploadSchema = z
       .object({
         enabled: z.boolean().optional().default(false),
         maxFileSizeMB: z.number().int().min(1).max(100).optional().default(5),
-        supportedTextFormats: z
+        supportedFormats: z
           .array(z.string())
           .optional()
           .default([
@@ -128,9 +128,15 @@ const uploadSchema = z
             'text/css',
             'text/javascript',
             'application/javascript',
-            'text/xml'
-          ]),
-        supportedPdfFormats: z.array(z.string()).optional().default(['application/pdf'])
+            'text/xml',
+            'message/rfc822',
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-outlook',
+            'application/vnd.oasis.opendocument.text',
+            'application/vnd.oasis.opendocument.spreadsheet',
+            'application/vnd.oasis.opendocument.presentation'
+          ])
       })
       .optional()
   })
