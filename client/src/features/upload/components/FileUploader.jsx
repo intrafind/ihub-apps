@@ -11,8 +11,20 @@ const loadPdfjs = async () => {
   return pdfjsLib;
 };
 
+// Lazy load Mammoth only when needed
+const loadMammoth = async () => {
+  const mammoth = await import('mammoth');
+  return mammoth;
+};
+
+// Lazy load MSGReader only when needed
+const loadMsgReader = async () => {
+  const MsgReader = await import('@kenjiuno/msgreader');
+  return MsgReader;
+};
+
 /**
- * Lightweight wrapper for uploading text or PDF files.
+ * Lightweight wrapper for uploading text, PDF, DOCX, and MSG files.
  */
 const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config = {} }) => {
   const { t } = useTranslation();
@@ -29,7 +41,16 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
     'application/javascript'
   ];
   const SUPPORTED_PDF_FORMATS = config.supportedPdfFormats || ['application/pdf'];
-  const ALL_SUPPORTED_FORMATS = [...SUPPORTED_TEXT_FORMATS, ...SUPPORTED_PDF_FORMATS];
+  const SUPPORTED_DOCX_FORMATS = config.supportedDocxFormats || [
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
+  const SUPPORTED_MSG_FORMATS = config.supportedMsgFormats || ['application/vnd.ms-outlook'];
+  const ALL_SUPPORTED_FORMATS = [
+    ...SUPPORTED_TEXT_FORMATS,
+    ...SUPPORTED_PDF_FORMATS,
+    ...SUPPORTED_DOCX_FORMATS,
+    ...SUPPORTED_MSG_FORMATS
+  ];
 
   const getFileTypeDisplay = mimeType => {
     switch (mimeType) {
@@ -50,6 +71,10 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
         return 'JS';
       case 'application/pdf':
         return 'PDF';
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+        return 'DOCX';
+      case 'application/vnd.ms-outlook':
+        return 'MSG';
       default:
         return 'FILE';
     }
@@ -79,6 +104,43 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
         const textContentPage = await page.getTextContent();
         const textItems = textContentPage.items.map(item => item.str).join(' ');
         textContent += textItems + '\n';
+      }
+
+      processedContent = textContent.trim();
+      content = processedContent;
+    } else if (SUPPORTED_DOCX_FORMATS.includes(file.type)) {
+      const arrayBuffer = await file.arrayBuffer();
+      const mammoth = await loadMammoth();
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+
+      // Extract plain text from HTML for better readability
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = result.value;
+      processedContent = tempDiv.textContent || tempDiv.innerText || '';
+      content = processedContent;
+    } else if (SUPPORTED_MSG_FORMATS.includes(file.type)) {
+      const arrayBuffer = await file.arrayBuffer();
+      const MsgReader = await loadMsgReader();
+      const msgReader = new MsgReader.default(arrayBuffer);
+      const fileData = msgReader.getFileData();
+
+      // Extract text content from MSG file
+      let textContent = '';
+      if (fileData.subject) {
+        textContent += `Subject: ${fileData.subject}\n\n`;
+      }
+      if (fileData.senderName) {
+        textContent += `From: ${fileData.senderName}`;
+        if (fileData.senderEmail) {
+          textContent += ` <${fileData.senderEmail}>`;
+        }
+        textContent += '\n';
+      }
+      if (fileData.recipients && fileData.recipients.length > 0) {
+        textContent += `To: ${fileData.recipients.map(r => r.name || r.email).join(', ')}\n`;
+      }
+      if (fileData.body) {
+        textContent += `\n${fileData.body}`;
       }
 
       processedContent = textContent.trim();
@@ -131,7 +193,13 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
       }
     });
     const pdfFormats = SUPPORTED_PDF_FORMATS.map(f => (f === 'application/pdf' ? 'PDF' : f));
-    return [...new Set([...textFormats, ...pdfFormats])].join(', ');
+    const docxFormats = SUPPORTED_DOCX_FORMATS.map(f =>
+      f === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? 'DOCX' : f
+    );
+    const msgFormats = SUPPORTED_MSG_FORMATS.map(f =>
+      f === 'application/vnd.ms-outlook' ? 'MSG' : f
+    );
+    return [...new Set([...textFormats, ...pdfFormats, ...docxFormats, ...msgFormats])].join(', ');
   })();
 
   const getErrorMessage = code => {

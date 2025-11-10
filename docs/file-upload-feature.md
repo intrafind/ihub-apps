@@ -2,7 +2,7 @@
 
 ## Overview
 
-The file upload feature allows users to upload text files and PDF documents to the iHub Apps chat interface. The uploaded content is automatically processed and included in the AI conversation.
+The file upload feature allows users to upload text files, PDF documents, Microsoft Word documents (.docx), and Outlook messages (.msg) to the iHub Apps chat interface. The uploaded content is automatically processed and included in the AI conversation.
 
 ## Supported File Types
 
@@ -18,7 +18,15 @@ The file upload feature allows users to upload text files and PDF documents to t
 
 ### PDF Files
 
-- `.pdf` - PDF documents (automatically converted to markdown)
+- `.pdf` - PDF documents (automatically converted to text)
+
+### Microsoft Office Documents
+
+- `.docx` - Microsoft Word documents (automatically converted to text)
+
+### Email Files
+
+- `.msg` - Microsoft Outlook email messages (subject, sender, recipients, and body extracted)
 
 ## File Size Limits
 
@@ -29,7 +37,9 @@ The file upload feature allows users to upload text files and PDF documents to t
 1. **File Selection**: Users click the paper-clip icon to open the file uploader
 2. **File Processing**:
    - Text files are read directly
-   - PDF files are converted to markdown using `@opendocsg/pdf2md`
+   - PDF files are converted to text using `pdfjs-dist`
+   - DOCX files are converted to text using `mammoth`
+   - MSG files are parsed using `@kenjiuno/msgreader` to extract subject, sender, recipients, and body
 3. **Preview**: The first 200 characters of the file content are shown as a preview
 4. **AI Integration**: File content is prepended to the user's message and sent to the AI
 5. **Content Format**: Files are formatted as `[File: filename.ext (type)] content`
@@ -41,6 +51,12 @@ The file upload feature allows users to upload text files and PDF documents to t
 - `FileUploader.jsx` - Handles file selection and processing
 - `ChatInput.jsx` - Integrates file upload with chat input
 - `AppChat.jsx` - Manages file upload state
+
+### Frontend Libraries
+
+- `pdfjs-dist` - PDF text extraction
+- `mammoth` - DOCX to HTML/text conversion
+- `@kenjiuno/msgreader` - MSG file parsing
 
 ### Backend Processing
 
@@ -73,7 +89,11 @@ Enable file upload for an app by adding to the app configuration:
       "application/javascript",
       "text/xml"
     ],
-    "supportedPdfFormats": ["application/pdf"]
+    "supportedPdfFormats": ["application/pdf"],
+    "supportedDocxFormats": [
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "supportedMsgFormats": ["application/vnd.ms-outlook"]
   }
 }
 ```
@@ -118,6 +138,18 @@ Enable file upload for an app by adding to the app configuration:
 - Default: `["application/pdf"]`
 - Typically only includes `"application/pdf"`
 
+**fileUpload.supportedDocxFormats** (array)
+
+- List of supported MIME types for Microsoft Word documents
+- Default: `["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]`
+- Typically only includes the DOCX MIME type
+
+**fileUpload.supportedMsgFormats** (array)
+
+- List of supported MIME types for Microsoft Outlook email messages
+- Default: `["application/vnd.ms-outlook"]`
+- Typically only includes the MSG MIME type
+
 #### Example Configurations
 
 **Full-featured file upload (AI Chat app):**
@@ -141,7 +173,11 @@ Enable file upload for an app by adding to the app configuration:
       "application/javascript",
       "text/xml"
     ],
-    "supportedPdfFormats": ["application/pdf"]
+    "supportedPdfFormats": ["application/pdf"],
+    "supportedDocxFormats": [
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "supportedMsgFormats": ["application/vnd.ms-outlook"]
   }
 }
 ```
@@ -157,7 +193,11 @@ Enable file upload for an app by adding to the app configuration:
   "fileUpload": {
     "maxFileSizeMB": 10,
     "supportedTextFormats": ["text/plain", "text/markdown", "text/html"],
-    "supportedPdfFormats": ["application/pdf"]
+    "supportedPdfFormats": ["application/pdf"],
+    "supportedDocxFormats": [
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ],
+    "supportedMsgFormats": ["application/vnd.ms-outlook"]
   }
 }
 ```

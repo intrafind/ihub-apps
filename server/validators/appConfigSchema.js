@@ -130,7 +130,12 @@ const uploadSchema = z
             'application/javascript',
             'text/xml'
           ]),
-        supportedPdfFormats: z.array(z.string()).optional().default(['application/pdf'])
+        supportedPdfFormats: z.array(z.string()).optional().default(['application/pdf']),
+        supportedDocxFormats: z
+          .array(z.string())
+          .optional()
+          .default(['application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
+        supportedMsgFormats: z.array(z.string()).optional().default(['application/vnd.ms-outlook'])
       })
       .optional()
   })
