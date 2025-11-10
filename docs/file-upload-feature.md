@@ -78,7 +78,7 @@ Enable file upload for an app by adding to the app configuration:
   },
   "fileUpload": {
     "maxFileSizeMB": 15,
-    "supportedTextFormats": [
+    "supportedFormats": [
       "text/plain",
       "text/markdown",
       "text/csv",
@@ -87,13 +87,11 @@ Enable file upload for an app by adding to the app configuration:
       "text/css",
       "text/javascript",
       "application/javascript",
-      "text/xml"
-    ],
-    "supportedPdfFormats": ["application/pdf"],
-    "supportedDocxFormats": [
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ],
-    "supportedMsgFormats": ["application/vnd.ms-outlook"]
+      "text/xml",
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-outlook"
+    ]
   }
 }
 ```
@@ -118,10 +116,11 @@ Enable file upload for an app by adding to the app configuration:
 - Default: `10`
 - Range: 1-50 (limited by the `requestBodyLimitMB` setting)
 
-**fileUpload.supportedTextFormats** (array)
+**fileUpload.supportedFormats** (array)
 
-- List of supported MIME types for text files
-- Default: `["text/plain", "text/markdown", "text/csv", "application/json", "text/html", "text/css", "text/javascript", "application/javascript"]`
+- List of supported MIME types for file uploads
+- Default: All supported formats including text, PDF, DOCX, and MSG files
+- The system automatically selects the appropriate processing tool based on the MIME type
 - Common values:
   - `"text/plain"` - .txt files
   - `"text/markdown"` - .md files
@@ -131,24 +130,9 @@ Enable file upload for an app by adding to the app configuration:
   - `"text/css"` - .css files
   - `"text/javascript"` or `"application/javascript"` - .js files
   - `"text/xml"` - .xml files
-
-**fileUpload.supportedPdfFormats** (array)
-
-- List of supported MIME types for PDF files
-- Default: `["application/pdf"]`
-- Typically only includes `"application/pdf"`
-
-**fileUpload.supportedDocxFormats** (array)
-
-- List of supported MIME types for Microsoft Word documents
-- Default: `["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]`
-- Typically only includes the DOCX MIME type
-
-**fileUpload.supportedMsgFormats** (array)
-
-- List of supported MIME types for Microsoft Outlook email messages
-- Default: `["application/vnd.ms-outlook"]`
-- Typically only includes the MSG MIME type
+  - `"application/pdf"` - .pdf files (processed with PDF.js)
+  - `"application/vnd.openxmlformats-officedocument.wordprocessingml.document"` - .docx files (processed with mammoth)
+  - `"application/vnd.ms-outlook"` - .msg files (processed with msgreader)
 
 #### Example Configurations
 
@@ -162,7 +146,7 @@ Enable file upload for an app by adding to the app configuration:
   },
   "fileUpload": {
     "maxFileSizeMB": 15,
-    "supportedTextFormats": [
+    "supportedFormats": [
       "text/plain",
       "text/markdown",
       "text/csv",
@@ -171,13 +155,11 @@ Enable file upload for an app by adding to the app configuration:
       "text/css",
       "text/javascript",
       "application/javascript",
-      "text/xml"
-    ],
-    "supportedPdfFormats": ["application/pdf"],
-    "supportedDocxFormats": [
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ],
-    "supportedMsgFormats": ["application/vnd.ms-outlook"]
+      "text/xml",
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-outlook"
+    ]
   }
 }
 ```
@@ -192,17 +174,19 @@ Enable file upload for an app by adding to the app configuration:
   },
   "fileUpload": {
     "maxFileSizeMB": 10,
-    "supportedTextFormats": ["text/plain", "text/markdown", "text/html"],
-    "supportedPdfFormats": ["application/pdf"],
-    "supportedDocxFormats": [
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ],
-    "supportedMsgFormats": ["application/vnd.ms-outlook"]
+    "supportedFormats": [
+      "text/plain",
+      "text/markdown",
+      "text/html",
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-outlook"
+    ]
   }
 }
 ```
 
-**Text-only file upload (Summarizer app):**
+**Text and PDF only (Summarizer app):**
 
 ```json
 {
@@ -211,8 +195,7 @@ Enable file upload for an app by adding to the app configuration:
   },
   "fileUpload": {
     "maxFileSizeMB": 5,
-    "supportedTextFormats": ["text/plain", "text/markdown", "text/html"],
-    "supportedPdfFormats": ["application/pdf"]
+    "supportedFormats": ["text/plain", "text/markdown", "text/html", "application/pdf"]
   }
 }
 ```

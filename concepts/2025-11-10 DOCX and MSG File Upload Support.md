@@ -57,13 +57,21 @@ Both packages were checked for vulnerabilities using the GitHub Advisory Databas
 
 **File:** `server/validators/appConfigSchema.js`
 
-Added two new optional configuration fields to the `fileUpload` schema:
+Unified all file format configurations into a single `supportedFormats` array:
 
-- `supportedDocxFormats`: Array of MIME types for Word documents
-  - Default: `['application/vnd.openxmlformats-officedocument.wordprocessingml.document']`
+- `supportedFormats`: Single array of MIME types for all supported file types
+  - Default includes: text formats, PDF, DOCX, and MSG
+  - The system automatically determines the appropriate processing tool based on MIME type
+  - Simpler configuration with one array instead of multiple separate arrays
   
-- `supportedMsgFormats`: Array of MIME types for Outlook messages
-  - Default: `['application/vnd.ms-outlook']`
+**Previous approach (multiple arrays):**
+- Had separate `supportedTextFormats`, `supportedPdfFormats`, `supportedDocxFormats`, `supportedMsgFormats`
+- More verbose and harder to maintain
+
+**New approach (single array):**
+- Single `supportedFormats` array with all MIME types
+- Processing tool selection based on MIME type matching
+- More maintainable and extensible
 
 ### Documentation Updates
 
@@ -74,8 +82,8 @@ Added two new optional configuration fields to the `fileUpload` schema:
    - "Microsoft Office Documents" section listing .docx support
    - "Email Files" section listing .msg support
 3. Updated "How It Works" section to document new processing libraries
-4. Added new configuration options documentation
-5. Updated all example configurations to include the new format arrays
+4. Simplified configuration documentation with unified `supportedFormats` array
+5. Updated all example configurations to use the new structure
 
 ## Code Locations
 
@@ -96,9 +104,13 @@ Added two new optional configuration fields to the `fileUpload` schema:
 
 4. **MSG Field Extraction**: Extracted the most relevant fields (subject, sender, recipients, body) to provide context while keeping the content manageable
 
-5. **Configuration Flexibility**: Added separate configuration arrays for each new file type to allow fine-grained control (e.g., admins could disable .msg but enable .docx)
+5. **Unified Configuration**: Changed from separate format arrays to a single `supportedFormats` array based on maintainer feedback
+   - Simpler and more maintainable
+   - Processor selection is automatic based on MIME type
+   - Easier to add new file types in the future
+   - Less verbose configuration
 
-6. **Backward Compatibility**: New file types are off by default in the schema, ensuring existing configurations continue to work without changes
+6. **Backward Compatibility**: All file types included in default configuration, ensuring the feature works out of the box while allowing customization
 
 ## Security Considerations
 

@@ -31,7 +31,7 @@
     "fileUpload": {
       "enabled": true,
       "maxFileSizeMB": 5,
-      "supportedTextFormats": [
+      "supportedFormats": [
         "text/plain",
         "text/markdown",
         "text/csv",
@@ -43,13 +43,11 @@
         "text/xml",
         "message/rfc822",
         "message/rfc2822",
-        "application/eml"
-      ],
-      "supportedPdfFormats": ["application/pdf"],
-      "supportedDocxFormats": [
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      ],
-      "supportedMsgFormats": ["application/vnd.ms-outlook"]
+        "application/eml",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-outlook"
+      ]
     }
   },
   "enabled": true

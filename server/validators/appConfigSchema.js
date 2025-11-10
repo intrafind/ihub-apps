@@ -116,7 +116,7 @@ const uploadSchema = z
       .object({
         enabled: z.boolean().optional().default(false),
         maxFileSizeMB: z.number().int().min(1).max(100).optional().default(5),
-        supportedTextFormats: z
+        supportedFormats: z
           .array(z.string())
           .optional()
           .default([
@@ -128,14 +128,11 @@ const uploadSchema = z
             'text/css',
             'text/javascript',
             'application/javascript',
-            'text/xml'
-          ]),
-        supportedPdfFormats: z.array(z.string()).optional().default(['application/pdf']),
-        supportedDocxFormats: z
-          .array(z.string())
-          .optional()
-          .default(['application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
-        supportedMsgFormats: z.array(z.string()).optional().default(['application/vnd.ms-outlook'])
+            'text/xml',
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-outlook'
+          ])
       })
       .optional()
   })

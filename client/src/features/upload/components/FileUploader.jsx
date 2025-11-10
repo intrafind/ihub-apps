@@ -30,7 +30,7 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
   const { t } = useTranslation();
 
   const MAX_FILE_SIZE_MB = config.maxFileSizeMB || 10;
-  const SUPPORTED_TEXT_FORMATS = config.supportedTextFormats || [
+  const SUPPORTED_FORMATS = config.supportedFormats || [
     'text/plain',
     'text/markdown',
     'text/csv',
@@ -38,18 +38,11 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
     'text/html',
     'text/css',
     'text/javascript',
-    'application/javascript'
-  ];
-  const SUPPORTED_PDF_FORMATS = config.supportedPdfFormats || ['application/pdf'];
-  const SUPPORTED_DOCX_FORMATS = config.supportedDocxFormats || [
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  ];
-  const SUPPORTED_MSG_FORMATS = config.supportedMsgFormats || ['application/vnd.ms-outlook'];
-  const ALL_SUPPORTED_FORMATS = [
-    ...SUPPORTED_TEXT_FORMATS,
-    ...SUPPORTED_PDF_FORMATS,
-    ...SUPPORTED_DOCX_FORMATS,
-    ...SUPPORTED_MSG_FORMATS
+    'application/javascript',
+    'text/xml',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-outlook'
   ];
 
   const getFileTypeDisplay = mimeType => {
@@ -93,7 +86,9 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
     let content = '';
     let processedContent = '';
 
-    if (SUPPORTED_PDF_FORMATS.includes(file.type)) {
+    // Determine processing method based on MIME type
+    if (file.type === 'application/pdf') {
+      // PDF processing
       const arrayBuffer = await file.arrayBuffer();
       const pdfjsLib = await loadPdfjs();
       const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
@@ -108,7 +103,10 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
 
       processedContent = textContent.trim();
       content = processedContent;
-    } else if (SUPPORTED_DOCX_FORMATS.includes(file.type)) {
+    } else if (
+      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
+      // DOCX processing
       const arrayBuffer = await file.arrayBuffer();
       const mammoth = await loadMammoth();
       const result = await mammoth.convertToHtml({ arrayBuffer });
@@ -118,7 +116,8 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
       tempDiv.innerHTML = result.value;
       processedContent = tempDiv.textContent || tempDiv.innerText || '';
       content = processedContent;
-    } else if (SUPPORTED_MSG_FORMATS.includes(file.type)) {
+    } else if (file.type === 'application/vnd.ms-outlook') {
+      // MSG processing
       const arrayBuffer = await file.arrayBuffer();
       const MsgReader = await loadMsgReader();
       const msgReader = new MsgReader.default(arrayBuffer);
@@ -145,7 +144,8 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
 
       processedContent = textContent.trim();
       content = processedContent;
-    } else if (SUPPORTED_TEXT_FORMATS.includes(file.type)) {
+    } else {
+      // Text file processing (default for all other supported formats)
       content = await readTextFile(file);
       processedContent = content;
     }
@@ -169,7 +169,7 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
   };
 
   const formatList = (() => {
-    const textFormats = SUPPORTED_TEXT_FORMATS.map(format => {
+    const displayFormats = SUPPORTED_FORMATS.map(format => {
       switch (format) {
         case 'text/plain':
           return 'TXT';
@@ -188,18 +188,17 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
           return 'JS';
         case 'text/xml':
           return 'XML';
+        case 'application/pdf':
+          return 'PDF';
+        case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+          return 'DOCX';
+        case 'application/vnd.ms-outlook':
+          return 'MSG';
         default:
           return format;
       }
     });
-    const pdfFormats = SUPPORTED_PDF_FORMATS.map(f => (f === 'application/pdf' ? 'PDF' : f));
-    const docxFormats = SUPPORTED_DOCX_FORMATS.map(f =>
-      f === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? 'DOCX' : f
-    );
-    const msgFormats = SUPPORTED_MSG_FORMATS.map(f =>
-      f === 'application/vnd.ms-outlook' ? 'MSG' : f
-    );
-    return [...new Set([...textFormats, ...pdfFormats, ...docxFormats, ...msgFormats])].join(', ');
+    return [...new Set(displayFormats)].join(', ');
   })();
 
   const getErrorMessage = code => {
@@ -223,7 +222,7 @@ const FileUploader = ({ onFileSelect, disabled = false, fileData = null, config 
 
   return (
     <Uploader
-      accept={ALL_SUPPORTED_FORMATS}
+      accept={SUPPORTED_FORMATS}
       maxSizeMB={MAX_FILE_SIZE_MB}
       disabled={disabled}
       onSelect={onFileSelect}
