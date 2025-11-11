@@ -12,7 +12,7 @@ Unleash creativity and productivity in your organization with **iHub** — the i
 
 The Software is free-of-use and "AS-IS without warranty of any kind. - Check the [License Details](LICENSE.md)
 
-**For enterprise-grade support, custom features, or professional services, please contact us at [eMail](mailto:info@intrafind.com).**
+**For enterprise-grade support, custom features, or professional services, please contact us at [eMail](mailto:sales@intrafind.com).**
 
 ## 🚀 Quick Start
 
