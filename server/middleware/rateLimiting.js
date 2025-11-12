@@ -16,11 +16,11 @@ function createRateLimiter(config = {}, defaults = {}, type = 'API') {
   const finalConfig = { ...defaults, ...config };
 
   return rateLimit({
-    windowMs: finalConfig.windowMs || 15 * 60 * 1000, // 15 minutes default
-    limit: finalConfig.limit || 100, // 100 requests default
+    windowMs: finalConfig.windowMs || 1 * 60 * 1000, // 1 minute default
+    limit: finalConfig.limit || 500, // 500 requests default
     message: finalConfig.message || {
       error: `Too many ${type.toLowerCase()} requests from this IP, please try again later.`,
-      retryAfter: `${Math.ceil((finalConfig.windowMs || 15 * 60 * 1000) / 60000)} minutes`
+      retryAfter: `${Math.ceil((finalConfig.windowMs || 1 * 60 * 1000) / 60000)} minutes`
     },
     standardHeaders: finalConfig.standardHeaders !== undefined ? finalConfig.standardHeaders : true,
     legacyHeaders: finalConfig.legacyHeaders !== undefined ? finalConfig.legacyHeaders : false,
@@ -41,8 +41,8 @@ export function createRateLimiters(platformConfig = {}) {
 
   // Default configuration that all rate limiters inherit from
   const defaultConfig = {
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    limit: 100, // 100 requests
+    windowMs: 1 * 60 * 1000, // 1 minute
+    limit: 500, // 500 requests
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: false,
@@ -53,7 +53,7 @@ export function createRateLimiters(platformConfig = {}) {
   // Admin API configuration - more restrictive by default
   const adminApiConfig = {
     ...defaultConfig,
-    limit: 50, // More restrictive for admin endpoints
+    limit: 500, // More restrictive for admin endpoints
     skipFailedRequests: false, // Don't skip failed requests for admin endpoints
     ...rateLimitConfig.adminApi
   };
@@ -67,7 +67,7 @@ export function createRateLimiters(platformConfig = {}) {
   // Auth API configuration - more restrictive for authentication
   const authApiConfig = {
     ...defaultConfig,
-    limit: 30, // More restrictive for auth endpoints
+    limit: 50, // More restrictive for auth endpoints
     windowMs: 15 * 60 * 1000, // 15 minutes
     skipFailedRequests: false, // Don't skip failed requests for auth
     ...rateLimitConfig.authApi
@@ -76,8 +76,8 @@ export function createRateLimiters(platformConfig = {}) {
   // Inference API configuration - balanced for AI inference
   const inferenceApiConfig = {
     ...defaultConfig,
-    limit: 60, // Moderate limit for inference
-    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 500, // Moderate limit for inference
+    windowMs: 1 * 60 * 1000, // 1 minute
     ...rateLimitConfig.inferenceApi
   };
 
