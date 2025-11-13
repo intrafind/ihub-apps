@@ -68,4 +68,5 @@ book/
 ai-input/
 # Attachments for generated images
 attachments/
+.claude/settings.local.json
 

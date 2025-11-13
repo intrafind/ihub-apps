@@ -222,6 +222,7 @@ export const appConfigSchema = z
     outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
     category: z.string().optional(),
     enabled: z.boolean().optional().default(true),
+    customResponseRenderer: z.string().optional(),
 
     // Inheritance fields
     allowInheritance: z.boolean().optional().default(false),

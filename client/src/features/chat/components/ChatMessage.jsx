@@ -7,6 +7,7 @@ import MessageVariables from './MessageVariables';
 import Icon from '../../../shared/components/Icon';
 import StreamingMarkdown from './StreamingMarkdown';
 import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
+import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import './ChatMessage.css';
 
 const ChatMessage = ({
@@ -22,7 +23,8 @@ const ChatMessage = ({
   compact = false, // New prop to indicate compact mode (for widget or mobile)
   onOpenInCanvas,
   onInsert,
-  canvasEnabled = false
+  canvasEnabled = false,
+  app = null // App configuration for custom response rendering
 }) => {
   const { t } = useTranslation();
 
@@ -52,6 +54,11 @@ const ChatMessage = ({
   const messageRef = useRef(null); // Ref to scope DOM queries to this specific message
   const [showCopyMenu, setShowCopyMenu] = useState(false);
   const copyMenuRef = useRef(null);
+
+  // Get custom renderer info from message metadata (set when message completes)
+  // This survives re-renders and component unmounting/remounting
+  const customRendererFromMessage = message.customResponseRenderer;
+  const outputFormatFromMessage = message.outputFormat;
 
   // Configure marked renderer and copy buttons
   useEffect(() => {
@@ -346,7 +353,30 @@ const ChatMessage = ({
 
     if (!isUser && (outputFormat === 'markdown' || outputFormat === 'json')) {
       let mdContent = contentToRender;
-      if (outputFormat === 'json') {
+
+      // Check if we should use custom renderer (prioritize message metadata over app prop)
+      const customRendererName = customRendererFromMessage || app?.customResponseRenderer;
+      const effectiveOutputFormat = outputFormatFromMessage || outputFormat;
+
+      if (effectiveOutputFormat === 'json' && customRendererName) {
+        try {
+          const parsedData = typeof message.content === 'string'
+            ? JSON.parse(message.content)
+            : message.content;
+
+          return (
+            <CustomResponseRenderer
+              componentName={customRendererName}
+              data={parsedData}
+            />
+          );
+        } catch (error) {
+          console.error('Error parsing JSON for custom renderer:', error);
+          // Fall through to default JSON rendering on parse error
+        }
+      }
+
+      if (effectiveOutputFormat === 'json') {
         let jsonString = '';
         try {
           jsonString =

@@ -757,19 +757,43 @@ const AppChat = () => {
       }
     }
 
+    // Validate variables: fall back to defaults if empty or whitespace-only
+    const validatedVariables = {};
+    if (app?.variables && app.variables.length > 0) {
+      app.variables.forEach(varConfig => {
+        const currentValue = variables[varConfig.name];
+        const isEmptyOrWhitespace =
+          currentValue === undefined ||
+          currentValue === null ||
+          (typeof currentValue === 'string' && currentValue.trim() === '');
+
+        if (isEmptyOrWhitespace) {
+          // Use default value if current value is empty/whitespace
+          const defaultValue =
+            typeof varConfig.defaultValue === 'object'
+              ? getLocalizedContent(varConfig.defaultValue, currentLanguage)
+              : varConfig.defaultValue || '';
+          validatedVariables[varConfig.name] = defaultValue;
+        } else {
+          // Use current value
+          validatedVariables[varConfig.name] = currentValue;
+        }
+      });
+    }
+
     sendChatMessage({
       displayMessage: {
         content: messageContent,
         meta: {
           rawContent: input,
-          variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined,
+          variables: app?.variables && app.variables.length > 0 ? { ...validatedVariables } : undefined,
           ...messageData
         }
       },
       apiMessage: {
         content: input,
         promptTemplate: app?.prompt || null,
-        variables: { ...variables },
+        variables: { ...validatedVariables },
         imageData: Array.isArray(fileUploadHandler.selectedFile)
           ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
           : fileUploadHandler.selectedFile?.type === 'image'
@@ -792,7 +816,11 @@ const AppChat = () => {
         ...(thinkingBudget !== null ? { thinkingBudget } : {}),
         ...(thinkingThoughts !== null ? { thinkingThoughts } : {})
       },
-      sendChatHistory
+      sendChatHistory,
+      messageMetadata: {
+        customResponseRenderer: app?.customResponseRenderer,
+        outputFormat: selectedOutputFormat
+      }
     });
 
     setInput('');
@@ -991,6 +1019,7 @@ const AppChat = () => {
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
+                        app={app}
                       />
                     </div>
                   ) : (
@@ -1061,6 +1090,7 @@ const AppChat = () => {
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
+                        app={app}
                       />
                     </div>
                   ) : (
@@ -1130,6 +1160,7 @@ const AppChat = () => {
                     canvasEnabled={app?.features?.canvas === true}
                     requiredIntegrations={requiredIntegrations}
                     onConnectIntegration={connectIntegration}
+                    app={app}
                   />
                 </div>
                 <div className="flex-shrink-0 px-4 pt-2">
