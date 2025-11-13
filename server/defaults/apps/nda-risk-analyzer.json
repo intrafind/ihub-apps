@@ -33,11 +33,11 @@
   "greeting": {
     "en": {
       "title": "⚖️ NDA Risk Analyzer",
-      "subtitle": "Upload your NDA document for comprehensive 8-criteria risk assessment: Mutuality, Cooperation Subject, Confidential Info Definition, Duration, Penalties, Third Party Disclosure, Project/Customer Protection, and Non-Compete."
+      "subtitle": "Upload your NDA document for comprehensive 8-criteria risk assessment: Mutuality, Cooperation Subject, Confidential Info Definition, Duration, Penalties, Third Party Disclosure, Project/Customer Protection, and Non-Compete. 📖 [View User Guide](/pages/nda-guide)"
     },
     "de": {
       "title": "⚖️ NDA-Risikoanalyse",
-      "subtitle": "Laden Sie Ihr NDA-Dokument hoch für eine umfassende 8-Kriterien-Risikobewertung: Gegenseitigkeit, Kooperationsgegenstand, Definition vertraulicher Informationen, Laufzeit, Vertragsstrafen, Weitergabe an Dritte, Projekt-/Kundenschutz und Wettbewerbsklausel."
+      "subtitle": "Laden Sie Ihr NDA-Dokument hoch für eine umfassende 8-Kriterien-Risikobewertung: Gegenseitigkeit, Kooperationsgegenstand, Definition vertraulicher Informationen, Laufzeit, Vertragsstrafen, Weitergabe an Dritte, Projekt-/Kundenschutz und Wettbewerbsklausel. 📖 [Benutzerhandbuch anzeigen](/pages/nda-guide)"
     }
   },
   "outputSchema": {
