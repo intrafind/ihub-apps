@@ -49,12 +49,15 @@ const Uploader = ({
       // Check if file type is in accepted MIME types
       // Note: Some browsers may return empty string or incorrect MIME type for certain files
       // In such cases, we can fall back to extension-based validation
-      const hasValidMimeType = acceptedMimeTypes.length === 0 || acceptedMimeTypes.includes(file.type);
+      const hasValidMimeType =
+        acceptedMimeTypes.length === 0 || acceptedMimeTypes.includes(file.type);
 
       if (!hasValidMimeType) {
         // If MIME type doesn't match, try checking file extension as fallback
         const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
-        const hasValidExtension = accept.some(item => item.startsWith('.') && item === fileExtension);
+        const hasValidExtension = accept.some(
+          item => item.startsWith('.') && item === fileExtension
+        );
 
         if (!hasValidExtension) {
           console.error('File validation failed:', {
