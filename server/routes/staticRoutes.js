@@ -59,6 +59,12 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
         return res.status(404).send('Documentation not found');
       }
 
+      // Don't serve SPA for requests that look like static assets (have file extensions)
+      // If they weren't served by the static middleware above, they don't exist
+      if (relativePath.match(/\.[a-z0-9]+$/i)) {
+        return res.status(404).send('File not found');
+      }
+
       res.sendFile(indexPath);
     });
   } else {
