@@ -147,6 +147,23 @@ export function AuthProvider({ children }) {
           const urlParams = new URLSearchParams(window.location.search);
           const isLogoutPage = urlParams.get('logout') === 'true';
 
+          // Store current URL for return after authentication (for all auth methods)
+          // Only store if not already on login page and not just logged out
+          if (!isLogoutPage && !window.location.pathname.includes('/login')) {
+            const currentUrl = window.location.href;
+            // Remove any existing auth-related query parameters
+            const cleanUrl = currentUrl.split('?')[0];
+            const searchParams = new URLSearchParams(window.location.search);
+            searchParams.delete('token');
+            searchParams.delete('provider');
+            searchParams.delete('logout');
+            const queryString = searchParams.toString();
+            const returnUrl = queryString ? `${cleanUrl}?${queryString}` : cleanUrl;
+
+            sessionStorage.setItem('authReturnUrl', returnUrl);
+            console.log('📍 Stored return URL for post-authentication redirect:', returnUrl);
+          }
+
           if (data.autoRedirect && !data.authenticated && !isLogoutPage) {
             // Prevent infinite redirect loops by checking if we've already attempted a redirect
             const redirectAttemptKey = `autoRedirect_${data.autoRedirect.provider}`;
@@ -157,7 +174,14 @@ export function AuthProvider({ children }) {
             if (!lastRedirectAttempt || now - parseInt(lastRedirectAttempt) > 5 * 60 * 1000) {
               console.log(`🔀 Auto-redirecting to ${data.autoRedirect.provider} provider`);
               sessionStorage.setItem(redirectAttemptKey, now.toString());
-              window.location.href = data.autoRedirect.url;
+
+              // Add returnUrl parameter to the OIDC redirect
+              const returnUrl = sessionStorage.getItem('authReturnUrl') || window.location.href;
+              const authUrl = data.autoRedirect.url;
+              const separator = authUrl.includes('?') ? '&' : '?';
+              const redirectUrl = `${authUrl}${separator}returnUrl=${encodeURIComponent(returnUrl)}`;
+
+              window.location.href = redirectUrl;
               return; // Don't continue with normal auth flow
             } else {
               console.log(
@@ -205,6 +229,15 @@ export function AuthProvider({ children }) {
         }
 
         dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
+
+        // Check for stored return URL and redirect (for all auth methods)
+        const returnUrl = sessionStorage.getItem('authReturnUrl');
+        if (returnUrl && returnUrl !== window.location.href) {
+          console.log('↩️ Redirecting to stored return URL after token login:', returnUrl);
+          sessionStorage.removeItem('authReturnUrl');
+          window.location.href = returnUrl;
+        }
+
         return { success: true };
       } else {
         localStorage.removeItem('authToken');
@@ -234,21 +267,12 @@ export function AuthProvider({ children }) {
         // Clean URL
         window.history.replaceState({}, document.title, window.location.pathname);
 
-        // Login with the token
+        // Login with the token (will handle redirect to authReturnUrl)
         const result = await loginWithToken(token);
 
         if (result.success) {
           // Refresh auth status to ensure all components are updated
           await loadAuthStatus();
-
-          // Get stored return URL
-          const returnUrl = sessionStorage.getItem('oidcReturnUrl');
-          sessionStorage.removeItem('oidcReturnUrl');
-
-          // Only redirect if it's a different page
-          if (returnUrl && returnUrl !== window.location.href) {
-            window.location.href = returnUrl;
-          }
         }
 
         return result;
@@ -314,6 +338,14 @@ export function AuthProvider({ children }) {
         // Refresh auth status to ensure all components are updated
         await loadAuthStatus();
 
+        // Check for stored return URL and redirect
+        const returnUrl = sessionStorage.getItem('authReturnUrl');
+        if (returnUrl && returnUrl !== window.location.href) {
+          console.log('↩️ Redirecting to stored return URL after login:', returnUrl);
+          sessionStorage.removeItem('authReturnUrl');
+          window.location.href = returnUrl;
+        }
+
         return { success: true };
       } else {
         const error = data.error || 'Login failed';
@@ -331,8 +363,8 @@ export function AuthProvider({ children }) {
   // OIDC login - redirect to provider
   const loginWithOidc = (providerName, returnUrl = window.location.href) => {
     try {
-      // Store return URL for after authentication
-      sessionStorage.setItem('oidcReturnUrl', returnUrl);
+      // Store return URL for after authentication (generic for all auth methods)
+      sessionStorage.setItem('authReturnUrl', returnUrl);
 
       // Redirect to OIDC provider
       const authUrl = buildApiUrl(
