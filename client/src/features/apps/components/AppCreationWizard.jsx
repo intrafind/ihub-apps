@@ -646,7 +646,11 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
           );
           setAppGeneratorPrompt(response.data);
         } catch (error) {
-          console.error('Failed to load app generator prompt for language', selectedLanguage, error);
+          console.error(
+            'Failed to load app generator prompt for language',
+            selectedLanguage,
+            error
+          );
           // Fallback to default language if the selected language fails
           if (selectedLanguage !== DEFAULT_LANGUAGE) {
             try {
@@ -655,7 +659,10 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
               );
               setAppGeneratorPrompt(fallbackResponse.data);
             } catch (fallbackError) {
-              console.error('Failed to load app generator prompt for default language', fallbackError);
+              console.error(
+                'Failed to load app generator prompt for default language',
+                fallbackError
+              );
             }
           }
         }
@@ -757,9 +764,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
         }
       } catch (e) {
         console.error('Failed to parse generated config:', e);
-        setError(
-          t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration')
-        );
+        setError(t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration'));
       }
     } catch (error) {
       console.error('Failed to generate app:', error);
