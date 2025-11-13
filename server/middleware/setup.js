@@ -33,19 +33,25 @@ export function checkContentLength(limit) {
 }
 
 /**
- * Check if the request is for a static asset that should bypass authentication
+ * Check if the request should bypass authentication
+ * Includes static assets and HTML page requests (for SPA routing)
  * @param {import('express').Request} req - Express request object
- * @returns {boolean} - True if the request is for a static asset
+ * @returns {boolean} - True if the request should bypass authentication
  */
 function isStaticAssetRequest(req) {
   const path = req.path || req.url;
   const isDevelopment = process.env.NODE_ENV === 'development';
 
+  // Skip auth for API routes - they handle their own authentication
+  if (path.startsWith('/api')) {
+    return false;
+  }
+
   // Common static assets (production and development)
   const isCommonStaticAsset =
     path.startsWith('/assets/') ||
     path.startsWith('/favicon') ||
-    path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map)$/);
+    path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|html)$/);
 
   // Vite dev server specific paths (development only)
   const isViteAsset =
@@ -55,7 +61,12 @@ function isStaticAssetRequest(req) {
       path.startsWith('/@fs/') ||
       path.startsWith('/node_modules/'));
 
-  return isCommonStaticAsset || isViteAsset;
+  // SPA routes (HTML page requests without file extensions) - let them through
+  // so the catch-all route in staticRoutes.js can serve index.html
+  // This allows direct navigation to routes like /apps/meeting-analyser
+  const isSPARoute = !path.match(/\.[a-z0-9]+$/i) && !path.startsWith('/uploads/');
+
+  return isCommonStaticAsset || isViteAsset || isSPARoute;
 }
 
 /**
