@@ -585,6 +585,8 @@ const AppChat = () => {
   };
 
   const handleResendMessage = (messageId, editedContent, useMaxTokens = false) => {
+    console.log('🔄 handleResendMessage called with useMaxTokens:', useMaxTokens);
+
     const resendData = prepareResend(messageId, editedContent);
     const {
       content: contentToResend,
@@ -604,19 +606,43 @@ const AppChat = () => {
       setVariables(variablesToRestore);
     }
 
-    // Restore image data if it exists
-    if (imageDataToRestore) {
-      setSelectedImage(imageDataToRestore);
+    // Clear any existing selected files first
+    fileUploadHandler.clearSelectedFile();
+
+    // Restore file data (images and/or documents) if they exist
+    if (imageDataToRestore || fileDataToRestore) {
+      // Reconstruct the selectedFile state from imageData and fileData
+      let filesToRestore = [];
+
+      // Add images to the array
+      if (imageDataToRestore) {
+        if (Array.isArray(imageDataToRestore)) {
+          filesToRestore = [...filesToRestore, ...imageDataToRestore];
+        } else {
+          filesToRestore.push(imageDataToRestore);
+        }
+      }
+
+      // Add documents to the array
+      if (fileDataToRestore) {
+        if (Array.isArray(fileDataToRestore)) {
+          filesToRestore = [...filesToRestore, ...fileDataToRestore];
+        } else {
+          filesToRestore.push(fileDataToRestore);
+        }
+      }
+
+      // Set the selected file(s)
+      if (filesToRestore.length === 1) {
+        fileUploadHandler.setSelectedFile(filesToRestore[0]);
+      } else if (filesToRestore.length > 1) {
+        fileUploadHandler.setSelectedFile(filesToRestore);
+      }
     }
 
-    // Restore file data if it exists
-    if (fileDataToRestore) {
-      setSelectedFile(fileDataToRestore);
-    }
-
-    if (useMaxTokens) {
-      setUseMaxTokens(true);
-    }
+    // Always set the useMaxTokens state based on the parameter
+    console.log(`Setting useMaxTokens to: ${useMaxTokens}`);
+    setUseMaxTokens(useMaxTokens);
 
     setTimeout(() => {
       const form = document.querySelector('form');
@@ -706,7 +732,7 @@ const AppChat = () => {
 
     let finalInput = input.trim();
     let messageContent = finalInput;
-    let messageData = null;
+    let messageData = {};
 
     if (fileUploadHandler.selectedFile) {
       // Handle multiple files
@@ -757,6 +783,21 @@ const AppChat = () => {
       }
     }
 
+    const params = {
+        modelId: selectedModel,
+        style: selectedStyle,
+        temperature,
+        outputFormat: selectedOutputFormat,
+        language: currentLanguage,
+        ...(useMaxTokens ? { useMaxTokens: true } : {}),
+        ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
+        ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+        ...(thinkingThoughts !== null ? { thinkingThoughts } : {})
+      };
+    
+      console.log('📤 Sending message with params:', params);
+      console.log('🔢 useMaxTokens state:', useMaxTokens);
+
     // Validate variables: fall back to defaults if empty or whitespace-only
     const validatedVariables = {};
     if (app?.variables && app.variables.length > 0) {
@@ -805,17 +846,7 @@ const AppChat = () => {
             ? fileUploadHandler.selectedFile
             : null
       },
-      params: {
-        modelId: selectedModel,
-        style: selectedStyle,
-        temperature,
-        outputFormat: selectedOutputFormat,
-        language: currentLanguage,
-        ...(useMaxTokens ? { useMaxTokens: true } : {}),
-        ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
-        ...(thinkingBudget !== null ? { thinkingBudget } : {}),
-        ...(thinkingThoughts !== null ? { thinkingThoughts } : {})
-      },
+      params,
       sendChatHistory,
       messageMetadata: {
         customResponseRenderer: app?.customResponseRenderer,
@@ -824,6 +855,7 @@ const AppChat = () => {
     });
 
     setInput('');
+    setUseMaxTokens(false); // Reset to use app token limit for next message
     magicPromptHandler.resetMagicPrompt();
     fileUploadHandler.clearSelectedFile();
     fileUploadHandler.hideUploader();

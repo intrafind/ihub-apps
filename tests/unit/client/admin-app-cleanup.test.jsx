@@ -96,7 +96,7 @@ describe('AdminAppEditPage - cleanAppData', () => {
           fileUpload: {
             enabled: false,
             maxFileSizeMB: 5,
-            supportedTextFormats: ['text/plain']
+            supportedFormats: ['text/plain']
           }
         }
       };
@@ -142,7 +142,7 @@ describe('AdminAppEditPage - cleanAppData', () => {
           fileUpload: {
             enabled: true,
             maxFileSizeMB: 5,
-            supportedTextFormats: ['text/plain']
+            supportedFormats: ['text/plain']
           }
         }
       };

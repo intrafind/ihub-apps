@@ -34,16 +34,40 @@ const Uploader = ({
     setError(null);
     if (!files.length || !files[0]) return;
 
+    // Filter accept array to only include MIME types (not file extensions like .pdf, .msg)
+    const acceptedMimeTypes = accept.filter(item => !item.startsWith('.'));
+
     // Validate all files first
     for (const file of files) {
+      console.log('File validation:', { name: file.name, type: file.type, size: file.size });
+
       if (file.size > maxSizeMB * 1024 * 1024) {
         setError('file-too-large');
         return;
       }
 
-      if (accept.length && !accept.includes(file.type)) {
-        setError('unsupported-format');
-        return;
+      // Check if file type is in accepted MIME types
+      // Note: Some browsers may return empty string or incorrect MIME type for certain files
+      // In such cases, we can fall back to extension-based validation
+      const hasValidMimeType = acceptedMimeTypes.length === 0 || acceptedMimeTypes.includes(file.type);
+
+      if (!hasValidMimeType) {
+        // If MIME type doesn't match, try checking file extension as fallback
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+        const hasValidExtension = accept.some(item => item.startsWith('.') && item === fileExtension);
+
+        if (!hasValidExtension) {
+          console.error('File validation failed:', {
+            fileName: file.name,
+            fileType: file.type,
+            fileExtension,
+            acceptedMimeTypes,
+            acceptedExtensions: accept.filter(item => item.startsWith('.'))
+          });
+          setError('unsupported-format');
+          return;
+        }
+        console.log('File accepted via extension fallback:', fileExtension);
       }
     }
 

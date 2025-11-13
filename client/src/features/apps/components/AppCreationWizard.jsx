@@ -3,9 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import { fetchToolsBasic } from '../../../api';
+import { fetchToolsBasic, fetchModels } from '../../../api';
 import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import {
+  validateAppId,
+  APP_ID_MAX_LENGTH,
+  APP_ID_PATTERN
+} from '../../../../../shared/validationPatterns.js';
 
 const AppCreationWizard = ({ onClose, templateApp = null }) => {
   const { t } = useTranslation();
@@ -22,7 +27,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     icon: 'chat-bubbles',
     system: { en: '' },
     tokenLimit: 4096,
-    preferredModel: 'gpt-4',
+    preferredModel: undefined,
     preferredOutputFormat: 'markdown',
     preferredStyle: 'normal',
     preferredTemperature: 0.7,
@@ -39,7 +44,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     features: {
       magicPrompt: {
         enabled: false,
-        model: 'gpt-4',
+        model: undefined,
         prompt:
           'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
       }
@@ -77,7 +82,8 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
         'admin.apps.wizard.method.description',
         'How would you like to create your app?'
       ),
-      component: CreationMethodStep
+      component: CreationMethodStep,
+      skip: () => !!templateApp // Skip this step if template is already selected
     },
     {
       id: 'ai-generation',
@@ -134,6 +140,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
         ...prev,
         ...templateApp,
         id: '', // Clear ID for new app
+        useTemplate: true, // Set template flag
         parentId: templateApp.id,
         inheritanceLevel: (templateApp.inheritanceLevel || 0) + 1,
         overriddenFields: []
@@ -149,6 +156,14 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
     const currentStepData = getVisibleSteps()[currentStep];
     const missingFields = [];
 
+    // Helper function to validate app ID format
+    const validateIdFormat = () => {
+      const error = validateAppId(appData.id);
+      if (error) {
+        missingFields.push('id');
+      }
+    };
+
     switch (currentStepData.id) {
       case 'method':
         if (!appData.useAI && !appData.useTemplate && !appData.useManual) {
@@ -159,9 +174,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
         // AI generation is optional, no validation needed
         break;
       case 'basic-info':
-        if (!appData.id || !appData.id.trim()) {
-          missingFields.push('id');
-        }
+        validateIdFormat();
         if (!appData.name || !Object.values(appData.name).some(v => v && v.trim())) {
           missingFields.push('name');
         }
@@ -181,7 +194,7 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
         break;
       case 'review':
         // Final validation
-        if (!appData.id || !appData.id.trim()) missingFields.push('id');
+        validateIdFormat();
         if (!appData.name || !Object.values(appData.name).some(v => v && v.trim()))
           missingFields.push('name');
         if (!appData.description || !Object.values(appData.description).some(v => v && v.trim()))
@@ -289,20 +302,14 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
       });
 
       // Create the app
-      const response = await makeAdminApiCall('admin/apps', {
+      await makeAdminApiCall('/admin/apps', {
         method: 'POST',
         body: JSON.stringify(cleanedAppData)
       });
 
-      if (response.ok) {
-        onClose();
-        navigate('/admin/apps');
-      } else {
-        const errorData = await response.json();
-        setError(
-          errorData.error || t('admin.apps.wizard.error.createFailed', 'Failed to create app')
-        );
-      }
+      // If we get here, the app was created successfully
+      onClose();
+      navigate('/admin/apps');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -633,22 +640,22 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
     const loadAppGeneratorPrompt = async () => {
       try {
         setLoadingPrompt(true);
-        const response = await makeAdminApiCall(
-          buildApiUrl(`admin/prompts/app-generator?lang=${selectedLanguage}`)
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setAppGeneratorPrompt(data);
-        } else {
-          console.error('Failed to load app generator prompt');
+        try {
+          const response = await makeAdminApiCall(
+            buildApiUrl(`/admin/prompts/app-generator?lang=${selectedLanguage}`)
+          );
+          setAppGeneratorPrompt(response.data);
+        } catch (error) {
+          console.error('Failed to load app generator prompt for language', selectedLanguage, error);
           // Fallback to default language if the selected language fails
           if (selectedLanguage !== DEFAULT_LANGUAGE) {
-            const fallbackResponse = await makeAdminApiCall(
-              buildApiUrl(`admin/prompts/app-generator?lang=${DEFAULT_LANGUAGE}`)
-            );
-            if (fallbackResponse.ok) {
-              const fallbackData = await fallbackResponse.json();
-              setAppGeneratorPrompt(fallbackData);
+            try {
+              const fallbackResponse = await makeAdminApiCall(
+                buildApiUrl(`/admin/prompts/app-generator?lang=${DEFAULT_LANGUAGE}`)
+              );
+              setAppGeneratorPrompt(fallbackResponse.data);
+            } catch (fallbackError) {
+              console.error('Failed to load app generator prompt for default language', fallbackError);
             }
           }
         }
@@ -669,7 +676,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
       setGenerating(true);
 
       // Use OpenAI completion directly for app generation
-      const response = await makeAdminApiCall('completions', {
+      const response = await makeAdminApiCall('/completions', {
         method: 'POST',
         body: JSON.stringify({
           messages: [
@@ -688,85 +695,71 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
         })
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('AI generation result:', JSON.stringify(data, null, 2));
-        const generatedConfig = data.choices[0].message.content;
+      const data = response.data;
+      console.log('AI generation result:', JSON.stringify(data, null, 2));
+      const generatedConfig = data.choices[0].message.content;
 
-        // Parse the generated JSON configuration
+      // Parse the generated JSON configuration
+      try {
+        let configJson;
+
+        // Prefer direct JSON when structured output is enabled
         try {
-          let configJson;
-
-          // Prefer direct JSON when structured output is enabled
-          try {
-            configJson = JSON.parse(generatedConfig);
-          } catch {
-            const jsonMatch = generatedConfig.match(/```json\s*(\{[\s\S]*?\})\s*```/);
-            if (jsonMatch) {
-              configJson = JSON.parse(jsonMatch[1]);
-            }
+          configJson = JSON.parse(generatedConfig);
+        } catch {
+          const jsonMatch = generatedConfig.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+          if (jsonMatch) {
+            configJson = JSON.parse(jsonMatch[1]);
           }
+        }
 
-          if (configJson) {
-            // Convert to multilingual format and merge with existing app data
-            const multilingualConfig = {
-              // Keep existing app data structure
-              ...appData,
+        if (configJson) {
+          // Convert to multilingual format and merge with existing app data
+          const multilingualConfig = {
+            // Keep existing app data structure
+            ...appData,
 
-              // Apply generated config
-              id: configJson.id || appData.id,
-              name:
-                typeof configJson.name === 'string'
-                  ? { [selectedLanguage]: configJson.name }
-                  : configJson.name,
-              description:
-                typeof configJson.description === 'string'
-                  ? { [selectedLanguage]: configJson.description }
-                  : configJson.description,
-              system:
-                typeof configJson.system === 'string'
-                  ? { [selectedLanguage]: configJson.system }
-                  : configJson.system,
-              category: configJson.category || appData.category,
-              color: configJson.color || appData.color,
-              icon: configJson.icon || appData.icon,
-              variables: configJson.variables || appData.variables,
-              tools: configJson.tools || appData.tools,
+            // Apply generated config
+            id: configJson.id || appData.id,
+            name:
+              typeof configJson.name === 'string'
+                ? { [selectedLanguage]: configJson.name }
+                : configJson.name,
+            description:
+              typeof configJson.description === 'string'
+                ? { [selectedLanguage]: configJson.description }
+                : configJson.description,
+            system:
+              typeof configJson.system === 'string'
+                ? { [selectedLanguage]: configJson.system }
+                : configJson.system,
+            category: configJson.category || appData.category,
+            color: configJson.color || appData.color,
+            icon: configJson.icon || appData.icon,
+            variables: configJson.variables || appData.variables,
+            tools: configJson.tools || appData.tools,
 
-              // Mark as AI generated
-              aiGenerated: true,
-              aiPrompt: prompt,
-              useAI: true
-            };
+            // Mark as AI generated
+            aiGenerated: true,
+            aiPrompt: prompt,
+            useAI: true
+          };
 
-            console.log('Generated config:', configJson);
-            console.log('Multilingual config:', multilingualConfig);
+          console.log('Generated config:', configJson);
+          console.log('Multilingual config:', multilingualConfig);
 
-            updateAppData(multilingualConfig);
-          } else {
-            console.error('No valid JSON found in generated config');
-            setError(
-              t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration')
-            );
-          }
-        } catch (e) {
-          console.error('Failed to parse generated config:', e);
+          updateAppData(multilingualConfig);
+        } else {
+          console.error('No valid JSON found in generated config');
           setError(
             t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration')
           );
         }
-      } else {
-        // Enhanced error handling - try to get the error message from the response
-        try {
-          const errorData = await response.json();
-          const errorMessage =
-            errorData.error || errorData.message || 'Failed to generate app configuration';
-          setError(errorMessage);
-        } catch {
-          setError(
-            t('admin.apps.wizard.ai.error.generate', 'Failed to generate app configuration')
-          );
-        }
+      } catch (e) {
+        console.error('Failed to parse generated config:', e);
+        setError(
+          t('admin.apps.wizard.ai.error.parse', 'Failed to parse generated configuration')
+        );
       }
     } catch (error) {
       console.error('Failed to generate app:', error);
@@ -899,9 +892,19 @@ const BasicInfoStep = ({
   const updateField = (field, value) => {
     updateAppData({ [field]: value });
 
-    // Clear field error when user starts typing
-    if (fieldErrors[field]) {
-      setFieldErrors(prev => ({ ...prev, [field]: false }));
+    // Validate app ID in real-time
+    if (field === 'id') {
+      const error = validateAppId(value);
+      if (error) {
+        setFieldErrors(prev => ({ ...prev, id: error }));
+      } else {
+        setFieldErrors(prev => ({ ...prev, id: false }));
+      }
+    } else {
+      // Clear field error when user starts typing
+      if (fieldErrors[field]) {
+        setFieldErrors(prev => ({ ...prev, [field]: false }));
+      }
     }
   };
 
@@ -909,6 +912,31 @@ const BasicInfoStep = ({
     const currentValue = appData[field] || {};
     return currentValue[selectedLanguage] || '';
   };
+
+  // Auto-select first available language from template data
+  useEffect(() => {
+    if (templateApp) {
+      // Check name, description for available languages
+      const fields = ['name', 'description'];
+      const availableLanguages = new Set();
+
+      fields.forEach(field => {
+        if (appData[field] && typeof appData[field] === 'object') {
+          Object.keys(appData[field]).forEach(lang => {
+            if (appData[field][lang] && appData[field][lang].trim()) {
+              availableLanguages.add(lang);
+            }
+          });
+        }
+      });
+
+      // If current language doesn't have content, switch to first available
+      const hasCurrentLanguage = Array.from(availableLanguages).includes(selectedLanguage);
+      if (!hasCurrentLanguage && availableLanguages.size > 0) {
+        setSelectedLanguage(Array.from(availableLanguages)[0]);
+      }
+    }
+  }, [templateApp, appData, selectedLanguage]);
 
   // Check for validation errors and highlight fields
   useEffect(() => {
@@ -976,11 +1004,26 @@ const BasicInfoStep = ({
           onChange={e => updateField('id', e.target.value)}
           className={getFieldClassName('id')}
           placeholder={t('admin.apps.wizard.basic.appIdPlaceholder', 'e.g., my-awesome-app')}
+          pattern={APP_ID_PATTERN.source}
+          maxLength={APP_ID_MAX_LENGTH}
           required
+          title={t(
+            'admin.apps.wizard.basic.appIdTitle',
+            'Only letters, numbers, dots (.), underscores (_), and hyphens (-) allowed'
+          )}
         />
-        {fieldErrors.id && (
+        {fieldErrors.id ? (
           <p className="mt-1 text-sm text-red-600">
-            {t('admin.apps.wizard.error.idRequired', 'App ID is required')}
+            {typeof fieldErrors.id === 'string'
+              ? fieldErrors.id
+              : t('admin.apps.wizard.error.idRequired', 'App ID is required')}
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-gray-500">
+            {t(
+              'admin.apps.wizard.basic.appIdHelp',
+              `Use only letters, numbers, dots (.), underscores (_), and hyphens (-). Max ${APP_ID_MAX_LENGTH} characters.`
+            )}
           </p>
         )}
       </div>
@@ -1106,10 +1149,28 @@ const SystemPromptStep = ({
   const { t, i18n } = useTranslation();
   const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
   const [fieldErrors, setFieldErrors] = useState({});
+  const [availableModels, setAvailableModels] = useState([]);
+  const [loadingModels, setLoadingModels] = useState(true);
 
   const isOverridden = field => {
     return templateApp && appData.overriddenFields?.includes(field);
   };
+
+  // Load available models from backend
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        setLoadingModels(true);
+        const models = await fetchModels();
+        setAvailableModels(models);
+      } catch (error) {
+        console.error('Failed to load models:', error);
+      } finally {
+        setLoadingModels(false);
+      }
+    };
+    loadModels();
+  }, []);
 
   const updateMultilingualField = (field, value) => {
     const currentValue = appData[field] || {};
@@ -1130,6 +1191,31 @@ const SystemPromptStep = ({
     const currentValue = appData[field] || {};
     return currentValue[selectedLanguage] || '';
   };
+
+  // Auto-select first available language from template data
+  useEffect(() => {
+    if (templateApp) {
+      // Check system and messagePlaceholder for available languages
+      const fields = ['system', 'messagePlaceholder'];
+      const availableLanguages = new Set();
+
+      fields.forEach(field => {
+        if (appData[field] && typeof appData[field] === 'object') {
+          Object.keys(appData[field]).forEach(lang => {
+            if (appData[field][lang] && appData[field][lang].trim()) {
+              availableLanguages.add(lang);
+            }
+          });
+        }
+      });
+
+      // If current language doesn't have content, switch to first available
+      const hasCurrentLanguage = Array.from(availableLanguages).includes(selectedLanguage);
+      if (!hasCurrentLanguage && availableLanguages.size > 0) {
+        setSelectedLanguage(Array.from(availableLanguages)[0]);
+      }
+    }
+  }, [templateApp, appData, selectedLanguage]);
 
   // Check for validation errors and highlight fields
   useEffect(() => {
@@ -1242,15 +1328,28 @@ const SystemPromptStep = ({
             {t('admin.apps.wizard.system.model', 'Preferred Model')}
           </label>
           <select
-            value={appData.preferredModel}
-            onChange={e => updateAppData({ preferredModel: e.target.value })}
+            value={appData.preferredModel || ''}
+            onChange={e => updateAppData({ preferredModel: e.target.value || undefined })}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            disabled={loadingModels}
           >
-            <option value="gpt-4">GPT-4</option>
-            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-            <option value="claude-3-opus-20240229">Claude 3 Opus</option>
-            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+            <option value="">
+              {loadingModels
+                ? t('admin.apps.wizard.system.loadingModels', 'Loading models...')
+                : t('admin.apps.wizard.system.noPreferredModel', 'No preferred model')}
+            </option>
+            {availableModels.map(model => (
+              <option key={model.id} value={model.id}>
+                {model.name?.en || model.name || model.id}
+              </option>
+            ))}
           </select>
+          <p className="mt-1 text-sm text-gray-500">
+            {t(
+              'admin.apps.wizard.system.modelHelp',
+              'Optional: Pre-select a default model for this app'
+            )}
+          </p>
         </div>
 
         <div>

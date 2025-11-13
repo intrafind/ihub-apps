@@ -72,7 +72,7 @@ const AdminAppEditPage = () => {
         icon: 'chat-bubbles',
         system: { en: '' },
         tokenLimit: 4096,
-        preferredModel: 'gpt-4',
+        preferredModel: undefined,
         preferredOutputFormat: 'markdown',
         preferredStyle: 'keep',
         preferredTemperature: 0.7,
@@ -113,7 +113,7 @@ const AdminAppEditPage = () => {
           fileUpload: {
             enabled: false,
             maxFileSizeMB: 5,
-            supportedTextFormats: [
+            supportedFormats: [
               'text/plain',
               'text/markdown',
               'text/csv',
@@ -122,9 +122,15 @@ const AdminAppEditPage = () => {
               'text/css',
               'text/javascript',
               'application/javascript',
-              'text/xml'
-            ],
-            supportedPdfFormats: ['application/pdf']
+              'text/xml',
+              'message/rfc822',
+              'application/pdf',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              'application/vnd.ms-outlook',
+              'application/vnd.oasis.opendocument.text',
+              'application/vnd.oasis.opendocument.spreadsheet',
+              'application/vnd.oasis.opendocument.presentation'
+            ]
           }
         }
       });
@@ -183,7 +189,7 @@ const AdminAppEditPage = () => {
           fileUpload: {
             enabled: data.upload?.fileUpload?.enabled || false,
             maxFileSizeMB: data.upload?.fileUpload?.maxFileSizeMB || 5,
-            supportedTextFormats: data.upload?.fileUpload?.supportedTextFormats || [
+            supportedFormats: data.upload?.fileUpload?.supportedFormats || [
               'text/plain',
               'text/markdown',
               'text/csv',
@@ -192,9 +198,15 @@ const AdminAppEditPage = () => {
               'text/css',
               'text/javascript',
               'application/javascript',
-              'text/xml'
-            ],
-            supportedPdfFormats: data.upload?.fileUpload?.supportedPdfFormats || ['application/pdf']
+              'text/xml',
+              'message/rfc822',
+              'application/pdf',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              'application/vnd.ms-outlook',
+              'application/vnd.oasis.opendocument.text',
+              'application/vnd.oasis.opendocument.spreadsheet',
+              'application/vnd.oasis.opendocument.presentation'
+            ]
           },
           ...(data.upload || {})
         }

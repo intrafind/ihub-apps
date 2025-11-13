@@ -17,8 +17,11 @@ let ntlmMiddlewareConfig = null;
  * @returns {Function} Express middleware
  */
 function createNtlmMiddleware(ntlmConfig = {}) {
+  // Support environment variables for LDAP credentials (more secure)
+  const ldapUser = ntlmConfig.domainControllerUser || process.env.NTLM_LDAP_USER;
+  const ldapPassword = ntlmConfig.domainControllerPassword || process.env.NTLM_LDAP_PASSWORD;
+
   const options = {
-    //debug: ntlmConfig.debug || false,
     domain: ntlmConfig.domain,
     domaincontroller: ntlmConfig.domainController,
     // Optional: specify which fields to return
@@ -27,12 +30,60 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     type: ntlmConfig.type || 'ntlm', // 'ntlm' or 'negotiate'
     // Optional: specify if we should get user groups
     getGroups: ntlmConfig.getGroups !== false, // Default true
+    // LDAP bind credentials (required for group queries)
+    domaincontrolleruser: ldapUser,
+    domaincontrollerpassword: ldapPassword,
     ...ntlmConfig.options
   };
 
   console.log(
     `[NTLM Auth] Configuring NTLM middleware with domain: ${options.domain || 'default'}`
   );
+  console.log(`[NTLM Auth] Domain controller: ${options.domaincontroller || 'NOT CONFIGURED'}`);
+  console.log(`[NTLM Auth] Get groups enabled: ${options.getGroups}`);
+  console.log(
+    `[NTLM Auth] LDAP bind user: ${options.domaincontrolleruser ? '✓ Configured' : '✗ NOT CONFIGURED'}`
+  );
+  console.log(
+    `[NTLM Auth] LDAP bind password: ${options.domaincontrollerpassword ? '✓ Configured' : '✗ NOT CONFIGURED'}`
+  );
+  console.log(`[NTLM Auth] Debug mode: ${options.debug}`);
+
+  // Warn if getGroups is enabled but no domain controller is configured
+  if (options.getGroups && !options.domaincontroller) {
+    console.warn(
+      '⚠️  [NTLM Auth] WARNING: getGroups is enabled but no domain controller is configured.'
+    );
+    console.warn('⚠️  [NTLM Auth] Group retrieval requires a domain controller for LDAP queries.');
+    console.warn('⚠️  [NTLM Auth] Users will be assigned default groups only.');
+    console.warn(
+      '⚠️  [NTLM Auth] To fix: Configure "domainController" in platform.json ntlmAuth section'
+    );
+    console.warn('⚠️  [NTLM Auth] Example: "domainController": "ldap://dc.yourdomain.com"');
+  }
+
+  // Warn if getGroups is enabled but LDAP credentials are missing
+  if (
+    options.getGroups &&
+    options.domaincontroller &&
+    (!options.domaincontrolleruser || !options.domaincontrollerpassword)
+  ) {
+    console.warn(
+      '⚠️  [NTLM Auth] WARNING: getGroups is enabled with domain controller, but LDAP credentials are missing.'
+    );
+    console.warn(
+      '⚠️  [NTLM Auth] Group retrieval requires LDAP bind credentials to query Active Directory.'
+    );
+    console.warn(
+      '⚠️  [NTLM Auth] Configure "domainControllerUser" and "domainControllerPassword" in platform.json'
+    );
+    console.warn(
+      '⚠️  [NTLM Auth] Example: "domainControllerUser": "CN=Service Account,OU=Users,DC=muc,DC=intrafind,DC=de"'
+    );
+    console.warn(
+      '⚠️  [NTLM Auth] Or use environment variables: NTLM_LDAP_USER and NTLM_LDAP_PASSWORD'
+    );
+  }
 
   return expressNtlm(options);
 }
@@ -60,10 +111,13 @@ function getNtlmMiddleware(ntlmConfig) {
  */
 function processNtlmUser(req, ntlmConfig) {
   if (!req.ntlm) {
+    console.debug('[NTLM Auth] No NTLM data in request');
     return null;
   }
 
   const ntlmUser = req.ntlm;
+
+  console.debug('[NTLM Auth] Raw NTLM data:', JSON.stringify(ntlmUser, null, 2));
 
   // Check if user is authenticated
   if (!ntlmUser.Authenticated) {
@@ -82,21 +136,50 @@ function processNtlmUser(req, ntlmConfig) {
   const domain = ntlmUser.domain || ntlmUser.Domain;
   const fullUsername = domain ? `${domain}\\${userId}` : userId;
 
-  // Extract groups
+  // Extract groups - check all possible field names
   let groups = [];
   if (ntlmUser.groups && Array.isArray(ntlmUser.groups)) {
     groups = ntlmUser.groups;
+    console.debug('[NTLM Auth] Found groups in ntlmUser.groups:', groups);
   } else if (ntlmUser.Groups && Array.isArray(ntlmUser.Groups)) {
     groups = ntlmUser.Groups;
+    console.debug('[NTLM Auth] Found groups in ntlmUser.Groups:', groups);
+  } else {
+    console.debug(
+      '[NTLM Auth] No groups found in NTLM data. Available fields:',
+      Object.keys(ntlmUser)
+    );
+    console.debug('[NTLM Auth] NTLM config getGroups setting:', ntlmConfig.getGroups);
+    console.debug(
+      '[NTLM Auth] NTLM config domainController:',
+      ntlmConfig.domainController || 'NOT CONFIGURED'
+    );
+
+    if (ntlmConfig.getGroups && !ntlmConfig.domainController) {
+      console.warn(
+        '⚠️  [NTLM Auth] Groups cannot be retrieved without a domain controller configuration'
+      );
+    }
   }
+
+  console.debug('[NTLM Auth] Extracted groups before mapping:', groups);
 
   // Apply group mapping using centralized function
   const mappedGroups = mapExternalGroups(groups);
 
+  console.debug('[NTLM Auth] Groups after mapping:', mappedGroups);
+
   // Add default groups if configured
   if (ntlmConfig.defaultGroups && Array.isArray(ntlmConfig.defaultGroups)) {
-    ntlmConfig.defaultGroups.forEach(g => mappedGroups.push(g));
+    console.debug('[NTLM Auth] Adding default groups:', ntlmConfig.defaultGroups);
+    ntlmConfig.defaultGroups.forEach(g => {
+      if (!mappedGroups.includes(g)) {
+        mappedGroups.push(g);
+      }
+    });
   }
+
+  console.debug('[NTLM Auth] Final groups for user:', mappedGroups);
 
   // Create normalized user object
   const user = {
@@ -104,6 +187,7 @@ function processNtlmUser(req, ntlmConfig) {
     name: ntlmUser.DisplayName || ntlmUser.displayName || fullUsername,
     email: ntlmUser.email || ntlmUser.Email || null,
     groups: mappedGroups,
+    externalGroups: groups, // Store original external groups for debugging
     authenticated: true,
     authMethod: 'ntlm',
     provider: ntlmConfig.name || 'ntlm',
@@ -111,6 +195,13 @@ function processNtlmUser(req, ntlmConfig) {
     workstation: ntlmUser.workstation || ntlmUser.Workstation,
     raw: ntlmUser // Keep raw NTLM data for debugging
   };
+
+  console.debug('[NTLM Auth] Created user object:', {
+    id: user.id,
+    name: user.name,
+    groups: user.groups,
+    externalGroups: user.externalGroups
+  });
 
   return user;
 }

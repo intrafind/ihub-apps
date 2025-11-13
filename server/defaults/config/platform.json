@@ -67,7 +67,7 @@
   },
   "rateLimit": {
     "default": {
-      "windowMs": 900000,
+      "windowMs": 60000,
       "limit": 100,
       "standardHeaders": true,
       "legacyHeaders": false,
@@ -75,16 +75,23 @@
       "skipFailedRequests": true
     },
     "adminApi": {
-      "limit": 50,
-      "skipFailedRequests": false
+      "windowMs": 60000,
+      "limit": 100,
+      "skipFailedRequests": true
     },
-    "publicApi": {},
+    "publicApi": {
+      "windowMs": 60000,
+      "limit": 500,
+      "skipFailedRequests": true
+    },
     "authApi": {
+      "windowMs": 900000,
       "limit": 30,
       "skipFailedRequests": false
     },
     "inferenceApi": {
-      "limit": 60
+      "windowMs": 60000,
+      "limit": 500
     }
   },
   "ssl": {

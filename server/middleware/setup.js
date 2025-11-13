@@ -104,7 +104,7 @@ function setupSessionMiddleware(app, platformConfig) {
   if (needsOidcSessions) {
     console.log('🔐 Enabling session middleware for OIDC user authentication');
     app.use(
-      '/auth/oidc',
+      '/api/auth/oidc',
       session({
         secret: config.JWT_SECRET || 'fallback-session-secret',
         resave: false,
@@ -115,7 +115,7 @@ function setupSessionMiddleware(app, platformConfig) {
           httpOnly: true,
           maxAge: 30 * 60 * 1000, // 30 minutes for user auth
           sameSite: 'lax',
-          path: '/auth/oidc'
+          path: '/api/auth/oidc'
         }
       })
     );

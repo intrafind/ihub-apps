@@ -1,16 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-
-// Lazy load PDF.js only when needed
-const loadPdfjs = async () => {
-  const pdfjsLib = await import('pdfjs-dist');
-  // Configure PDF.js worker
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
-  return pdfjsLib;
-};
 import Uploader from './Uploader';
 import '../components/ImageUpload.css';
+import {
+  SUPPORTED_TEXT_FORMATS,
+  getFileTypeDisplay as getFileTypeDisplayUtil,
+  formatMimeTypesToDisplay,
+  processDocumentFile,
+  formatAcceptAttribute
+} from '../utils/fileProcessing';
 
 /**
  * Unified uploader component that handles both images and files in a single interface.
@@ -52,28 +50,14 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
 
   // File-specific configuration
   const TEXT_FORMATS = isFileUploadEnabled
-    ? fileConfig.supportedTextFormats ||
-      config.supportedTextFormats || [
-        'text/plain',
-        'text/markdown',
-        'text/csv',
-        'application/json',
-        'text/html',
-        'text/css',
-        'text/javascript',
-        'application/javascript'
-      ]
-    : [];
-  const PDF_FORMATS = isFileUploadEnabled
-    ? fileConfig.supportedPdfFormats || config.supportedPdfFormats || ['application/pdf']
+    ? fileConfig.supportedFormats || config.supportedFormats || SUPPORTED_TEXT_FORMATS
     : [];
 
-  // All supported formats combined
-  const ALL_FORMATS = [...IMAGE_FORMATS, ...TEXT_FORMATS, ...PDF_FORMATS];
+  // All supported formats combined - include both MIME types and file extensions for better OS compatibility
+  const ALL_FORMATS = formatAcceptAttribute([...IMAGE_FORMATS, ...TEXT_FORMATS]);
 
   const isImageFile = type => IMAGE_FORMATS.includes(type);
   const isTextFile = type => TEXT_FORMATS.includes(type);
-  const isPdfFile = type => PDF_FORMATS.includes(type);
 
   const getFileTypeDisplay = mimeType => {
     // Image types
@@ -81,28 +65,8 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
       return mimeType.replace('image/', '').toUpperCase();
     }
 
-    // Text/document types
-    switch (mimeType) {
-      case 'text/plain':
-        return 'TXT';
-      case 'text/markdown':
-        return 'MD';
-      case 'text/csv':
-        return 'CSV';
-      case 'application/json':
-        return 'JSON';
-      case 'text/html':
-        return 'HTML';
-      case 'text/css':
-        return 'CSS';
-      case 'text/javascript':
-      case 'application/javascript':
-        return 'JS';
-      case 'application/pdf':
-        return 'PDF';
-      default:
-        return 'FILE';
-    }
+    // Use shared utility for document types
+    return getFileTypeDisplayUtil(mimeType);
   };
 
   const processImage = file => {
@@ -170,15 +134,6 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     });
   };
 
-  const readTextFile = file => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
-      reader.onerror = () => reject(new Error('read-error'));
-      reader.readAsText(file);
-    });
-  };
-
   const processFile = async file => {
     // Check if image files are disabled
     if (!isImageUploadEnabled && IMAGE_FORMATS.some(format => format === file.type)) {
@@ -186,11 +141,7 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     }
 
     // Check if file upload is disabled
-    if (
-      !isFileUploadEnabled &&
-      (TEXT_FORMATS.some(format => format === file.type) ||
-        PDF_FORMATS.some(format => format === file.type))
-    ) {
+    if (!isFileUploadEnabled && TEXT_FORMATS.some(format => format === file.type)) {
       throw new Error('file-upload-disabled');
     }
 
@@ -199,31 +150,10 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
       return await processImage(file);
     }
 
-    // Handle text/document files
-    let content = '';
-    let processedContent = '';
-
-    if (isPdfFile(file.type)) {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdfjsLib = await loadPdfjs();
-      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-      let textContent = '';
-
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContentPage = await page.getTextContent();
-        const textItems = textContentPage.items.map(item => item.str).join(' ');
-        textContent += textItems + '\n';
-      }
-
-      processedContent = textContent.trim();
-      content = processedContent;
-    } else if (isTextFile(file.type)) {
-      content = await readTextFile(file);
-      processedContent = content;
-    }
-
-    const previewContent = content.length > 200 ? content.substring(0, 200) + '...' : content;
+    // Handle text/document files using shared utility
+    const processedContent = await processDocumentFile(file);
+    const previewContent =
+      processedContent.length > 200 ? processedContent.substring(0, 200) + '...' : processedContent;
 
     return {
       preview: {
@@ -245,29 +175,9 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
 
   const formatList = (() => {
     const imageFormats = IMAGE_FORMATS.map(format => format.replace('image/', '').toUpperCase());
-    const textFormats = TEXT_FORMATS.map(format => {
-      switch (format) {
-        case 'text/plain':
-          return 'TXT';
-        case 'text/markdown':
-          return 'MD';
-        case 'text/csv':
-          return 'CSV';
-        case 'application/json':
-          return 'JSON';
-        case 'text/html':
-          return 'HTML';
-        case 'text/css':
-          return 'CSS';
-        case 'text/javascript':
-        case 'application/javascript':
-          return 'JS';
-        default:
-          return format;
-      }
-    });
-    const pdfFormats = PDF_FORMATS.map(f => (f === 'application/pdf' ? 'PDF' : f));
-    return [...new Set([...imageFormats, ...textFormats, ...pdfFormats])].join(', ');
+    const textFormatsDisplay = formatMimeTypesToDisplay(TEXT_FORMATS);
+    const combined = imageFormats.length > 0 ? [...imageFormats, textFormatsDisplay].join(', ') : textFormatsDisplay;
+    return combined;
   })();
 
   const getErrorMessage = code => {

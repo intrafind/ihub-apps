@@ -241,19 +241,31 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         const idx = messages.findIndex(m => m.id === messageId);
         const prevUser = [...messages.slice(0, idx)].reverse().find(m => m.role === 'user');
         if (!prevUser) return { content: '', variables: null, imageData: null, fileData: null };
-        contentToResend = prevUser.rawContent || prevUser.content;
-        variablesToRestore = prevUser.meta?.variables || null;
         imageDataToRestore = prevUser.imageData || null;
         fileDataToRestore = prevUser.fileData || null;
+        // If there's file data, use rawContent to avoid including file HTML in the text
+        // Otherwise fall back to content for backward compatibility
+        contentToResend =
+          imageDataToRestore || fileDataToRestore
+            ? prevUser.rawContent || ''
+            : prevUser.rawContent || prevUser.content;
+        variablesToRestore = prevUser.meta?.variables || null;
         deleteMessage(prevUser.id);
       } else {
         deleteMessage(messageId);
         if (contentToResend === undefined) {
-          contentToResend = messageToResend.rawContent || messageToResend.content;
+          imageDataToRestore = messageToResend.imageData || null;
+          fileDataToRestore = messageToResend.fileData || null;
+          // If there's file data, use rawContent to avoid including file HTML in the text
+          // Otherwise fall back to content for backward compatibility
+          contentToResend =
+            imageDataToRestore || fileDataToRestore
+              ? messageToResend.rawContent || ''
+              : messageToResend.rawContent || messageToResend.content;
         }
         variablesToRestore = messageToResend.meta?.variables || null;
-        imageDataToRestore = messageToResend.imageData || null;
-        fileDataToRestore = messageToResend.fileData || null;
+        if (!imageDataToRestore) imageDataToRestore = messageToResend.imageData || null;
+        if (!fileDataToRestore) fileDataToRestore = messageToResend.fileData || null;
       }
 
       // Return content, variables, and file data

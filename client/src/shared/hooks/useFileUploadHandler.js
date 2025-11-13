@@ -71,7 +71,7 @@ export const useFileUploadHandler = () => {
       fileUpload: {
         enabled: fileUploadEnabled,
         maxFileSizeMB: fileConfig?.maxFileSizeMB || 5,
-        supportedTextFormats: fileConfig?.supportedTextFormats || [
+        supportedFormats: fileConfig?.supportedFormats || [
           'text/plain',
           'text/markdown',
           'text/csv',
@@ -79,9 +79,9 @@ export const useFileUploadHandler = () => {
           'text/html',
           'text/css',
           'text/javascript',
-          'application/javascript'
-        ],
-        supportedPdfFormats: fileConfig?.supportedPdfFormats || ['application/pdf']
+          'application/javascript',
+          'application/pdf'
+        ]
       },
       // Unified format fields for backward compatibility with components
       resizeImages: imageConfig?.resizeImages !== false,
@@ -95,8 +95,8 @@ export const useFileUploadHandler = () => {
             'image/webp'
           ]
         : [],
-      supportedTextFormats: fileUploadEnabled
-        ? fileConfig?.supportedTextFormats || [
+      supportedFormats: fileUploadEnabled
+        ? fileConfig?.supportedFormats || [
             'text/plain',
             'text/markdown',
             'text/csv',
@@ -104,11 +104,9 @@ export const useFileUploadHandler = () => {
             'text/html',
             'text/css',
             'text/javascript',
-            'application/javascript'
+            'application/javascript',
+            'application/pdf'
           ]
-        : [],
-      supportedPdfFormats: fileUploadEnabled
-        ? fileConfig?.supportedPdfFormats || ['application/pdf']
         : []
     };
   };

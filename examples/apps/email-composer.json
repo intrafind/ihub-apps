@@ -228,7 +228,7 @@
     },
     "fileUpload": {
       "maxFileSizeMB": 5,
-      "supportedTextFormats": [
+      "supportedFormats": [
         "text/plain",
         "text/markdown",
         "text/csv",
@@ -240,9 +240,9 @@
         "text/xml",
         "message/rfc822",
         "message/rfc2822",
-        "application/eml"
-      ],
-      "supportedPdfFormats": ["application/pdf"]
+        "application/eml",
+        "application/pdf"
+      ]
     }
   }
 }

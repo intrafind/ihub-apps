@@ -249,37 +249,11 @@
     "edit": "Bearbeiten"
   },
   "errors": {
-    "fetchFailed": "Daten konnten nicht abgerufen werden",
-    "sendFailed": "Nachricht konnte nicht gesendet werden",
-    "configSaveFailed": "Konfiguration konnte nicht gespeichert werden",
-    "imageUploadDisabled": "Bild-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell oder laden Sie stattdessen eine Textdatei hoch.",
-    "fileUploadDisabled": "Datei-Upload ist für diese Anwendung deaktiviert.",
     "componentError": "Komponenten-Fehler",
     "compilationError": "Kompilierungsfehler",
     "noComponentToRender": "Keine Komponente zum Rendern",
     "pageNotFound": "Seite nicht gefunden",
-    "signIn": "Anmelden",
-    "notFound": {
-      "title": "Seite nicht gefunden",
-      "message": "Wir konnten die gesuchte Seite nicht finden.",
-      "returnHome": "Zur Startseite"
-    },
-    "unauthorized": {
-      "title": "Nicht autorisiert",
-      "message": "Sie haben keine Berechtigung, auf diese Seite zuzugreifen.",
-      "goBack": "Zurück"
-    },
-    "forbidden": {
-      "title": "Verboten",
-      "message": "Der Zugriff auf diese Ressource ist verboten.",
-      "goBack": "Zurück"
-    },
-    "serverError": {
-      "title": "Serverfehler",
-      "message": "Auf unserer Seite ist etwas schief gelaufen.",
-      "subtitle": "Bitte versuchen Sie es später erneut.",
-      "retry": "Erneut versuchen"
-    }
+    "signIn": "Anmelden"
   },
   "serverErrors": {
     "appNotFound": "Anwendung nicht gefunden",
@@ -469,13 +443,12 @@
         },
         "basic": {
           "title": "Grundlegende Informationen",
-          "description": "Name, Beschreibung und Aussehen konfigurieren",
+          "description": "Beschreibung",
           "language": "Sprache",
           "appId": "App-ID",
           "appIdPlaceholder": "z.B. meine-tolle-app",
           "name": "App-Name",
           "namePlaceholder": "App-Name eingeben",
-          "description": "Beschreibung",
           "descriptionPlaceholder": "App-Beschreibung eingeben",
           "color": "Farbe",
           "icon": "Symbol",
@@ -617,7 +590,10 @@
       "filterDisabled": "Nur deaktivierte",
       "name": "Name",
       "provider": "Anbieter",
-      "actions": "Aktionen",
+      "actions": {
+        "clone": "Klonen",
+        "delete": "Löschen"
+      },
       "enabled": "Aktiviert",
       "disabled": "Deaktiviert",
       "test": "Testen",
@@ -684,39 +660,9 @@
       },
       "table": {
         "status": "Status"
-      },
-      "actions": {
-        "clone": "Klonen",
-        "delete": "Löschen"
       }
     },
     "prompts": {
-      "title": "Prompt-Verwaltung",
-      "subtitle": "Prompts für Ihre AI-Anwendungen verwalten und organisieren",
-      "createNew": "Neuen Prompt erstellen",
-      "loadError": "Fehler beim Laden der Prompts",
-      "searchPlaceholder": "Prompts durchsuchen...",
-      "filterAll": "Alle Prompts",
-      "filterEnabled": "Nur aktivierte",
-      "filterDisabled": "Nur deaktivierte",
-      "name": "Name",
-      "category": "Kategorie",
-      "description": "Beschreibung",
-      "order": "Reihenfolge",
-      "appId": "App-ID",
-      "status": "Status",
-      "actions": "Aktionen",
-      "enabled": "Aktiviert",
-      "disabled": "Deaktiviert",
-      "enable": "Aktivieren",
-      "disable": "Deaktivieren",
-      "clone": "Klonen",
-      "edit": "Bearbeiten",
-      "delete": "Löschen",
-      "deleteConfirm": "Sind Sie sicher, dass Sie diesen Prompt löschen möchten?",
-      "deleteSuccess": "Prompt erfolgreich gelöscht",
-      "noPrompts": "Keine Prompts gefunden",
-      "noPromptsDesc": "Beginnen Sie mit der Erstellung eines neuen Prompts.",
       "variableTypes": {
         "string": "Zeichenkette",
         "number": "Zahl",
@@ -743,13 +689,6 @@
         "reactComponent": "React-Komponente (.jsx)",
         "jsxDescription": "Schreiben Sie JSX-Code, der als React-Komponente kompiliert und gerendert wird",
         "markdownDescription": "Schreiben Sie Standard-Markdown-Inhalte mit Syntaxhervorhebung"
-      }
-    },
-    "prompts": {
-      "variableTypes": {
-        "string": "Zeichenkette",
-        "number": "Zahl",
-        "boolean": "Boolean"
       }
     },
     "shortlinks": {
@@ -855,6 +794,57 @@
       "jwtProviders": "JWT-Anbieter",
       "noOidcProviders": "Keine OIDC-Anbieter konfiguriert",
       "addProvider": "Fügen Sie einen Anbieter hinzu, um OIDC-Authentifizierung zu aktivieren"
+    },
+    "system": {
+      "title": "Systemverwaltung",
+      "description": "Systemweite Einstellungen und Wartung verwalten",
+      "forceTitle": "Client-Aktualisierung erzwingen",
+      "forceDesc": "Eine erzwungene Aktualisierung für alle Clients auslösen. Dies löscht alle Browser-Caches, localStorage und zwingt Clients, alle Assets (JS, CSS, Schriften, Konfigurationen) ohne Browser-Cache neu zu laden. Die Disclaimer-Akzeptanz bleibt erhalten.",
+      "warningTitle": "Warnung",
+      "warningDesc": "Diese Aktion zwingt alle verbundenen Clients, ihre Browser bei der nächsten Seiteninteraktion neu zu laden. Verwenden Sie dies bei der Bereitstellung kritischer Updates oder wenn Clients zwischengespeicherte Daten löschen müssen.",
+      "trigger": "Aktualisierung erzwingen",
+      "triggering": "Aktualisierung wird erzwungen...",
+      "triggerSuccess": "Erzwungene Aktualisierung erfolgreich ausgelöst! Neuer Salt: {{salt}}. Alle Clients werden beim nächsten Seitenladen aktualisiert.",
+      "triggerError": "Fehler beim Auslösen der erzwungenen Aktualisierung",
+      "passwordTitle": "Admin-Passwort ändern",
+      "passwordDesc": "Das Admin-Passwort aktualisieren. Das neue Passwort wird mit bcrypt verschlüsselt und sicher gespeichert.",
+      "newPassword": "Neues Passwort",
+      "newPasswordPlaceholder": "Neues Passwort eingeben",
+      "confirmPassword": "Neues Passwort bestätigen",
+      "confirmPasswordPlaceholder": "Neues Passwort bestätigen",
+      "changePassword": "Passwort ändern",
+      "changingPassword": "Passwort wird geändert...",
+      "passwordChanged": "Admin-Passwort erfolgreich geändert und verschlüsselt",
+      "passwordChangeError": "Fehler beim Ändern des Passworts",
+      "passwordError": "Beide Passwortfelder sind erforderlich",
+      "passwordMismatch": "Passwörter stimmen nicht überein",
+      "passwordTooShort": "Passwort muss mindestens 3 Zeichen lang sein",
+      "backupTitle": "Konfigurations-Backup & Import",
+      "backupDesc": "Exportieren Sie Ihre vollständige Konfiguration als ZIP-Datei für die Notfallwiederherstellung oder importieren Sie ein Konfigurations-Backup, um Ihr System wiederherzustellen. Dies umfasst alle Apps, Modelle, Gruppen, benutzerdefinierte Seiten und Frontend-Anpassungen (CSS, HTML usw.).",
+      "backupInfoTitle": "Was ist in Backups enthalten",
+      "backupInfo1": "Alle Konfigurationsdateien (Plattform, Apps, Modelle, Gruppen, UI)",
+      "backupInfo2": "Benutzerdefinierte Seiten und React-Komponenten",
+      "backupInfo3": "Prompt-Vorlagen und Lokalisierungsdateien",
+      "backupInfo4": "Frontend-Anpassungen (CSS, HTML, Bilder)",
+      "backupInfo5": "Alle Daten und Quelldateien",
+      "exportConfig": "Konfiguration exportieren",
+      "exporting": "Backup wird erstellt...",
+      "exportError": "Fehler beim Exportieren der Konfiguration: {{error}}",
+      "importConfig": "Konfiguration importieren",
+      "importing": "Konfiguration wird importiert...",
+      "importSuccess": "Konfiguration erfolgreich importiert! {{fileCount}} Dateien importiert. Aktuelle Konfiguration gesichert als: {{backup}}",
+      "importError": "Fehler beim Importieren der Konfiguration: {{error}}",
+      "importInvalidFile": "Bitte wählen Sie eine ZIP-Datei aus",
+      "importConfirm": "Sind Sie sicher, dass Sie diese Konfiguration importieren möchten? Dies wird ALLE vorhandenen Konfigurationen, Apps, Modelle und benutzerdefinierten Seiten ersetzen. Ein Backup der aktuellen Konfiguration wird automatisch erstellt.",
+      "backupNote": "Hinweis: Importe erstellen automatisch ein Backup Ihrer aktuellen Konfiguration, bevor sie ersetzt wird.",
+      "versionTitle": "Versionsinformationen",
+      "versionDesc": "Aktuelle Versionsinformationen für die Anwendung, Frontend- und Backend-Komponenten.",
+      "versionApp": "Anwendungsversion",
+      "versionClient": "Frontend-Version",
+      "versionServer": "Backend-Version",
+      "versionNode": "Node.js-Version",
+      "versionLoading": "Versionsinformationen werden geladen...",
+      "versionError": "Fehler beim Laden der Versionsinformationen"
     }
   },
   "components": {
@@ -874,13 +864,6 @@
     "rated": "Bewertet",
     "sendFeedback": "Feedback senden",
     "thankYou": "Danke für dein Feedback!"
-  },
-  "errors": {
-    "componentError": "Komponenten-Fehler",
-    "compilationError": "Kompilierungsfehler",
-    "noComponentToRender": "Keine Komponente zum Rendern",
-    "pageNotFound": "Seite nicht gefunden",
-    "signIn": "Anmelden"
   },
   "auth": {
     "login": {
