@@ -9,7 +9,7 @@
   "scripts": {
     "// === DEVELOPMENT ===": "",
     "setup:dev": "cp .env.example .env && npm run install:all && echo '\\n✅ Setup complete! Edit .env with your API keys, then run: npm run dev'",
-    "dev": "NODE_ENV=development concurrently --kill-others-on-fail \"npm run server\" \"sleep 2 && npm run client\"",
+    "dev": "cross-env NODE_ENV=development concurrently --kill-others-on-fail \"npm run server\" \"sleep 2 && npm run client\"",
     "server": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
     "client": "cd client && npm run dev",
     "start": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
@@ -118,6 +118,7 @@
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^14.5.2",
     "concurrently": "^9.2.0",
+    "cross-env": "^10.1.0",
     "electron": "^37.2.6",
     "electron-builder": "^26.0.12",
     "esbuild": "^0.25.10",
