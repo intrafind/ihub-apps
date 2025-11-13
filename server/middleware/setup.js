@@ -33,6 +33,58 @@ export function checkContentLength(limit) {
 }
 
 /**
+ * Check if the request is for a static asset that should bypass authentication
+ * @param {import('express').Request} req - Express request object
+ * @returns {boolean} - True if the request is for a static asset
+ */
+function isStaticAssetRequest(req) {
+  const path = req.path || req.url;
+  const isDevelopment = process.env.NODE_ENV === 'development';
+
+  // Common static assets (production and development)
+  const isCommonStaticAsset =
+    path.startsWith('/assets/') ||
+    path.startsWith('/favicon') ||
+    path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map)$/);
+
+  // Vite dev server specific paths (development only)
+  const isViteAsset =
+    isDevelopment &&
+    (path.startsWith('/vite/') ||
+      path.startsWith('/@vite/') ||
+      path.startsWith('/@fs/') ||
+      path.startsWith('/node_modules/'));
+
+  return isCommonStaticAsset || isViteAsset;
+}
+
+/**
+ * Middleware wrapper that skips authentication for static assets
+ * @param {Function[]} authMiddlewares - Array of authentication middleware functions
+ * @returns {import('express').RequestHandler}
+ */
+function createAuthChain(authMiddlewares) {
+  return (req, res, next) => {
+    // Skip auth for static assets
+    if (isStaticAssetRequest(req)) {
+      return next();
+    }
+
+    // Run auth middleware chain
+    let index = 0;
+    const runNext = err => {
+      if (err) return next(err);
+      if (index >= authMiddlewares.length) return next();
+
+      const middleware = authMiddlewares[index++];
+      middleware(req, res, runNext);
+    };
+
+    runNext();
+  };
+}
+
+/**
  * Process CORS origins, replacing environment variables and handling special cases
  * @param {string|Array} origins - CORS origins configuration
  * @returns {Array|string|boolean} - Processed origins
@@ -259,13 +311,18 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Configure OIDC providers based on platform configuration
   configureOidcProviders();
 
-  // Authentication middleware (order matters: proxy auth first, then unified JWT validation)
-  app.use(proxyAuth);
-  app.use(teamsAuthMiddleware);
-  app.use(jwtAuthMiddleware);
-  app.use(localAuthMiddleware); // Now mainly a placeholder for local auth specific logic
-  app.use(ldapAuthMiddleware); // LDAP auth placeholder for any LDAP-specific logic
-  app.use(ntlmAuthMiddleware); // NTLM handles its own initialization internally
+  // Apply authentication middleware chain (skips static assets automatically)
+  // Order matters: proxy auth first, then unified JWT validation
+  app.use(
+    createAuthChain([
+      proxyAuth,
+      teamsAuthMiddleware,
+      jwtAuthMiddleware,
+      localAuthMiddleware, // Now mainly a placeholder for local auth specific logic
+      ldapAuthMiddleware, // LDAP auth placeholder for any LDAP-specific logic
+      ntlmAuthMiddleware // NTLM handles its own initialization internally
+    ])
+  );
 
   // Enhance user with permissions after authentication
   app.use((req, res, next) => {

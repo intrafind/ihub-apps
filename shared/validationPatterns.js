@@ -54,7 +54,8 @@ export const VARIABLE_NAME_ERROR_MESSAGE =
  * Format: 'en', 'de', 'en-US', 'en-GB', etc.
  */
 export const LANGUAGE_CODE_PATTERN = /^[a-z]{2}(-[A-Z]{2})?$/;
-export const LANGUAGE_CODE_ERROR_MESSAGE = 'Invalid language code format (e.g., "en", "de", "en-US")';
+export const LANGUAGE_CODE_ERROR_MESSAGE =
+  'Invalid language code format (e.g., "en", "de", "en-US")';
 
 /**
  * Color hex code validation

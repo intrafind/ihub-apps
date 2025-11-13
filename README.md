@@ -11,7 +11,6 @@ Unleash creativity and productivity in your organization with **iHub** — the i
 
 ![INTRAFIND iHub Startpage](https://github.com/user-attachments/assets/f0495f7e-a0c8-4c25-9e16-4b74d97a3f79)
 
-
 **iHub** is developed by [**IntraFind Software AG**](https://intrafind.com/) - made with ❤️ from our teams in Berlin, Bonn, Munich + Remote
 
 The Software is free-of-use and "AS-IS without warranty of any kind. - Check the [License Details](LICENSE.md)

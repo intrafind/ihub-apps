@@ -176,7 +176,10 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   const formatList = (() => {
     const imageFormats = IMAGE_FORMATS.map(format => format.replace('image/', '').toUpperCase());
     const textFormatsDisplay = formatMimeTypesToDisplay(TEXT_FORMATS);
-    const combined = imageFormats.length > 0 ? [...imageFormats, textFormatsDisplay].join(', ') : textFormatsDisplay;
+    const combined =
+      imageFormats.length > 0
+        ? [...imageFormats, textFormatsDisplay].join(', ')
+        : textFormatsDisplay;
     return combined;
   })();
 
