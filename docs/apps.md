@@ -135,20 +135,21 @@ Each app is defined with the following essential properties:
 
 | Property                | Type    | Description                                                                                                              |
 | ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `id`                    | String  | Unique identifier for the app                                                                                            |
-| `order`                 | Number  | Display order in the app list (optional)                                                                                 |
-| `name`                  | Object  | Localized names for the app                                                                                              |
-| `description`           | Object  | Localized descriptions of app functionality                                                                              |
-| `color`                 | String  | Hex color code for app theming                                                                                           |
-| `icon`                  | String  | Icon identifier for the app (see [Available Icons](#available-icons))                                                    |
-| `system`                | Object  | Localized system prompts/instructions for the AI model                                                                   |
-| `tokenLimit`            | Number  | Maximum token limit for context window                                                                                   |
-| `preferredModel`        | String  | Default AI model to use with this app. If omitted, the server falls back to the model marked as default in `models.json` |
-| `preferredOutputFormat` | String  | Format for AI responses (markdown, text)                                                                                 |
-| `preferredStyle`        | String  | Style guidance for AI responses (normal, professional, creative, academic)                                               |
-| `preferredTemperature`  | Number  | Temperature setting (0.0-1.0) controlling randomness                                                                     |
-| `sendChatHistory`       | Boolean | Whether to include chat history in API requests                                                                          |
-| `outputSchema`          | Object  | JSON schema describing the structured response format                                                                    |
+| `id`                    | String  | **Required.** Unique identifier for the app                                                                              |
+| `name`                  | Object  | **Required.** Localized names for the app                                                                                |
+| `description`           | Object  | **Required.** Localized descriptions of app functionality                                                                |
+| `color`                 | String  | **Required.** Hex color code for app theming                                                                             |
+| `icon`                  | String  | **Required.** Icon identifier for the app (see [Available Icons](#available-icons))                                      |
+| `system`                | Object  | **Required.** Localized system prompts/instructions for the AI model                                                     |
+| `tokenLimit`            | Number  | Optional. Maximum token limit for context window (1-1,000,000)                                                           |
+| `order`                 | Number  | Optional. Display order in the app list                                                                                  |
+| `preferredModel`        | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`          |
+| `preferredOutputFormat` | String  | Optional. Format for AI responses (markdown, text, json, html)                                                           |
+| `preferredStyle`        | String  | Optional. Style guidance for AI responses (normal, professional, creative, academic)                                     |
+| `preferredTemperature`  | Number  | Optional. Temperature setting (0.0-2.0) controlling randomness                                                           |
+| `sendChatHistory`       | Boolean | Optional. Whether to include chat history in API requests (default: true)                                                |
+| `outputSchema`          | Object  | Optional. JSON schema describing the structured response format                                                          |
+| `iassistant`            | Object  | Optional. Tool-specific configuration for iAssistant RAG integration (see [Tool-Specific Configuration](#tool-specific-configuration)) |
 
 ### Advanced Configuration Options
 
@@ -398,6 +399,56 @@ When `true`, users can submit the form without entering content in the main inpu
 - `allowedModels`: Restrict which models can be used with this app
 - `disallowModelSelection`: Prevent user from changing the model
 - `outputSchema`: JSON schema defining the required structure of the AI response
+
+### Tool-Specific Configuration
+
+Some tools support app-level configuration to override platform defaults. This allows individual apps to customize tool behavior for their specific use case.
+
+#### iAssistant Configuration
+
+The `iassistant` configuration object allows apps to customize iAssistant RAG (Retrieval-Augmented Generation) behavior:
+
+```json
+{
+  "id": "my-rag-app",
+  "name": { "en": "Knowledge Base Assistant" },
+  "description": { "en": "Search and answer from knowledge base" },
+  "color": "#2563eb",
+  "icon": "search-brain",
+  "system": { 
+    "en": "You are an assistant that searches documents and provides accurate answers."
+  },
+  "tools": ["iAssistant_ask"],
+  "iassistant": {
+    "baseUrl": "https://my-iassistant-instance.example.com",
+    "profileId": "my-search-profile-id",
+    "filter": [
+      {
+        "key": "category",
+        "values": ["documentation", "help"],
+        "isNegated": false
+      }
+    ],
+    "searchMode": "multiword",
+    "searchDistance": "",
+    "searchFields": {}
+  }
+}
+```
+
+**iAssistant Configuration Properties:**
+
+- `baseUrl` (optional): URL of the iAssistant API endpoint. Overrides the platform-level setting.
+- `profileId` (optional): Search profile ID to use. Can be plain text or base64-encoded.
+- `filter` (optional): Array of filter objects to apply to searches:
+  - `key`: Field name to filter on
+  - `values`: Array of values to match
+  - `isNegated`: Boolean, if true excludes matches instead of including them
+- `searchMode` (optional): Search algorithm mode (e.g., "multiword")
+- `searchDistance` (optional): Search distance parameter
+- `searchFields` (optional): Object specifying which fields to search
+
+This configuration allows each app to query different knowledge bases, apply different filters, or use different search profiles without affecting other apps using iAssistant.
 
 ### Available Icons
 
