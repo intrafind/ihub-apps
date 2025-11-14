@@ -105,7 +105,12 @@
       "favorites": "Favoriten",
       "clearFilters": "Filter zurücksetzen",
       "loadMore": "Mehr laden",
-      "showingCountOfTotal": "Zeige {{displayed}} von {{total}} Anwendungen"
+      "showingCountOfTotal": "Zeige {{displayed}} von {{total}} Anwendungen",
+      "appTypes": {
+        "chat": "Chat",
+        "redirect": "Extern",
+        "iframe": "Eingebettet"
+      }
     },
     "sort": {
       "label": "Sortieren nach",
@@ -135,6 +140,26 @@
         "nameDesc": "Name Z-A",
         "relevance": "Relevanz"
       }
+    },
+    "notFound": {
+      "title": "Seite nicht gefunden",
+      "description": "Die gesuchte Seite existiert nicht.",
+      "backHome": "Zurück zur Startseite"
+    },
+    "redirectApp": {
+      "title": "Externe Anwendung",
+      "externalSite": "Externe Webseite",
+      "continueButton": "Weiter zu {{appName}}",
+      "warning": "Sie verlassen iHub Apps",
+      "openingInNewTab": "Wird in neuem Tab geöffnet...",
+      "redirecting": "Weiterleitung..."
+    },
+    "iframeApp": {
+      "title": "Eingebettete Anwendung",
+      "loading": "Anwendung wird geladen...",
+      "loadError": "Fehler beim Laden der eingebetteten Anwendung",
+      "reload": "Neu laden",
+      "openInNewTab": "In neuem Tab öffnen"
     },
     "appChat": {
       "messagePlaceholder": "Gib deine Nachricht hier ein...",

@@ -1,0 +1,21 @@
+{
+  "id": "embedded-whiteboard",
+  "order": 100,
+  "name": {
+    "en": "Whiteboard",
+    "de": "Whiteboard"
+  },
+  "description": {
+    "en": "Embedded collaborative whiteboard application",
+    "de": "Eingebettete kollaborative Whiteboard-Anwendung"
+  },
+  "type": "iframe",
+  "iframeConfig": {
+    "url": "https://excalidraw.com/",
+    "allowFullscreen": true,
+    "sandbox": ["allow-scripts", "allow-same-origin", "allow-forms", "allow-popups"]
+  },
+  "color": "#8B5CF6",
+  "icon": "pencil",
+  "enabled": true
+}

@@ -106,7 +106,12 @@
       "favorites": "Favorites",
       "clearFilters": "Clear filters",
       "loadMore": "Load More",
-      "showingCountOfTotal": "Showing {{displayed}} of {{total}} apps"
+      "showingCountOfTotal": "Showing {{displayed}} of {{total}} apps",
+      "appTypes": {
+        "chat": "Chat",
+        "redirect": "External",
+        "iframe": "Embedded"
+      }
     },
     "sort": {
       "label": "Sort by",
@@ -146,6 +151,21 @@
       "title": "Page Not Found",
       "description": "The page you're looking for doesn't exist.",
       "backHome": "Back to Home"
+    },
+    "redirectApp": {
+      "title": "External Application",
+      "externalSite": "External Site",
+      "continueButton": "Continue to {{appName}}",
+      "warning": "You are about to leave iHub Apps",
+      "openingInNewTab": "Opening in new tab...",
+      "redirecting": "Redirecting..."
+    },
+    "iframeApp": {
+      "title": "Embedded Application",
+      "loading": "Loading application...",
+      "loadError": "Failed to load embedded application",
+      "reload": "Reload",
+      "openInNewTab": "Open in new tab"
     },
     "appChat": {
       "messagePlaceholder": "Type your message here...",

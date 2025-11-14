@@ -5,7 +5,7 @@ import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
 import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
 import PromptsList from './features/prompts/pages/PromptsList';
-import AppChat from './features/apps/pages/AppChat';
+import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
 import AppCanvas from './features/canvas/pages/AppCanvas';
 import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
@@ -55,7 +55,7 @@ const TeamsAuthEnd = React.lazy(() => import('./features/teams/TeamsAuthEnd'));
 
 // Create safe versions of components that need error boundaries
 const SafeAppsList = withSafeRoute(AppsList);
-const SafeAppChat = withSafeRoute(AppChat);
+const SafeAppRouterWrapper = withSafeRoute(AppRouterWrapper);
 const SafeAppCanvas = withSafeRoute(AppCanvas);
 const SafeUnifiedPage = withSafeRoute(UnifiedPage);
 const SafePromptsList = withSafeRoute(PromptsList);
@@ -137,7 +137,7 @@ function App() {
                     {uiConfig?.promptsList?.enabled !== false && (
                       <Route path="prompts" element={<SafePromptsList />} />
                     )}
-                    <Route path="apps/:appId" element={<SafeAppChat />} />
+                    <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
                     <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
                     <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
                     {showAdminPage('home') && (

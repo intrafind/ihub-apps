@@ -96,16 +96,16 @@ const renderStartupState = (app, welcomeMessage, handleStarterPromptClick) => {
   return <NoMessagesView />;
 };
 
-const AppChat = () => {
+const AppChat = ({ preloadedApp = null }) => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { appId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const prefillMessage = searchParams.get('prefill') || '';
-  const [app, setApp] = useState(null);
+  const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!preloadedApp);
   const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
   const [variables, setVariables] = useState({});
@@ -416,6 +416,18 @@ const AppChat = () => {
     let isMounted = true;
 
     const loadData = async () => {
+      // Skip fetching if app data is already preloaded
+      if (preloadedApp) {
+        // Still initialize variables if needed
+        if (preloadedApp.variables && isMounted) {
+          const initialVars = getInitializedVariables(preloadedApp, currentLanguage);
+          if (isMounted) {
+            setVariables(initialVars);
+          }
+        }
+        return;
+      }
+
       try {
         setLoading(true);
 
@@ -469,7 +481,7 @@ const AppChat = () => {
     return () => {
       isMounted = false;
     };
-  }, [appId, currentLanguage, t]);
+  }, [appId, currentLanguage, t, preloadedApp]);
 
   // Load saved variables from sessionStorage when initializing
   useEffect(() => {

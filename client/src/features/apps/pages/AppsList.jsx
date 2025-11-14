@@ -625,7 +625,7 @@ const AppsList = () => {
                   >
                     <div className="flex flex-row sm:flex-col h-full">
                       <div
-                        className="flex items-center justify-center w-20 h-full flex-shrink-0 rounded-l-lg sm:rounded-t-lg sm:rounded-l-none sm:w-full sm:h-24"
+                        className="flex items-center justify-center w-20 h-full flex-shrink-0 rounded-l-lg sm:rounded-t-lg sm:rounded-l-none sm:w-full sm:h-24 relative"
                         style={{ backgroundColor: app.color || '#4f46e5' }}
                       >
                         <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
@@ -635,6 +635,16 @@ const AppsList = () => {
                             className="text-white"
                           />
                         </div>
+                        {/* App type badge */}
+                        {app.type && app.type !== 'chat' && (
+                          <div className="absolute bottom-2 right-2 bg-white/90 dark:bg-gray-800/90 px-2 py-0.5 rounded-full text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                            <Icon
+                              name={app.type === 'redirect' ? 'external-link' : 'window'}
+                              size="xs"
+                            />
+                            {t(`pages.appsList.appTypes.${app.type}`)}
+                          </div>
+                        )}
                       </div>
                       <div className="px-4 py-2 flex flex-col flex-1">
                         <h3 className="font-bold text-lg mb-1 break-words">
