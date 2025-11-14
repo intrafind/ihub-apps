@@ -206,37 +206,37 @@ const iframeConfigSchema = z.object({
     .default(['allow-scripts', 'allow-same-origin', 'allow-forms'])
 });
 
-export const appConfigSchema = z
-  .object({
-    // Required fields
-    id: z
-      .string()
-      .regex(
-        APP_ID_PATTERN,
-        'ID must contain only alphanumeric characters, underscores, dots, and hyphens'
-      )
-      .min(1, 'ID cannot be empty')
-      .max(APP_ID_MAX_LENGTH, `ID cannot exceed ${APP_ID_MAX_LENGTH} characters`),
-    name: localizedStringSchema,
-    description: localizedStringSchema,
-    color: z.string().regex(HEX_COLOR_PATTERN, 'Color must be a valid hex code (e.g., #4F46E5)'),
-    icon: z.string().min(1, 'Icon cannot be empty'),
+// Base app config schema without refinements
+const baseAppConfigSchema = z.object({
+  // Required fields
+  id: z
+    .string()
+    .regex(
+      APP_ID_PATTERN,
+      'ID must contain only alphanumeric characters, underscores, dots, and hyphens'
+    )
+    .min(1, 'ID cannot be empty')
+    .max(APP_ID_MAX_LENGTH, `ID cannot exceed ${APP_ID_MAX_LENGTH} characters`),
+  name: localizedStringSchema,
+  description: localizedStringSchema,
+  color: z.string().regex(HEX_COLOR_PATTERN, 'Color must be a valid hex code (e.g., #4F46E5)'),
+  icon: z.string().min(1, 'Icon cannot be empty'),
 
-    // App type - defaults to 'chat' for backward compatibility
-    type: z.enum(['chat', 'redirect', 'iframe']).optional().default('chat'),
+  // App type - defaults to 'chat' for backward compatibility
+  type: z.enum(['chat', 'redirect', 'iframe']).optional().default('chat'),
 
-    // Type-specific configuration
-    redirectConfig: redirectConfigSchema.optional(),
-    iframeConfig: iframeConfigSchema.optional(),
+  // Type-specific configuration
+  redirectConfig: redirectConfigSchema.optional(),
+  iframeConfig: iframeConfigSchema.optional(),
 
-    // Chat-specific fields (required for chat type, optional for others)
-    system: localizedStringSchema.optional(),
-    tokenLimit: z
-      .number()
-      .int()
-      .min(TOKEN_LIMIT_MIN, `Token limit must be at least ${TOKEN_LIMIT_MIN}`)
-      .max(TOKEN_LIMIT_MAX, `Token limit cannot exceed ${TOKEN_LIMIT_MAX.toLocaleString()}`)
-      .optional(),
+  // Chat-specific fields (required for chat type, optional for others)
+  system: localizedStringSchema.optional(),
+  tokenLimit: z
+    .number()
+    .int()
+    .min(TOKEN_LIMIT_MIN, `Token limit must be at least ${TOKEN_LIMIT_MIN}`)
+    .max(TOKEN_LIMIT_MAX, `Token limit cannot exceed ${TOKEN_LIMIT_MAX.toLocaleString()}`)
+    .optional(),
 
     // Optional fields with validation
     order: z.number().int().min(0).optional(),
@@ -269,7 +269,13 @@ export const appConfigSchema = z
     parentId: z.string().optional(),
     inheritanceLevel: z.number().int().min(0).optional(),
     overriddenFields: z.array(z.string()).optional()
-  })
+  });
+
+// Export known app keys from base schema before adding refinements
+export const knownAppKeys = Object.keys(baseAppConfigSchema.shape);
+
+// Add validation refinements and export the final schema
+export const appConfigSchema = baseAppConfigSchema
   .strict() // Use strict instead of passthrough for better validation
   .refine(
     data => {
@@ -308,4 +314,3 @@ export const appConfigSchema = z
     }
   );
 
-export const knownAppKeys = Object.keys(appConfigSchema.shape);
