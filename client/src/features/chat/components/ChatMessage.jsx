@@ -360,16 +360,10 @@ const ChatMessage = ({
 
       if (effectiveOutputFormat === 'json' && customRendererName) {
         try {
-          const parsedData = typeof message.content === 'string'
-            ? JSON.parse(message.content)
-            : message.content;
+          const parsedData =
+            typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
 
-          return (
-            <CustomResponseRenderer
-              componentName={customRendererName}
-              data={parsedData}
-            />
-          );
+          return <CustomResponseRenderer componentName={customRendererName} data={parsedData} />;
         } catch (error) {
           console.error('Error parsing JSON for custom renderer:', error);
           // Fall through to default JSON rendering on parse error

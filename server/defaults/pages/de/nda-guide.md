@@ -44,11 +44,11 @@ Der NDA-Risikoanalyzer kommt mit den folgenden Standard-Richtlinien:
 
 Der Analyzer verwendet ein dreistufiges Risikoeinstufungssystem:
 
-| Risikostufe | Farbe | Beschreibung |
-|-------------|-------|--------------|
-| **ROT** 🔴 | Hohes Risiko | Problematische Klauseln, die gegen Richtlinien verstoßen ODER wichtige Klauseln, die vollständig fehlen |
-| **GELB** 🟡 | Mittleres Risiko | Unklare Definitionen, unklare Begriffe, moderate Einschränkungen oder fehlende optionale Klauseln |
-| **GRÜN** 🟢 | Geringes Risiko | Akzeptable Klauseln, die den Richtlinien entsprechen |
+| Risikostufe | Farbe            | Beschreibung                                                                                            |
+| ----------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
+| **ROT** 🔴  | Hohes Risiko     | Problematische Klauseln, die gegen Richtlinien verstoßen ODER wichtige Klauseln, die vollständig fehlen |
+| **GELB** 🟡 | Mittleres Risiko | Unklare Definitionen, unklare Begriffe, moderate Einschränkungen oder fehlende optionale Klauseln       |
+| **GRÜN** 🟢 | Geringes Risiko  | Akzeptable Klauseln, die den Richtlinien entsprechen                                                    |
 
 ## Verwendung des NDA-Risikoanalyzers
 
@@ -65,6 +65,7 @@ Vor der Analyse Ihres NDAs können Sie die Richtlinien anpassen:
 3. Sie können diese Regeln anpassen, um Ihren spezifischen Anforderungen zu entsprechen
 
 **Regelformat:**
+
 - Jede Regel sollte in einer separaten Zeile stehen
 - Beginnen Sie mit einem Bindestrich `-`
 - Fügen Sie den Klauselnamen und die Bedingungen hinzu
@@ -76,17 +77,20 @@ Vor der Analyse Ihres NDAs können Sie die Richtlinien anpassen:
 Sie haben zwei Optionen:
 
 **Option A: Dokument hochladen**
+
 - Klicken Sie auf die Upload-Schaltfläche
 - Wählen Sie Ihr NDA-Dokument aus (PDF, TXT oder Markdown-Format)
 - Maximale Dateigröße: 10MB
 
 **Option B: Text einfügen**
+
 - Kopieren Sie den NDA-Text
 - Fügen Sie ihn direkt in das Nachrichteneingabefeld ein
 
 ### Schritt 4: Analysieren
 
 Klicken Sie auf die Absenden-Schaltfläche, um die Analyse zu starten. Die KI wird:
+
 1. Alle 8 Standardklauseln bewerten
 2. Zusätzliche Klauseln aus Ihren benutzerdefinierten Richtlinien extrahieren
 3. Jede Klausel gegen den NDA-Text analysieren
@@ -134,6 +138,7 @@ Um den Laufzeitschwellenwert zu ändern:
 **Wichtig**: Wenn Sie die Seite aktualisieren oder die App neu starten, werden die benutzerdefinierten Richtlinien **automatisch auf die im System konfigurierten Standardregeln zurückgesetzt**.
 
 So stellen Sie die Standardeinstellungen wieder her:
+
 1. Aktualisieren Sie die Browser-Seite (F5 oder Strg+R / Cmd+R)
 2. Oder löschen Sie das Feld "Benutzerdefinierte Richtlinien" und laden Sie die App neu
 
@@ -181,6 +186,7 @@ Der NDA-Risikoanalyzer gibt Ergebnisse in einem strukturierten JSON-Format zurü
 ### Problem: Ergebnisse scheinen falsch
 
 **Lösung**:
+
 1. Überprüfen Sie die Zitate, um zu sehen, welchen Text die KI gefunden hat
 2. Prüfen Sie, ob Ihre benutzerdefinierten Regeln spezifisch genug sind
 3. Versuchen Sie, Ihre benutzerdefinierten Regeln mit klareren Bedingungen neu zu formulieren
@@ -194,6 +200,7 @@ contents/apps/nda-risk-analyzer.json
 ```
 
 Um systemweite Standardeinstellungen zu ändern:
+
 1. Bearbeiten Sie das Feld `defaultValue` im Abschnitt `variables`
 2. Speichern Sie die Datei
 3. Die Änderungen werden automatisch angewendet (kein Server-Neustart erforderlich)
@@ -201,6 +208,7 @@ Um systemweite Standardeinstellungen zu ändern:
 ## Support
 
 Für Fragen oder Probleme mit dem NDA-Risikoanalyzer:
+
 - Kontaktieren Sie den iHub Apps-Administrator Ihrer Organisation
 - Siehe die Haupt-iHub Apps-Dokumentation
 - Melden Sie Fehler unter: https://github.com/intrafind/ihub-apps/issues

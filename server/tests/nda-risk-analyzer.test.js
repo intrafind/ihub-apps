@@ -34,12 +34,7 @@ async function testRuleConfigurationLoaded() {
     defaultRulesEN.includes('RED if > 24 months'),
     'Should specify RED flag for duration > 24 months'
   );
-  assert.ok(
-    defaultRulesEN.includes('Mutuality'),
-    'Should include Mutuality rule'
-  );
-;
-
+  assert.ok(defaultRulesEN.includes('Mutuality'), 'Should include Mutuality rule');
   console.log('✓ Default rules loaded correctly\n');
 }
 
@@ -88,18 +83,9 @@ async function testPromptTemplateSubstitution() {
     finalPrompt.includes('- Duration: Maximum 12 months'),
     'Custom rules should be injected'
   );
-  assert.ok(
-    finalPrompt.includes('CONFIDENTIALITY AGREEMENT'),
-    'NDA content should be injected'
-  );
-  assert.ok(
-    !finalPrompt.includes('{{custom_rules}}'),
-    'Template placeholders should be replaced'
-  );
-  assert.ok(
-    !finalPrompt.includes('{{content}}'),
-    'Content placeholder should be replaced'
-  );
+  assert.ok(finalPrompt.includes('CONFIDENTIALITY AGREEMENT'), 'NDA content should be injected');
+  assert.ok(!finalPrompt.includes('{{custom_rules}}'), 'Template placeholders should be replaced');
+  assert.ok(!finalPrompt.includes('{{content}}'), 'Content placeholder should be replaced');
 
   console.log('✓ Prompt template substitution works correctly\n');
 }
@@ -185,14 +171,8 @@ async function testOutputSchemaStructure() {
   assert.strictEqual(schema.type, 'object', 'Schema type should be object');
 
   // Required fields
-  assert.ok(
-    schema.required.includes('overall_risk'),
-    'Schema should require overall_risk'
-  );
-  assert.ok(
-    schema.required.includes('clauses'),
-    'Schema should require clauses'
-  );
+  assert.ok(schema.required.includes('overall_risk'), 'Schema should require overall_risk');
+  assert.ok(schema.required.includes('clauses'), 'Schema should require clauses');
 
   // Overall risk property
   assert.strictEqual(
@@ -207,16 +187,8 @@ async function testOutputSchemaStructure() {
   );
 
   // Clauses array
-  assert.strictEqual(
-    schema.properties.clauses.type,
-    'array',
-    'clauses should be array'
-  );
-  assert.strictEqual(
-    schema.properties.clauses.minItems,
-    8,
-    'clauses should have minimum 8 items'
-  );
+  assert.strictEqual(schema.properties.clauses.type, 'array', 'clauses should be array');
+  assert.strictEqual(schema.properties.clauses.minItems, 8, 'clauses should have minimum 8 items');
 
   console.log('✓ Output schema structure is valid\n');
 }
@@ -233,10 +205,7 @@ async function testClausesSchemaStructure() {
   // Required fields for each clause
   const requiredFields = ['clause_name', 'citation', 'risk_level', 'reason'];
   requiredFields.forEach(field => {
-    assert.ok(
-      clausesSchema.required.includes(field),
-      `Clause should require ${field}`
-    );
+    assert.ok(clausesSchema.required.includes(field), `Clause should require ${field}`);
   });
 
   // Field types
@@ -245,11 +214,7 @@ async function testClausesSchemaStructure() {
     'string',
     'clause_name should be string'
   );
-  assert.strictEqual(
-    clausesSchema.properties.citation.type,
-    'array',
-    'citation should be array'
-  );
+  assert.strictEqual(clausesSchema.properties.citation.type, 'array', 'citation should be array');
   assert.strictEqual(
     clausesSchema.properties.risk_level.type,
     'string',
@@ -260,11 +225,7 @@ async function testClausesSchemaStructure() {
     ['red', 'yellow', 'green'],
     'risk_level should have correct enum values'
   );
-  assert.strictEqual(
-    clausesSchema.properties.reason.type,
-    'string',
-    'reason should be string'
-  );
+  assert.strictEqual(clausesSchema.properties.reason.type, 'string', 'reason should be string');
 
   console.log('✓ Clauses schema structure is valid\n');
 }
@@ -284,7 +245,8 @@ async function testFixtureResponseStructure() {
         clause_name: 'Duration',
         citation: ['Die Laufzeit beträgt 60 Monate'],
         risk_level: 'red',
-        reason: 'Die Vertragslaufzeit überschreitet die maximal akzeptable Dauer von 24 Monaten erheblich'
+        reason:
+          'Die Vertragslaufzeit überschreitet die maximal akzeptable Dauer von 24 Monaten erheblich'
       },
       {
         clause_name: 'Mutuality',
