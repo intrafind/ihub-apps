@@ -2,13 +2,13 @@
 
 ## Übersicht
 
-Der NDA-Risikoanalyzer ist ein KI-gestütztes Tool, das Geheimhaltungsvereinbarungen (NDAs) analysiert und potenzielle rechtliche Risiken identifiziert. Es bewertet NDAs anhand einer Reihe von Standardkriterien sowie der benutzerdefinierten Richtlinien Ihrer Organisation.
+Der NDA-Risikoanalyzer ist ein KI-gestütztes Tool, das Geheimhaltungsvereinbarungen (NDAs) analysiert und potenzielle rechtliche Risiken identifiziert. Es bewertet NDAs anhand einer Reihe von Standardklauseln sowie der benutzerdefinierten Richtlinien Ihrer Organisation.
 
 ## Wie die Analyse funktioniert
 
-### 1. Standard-Bewertungskriterien
+### 1. Standard-Bewertungsklauseln
 
-Der NDA-Risikoanalyzer bewertet **immer** diese 8 Standardkriterien:
+Der NDA-Risikoanalyzer bewertet **immer** diese 8 Standardklauseln:
 
 1. **Mutuality** (Einseitigkeit/Gegenseitigkeit): Ob das NDA gegenseitig oder einseitig ist
 2. **Cooperation Subject** (Gegenstand der Zusammenarbeit): Klare Definition des Kooperationszwecks
@@ -21,7 +21,7 @@ Der NDA-Risikoanalyzer bewertet **immer** diese 8 Standardkriterien:
 
 ### 2. Benutzerdefinierte Richtlinien
 
-Zusätzlich zu den Standardkriterien kann der Analyzer **zusätzliche Kriterien** basierend auf den benutzerdefinierten Richtlinien Ihrer Organisation bewerten. Die KI extrahiert und bewertet automatisch alle zusätzlichen Anforderungen, die Sie angeben (z.B. DSGVO-Konformität, Prüfrechte, Versicherungsanforderungen usw.). Die Regeln für die Standardkriterien können ebenfalls angepasst werden. Wir empfehlen jedoch nicht, Regeln für die Standardkriterien zu löschen.
+Zusätzlich zu den Standardklauseln kann der Analyzer **zusätzliche Klauseln** basierend auf den benutzerdefinierten Richtlinien Ihrer Organisation bewerten. Die KI extrahiert und bewertet automatisch alle zusätzlichen Anforderungen, die Sie angeben (z.B. DSGVO-Konformität, Prüfrechte, Versicherungsanforderungen usw.). Die Regeln für die Standardklauseln können ebenfalls angepasst werden. Wir empfehlen jedoch nicht, Regeln für die Standardklauseln zu löschen.
 
 ## Standard-Richtlinien
 
@@ -67,7 +67,7 @@ Vor der Analyse Ihres NDAs können Sie die Richtlinien anpassen:
 **Regelformat:**
 - Jede Regel sollte in einer separaten Zeile stehen
 - Beginnen Sie mit einem Bindestrich `-`
-- Fügen Sie den Kriteriumnamen und die Bedingungen hinzu
+- Fügen Sie den Klauselnamen und die Bedingungen hinzu
 - Geben Sie Risikostufen an: ROT, GELB, GRÜN
 - Beispiel: `- Laufzeit: Maximum 18 Monate akzeptabel (ROT wenn > 18 Monate, GELB wenn 12-18 Monate, GRÜN wenn < 12 Monate)`
 
@@ -87,9 +87,9 @@ Sie haben zwei Optionen:
 ### Schritt 4: Analysieren
 
 Klicken Sie auf die Absenden-Schaltfläche, um die Analyse zu starten. Die KI wird:
-1. Alle 8 Standardkriterien bewerten
-2. Zusätzliche Kriterien aus Ihren benutzerdefinierten Richtlinien extrahieren
-3. Jedes Kriterium gegen den NDA-Text analysieren
+1. Alle 8 Standardklauseln bewerten
+2. Zusätzliche Klauseln aus Ihren benutzerdefinierten Richtlinien extrahieren
+3. Jede Klausel gegen den NDA-Text analysieren
 4. Zitate bereitstellen (exakte Zitate aus dem NDA)
 5. Risikostufen zuweisen (ROT/GELB/GRÜN)
 
@@ -99,7 +99,7 @@ Die Ergebnisse werden in einem benutzerfreundlichen Format angezeigt:
 
 - **Gesamtrisikobewertung**: Zusammenfassungskarte, die die höchste gefundene Risikostufe zeigt
 - **Zusammenfassungsstatistik**: Anzahl der hohen, mittleren und niedrigen Risikoelemente
-- **Detaillierte Analyse**: Einzelne Karten für jedes Kriterium mit:
+- **Detaillierte Analyse**: Einzelne Karten für jede Klausel mit:
   - Risikoindikator (farbcodiert)
   - Erklärung, warum die Risikostufe zugewiesen wurde
   - Erweiterbare Zitate aus dem NDA-Dokument
@@ -111,15 +111,15 @@ Sie können die benutzerdefinierten Richtlinien jederzeit ändern:
 1. **Vor der Analyse**: Bearbeiten Sie das Feld "Benutzerdefinierte Richtlinien", bevor Sie Ihr NDA einreichen
 2. **Für neue Analyse**: Ändern Sie die Regeln und reichen Sie das NDA erneut mit den neuen Regeln ein
 
-### Beispiel: Hinzufügen eines neuen Kriteriums
+### Beispiel: Hinzufügen einer neuen Klausel
 
-Um ein neues Kriterium hinzuzufügen (z.B. Datenschutz):
+Um eine neue Klausel hinzuzufügen (z.B. Datenschutz):
 
 ```
 - Datenschutz: Muss DSGVO-Konformitätsklausel enthalten (ROT wenn fehlend, GELB wenn vage, GRÜN wenn explizite DSGVO-Konformität erwähnt)
 ```
 
-Die KI wird dieses neue Kriterium automatisch erkennen und neben den 8 Standardkriterien bewerten.
+Die KI wird diese neue Klausel automatisch erkennen und neben den 8 Standardklauseln bewerten.
 
 ### Beispiel: Ändern vorhandener Regeln
 
@@ -154,9 +154,9 @@ Der NDA-Risikoanalyzer gibt Ergebnisse in einem strukturierten JSON-Format zurü
 ```json
 {
   "overall_risk": "red|yellow|green",
-  "criteria": [
+  "clauses": [
     {
-      "category": "Kriteriumsname",
+      "clause_name": "Klauselname",
       "citation": ["Zitat 1 aus NDA", "Zitat 2 aus NDA"],
       "risk_level": "red|yellow|green",
       "reason": "Erklärung der Risikobewertung"
@@ -165,18 +165,18 @@ Der NDA-Risikoanalyzer gibt Ergebnisse in einem strukturierten JSON-Format zurü
 }
 ```
 
-- **overall_risk**: Die höchste gefundene Risikostufe (rot wenn ein Kriterium rot ist, gelb wenn eines gelb ist, aber keines rot ist, sonst grün)
-- **criteria**: Array mit mindestens 8 Elementen (die Standardkriterien) plus alle zusätzlichen Kriterien aus benutzerdefinierten Regeln
+- **overall_risk**: Die höchste gefundene Risikostufe (rot wenn eine Klausel rot ist, gelb wenn eine gelb ist, aber keine rot ist, sonst grün)
+- **clauses**: Array mit mindestens 8 Elementen (die Standardklauseln) plus alle zusätzlichen Klauseln aus benutzerdefinierten Regeln
 
 ## Fehlerbehebung
 
 ### Problem: Nicht alle benutzerdefinierten Regeln werden bewertet
 
-**Lösung**: Stellen Sie sicher, dass Ihre benutzerdefinierten Regeln klar formatiert sind mit expliziten Risikostufenindikatoren (ROT, GELB, GRÜN). Die KI extrahiert Kriterien basierend auf diesen Schlüsselwörtern.
+**Lösung**: Stellen Sie sicher, dass Ihre benutzerdefinierten Regeln klar formatiert sind mit expliziten Risikostufenindikatoren (ROT, GELB, GRÜN). Die KI extrahiert Klauseln basierend auf diesen Schlüsselwörtern.
 
 ### Problem: Zitate fehlen
 
-**Lösung**: Einige Kriterien können leere Zitate haben, wenn die Klausel im NDA vollständig fehlt. Dies ist erwartetes Verhalten und wird als ROT markiert.
+**Lösung**: Einige Klauseln können leere Zitate haben, wenn die Klausel im NDA vollständig fehlt. Dies ist erwartetes Verhalten und wird als ROT markiert.
 
 ### Problem: Ergebnisse scheinen falsch
 

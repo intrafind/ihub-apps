@@ -2,13 +2,13 @@
 
 ## Overview
 
-The NDA Risk Analyzer is an AI-powered tool that analyzes Non-Disclosure Agreement (NDA) documents and identifies potential legal risks. It evaluates NDAs against a set of standard criteria plus your organization's custom policy preferences.
+The NDA Risk Analyzer is an AI-powered tool that analyzes Non-Disclosure Agreement (NDA) documents and identifies potential legal risks. It evaluates NDAs against a set of standard clauses plus your organization's custom policy preferences.
 
 ## How the Analysis Works
 
-### 1. Standard Evaluation Criteria
+### 1. Standard Evaluation Clauses
 
-The NDA Risk Analyzer **always** evaluates these 8 standard criteria:
+The NDA Risk Analyzer **always** evaluates these 8 standard clauses:
 
 1. **Mutuality** (Einseitigkeit/Gegenseitigkeit): Whether the NDA is mutual or unilateral
 2. **Cooperation Subject** (Gegenstand der Zusammenarbeit): Clear definition of collaboration purpose
@@ -21,7 +21,7 @@ The NDA Risk Analyzer **always** evaluates these 8 standard criteria:
 
 ### 2. Custom Policy Rules
 
-In addition to the standard criteria, the analyzer can evaluate **additional criteria** based on your organization's custom policy preferences. The AI will automatically extract and evaluate any additional requirements you specify (e.g., GDPR Compliance, Audit Rights, Insurance Requirements, etc.). Also the rules for the default criteria can be adjusted. We don't recommend to delete rules for the default criteria.
+In addition to the standard clauses, the analyzer can evaluate **additional clauses** based on your organization's custom policy preferences. The AI will automatically extract and evaluate any additional requirements you specify (e.g., GDPR Compliance, Audit Rights, Insurance Requirements, etc.). Also the rules for the default clauses can be adjusted. We don't recommend to delete rules for the default clauses.
 
 ## Default Policy Rules
 
@@ -80,7 +80,7 @@ Before analyzing your NDA, you can customize the policy rules:
 **Rule Format:**
 - Each rule should be on a separate line
 - Start with a dash `-`
-- Include the criterion name and conditions
+- Include the clause name and conditions
 - Specify risk levels: RED, YELLOW, GREEN
 - Example: `- Duration: Maximum 18 months acceptable (RED if > 18 months, YELLOW if 12-18 months, GREEN if < 12 months)`
 
@@ -100,9 +100,9 @@ You have two options:
 ### Step 4: Analyze
 
 Click the submit button to start the analysis. The AI will:
-1. Evaluate all 8 standard criteria
-2. Extract additional criteria from your custom policy rules
-3. Analyze each criterion against the NDA text
+1. Evaluate all 8 standard clauses
+2. Extract additional clauses from your custom policy rules
+3. Analyze each clause against the NDA text
 4. Provide citations (exact quotes from the NDA)
 5. Assign risk levels (RED/YELLOW/GREEN)
 
@@ -112,7 +112,7 @@ The results are displayed in a user-friendly format:
 
 - **Overall Risk Assessment**: Summary card showing the highest risk level found
 - **Summary Statistics**: Count of high, medium, and low risk items
-- **Detailed Analysis**: Individual cards for each criterion with:
+- **Detailed Analysis**: Individual cards for each clause with:
   - Risk level indicator (color-coded)
   - Explanation of why the risk level was assigned
   - Expandable citations from the NDA document
@@ -124,15 +124,15 @@ You can change the custom policy rules at any time:
 1. **Before Analysis**: Edit the "Custom Policy Rules" field before submitting your NDA
 2. **For New Analysis**: Change the rules and submit the NDA again with the new rules
 
-### Example: Adding a New Criterion
+### Example: Adding a New Clause
 
-To add a new criterion (e.g., Data Protection):
+To add a new clause (e.g., Data Protection):
 
 ```
 - Data Protection: Must include GDPR compliance clause (RED if absent, YELLOW if vague, GREEN if explicit GDPR compliance mentioned)
 ```
 
-The AI will automatically detect this new criterion and evaluate it alongside the 8 standard criteria.
+The AI will automatically detect this new clause and evaluate it alongside the 8 standard clauses.
 
 ### Example: Modifying Existing Rules
 
@@ -167,9 +167,9 @@ The NDA Risk Analyzer returns results in a structured JSON format:
 ```json
 {
   "overall_risk": "red|yellow|green",
-  "criteria": [
+  "clauses": [
     {
-      "category": "Criterion Name",
+      "clause_name": "Clause Name",
       "citation": ["Quote 1 from NDA", "Quote 2 from NDA"],
       "risk_level": "red|yellow|green",
       "reason": "Explanation of risk assessment"
@@ -178,18 +178,18 @@ The NDA Risk Analyzer returns results in a structured JSON format:
 }
 ```
 
-- **overall_risk**: The highest risk level found (red if any criterion is red, yellow if any is yellow but none are red, otherwise green)
-- **criteria**: Array of at least 8 items (the standard criteria) plus any additional criteria from custom rules
+- **overall_risk**: The highest risk level found (red if any clause is red, yellow if any is yellow but none are red, otherwise green)
+- **clauses**: Array of at least 8 items (the standard clauses) plus any additional clauses from custom rules
 
 ## Troubleshooting
 
 ### Issue: Not All Custom Rules Are Evaluated
 
-**Solution**: Ensure your custom rules are clearly formatted with explicit risk level indicators (RED, YELLOW, GREEN). The AI extracts criteria based on these keywords.
+**Solution**: Ensure your custom rules are clearly formatted with explicit risk level indicators (RED, YELLOW, GREEN). The AI extracts clauses based on these keywords.
 
 ### Issue: Citations Are Missing
 
-**Solution**: Some criteria may have empty citations if the clause is completely absent from the NDA. This is expected behavior and will be marked as RED.
+**Solution**: Some clauses may have empty citations if the clause is completely absent from the NDA. This is expected behavior and will be marked as RED.
 
 ### Issue: Results Seem Incorrect
 

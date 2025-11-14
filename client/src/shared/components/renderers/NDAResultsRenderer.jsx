@@ -91,7 +91,7 @@ const NDAResultsRenderer = ({ data, t }) => {
     return labels[level?.toLowerCase()] || level;
   };
 
-  if (!data || !data.criteria) {
+  if (!data || !data.clauses) {
     return (
       <div className="p-4 text-center text-gray-500">
         {t ? t('nda.noData', 'No analysis data available') : 'No analysis data available'}
@@ -132,7 +132,7 @@ const NDAResultsRenderer = ({ data, t }) => {
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
             <div className="text-2xl font-bold text-red-600">
-              {data.criteria.filter(c => c.risk_level?.toLowerCase() === 'red').length}
+              {data.clauses.filter(c => c.risk_level?.toLowerCase() === 'red').length}
             </div>
             <div className="text-xs text-gray-600 mt-1">
               {t ? t('nda.highRiskItems', 'High Risk') : 'High Risk'}
@@ -140,7 +140,7 @@ const NDAResultsRenderer = ({ data, t }) => {
           </div>
           <div>
             <div className="text-2xl font-bold text-yellow-600">
-              {data.criteria.filter(c => c.risk_level?.toLowerCase() === 'yellow').length}
+              {data.clauses.filter(c => c.risk_level?.toLowerCase() === 'yellow').length}
             </div>
             <div className="text-xs text-gray-600 mt-1">
               {t ? t('nda.mediumRiskItems', 'Medium Risk') : 'Medium Risk'}
@@ -148,7 +148,7 @@ const NDAResultsRenderer = ({ data, t }) => {
           </div>
           <div>
             <div className="text-2xl font-bold text-green-600">
-              {data.criteria.filter(c => c.risk_level?.toLowerCase() === 'green').length}
+              {data.clauses.filter(c => c.risk_level?.toLowerCase() === 'green').length}
             </div>
             <div className="text-xs text-gray-600 mt-1">
               {t ? t('nda.lowRiskItems', 'Low Risk') : 'Low Risk'}
@@ -157,22 +157,22 @@ const NDAResultsRenderer = ({ data, t }) => {
         </div>
       </div>
 
-      {/* Risk Criteria Cards */}
+      {/* Clause Analysis Cards */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-gray-700 mb-4">
           {t ? t('nda.detailedAnalysis', 'Detailed Analysis') : 'Detailed Analysis'}
         </h3>
 
-        {data.criteria.map((criterion, idx) => {
-          return <CriterionCard key={idx} criterion={criterion} t={t} />;
+        {data.clauses.map((clause, idx) => {
+          return <ClauseCard key={idx} clause={clause} t={t} />;
         })}
       </div>
     </div>
   );
 };
 
-// Separate component for each criterion card (to manage its own state)
-const CriterionCard = ({ criterion, t }) => {
+// Separate component for each clause card (to manage its own state)
+const ClauseCard = ({ clause, t }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const getRiskColorClasses = (level) => {
@@ -258,23 +258,23 @@ const CriterionCard = ({ criterion, t }) => {
     return labels[level?.toLowerCase()] || level;
   };
 
-  const colors = getRiskColorClasses(criterion.risk_level);
+  const colors = getRiskColorClasses(clause.risk_level);
 
   return (
     <div
       className={`rounded-lg border ${colors.container} ${colors.border} border-l-4 shadow-sm transition-all duration-200 hover:shadow-md`}
     >
       <div className="p-4">
-        {/* Criterion Header */}
+        {/* Clause Header */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-3 flex-1">
-            <div className={colors.icon}>{getRiskIcon(criterion.risk_level)}</div>
+            <div className={colors.icon}>{getRiskIcon(clause.risk_level)}</div>
             <div className="flex-1">
-              <h4 className={`text-lg font-semibold ${colors.text}`}>{criterion.category}</h4>
+              <h4 className={`text-lg font-semibold ${colors.text}`}>{clause.clause_name}</h4>
               <span
                 className={`inline-block mt-1 px-3 py-0.5 rounded-full text-xs font-medium border ${colors.badge}`}
               >
-                {getRiskLabel(criterion.risk_level)}
+                {getRiskLabel(clause.risk_level)}
               </span>
             </div>
           </div>
@@ -282,11 +282,11 @@ const CriterionCard = ({ criterion, t }) => {
 
         {/* Reason */}
         <div className={`mb-3 p-3 rounded bg-white bg-opacity-50 ${colors.text}`}>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{criterion.reason}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{clause.reason}</p>
         </div>
 
         {/* Citations (Expandable) */}
-        {criterion.citation && criterion.citation.length > 0 && (
+        {clause.citation && clause.citation.length > 0 && (
           <div className="mt-3">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
@@ -311,15 +311,15 @@ const CriterionCard = ({ criterion, t }) => {
                   : t
                     ? t('nda.showCitations', 'Show Citations ({count})').replace(
                         '{count}',
-                        criterion.citation.length
+                        clause.citation.length
                       )
-                    : `Show Citations (${criterion.citation.length})`}
+                    : `Show Citations (${clause.citation.length})`}
               </span>
             </button>
 
             {isExpanded && (
               <div className="mt-3 space-y-2">
-                {criterion.citation.map((cite, citIdx) => (
+                {clause.citation.map((cite, citIdx) => (
                   <div
                     key={citIdx}
                     className={`p-3 rounded border-l-2 bg-white bg-opacity-70 ${colors.border} text-sm italic ${colors.text}`}

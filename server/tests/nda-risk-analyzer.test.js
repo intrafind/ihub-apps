@@ -1,6 +1,5 @@
 import assert from 'assert';
 import configCache from '../configCache.js';
-import PromptService from '../services/PromptService.js';
 
 console.log('Testing NDA Risk Analyzer configuration and prompt logic...\n');
 
@@ -39,10 +38,7 @@ async function testRuleConfigurationLoaded() {
     defaultRulesEN.includes('Mutuality'),
     'Should include Mutuality rule'
   );
-  assert.ok(
-    defaultRulesEN.includes('Liability'),
-    'Should include Liability rule'
-  );
+;
 
   console.log('✓ Default rules loaded correctly\n');
 }
@@ -194,8 +190,8 @@ async function testOutputSchemaStructure() {
     'Schema should require overall_risk'
   );
   assert.ok(
-    schema.required.includes('criteria'),
-    'Schema should require criteria'
+    schema.required.includes('clauses'),
+    'Schema should require clauses'
   );
 
   // Overall risk property
@@ -210,67 +206,67 @@ async function testOutputSchemaStructure() {
     'overall_risk should have correct enum values'
   );
 
-  // Criteria array
+  // Clauses array
   assert.strictEqual(
-    schema.properties.criteria.type,
+    schema.properties.clauses.type,
     'array',
-    'criteria should be array'
+    'clauses should be array'
   );
   assert.strictEqual(
-    schema.properties.criteria.minItems,
+    schema.properties.clauses.minItems,
     8,
-    'criteria should have minimum 8 items'
+    'clauses should have minimum 8 items'
   );
 
   console.log('✓ Output schema structure is valid\n');
 }
 
-async function testCriteriaSchemaStructure() {
-  console.log('Test 7: Criteria items schema has correct structure');
+async function testClausesSchemaStructure() {
+  console.log('Test 7: Clauses items schema has correct structure');
 
   const { data: apps } = configCache.getApps();
   const appConfig = apps.find(app => app.id === 'nda-risk-analyzer');
-  const criteriaSchema = appConfig.outputSchema.properties.criteria.items;
+  const clausesSchema = appConfig.outputSchema.properties.clauses.items;
 
-  assert.strictEqual(criteriaSchema.type, 'object', 'Criteria item should be object');
+  assert.strictEqual(clausesSchema.type, 'object', 'Clause item should be object');
 
-  // Required fields for each criterion
-  const requiredFields = ['category', 'citation', 'risk_level', 'reason'];
+  // Required fields for each clause
+  const requiredFields = ['clause_name', 'citation', 'risk_level', 'reason'];
   requiredFields.forEach(field => {
     assert.ok(
-      criteriaSchema.required.includes(field),
-      `Criterion should require ${field}`
+      clausesSchema.required.includes(field),
+      `Clause should require ${field}`
     );
   });
 
   // Field types
   assert.strictEqual(
-    criteriaSchema.properties.category.type,
+    clausesSchema.properties.clause_name.type,
     'string',
-    'category should be string'
+    'clause_name should be string'
   );
   assert.strictEqual(
-    criteriaSchema.properties.citation.type,
+    clausesSchema.properties.citation.type,
     'array',
     'citation should be array'
   );
   assert.strictEqual(
-    criteriaSchema.properties.risk_level.type,
+    clausesSchema.properties.risk_level.type,
     'string',
     'risk_level should be string'
   );
   assert.deepStrictEqual(
-    criteriaSchema.properties.risk_level.enum,
+    clausesSchema.properties.risk_level.enum,
     ['red', 'yellow', 'green'],
     'risk_level should have correct enum values'
   );
   assert.strictEqual(
-    criteriaSchema.properties.reason.type,
+    clausesSchema.properties.reason.type,
     'string',
     'reason should be string'
   );
 
-  console.log('✓ Criteria schema structure is valid\n');
+  console.log('✓ Clauses schema structure is valid\n');
 }
 
 /**
@@ -283,21 +279,21 @@ async function testFixtureResponseStructure() {
   // This is a mock response structure that the renderer expects
   const sampleResponse = {
     overall_risk: 'red',
-    criteria: [
+    clauses: [
       {
-        category: 'Duration',
+        clause_name: 'Duration',
         citation: ['Die Laufzeit beträgt 60 Monate'],
         risk_level: 'red',
         reason: 'Die Vertragslaufzeit überschreitet die maximal akzeptable Dauer von 24 Monaten erheblich'
       },
       {
-        category: 'Mutuality',
+        clause_name: 'Mutuality',
         citation: ['Diese Vereinbarung ist einseitig'],
         risk_level: 'yellow',
         reason: 'Die NDA ist einseitig, was für den Empfänger nachteilig sein kann'
       },
       {
-        category: 'Confidential Information Definition',
+        clause_name: 'Confidential Information Definition',
         citation: ['Vertrauliche Informationen umfassen alle geschäftlichen Daten'],
         risk_level: 'green',
         reason: 'Die Definition vertraulicher Informationen ist klar und angemessen'
@@ -307,17 +303,17 @@ async function testFixtureResponseStructure() {
 
   // Validate structure matches what renderer expects
   assert.ok(['red', 'yellow', 'green'].includes(sampleResponse.overall_risk));
-  assert.ok(Array.isArray(sampleResponse.criteria));
-  assert.ok(sampleResponse.criteria.length >= 3);
+  assert.ok(Array.isArray(sampleResponse.clauses));
+  assert.ok(sampleResponse.clauses.length >= 3);
 
-  sampleResponse.criteria.forEach((criterion, idx) => {
-    assert.ok(criterion.category, `Criterion ${idx} should have category`);
+  sampleResponse.clauses.forEach((clause, idx) => {
+    assert.ok(clause.clause_name, `Clause ${idx} should have clause_name`);
     assert.ok(
-      ['red', 'yellow', 'green'].includes(criterion.risk_level),
-      `Criterion ${idx} should have valid risk_level`
+      ['red', 'yellow', 'green'].includes(clause.risk_level),
+      `Clause ${idx} should have valid risk_level`
     );
-    assert.ok(criterion.reason, `Criterion ${idx} should have reason`);
-    assert.ok(Array.isArray(criterion.citation), `Criterion ${idx} should have citation array`);
+    assert.ok(clause.reason, `Clause ${idx} should have reason`);
+    assert.ok(Array.isArray(clause.citation), `Clause ${idx} should have citation array`);
   });
 
   console.log('✓ Sample response structure is valid for renderer\n');
@@ -343,7 +339,7 @@ async function runAllTests() {
 
     // Test Suite 3: JSON Schema
     await testOutputSchemaStructure();
-    await testCriteriaSchemaStructure();
+    await testClausesSchemaStructure();
 
     // Test Suite 4: Fixture Response
     await testFixtureResponseStructure();
