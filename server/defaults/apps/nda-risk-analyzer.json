@@ -45,11 +45,7 @@
     "properties": {
       "overall_risk": {
         "type": "string",
-        "enum": [
-          "red",
-          "yellow",
-          "green"
-        ],
+        "enum": ["red", "yellow", "green"],
         "description": "Overall risk assessment based on all clauses (red if any red, yellow if any yellow but no red, otherwise green)"
       },
       "clauses": {
@@ -71,11 +67,7 @@
             },
             "risk_level": {
               "type": "string",
-              "enum": [
-                "red",
-                "yellow",
-                "green"
-              ],
+              "enum": ["red", "yellow", "green"],
               "description": "Risk classification for this clause"
             },
             "reason": {
@@ -83,21 +75,13 @@
               "description": "Detailed explanation of why this risk level was assigned"
             }
           },
-          "required": [
-            "clause_name",
-            "citation",
-            "risk_level",
-            "reason"
-          ],
+          "required": ["clause_name", "citation", "risk_level", "reason"],
           "additionalProperties": false
         },
         "minItems": 8
       }
     },
-    "required": [
-      "overall_risk",
-      "clauses"
-    ],
+    "required": ["overall_risk", "clauses"],
     "additionalProperties": false
   },
   "upload": {
@@ -105,14 +89,8 @@
     "fileUpload": {
       "enabled": true,
       "maxFileSizeMB": 10,
-      "supportedTextFormats": [
-        "text/plain",
-        "text/markdown",
-        "text/x-markdown"
-      ],
-      "supportedPdfFormats": [
-        "application/pdf"
-      ]
+      "supportedTextFormats": ["text/plain", "text/markdown", "text/x-markdown"],
+      "supportedPdfFormats": ["application/pdf"]
     },
     "imageUpload": {
       "enabled": false
@@ -152,8 +130,8 @@
       },
       "type": "text",
       "defaultValue": {
-        "en": "- Duration: Maximum months acceptable (RED if > 24 months, GREEN otherwise)\n- Mutuality: Mutual NDAs strongly preferred (RED if unilateral, GREEN if mutual)\n- Liability: Must be capped and reasonable (RED if unlimited liability, YELLOW if high cap, GREEN if reasonable cap)\n- Jurisdiction: DE, AT, CH preferred (RED if unfavorable jurisdiction like US/UK, YELLOW if EU but not DACH, GREEN if DE/AT/CH)\n- Residual clauses: Not allowed (RED if present, GREEN if absent)\n- Third Party Disclosure: Must require prior written consent (RED if allowed without consent, YELLOW if vague, GREEN if requires consent)\n- Non-Compete: Should be limited in scope and time (RED if broad/unlimited, YELLOW if moderate, GREEN if narrow/absent)\n- Penalties: Should be reasonable and capped (RED if excessive, YELLOW if unclear, GREEN if reasonable or absent)",
-        "de": "- Laufzeit: Maximum Monate akzeptabel (ROT wenn > 24 Monate, GELB wenn 13-24 Monate, GRÜN wenn ≤ 12 Monate)\n- Gegenseitigkeit: Gegenseitige NDAs stark bevorzugt (ROT wenn einseitig mit breitem Umfang, GELB wenn einseitig mit begrenztem Umfang, GRÜN wenn gegenseitig)\n- Haftung: Muss begrenzt und angemessen sein (ROT wenn unbegrenzte Haftung, GELB wenn hohe Obergrenze, GRÜN wenn angemessene Obergrenze)\n- Gerichtsstand: DE, AT, CH bevorzugt (ROT wenn ungünstiger Gerichtsstand wie US/UK, GELB wenn EU aber nicht DACH, GRÜN wenn DE/AT/CH)\n- Residualklauseln: Nicht erlaubt (ROT wenn vorhanden, GRÜN wenn nicht vorhanden)\n- Weitergabe an Dritte: Muss vorherige schriftliche Zustimmung erfordern (ROT wenn ohne Zustimmung erlaubt, GELB wenn vage, GRÜN wenn Zustimmung erforderlich)\n- Wettbewerbsverbot: Sollte in Umfang und Zeit begrenzt sein (ROT wenn breit/unbegrenzt, GELB wenn moderat, GRÜN wenn eng/nicht vorhanden)\n- Vertragsstrafen: Sollten angemessen und begrenzt sein (ROT wenn übermäßig, GELB wenn unklar, GRÜN wenn angemessen oder nicht vorhanden)"
+        "en": "- Duration: Maximum months acceptable (RED if > 24 months, GREEN otherwise)\n- Mutuality: Mutual NDAs strongly preferred (RED if unilateral, GREEN if mutual)\n- Cooperation Subject: Clear definition of collaboration purpose (RED if missing, YELLOW if present but not clear, GREEN when clear\n- Confidential Information Definition: Clear scope of what's confidential (RED if missing, YELLOW if unclear, GREEN when present and clear)\n Penalties: Should be reasonable and capped (RED if excessive, YELLOW if unclear, GREEN if reasonable or absent)\n- Third Party Disclosure: Rules for sharing with third parties(RED when missing or no , GREEN when present and clear)\n- Project/Customer Protection: Protection of business relationships(RED when missing or agreement not enforced, GREEN when agreement needed )\n- Non-Compete: Should be limited in scope and time (RED if broad/unlimited, YELLOW if moderate, GREEN if narrow/absent)",
+        "de": "- Laufzeit: Maximum Monate akzeptabel (ROT wenn > 24 Monate, GRÜN wenn ≤ 24 Monate)\n- Gegenseitigkeit: Gegenseitige NDAs stark bevorzugt (ROT wenn einseitig mit breitem Umfang, GELB wenn einseitig mit begrenztem Umfang, GRÜN wenn gegenseitig)\n- Gegenstand der Zusammenarbeit (ROT wenn fehlt, GELB wenn vorhanden aber nicht klar, GRÜN wenn vorhanden und klar)\n- Definition vertraulicher Informationen (ROT wenn fehlt, GELB wenn unklar, GRÜN wenn vorhanden und klar)\n- Vertragsstrafen: Sollten angemessen und begrenzt sein (ROT wenn übermäßig, GELB wenn unklar, GRÜN wenn angemessen oder nicht vorhanden)\n- Weitergabe an Dritte: Muss vorherige schriftliche Zustimmung erfordern (ROT wenn ohne Zustimmung erlaubt, GELB wenn vage, GRÜN wenn Zustimmung der Parteien erforderlich)\n- Projekt-/Kundenschutz: Schutz von Geschäftsbeziehungen(ROT wenn fehlt, GRÜN wenn vorhanden und klar)\n- Wettbewerbsverbot: Sollte in Umfang und Zeit begrenzt sein (ROT wenn breit/unbegrenzt, GELB wenn moderat, GRÜN wenn eng/nicht vorhanden)"
       },
       "description": {
         "en": "Define your organization's NDA policy preferences. These rules will be used to evaluate the risk level of each clause.",
