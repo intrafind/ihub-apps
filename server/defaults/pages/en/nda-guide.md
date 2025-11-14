@@ -57,11 +57,11 @@ The NDA Risk Analyzer comes with the following default policy rules:
 
 The analyzer uses a three-level risk classification system:
 
-| Risk Level | Color | Description |
-|------------|-------|-------------|
-| **RED** 🔴 | High Risk | Problematic clauses that violate policy preferences OR important clauses that are completely absent |
-| **YELLOW** 🟡 | Medium Risk | Unclear definitions, unclear terms, moderate restrictions, or missing optional clauses |
-| **GREEN** 🟢 | Low Risk | Acceptable clauses that meet the policy preferences |
+| Risk Level    | Color       | Description                                                                                         |
+| ------------- | ----------- | --------------------------------------------------------------------------------------------------- |
+| **RED** 🔴    | High Risk   | Problematic clauses that violate policy preferences OR important clauses that are completely absent |
+| **YELLOW** 🟡 | Medium Risk | Unclear definitions, unclear terms, moderate restrictions, or missing optional clauses              |
+| **GREEN** 🟢  | Low Risk    | Acceptable clauses that meet the policy preferences                                                 |
 
 ## How to Use the NDA Risk Analyzer
 
@@ -78,6 +78,7 @@ Before analyzing your NDA, you can customize the policy rules:
 3. You can modify these rules to match your specific requirements
 
 **Rule Format:**
+
 - Each rule should be on a separate line
 - Start with a dash `-`
 - Include the clause name and conditions
@@ -89,17 +90,20 @@ Before analyzing your NDA, you can customize the policy rules:
 You have two options:
 
 **Option A: Upload a Document**
+
 - Click the upload button
 - Select your NDA document (PDF, TXT, or Markdown format)
 - Maximum file size: 10MB
 
 **Option B: Paste Text**
+
 - Copy the NDA text
 - Paste it directly into the message input field
 
 ### Step 4: Analyze
 
 Click the submit button to start the analysis. The AI will:
+
 1. Evaluate all 8 standard clauses
 2. Extract additional clauses from your custom policy rules
 3. Analyze each clause against the NDA text
@@ -147,6 +151,7 @@ To change the duration threshold:
 **Important**: When you refresh the page or restart the app, the custom policy rules will **automatically reset to the default rules** configured in the system.
 
 To restore defaults:
+
 1. Refresh the browser page (F5 or Ctrl+R / Cmd+R)
 2. Or clear the "Custom Policy Rules" field and reload the app
 
@@ -194,6 +199,7 @@ The NDA Risk Analyzer returns results in a structured JSON format:
 ### Issue: Results Seem Incorrect
 
 **Solution**:
+
 1. Review the citations to see what text the AI found
 2. Check if your custom rules are specific enough
 3. Try rephrasing your custom rules with clearer conditions
@@ -207,6 +213,7 @@ contents/apps/nda-risk-analyzer.json
 ```
 
 To modify system-wide defaults:
+
 1. Edit the `defaultValue` field in the `variables` section
 2. Save the file
 3. The changes will be applied automatically (no server restart needed)
@@ -214,6 +221,7 @@ To modify system-wide defaults:
 ## Support
 
 For questions or issues with the NDA Risk Analyzer:
+
 - Contact your organization's iHub Apps administrator
 - Refer to the main iHub Apps documentation
 - Report bugs at: https://github.com/intrafind/ihub-apps/issues

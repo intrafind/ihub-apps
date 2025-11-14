@@ -6,7 +6,7 @@ import { useState } from 'react';
  */
 const NDAResultsRenderer = ({ data, t }) => {
   // Helper function to get risk color classes
-  const getRiskColorClasses = (level) => {
+  const getRiskColorClasses = level => {
     switch (level?.toLowerCase()) {
       case 'red':
         return {
@@ -44,7 +44,7 @@ const NDAResultsRenderer = ({ data, t }) => {
   };
 
   // Helper function to get risk icon
-  const getRiskIcon = (level) => {
+  const getRiskIcon = level => {
     switch (level?.toLowerCase()) {
       case 'red':
         return (
@@ -82,7 +82,7 @@ const NDAResultsRenderer = ({ data, t }) => {
   };
 
   // Get risk level label
-  const getRiskLabel = (level) => {
+  const getRiskLabel = level => {
     const labels = {
       red: t ? t('nda.risk.high', 'High Risk') : 'High Risk',
       yellow: t ? t('nda.risk.medium', 'Medium Risk') : 'Medium Risk',
@@ -175,7 +175,7 @@ const NDAResultsRenderer = ({ data, t }) => {
 const ClauseCard = ({ clause, t }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const getRiskColorClasses = (level) => {
+  const getRiskColorClasses = level => {
     switch (level?.toLowerCase()) {
       case 'red':
         return {
@@ -212,7 +212,7 @@ const ClauseCard = ({ clause, t }) => {
     }
   };
 
-  const getRiskIcon = (level) => {
+  const getRiskIcon = level => {
     switch (level?.toLowerCase()) {
       case 'red':
         return (
@@ -249,7 +249,7 @@ const ClauseCard = ({ clause, t }) => {
     }
   };
 
-  const getRiskLabel = (level) => {
+  const getRiskLabel = level => {
     const labels = {
       red: t ? t('nda.risk.high', 'High Risk') : 'High Risk',
       yellow: t ? t('nda.risk.medium', 'Medium Risk') : 'Medium Risk',

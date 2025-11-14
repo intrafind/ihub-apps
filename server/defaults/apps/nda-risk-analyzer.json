@@ -45,11 +45,7 @@
     "properties": {
       "overall_risk": {
         "type": "string",
-        "enum": [
-          "red",
-          "yellow",
-          "green"
-        ],
+        "enum": ["red", "yellow", "green"],
         "description": "Overall risk assessment based on all clauses (red if any red, yellow if any yellow but no red, otherwise green)"
       },
       "clauses": {
@@ -71,11 +67,7 @@
             },
             "risk_level": {
               "type": "string",
-              "enum": [
-                "red",
-                "yellow",
-                "green"
-              ],
+              "enum": ["red", "yellow", "green"],
               "description": "Risk classification for this clause"
             },
             "reason": {
@@ -83,21 +75,13 @@
               "description": "Detailed explanation of why this risk level was assigned"
             }
           },
-          "required": [
-            "clause_name",
-            "citation",
-            "risk_level",
-            "reason"
-          ],
+          "required": ["clause_name", "citation", "risk_level", "reason"],
           "additionalProperties": false
         },
         "minItems": 8
       }
     },
-    "required": [
-      "overall_risk",
-      "clauses"
-    ],
+    "required": ["overall_risk", "clauses"],
     "additionalProperties": false
   },
   "upload": {
@@ -105,14 +89,8 @@
     "fileUpload": {
       "enabled": true,
       "maxFileSizeMB": 10,
-      "supportedTextFormats": [
-        "text/plain",
-        "text/markdown",
-        "text/x-markdown"
-      ],
-      "supportedPdfFormats": [
-        "application/pdf"
-      ]
+      "supportedTextFormats": ["text/plain", "text/markdown", "text/x-markdown"],
+      "supportedPdfFormats": ["application/pdf"]
     },
     "imageUpload": {
       "enabled": false

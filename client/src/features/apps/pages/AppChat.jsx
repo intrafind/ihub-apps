@@ -784,19 +784,19 @@ const AppChat = () => {
     }
 
     const params = {
-        modelId: selectedModel,
-        style: selectedStyle,
-        temperature,
-        outputFormat: selectedOutputFormat,
-        language: currentLanguage,
-        ...(useMaxTokens ? { useMaxTokens: true } : {}),
-        ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
-        ...(thinkingBudget !== null ? { thinkingBudget } : {}),
-        ...(thinkingThoughts !== null ? { thinkingThoughts } : {})
-      };
-    
-      console.log('📤 Sending message with params:', params);
-      console.log('🔢 useMaxTokens state:', useMaxTokens);
+      modelId: selectedModel,
+      style: selectedStyle,
+      temperature,
+      outputFormat: selectedOutputFormat,
+      language: currentLanguage,
+      ...(useMaxTokens ? { useMaxTokens: true } : {}),
+      ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
+      ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+      ...(thinkingThoughts !== null ? { thinkingThoughts } : {})
+    };
+
+    console.log('📤 Sending message with params:', params);
+    console.log('🔢 useMaxTokens state:', useMaxTokens);
 
     // Validate variables: fall back to defaults if empty or whitespace-only
     const validatedVariables = {};
@@ -827,7 +827,8 @@ const AppChat = () => {
         content: messageContent,
         meta: {
           rawContent: input,
-          variables: app?.variables && app.variables.length > 0 ? { ...validatedVariables } : undefined,
+          variables:
+            app?.variables && app.variables.length > 0 ? { ...validatedVariables } : undefined,
           ...messageData
         }
       },
