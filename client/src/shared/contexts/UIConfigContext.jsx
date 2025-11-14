@@ -56,6 +56,25 @@ export const UIConfigProvider = ({ children }) => {
     }
   }, [uiConfig, headerColor]);
 
+  // Inject custom CSS from admin configuration
+  useEffect(() => {
+    const customCss = uiConfig?.customStyles?.css;
+
+    // Remove existing custom styles if any
+    const existingStyle = document.getElementById('admin-custom-styles');
+    if (existingStyle) {
+      existingStyle.remove();
+    }
+
+    // Inject new custom styles if available
+    if (customCss) {
+      const styleElement = document.createElement('style');
+      styleElement.id = 'admin-custom-styles';
+      styleElement.textContent = customCss;
+      document.head.appendChild(styleElement);
+    }
+  }, [uiConfig?.customStyles?.css]);
+
   const resetHeaderColor = () => {
     setHeaderColor(defaultHeaderColor);
   };
