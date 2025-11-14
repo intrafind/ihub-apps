@@ -244,7 +244,9 @@
     "appNotFound": "Anwendung nicht gefunden",
     "missingRequiredFields": "Erforderliche Felder fehlen:",
     "streamingError": "Ein Fehler ist beim Streaming aufgetreten",
-    "failedToGenerateResponse": "Fehler beim Generieren der Antwort. Bitte versuchen Sie es erneut oder wählen Sie ein anderes Modell."
+    "failedToGenerateResponse": "Fehler beim Generieren der Antwort. Bitte versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
+    "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an, um fortzufahren.",
+    "sessionExpiredReconnecting": "Sitzung abgelaufen. Verbindung zum Authentifizierungsanbieter wird wiederhergestellt..."
   },
   "message": {
     "generationCancelled": " [Generierung abgebrochen]"
