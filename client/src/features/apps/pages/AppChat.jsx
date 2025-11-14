@@ -732,6 +732,7 @@ const AppChat = () => {
 
     let finalInput = input.trim();
     let messageContent = finalInput;
+    let messageData = {};
 
     if (fileUploadHandler.selectedFile) {
       // Handle multiple files
@@ -764,14 +765,20 @@ const AppChat = () => {
         }
 
         messageContent = contentParts.filter(Boolean).join('\n\n');
+        messageData = {
+          imageData: images.length > 0 ? images : undefined,
+          fileData: documents.length > 0 ? documents : undefined
+        };
       } else {
         // Handle single file (legacy behavior)
         if (fileUploadHandler.selectedFile.type === 'image') {
           const imgPreview = `<img src="${fileUploadHandler.selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
           messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
+          messageData = { imageData: fileUploadHandler.selectedFile };
         } else {
           const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
           messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
+          messageData = { fileData: fileUploadHandler.selectedFile };
         }
       }
     }
@@ -791,18 +798,44 @@ const AppChat = () => {
     console.log('📤 Sending message with params:', params);
     console.log('🔢 useMaxTokens state:', useMaxTokens);
 
+    // Validate variables: fall back to defaults if empty or whitespace-only
+    const validatedVariables = {};
+    if (app?.variables && app.variables.length > 0) {
+      app.variables.forEach(varConfig => {
+        const currentValue = variables[varConfig.name];
+        const isEmptyOrWhitespace =
+          currentValue === undefined ||
+          currentValue === null ||
+          (typeof currentValue === 'string' && currentValue.trim() === '');
+
+        if (isEmptyOrWhitespace) {
+          // Use default value if current value is empty/whitespace
+          const defaultValue =
+            typeof varConfig.defaultValue === 'object'
+              ? getLocalizedContent(varConfig.defaultValue, currentLanguage)
+              : varConfig.defaultValue || '';
+          validatedVariables[varConfig.name] = defaultValue;
+        } else {
+          // Use current value
+          validatedVariables[varConfig.name] = currentValue;
+        }
+      });
+    }
+
     sendChatMessage({
       displayMessage: {
         content: messageContent,
         meta: {
           rawContent: input,
-          variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined
+          variables:
+            app?.variables && app.variables.length > 0 ? { ...validatedVariables } : undefined,
+          ...messageData
         }
       },
       apiMessage: {
         content: input,
         promptTemplate: app?.prompt || null,
-        variables: { ...variables },
+        variables: { ...validatedVariables },
         imageData: Array.isArray(fileUploadHandler.selectedFile)
           ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
           : fileUploadHandler.selectedFile?.type === 'image'
@@ -815,7 +848,11 @@ const AppChat = () => {
             : null
       },
       params,
-      sendChatHistory
+      sendChatHistory,
+      messageMetadata: {
+        customResponseRenderer: app?.customResponseRenderer,
+        outputFormat: selectedOutputFormat
+      }
     });
 
     setInput('');
@@ -1015,6 +1052,7 @@ const AppChat = () => {
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
+                        app={app}
                       />
                     </div>
                   ) : (
@@ -1085,6 +1123,7 @@ const AppChat = () => {
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
+                        app={app}
                       />
                     </div>
                   ) : (
@@ -1154,6 +1193,7 @@ const AppChat = () => {
                     canvasEnabled={app?.features?.canvas === true}
                     requiredIntegrations={requiredIntegrations}
                     onConnectIntegration={connectIntegration}
+                    app={app}
                   />
                 </div>
                 <div className="flex-shrink-0 px-4 pt-2">

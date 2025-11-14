@@ -24,7 +24,8 @@ const ChatMessageList = ({
   canvasEnabled = false,
   // Integration auth props
   requiredIntegrations = [],
-  onConnectIntegration
+  onConnectIntegration,
+  app = null // App configuration for custom response rendering
 }) => {
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
@@ -79,6 +80,7 @@ const ChatMessageList = ({
                 onOpenInCanvas={onOpenInCanvas}
                 onInsert={onInsert}
                 canvasEnabled={canvasEnabled}
+                app={app}
               />
             </div>
           </div>
