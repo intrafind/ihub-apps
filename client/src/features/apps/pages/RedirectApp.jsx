@@ -127,11 +127,7 @@ const RedirectApp = ({ app }) => {
         {/* Additional Info */}
         {openInNewTab && (
           <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
-            <Icon
-              name="information-circle"
-              className="inline h-4 w-4 mr-1"
-              aria-hidden="true"
-            />
+            <Icon name="information-circle" className="inline h-4 w-4 mr-1" aria-hidden="true" />
             {t('pages.redirectApp.openingInNewTab')}
           </div>
         )}
