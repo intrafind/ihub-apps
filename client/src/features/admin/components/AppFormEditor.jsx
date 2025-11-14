@@ -645,6 +645,97 @@ const AppFormEditor = ({
                     {t('admin.apps.edit.allowFullscreen', 'Allow Fullscreen')}
                   </label>
                 </div>
+
+                {/* Sandbox Configuration */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('admin.apps.edit.sandboxPermissions', 'Sandbox Permissions')}
+                  </label>
+                  <p className="text-xs text-gray-500 mb-3">
+                    {t(
+                      'admin.apps.edit.sandboxPermissionsDesc',
+                      'Control what the embedded content is allowed to do. Uncheck options to restrict permissions for better security.'
+                    )}
+                  </p>
+                  <div className="space-y-2 pl-4">
+                    {[
+                      {
+                        value: 'allow-scripts',
+                        label: t(
+                          'admin.apps.edit.allowScripts',
+                          'Allow Scripts (required for most interactive content)'
+                        )
+                      },
+                      {
+                        value: 'allow-same-origin',
+                        label: t(
+                          'admin.apps.edit.allowSameOrigin',
+                          'Allow Same Origin (enables localStorage, cookies)'
+                        )
+                      },
+                      {
+                        value: 'allow-forms',
+                        label: t(
+                          'admin.apps.edit.allowForms',
+                          'Allow Forms (enable form submission)'
+                        )
+                      },
+                      {
+                        value: 'allow-popups',
+                        label: t('admin.apps.edit.allowPopups', 'Allow Popups')
+                      },
+                      {
+                        value: 'allow-modals',
+                        label: t(
+                          'admin.apps.edit.allowModals',
+                          'Allow Modals (alert, confirm, etc.)'
+                        )
+                      },
+                      {
+                        value: 'allow-top-navigation',
+                        label: t(
+                          'admin.apps.edit.allowTopNavigation',
+                          'Allow Top Navigation (navigate parent window)'
+                        )
+                      }
+                    ].map(permission => {
+                      const currentSandbox =
+                        app.iframeConfig?.sandbox ||
+                        (app.iframeConfig
+                          ? []
+                          : ['allow-scripts', 'allow-same-origin', 'allow-forms']);
+                      const isChecked = currentSandbox.includes(permission.value);
+
+                      return (
+                        <div key={permission.value} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={e => {
+                              const currentSandbox = app.iframeConfig?.sandbox || [
+                                'allow-scripts',
+                                'allow-same-origin',
+                                'allow-forms'
+                              ];
+                              const newSandbox = e.target.checked
+                                ? [...currentSandbox, permission.value]
+                                : currentSandbox.filter(p => p !== permission.value);
+
+                              handleInputChange('iframeConfig', {
+                                ...app.iframeConfig,
+                                sandbox: newSandbox
+                              });
+                            }}
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                          <label className="ml-2 block text-sm text-gray-700">
+                            {permission.label}
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
