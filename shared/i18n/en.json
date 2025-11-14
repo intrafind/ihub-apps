@@ -912,7 +912,9 @@
     "appNotFound": "Application not found",
     "missingRequiredFields": "Missing required fields:",
     "streamingError": "An error occurred during streaming",
-    "failedToGenerateResponse": "Failed to generate response. Please try again or select a different model."
+    "failedToGenerateResponse": "Failed to generate response. Please try again or select a different model.",
+    "sessionExpired": "Your session has expired. Please log in again to continue.",
+    "sessionExpiredReconnecting": "Session expired. Reconnecting to authentication provider..."
   },
   "message": {
     "generationCancelled": " [Generation cancelled]"
