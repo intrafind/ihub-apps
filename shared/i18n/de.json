@@ -168,6 +168,7 @@
       "regenerate": "Antwort neu generieren",
       "clear": "Chat löschen",
       "confirmClear": "Möchtest du den Chat wirklich löschen?",
+      "editApp": "App bearbeiten",
       "shareConversation": "App teilen",
       "export": {
         "conversation": "Unterhaltung exportieren",
