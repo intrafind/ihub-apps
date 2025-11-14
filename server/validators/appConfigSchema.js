@@ -206,6 +206,25 @@ const iframeConfigSchema = z.object({
     .default(['allow-scripts', 'allow-same-origin', 'allow-forms'])
 });
 
+// iAssistant filter schema for app-specific iAssistant configuration
+const iAssistantFilterSchema = z.object({
+  key: z.string().min(1, 'Filter key cannot be empty'),
+  values: z.array(z.string()),
+  isNegated: z.boolean().optional().default(false)
+});
+
+// iAssistant configuration schema for tool-specific settings
+const iAssistantConfigSchema = z
+  .object({
+    baseUrl: z.string().url('Base URL must be a valid URL').optional(),
+    profileId: z.string().min(1, 'Profile ID cannot be empty').optional(),
+    filter: z.array(iAssistantFilterSchema).optional(),
+    searchMode: z.string().optional(),
+    searchDistance: z.string().optional(),
+    searchFields: z.record(z.any()).optional()
+  })
+  .optional();
+
 // Base app config schema without refinements
 const baseAppConfigSchema = z.object({
   // Required fields
@@ -229,7 +248,7 @@ const baseAppConfigSchema = z.object({
   redirectConfig: redirectConfigSchema.optional(),
   iframeConfig: iframeConfigSchema.optional(),
 
-  // Chat-specific fields (required for chat type, optional for others)
+  // Chat-specific fields (optional to support non-chat types)
   system: localizedStringSchema.optional(),
   tokenLimit: z
     .number()
@@ -238,84 +257,41 @@ const baseAppConfigSchema = z.object({
     .max(TOKEN_LIMIT_MAX, `Token limit cannot exceed ${TOKEN_LIMIT_MAX.toLocaleString()}`)
     .optional(),
 
-    // Optional fields with validation
-// iAssistant filter schema for app-specific iAssistant configuration
-const iAssistantFilterSchema = z.object({
-  key: z.string().min(1, 'Filter key cannot be empty'),
-  values: z.array(z.string()),
-  isNegated: z.boolean().optional().default(false)
+  // Optional fields with validation
+  order: z.number().int().min(0).optional(),
+  preferredModel: z.string().optional(),
+  preferredOutputFormat: z.enum(['markdown', 'text', 'json', 'html']).optional(),
+  preferredStyle: z.string().optional(),
+  preferredTemperature: z.number().min(0).max(2).optional(),
+  sendChatHistory: z.boolean().optional().default(true),
+  thinking: thinkingSchema.optional(),
+  messagePlaceholder: localizedStringSchema.optional(),
+  prompt: localizedStringSchema.optional(),
+  variables: z.array(variableSchema).optional(),
+  settings: settingsSchema.optional(),
+  inputMode: inputModeSchema.optional(),
+  upload: uploadSchema.optional(),
+  features: featuresSchema.optional(),
+  greeting: localizedGreetingSchema.optional(),
+  starterPrompts: z.array(starterPromptSchema).optional(),
+  sources: z.array(sourceReferenceSchema).optional(),
+  allowedModels: z.array(z.string()).optional(),
+  disallowModelSelection: z.boolean().optional().default(false),
+  allowEmptyContent: z.boolean().optional().default(false),
+  tools: z.array(z.string()).optional(),
+  outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
+  category: z.string().optional(),
+  enabled: z.boolean().optional().default(true),
+
+  // Tool-specific configurations
+  iassistant: iAssistantConfigSchema,
+
+  // Inheritance fields
+  allowInheritance: z.boolean().optional().default(false),
+  parentId: z.string().optional(),
+  inheritanceLevel: z.number().int().min(0).optional(),
+  overriddenFields: z.array(z.string()).optional()
 });
-
-// iAssistant configuration schema for tool-specific settings
-const iAssistantConfigSchema = z
-  .object({
-    baseUrl: z.string().url('Base URL must be a valid URL').optional(),
-    profileId: z.string().min(1, 'Profile ID cannot be empty').optional(),
-    filter: z.array(iAssistantFilterSchema).optional(),
-    searchMode: z.string().optional(),
-    searchDistance: z.string().optional(),
-    searchFields: z.record(z.any()).optional()
-  })
-  .optional();
-
-export const appConfigSchema = z
-  .object({
-    // Required fields
-    id: z
-      .string()
-      .regex(
-        APP_ID_PATTERN,
-        'ID must contain only alphanumeric characters, underscores, dots, and hyphens'
-      )
-      .min(1, 'ID cannot be empty')
-      .max(APP_ID_MAX_LENGTH, `ID cannot exceed ${APP_ID_MAX_LENGTH} characters`),
-    name: localizedStringSchema,
-    description: localizedStringSchema,
-    color: z.string().regex(HEX_COLOR_PATTERN, 'Color must be a valid hex code (e.g., #4F46E5)'),
-    icon: z.string().min(1, 'Icon cannot be empty'),
-    system: localizedStringSchema,
-
-    // Optional fields with validation
-    tokenLimit: z
-      .number()
-      .int()
-      .min(TOKEN_LIMIT_MIN, `Token limit must be at least ${TOKEN_LIMIT_MIN}`)
-      .max(TOKEN_LIMIT_MAX, `Token limit cannot exceed ${TOKEN_LIMIT_MAX.toLocaleString()}`)
-      .optional(),
-    order: z.number().int().min(0).optional(),
-    preferredModel: z.string().optional(),
-    preferredOutputFormat: z.enum(['markdown', 'text', 'json', 'html']).optional(),
-    preferredStyle: z.string().optional(),
-    preferredTemperature: z.number().min(0).max(2).optional(),
-    sendChatHistory: z.boolean().optional().default(true),
-    thinking: thinkingSchema.optional(),
-    messagePlaceholder: localizedStringSchema.optional(),
-    prompt: localizedStringSchema.optional(),
-    variables: z.array(variableSchema).optional(),
-    settings: settingsSchema.optional(),
-    inputMode: inputModeSchema.optional(),
-    upload: uploadSchema.optional(),
-    features: featuresSchema.optional(),
-    greeting: localizedGreetingSchema.optional(),
-    starterPrompts: z.array(starterPromptSchema).optional(),
-    sources: z.array(sourceReferenceSchema).optional(),
-    allowedModels: z.array(z.string()).optional(),
-    disallowModelSelection: z.boolean().optional().default(false),
-    allowEmptyContent: z.boolean().optional().default(false),
-    tools: z.array(z.string()).optional(),
-    outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
-    category: z.string().optional(),
-    enabled: z.boolean().optional().default(true),
-
-    // Tool-specific configurations
-    iassistant: iAssistantConfigSchema,
-
-    // Inheritance fields
-    allowInheritance: z.boolean().optional().default(false),
-    parentId: z.string().optional(),
-    inheritanceLevel: z.number().int().min(0).optional(),
-    overriddenFields: z.array(z.string()).optional()
-  });
 
 // Export known app keys from base schema before adding refinements
 export const knownAppKeys = Object.keys(baseAppConfigSchema.shape);
