@@ -190,6 +190,22 @@ const thinkingSchema = z
 // Sources configuration - only supports string references to admin-configured sources
 const sourceReferenceSchema = z.string().min(1, 'Source reference ID cannot be empty');
 
+// Redirect app configuration schema
+const redirectConfigSchema = z.object({
+  url: z.string().url('Redirect URL must be a valid URL'),
+  openInNewTab: z.boolean().optional().default(true)
+});
+
+// Iframe app configuration schema
+const iframeConfigSchema = z.object({
+  url: z.string().url('Iframe URL must be a valid URL'),
+  allowFullscreen: z.boolean().optional().default(true),
+  sandbox: z
+    .array(z.string())
+    .optional()
+    .default(['allow-scripts', 'allow-same-origin', 'allow-forms'])
+});
+
 export const appConfigSchema = z
   .object({
     // Required fields
@@ -205,12 +221,22 @@ export const appConfigSchema = z
     description: localizedStringSchema,
     color: z.string().regex(HEX_COLOR_PATTERN, 'Color must be a valid hex code (e.g., #4F46E5)'),
     icon: z.string().min(1, 'Icon cannot be empty'),
-    system: localizedStringSchema,
+
+    // App type - defaults to 'chat' for backward compatibility
+    type: z.enum(['chat', 'redirect', 'iframe']).optional().default('chat'),
+
+    // Type-specific configuration
+    redirectConfig: redirectConfigSchema.optional(),
+    iframeConfig: iframeConfigSchema.optional(),
+
+    // Chat-specific fields (required for chat type, optional for others)
+    system: localizedStringSchema.optional(),
     tokenLimit: z
       .number()
       .int()
       .min(TOKEN_LIMIT_MIN, `Token limit must be at least ${TOKEN_LIMIT_MIN}`)
-      .max(TOKEN_LIMIT_MAX, `Token limit cannot exceed ${TOKEN_LIMIT_MAX.toLocaleString()}`),
+      .max(TOKEN_LIMIT_MAX, `Token limit cannot exceed ${TOKEN_LIMIT_MAX.toLocaleString()}`)
+      .optional(),
 
     // Optional fields with validation
     order: z.number().int().min(0).optional(),
@@ -244,6 +270,42 @@ export const appConfigSchema = z
     inheritanceLevel: z.number().int().min(0).optional(),
     overriddenFields: z.array(z.string()).optional()
   })
-  .strict(); // Use strict instead of passthrough for better validation
+  .strict() // Use strict instead of passthrough for better validation
+  .refine(
+    data => {
+      // For chat type apps, system and tokenLimit are required
+      if (data.type === 'chat' || !data.type) {
+        return data.system !== undefined && data.tokenLimit !== undefined;
+      }
+      return true;
+    },
+    {
+      message: 'Chat type apps require system prompt and tokenLimit fields'
+    }
+  )
+  .refine(
+    data => {
+      // For redirect type apps, redirectConfig is required
+      if (data.type === 'redirect') {
+        return data.redirectConfig !== undefined;
+      }
+      return true;
+    },
+    {
+      message: 'Redirect type apps require redirectConfig with url field'
+    }
+  )
+  .refine(
+    data => {
+      // For iframe type apps, iframeConfig is required
+      if (data.type === 'iframe') {
+        return data.iframeConfig !== undefined;
+      }
+      return true;
+    },
+    {
+      message: 'Iframe type apps require iframeConfig with url field'
+    }
+  );
 
 export const knownAppKeys = Object.keys(appConfigSchema.shape);
