@@ -5,6 +5,7 @@ This comprehensive guide covers how to configure and customize AI applications i
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [App Types](#app-types)
 - [Basic App Structure](#basic-app-structure)
 - [Property Details](#property-details)
 - [Advanced Configuration](#advanced-configuration-options)
@@ -99,6 +100,77 @@ That's it! Your app will:
   }
 }
 ```
+
+## App Types
+
+iHub Apps supports three types of applications:
+
+### Chat Apps (default)
+
+Standard AI-powered chat interfaces with customizable prompts and settings. This is the default type when `type` is omitted.
+
+```json
+{
+  "id": "my-chat-app",
+  "type": "chat",
+  "name": { "en": "My Chat Assistant" },
+  "description": { "en": "AI assistant for general questions" },
+  "system": { "en": "You are a helpful assistant." },
+  "tokenLimit": 4000,
+  "color": "#4F46E5",
+  "icon": "chat"
+}
+```
+
+### Redirect Apps
+
+Link to external applications or websites directly from the app list. Perfect for integrating third-party tools.
+
+```json
+{
+  "id": "external-tool",
+  "type": "redirect",
+  "name": { "en": "External Tool" },
+  "description": { "en": "Opens external application" },
+  "redirectConfig": {
+    "url": "https://example.com/tool",
+    "openInNewTab": true,
+    "showWarning": true
+  },
+  "color": "#10B981",
+  "icon": "external-link"
+}
+```
+
+**Redirect Configuration:**
+- `url` (required): The target URL to redirect to
+- `openInNewTab` (optional, default: `true`): Whether to open in a new browser tab
+- `showWarning` (optional, default: `true`): Whether to show a warning page before redirecting. Set to `false` to redirect immediately without showing the warning page.
+
+### Iframe Apps
+
+Embed external applications directly within iHub Apps using an iframe.
+
+```json
+{
+  "id": "embedded-app",
+  "type": "iframe",
+  "name": { "en": "Embedded Application" },
+  "description": { "en": "External app embedded in iHub" },
+  "iframeConfig": {
+    "url": "https://example.com/app",
+    "allowFullscreen": true,
+    "sandbox": ["allow-scripts", "allow-same-origin", "allow-forms"]
+  },
+  "color": "#3B82F6",
+  "icon": "window"
+}
+```
+
+**Iframe Configuration:**
+- `url` (required): The URL to embed
+- `allowFullscreen` (optional, default: `true`): Whether to allow fullscreen mode
+- `sandbox` (optional): Array of sandbox permissions for security
 
 ## Basic App Structure
 

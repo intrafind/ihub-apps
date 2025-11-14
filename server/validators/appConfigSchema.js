@@ -193,7 +193,8 @@ const sourceReferenceSchema = z.string().min(1, 'Source reference ID cannot be e
 // Redirect app configuration schema
 const redirectConfigSchema = z.object({
   url: z.string().url('Redirect URL must be a valid URL'),
-  openInNewTab: z.boolean().optional().default(true)
+  openInNewTab: z.boolean().optional().default(true),
+  showWarning: z.boolean().optional().default(true)
 });
 
 // Iframe app configuration schema
@@ -335,4 +336,3 @@ export const appConfigSchema = baseAppConfigSchema
       message: 'Iframe type apps require iframeConfig with url field'
     }
   );
-

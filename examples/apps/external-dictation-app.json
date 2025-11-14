@@ -12,7 +12,8 @@
   "type": "redirect",
   "redirectConfig": {
     "url": "https://dictation.io/",
-    "openInNewTab": true
+    "openInNewTab": true,
+    "showWarning": true
   },
   "color": "#10B981",
   "icon": "microphone",
