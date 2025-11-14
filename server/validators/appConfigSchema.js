@@ -190,6 +190,25 @@ const thinkingSchema = z
 // Sources configuration - only supports string references to admin-configured sources
 const sourceReferenceSchema = z.string().min(1, 'Source reference ID cannot be empty');
 
+// iAssistant filter schema for app-specific iAssistant configuration
+const iAssistantFilterSchema = z.object({
+  key: z.string().min(1, 'Filter key cannot be empty'),
+  values: z.array(z.string()),
+  isNegated: z.boolean().optional().default(false)
+});
+
+// iAssistant configuration schema for tool-specific settings
+const iAssistantConfigSchema = z
+  .object({
+    baseUrl: z.string().url('Base URL must be a valid URL').optional(),
+    profileId: z.string().min(1, 'Profile ID cannot be empty').optional(),
+    filter: z.array(iAssistantFilterSchema).optional(),
+    searchMode: z.string().optional(),
+    searchDistance: z.string().optional(),
+    searchFields: z.record(z.any()).optional()
+  })
+  .optional();
+
 export const appConfigSchema = z
   .object({
     // Required fields
@@ -206,13 +225,14 @@ export const appConfigSchema = z
     color: z.string().regex(HEX_COLOR_PATTERN, 'Color must be a valid hex code (e.g., #4F46E5)'),
     icon: z.string().min(1, 'Icon cannot be empty'),
     system: localizedStringSchema,
+
+    // Optional fields with validation
     tokenLimit: z
       .number()
       .int()
       .min(TOKEN_LIMIT_MIN, `Token limit must be at least ${TOKEN_LIMIT_MIN}`)
-      .max(TOKEN_LIMIT_MAX, `Token limit cannot exceed ${TOKEN_LIMIT_MAX.toLocaleString()}`),
-
-    // Optional fields with validation
+      .max(TOKEN_LIMIT_MAX, `Token limit cannot exceed ${TOKEN_LIMIT_MAX.toLocaleString()}`)
+      .optional(),
     order: z.number().int().min(0).optional(),
     preferredModel: z.string().optional(),
     preferredOutputFormat: z.enum(['markdown', 'text', 'json', 'html']).optional(),
@@ -237,6 +257,9 @@ export const appConfigSchema = z
     outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
     category: z.string().optional(),
     enabled: z.boolean().optional().default(true),
+
+    // Tool-specific configurations
+    iassistant: iAssistantConfigSchema,
 
     // Inheritance fields
     allowInheritance: z.boolean().optional().default(false),
