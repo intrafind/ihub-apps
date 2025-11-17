@@ -117,7 +117,7 @@
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^14.5.2",
     "concurrently": "^9.2.1",
-    "electron": "^37.3.1",
+    "electron": "^39.2.1",
     "electron-builder": "^26.0.12",
     "esbuild": "^0.27.0",
     "eslint": "^9.38.0",
