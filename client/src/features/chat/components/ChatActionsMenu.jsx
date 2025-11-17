@@ -55,7 +55,7 @@ const ChatActionsMenu = ({
           {user?.isAdmin && appId && (
             <button
               onClick={() => {
-                navigate(`/admin/apps/${appId}/edit`);
+                navigate(`/admin/apps/${appId}`);
                 setOpen(false);
               }}
               className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"

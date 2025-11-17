@@ -38,10 +38,11 @@
           }
         }
 
-        // Add base tag if we determined a base path
-        if (basePath && basePath !== '') {
+        // Add base tag to ensure proper asset loading
+        // Always add base tag when we have a basePath (including '/')
+        if (basePath !== null && basePath !== undefined) {
           const base = document.createElement('base');
-          base.href = basePath === '/' ? '/' : basePath + '/';
+          base.href = basePath === '/' || basePath === '' ? '/' : basePath + '/';
           document.head.appendChild(base);
 
           // Store for debugging (same as runtimeBasePath.js)
