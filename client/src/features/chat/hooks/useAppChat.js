@@ -57,14 +57,28 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             } catch (error) {
               if (lastMessageIdRef.current && !isCancellingRef.current) {
                 // Only show error if this wasn't a manual cancellation
-                // Use the userFriendlyMessage from the enhanced error, or fall back to a generic message
-                const errorMessage =
-                  error.userFriendlyMessage ||
-                  error.message ||
-                  t(
-                    'error.failedToGenerateResponse',
-                    'Failed to generate response. Please try again or select a different model.'
+                let errorMessage;
+
+                // Check if this is a session expiration error (401)
+                if (error.isAuthRequired || error.status === 401) {
+                  errorMessage = t(
+                    'error.sessionExpired',
+                    'Your session has expired. Please log in again to continue.'
                   );
+                  console.log('🔐 Session expired during chat message send');
+                  // The authTokenExpired event should already be dispatched by the API client
+                  // which will trigger the auto-redirect flow in AuthContext
+                } else {
+                  // Use the userFriendlyMessage from the enhanced error, or fall back to a generic message
+                  errorMessage =
+                    error.userFriendlyMessage ||
+                    error.message ||
+                    t(
+                      'error.failedToGenerateResponse',
+                      'Failed to generate response. Please try again or select a different model.'
+                    );
+                }
+
                 // Preserve any streamed content that might have been accumulated
                 const currentMessage = messagesRef.current.find(
                   m => m.id === lastMessageIdRef.current
