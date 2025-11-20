@@ -288,5 +288,12 @@
   },
   "ssl": {
     "ignoreInvalidCertificates": false
+  },
+  "proxy": {
+    "enabled": false,
+    "http": "${HTTP_PROXY}",
+    "https": "${HTTPS_PROXY}",
+    "noProxy": "${NO_PROXY}",
+    "urlPatterns": []
   }
 }
