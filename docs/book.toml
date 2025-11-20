@@ -16,6 +16,8 @@ edit-url-template = "https://github.com/intrafind/ihub-apps/edit/main/docs/{path
 
 [preprocessor.template]
 command = "mdbook-template"
+optional = true
 
 [preprocessor.mermaid]
 command = "mdbook-mermaid"
+optional = true
