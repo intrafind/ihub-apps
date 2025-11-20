@@ -69,6 +69,9 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `BRAVE_SEARCH_ENDPOINT`    | Custom Brave Search API endpoint                                  | `https://api.search.brave.com/res/v1/web/search` |
 | `TAVILY_SEARCH_API_KEY`    | API key for the Tavily Search tool                                | –                                                |
 | `TAVILY_ENDPOINT`          | Custom Tavily API endpoint                                        | `https://api.tavily.com/search`                  |
+| `HTTP_PROXY`               | HTTP proxy URL for external requests                              | –                                                |
+| `HTTPS_PROXY`              | HTTPS proxy URL for external requests                             | –                                                |
+| `NO_PROXY`                 | Comma-separated list of hosts that bypass the proxy               | –                                                |
 | `MAGIC_PROMPT_MODEL`       | Default model for the magic prompt feature                        | `gpt-3.5-turbo`                                  |
 | `MAGIC_PROMPT_PROMPT`      | Default prompt used to refine user input                          | `Improve the following prompt.`                  |
 | `AUTH_MODE`                | Login flow (`proxy`, `local`, `oidc`)                             | `proxy`                                          |
@@ -124,6 +127,108 @@ When `SSL_KEY` and `SSL_CERT` are set the server starts in HTTPS mode.
 ### External Services with Self-Signed Certificates
 
 If iHub Apps needs to communicate with external services using self-signed SSL certificates (such as custom LLM endpoints, internal APIs, or authentication providers), see the [SSL Certificates Guide](ssl-certificates.md) for configuration options.
+
+## HTTP/HTTPS Proxy Configuration
+
+iHub Apps supports routing all external HTTP/HTTPS requests through a proxy server. This is essential for corporate environments where direct internet access is restricted.
+
+### Configuration Methods
+
+Proxy configuration can be provided through:
+1. **Environment Variables** (recommended for simple setups)
+2. **Platform Configuration** (`contents/config/platform.json`) for advanced features
+
+### Environment Variables
+
+```bash
+# Basic proxy configuration
+HTTP_PROXY=http://proxy.company.com:8080
+HTTPS_PROXY=http://proxy.company.com:8080
+NO_PROXY=localhost,127.0.0.1,.local,.company.com
+```
+
+The `NO_PROXY` variable accepts:
+- **Exact hostnames**: `localhost`, `api.internal.com`
+- **Domain suffixes**: `.company.com` (matches all subdomains)
+- **Wildcard domains**: `*.internal.com`
+
+### Platform Configuration
+
+For advanced proxy features, configure in `contents/config/platform.json`:
+
+```json
+{
+  "proxy": {
+    "enabled": true,
+    "http": "http://proxy.company.com:8080",
+    "https": "http://proxy.company.com:8080",
+    "noProxy": "localhost,127.0.0.1,.local,.company.com",
+    "urlPatterns": [
+      ".*\\.atlassian\\.net.*",
+      ".*\\.openai\\.com.*"
+    ]
+  }
+}
+```
+
+**Configuration Options**:
+- `enabled` (boolean): Enable/disable proxy globally (default: `false`)
+- `http` (string): HTTP proxy URL
+- `https` (string): HTTPS proxy URL
+- `noProxy` (string): Comma-separated bypass list
+- `urlPatterns` (array): Regex patterns for selective proxy (empty = all URLs)
+
+### Use Cases
+
+#### All External Traffic Through Proxy
+```json
+{
+  "proxy": {
+    "enabled": true,
+    "http": "http://proxy.company.com:8080",
+    "https": "http://proxy.company.com:8080",
+    "noProxy": "localhost,.local"
+  }
+}
+```
+
+#### Proxy Only for Specific Services
+```json
+{
+  "proxy": {
+    "enabled": true,
+    "https": "http://proxy.company.com:8080",
+    "urlPatterns": [
+      ".*\\.atlassian\\.net.*",
+      ".*\\.openai\\.com.*"
+    ]
+  }
+}
+```
+
+This configuration proxies only Atlassian (Jira) and OpenAI requests.
+
+### What Gets Proxied
+
+When enabled, the proxy configuration applies to:
+- **LLM Providers**: OpenAI, Anthropic, Google, Mistral, custom endpoints
+- **Authentication**: OIDC, OAuth2, Azure AD, LDAP
+- **Integrations**: Jira, Microsoft Graph (Entra ID)
+- **Tools**: Web search (Brave, Tavily), web content extraction
+- **Sources**: External URL sources, iFinder integrations
+
+### Troubleshooting
+
+Enable debug logging to see proxy decisions:
+```bash
+DEBUG=proxy node server/server.js
+```
+
+Check console output for proxy-related messages:
+- `Using proxy http://proxy:8080 for URL: https://...`
+- `Bypassing proxy for URL: https://localhost...`
+- `URL does not match proxy patterns: https://...`
+
 
 ## Example
 
