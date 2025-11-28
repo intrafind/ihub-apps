@@ -2,6 +2,7 @@ import 'dotenv/config';
 import axios from 'axios';
 import crypto from 'crypto';
 import tokenStorage from '../TokenStorageService.js';
+import { enhanceAxiosConfig } from '../../utils/httpConfig.js';
 
 /**
  * JIRA Service for comprehensive ticket management integration
@@ -72,11 +73,18 @@ class JiraService {
         tokenData.append('code_verifier', codeVerifier);
       }
 
-      const response = await axios.post(this.tokenUrl, tokenData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
+      const response = await axios.post(
+        this.tokenUrl,
+        tokenData,
+        enhanceAxiosConfig(
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }
+          },
+          this.tokenUrl
+        )
+      );
 
       const tokens = response.data;
 
@@ -104,12 +112,18 @@ class JiraService {
    */
   async getAccessibleResources(accessToken) {
     try {
-      const response = await axios.get(this.resourcesUrl, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/json'
-        }
-      });
+      const response = await axios.get(
+        this.resourcesUrl,
+        enhanceAxiosConfig(
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              Accept: 'application/json'
+            }
+          },
+          this.resourcesUrl
+        )
+      );
 
       return response.data;
     } catch (error) {
@@ -163,11 +177,18 @@ class JiraService {
         refresh_token: refreshToken
       });
 
-      const response = await axios.post(this.tokenUrl, tokenData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
+      const response = await axios.post(
+        this.tokenUrl,
+        tokenData,
+        enhanceAxiosConfig(
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }
+          },
+          this.tokenUrl
+        )
+      );
 
       const tokens = response.data;
       console.log('✅ JIRA token refresh successful');
@@ -306,7 +327,8 @@ class JiraService {
         config.data = data;
       }
 
-      const response = await axios(config);
+      const enhancedConfig = enhanceAxiosConfig(config, apiUrl);
+      const response = await axios(enhancedConfig);
       return response.data;
     } catch (error) {
       if (error.response?.status === 401 && retryCount < maxRetries) {
@@ -572,24 +594,36 @@ class JiraService {
 
       // Get attachment metadata using the cloud API
       const apiUrl = await this.buildApiUrl(tokens.accessToken, `/attachment/${attachmentId}`);
-      const response = await axios.get(apiUrl, {
-        headers: {
-          Authorization: `Bearer ${tokens.accessToken}`,
-          Accept: 'application/json'
-        }
-      });
+      const response = await axios.get(
+        apiUrl,
+        enhanceAxiosConfig(
+          {
+            headers: {
+              Authorization: `Bearer ${tokens.accessToken}`,
+              Accept: 'application/json'
+            }
+          },
+          apiUrl
+        )
+      );
 
       const attachmentInfo = response.data;
 
       // Get attachment content as stream
-      const contentResponse = await axios.get(attachmentInfo.content, {
-        headers: {
-          Authorization: `Bearer ${tokens.accessToken}`,
-          Accept: '*/*'
-        },
-        responseType: 'stream',
-        timeout: 60000 // 60 second timeout for large files
-      });
+      const contentResponse = await axios.get(
+        attachmentInfo.content,
+        enhanceAxiosConfig(
+          {
+            headers: {
+              Authorization: `Bearer ${tokens.accessToken}`,
+              Accept: '*/*'
+            },
+            responseType: 'stream',
+            timeout: 60000 // 60 second timeout for large files
+          },
+          attachmentInfo.content
+        )
+      );
 
       return {
         filename: attachmentInfo.filename,
@@ -612,12 +646,18 @@ class JiraService {
 
       // Get attachment metadata using the cloud API
       const apiUrl = await this.buildApiUrl(tokens.accessToken, `/attachment/${attachmentId}`);
-      const response = await axios.get(apiUrl, {
-        headers: {
-          Authorization: `Bearer ${tokens.accessToken}`,
-          Accept: 'application/json'
-        }
-      });
+      const response = await axios.get(
+        apiUrl,
+        enhanceAxiosConfig(
+          {
+            headers: {
+              Authorization: `Bearer ${tokens.accessToken}`,
+              Accept: 'application/json'
+            }
+          },
+          apiUrl
+        )
+      );
 
       const attachmentInfo = response.data;
 
@@ -639,14 +679,20 @@ class JiraService {
       console.log(`📎 Downloading attachment: ${attachmentInfo.filename} from ${contentUrl}`);
 
       // Get attachment content with proper authorization
-      const contentResponse = await axios.get(contentUrl, {
-        headers: {
-          Authorization: `Bearer ${tokens.accessToken}`,
-          Accept: '*/*'
-        },
-        responseType: returnBase64 ? 'arraybuffer' : 'stream',
-        timeout: 30000 // 30 second timeout for large files
-      });
+      const contentResponse = await axios.get(
+        contentUrl,
+        enhanceAxiosConfig(
+          {
+            headers: {
+              Authorization: `Bearer ${tokens.accessToken}`,
+              Accept: '*/*'
+            },
+            responseType: returnBase64 ? 'arraybuffer' : 'stream',
+            timeout: 30000 // 30 second timeout for large files
+          },
+          contentUrl
+        )
+      );
 
       if (returnBase64) {
         const base64Content = Buffer.from(contentResponse.data).toString('base64');
