@@ -262,6 +262,12 @@ class TokenStorageService {
   /**
    * Generic encryption for simple strings (e.g., API keys)
    * Uses AES-256-GCM with unique IV per encryption
+   * 
+   * Note: Uses GCM mode instead of CBC (used in encryptTokens) because:
+   * - Provides authenticated encryption (integrity + confidentiality)
+   * - No padding oracle vulnerabilities
+   * - Better for simple string encryption without context binding
+   * 
    * @param {string} plaintext - The text to encrypt
    * @returns {string} Base64-encoded encrypted data with IV and auth tag
    */
@@ -344,8 +350,9 @@ class TokenStorageService {
       return false;
     }
 
-    // Encrypted values are base64 strings of at least 32 bytes (IV + auth tag)
-    // which is 44 characters in base64
+    // Encrypted values contain: IV (16 bytes) + auth tag (16 bytes) + encrypted data (at least 1 byte)
+    // Minimum 33 bytes = 44 base64 characters (with padding)
+    // In practice, encrypted values will be longer due to actual data
     if (value.length < 44) {
       return false;
     }
