@@ -6,7 +6,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { throttledFetch } from './requestThrottler.js';
 import configCache from './configCache.js';
-import encryptionService from './services/EncryptionService.js';
+import tokenStorageService from './services/TokenStorageService.js';
+
+// Constants
+const JWT_AUTH_REQUIRED = 'JWT_AUTH_REQUIRED';
 
 /**
  * Helper function to get API key for a model
@@ -42,10 +45,11 @@ export async function getApiKeyForModel(modelId) {
     if (model.apiKey) {
       try {
         // Check if it's marked as encrypted or appears to be encrypted
-        const isEncrypted = model.apiKeyEncrypted || encryptionService.isEncrypted(model.apiKey);
+        const isEncrypted =
+          model.apiKeyEncrypted || tokenStorageService.isEncrypted(model.apiKey);
 
         if (isEncrypted) {
-          const decryptedKey = encryptionService.decrypt(model.apiKey);
+          const decryptedKey = tokenStorageService.decryptString(model.apiKey);
           console.log(`Using stored encrypted API key for model: ${modelId}`);
           return decryptedKey;
         } else {

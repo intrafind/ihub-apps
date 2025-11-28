@@ -7,7 +7,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
-import encryptionService from '../../services/EncryptionService.js';
+import tokenStorageService from '../../services/TokenStorageService.js';
 
 export default function registerAdminModelsRoutes(app, basePath = '') {
   /**
@@ -135,7 +135,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
         if (updatedModel.apiKey !== '••••••••') {
           // New key provided - encrypt it
           try {
-            updatedModel.apiKey = encryptionService.encrypt(updatedModel.apiKey);
+            updatedModel.apiKey = tokenStorageService.encryptString(updatedModel.apiKey);
             updatedModel.apiKeyEncrypted = true;
           } catch (error) {
             console.error('Error encrypting API key:', error);
@@ -204,7 +204,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
       if (newModel.apiKey && newModel.apiKey !== '••••••••') {
         // New key provided - encrypt it
         try {
-          newModel.apiKey = encryptionService.encrypt(newModel.apiKey);
+          newModel.apiKey = tokenStorageService.encryptString(newModel.apiKey);
           newModel.apiKeyEncrypted = true;
         } catch (error) {
           console.error('Error encrypting API key:', error);

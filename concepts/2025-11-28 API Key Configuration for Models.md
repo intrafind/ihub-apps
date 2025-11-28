@@ -35,23 +35,34 @@ The solution implements a three-tier key resolution strategy:
 
 ### Components
 
-#### 1. Encryption Service (`server/services/EncryptionService.js`)
+#### 1. Token Storage Service (`server/services/TokenStorageService.js`)
 
-A dedicated service for encrypting and decrypting sensitive data:
+The existing TokenStorageService was enhanced with generic string encryption methods for API keys:
 
 ```javascript
-class EncryptionService {
-  encrypt(plaintext)  // Returns base64-encoded encrypted data
-  decrypt(encryptedData)  // Returns plaintext
+class TokenStorageService {
+  // Existing methods for user-specific tokens
+  encryptTokens(tokens, userId, serviceName)
+  decryptTokens(encryptedData, userId, serviceName)
+  
+  // New generic methods for API keys
+  encryptString(plaintext)  // Returns base64-encoded encrypted data
+  decryptString(encryptedData)  // Returns plaintext
   isEncrypted(value)  // Checks if value appears to be encrypted
 }
 ```
+
+**Why TokenStorageService?**
+- Reuses existing, tested encryption infrastructure
+- Consistent encryption key management across the application
+- Single source of truth for encryption/decryption
+- Reduces code duplication
 
 **Security Features:**
 - AES-256-GCM encryption algorithm
 - Unique initialization vector (IV) per encryption operation
 - Authentication tag for integrity verification
-- Key derived from JWT_SECRET using scrypt
+- Encryption key from TOKEN_ENCRYPTION_KEY environment variable
 
 **Data Format:**
 Encrypted data is stored as base64 string containing:
@@ -59,7 +70,15 @@ Encrypted data is stored as base64 string containing:
 - 16 bytes: Authentication Tag
 - Remaining: Encrypted data
 
-#### 2. Model Schema Extension
+#### 2. JWT_AUTH_REQUIRED Constant
+
+Fixed undefined constant issue:
+```javascript
+const JWT_AUTH_REQUIRED = 'JWT_AUTH_REQUIRED';
+```
+This constant is used for the iAssistant provider which uses JWT tokens instead of static API keys.
+
+#### 3. Model Schema Extension
 
 Added optional fields to model configuration:
 
@@ -70,7 +89,7 @@ Added optional fields to model configuration:
 }
 ```
 
-#### 3. API Key Resolution (`server/utils.js`)
+#### 4. API Key Resolution (`server/utils.js`)
 
 Enhanced `getApiKeyForModel()` function:
 
@@ -78,7 +97,7 @@ Enhanced `getApiKeyForModel()` function:
 export async function getApiKeyForModel(modelId) {
   // 1. Check for stored encrypted key in model config
   if (model.apiKey) {
-    return encryptionService.decrypt(model.apiKey);
+    return tokenStorageService.decryptString(model.apiKey);
   }
   
   // 2. Check for model-specific environment variable
@@ -91,7 +110,7 @@ export async function getApiKeyForModel(modelId) {
 }
 ```
 
-#### 4. Admin API Endpoints
+#### 5. Admin API Endpoints
 
 Modified endpoints to handle API key encryption/masking:
 
@@ -101,11 +120,11 @@ Modified endpoints to handle API key encryption/masking:
 - Never exposes actual encrypted keys
 
 **PUT `/api/admin/models/:modelId` & POST `/api/admin/models`**
-- Encrypts new API keys before storage
+- Encrypts new API keys before storage using `tokenStorageService.encryptString()`
 - Preserves existing keys when masked value submitted
 - Removes client-side helper fields before saving
 
-#### 5. Frontend Integration
+#### 6. Frontend Integration
 
 **ModelFormEditor Component:**
 - Password input field for API key entry
@@ -123,7 +142,7 @@ Modified endpoints to handle API key encryption/masking:
 ### Files Modified
 
 **Server-side:**
-- `server/services/EncryptionService.js` (new)
+- `server/services/TokenStorageService.js` (enhanced with generic encryption methods)
 - `server/validators/modelConfigSchema.js`
 - `server/utils.js`
 - `server/routes/admin/models.js`
@@ -150,10 +169,11 @@ API keys are stored in model JSON files:
 ### Security Considerations
 
 1. **Encryption at Rest**: All stored API keys encrypted with AES-256-GCM
-2. **Key Derivation**: Encryption key derived from JWT_SECRET using scrypt
+2. **Key Management**: Uses TOKEN_ENCRYPTION_KEY environment variable (consistent with user token storage)
 3. **Never Exposed**: Keys never sent to client except as masked values
 4. **Backwards Compatible**: System works with unencrypted keys for migration
 5. **Audit Trail**: Changes logged through normal admin API logging
+6. **Unified Approach**: Reuses existing TokenStorageService infrastructure
 
 ### Migration Path
 
@@ -219,10 +239,10 @@ If no API key is configured for a model:
 ## Related Files and Code Locations
 
 ### Encryption Logic
-- `server/services/EncryptionService.js` - Main encryption service
+- `server/services/TokenStorageService.js` - Main encryption service with generic string encryption methods
 
 ### API Key Resolution
-- `server/utils.js` - `getApiKeyForModel()` function
+- `server/utils.js` - `getApiKeyForModel()` function with JWT_AUTH_REQUIRED constant
 - `server/utils/ApiKeyVerifier.js` - Verification logic
 
 ### Admin Interface
@@ -238,13 +258,13 @@ If no API key is configured for a model:
 ### Encryption Key Management
 
 **Production Deployment:**
-- **CRITICAL**: Set a strong JWT_SECRET in production
-- Never commit JWT_SECRET to version control
+- **CRITICAL**: Set TOKEN_ENCRYPTION_KEY in production (consistent with user token storage)
+- Never commit TOKEN_ENCRYPTION_KEY to version control
 - Use environment-specific secrets management
-- Rotate JWT_SECRET carefully (requires re-encryption of all keys)
+- Rotate TOKEN_ENCRYPTION_KEY carefully (requires re-encryption of all keys)
 
 **Development:**
-- System generates insecure default key if JWT_SECRET not set
+- System generates insecure default key if TOKEN_ENCRYPTION_KEY not set
 - Warning displayed in console
 
 ### Best Practices
