@@ -17,7 +17,8 @@ class EncryptionService {
    */
   getEncryptionKey() {
     // Use JWT_SECRET as base for encryption key
-    const jwtSecret = config.JWT_SECRET || process.env.JWT_SECRET;
+    // Try process.env first, then config module
+    const jwtSecret = process.env.JWT_SECRET || config.JWT_SECRET;
 
     if (!jwtSecret) {
       console.warn(
@@ -115,8 +116,8 @@ class EncryptionService {
       return false;
     }
 
-    // Check if it's valid base64
-    const base64Regex = /^[A-Za-z0-9+/]+=*$/;
+    // Check if it's valid base64 (allow 0-2 padding characters)
+    const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
     return base64Regex.test(value);
   }
 }
