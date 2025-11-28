@@ -595,16 +595,21 @@
         "requestDelay": "Request Delay (ms)",
         "supportsTools": "Supports Tools",
         "enabled": "Enabled",
-        "defaultModel": "Default Model"
+        "defaultModel": "Default Model",
+        "apiKey": "API Key"
       },
       "hints": {
         "modelId": "Unique identifier for this model configuration",
-        "apiModelId": "The actual model ID used in API calls (e.g., gpt-4, claude-3-opus)"
+        "apiModelId": "The actual model ID used in API calls (e.g., gpt-4, claude-3-opus)",
+        "apiKey": "API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.",
+        "apiKeySet": "✓ API key is configured for this model"
       },
       "placeholders": {
         "selectProvider": "Select a provider",
         "apiModelId": "e.g., gpt-4, claude-3-opus",
-        "apiUrl": "https://api.example.com/v1/chat/completions"
+        "apiUrl": "https://api.example.com/v1/chat/completions",
+        "apiKey": "Enter API key (optional - will use environment variable if not set)",
+        "apiKeySet": "API key is set (leave blank to keep current)"
       },
       "status": {
         "enabled": "Enabled",

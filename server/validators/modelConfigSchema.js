@@ -63,7 +63,11 @@ export const modelConfigSchema = z
 
     // Additional fields for specific providers
     supportsImages: z.boolean().optional(),
-    config: z.record(z.any()).optional() // Allow provider-specific configuration
+    config: z.record(z.any()).optional(), // Allow provider-specific configuration
+
+    // API Key configuration - stored encrypted on server
+    apiKey: z.string().optional(), // Encrypted API key for this model
+    apiKeyEncrypted: z.boolean().optional() // Flag to indicate if apiKey is encrypted
   })
   .strict(); // Use strict instead of passthrough for better validation
 

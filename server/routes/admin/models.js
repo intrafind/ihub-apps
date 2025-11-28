@@ -7,6 +7,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
+import encryptionService from '../../services/EncryptionService.js';
 
 export default function registerAdminModelsRoutes(app, basePath = '') {
   /**
@@ -46,8 +47,24 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/admin/models', basePath), adminAuth, async (req, res) => {
     try {
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
+
+      // Mask API keys in the response for security
+      const maskedModels = models.map(model => {
+        const maskedModel = { ...model };
+        if (maskedModel.apiKey) {
+          // Show masked value to indicate a key is set
+          maskedModel.apiKeyMasked = '••••••••';
+          maskedModel.apiKeySet = true;
+          // Remove the actual encrypted key from response
+          delete maskedModel.apiKey;
+        } else {
+          maskedModel.apiKeySet = false;
+        }
+        return maskedModel;
+      });
+
       res.setHeader('ETag', modelsEtag);
-      res.json(models);
+      res.json(maskedModels);
     } catch (error) {
       console.error('Error fetching all models:', error);
       res.status(500).json({ error: 'Failed to fetch models' });
@@ -68,8 +85,21 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
       if (!model) {
         return res.status(404).json({ error: 'Model not found' });
       }
+
+      // Mask API key in the response for security
+      const maskedModel = { ...model };
+      if (maskedModel.apiKey) {
+        // Show masked value to indicate a key is set
+        maskedModel.apiKeyMasked = '••••••••';
+        maskedModel.apiKeySet = true;
+        // Remove the actual encrypted key from response
+        delete maskedModel.apiKey;
+      } else {
+        maskedModel.apiKeySet = false;
+      }
+
       res.setHeader('ETag', modelsEtag);
-      res.json(model);
+      res.json(maskedModel);
     } catch (error) {
       console.error('Error fetching model:', error);
       res.status(500).json({ error: 'Failed to fetch model' });
@@ -98,6 +128,38 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
       if (updatedModel.id !== modelId) {
         return res.status(400).json({ error: 'Model ID cannot be changed' });
       }
+
+      // Handle API key encryption
+      if (updatedModel.apiKey) {
+        // Check if this is a new key or unchanged masked value
+        if (updatedModel.apiKey !== '••••••••') {
+          // New key provided - encrypt it
+          try {
+            updatedModel.apiKey = encryptionService.encrypt(updatedModel.apiKey);
+            updatedModel.apiKeyEncrypted = true;
+          } catch (error) {
+            console.error('Error encrypting API key:', error);
+            return res.status(500).json({ error: 'Failed to encrypt API key' });
+          }
+        } else {
+          // Masked value - keep existing key from database
+          const { data: models } = configCache.getModels(true);
+          const existingModel = models.find(m => m.id === modelId);
+          if (existingModel && existingModel.apiKey) {
+            updatedModel.apiKey = existingModel.apiKey;
+            updatedModel.apiKeyEncrypted = existingModel.apiKeyEncrypted;
+          } else {
+            // No existing key, remove the masked placeholder
+            delete updatedModel.apiKey;
+            delete updatedModel.apiKeyEncrypted;
+          }
+        }
+      }
+
+      // Remove client-side helper fields
+      delete updatedModel.apiKeySet;
+      delete updatedModel.apiKeyMasked;
+
       if (updatedModel.default === true) {
         const modelsResponse = configCache.getModels(true);
         const allModels = modelsResponse.data || modelsResponse;
@@ -137,6 +199,26 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
       if (!validateIdForPath(newModel.id, 'model', res)) {
         return;
       }
+
+      // Handle API key encryption
+      if (newModel.apiKey && newModel.apiKey !== '••••••••') {
+        // New key provided - encrypt it
+        try {
+          newModel.apiKey = encryptionService.encrypt(newModel.apiKey);
+          newModel.apiKeyEncrypted = true;
+        } catch (error) {
+          console.error('Error encrypting API key:', error);
+          return res.status(500).json({ error: 'Failed to encrypt API key' });
+        }
+      } else if (newModel.apiKey === '••••••••') {
+        // Remove masked placeholder if no real key
+        delete newModel.apiKey;
+        delete newModel.apiKeyEncrypted;
+      }
+
+      // Remove client-side helper fields
+      delete newModel.apiKeySet;
+      delete newModel.apiKeyMasked;
 
       const rootDir = getRootDir();
       const modelFilePath = join(rootDir, 'contents', 'models', `${newModel.id}.json`);
