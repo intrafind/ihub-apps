@@ -1,12 +1,39 @@
 # Proxy Support for External Services
 
 **Date:** 2025-11-20  
-**Status:** Implemented  
+**Status:** Implemented (Fixed 2025-11-28)  
 **Type:** Feature Enhancement
 
 ## Overview
 
 This feature adds comprehensive proxy support for all external HTTP/HTTPS calls made by the iHub Apps platform. This is essential for customers running iHub internally where all external calls must go through a corporate proxy.
+
+## Bug Fix (2025-11-28)
+
+### Issue
+The proxy configuration was not working for LLM API requests. Users reported connection timeout errors when proxy was enabled:
+```
+ConnectTimeoutError: Connect Timeout Error (attempted address: aif-curie-1.cognitiveservices.azure.com:443, timeout: 10000ms)
+```
+
+### Root Cause
+The original implementation created proxy agents correctly but used native Node.js `fetch()` API which does not support the `agent` option. The proxy agents (`http-proxy-agent` and `https-proxy-agent`) only work with:
+- Node.js HTTP/HTTPS modules directly
+- `node-fetch` library (v2/v3)
+- `axios` library
+
+Native `fetch()` (introduced in Node.js 18+) ignores the `agent` option, so proxy configuration was silently ignored.
+
+### Fix
+Modified `server/requestThrottler.js` to conditionally use `node-fetch` when a proxy agent is configured:
+- When no proxy is configured: Uses native `fetch()` (optimal performance)
+- When proxy is configured: Switches to `node-fetch` (proxy support)
+
+Also updated `server/services/integrations/JiraService.js` to use `enhanceAxiosConfig()` for consistent proxy support across all integrations.
+
+### Files Modified
+- `server/requestThrottler.js` - Added conditional node-fetch usage
+- `server/services/integrations/JiraService.js` - Added proxy support to axios calls
 
 ## Problem Statement
 
@@ -132,9 +159,10 @@ These packages were already available as transitive dependencies through electro
 
 The proxy support is automatically applied to all HTTP clients used in the platform:
 
-1. **Fetch API** (Native Node.js)
+1. **Fetch API** (Native Node.js + node-fetch fallback)
    - Used by: LLM adapters, tools, requestThrottler
    - Enhanced via: `enhanceFetchOptions()` in requestThrottler.js
+   - **Important**: Automatically switches to `node-fetch` when proxy agent is present (native fetch doesn't support agent option)
 
 2. **Axios**
    - Used by: Integration services (Jira, Entra/Azure AD)
