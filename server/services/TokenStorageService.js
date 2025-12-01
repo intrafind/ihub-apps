@@ -334,16 +334,23 @@ class TokenStorageService {
   _decryptEncFormat(encryptedData) {
     // Parse ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
     const encContent = encryptedData.slice(4, -1); // Remove "ENC[" and "]"
-    const parts = encContent.split(',');
     
-    const algorithm = parts[0];
+    // Extract algorithm (first part before first comma)
+    const algorithmMatch = encContent.match(/^([^,]+)/);
+    if (!algorithmMatch) {
+      throw new Error('Invalid ENC format: missing algorithm');
+    }
+    
+    const algorithm = algorithmMatch[1];
     if (algorithm !== 'AES256_GCM') {
       throw new Error(`Unsupported encryption algorithm: ${algorithm}`);
     }
 
-    const dataMatch = encContent.match(/data:([^,]+)/);
-    const ivMatch = encContent.match(/iv:([^,]+)/);
-    const tagMatch = encContent.match(/tag:([^,]+)/);
+    // Use specific regex patterns for base64 values
+    // Base64 uses A-Za-z0-9+/= characters
+    const dataMatch = encContent.match(/data:([A-Za-z0-9+/=]+)/);
+    const ivMatch = encContent.match(/iv:([A-Za-z0-9+/=]+)/);
+    const tagMatch = encContent.match(/tag:([A-Za-z0-9+/=]+)/);
 
     if (!dataMatch || !ivMatch || !tagMatch) {
       throw new Error('Invalid ENC format: missing required fields');

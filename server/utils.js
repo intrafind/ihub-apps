@@ -20,8 +20,12 @@ function sanitizeForLog(input) {
   if (!input || typeof input !== 'string') {
     return String(input);
   }
-  // Remove control characters and newlines to prevent log injection
-  return input.replace(/[\n\r\t\x00-\x1F\x7F]/g, '');
+  // Remove/escape dangerous characters:
+  // - Control characters (\n, \r, \t, etc.) for log injection
+  // - Backticks, dollar signs, backslashes for shell injection if logs are processed
+  return input
+    .replace(/[\n\r\t\x00-\x1F\x7F]/g, '') // Remove control characters
+    .replace(/[`$\\]/g, '\\$&'); // Escape backticks, dollar signs, backslashes
 }
 
 /**
