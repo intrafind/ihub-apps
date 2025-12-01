@@ -4,6 +4,7 @@
  */
 import https from 'https';
 import tls from 'tls';
+import net from 'net';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import configCache from '../configCache.js';
@@ -57,18 +58,18 @@ class CustomHttpsProxyAgent extends HttpsProxyAgent {
       socket = tls.connect({
         ...this.connectOpts,
         servername:
-          this.connectOpts.host && !require('net').isIP(this.connectOpts.host)
+          this.connectOpts.host && !net.isIP(this.connectOpts.host)
             ? this.connectOpts.host
             : undefined
       });
     } else {
-      socket = require('net').connect(this.connectOpts);
+      socket = net.connect(this.connectOpts);
     }
 
     // Build CONNECT request
     const headers =
       typeof this.proxyHeaders === 'function' ? this.proxyHeaders() : { ...this.proxyHeaders };
-    const host = require('net').isIPv6(opts.host) ? `[${opts.host}]` : opts.host;
+    const host = net.isIPv6(opts.host) ? `[${opts.host}]` : opts.host;
     let payload = `CONNECT ${host}:${opts.port} HTTP/1.1\r\n`;
 
     // Add proxy authentication if needed
@@ -184,8 +185,7 @@ class CustomHttpsProxyAgent extends HttpsProxyAgent {
         const tlsOptions = {
           socket,
           servername:
-            opts.servername ||
-            (opts.host && !require('net').isIP(opts.host) ? opts.host : undefined),
+            opts.servername || (opts.host && !net.isIP(opts.host) ? opts.host : undefined),
           ...this.destinationTLSOptions, // Apply our stored TLS options
           // Allow per-request options to override
           ...(opts.ca && { ca: opts.ca }),
@@ -193,7 +193,13 @@ class CustomHttpsProxyAgent extends HttpsProxyAgent {
           ...(opts.key && { key: opts.key })
         };
 
-        return tls.connect(tlsOptions);
+        try {
+          return tls.connect(tlsOptions);
+        } catch (error) {
+          // Clean up socket on TLS connection error
+          socket.destroy();
+          throw error;
+        }
       }
 
       return socket;
@@ -201,7 +207,7 @@ class CustomHttpsProxyAgent extends HttpsProxyAgent {
 
     // Handle non-200 status codes (same as parent)
     socket.destroy();
-    const fakeSocket = require('net').Socket({ writable: false });
+    const fakeSocket = new net.Socket({ writable: false });
     fakeSocket.readable = true;
     req.once('socket', s => {
       s.push(buffered);
