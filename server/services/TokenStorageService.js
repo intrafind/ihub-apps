@@ -263,13 +263,16 @@ class TokenStorageService {
    * Generic encryption for simple strings (e.g., API keys)
    * Uses AES-256-GCM with unique IV per encryption
    * 
+   * Format: ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
+   * This format makes encrypted values easily identifiable and includes metadata
+   * 
    * Note: Uses GCM mode instead of CBC (used in encryptTokens) because:
    * - Provides authenticated encryption (integrity + confidentiality)
    * - No padding oracle vulnerabilities
    * - Better for simple string encryption without context binding
    * 
    * @param {string} plaintext - The text to encrypt
-   * @returns {string} Base64-encoded encrypted data with IV and auth tag
+   * @returns {string} Encrypted data in ENC[...] format with metadata
    */
   encryptString(plaintext) {
     if (!plaintext || typeof plaintext !== 'string') {
@@ -289,11 +292,10 @@ class TokenStorageService {
       // Get the authentication tag
       const authTag = cipher.getAuthTag();
 
-      // Combine IV, auth tag, and encrypted data
-      const combined = Buffer.concat([iv, authTag, Buffer.from(encrypted, 'base64')]);
+      // Format: ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
+      const encryptedValue = `ENC[AES256_GCM,data:${encrypted},iv:${iv.toString('base64')},tag:${authTag.toString('base64')},type:str]`;
 
-      // Return as base64 string
-      return combined.toString('base64');
+      return encryptedValue;
     } catch (error) {
       console.error('❌ Error encrypting string:', error.message);
       throw new Error('Failed to encrypt string');
@@ -302,7 +304,8 @@ class TokenStorageService {
 
   /**
    * Generic decryption for simple strings (e.g., API keys)
-   * @param {string} encryptedData - Base64-encoded encrypted data with IV and auth tag
+   * Supports both new ENC[...] format and legacy base64 format
+   * @param {string} encryptedData - Encrypted data in ENC[...] format or legacy base64
    * @returns {string} Decrypted plaintext
    */
   decryptString(encryptedData) {
@@ -311,29 +314,13 @@ class TokenStorageService {
     }
 
     try {
-      // Decode from base64
-      const combined = Buffer.from(encryptedData, 'base64');
-
-      // Extract IV (first 16 bytes)
-      const iv = combined.subarray(0, 16);
-
-      // Extract auth tag (next 16 bytes)
-      const authTag = combined.subarray(16, 32);
-
-      // Extract encrypted data (remaining bytes)
-      const encrypted = combined.subarray(32);
-
-      const key = Buffer.from(this.encryptionKey, 'hex');
-
-      // Create decipher
-      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-      decipher.setAuthTag(authTag);
-
-      // Decrypt the data
-      let decrypted = decipher.update(encrypted, undefined, 'utf8');
-      decrypted += decipher.final('utf8');
-
-      return decrypted;
+      // Check if it's the new ENC[...] format
+      if (encryptedData.startsWith('ENC[') && encryptedData.endsWith(']')) {
+        return this._decryptEncFormat(encryptedData);
+      } else {
+        // Legacy format: base64 encoded with IV, tag, and data concatenated
+        return this._decryptLegacyFormat(encryptedData);
+      }
     } catch (error) {
       console.error('❌ Error decrypting string:', error.message);
       throw new Error('Failed to decrypt string. The encryption key may have changed.');
@@ -341,7 +328,77 @@ class TokenStorageService {
   }
 
   /**
+   * Decrypt data in ENC[AES256_GCM,data:...,iv:...,tag:...,type:str] format
+   * @private
+   */
+  _decryptEncFormat(encryptedData) {
+    // Parse ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
+    const encContent = encryptedData.slice(4, -1); // Remove "ENC[" and "]"
+    const parts = encContent.split(',');
+    
+    const algorithm = parts[0];
+    if (algorithm !== 'AES256_GCM') {
+      throw new Error(`Unsupported encryption algorithm: ${algorithm}`);
+    }
+
+    const dataMatch = encContent.match(/data:([^,]+)/);
+    const ivMatch = encContent.match(/iv:([^,]+)/);
+    const tagMatch = encContent.match(/tag:([^,]+)/);
+
+    if (!dataMatch || !ivMatch || !tagMatch) {
+      throw new Error('Invalid ENC format: missing required fields');
+    }
+
+    const encrypted = Buffer.from(dataMatch[1], 'base64');
+    const iv = Buffer.from(ivMatch[1], 'base64');
+    const authTag = Buffer.from(tagMatch[1], 'base64');
+
+    const key = Buffer.from(this.encryptionKey, 'hex');
+
+    // Create decipher
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+
+    // Decrypt the data
+    let decrypted = decipher.update(encrypted, undefined, 'utf8');
+    decrypted += decipher.final('utf8');
+
+    return decrypted;
+  }
+
+  /**
+   * Decrypt data in legacy base64 format (for backwards compatibility)
+   * @private
+   */
+  _decryptLegacyFormat(encryptedData) {
+    // Decode from base64
+    const combined = Buffer.from(encryptedData, 'base64');
+
+    // Extract IV (first 16 bytes)
+    const iv = combined.subarray(0, 16);
+
+    // Extract auth tag (next 16 bytes)
+    const authTag = combined.subarray(16, 32);
+
+    // Extract encrypted data (remaining bytes)
+    const encrypted = combined.subarray(32);
+
+    const key = Buffer.from(this.encryptionKey, 'hex');
+
+    // Create decipher
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+
+    // Decrypt the data
+    let decrypted = decipher.update(encrypted, undefined, 'utf8');
+    decrypted += decipher.final('utf8');
+
+    return decrypted;
+  }
+
+  /**
    * Check if a string appears to be encrypted
+   * Supports both ENC[...] format and legacy base64 format
    * @param {string} value - The value to check
    * @returns {boolean} True if the value appears to be encrypted
    */
@@ -350,6 +407,12 @@ class TokenStorageService {
       return false;
     }
 
+    // Check for new ENC[...] format
+    if (value.startsWith('ENC[') && value.endsWith(']')) {
+      return true;
+    }
+
+    // Check for legacy base64 format
     // Encrypted values contain: IV (16 bytes) + auth tag (16 bytes) + encrypted data (at least 1 byte)
     // Minimum 33 bytes = 44 base64 characters (with padding)
     // In practice, encrypted values will be longer due to actual data

@@ -12,6 +12,19 @@ import tokenStorageService from './services/TokenStorageService.js';
 const JWT_AUTH_REQUIRED = 'JWT_AUTH_REQUIRED';
 
 /**
+ * Sanitize user-provided input for logging to prevent log injection
+ * @param {string} input - User input to sanitize
+ * @returns {string} Sanitized input safe for logging
+ */
+function sanitizeForLog(input) {
+  if (!input || typeof input !== 'string') {
+    return String(input);
+  }
+  // Remove control characters and newlines to prevent log injection
+  return input.replace(/[\n\r\t\x00-\x1F\x7F]/g, '');
+}
+
+/**
  * Helper function to get API key for a model
  * Checks in this order:
  * 1. Model's stored encrypted API key (from model config)
@@ -34,7 +47,7 @@ export async function getApiKeyForModel(modelId) {
     // Find the model by ID
     const model = models.find(m => m.id === modelId);
     if (!model) {
-      console.error(`Model not found: ${modelId}`);
+      console.error(`Model not found: ${sanitizeForLog(modelId)}`);
       return null;
     }
 
@@ -50,15 +63,18 @@ export async function getApiKeyForModel(modelId) {
 
         if (isEncrypted) {
           const decryptedKey = tokenStorageService.decryptString(model.apiKey);
-          console.log(`Using stored encrypted API key for model: ${modelId}`);
+          console.log(`Using stored encrypted API key for model: ${sanitizeForLog(modelId)}`);
           return decryptedKey;
         } else {
           // If not encrypted, use as-is (for backwards compatibility during migration)
-          console.log(`Using stored plaintext API key for model: ${modelId}`);
+          console.log(`Using stored plaintext API key for model: ${sanitizeForLog(modelId)}`);
           return model.apiKey;
         }
       } catch (error) {
-        console.error(`Failed to decrypt API key for model ${modelId}:`, error.message);
+        console.error(
+          `Failed to decrypt API key for model ${sanitizeForLog(modelId)}:`,
+          error.message
+        );
         // Continue to fallback options
       }
     }

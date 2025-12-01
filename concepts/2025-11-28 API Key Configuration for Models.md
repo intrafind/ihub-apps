@@ -46,8 +46,8 @@ class TokenStorageService {
   decryptTokens(encryptedData, userId, serviceName)
   
   // New generic methods for API keys
-  encryptString(plaintext)  // Returns base64-encoded encrypted data
-  decryptString(encryptedData)  // Returns plaintext
+  encryptString(plaintext)  // Returns ENC[...] format with metadata
+  decryptString(encryptedData)  // Supports both new and legacy formats
   isEncrypted(value)  // Checks if value appears to be encrypted
 }
 ```
@@ -64,13 +64,36 @@ class TokenStorageService {
 - Authentication tag for integrity verification
 - Encryption key from TOKEN_ENCRYPTION_KEY environment variable
 
-**Data Format:**
-Encrypted data is stored as base64 string containing:
-- 16 bytes: Initialization Vector (IV)
-- 16 bytes: Authentication Tag
-- Remaining: Encrypted data
+**Encrypted Data Format:**
 
-#### 2. JWT_AUTH_REQUIRED Constant
+New format (following SOPS-style standards):
+```
+ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
+```
+
+Benefits:
+- Easily identifiable as encrypted (starts with `ENC[`)
+- Contains metadata about encryption algorithm
+- Separates IV, auth tag, and encrypted data clearly
+- Type information for future extensibility
+
+Example:
+```
+ENC[AES256_GCM,data:5L6F6rhHxu5w9qPdzMH4qHe0,iv:agSRTClUGtZpS9oO5TJjTw==,tag:G0F8JxSl1hLzYSD01hl4RA==,type:str]
+```
+
+Legacy format (backwards compatible):
+- Base64 string containing: IV (16 bytes) + auth tag (16 bytes) + encrypted data
+- Automatically detected and decrypted
+
+#### 2. Log Injection Prevention
+
+Added `sanitizeForLog()` helper function to prevent log injection attacks:
+- Removes control characters and newlines from user-provided input
+- Applied to all console.log/error statements using modelId
+- Prevents malicious model IDs from injecting fake log entries
+
+#### 3. JWT_AUTH_REQUIRED Constant
 
 Fixed undefined constant issue:
 ```javascript
