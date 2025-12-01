@@ -32,7 +32,9 @@ class StreamingHandler {
       return Readable.toWeb(response.body);
     }
 
-    throw new Error('Response body is not a readable stream');
+    throw new Error(
+      'Response body is not a readable stream. Expected Web Streams API or Node.js stream.'
+    );
   }
 
   async executeStreamingResponse({
