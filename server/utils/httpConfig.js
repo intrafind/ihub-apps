@@ -3,10 +3,70 @@
  * Provides centralized configuration for HTTP clients including SSL and proxy settings
  */
 import https from 'https';
+import tls from 'tls';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import configCache from '../configCache.js';
 import config from '../config.js';
+
+/**
+ * Custom HttpsProxyAgent that properly applies SSL options to destination connections
+ * Fixes the issue where rejectUnauthorized and other TLS options are not applied
+ * to the destination server when using a proxy.
+ */
+class CustomHttpsProxyAgent extends HttpsProxyAgent {
+  constructor(proxy, opts) {
+    super(proxy, opts);
+    // Store TLS options that should be applied to destination connections
+    this.destinationTLSOptions = {};
+    if (opts) {
+      // Extract TLS-related options that should apply to destination
+      const tlsKeys = [
+        'rejectUnauthorized',
+        'ca',
+        'cert',
+        'key',
+        'pfx',
+        'passphrase',
+        'ciphers',
+        'secureProtocol',
+        'secureOptions',
+        'minVersion',
+        'maxVersion'
+      ];
+      for (const key of tlsKeys) {
+        if (key in opts) {
+          this.destinationTLSOptions[key] = opts[key];
+        }
+      }
+    }
+  }
+
+  async connect(req, opts) {
+    // Store original connect for potential fallback
+    const originalConnect = tls.connect;
+
+    // Temporarily override tls.connect to inject our TLS options
+    tls.connect = (...args) => {
+      const [options, ...rest] = args;
+      // Merge our destination TLS options into the connection options
+      const mergedOptions = {
+        ...options,
+        ...this.destinationTLSOptions
+      };
+      return originalConnect.call(tls, mergedOptions, ...rest);
+    };
+
+    try {
+      // Call parent connect method
+      const result = await super.connect(req, opts);
+      return result;
+    } finally {
+      // Restore original tls.connect
+      tls.connect = originalConnect;
+    }
+  }
+}
 
 /**
  * Get SSL configuration from platform config
@@ -152,7 +212,8 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
       const agentOptions = shouldIgnoreSSL ? { rejectUnauthorized: false } : {};
 
       if (isHttps) {
-        return new HttpsProxyAgent(proxyUrl, agentOptions);
+        // Use custom agent that properly applies SSL options to destination connections
+        return new CustomHttpsProxyAgent(proxyUrl, agentOptions);
       } else {
         return new HttpProxyAgent(proxyUrl, agentOptions);
       }
