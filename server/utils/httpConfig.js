@@ -15,17 +15,21 @@ import config from '../config.js';
 export function getSSLConfig() {
   const platformConfig = configCache.getPlatform() || {};
   const sslConfig = {
-     ignoreInvalidCertificates: platformConfig.ssl?.ignoreInvalidCertificates || false
-   };
+    ignoreInvalidCertificates: platformConfig.ssl?.ignoreInvalidCertificates || false
+  };
   // Log SSL config on first access for debugging
   if (!getSSLConfig._logged) {
-    console.log(`🔒 SSL Configuration: ignoreInvalidCertificates = ${sslConfig.ignoreInvalidCertificates}`);
+    console.log(
+      `🔒 SSL Configuration: ignoreInvalidCertificates = ${sslConfig.ignoreInvalidCertificates}`
+    );
 
     // Set NODE_TLS_REJECT_UNAUTHORIZED environment variable if SSL verification should be ignored
     // This is necessary for proxy agents (https-proxy-agent v7+) to properly ignore SSL errors
     if (sslConfig.ignoreInvalidCertificates) {
       process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-      console.log('⚠️  NODE_TLS_REJECT_UNAUTHORIZED=0 set globally (SSL certificate verification disabled)');
+      console.log(
+        '⚠️  NODE_TLS_REJECT_UNAUTHORIZED=0 set globally (SSL certificate verification disabled)'
+      );
     }
 
     getSSLConfig._logged = true;
@@ -163,7 +167,7 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     console.log(`Using proxy ${proxyUrl} for URL: ${url}`);
     if (shouldIgnoreSSL) {
       console.log(`SSL certificate verification disabled (rejectUnauthorized: false)`);
-    }    
+    }
 
     try {
       // For HttpsProxyAgent v7+, rejectUnauthorized is passed as a top-level option
