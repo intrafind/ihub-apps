@@ -154,7 +154,9 @@ Check that:
 
 ### SSL Certificate Issues
 
-If you encounter SSL certificate errors with your proxy, you can configure the application to ignore invalid certificates:
+**Fixed in v4.3.9+**: SSL certificate validation settings now properly apply to destination servers when using proxy mode.
+
+If you encounter SSL certificate errors with destination servers (not the proxy itself) when using a proxy, you can configure the application to ignore invalid certificates:
 
 ```json
 {
@@ -168,7 +170,14 @@ If you encounter SSL certificate errors with your proxy, you can configure the a
 }
 ```
 
-**Warning**: Only use `ignoreInvalidCertificates` in development or when you trust your proxy server.
+This configuration will:
+- Use standard SSL validation for the connection to the proxy server
+- Ignore SSL certificate errors when the proxy connects to the destination server
+- Apply to all HTTPS requests routed through the proxy
+
+**Warning**: Only use `ignoreInvalidCertificates` in development or when you trust your network environment and destination servers.
+
+**Note**: If the proxy server itself uses a self-signed certificate, you may need to add the proxy's certificate to your system's trust store. See [SSL Certificates Documentation](ssl-certificates.md) for details.
 
 ### Debugging Proxy Issues
 

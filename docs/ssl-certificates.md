@@ -4,6 +4,34 @@ When iHub Apps needs to communicate with external services that use self-signed 
 
 This guide covers how administrators can configure the application to work with self-signed certificates in different scenarios.
 
+## Important: Proxy Mode SSL Configuration
+
+**Fixed in v4.3.9+**: SSL certificate validation settings now properly apply when using proxy mode. Previous versions had an issue where the `ignoreInvalidCertificates` setting was not being applied to destination servers when routing through a proxy.
+
+When using iHub Apps with a proxy server (configured via `platform.json` or environment variables `HTTP_PROXY`/`HTTPS_PROXY`), SSL certificate validation can be controlled through the platform configuration:
+
+```json
+{
+  "ssl": {
+    "ignoreInvalidCertificates": true
+  },
+  "proxy": {
+    "enabled": true,
+    "https": "http://proxy.example.com:8080"
+  }
+}
+```
+
+With this configuration, iHub Apps will:
+1. Connect to the proxy server using standard SSL validation
+2. Establish a CONNECT tunnel through the proxy
+3. Ignore SSL certificate errors when connecting to the destination server (if `ignoreInvalidCertificates` is true)
+
+This is particularly useful in corporate environments where:
+- Internal services use self-signed certificates
+- All outbound traffic must go through a corporate proxy
+- You need both proxy support AND SSL ignore functionality
+
 ## Understanding the Problem
 
 Node.js applications, including iHub Apps, use the system's certificate store to verify SSL/TLS connections. When connecting to a service with a self-signed certificate, you may encounter errors like:

@@ -1,14 +1,89 @@
 # Proxy Support for External Services
 
 **Date:** 2025-11-20  
-**Status:** Implemented (Fixed 2025-11-28)  
+**Status:** Implemented (Fixed 2025-11-28, SSL Fix 2025-12-01)  
 **Type:** Feature Enhancement
 
 ## Overview
 
 This feature adds comprehensive proxy support for all external HTTP/HTTPS calls made by the iHub Apps platform. This is essential for customers running iHub internally where all external calls must go through a corporate proxy.
 
-## Bug Fix (2025-11-28)
+## Bug Fix: SSL Certificate Validation in Proxy Mode (2025-12-01)
+
+### Issue
+The `ssl.ignoreInvalidCertificates` setting was not being applied to destination servers when using proxy mode. When a proxy was configured and `ignoreInvalidCertificates: true` was set, SSL certificate validation was still being enforced for the destination server connections through the proxy.
+
+### Root Cause
+The `https-proxy-agent` library (v7.0.6) does not automatically apply TLS options (like `rejectUnauthorized: false`) from the agent constructor to the destination TLS connection. When creating the HTTPS connection through the proxy:
+
+1. The agent stores options in `this.connectOpts` - these are used for connecting TO the proxy
+2. The destination TLS connection is created using `tls.connect({...opts, socket})` where `opts` comes from the HTTP client, NOT from `this.connectOpts`
+3. This means `rejectUnauthorized: false` was only applied to the proxy connection, not the destination
+
+### Fix
+Created a `CustomHttpsProxyAgent` class that extends `HttpsProxyAgent` and overrides the `connect()` method to properly inject TLS options into destination connections:
+
+```javascript
+class CustomHttpsProxyAgent extends HttpsProxyAgent {
+  constructor(proxy, opts) {
+    super(proxy, opts);
+    // Store TLS options that should be applied to destination
+    this.destinationTLSOptions = {};
+    if (opts) {
+      const tlsKeys = ['rejectUnauthorized', 'ca', 'cert', 'key', ...];
+      for (const key of tlsKeys) {
+        if (key in opts) {
+          this.destinationTLSOptions[key] = opts[key];
+        }
+      }
+    }
+  }
+
+  async connect(req, opts) {
+    // Temporarily override tls.connect to inject our TLS options
+    const originalConnect = tls.connect;
+    tls.connect = (...args) => {
+      const [options, ...rest] = args;
+      const mergedOptions = { ...options, ...this.destinationTLSOptions };
+      return originalConnect.call(tls, mergedOptions, ...rest);
+    };
+    
+    try {
+      return await super.connect(req, opts);
+    } finally {
+      tls.connect = originalConnect;
+    }
+  }
+}
+```
+
+This approach:
+- Preserves all TLS-related options from the agent constructor
+- Injects them into the destination TLS connection when the proxy establishes the tunnel
+- Uses a temporary override pattern to avoid modifying the library directly
+- Restores the original `tls.connect` after completion
+
+### Files Modified
+- `server/utils/httpConfig.js` - Added `CustomHttpsProxyAgent` class and updated `createAgent()` to use it
+- `docs/ssl-certificates.md` - Added section about proxy mode SSL configuration
+- `docs/proxy-configuration.md` - Updated SSL certificate section with fix notes
+
+### Configuration Example
+```json
+{
+  "ssl": {
+    "ignoreInvalidCertificates": true
+  },
+  "proxy": {
+    "enabled": true,
+    "https": "http://proxy.example.com:8080"
+  }
+}
+```
+
+Now correctly ignores SSL certificates for destination servers when routing through the proxy.
+
+## Bug Fix: Proxy Not Working for LLM Requests (2025-11-28)
 
 ### Issue
 The proxy configuration was not working for LLM API requests. Users reported connection timeout errors when proxy was enabled:
