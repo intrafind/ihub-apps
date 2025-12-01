@@ -13,6 +13,9 @@ import config from '../config.js';
  * Custom HttpsProxyAgent that properly applies SSL options to destination connections
  * Fixes the issue where rejectUnauthorized and other TLS options are not applied
  * to the destination server when using a proxy.
+ *
+ * This implementation uses a safer approach that doesn't globally override tls.connect,
+ * instead it creates the destination TLS connection directly with merged options.
  */
 class CustomHttpsProxyAgent extends HttpsProxyAgent {
   constructor(proxy, opts) {
@@ -43,28 +46,87 @@ class CustomHttpsProxyAgent extends HttpsProxyAgent {
   }
 
   async connect(req, opts) {
-    // Store original connect for potential fallback
-    const originalConnect = tls.connect;
-
-    // Temporarily override tls.connect to inject our TLS options
-    tls.connect = (...args) => {
-      const [options, ...rest] = args;
-      // Merge our destination TLS options into the connection options
-      const mergedOptions = {
-        ...options,
-        ...this.destinationTLSOptions
-      };
-      return originalConnect.call(tls, mergedOptions, ...rest);
-    };
-
-    try {
-      // Call parent connect method
-      const result = await super.connect(req, opts);
-      return result;
-    } finally {
-      // Restore original tls.connect
-      tls.connect = originalConnect;
+    const { proxy } = this;
+    if (!opts.host) {
+      throw new TypeError('No "host" provided');
     }
+
+    // Create socket connection to proxy (reuse parent's logic)
+    let socket;
+    if (proxy.protocol === 'https:') {
+      socket = tls.connect({
+        ...this.connectOpts,
+        servername:
+          this.connectOpts.host && !require('net').isIP(this.connectOpts.host)
+            ? this.connectOpts.host
+            : undefined
+      });
+    } else {
+      socket = require('net').connect(this.connectOpts);
+    }
+
+    // Build CONNECT request
+    const headers =
+      typeof this.proxyHeaders === 'function' ? this.proxyHeaders() : { ...this.proxyHeaders };
+    const host = require('net').isIPv6(opts.host) ? `[${opts.host}]` : opts.host;
+    let payload = `CONNECT ${host}:${opts.port} HTTP/1.1\r\n`;
+
+    // Add proxy authentication if needed
+    if (proxy.username || proxy.password) {
+      const auth = `${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`;
+      headers['Proxy-Authorization'] = `Basic ${Buffer.from(auth).toString('base64')}`;
+    }
+
+    headers.Host = `${host}:${opts.port}`;
+    if (!headers['Proxy-Connection']) {
+      headers['Proxy-Connection'] = this.keepAlive ? 'Keep-Alive' : 'close';
+    }
+
+    for (const name of Object.keys(headers)) {
+      payload += `${name}: ${headers[name]}\r\n`;
+    }
+
+    // Import parse proxy response from the parent library
+    const { parseProxyResponse } = await import('https-proxy-agent/dist/parse-proxy-response.js');
+    const proxyResponsePromise = parseProxyResponse(socket);
+    socket.write(`${payload}\r\n`);
+
+    const { connect, buffered } = await proxyResponsePromise;
+    req.emit('proxyConnect', connect);
+    this.emit('proxyConnect', connect, req);
+
+    if (connect.statusCode === 200) {
+      req.once('socket', s => s.resume());
+
+      if (opts.secureEndpoint) {
+        // Create TLS connection to destination with merged options
+        const tlsOptions = {
+          socket,
+          servername:
+            opts.servername ||
+            (opts.host && !require('net').isIP(opts.host) ? opts.host : undefined),
+          ...this.destinationTLSOptions, // Apply our stored TLS options
+          // Allow per-request options to override
+          ...(opts.ca && { ca: opts.ca }),
+          ...(opts.cert && { cert: opts.cert }),
+          ...(opts.key && { key: opts.key })
+        };
+
+        return tls.connect(tlsOptions);
+      }
+
+      return socket;
+    }
+
+    // Handle non-200 status codes (same as parent)
+    socket.destroy();
+    const fakeSocket = require('net').Socket({ writable: false });
+    fakeSocket.readable = true;
+    req.once('socket', s => {
+      s.push(buffered);
+      s.push(null);
+    });
+    return fakeSocket;
   }
 }
 
