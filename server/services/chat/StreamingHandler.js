@@ -7,10 +7,34 @@ import { createParser } from 'eventsource-parser';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
+import { Readable } from 'stream';
 
 class StreamingHandler {
   constructor() {
     this.errorHandler = new ErrorHandler();
+  }
+
+  /**
+   * Convert response body to Web Streams ReadableStream
+   * Handles compatibility between native fetch (Web Streams) and node-fetch (Node.js streams)
+   * @param {Response} response - The fetch response object
+   * @returns {ReadableStream} Web Streams ReadableStream
+   */
+  getReadableStream(response) {
+    // Check if body already has getReader (native fetch with Web Streams API)
+    if (response.body && typeof response.body.getReader === 'function') {
+      return response.body;
+    }
+
+    // node-fetch returns a Node.js stream - convert to Web Streams
+    if (response.body && typeof response.body.pipe === 'function') {
+      // Use Node.js Readable.toWeb() to convert Node.js stream to Web Streams ReadableStream
+      return Readable.toWeb(response.body);
+    }
+
+    throw new Error(
+      'Response body is not a readable stream. Expected Web Streams API or Node.js stream.'
+    );
   }
 
   async executeStreamingResponse({
@@ -128,7 +152,8 @@ class StreamingHandler {
         return;
       }
 
-      const reader = llmResponse.body.getReader();
+      const readableStream = this.getReadableStream(llmResponse);
+      const reader = readableStream.getReader();
       const decoder = new TextDecoder();
       let fullResponse = '';
 
