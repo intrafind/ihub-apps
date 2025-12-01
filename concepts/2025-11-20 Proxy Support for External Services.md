@@ -40,18 +40,22 @@ class CustomHttpsProxyAgent extends HttpsProxyAgent {
   }
 
   async connect(req, opts) {
-    // Temporarily override tls.connect to inject our TLS options
-    const originalConnect = tls.connect;
-    tls.connect = (...args) => {
-      const [options, ...rest] = args;
-      const mergedOptions = { ...options, ...this.destinationTLSOptions };
-      return originalConnect.call(tls, mergedOptions, ...rest);
-    };
+    // Re-implement proxy CONNECT handshake with proper TLS option handling
+    // ... (proxy connection and CONNECT request handling)
     
-    try {
-      return await super.connect(req, opts);
-    } finally {
-      tls.connect = originalConnect;
+    if (connect.statusCode === 200 && opts.secureEndpoint) {
+      // Create TLS connection to destination with merged options
+      const tlsOptions = {
+        socket,
+        servername: opts.servername || (opts.host && !net.isIP(opts.host) ? opts.host : undefined),
+        ...this.destinationTLSOptions,  // Apply our stored TLS options
+        // Allow per-request options to override
+        ...(opts.ca && { ca: opts.ca }),
+        ...(opts.cert && { cert: opts.cert }),
+        ...(opts.key && { key: opts.key })
+      };
+      
+      return tls.connect(tlsOptions);
     }
   }
 }
@@ -59,9 +63,9 @@ class CustomHttpsProxyAgent extends HttpsProxyAgent {
 
 This approach:
 - Preserves all TLS-related options from the agent constructor
-- Injects them into the destination TLS connection when the proxy establishes the tunnel
-- Uses a temporary override pattern to avoid modifying the library directly
-- Restores the original `tls.connect` after completion
+- Directly injects them into the destination TLS connection creation
+- Avoids global patching or monkey-patching for better concurrency safety
+- Allows per-request TLS options to override agent defaults
 
 ### Files Modified
 - `server/utils/httpConfig.js` - Added `CustomHttpsProxyAgent` class and updated `createAgent()` to use it
