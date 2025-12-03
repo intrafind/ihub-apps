@@ -490,6 +490,7 @@ const AppFormEditor = ({
                   className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                     validationErrors.tokenLimit ? 'border-red-300' : ''
                   }`}
+                  required={isFieldRequired('tokenLimit', jsonSchema)}
                 />
                 {validationErrors.tokenLimit && (
                   <p className="mt-1 text-sm text-red-600">{validationErrors.tokenLimit}</p>
