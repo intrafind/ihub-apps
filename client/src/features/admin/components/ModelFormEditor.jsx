@@ -233,7 +233,10 @@ const ModelFormEditor = ({
             <div className="grid grid-cols-6 gap-6">
               <div className="col-span-6 sm:col-span-2">
                 <label htmlFor="tokenLimit" className="block text-sm font-medium text-gray-700">
-                  {t('admin.models.fields.tokenLimit')} <span className="text-red-500">*</span>
+                  {t('admin.models.fields.tokenLimit')}
+                  {isFieldRequired('tokenLimit', jsonSchema) && (
+                    <span className="text-red-500"> *</span>
+                  )}
                 </label>
                 <input
                   type="number"
@@ -245,7 +248,7 @@ const ModelFormEditor = ({
                   className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md ${
                     errors.tokenLimit ? 'border-red-300 text-red-900' : ''
                   }`}
-                  required
+                  required={isFieldRequired('tokenLimit', jsonSchema)}
                 />
                 {errors.tokenLimit && (
                   <p className="mt-2 text-sm text-red-600">{errors.tokenLimit}</p>
