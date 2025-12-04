@@ -7,6 +7,7 @@ language = "en"
 
 [build]
 create-missing = false
+build-dir = "book/epub"
 
 [output.epub]
 title = "iHub Apps Documentation"
@@ -16,4 +17,4 @@ language = "en"
 publisher = "IntraFind Software AG"
 use-default-css = false
 additional-css = []
-output-file = "book/epub/iHub-Apps-Documentation.epub"
+output-file = "iHub-Apps-Documentation.epub"
