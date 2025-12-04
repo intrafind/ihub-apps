@@ -63,6 +63,7 @@ jobs:
           else
             echo "mdbook-mermaid already installed"
           fi
+        shell: bash
 
       - name: Install dependencies
         run: |
@@ -158,6 +159,7 @@ jobs:
           else
             echo "mdbook-mermaid already installed"
           fi
+        shell: bash
 
       - name: Install dependencies
         run: |
