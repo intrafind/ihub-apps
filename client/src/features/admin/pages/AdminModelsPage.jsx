@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -388,9 +388,8 @@ const AdminModelsPage = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {filteredModels.map(model => (
-                        <>
+                        <React.Fragment key={model.id}>
                           <tr
-                            key={model.id}
                             className="hover:bg-gray-50 cursor-pointer"
                             onClick={() => handleModelClick(model)}
                           >
@@ -565,7 +564,7 @@ const AdminModelsPage = () => {
                             </td>
                           </tr>
                         )}
-                        </>
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>

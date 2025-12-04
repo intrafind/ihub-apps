@@ -18,6 +18,9 @@ const AdminModelEditPage = () => {
   const location = useLocation();
   const isNewModel = modelId === 'new';
 
+  // Constants
+  const API_KEY_PLACEHOLDER = '••••••••';
+
   const [loading, setLoading] = useState(!isNewModel);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -116,7 +119,7 @@ const AdminModelEditPage = () => {
       // Handle API key display - show placeholder if key is set
       if (model.apiKeySet) {
         formDataObj.apiKeySet = true;
-        formDataObj.apiKey = model.apiKeyMasked || '••••••••';
+        formDataObj.apiKey = model.apiKeyMasked || API_KEY_PLACEHOLDER;
       } else {
         formDataObj.apiKeySet = false;
         formDataObj.apiKey = '';
@@ -189,10 +192,10 @@ const AdminModelEditPage = () => {
       // - If it's the masked placeholder and a key was previously set, keep it (backend will preserve)
       // - If it's empty and a key was set, remove it (user wants to clear it)
       // - If it's a new value, send it (user is setting/updating the key)
-      if (dataToSend.apiKey === '••••••••' || dataToSend.apiKey === '') {
-        if (data.apiKeySet && dataToSend.apiKey === '••••••••') {
+      if (dataToSend.apiKey === API_KEY_PLACEHOLDER || dataToSend.apiKey === '') {
+        if (data.apiKeySet && dataToSend.apiKey === API_KEY_PLACEHOLDER) {
           // Keep the placeholder so backend knows to preserve the existing key
-          dataToSend.apiKey = '••••••••';
+          dataToSend.apiKey = API_KEY_PLACEHOLDER;
         } else if (dataToSend.apiKey === '') {
           // Empty string - remove the field to avoid confusion
           delete dataToSend.apiKey;
@@ -203,9 +206,9 @@ const AdminModelEditPage = () => {
       delete dataToSend.apiKeySet;
       delete dataToSend.apiKeyMasked;
 
-      // Remove empty fields
+      // Remove empty and undefined fields
       Object.keys(dataToSend).forEach(key => {
-        if (dataToSend[key] === undefined) {
+        if (dataToSend[key] === '' || dataToSend[key] === undefined) {
           delete dataToSend[key];
         }
       });
