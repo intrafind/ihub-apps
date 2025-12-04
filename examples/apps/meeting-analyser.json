@@ -1,0 +1,60 @@
+{
+  "id": "meeting-analyser",
+  "order": 10,
+  "name": {
+    "en": "Meeting Analyser",
+    "de": "Meeting-Analyse"
+  },
+  "description": {
+    "en": "Upload and analyze meeting recordings with AI",
+    "de": "Meeting-Aufzeichnungen mit KI analysieren"
+  },
+  "color": "#10B981",
+  "icon": "camera",
+  "system": {
+    "en": "You are an AI meeting analysis assistant. Your role is to analyze files that users upload. Summarize the content so that only results of the discussion are formed as bullet points and also list next steps with corresponding responsibilities.",
+    "de": "Du bist ein KI-Meeting-Analyseassistent. Deine Aufgabe ist es, von Benutzern hochgeladene Dateien zu analysieren. Fasse die Inhalte so zusammen, dass wirklich nur Ergebnisse der Diskussion als Stichpunkte gebildet werden und zudem noch Nächste Schritte aufgelistet werden mit entsprechenden Verantwortlichkeiten."
+  },
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "detailed",
+  "preferredTemperature": 0.7,
+  "tokenLimit": 32768,
+  "upload": {
+    "enabled": true,
+    "imageUpload": {
+      "enabled": false
+    },
+    "fileUpload": {
+      "enabled": true,
+      "maxFileSizeMB": 10,
+      "supportedTextFormats": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/json",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/xml",
+        "message/rfc822",
+        "message/rfc2822",
+        "application/eml"
+      ],
+      "supportedPdfFormats": [
+        "application/pdf"
+      ]
+    },
+    "allowMultiple": true
+  },
+  "enabled": true,
+  "allowEmptyContent": false,
+  "sendChatHistory": true,
+  "inputMode": {
+    "type": "multiline",
+    "rows": 5,
+    "microphone": {
+      "enabled": false
+    }
+  }
+}
