@@ -66,8 +66,7 @@ export const modelConfigSchema = z
     config: z.record(z.any()).optional(), // Allow provider-specific configuration
 
     // API Key configuration - stored encrypted on server
-    apiKey: z.string().optional(), // Encrypted API key for this model
-    apiKeyEncrypted: z.boolean().optional() // Flag to indicate if apiKey is encrypted
+    apiKey: z.string().optional() // Encrypted API key for this model
   })
   .strict(); // Use strict instead of passthrough for better validation
 

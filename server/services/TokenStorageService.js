@@ -314,13 +314,7 @@ class TokenStorageService {
     }
 
     try {
-      // Check if it's the new ENC[...] format
-      if (encryptedData.startsWith('ENC[') && encryptedData.endsWith(']')) {
-        return this._decryptEncFormat(encryptedData);
-      } else {
-        // Legacy format: base64 encoded with IV, tag, and data concatenated
-        return this._decryptLegacyFormat(encryptedData);
-      }
+      return this._decrypt(encryptedData);
     } catch (error) {
       console.error('❌ Error decrypting string:', error.message);
       throw new Error('Failed to decrypt string. The encryption key may have changed.');
@@ -331,7 +325,7 @@ class TokenStorageService {
    * Decrypt data in ENC[AES256_GCM,data:...,iv:...,tag:...,type:str] format
    * @private
    */
-  _decryptEncFormat(encryptedData) {
+  _decrypt(encryptedData) {
     // Parse ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
     const encContent = encryptedData.slice(4, -1); // Remove "ENC[" and "]"
 
@@ -374,36 +368,6 @@ class TokenStorageService {
   }
 
   /**
-   * Decrypt data in legacy base64 format (for backwards compatibility)
-   * @private
-   */
-  _decryptLegacyFormat(encryptedData) {
-    // Decode from base64
-    const combined = Buffer.from(encryptedData, 'base64');
-
-    // Extract IV (first 16 bytes)
-    const iv = combined.subarray(0, 16);
-
-    // Extract auth tag (next 16 bytes)
-    const authTag = combined.subarray(16, 32);
-
-    // Extract encrypted data (remaining bytes)
-    const encrypted = combined.subarray(32);
-
-    const key = Buffer.from(this.encryptionKey, 'hex');
-
-    // Create decipher
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
-
-    // Decrypt the data
-    let decrypted = decipher.update(encrypted, undefined, 'utf8');
-    decrypted += decipher.final('utf8');
-
-    return decrypted;
-  }
-
-  /**
    * Check if a string appears to be encrypted
    * Supports both ENC[...] format and legacy base64 format
    * @param {string} value - The value to check
@@ -419,17 +383,7 @@ class TokenStorageService {
       return true;
     }
 
-    // Check for legacy base64 format
-    // Encrypted values contain: IV (16 bytes) + auth tag (16 bytes) + encrypted data (at least 1 byte)
-    // Minimum 33 bytes = 44 base64 characters (with padding)
-    // In practice, encrypted values will be longer due to actual data
-    if (value.length < 44) {
-      return false;
-    }
-
-    // Check if it's valid base64 (allow 0-2 padding characters)
-    const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-    return base64Regex.test(value);
+    return false;
   }
 }
 

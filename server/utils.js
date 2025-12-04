@@ -62,15 +62,15 @@ export async function getApiKeyForModel(modelId) {
     if (model.apiKey) {
       try {
         // Check if it's marked as encrypted or appears to be encrypted
-        const isEncrypted = model.apiKeyEncrypted || tokenStorageService.isEncrypted(model.apiKey);
+        const isEncrypted = tokenStorageService.isEncrypted(model.apiKey);
 
         if (isEncrypted) {
           const decryptedKey = tokenStorageService.decryptString(model.apiKey);
-          console.log(`Using stored encrypted API key for model: ${sanitizeForLog(modelId)}`);
+          console.log(`Using stored encrypted API key for model: %s`, sanitizeForLog(modelId));
           return decryptedKey;
         } else {
           // If not encrypted, use as-is (for backwards compatibility during migration)
-          console.log(`Using stored plaintext API key for model: ${sanitizeForLog(modelId)}`);
+          console.log(`Using stored plaintext API key for model: %s`, sanitizeForLog(modelId));
           return model.apiKey;
         }
       } catch (error) {
@@ -88,7 +88,7 @@ export async function getApiKeyForModel(modelId) {
     const modelSpecificKeyName = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
     const modelSpecificKey = config[modelSpecificKeyName];
     if (modelSpecificKey) {
-      console.log(`Using environment variable API key: ${modelSpecificKeyName}`);
+      console.log(`Using environment variable API key: %s`, modelSpecificKeyName);
       return modelSpecificKey;
     }
 

@@ -107,8 +107,7 @@ Added optional fields to model configuration:
 
 ```json
 {
-  "apiKey": "string (encrypted)",
-  "apiKeyEncrypted": "boolean"
+  "apiKey": "string (encrypted)"
 }
 ```
 
@@ -183,8 +182,7 @@ API keys are stored in model JSON files:
 {
   "id": "gpt-4",
   "provider": "openai",
-  "apiKey": "base64_encrypted_key_here",
-  "apiKeyEncrypted": true,
+  "apiKey": "base64_encrypted_key_here"
   ...
 }
 ```

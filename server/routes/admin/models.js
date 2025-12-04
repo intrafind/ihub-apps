@@ -136,7 +136,6 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
           // New key provided - encrypt it
           try {
             updatedModel.apiKey = tokenStorageService.encryptString(updatedModel.apiKey);
-            updatedModel.apiKeyEncrypted = true;
           } catch (error) {
             console.error('Error encrypting API key:', error);
             return res.status(500).json({ error: 'Failed to encrypt API key' });
@@ -147,11 +146,9 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
           const existingModel = models.find(m => m.id === modelId);
           if (existingModel && existingModel.apiKey) {
             updatedModel.apiKey = existingModel.apiKey;
-            updatedModel.apiKeyEncrypted = existingModel.apiKeyEncrypted;
           } else {
             // No existing key, remove the masked placeholder
             delete updatedModel.apiKey;
-            delete updatedModel.apiKeyEncrypted;
           }
         }
       }
@@ -205,7 +202,6 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
         // New key provided - encrypt it
         try {
           newModel.apiKey = tokenStorageService.encryptString(newModel.apiKey);
-          newModel.apiKeyEncrypted = true;
         } catch (error) {
           console.error('Error encrypting API key:', error);
           return res.status(500).json({ error: 'Failed to encrypt API key' });
@@ -213,7 +209,6 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
       } else if (newModel.apiKey === '••••••••') {
         // Remove masked placeholder if no real key
         delete newModel.apiKey;
-        delete newModel.apiKeyEncrypted;
       }
 
       // Remove client-side helper fields
