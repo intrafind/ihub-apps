@@ -206,8 +206,12 @@ const AdminModelEditPage = () => {
       delete dataToSend.apiKeySet;
       delete dataToSend.apiKeyMasked;
 
-      // Remove empty and undefined fields
+      // Remove empty and undefined fields (but preserve API key placeholder)
       Object.keys(dataToSend).forEach(key => {
+        if (key === 'apiKey' && dataToSend[key] === API_KEY_PLACEHOLDER) {
+          // Keep the placeholder - it signals backend to preserve encrypted key
+          return;
+        }
         if (dataToSend[key] === '' || dataToSend[key] === undefined) {
           delete dataToSend[key];
         }
