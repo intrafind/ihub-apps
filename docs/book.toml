@@ -7,3 +7,17 @@ language = "en"
 
 [build]
 create-missing = false
+
+[output.html]
+theme = "theme"
+additional-css = ["theme/custom.css"]
+additional-js = ["theme/mermaid.min.js", "theme/mermaid-init.js"]
+git-repository-url = "https://github.com/intrafind/ihub-apps"
+edit-url-template = "https://github.com/intrafind/ihub-apps/edit/main/docs/{path}"
+
+[preprocessor.template]
+command = "mdbook-template"
+optional = true
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
