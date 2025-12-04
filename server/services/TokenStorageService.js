@@ -262,15 +262,15 @@ class TokenStorageService {
   /**
    * Generic encryption for simple strings (e.g., API keys)
    * Uses AES-256-GCM with unique IV per encryption
-   * 
+   *
    * Format: ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
    * This format makes encrypted values easily identifiable and includes metadata
-   * 
+   *
    * Note: Uses GCM mode instead of CBC (used in encryptTokens) because:
    * - Provides authenticated encryption (integrity + confidentiality)
    * - No padding oracle vulnerabilities
    * - Better for simple string encryption without context binding
-   * 
+   *
    * @param {string} plaintext - The text to encrypt
    * @returns {string} Encrypted data in ENC[...] format with metadata
    */
@@ -334,13 +334,13 @@ class TokenStorageService {
   _decryptEncFormat(encryptedData) {
     // Parse ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
     const encContent = encryptedData.slice(4, -1); // Remove "ENC[" and "]"
-    
+
     // Extract algorithm (first part before first comma)
     const algorithmMatch = encContent.match(/^([^,]+)/);
     if (!algorithmMatch) {
       throw new Error('Invalid ENC format: missing algorithm');
     }
-    
+
     const algorithm = algorithmMatch[1];
     if (algorithm !== 'AES256_GCM') {
       throw new Error(`Unsupported encryption algorithm: ${algorithm}`);

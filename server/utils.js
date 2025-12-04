@@ -62,8 +62,7 @@ export async function getApiKeyForModel(modelId) {
     if (model.apiKey) {
       try {
         // Check if it's marked as encrypted or appears to be encrypted
-        const isEncrypted =
-          model.apiKeyEncrypted || tokenStorageService.isEncrypted(model.apiKey);
+        const isEncrypted = model.apiKeyEncrypted || tokenStorageService.isEncrypted(model.apiKey);
 
         if (isEncrypted) {
           const decryptedKey = tokenStorageService.decryptString(model.apiKey);
@@ -76,7 +75,8 @@ export async function getApiKeyForModel(modelId) {
         }
       } catch (error) {
         console.error(
-          'Failed to decrypt API key for model %s:', sanitizeForLog(modelId),
+          'Failed to decrypt API key for model %s:',
+          sanitizeForLog(modelId),
           error.message
         );
         // Continue to fallback options
