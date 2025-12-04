@@ -24,7 +24,7 @@ echo "OS platform: $(uname -s)"
 
 # Build documentation before packaging
 echo "Building documentation..."
-npm run docs:build
+npm run docs:build:all
 
 # Run the SEA build script with .cjs extension
 node build-sea.cjs $PLATFORM
