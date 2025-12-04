@@ -210,6 +210,44 @@ const ModelFormEditor = ({
                 />
                 {errors.url && <p className="mt-2 text-sm text-red-600">{errors.url}</p>}
               </div>
+
+              <div className="col-span-6">
+                <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700">
+                  {t('admin.models.fields.apiKey', 'API Key')}
+                </label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <input
+                    type="password"
+                    name="apiKey"
+                    id="apiKey"
+                    value={data.apiKey || ''}
+                    onChange={handleInputChange}
+                    placeholder={
+                      data.apiKeySet
+                        ? t(
+                            'admin.models.placeholders.apiKeySet',
+                            'API key is set (leave blank to keep current)'
+                          )
+                        : t(
+                            'admin.models.placeholders.apiKey',
+                            'Enter API key (optional - will use environment variable if not set)'
+                          )
+                    }
+                    className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pr-10 sm:text-sm border-gray-300 rounded-md"
+                  />
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  {t(
+                    'admin.models.hints.apiKey',
+                    'API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.'
+                  )}
+                </p>
+                {data.apiKeySet && (
+                  <p className="mt-2 text-sm text-blue-600">
+                    {t('admin.models.hints.apiKeySet', '✓ API key is configured for this model')}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>

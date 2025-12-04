@@ -6,9 +6,34 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { throttledFetch } from './requestThrottler.js';
 import configCache from './configCache.js';
+import tokenStorageService from './services/TokenStorageService.js';
+
+// Constants
+const JWT_AUTH_REQUIRED = 'JWT_AUTH_REQUIRED';
+
+/**
+ * Sanitize user-provided input for logging to prevent log injection
+ * @param {string} input - User input to sanitize
+ * @returns {string} Sanitized input safe for logging
+ */
+function sanitizeForLog(input) {
+  if (!input || typeof input !== 'string') {
+    return String(input);
+  }
+  // Remove/escape dangerous characters:
+  // - Control characters (\n, \r, \t, etc.) for log injection
+  // - Backticks, dollar signs, backslashes for shell injection if logs are processed
+  return input
+    .replace(/[\n\r\t\x00-\x1F\x7F]/g, '') // Remove control characters
+    .replace(/[`$\\]/g, '\\$&'); // Escape backticks, dollar signs, backslashes
+}
 
 /**
  * Helper function to get API key for a model
+ * Checks in this order:
+ * 1. Model's stored encrypted API key (from model config)
+ * 2. Environment variable for model-specific key
+ * 3. Environment variable for provider key
  * @param {string} modelId - The model ID
  * @returns {string|null} The API key or null if not found
  */
@@ -26,22 +51,48 @@ export async function getApiKeyForModel(modelId) {
     // Find the model by ID
     const model = models.find(m => m.id === modelId);
     if (!model) {
-      console.error(`Model not found: ${modelId}`);
+      console.error(`Model not found: ${sanitizeForLog(modelId)}`);
       return null;
     }
 
     // Get the provider for this model
     const provider = model.provider;
 
-    // First, check for model-specific API key (e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1")
+    // First priority: Check if the model has a stored (encrypted) API key
+    if (model.apiKey) {
+      try {
+        // Check if it's marked as encrypted or appears to be encrypted
+        const isEncrypted = tokenStorageService.isEncrypted(model.apiKey);
+
+        if (isEncrypted) {
+          const decryptedKey = tokenStorageService.decryptString(model.apiKey);
+          console.log(`Using stored encrypted API key for model: %s`, sanitizeForLog(modelId));
+          return decryptedKey;
+        } else {
+          // If not encrypted, use as-is (for backwards compatibility during migration)
+          console.log(`Using stored plaintext API key for model: %s`, sanitizeForLog(modelId));
+          return model.apiKey;
+        }
+      } catch (error) {
+        console.error(
+          'Failed to decrypt API key for model %s:',
+          sanitizeForLog(modelId),
+          error.message
+        );
+        // Continue to fallback options
+      }
+    }
+
+    // Second priority: Check for model-specific API key in environment
+    // (e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1")
     const modelSpecificKeyName = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
     const modelSpecificKey = config[modelSpecificKeyName];
     if (modelSpecificKey) {
-      console.log(`Using model-specific API key: ${modelSpecificKeyName}`);
+      console.log(`Using environment variable API key: %s`, modelSpecificKeyName);
       return modelSpecificKey;
     }
 
-    // Then check for provider-specific API keys
+    // Third priority: Check for provider-specific API keys from environment
     switch (provider) {
       case 'openai':
         return config.OPENAI_API_KEY;

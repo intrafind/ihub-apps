@@ -143,8 +143,8 @@
     },
     "notFound": {
       "title": "Seite nicht gefunden",
-      "description": "Die gesuchte Seite existiert nicht.",
-      "backHome": "Zurück zur Startseite"
+      "message": "Wir konnten die gesuchte Seite nicht finden.",
+      "returnHome": "Zurück zur Startseite"
     },
     "redirectApp": {
       "title": "Externe Anwendung",
@@ -192,11 +192,6 @@
       "examplePrompts": "Hier sind einige Beispiel-Prompts zum Einstieg",
       "noMessagesTitle": "Noch keine Nachrichten",
       "noMessagesSubtitle": "Beginne eine Unterhaltung, indem du eine Nachricht sendest!"
-    },
-    "notFound": {
-      "title": "Seite nicht gefunden",
-      "message": "Wir konnten die gesuchte Seite nicht finden.",
-      "returnHome": "Zurück zur Startseite"
     }
   },
   "models": {
@@ -666,16 +661,21 @@
         "requestDelay": "Anfrageverzögerung (ms)",
         "supportsTools": "Unterstützt Werkzeuge",
         "enabled": "Aktiviert",
-        "defaultModel": "Standardmodell"
+        "defaultModel": "Standardmodell",
+        "apiKey": "API-Schlüssel"
       },
       "placeholders": {
         "selectProvider": "Anbieter auswählen",
         "apiModelId": "z.B. gpt-4, claude-3-sonnet",
-        "apiUrl": "z.B. https://api.openai.com/v1/chat/completions"
+        "apiUrl": "z.B. https://api.openai.com/v1/chat/completions",
+        "apiKey": "API-Schlüssel eingeben (optional - verwendet Umgebungsvariable falls nicht gesetzt)",
+        "apiKeySet": "API-Schlüssel ist gesetzt (leer lassen um aktuellen zu behalten)"
       },
       "hints": {
         "modelId": "Eindeutige Kennung für diese Modellkonfiguration",
-        "apiModelId": "Die in API-Aufrufen an den Anbieter verwendete Modell-ID"
+        "apiModelId": "Die in API-Aufrufen an den Anbieter verwendete Modell-ID",
+        "apiKey": "API-Schlüssel für dieses Modell. Falls nicht angegeben, verwendet das System die Umgebungsvariable für den Provider. Schlüssel werden verschlüsselt gespeichert.",
+        "apiKeySet": "✓ API-Schlüssel ist für dieses Modell konfiguriert"
       },
       "status": {
         "enabled": "Aktiviert",
