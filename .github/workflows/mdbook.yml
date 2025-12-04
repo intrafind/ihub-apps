@@ -55,13 +55,6 @@ jobs:
           #   echo "mdbook-pdf already installed"
           # fi
 
-          if ! command -v mdbook-epub &> /dev/null; then
-            echo "Installing mdbook-epub..."
-            cargo install mdbook-epub
-          else
-            echo "mdbook-epub already installed"
-          fi
-
           if ! command -v mdbook-mermaid &> /dev/null; then
             echo "Installing mdbook-mermaid..."
             cargo install mdbook-mermaid
@@ -94,9 +87,6 @@ jobs:
           echo "=== PDF Output ==="
           ls -lh docs/book/pdf/ || echo "No PDF output"
           echo ""
-          echo "=== EPUB Output ==="
-          ls -lh docs/book/epub/ || echo "No EPUB output"
-          echo ""
           echo "=== Markdown Output ==="
           ls -lh docs/book/*.md || echo "No Markdown output"
 
@@ -111,13 +101,6 @@ jobs:
         with:
           name: docs-pdf
           path: docs/book/pdf/*.pdf
-        continue-on-error: true
-
-      - name: Upload EPUB artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docs-epub
-          path: docs/book/epub/*.epub
         continue-on-error: true
 
       - name: Upload Markdown artifact

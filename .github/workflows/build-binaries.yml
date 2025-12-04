@@ -65,16 +65,6 @@ jobs:
           fi
         shell: bash
 
-      - name: Install mdbook-epub
-        run: |
-          if ! command -v mdbook-epub &> /dev/null; then
-            echo "Installing mdbook-epub..."
-            cargo install mdbook-epub
-          else
-            echo "mdbook-epub already installed"
-          fi
-        shell: bash
-
       - name: Install dependencies
         run: |
           npm ci
@@ -168,16 +158,6 @@ jobs:
             cargo install mdbook-mermaid
           else
             echo "mdbook-mermaid already installed"
-          fi
-        shell: bash
-
-      - name: Install mdbook-epub
-        run: |
-          if ! command -v mdbook-epub &> /dev/null; then
-            echo "Installing mdbook-epub..."
-            cargo install mdbook-epub
-          else
-            echo "mdbook-epub already installed"
           fi
         shell: bash
 

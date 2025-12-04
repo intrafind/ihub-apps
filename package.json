@@ -41,7 +41,7 @@
     "docs:build:html": "npm run docs:build",
     "docs:build:markdown": "node scripts/export-docs-markdown.js",
     "docs:copy": "mkdir -p dist/docs && cp -r docs/book/* dist/docs/",
-    "docs:copy:all": "mkdir -p dist/docs dist/exports && cp -r docs/book/html/* dist/docs/ && cp docs/book/pdf/*.pdf dist/exports/ 2>/dev/null || true && cp docs/book/epub/*.epub dist/exports/ 2>/dev/null || true && cp docs/book/iHub-Apps-Documentation.md dist/exports/ 2>/dev/null || true",
+    "docs:copy:all": "mkdir -p dist/docs dist/exports && cp -r docs/book/html/* dist/docs/ && cp docs/book/pdf/*.pdf dist/exports/ 2>/dev/null || true && cp docs/book/iHub-Apps-Documentation.md dist/exports/ 2>/dev/null || true",
     "docs:clean": "rm -rf docs/book",
     "docs:serve": "cd docs && mdbook serve",
     "docs:update-version": "node scripts/update-docs-version.js",

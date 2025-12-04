@@ -7,4 +7,3 @@ language = "en"
 
 [build]
 create-missing = false
-build-dir = "book/epub"

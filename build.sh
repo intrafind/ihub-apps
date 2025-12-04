@@ -40,7 +40,6 @@ npm run docs:build:all
 # Copy generated docs into dist
 mkdir -p dist/public/help dist/exports
 cp -r docs/book/html/* dist/public/help/ 2>/dev/null || true
-cp docs/book/epub/*.epub dist/exports/ 2>/dev/null || true
 cp docs/book/iHub-Apps-Documentation.md dist/exports/ 2>/dev/null || true
 
 # Step 4: Copy server files
