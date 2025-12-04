@@ -70,20 +70,13 @@ const AppFormEditor = ({
       );
     }
 
-    // System instructions and tokenLimit are only required for chat-type apps
+    // System instructions are required for chat-type apps
     const appType = appData.type || 'chat';
     if (appType === 'chat') {
       if (!appData.system || !Object.keys(appData.system).length) {
         errors.system = t(
           'admin.apps.edit.validation.systemRequired',
           'System instructions are required'
-        );
-      }
-
-      if (!appData.tokenLimit || appData.tokenLimit < 1) {
-        errors.tokenLimit = t(
-          'admin.apps.edit.validation.tokenLimitRequired',
-          'Token limit must be at least 1'
         );
       }
     }
@@ -485,7 +478,9 @@ const AppFormEditor = ({
               <div className="col-span-6 sm:col-span-3">
                 <label className="block text-sm font-medium text-gray-700">
                   {t('admin.apps.edit.tokenLimit', 'Token Limit')}
-                  <span className="text-red-500 ml-1">*</span>
+                  {isFieldRequired('tokenLimit', jsonSchema) && (
+                    <span className="text-red-500 ml-1">*</span>
+                  )}
                 </label>
                 <input
                   type="number"
@@ -495,6 +490,7 @@ const AppFormEditor = ({
                   className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                     validationErrors.tokenLimit ? 'border-red-300' : ''
                   }`}
+                  required={isFieldRequired('tokenLimit', jsonSchema)}
                 />
                 {validationErrors.tokenLimit && (
                   <p className="mt-1 text-sm text-red-600">{validationErrors.tokenLimit}</p>
