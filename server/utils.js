@@ -76,7 +76,7 @@ export async function getApiKeyForModel(modelId) {
         }
       } catch (error) {
         console.error(
-          `Failed to decrypt API key for model ${sanitizeForLog(modelId)}:`,
+          'Failed to decrypt API key for model %s:', sanitizeForLog(modelId),
           error.message
         );
         // Continue to fallback options
