@@ -5,7 +5,7 @@ import { checkAppChatStatus, stopAppChatStream } from '../../api/api';
  * Hook for handling Server Sent Events.
  * It forwards all received events to the provided onEvent callback.
  */
-function useEventSource({ appId, chatId, timeoutDuration = 10000, onEvent, onProcessingChange }) {
+function useEventSource({ appId, chatId, timeoutDuration = 30000, onEvent, onProcessingChange }) {
   const eventSourceRef = useRef(null);
   const connectionTimeoutRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);

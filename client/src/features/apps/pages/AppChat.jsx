@@ -815,16 +815,34 @@ const AppChat = ({ preloadedApp = null }) => {
         content: input,
         promptTemplate: app?.prompt || null,
         variables: { ...variables },
-        imageData: Array.isArray(fileUploadHandler.selectedFile)
-          ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
-          : fileUploadHandler.selectedFile?.type === 'image'
-            ? fileUploadHandler.selectedFile
-            : null,
-        fileData: Array.isArray(fileUploadHandler.selectedFile)
-          ? fileUploadHandler.selectedFile.filter(f => f.type === 'document')
-          : fileUploadHandler.selectedFile?.type === 'document'
-            ? fileUploadHandler.selectedFile
-            : null
+        imageData: (() => {
+          // Handle image data: convert to object/array/null based on count
+          const imageFiles = Array.isArray(fileUploadHandler.selectedFile)
+            ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
+            : fileUploadHandler.selectedFile?.type === 'image'
+              ? [fileUploadHandler.selectedFile]
+              : [];
+          // Return single object for 1 file, array for multiple, null for none
+          return imageFiles.length === 1
+            ? imageFiles[0]
+            : imageFiles.length > 1
+              ? imageFiles
+              : null;
+        })(),
+        fileData: (() => {
+          // Handle file data: convert to object/array/null based on count
+          const documentFiles = Array.isArray(fileUploadHandler.selectedFile)
+            ? fileUploadHandler.selectedFile.filter(f => f.type === 'document')
+            : fileUploadHandler.selectedFile?.type === 'document'
+              ? [fileUploadHandler.selectedFile]
+              : [];
+          // Return single object for 1 file, array for multiple, null for none
+          return documentFiles.length === 1
+            ? documentFiles[0]
+            : documentFiles.length > 1
+              ? documentFiles
+              : null;
+        })()
       },
       params,
       sendChatHistory
