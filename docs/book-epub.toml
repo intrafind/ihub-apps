@@ -8,19 +8,12 @@ language = "en"
 [build]
 create-missing = false
 
-[preprocessor.mermaid]
-command = "mdbook-mermaid"
-
-[preprocessor.template]
-command = "mdbook-template"
-optional = true
-
 [output.epub]
 title = "iHub Apps Documentation"
 author = "IntraFind"
 description = "iHub Applications Platform - AI-powered applications with LLM integration"
 language = "en"
 publisher = "IntraFind Software AG"
-use-default-css = true
-additional-css = ["theme/custom.css"]
+use-default-css = false
+additional-css = []
 output-file = "book/epub/iHub-Apps-Documentation.epub"
