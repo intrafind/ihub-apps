@@ -18,6 +18,9 @@ const AdminModelEditPage = () => {
   const location = useLocation();
   const isNewModel = modelId === 'new';
 
+  // Constants
+  const API_KEY_PLACEHOLDER = '••••••••';
+
   const [loading, setLoading] = useState(!isNewModel);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -36,7 +39,9 @@ const AdminModelEditPage = () => {
     tokenLimit: '',
     supportsTools: false,
     enabled: true,
-    default: false
+    default: false,
+    apiKey: '',
+    apiKeySet: false
   });
 
   useEffect(() => {
@@ -111,6 +116,15 @@ const AdminModelEditPage = () => {
         formDataObj.requestDelayMs = model.requestDelayMs;
       }
 
+      // Handle API key display - show placeholder if key is set
+      if (model.apiKeySet) {
+        formDataObj.apiKeySet = true;
+        formDataObj.apiKey = model.apiKeyMasked || API_KEY_PLACEHOLDER;
+      } else {
+        formDataObj.apiKeySet = false;
+        formDataObj.apiKey = '';
+      }
+
       setFormData(formDataObj);
 
       console.log('Form data set with name:', ensureLocalizedObject(model.name));
@@ -174,8 +188,30 @@ const AdminModelEditPage = () => {
         requestDelayMs: data.requestDelayMs ? parseInt(data.requestDelayMs) : undefined
       };
 
-      // Remove empty fields
+      // Handle API key:
+      // - If it's the masked placeholder and a key was previously set, keep it (backend will preserve)
+      // - If it's empty and a key was set, remove it (user wants to clear it)
+      // - If it's a new value, send it (user is setting/updating the key)
+      if (dataToSend.apiKey === API_KEY_PLACEHOLDER || dataToSend.apiKey === '') {
+        if (data.apiKeySet && dataToSend.apiKey === API_KEY_PLACEHOLDER) {
+          // Keep the placeholder so backend knows to preserve the existing key
+          dataToSend.apiKey = API_KEY_PLACEHOLDER;
+        } else if (dataToSend.apiKey === '') {
+          // Empty string - remove the field to avoid confusion
+          delete dataToSend.apiKey;
+        }
+      }
+
+      // Remove helper fields that shouldn't be sent to backend
+      delete dataToSend.apiKeySet;
+      delete dataToSend.apiKeyMasked;
+
+      // Remove empty and undefined fields (but preserve API key placeholder)
       Object.keys(dataToSend).forEach(key => {
+        if (key === 'apiKey' && dataToSend[key] === API_KEY_PLACEHOLDER) {
+          // Keep the placeholder - it signals backend to preserve encrypted key
+          return;
+        }
         if (dataToSend[key] === '' || dataToSend[key] === undefined) {
           delete dataToSend[key];
         }

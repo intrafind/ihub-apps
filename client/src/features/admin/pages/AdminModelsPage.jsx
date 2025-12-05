@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -18,7 +18,7 @@ const AdminModelsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
   const [testingModel, setTestingModel] = useState(null);
-  const [, setTestResults] = useState({});
+  const [testResults, setTestResults] = useState({});
   const [selectedModel, setSelectedModel] = useState(null);
   const [showModelDetails, setShowModelDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -101,9 +101,15 @@ const AdminModelsPage = () => {
         [modelId]: result
       }));
     } catch (err) {
+      // Handle error responses from the server
+      const errorData = err.response?.data || {};
       setTestResults(prevResults => ({
         ...prevResults,
-        [modelId]: { error: err.message }
+        [modelId]: {
+          success: false,
+          message: errorData.message || 'Test failed',
+          error: errorData.error || err.message
+        }
       }));
     } finally {
       setTestingModel(null);
@@ -382,11 +388,11 @@ const AdminModelsPage = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {filteredModels.map(model => (
-                        <tr
-                          key={model.id}
-                          className="hover:bg-gray-50 cursor-pointer"
-                          onClick={() => handleModelClick(model)}
-                        >
+                        <React.Fragment key={model.id}>
+                          <tr
+                            className="hover:bg-gray-50 cursor-pointer"
+                            onClick={() => handleModelClick(model)}
+                          >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               <div className="flex-shrink-0 h-8 w-8">
@@ -502,6 +508,63 @@ const AdminModelsPage = () => {
                             </div>
                           </td>
                         </tr>
+                        {/* Test result row */}
+                        {testResults[model.id] && (
+                          <tr key={`${model.id}-test-result`}>
+                            <td colSpan="4" className="px-6 py-3 bg-gray-50">
+                              <div className="flex items-start space-x-3">
+                                {testResults[model.id].success ? (
+                                  <>
+                                    <Icon
+                                      name="check-circle"
+                                      className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5"
+                                    />
+                                    <div className="flex-1">
+                                      <div className="text-sm font-medium text-green-800">
+                                        {t('admin.models.test.success', 'Test Successful')}
+                                      </div>
+                                      <div className="text-sm text-gray-700 mt-1">
+                                        {testResults[model.id].response}
+                                      </div>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Icon
+                                      name="x-circle"
+                                      className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5"
+                                    />
+                                    <div className="flex-1">
+                                      <div className="text-sm font-medium text-red-800">
+                                        {testResults[model.id].message ||
+                                          t('admin.models.test.failed', 'Test Failed')}
+                                      </div>
+                                      {testResults[model.id].error && (
+                                        <div className="text-sm text-gray-700 mt-1">
+                                          {testResults[model.id].error}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    setTestResults(prev => {
+                                      const newResults = { ...prev };
+                                      delete newResults[model.id];
+                                      return newResults;
+                                    });
+                                  }}
+                                  className="text-gray-400 hover:text-gray-600"
+                                  title={t('common.close', 'Close')}
+                                >
+                                  <Icon name="x-mark" className="h-5 w-5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
