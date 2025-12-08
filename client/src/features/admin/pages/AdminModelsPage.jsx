@@ -393,177 +393,177 @@ const AdminModelsPage = () => {
                             className="hover:bg-gray-50 cursor-pointer"
                             onClick={() => handleModelClick(model)}
                           >
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0 h-8 w-8">
-                                <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                                  <Icon name="cpu-chip" className="h-4 w-4 text-indigo-600" />
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="flex-shrink-0 h-8 w-8">
+                                  <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                                    <Icon name="cpu-chip" className="h-4 w-4 text-indigo-600" />
+                                  </div>
+                                </div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {getLocalizedContent(model.name, currentLanguage)}
+                                  </div>
+                                  <div className="text-sm text-gray-500">{model.id}</div>
                                 </div>
                               </div>
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {getLocalizedContent(model.name, currentLanguage)}
-                                </div>
-                                <div className="text-sm text-gray-500">{model.id}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {model.provider || '-'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  model.enabled
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}
-                              >
-                                {model.enabled
-                                  ? t('admin.models.enabled', 'Enabled')
-                                  : t('admin.models.disabled', 'Disabled')}
-                              </span>
-                              {model.default && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                  {t('admin.models.default', 'Default')}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex items-center justify-end space-x-2">
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  testModel(model.id);
-                                }}
-                                disabled={testingModel === model.id}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-full disabled:opacity-50"
-                                title={t('admin.models.test', 'Test')}
-                              >
-                                <Icon name="play" className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  toggleModel(model.id);
-                                }}
-                                className={`p-2 rounded-full ${
-                                  model.enabled
-                                    ? 'text-red-600 hover:bg-red-50'
-                                    : 'text-green-600 hover:bg-green-50'
-                                }`}
-                                title={
-                                  model.enabled
-                                    ? t('admin.models.disable', 'Disable')
-                                    : t('admin.models.enable', 'Enable')
-                                }
-                              >
-                                <Icon
-                                  name={model.enabled ? 'eye-slash' : 'eye'}
-                                  className="h-4 w-4"
-                                />
-                              </button>
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  navigate(`/admin/models/${model.id}`);
-                                }}
-                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
-                                title={t('common.edit', 'Edit')}
-                              >
-                                <Icon name="pencil" className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handleCloneModel(model);
-                                }}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
-                                title={t('admin.models.clone', 'Clone')}
-                              >
-                                <Icon name="copy" className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  downloadModelConfig(model.id);
-                                }}
-                                className="p-2 text-green-600 hover:bg-green-50 rounded-full"
-                                title={t('admin.models.download', 'Download Config')}
-                              >
-                                <Icon name="download" className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handleDeleteModel(model.id);
-                                }}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-full"
-                                title={t('admin.models.delete', 'Delete')}
-                              >
-                                <Icon name="trash" className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                        {/* Test result row */}
-                        {testResults[model.id] && (
-                          <tr key={`${model.id}-test-result`}>
-                            <td colSpan="4" className="px-6 py-3 bg-gray-50">
-                              <div className="flex items-start space-x-3">
-                                {testResults[model.id].success ? (
-                                  <>
-                                    <Icon
-                                      name="check-circle"
-                                      className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5"
-                                    />
-                                    <div className="flex-1">
-                                      <div className="text-sm font-medium text-green-800">
-                                        {t('admin.models.test.success', 'Test Successful')}
-                                      </div>
-                                      <div className="text-sm text-gray-700 mt-1">
-                                        {testResults[model.id].response}
-                                      </div>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Icon
-                                      name="x-circle"
-                                      className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5"
-                                    />
-                                    <div className="flex-1">
-                                      <div className="text-sm font-medium text-red-800">
-                                        {testResults[model.id].message ||
-                                          t('admin.models.test.failed', 'Test Failed')}
-                                      </div>
-                                      {testResults[model.id].error && (
-                                        <div className="text-sm text-gray-700 mt-1">
-                                          {testResults[model.id].error}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </>
-                                )}
-                                <button
-                                  onClick={() => {
-                                    setTestResults(prev => {
-                                      const newResults = { ...prev };
-                                      delete newResults[model.id];
-                                      return newResults;
-                                    });
-                                  }}
-                                  className="text-gray-400 hover:text-gray-600"
-                                  title={t('common.close', 'Close')}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {model.provider || '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    model.enabled
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }`}
                                 >
-                                  <Icon name="x-mark" className="h-5 w-5" />
+                                  {model.enabled
+                                    ? t('admin.models.enabled', 'Enabled')
+                                    : t('admin.models.disabled', 'Disabled')}
+                                </span>
+                                {model.default && (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    {t('admin.models.default', 'Default')}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <div className="flex items-center justify-end space-x-2">
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    testModel(model.id);
+                                  }}
+                                  disabled={testingModel === model.id}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-full disabled:opacity-50"
+                                  title={t('admin.models.test', 'Test')}
+                                >
+                                  <Icon name="play" className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    toggleModel(model.id);
+                                  }}
+                                  className={`p-2 rounded-full ${
+                                    model.enabled
+                                      ? 'text-red-600 hover:bg-red-50'
+                                      : 'text-green-600 hover:bg-green-50'
+                                  }`}
+                                  title={
+                                    model.enabled
+                                      ? t('admin.models.disable', 'Disable')
+                                      : t('admin.models.enable', 'Enable')
+                                  }
+                                >
+                                  <Icon
+                                    name={model.enabled ? 'eye-slash' : 'eye'}
+                                    className="h-4 w-4"
+                                  />
+                                </button>
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    navigate(`/admin/models/${model.id}`);
+                                  }}
+                                  className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                                  title={t('common.edit', 'Edit')}
+                                >
+                                  <Icon name="pencil" className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handleCloneModel(model);
+                                  }}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                                  title={t('admin.models.clone', 'Clone')}
+                                >
+                                  <Icon name="copy" className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    downloadModelConfig(model.id);
+                                  }}
+                                  className="p-2 text-green-600 hover:bg-green-50 rounded-full"
+                                  title={t('admin.models.download', 'Download Config')}
+                                >
+                                  <Icon name="download" className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handleDeleteModel(model.id);
+                                  }}
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                                  title={t('admin.models.delete', 'Delete')}
+                                >
+                                  <Icon name="trash" className="h-4 w-4" />
                                 </button>
                               </div>
                             </td>
                           </tr>
-                        )}
+                          {/* Test result row */}
+                          {testResults[model.id] && (
+                            <tr key={`${model.id}-test-result`}>
+                              <td colSpan="4" className="px-6 py-3 bg-gray-50">
+                                <div className="flex items-start space-x-3">
+                                  {testResults[model.id].success ? (
+                                    <>
+                                      <Icon
+                                        name="check-circle"
+                                        className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5"
+                                      />
+                                      <div className="flex-1">
+                                        <div className="text-sm font-medium text-green-800">
+                                          {t('admin.models.test.success', 'Test Successful')}
+                                        </div>
+                                        <div className="text-sm text-gray-700 mt-1">
+                                          {testResults[model.id].response}
+                                        </div>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Icon
+                                        name="x-circle"
+                                        className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5"
+                                      />
+                                      <div className="flex-1">
+                                        <div className="text-sm font-medium text-red-800">
+                                          {testResults[model.id].message ||
+                                            t('admin.models.test.failed', 'Test Failed')}
+                                        </div>
+                                        {testResults[model.id].error && (
+                                          <div className="text-sm text-gray-700 mt-1">
+                                            {testResults[model.id].error}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      setTestResults(prev => {
+                                        const newResults = { ...prev };
+                                        delete newResults[model.id];
+                                        return newResults;
+                                      });
+                                    }}
+                                    className="text-gray-400 hover:text-gray-600"
+                                    title={t('common.close', 'Close')}
+                                  >
+                                    <Icon name="x-mark" className="h-5 w-5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
                         </React.Fragment>
                       ))}
                     </tbody>
