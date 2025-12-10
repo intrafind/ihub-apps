@@ -88,6 +88,23 @@ function App() {
     initializeBasePath();
   }, []);
 
+  // Prevent default drag and drop behavior globally to avoid files opening in browser
+  useEffect(() => {
+    const preventDefaults = e => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    // Prevent default behavior for drag and drop events on the window
+    window.addEventListener('dragover', preventDefaults);
+    window.addEventListener('drop', preventDefaults);
+
+    return () => {
+      window.removeEventListener('dragover', preventDefaults);
+      window.removeEventListener('drop', preventDefaults);
+    };
+  }, []);
+
   // Get base path for React Router
   const basename = getBasePath();
 
