@@ -17,6 +17,7 @@ const Uploader = ({
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
 
   // Reset preview when parent clears the data
@@ -133,12 +134,59 @@ const Uploader = ({
     }
   };
 
+  const handleDragEnter = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!disabled && !isProcessing) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragging to false if we're leaving the drop zone entirely
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = e => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async e => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (disabled || isProcessing) return;
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    // Create a synthetic event for handleFileChange
+    const syntheticEvent = {
+      target: {
+        files: allowMultiple ? files : [files[0]]
+      }
+    };
+
+    await handleFileChange(syntheticEvent);
+  };
+
   return children({
     preview,
     error,
     isProcessing,
+    isDragging,
     handleButtonClick,
     handleClear,
+    handleDragEnter,
+    handleDragLeave,
+    handleDragOver,
+    handleDrop,
     inputProps: {
       type: 'file',
       ref: fileInputRef,

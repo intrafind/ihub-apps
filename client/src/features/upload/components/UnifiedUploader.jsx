@@ -221,9 +221,39 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
       data={fileData}
       allowMultiple={allowMultiple}
     >
-      {({ preview, error, isProcessing, handleButtonClick, handleClear, inputProps }) => (
-        <div className="unified-uploader">
+      {({
+        preview,
+        error,
+        isProcessing,
+        isDragging,
+        handleButtonClick,
+        handleClear,
+        handleDragEnter,
+        handleDragLeave,
+        handleDragOver,
+        handleDrop,
+        inputProps
+      }) => (
+        <div
+          className="unified-uploader"
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
           <input {...inputProps} />
+          {isDragging && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-20 pointer-events-none">
+              <div className="bg-white rounded-lg shadow-2xl p-8 border-4 border-blue-500 border-dashed">
+                <div className="text-center">
+                  <div className="text-6xl mb-4">📎</div>
+                  <p className="text-xl font-semibold text-blue-600">
+                    {t('components.uploader.dropFileHere', 'Drop file here')}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           {preview ? (
             <div className="relative mt-2 mb-4">
               {Array.isArray(preview) ? (
