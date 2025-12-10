@@ -18,6 +18,7 @@ const Uploader = ({
   const [error, setError] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [dragCounter, setDragCounter] = useState(0);
   const fileInputRef = useRef(null);
 
   // Reset preview when parent clears the data
@@ -30,8 +31,7 @@ const Uploader = ({
     }
   }, [data, preview]);
 
-  const handleFileChange = async e => {
-    const files = allowMultiple ? Array.from(e.target.files) : [e.target.files[0]];
+  const processFiles = async files => {
     setError(null);
     if (!files.length || !files[0]) return;
 
@@ -116,6 +116,11 @@ const Uploader = ({
     }
   };
 
+  const handleFileChange = async e => {
+    const files = allowMultiple ? Array.from(e.target.files) : [e.target.files[0]];
+    await processFiles(files);
+  };
+
   const handleButtonClick = () => {
     if (fileInputRef.current && !isProcessing) {
       fileInputRef.current.click();
@@ -138,6 +143,7 @@ const Uploader = ({
     e.preventDefault();
     e.stopPropagation();
     if (!disabled && !isProcessing) {
+      setDragCounter(prev => prev + 1);
       setIsDragging(true);
     }
   };
@@ -145,9 +151,14 @@ const Uploader = ({
   const handleDragLeave = e => {
     e.preventDefault();
     e.stopPropagation();
-    // Only set dragging to false if we're leaving the drop zone entirely
-    if (e.currentTarget === e.target) {
-      setIsDragging(false);
+    if (!disabled && !isProcessing) {
+      setDragCounter(prev => {
+        const newCount = prev - 1;
+        if (newCount === 0) {
+          setIsDragging(false);
+        }
+        return newCount;
+      });
     }
   };
 
@@ -159,6 +170,7 @@ const Uploader = ({
   const handleDrop = async e => {
     e.preventDefault();
     e.stopPropagation();
+    setDragCounter(0);
     setIsDragging(false);
 
     if (disabled || isProcessing) return;
@@ -166,14 +178,8 @@ const Uploader = ({
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
 
-    // Create a synthetic event for handleFileChange
-    const syntheticEvent = {
-      target: {
-        files: allowMultiple ? files : [files[0]]
-      }
-    };
-
-    await handleFileChange(syntheticEvent);
+    // Process files using the same logic as file input
+    await processFiles(allowMultiple ? files : [files[0]]);
   };
 
   return children({

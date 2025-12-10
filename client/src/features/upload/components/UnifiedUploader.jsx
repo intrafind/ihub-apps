@@ -243,7 +243,15 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
         >
           <input {...inputProps} />
           {isDragging && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-20 pointer-events-none">
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-20 pointer-events-none"
+              role="alert"
+              aria-live="polite"
+              aria-label={t(
+                'components.uploader.dropZoneActive',
+                'Drop zone active. Release to upload files.'
+              )}
+            >
               <div className="bg-white rounded-lg shadow-2xl p-8 border-4 border-blue-500 border-dashed">
                 <div className="text-center">
                   <div className="text-6xl mb-4">📎</div>
