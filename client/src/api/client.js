@@ -5,7 +5,7 @@ import { buildApiUrl } from '../utils/runtimeBasePath';
 // Use dynamic API URL based on runtime base path detection
 const API_URL = import.meta.env.VITE_API_URL || buildApiUrl('');
 const API_REQUEST_TIMEOUT = 30000; // 30 seconds timeout
-const STREAMING_REQUEST_TIMEOUT = 120000; // 2 minutes for streaming requests
+const STREAMING_REQUEST_TIMEOUT = 300000; // 5 minutes for streaming requests
 
 // Create axios instance with request timeout
 const apiClient = axios.create({
