@@ -117,8 +117,8 @@ class RequestBuilder {
         `Preparing request for App: ${app.id}, Model: ${model.id}, Max Tokens: ${useMaxTokens ? 'Max' : 'Calculated'}`
       );
 
-      // Determine model token limit (default to 4096 if not specified)
-      const modelTokenLimit = model.tokenLimit || 4096;
+      // Determine model token limit (default to 8192 if not specified)
+      const modelTokenLimit = model.tokenLimit || 8192;
       console.log(`Model Token Limit: ${modelTokenLimit}`);
 
       // If app specifies tokenLimit, use it; otherwise use model's tokenLimit

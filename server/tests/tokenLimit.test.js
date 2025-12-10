@@ -18,7 +18,7 @@ function testAppWithTokenLimit() {
   const model = { tokenLimit: 8192 };
   const useMaxTokens = false;
 
-  const modelTokenLimit = model.tokenLimit || 4096;
+  const modelTokenLimit = model.tokenLimit || 8192;
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
@@ -40,7 +40,7 @@ function testAppWithoutTokenLimit() {
   const model = { tokenLimit: 8192 };
   const useMaxTokens = false;
 
-  const modelTokenLimit = model.tokenLimit || 4096;
+  const modelTokenLimit = model.tokenLimit || 8192;
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
@@ -66,7 +66,7 @@ function testNeitherHasTokenLimit() {
   const model = {}; // No tokenLimit
   const useMaxTokens = false;
 
-  const modelTokenLimit = model.tokenLimit || 4096;
+  const modelTokenLimit = model.tokenLimit || 8192;
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
@@ -74,9 +74,9 @@ function testNeitherHasTokenLimit() {
   console.log(`  App Token Limit: ${appTokenLimit}`);
   console.log(`  Final Token Limit: ${finalTokens}`);
 
-  assert.strictEqual(modelTokenLimit, 4096, 'Model token limit should default to 4096');
-  assert.strictEqual(appTokenLimit, 4096, 'App token limit should fallback to default (4096)');
-  assert.strictEqual(finalTokens, 4096, 'Final token limit should be 4096');
+  assert.strictEqual(modelTokenLimit, 8192, 'Model token limit should default to 8192');
+  assert.strictEqual(appTokenLimit, 8192, 'App token limit should fallback to default (8192)');
+  assert.strictEqual(finalTokens, 8192, 'Final token limit should be 8192');
   console.log('  ✓ Passed\n');
 }
 
@@ -90,7 +90,7 @@ function testUseMaxTokens() {
   const model = { tokenLimit: 8192 };
   const useMaxTokens = true;
 
-  const modelTokenLimit = model.tokenLimit || 4096;
+  const modelTokenLimit = model.tokenLimit || 8192;
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
@@ -116,7 +116,7 @@ function testAppWithZeroTokenLimit() {
   const model = { tokenLimit: 8192 };
   const useMaxTokens = false;
 
-  const modelTokenLimit = model.tokenLimit || 4096;
+  const modelTokenLimit = model.tokenLimit || 8192;
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
@@ -143,7 +143,7 @@ function testBugScenarioFixed() {
   // const modelTokenLimit = model.tokenLimit || appTokenLimit;
 
   // NEW FIXED LOGIC:
-  const modelTokenLimit = model.tokenLimit || 4096;
+  const modelTokenLimit = model.tokenLimit || 8192;
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
