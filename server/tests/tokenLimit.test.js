@@ -82,7 +82,9 @@ function testNeitherHasTokenLimit() {
 
 // Test 4: useMaxTokens is true
 function testUseMaxTokens() {
-  console.log('Test 4: useMaxTokens is true, app has tokenLimit (4000), model has tokenLimit (8192)');
+  console.log(
+    'Test 4: useMaxTokens is true, app has tokenLimit (4000), model has tokenLimit (8192)'
+  );
 
   const app = { tokenLimit: 4000 };
   const model = { tokenLimit: 8192 };
@@ -130,9 +132,7 @@ function testAppWithZeroTokenLimit() {
 
 // Test 6: Bug scenario - app has NO tokenLimit, should NOT default to 1024
 function testBugScenarioFixed() {
-  console.log(
-    'Test 6: Bug scenario - app has NO tokenLimit, should use model tokenLimit NOT 1024'
-  );
+  console.log('Test 6: Bug scenario - app has NO tokenLimit, should use model tokenLimit NOT 1024');
 
   const app = {}; // No tokenLimit
   const model = { tokenLimit: 64000 }; // Like Claude 4 Sonnet
