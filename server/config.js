@@ -13,7 +13,7 @@ const env = cleanEnv(
   {
     PORT: num({ default: 3000 }),
     HOST: str({ default: '0.0.0.0' }),
-    REQUEST_TIMEOUT: num({ default: 300000 }),
+    REQUEST_TIMEOUT: num({ default: 300000 }), // 5 minutes for streaming/generation requests
     WORKERS: num({ default: undefined, optional: true }),
     NUM_WORKERS: num({ default: undefined, optional: true }),
     SSL_KEY: str({ optional: true }),
