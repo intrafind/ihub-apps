@@ -383,6 +383,11 @@
           "color": "Color",
           "icon": "Icon",
           "iconPlaceholder": "e.g., chat-bubbles",
+          "selectIcon": "Select an icon",
+          "searchIcons": "Search icons...",
+          "noIconsFound": "No icons found",
+          "iconCount": "{{count}} icons available",
+          "iconCountFiltered": "{{filtered}} of {{total}} icons",
           "nameLabel": {
             "label": "App Name",
             "placeholder": "Enter app name"
