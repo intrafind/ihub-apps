@@ -476,6 +476,11 @@
           "color": "Farbe",
           "icon": "Symbol",
           "iconPlaceholder": "z.B. chat-bubbles",
+          "selectIcon": "Symbol auswählen",
+          "searchIcons": "Symbole suchen...",
+          "noIconsFound": "Keine Symbole gefunden",
+          "iconCount": "{{count}} Symbole verfügbar",
+          "iconCountFiltered": "{{filtered}} von {{total}} Symbolen",
           "nameLabel": {
             "label": "App-Name",
             "placeholder": "App-Name eingeben"

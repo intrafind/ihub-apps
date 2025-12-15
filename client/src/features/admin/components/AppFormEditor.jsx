@@ -4,6 +4,7 @@ import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEdi
 import ToolsSelector from '../../../shared/components/ToolsSelector';
 import SourcePicker from './SourcePicker';
 import Icon from '../../../shared/components/Icon';
+import IconPicker from '../../../shared/components/IconPicker';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   validateWithSchema,
@@ -427,17 +428,12 @@ const AppFormEditor = ({
                   {t('admin.apps.edit.icon', 'Icon')}
                   <span className="text-red-500 ml-1">*</span>
                 </label>
-                <input
-                  type="text"
+                <IconPicker
                   value={app.icon || ''}
-                  onChange={e => handleInputChange('icon', e.target.value)}
-                  className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-                    validationErrors.icon ? 'border-red-300' : ''
-                  }`}
+                  onChange={value => handleInputChange('icon', value)}
+                  error={validationErrors.icon}
+                  className="mt-1"
                 />
-                {validationErrors.icon && (
-                  <p className="mt-1 text-sm text-red-600">{validationErrors.icon}</p>
-                )}
               </div>
 
               <div className="col-span-6 sm:col-span-3">
