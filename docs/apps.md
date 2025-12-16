@@ -6,6 +6,10 @@ This comprehensive guide covers how to configure and customize AI applications i
 
 - [Quick Start](#quick-start)
 - [App Types](#app-types)
+  - [Chat Apps](#chat-apps-default)
+  - [Redirect Apps](#redirect-apps)
+  - [Iframe Apps](#iframe-apps)
+- [Required vs Optional Fields by App Type](#required-vs-optional-fields-by-app-type)
 - [Basic App Structure](#basic-app-structure)
 - [Property Details](#property-details)
 - [Advanced Configuration](#advanced-configuration-options)
@@ -16,6 +20,8 @@ This comprehensive guide covers how to configure and customize AI applications i
 - [UI Customization](#ui-customization)
 - [Complete Examples](#complete-examples)
 - [Troubleshooting](#troubleshooting)
+  - [Common Configuration Issues](#common-configuration-issues)
+  - [App Type Specific Issues](#app-type-specific-issues)
 
 ## Quick Start
 
@@ -103,7 +109,18 @@ That's it! Your app will:
 
 ## App Types
 
-iHub Apps supports three types of applications:
+iHub Apps supports three types of applications, each designed for different use cases:
+
+| Type | Best For | Integration Level | Configuration Complexity |
+|------|----------|-------------------|--------------------------|
+| **Chat** | AI-powered conversations, assistants, tools | Native | Medium to High |
+| **Redirect** | External tools, SaaS apps, separate services | External Link | Low |
+| **Iframe** | Embedded dashboards, web apps, tools | Embedded | Low to Medium |
+
+**Choosing the Right Type:**
+- Use **Chat Apps** when you need AI-powered interactions with customizable prompts, tools, and settings
+- Use **Redirect Apps** when you want to link to external applications without embedding them
+- Use **Iframe Apps** when you want to embed external applications seamlessly within iHub Apps
 
 ### Chat Apps (default)
 
