@@ -10,14 +10,26 @@ import crypto from 'crypto';
 
 /**
  * Get encryption key from environment
+ * In production, this must be explicitly set. In development, a warning is shown.
  */
 function getEncryptionKey() {
   let key = process.env.TOKEN_ENCRYPTION_KEY;
 
   if (!key) {
-    // Generate a random key if not provided (development only)
+    // In production, fail fast rather than generating a random key
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'TOKEN_ENCRYPTION_KEY is required in production. ' +
+          'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+      );
+    }
+
+    // In development, generate a random key but warn loudly
     key = crypto.randomBytes(32).toString('hex');
     console.warn('⚠️  Using generated encryption key. Set TOKEN_ENCRYPTION_KEY for production.');
+    console.warn(
+      '   Generated keys change on restart and will NOT decrypt previously encrypted values!'
+    );
   }
 
   return Buffer.from(key, 'hex');
@@ -85,6 +97,7 @@ function decryptString(encryptedData) {
  */
 function decryptEnvironmentVariables() {
   let decryptedCount = 0;
+  const failedVars = [];
 
   Object.keys(process.env).forEach(key => {
     const value = process.env[key];
@@ -96,17 +109,31 @@ function decryptEnvironmentVariables() {
         decryptedCount++;
         console.log(`🔓 Decrypted environment variable: ${key}`);
       } catch (error) {
+        failedVars.push({ key, error: error.message });
         console.error(
           `⚠️  Failed to decrypt environment variable ${key}. This usually means TOKEN_ENCRYPTION_KEY has changed or the value is corrupted.`
         );
         console.error(`   Error: ${error.message}`);
-        // Leave the encrypted value as-is
+        // Leave the encrypted value as-is - application should handle gracefully or fail during authentication
       }
     }
   });
 
   if (decryptedCount > 0) {
     console.log(`✅ Decrypted ${decryptedCount} environment variable(s)`);
+  }
+
+  // If any decryptions failed, provide a summary
+  if (failedVars.length > 0) {
+    console.error('');
+    console.error('❌ Decryption failed for the following variables:');
+    failedVars.forEach(({ key, error }) => {
+      console.error(`   - ${key}: ${error}`);
+    });
+    console.error('');
+    console.error('⚠️  The application may fail when trying to use these encrypted values.');
+    console.error('   Please verify TOKEN_ENCRYPTION_KEY and re-encrypt if necessary.');
+    console.error('');
   }
 }
 

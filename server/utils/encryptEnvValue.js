@@ -71,8 +71,13 @@ try {
   console.log('');
   console.log(encrypted);
   console.log('');
-  console.log('💡 Add this to your .env file:');
+  console.log('💡 Examples of adding this to your .env file:');
+  console.log(`# For LDAP password:`);
   console.log(`LDAP_ADMIN_PASSWORD=${encrypted}`);
+  console.log(`# For API keys:`);
+  console.log(`OPENAI_API_KEY=${encrypted}`);
+  console.log(`# For any sensitive value:`);
+  console.log(`YOUR_VARIABLE_NAME=${encrypted}`);
   console.log('');
   console.log('⚠️  Keep the TOKEN_ENCRYPTION_KEY consistent! If you change it,');
   console.log('   you will need to re-encrypt all encrypted values.');
