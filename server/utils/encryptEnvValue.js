@@ -5,52 +5,24 @@ import crypto from 'crypto';
 /**
  * CLI tool to encrypt values for use in .env files
  * Usage: node server/utils/encryptEnvValue.js "your-password-here"
+ *
+ * Uses TokenStorageService for consistency with the rest of the application.
  */
 
-/**
- * Get encryption key from environment
- */
-function getEncryptionKey() {
-  let key = process.env.TOKEN_ENCRYPTION_KEY;
-
-  if (!key) {
-    // Generate a random key if not provided (development only)
-    key = crypto.randomBytes(32).toString('hex');
-    console.warn('⚠️  Using generated encryption key. Set TOKEN_ENCRYPTION_KEY for production.');
-  }
-
-  return Buffer.from(key, 'hex');
+// Ensure TOKEN_ENCRYPTION_KEY is set
+if (!process.env.TOKEN_ENCRYPTION_KEY) {
+  console.warn('⚠️  TOKEN_ENCRYPTION_KEY not set. Generating a temporary key...');
+  console.warn('   Set TOKEN_ENCRYPTION_KEY in your .env file for persistent encryption.');
+  console.warn('');
+  const tempKey = crypto.randomBytes(32).toString('hex');
+  process.env.TOKEN_ENCRYPTION_KEY = tempKey;
+  console.log('Generated key for this session:');
+  console.log(`TOKEN_ENCRYPTION_KEY=${tempKey}`);
+  console.log('');
 }
 
-/**
- * Encrypt a string value
- */
-function encryptString(plaintext) {
-  if (!plaintext || typeof plaintext !== 'string') {
-    throw new Error('Invalid plaintext: must be a non-empty string');
-  }
-
-  try {
-    const key = getEncryptionKey();
-    const iv = crypto.randomBytes(16);
-
-    // Use AES-256-GCM for authenticated encryption
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-
-    let encrypted = cipher.update(plaintext, 'utf8', 'base64');
-    encrypted += cipher.final('base64');
-
-    // Get the authentication tag
-    const authTag = cipher.getAuthTag();
-
-    // Format: ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
-    const encryptedValue = `ENC[AES256_GCM,data:${encrypted},iv:${iv.toString('base64')},tag:${authTag.toString('base64')},type:str]`;
-
-    return encryptedValue;
-  } catch (error) {
-    throw new Error(`Failed to encrypt string: ${error.message}`);
-  }
-}
+// Import TokenStorageService to use its encryption method
+const { default: tokenStorageService } = await import('../services/TokenStorageService.js');
 
 const value = process.argv[2];
 
@@ -65,7 +37,7 @@ if (!value) {
 }
 
 try {
-  const encrypted = encryptString(value);
+  const encrypted = tokenStorageService.encryptString(value);
   console.log('');
   console.log('✅ Encrypted value:');
   console.log('');

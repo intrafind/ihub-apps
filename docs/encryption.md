@@ -4,7 +4,9 @@ This document explains how to use the environment variable encryption feature in
 
 ## Overview
 
-iHub Apps supports encryption of environment variables in `.env` files using AES-256-GCM encryption. This provides additional security for:
+iHub Apps supports encryption of environment variables in `.env` files using AES-256-GCM encryption. This uses the same `TokenStorageService` that encrypts model API keys in the admin UI, ensuring consistency across the application.
+
+Encryption is supported for:
 
 - API keys (OpenAI, Anthropic, Google, etc.)
 - LDAP/AD bind passwords
@@ -30,21 +32,19 @@ TOKEN_ENCRYPTION_KEY=your_generated_64_character_hex_key
 
 ### 2. Encrypt Sensitive Values
 
-Use the encryption tool to encrypt any sensitive value:
+**Option A: Using the CLI Tool**
 
 ```bash
 node server/utils/encryptEnvValue.js "your_secret_password"
 ```
 
-Output:
-```
-✅ Encrypted value:
+**Option B: Using the Admin UI** (recommended)
 
-ENC[AES256_GCM,data:abc123...,iv:def456...,tag:ghi789...,type:str]
-
-💡 Add this to your .env file:
-LDAP_ADMIN_PASSWORD=ENC[AES256_GCM,data:abc123...,iv:def456...,tag:ghi789...,type:str]
-```
+1. Log in to the Admin UI
+2. Go to the System Settings page
+3. Use the "Encrypt Value" tool
+4. Enter your plain text value
+5. Copy the encrypted output
 
 ### 3. Use in .env File
 
@@ -88,6 +88,53 @@ ENC[AES256_GCM,data:<base64>,iv:<base64>,tag:<base64>,type:str]
 - **Key**: Derived from `TOKEN_ENCRYPTION_KEY` (32 bytes hex)
 - **IV**: Random 16-byte initialization vector (unique per encryption)
 - **Tag**: Authentication tag for integrity verification
+- **Compatibility**: Same format as model API keys stored through the admin UI
+
+## Admin UI Integration
+
+The encryption feature is fully integrated with the existing admin UI:
+
+### Encrypting Values via Admin UI
+
+1. Navigate to **Admin → System Settings**
+2. Find the **"Encrypt Value for .env"** section
+3. Enter your plain text value (password, API key, etc.)
+4. Click **"Encrypt"**
+5. Copy the encrypted value to your clipboard
+6. Add it to your `.env` file
+
+### API Endpoint
+
+The admin UI uses the `/api/admin/auth/encrypt-value` endpoint:
+
+```bash
+curl -X POST http://localhost:3000/api/admin/auth/encrypt-value \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -d '{"plaintext": "my-secret-password"}'
+```
+
+Response:
+```json
+{
+  "encrypted": "ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]",
+  "format": "AES256_GCM",
+  "message": "Value encrypted successfully. Copy this to your .env file."
+}
+```
+
+### Consistency with Model API Keys
+
+The environment variable encryption uses the same `TokenStorageService` that handles:
+- Model API key encryption in the admin UI
+- OAuth token storage per user
+- Other sensitive data encryption
+
+This ensures:
+- ✅ Same encryption algorithm across the application
+- ✅ Same encryption key for all encrypted values
+- ✅ No code duplication
+- ✅ Consistent security practices
 
 ## Security Best Practices
 

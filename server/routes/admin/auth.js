@@ -8,6 +8,7 @@ import { hashPasswordWithUserId } from '../../middleware/localAuth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
+import tokenStorageService from '../../services/TokenStorageService.js';
 
 /**
  * @swagger
@@ -710,6 +711,100 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
       } catch (error) {
         console.error('Error deleting user:', error);
         res.status(500).json({ error: 'Failed to delete user' });
+      }
+    }
+  );
+
+  /**
+   * @openapi
+   * /api/admin/auth/encrypt-value:
+   *   post:
+   *     summary: Encrypt a value for use in .env files
+   *     description: |
+   *       Encrypts a plain text value (password, API key, etc.) so it can be safely stored
+   *       in .env files. The encrypted value uses AES-256-GCM encryption with the
+   *       TOKEN_ENCRYPTION_KEY from the environment.
+   *
+   *       **Use Cases:**
+   *       - Encrypt LDAP/AD passwords for secure storage
+   *       - Encrypt API keys for model configurations
+   *       - Encrypt any sensitive credential that needs to be in .env
+   *
+   *       **Format:** The encrypted value will be in the format:
+   *       `ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]`
+   *
+   *       This can be copied directly to your .env file and will be automatically
+   *       decrypted when the application starts.
+   *     tags:
+   *       - Admin
+   *       - Authentication
+   *       - Security
+   *     security:
+   *       - adminAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - plaintext
+   *             properties:
+   *               plaintext:
+   *                 type: string
+   *                 description: Plain text value to encrypt
+   *                 minLength: 1
+   *                 example: "my-ldap-password"
+   *     responses:
+   *       200:
+   *         description: Value successfully encrypted
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 encrypted:
+   *                   type: string
+   *                   description: Encrypted value in ENC[...] format
+   *                   example: "ENC[AES256_GCM,data:abc...,iv:def...,tag:ghi...,type:str]"
+   *                 format:
+   *                   type: string
+   *                   description: Encryption format used
+   *                   example: "AES256_GCM"
+   *                 message:
+   *                   type: string
+   *                   example: "Value encrypted successfully. Copy this to your .env file."
+   *             example:
+   *               encrypted: "ENC[AES256_GCM,data:xyz...,iv:abc...,tag:def...,type:str]"
+   *               format: "AES256_GCM"
+   *               message: "Value encrypted successfully. Copy this to your .env file."
+   *       400:
+   *         description: Invalid input
+   *       500:
+   *         description: Encryption failed
+   */
+  app.post(
+    buildServerPath('/api/admin/auth/encrypt-value', basePath),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { plaintext } = req.body;
+
+        if (!plaintext || typeof plaintext !== 'string' || plaintext.length < 1) {
+          return res.status(400).json({ error: 'Plaintext value is required' });
+        }
+
+        // Use TokenStorageService for encryption (consistent with model API key encryption)
+        const encrypted = tokenStorageService.encryptString(plaintext);
+
+        res.json({
+          encrypted,
+          format: 'AES256_GCM',
+          message: 'Value encrypted successfully. Copy this to your .env file.'
+        });
+      } catch (error) {
+        console.error('Error encrypting value:', error);
+        res.status(500).json({ error: 'Failed to encrypt value' });
       }
     }
   );
