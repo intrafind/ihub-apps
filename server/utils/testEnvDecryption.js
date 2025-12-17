@@ -39,8 +39,8 @@ testVars.forEach(varName => {
       console.log(`  Value: ${value.substring(0, 50)}...`);
     } else {
       console.log(`${varName}: ${status}`);
-      // Show first few characters only for security
-      console.log(`  Value: ${value.substring(0, 10)}... (${value.length} chars)`);
+      // Only show that a value exists, not its content
+      console.log(`  Value: ${'*'.repeat(Math.min(value.length, 20))} (${value.length} chars)`);
     }
   } else {
     console.log(`${varName}: ⚪ Not set`);

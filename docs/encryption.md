@@ -167,10 +167,12 @@ node server/utils/testEnvDecryption.js
 **Cause:** `TOKEN_ENCRYPTION_KEY` not set in environment
 
 **Solution:**
-Generate and set the key:
+Generate and set the key in your `.env` file:
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))" >> .env
-# Edit .env to add TOKEN_ENCRYPTION_KEY= prefix
+# Generate key
+KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+# Add to .env file
+echo "TOKEN_ENCRYPTION_KEY=$KEY" >> .env
 ```
 
 ### Encrypted value still appears encrypted
@@ -193,7 +195,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))" >> .env
 
 2. **Generate encryption key:**
    ```bash
-   node -e "console.log('TOKEN_ENCRYPTION_KEY=' + require('crypto').randomBytes(32).toString('hex'))" >> .env
+   KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+   echo "TOKEN_ENCRYPTION_KEY=$KEY" >> .env
    ```
 
 3. **Encrypt each sensitive value:**
@@ -243,7 +246,7 @@ GOOGLE_API_KEY=ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
 - ❌ Losing the encryption key means re-encrypting all values
 - ❌ Encrypted values are longer than plain text (may affect .env file size)
 - ✅ Automatic decryption only works for `.env` files loaded by the application
-- ✅ Does not encrypt values in version control (must be done manually)
+- ✅ Tool does not automatically scan and encrypt existing plain-text values in your repository (you must manually encrypt each value)
 
 ## Advanced Usage
 
@@ -272,9 +275,9 @@ function encryptValue(plaintext, keyHex) {
 # encrypt-all-secrets.sh
 
 declare -A secrets=(
-  ["OPENAI_API_KEY"]="sk-..."
-  ["LDAP_PASSWORD"]="password123"
-  ["DATABASE_URL"]="postgres://..."
+  ["OPENAI_API_KEY"]="secret_value_1"
+  ["LDAP_PASSWORD"]="secret_value_2"
+  ["DATABASE_URL"]="secret_value_3"
 )
 
 for key in "${!secrets[@]}"; do

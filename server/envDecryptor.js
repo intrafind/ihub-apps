@@ -26,10 +26,17 @@ function getEncryptionKey() {
 
     // In development, generate a random key but warn loudly
     key = crypto.randomBytes(32).toString('hex');
-    console.warn('⚠️  Using generated encryption key. Set TOKEN_ENCRYPTION_KEY for production.');
+    console.warn('');
+    console.warn('⚠️  SECURITY WARNING: Using a randomly generated encryption key!');
+    console.warn('   This is ONLY acceptable for local development/testing.');
+    console.warn('   Generated keys are NOT persistent - they change on every restart.');
+    console.warn('   This means encrypted values from previous runs CANNOT be decrypted.');
+    console.warn('');
+    console.warn('   For production or persistent encryption, set TOKEN_ENCRYPTION_KEY:');
     console.warn(
-      '   Generated keys change on restart and will NOT decrypt previously encrypted values!'
+      '   node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
     );
+    console.warn('');
   }
 
   return Buffer.from(key, 'hex');
@@ -44,6 +51,11 @@ function isEncrypted(value) {
   }
   return value.startsWith('ENC[') && value.endsWith(']');
 }
+
+// Define regex patterns for encrypted data parsing
+const ENCRYPTED_DATA_REGEX = /data:([A-Za-z0-9+/=]+)/;
+const ENCRYPTED_IV_REGEX = /iv:([A-Za-z0-9+/=]+)/;
+const ENCRYPTED_TAG_REGEX = /tag:([A-Za-z0-9+/=]+)/;
 
 /**
  * Decrypt an encrypted string
@@ -64,9 +76,9 @@ function decryptString(encryptedData) {
     }
 
     // Extract data, iv, and tag using regex patterns
-    const dataMatch = encContent.match(/data:([A-Za-z0-9+/=]+)/);
-    const ivMatch = encContent.match(/iv:([A-Za-z0-9+/=]+)/);
-    const tagMatch = encContent.match(/tag:([A-Za-z0-9+/=]+)/);
+    const dataMatch = encContent.match(ENCRYPTED_DATA_REGEX);
+    const ivMatch = encContent.match(ENCRYPTED_IV_REGEX);
+    const tagMatch = encContent.match(ENCRYPTED_TAG_REGEX);
 
     if (!dataMatch || !ivMatch || !tagMatch) {
       throw new Error('Invalid ENC format: missing required fields');
@@ -99,6 +111,9 @@ function decryptEnvironmentVariables() {
   let decryptedCount = 0;
   const failedVars = [];
 
+  // Control verbosity - can be disabled in production
+  const verbose = process.env.NODE_ENV !== 'production';
+
   Object.keys(process.env).forEach(key => {
     const value = process.env[key];
 
@@ -107,7 +122,9 @@ function decryptEnvironmentVariables() {
         const decrypted = decryptString(value);
         process.env[key] = decrypted;
         decryptedCount++;
-        console.log(`🔓 Decrypted environment variable: ${key}`);
+        if (verbose) {
+          console.log(`🔓 Decrypted environment variable: ${key}`);
+        }
       } catch (error) {
         failedVars.push({ key, error: error.message });
         console.error(
