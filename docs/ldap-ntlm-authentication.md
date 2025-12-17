@@ -86,6 +86,33 @@ AD_BIND_USER=your_ad_service_account
 AD_BIND_PASSWORD=your_ad_service_password
 ```
 
+#### Encrypting Passwords (Recommended)
+
+For enhanced security, you should encrypt sensitive values like passwords before storing them in the `.env` file:
+
+1. **Generate an encrypted value** using the encryption tool:
+   ```bash
+   node server/utils/encryptEnvValue.js "your_ldap_admin_password"
+   ```
+
+2. **Copy the encrypted value** (starts with `ENC[`) from the output
+
+3. **Add it to your `.env` file**:
+   ```bash
+   LDAP_ADMIN_PASSWORD=ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
+   ```
+
+4. The system will **automatically decrypt** the value when loading the configuration
+
+**Important Notes:**
+- Keep your `TOKEN_ENCRYPTION_KEY` secure and consistent. If you lose or change it, encrypted values will need to be re-encrypted.
+- The encryption key is automatically generated on first run if not set. Set it explicitly in production:
+  ```bash
+  TOKEN_ENCRYPTION_KEY=your_64_character_hex_key
+  ```
+- You can generate a secure key with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+- All environment variables (API keys, passwords, etc.) can be encrypted using this method
+
 ### Configuration Options
 
 | Option                  | Description                                    | Required | Default                                        |
