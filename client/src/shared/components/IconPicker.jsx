@@ -133,7 +133,9 @@ const IconPicker = ({ value, onChange, className = '', error }) => {
               <span className="text-gray-900">{value}</span>
             </>
           ) : (
-            <span className="text-gray-400">{t('admin.apps.edit.selectIcon', 'Select an icon')}</span>
+            <span className="text-gray-400">
+              {t('admin.apps.edit.selectIcon', 'Select an icon')}
+            </span>
           )}
         </div>
         <Icon name="chevron-down" size="sm" className="text-gray-400" />

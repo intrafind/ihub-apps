@@ -6,6 +6,10 @@ This comprehensive guide covers how to configure and customize AI applications i
 
 - [Quick Start](#quick-start)
 - [App Types](#app-types)
+  - [Chat Apps](#chat-apps-default)
+  - [Redirect Apps](#redirect-apps)
+  - [Iframe Apps](#iframe-apps)
+- [Required vs Optional Fields by App Type](#required-vs-optional-fields-by-app-type)
 - [Basic App Structure](#basic-app-structure)
 - [Property Details](#property-details)
 - [Advanced Configuration](#advanced-configuration-options)
@@ -16,6 +20,8 @@ This comprehensive guide covers how to configure and customize AI applications i
 - [UI Customization](#ui-customization)
 - [Complete Examples](#complete-examples)
 - [Troubleshooting](#troubleshooting)
+  - [Common Configuration Issues](#common-configuration-issues)
+  - [App Type Specific Issues](#app-type-specific-issues)
 
 ## Quick Start
 
@@ -103,7 +109,18 @@ That's it! Your app will:
 
 ## App Types
 
-iHub Apps supports three types of applications:
+iHub Apps supports three types of applications, each designed for different use cases:
+
+| Type | Best For | Integration Level | Configuration Complexity |
+|------|----------|-------------------|--------------------------|
+| **Chat** | AI-powered conversations, assistants, tools | Native | Medium to High |
+| **Redirect** | External tools, SaaS apps, separate services | External Link | Low |
+| **Iframe** | Embedded dashboards, web apps, tools | Embedded | Low to Medium |
+
+**Choosing the Right Type:**
+- Use **Chat Apps** when you need AI-powered interactions with customizable prompts, tools, and settings
+- Use **Redirect Apps** when you want to link to external applications without embedding them
+- Use **Iframe Apps** when you want to embed external applications seamlessly within iHub Apps
 
 ### Chat Apps (default)
 
@@ -124,7 +141,15 @@ Standard AI-powered chat interfaces with customizable prompts and settings. This
 
 ### Redirect Apps
 
-Link to external applications or websites directly from the app list. Perfect for integrating third-party tools.
+Link to external applications or websites directly from the app list. Perfect for integrating third-party tools, external services, or specialized applications that don't need to be embedded.
+
+**Use Cases:**
+- Link to external SaaS tools (e.g., CRM, project management)
+- Connect to internal applications on different domains
+- Provide quick access to web-based tools
+- Create shortcuts to frequently used resources
+
+**Basic Configuration:**
 
 ```json
 {
@@ -142,14 +167,99 @@ Link to external applications or websites directly from the app list. Perfect fo
 }
 ```
 
-**Redirect Configuration:**
-- `url` (required): The target URL to redirect to
-- `openInNewTab` (optional, default: `true`): Whether to open in a new browser tab
-- `showWarning` (optional, default: `true`): Whether to show a warning page before redirecting. Set to `false` to redirect immediately without showing the warning page.
+**Configuration Properties:**
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `url` | String (URL) | Yes | - | The target URL to redirect to. Must be a valid HTTP/HTTPS URL. |
+| `openInNewTab` | Boolean | No | `true` | Whether to open the URL in a new browser tab. When `false`, navigates in the same window. |
+| `showWarning` | Boolean | No | `true` | Whether to display a warning page before redirecting. When `false`, redirects immediately without confirmation. |
+
+**Step-by-Step Setup:**
+
+1. **Create the app configuration file** in `contents/apps/my-redirect-app.json`:
+   ```json
+   {
+     "id": "my-external-tool",
+     "type": "redirect",
+     "name": {
+       "en": "External Tool",
+       "de": "Externes Tool"
+     },
+     "description": {
+       "en": "Quick access to our project management system",
+       "de": "Schnellzugriff auf unser Projektverwaltungssystem"
+     },
+     "redirectConfig": {
+       "url": "https://projects.company.com",
+       "openInNewTab": true,
+       "showWarning": true
+     },
+     "color": "#10B981",
+     "icon": "external-link",
+     "enabled": true
+   }
+   ```
+
+2. **Configure redirect behavior:**
+   - Set `showWarning: true` for external sites to inform users they're leaving iHub Apps
+   - Set `showWarning: false` for seamless redirects to trusted internal tools
+   - Use `openInNewTab: true` to keep iHub Apps open in the background
+   - Use `openInNewTab: false` to fully navigate away from iHub Apps
+
+3. **Add translations** for all supported languages in the `name` and `description` fields
+
+4. **Restart the server** to load the new app configuration
+
+5. **Verify** the app appears in the apps list with an "External" badge
+
+**Configuration Examples:**
+
+*Immediate redirect to internal tool (no warning):*
+```json
+{
+  "id": "intranet",
+  "type": "redirect",
+  "name": { "en": "Company Intranet" },
+  "description": { "en": "Access company resources" },
+  "redirectConfig": {
+    "url": "https://intranet.company.local",
+    "openInNewTab": false,
+    "showWarning": false
+  },
+  "color": "#3B82F6",
+  "icon": "building"
+}
+```
+
+*External service with warning:*
+```json
+{
+  "id": "external-crm",
+  "type": "redirect",
+  "name": { "en": "CRM System" },
+  "description": { "en": "Customer relationship management" },
+  "redirectConfig": {
+    "url": "https://crm.external-vendor.com",
+    "openInNewTab": true,
+    "showWarning": true
+  },
+  "color": "#8B5CF6",
+  "icon": "users"
+}
+```
 
 ### Iframe Apps
 
-Embed external applications directly within iHub Apps using an iframe.
+Embed external applications directly within iHub Apps using an iframe. This creates a seamless integration where the external application appears as a native part of iHub Apps.
+
+**Use Cases:**
+- Embed business intelligence dashboards
+- Integrate document editors or collaboration tools
+- Display internal web applications
+- Provide access to specialized tools without leaving iHub Apps
+
+**Basic Configuration:**
 
 ```json
 {
@@ -167,10 +277,220 @@ Embed external applications directly within iHub Apps using an iframe.
 }
 ```
 
-**Iframe Configuration:**
-- `url` (required): The URL to embed
-- `allowFullscreen` (optional, default: `true`): Whether to allow fullscreen mode
-- `sandbox` (optional): Array of sandbox permissions for security
+**Configuration Properties:**
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `url` | String (URL) | Yes | - | The URL of the application to embed. Must be a valid HTTP/HTTPS URL. |
+| `allowFullscreen` | Boolean | No | `true` | Whether to allow the embedded app to enter fullscreen mode. |
+| `sandbox` | Array<String> | No | `["allow-scripts", "allow-same-origin", "allow-forms"]` | Array of sandbox permissions that control what the iframe can do. See [Sandbox Permissions](#iframe-sandbox-permissions) below. |
+
+**Step-by-Step Setup:**
+
+1. **Create the app configuration file** in `contents/apps/my-iframe-app.json`:
+   ```json
+   {
+     "id": "my-embedded-app",
+     "type": "iframe",
+     "name": {
+       "en": "Analytics Dashboard",
+       "de": "Analyse-Dashboard"
+     },
+     "description": {
+       "en": "Company analytics and reporting",
+       "de": "Unternehmensanalyse und Berichterstattung"
+     },
+     "iframeConfig": {
+       "url": "https://analytics.company.com/dashboard",
+       "allowFullscreen": true,
+       "sandbox": [
+         "allow-scripts",
+         "allow-same-origin",
+         "allow-forms",
+         "allow-popups"
+       ]
+     },
+     "color": "#8B5CF6",
+     "icon": "chart-bar",
+     "enabled": true
+   }
+   ```
+
+2. **Verify the target site allows embedding:**
+   - Check that the site doesn't send `X-Frame-Options: DENY` or `X-Frame-Options: SAMEORIGIN` headers
+   - Verify the Content Security Policy (CSP) allows embedding
+   - Test the URL in a simple HTML iframe to confirm it works
+
+3. **Configure sandbox permissions** based on what the app needs (see below)
+
+4. **Add translations** for all supported languages
+
+5. **Restart the server** to load the new app configuration
+
+6. **Test the embedded app** to ensure it loads and functions correctly
+
+**Iframe Sandbox Permissions:**
+
+The `sandbox` attribute restricts what the embedded application can do. Include only the permissions your application needs:
+
+| Permission | Description | Risk Level |
+|------------|-------------|------------|
+| `allow-scripts` | Allows JavaScript execution | Medium - Required for most modern web apps |
+| `allow-same-origin` | Treats content as same origin, enables storage access | High - Required for apps that need cookies/storage |
+| `allow-forms` | Allows form submission | Low - Required for apps with forms |
+| `allow-popups` | Allows opening new windows/tabs | Medium - Required for apps that open external links |
+| `allow-modals` | Allows `alert()`, `confirm()`, `prompt()` dialogs | Low - Usually safe to enable |
+| `allow-top-navigation` | Allows navigating the top-level window | High - Generally avoid unless necessary |
+| `allow-downloads` | Allows downloading files | Medium - Enable if app needs file downloads |
+
+**Recommended Sandbox Configurations:**
+
+*Minimal (most restrictive):*
+```json
+"sandbox": ["allow-scripts"]
+```
+
+*Standard (balanced security and functionality):*
+```json
+"sandbox": ["allow-scripts", "allow-same-origin", "allow-forms"]
+```
+
+*Permissive (for trusted applications):*
+```json
+"sandbox": ["allow-scripts", "allow-same-origin", "allow-forms", "allow-popups", "allow-modals", "allow-downloads"]
+```
+
+**Configuration Examples:**
+
+*Embedded whiteboard application:*
+```json
+{
+  "id": "whiteboard",
+  "type": "iframe",
+  "name": { "en": "Collaborative Whiteboard" },
+  "description": { "en": "Draw and brainstorm together" },
+  "iframeConfig": {
+    "url": "https://excalidraw.com/",
+    "allowFullscreen": true,
+    "sandbox": [
+      "allow-scripts",
+      "allow-same-origin",
+      "allow-forms",
+      "allow-popups",
+      "allow-downloads"
+    ]
+  },
+  "color": "#8B5CF6",
+  "icon": "pencil"
+}
+```
+
+*Embedded analytics dashboard:*
+```json
+{
+  "id": "analytics",
+  "type": "iframe",
+  "name": { "en": "Analytics Dashboard" },
+  "description": { "en": "View company metrics and reports" },
+  "iframeConfig": {
+    "url": "https://metabase.company.com/public/dashboard/abc123",
+    "allowFullscreen": true,
+    "sandbox": ["allow-scripts", "allow-same-origin"]
+  },
+  "color": "#3B82F6",
+  "icon": "chart-bar"
+}
+```
+
+*Internal document editor:*
+```json
+{
+  "id": "docs-editor",
+  "type": "iframe",
+  "name": { "en": "Document Editor" },
+  "description": { "en": "Create and edit documents" },
+  "iframeConfig": {
+    "url": "https://docs.company.local/editor",
+    "allowFullscreen": false,
+    "sandbox": [
+      "allow-scripts",
+      "allow-same-origin",
+      "allow-forms",
+      "allow-modals"
+    ]
+  },
+  "color": "#10B981",
+  "icon": "document-text"
+}
+```
+
+## Required vs Optional Fields by App Type
+
+Different app types have different required and optional fields. Here's a quick reference:
+
+### All App Types (Required Fields)
+
+These fields are required for **all** app types (chat, redirect, iframe):
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `id` | String | Unique identifier (alphanumeric, dots, hyphens, underscores) | `"my-app"` |
+| `name` | Object | Localized app names | `{"en": "My App", "de": "Meine App"}` |
+| `description` | Object | Localized descriptions | `{"en": "Description", "de": "Beschreibung"}` |
+| `color` | String | Hex color code | `"#4F46E5"` |
+| `icon` | String | Icon identifier | `"chat"` |
+
+### Chat Apps (Additional Required Fields)
+
+Chat apps require these additional fields:
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `system` | Object | Localized system prompts | `{"en": "You are a helpful assistant."}` |
+| `tokenLimit` | Number | Max tokens (1-1,000,000) | `4000` |
+
+Optional fields include: `preferredModel`, `preferredStyle`, `preferredTemperature`, `tools`, `variables`, `settings`, etc.
+
+### Redirect Apps (Additional Required Fields)
+
+Redirect apps require:
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `type` | String | Must be `"redirect"` | `"redirect"` |
+| `redirectConfig` | Object | Redirect configuration | See below |
+| `redirectConfig.url` | String | Target URL | `"https://example.com"` |
+
+### Iframe Apps (Additional Required Fields)
+
+Iframe apps require:
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `type` | String | Must be `"iframe"` | `"iframe"` |
+| `iframeConfig` | Object | Iframe configuration | See below |
+| `iframeConfig.url` | String | URL to embed | `"https://example.com/app"` |
+
+### Common Optional Fields
+
+These optional fields work for all app types:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | Boolean | `true` | Whether the app is enabled |
+| `order` | Number | - | Display order in app list |
+| `category` | String | - | App category for grouping |
+
+### Chat-Specific Fields Not Used in Redirect/Iframe Apps
+
+The following fields are specific to chat apps and are not used for redirect or iframe types:
+- `system`, `tokenLimit`, `preferredModel`, `preferredOutputFormat`
+- `preferredStyle`, `preferredTemperature`, `sendChatHistory`
+- `tools`, `variables`, `prompt`, `outputSchema`
+- `settings`, `inputMode`, `upload`, `features`
+- `greeting`, `starterPrompts`, `messagePlaceholder`
+- `allowEmptyContent`, `allowedModels`, `disallowModelSelection`
+- `sources`, `thinking`, `iassistant`
 
 ## Basic App Structure
 
@@ -656,6 +976,90 @@ Here are some practical examples of how to configure the settings for different 
 - Validate your JSON schema syntax
 - Test with simpler schemas first
 - Check provider-specific limitations
+
+### App Type Specific Issues
+
+**Redirect Apps:**
+
+*App redirects but doesn't open:*
+- Check if browser pop-up blocker is preventing new tabs
+- Verify the URL is accessible from the user's network
+- Ensure the URL includes the protocol (https:// or http://)
+- Test the URL directly in a browser
+
+*Warning page shows but redirect button doesn't work:*
+- Check browser console for JavaScript errors
+- Verify the `redirectConfig.url` is a valid URL format
+- Ensure no network policies are blocking the redirect
+
+*Users don't want to see the warning page:*
+- Set `redirectConfig.showWarning: false` for immediate redirect
+- This is recommended for trusted internal applications only
+
+**Iframe Apps:**
+
+*"Failed to load embedded application" error:*
+- **X-Frame-Options blocking**: The target site sends `X-Frame-Options: DENY` or `SAMEORIGIN` headers
+  - Solution: Contact the site administrator to allow framing from your domain, or use a redirect app instead
+- **CSP blocking**: The site's Content Security Policy prevents embedding
+  - Solution: The target site needs to adjust its CSP `frame-ancestors` directive
+- **HTTPS mixed content**: Embedding HTTP content in HTTPS page
+  - Solution: Use HTTPS URLs or serve iHub Apps over HTTP (not recommended)
+
+*Iframe loads but features don't work:*
+- Check sandbox permissions - add necessary permissions like `allow-popups`, `allow-modals`
+- Verify `allow-same-origin` is included if the app needs storage/cookies
+- Check browser console for security or permission errors
+
+*Authentication issues in embedded app:*
+- Ensure `allow-same-origin` is in sandbox permissions
+- Check if the app uses third-party cookies (may be blocked by browser)
+- Consider using redirect type instead if authentication is complex
+
+*Iframe is slow to load:*
+- The target application may be resource-intensive
+- Consider using redirect type to open in a separate tab
+- Check network latency between user and target server
+
+*Embedded app breaks out of iframe:*
+- The app uses `target="_top"` or `target="_parent"` in links
+- Add `allow-top-navigation` to sandbox if this is intended
+- Or remove this permission to prevent breakout (links won't work)
+
+**Security Considerations:**
+
+*Redirect Apps:*
+- Always validate URLs to prevent open redirect vulnerabilities
+- Use `showWarning: true` for external sites to inform users
+- Consider maintaining a whitelist of allowed domains
+- Be cautious with redirects to user-provided URLs
+
+*Iframe Apps:*
+- Only embed applications from trusted sources
+- Use minimal sandbox permissions necessary for functionality
+- Avoid `allow-top-navigation` unless absolutely required
+- Be aware that embedded apps can potentially:
+  - Run JavaScript in the context of the iframe
+  - Access their own cookies and storage (with `allow-same-origin`)
+  - Make network requests to their own domain
+- Never embed untrusted or user-provided URLs
+- Consider implementing Content Security Policy headers for additional protection
+
+**Best Practices:**
+
+*Redirect Apps:*
+- Use descriptive names and descriptions to clarify where users are going
+- Choose appropriate icons that represent the external service
+- Test redirects on different browsers and devices
+- Document any required VPN or network access for internal apps
+
+*Iframe Apps:*
+- Test thoroughly in the target browsers your users will use
+- Verify mobile responsiveness if users access via mobile devices
+- Monitor for changes in the embedded app that might break integration
+- Keep a list of embedded URLs and verify them periodically
+- Consider fallback options if embedding fails
+- Document any special requirements or limitations of the embedded app
 
 ## Related Documentation
 
