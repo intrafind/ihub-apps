@@ -83,24 +83,30 @@ export default function registerAuthRoutes(app, basePath = '') {
         return res.status(400).json({ error: 'Username and password are required' });
       }
 
+      // Check if any authentication method is enabled before attempting authentication
+      if (!localAuthConfig.enabled && !ldapAuthConfig.enabled) {
+        return res.status(400).json({
+          error: 'No authentication methods are enabled. Please contact your administrator.'
+        });
+      }
+
       let result = null;
-      let lastError = null;
 
       // Try local authentication first if enabled
       if (localAuthConfig.enabled) {
         try {
-          console.log('[Auth] Attempting local authentication for user:', username);
+          console.log('[Auth] Attempting local authentication');
           result = await loginUser(username, password, localAuthConfig);
+          console.log('[Auth] Local authentication succeeded');
         } catch (error) {
-          console.log('[Auth] Local authentication failed:', error.message);
-          lastError = error;
+          console.log('[Auth] Local authentication failed');
           // Continue to try LDAP if enabled
         }
       }
 
       // Try LDAP authentication if local auth failed or is disabled
       if (!result && ldapAuthConfig.enabled && ldapAuthConfig.providers?.length > 0) {
-        console.log('[Auth] Attempting LDAP authentication for user:', username);
+        console.log('[Auth] Attempting LDAP authentication');
 
         // If a specific provider was requested, use it
         if (provider) {
@@ -111,12 +117,9 @@ export default function registerAuthRoutes(app, basePath = '') {
 
           try {
             result = await loginLdapUser(username, password, ldapProvider);
+            console.log('[Auth] LDAP authentication succeeded');
           } catch (error) {
-            console.log(
-              `[Auth] LDAP authentication failed for provider '${provider}':`,
-              error.message
-            );
-            lastError = error;
+            console.log(`[Auth] LDAP authentication failed for provider '${provider}'`);
           }
         } else {
           // Try each LDAP provider until one succeeds
@@ -125,14 +128,11 @@ export default function registerAuthRoutes(app, basePath = '') {
               console.log(`[Auth] Trying LDAP provider: ${ldapProvider.name}`);
               result = await loginLdapUser(username, password, ldapProvider);
               if (result) {
-                console.log(
-                  `[Auth] LDAP authentication succeeded with provider: ${ldapProvider.name}`
-                );
+                console.log(`[Auth] LDAP authentication succeeded with provider: ${ldapProvider.name}`);
                 break;
               }
             } catch (error) {
-              console.log(`[Auth] LDAP provider '${ldapProvider.name}' failed:`, error.message);
-              lastError = error;
+              console.log(`[Auth] LDAP provider '${ldapProvider.name}' failed`);
               // Continue to next provider
             }
           }
@@ -141,17 +141,10 @@ export default function registerAuthRoutes(app, basePath = '') {
 
       // If no authentication method succeeded
       if (!result) {
-        if (!localAuthConfig.enabled && !ldapAuthConfig.enabled) {
-          return res.status(400).json({
-            error: 'No authentication methods are enabled. Please contact your administrator.'
-          });
-        }
-
-        // Return the last error or a generic message
-        const errorMessage = lastError?.message || 'Invalid credentials';
+        // Return a generic error message to avoid information disclosure
         return res.status(401).json({
           success: false,
-          error: errorMessage
+          error: 'Invalid credentials'
         });
       }
 

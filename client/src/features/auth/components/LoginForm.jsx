@@ -55,9 +55,9 @@ const LoginForm = ({ onSuccess, onCancel }) => {
   const hasOidcProviders = authConfig?.authMethods?.oidc?.enabled && oidcProviders.length > 0;
   const hasLocalAuth = authConfig?.authMethods?.local?.enabled;
 
-  // Check if LDAP is enabled and has providers
+  // Check if LDAP is enabled
   const ldapProviders = authConfig?.authMethods?.ldap?.providers || [];
-  const hasLdapAuth = authConfig?.authMethods?.ldap?.enabled && ldapProviders.length > 0;
+  const hasLdapAuth = authConfig?.authMethods?.ldap?.enabled;
 
   // Show username/password form if either local or LDAP auth is enabled
   const hasUsernamePasswordAuth = hasLocalAuth || hasLdapAuth;
