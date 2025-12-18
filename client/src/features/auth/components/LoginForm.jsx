@@ -50,6 +50,15 @@ const LoginForm = ({ onSuccess, onCancel }) => {
     loginWithOidc(providerName);
   };
 
+  const handleNtlmLogin = () => {
+    // Store current URL for return after NTLM authentication
+    const returnUrl = window.location.href;
+    
+    // Redirect to NTLM login endpoint which will trigger NTLM authentication
+    const ntlmLoginUrl = `/api/auth/ntlm/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+    window.location.href = ntlmLoginUrl;
+  };
+
   // Check if OIDC is enabled and has providers
   const oidcProviders = authConfig?.authMethods?.oidc?.providers || [];
   const hasOidcProviders = authConfig?.authMethods?.oidc?.enabled && oidcProviders.length > 0;
@@ -58,6 +67,10 @@ const LoginForm = ({ onSuccess, onCancel }) => {
   // Check if LDAP is enabled
   const ldapProviders = authConfig?.authMethods?.ldap?.providers || [];
   const hasLdapAuth = authConfig?.authMethods?.ldap?.enabled;
+
+  // Check if NTLM is enabled
+  const hasNtlmAuth = authConfig?.authMethods?.ntlm?.enabled;
+  const ntlmDomain = authConfig?.authMethods?.ntlm?.domain;
 
   // Show username/password form if either local or LDAP auth is enabled
   const hasUsernamePasswordAuth = hasLocalAuth || hasLdapAuth;
@@ -111,6 +124,35 @@ const LoginForm = ({ onSuccess, onCancel }) => {
               </button>
             ))}
           </div>
+
+          {(hasUsernamePasswordAuth || hasNtlmAuth) && (
+            <div className="my-4 flex items-center">
+              <div className="flex-grow border-t border-gray-300"></div>
+              <span className="px-3 text-sm text-gray-500">{t('auth.login.or', 'or')}</span>
+              <div className="flex-grow border-t border-gray-300"></div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* NTLM Provider */}
+      {hasNtlmAuth && (
+        <div className="mb-6">
+          {!hasOidcProviders && (
+            <div className="text-sm text-gray-600 text-center mb-3">
+              {t('auth.login.signInWith', 'Sign in with:')}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleNtlmLogin}
+            disabled={isFormLoading}
+            className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          >
+            <span className="mr-2">🔐</span>
+            {t('auth.login.windowsAuth', 'Windows Authentication')}
+            {ntlmDomain && <span className="ml-1 text-xs text-gray-500">({ntlmDomain})</span>}
+          </button>
 
           {hasUsernamePasswordAuth && (
             <div className="my-4 flex items-center">
@@ -223,7 +265,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
       )}
 
       {/* Show message if no auth methods are available */}
-      {!hasUsernamePasswordAuth && !hasOidcProviders && (
+      {!hasUsernamePasswordAuth && !hasOidcProviders && !hasNtlmAuth && (
         <div className="text-center text-gray-500">
           <p>No authentication methods are currently enabled.</p>
           <p className="text-sm mt-2">Please contact your administrator.</p>
