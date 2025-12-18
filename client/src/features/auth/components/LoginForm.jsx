@@ -76,6 +76,10 @@ const LoginForm = ({ onSuccess, onCancel }) => {
   const hasUsernamePasswordAuth = hasLocalAuth || hasLdapAuth;
   const showDemoAccounts = platformConfig?.localAuth?.showDemoAccounts === true;
 
+  // Count total number of auth methods for proper separator logic
+  const totalAuthMethods =
+    (hasOidcProviders ? 1 : 0) + (hasNtlmAuth ? 1 : 0) + (hasUsernamePasswordAuth ? 1 : 0);
+
   // Provider icon mapping
   const getProviderIcon = providerName => {
     switch (providerName) {
@@ -125,7 +129,8 @@ const LoginForm = ({ onSuccess, onCancel }) => {
             ))}
           </div>
 
-          {(hasUsernamePasswordAuth || hasNtlmAuth) && (
+          {/* Show separator only if there are other auth methods */}
+          {totalAuthMethods > 1 && (
             <div className="my-4 flex items-center">
               <div className="flex-grow border-t border-gray-300"></div>
               <span className="px-3 text-sm text-gray-500">{t('auth.login.or', 'or')}</span>
@@ -138,7 +143,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
       {/* NTLM Provider */}
       {hasNtlmAuth && (
         <div className="mb-6">
-          {!hasOidcProviders && (
+          {!hasOidcProviders && totalAuthMethods > 1 && (
             <div className="text-sm text-gray-600 text-center mb-3">
               {t('auth.login.signInWith', 'Sign in with:')}
             </div>
@@ -154,6 +159,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
             {ntlmDomain && <span className="ml-1 text-xs text-gray-500">({ntlmDomain})</span>}
           </button>
 
+          {/* Show separator only if there are more auth methods after NTLM */}
           {hasUsernamePasswordAuth && (
             <div className="my-4 flex items-center">
               <div className="flex-grow border-t border-gray-300"></div>

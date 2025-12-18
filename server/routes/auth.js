@@ -261,10 +261,36 @@ export default function registerAuthRoutes(app, basePath = '') {
         maxAge: result.expiresIn * 1000
       });
 
-      // Get return URL from query parameter or default to home
-      const returnUrl = req.query.returnUrl || '/';
+      // Validate and sanitize return URL to prevent open redirect attacks
+      let returnUrl = req.query.returnUrl || '/';
       
-      // Redirect to the return URL with success indicator
+      // Only allow relative URLs (starting with /) and same-origin URLs
+      try {
+        // If returnUrl is an absolute URL, validate it's same origin
+        if (returnUrl.startsWith('http://') || returnUrl.startsWith('https://')) {
+          const returnUrlObj = new URL(returnUrl);
+          const currentHost = req.get('host');
+          
+          // Only allow same-origin redirects
+          if (returnUrlObj.host !== currentHost) {
+            console.warn(`[Security] Blocked open redirect attempt to: ${returnUrl}`);
+            returnUrl = '/';
+          }
+        } else if (!returnUrl.startsWith('/')) {
+          // Ensure relative URLs start with /
+          returnUrl = '/' + returnUrl;
+        }
+        
+        // Remove any attempts to use protocol-relative URLs (//example.com)
+        if (returnUrl.startsWith('//')) {
+          returnUrl = '/';
+        }
+      } catch (error) {
+        console.error('[Security] Invalid return URL:', returnUrl, error);
+        returnUrl = '/';
+      }
+      
+      // Redirect to the validated return URL with success indicator
       res.redirect(returnUrl + (returnUrl.includes('?') ? '&' : '?') + 'ntlm=success');
     } catch (error) {
       console.error('NTLM login error:', error);
@@ -361,12 +387,14 @@ export default function registerAuthRoutes(app, basePath = '') {
 
     // Clear NTLM session flag to prevent auto-relogin
     if (req.session) {
-      req.session.ntlmRequested = false;
       // Regenerate session to ensure clean state
       req.session.regenerate(err => {
         if (err) {
           console.error('Session regeneration error:', err);
         }
+        
+        // Set flag in the new session to prevent NTLM auto-login
+        req.session.ntlmRequested = false;
       });
     }
 
