@@ -222,7 +222,87 @@ export default function registerAuthRoutes(app, basePath = '') {
   });
 
   /**
-   * NTLM authentication login (for API usage)
+   * NTLM authentication initiation (GET) - triggers NTLM authentication flow
+   * Used when multiple auth providers are available and user explicitly selects NTLM
+   */
+  app.get(buildServerPath('/api/auth/ntlm/login', basePath), async (req, res) => {
+    try {
+      const platform = app.get('platform') || {};
+      const ntlmAuthConfig = platform.ntlmAuth || {};
+
+      if (!ntlmAuthConfig.enabled) {
+        return res.status(400).json({ error: 'NTLM authentication is not enabled' });
+      }
+
+      // Mark session to indicate NTLM was explicitly requested
+      // This allows the NTLM middleware to activate
+      if (req.session) {
+        req.session.ntlmRequested = true;
+      }
+
+      // Check if NTLM data is available from the middleware
+      if (!req.ntlm || !req.ntlm.Authenticated) {
+        // NTLM middleware will handle the challenge-response
+        // This response should not be reached if middleware is working
+        return res.status(401).json({
+          error:
+            'NTLM authentication in progress. Please ensure Windows Integrated Authentication is enabled in your browser.'
+        });
+      }
+
+      // User is authenticated via NTLM
+      const result = processNtlmLogin(req, ntlmAuthConfig);
+
+      // Set HTTP-only cookie for authentication
+      res.cookie('authToken', result.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: result.expiresIn * 1000
+      });
+
+      // Validate and sanitize return URL to prevent open redirect attacks
+      let returnUrl = req.query.returnUrl || '/';
+      
+      // Only allow relative URLs (starting with /) and same-origin URLs
+      try {
+        // If returnUrl is an absolute URL, validate it's same origin
+        if (returnUrl.startsWith('http://') || returnUrl.startsWith('https://')) {
+          const returnUrlObj = new URL(returnUrl);
+          const currentHost = req.get('host');
+          
+          // Only allow same-origin redirects
+          if (returnUrlObj.host !== currentHost) {
+            console.warn(`[Security] Blocked open redirect attempt to: ${returnUrl}`);
+            returnUrl = '/';
+          }
+        } else if (!returnUrl.startsWith('/')) {
+          // Ensure relative URLs start with /
+          returnUrl = '/' + returnUrl;
+        }
+        
+        // Remove any attempts to use protocol-relative URLs (//example.com)
+        if (returnUrl.startsWith('//')) {
+          returnUrl = '/';
+        }
+      } catch (error) {
+        console.error('[Security] Invalid return URL:', returnUrl, error);
+        returnUrl = '/';
+      }
+      
+      // Redirect to the validated return URL with success indicator
+      res.redirect(returnUrl + (returnUrl.includes('?') ? '&' : '?') + 'ntlm=success');
+    } catch (error) {
+      console.error('NTLM login error:', error);
+      res.status(401).json({
+        success: false,
+        error: error.message || 'NTLM authentication failed'
+      });
+    }
+  });
+
+  /**
+   * NTLM authentication login (POST - for API usage)
    */
   app.post(buildServerPath('/api/auth/ntlm/login', basePath), async (req, res) => {
     try {
@@ -231,6 +311,11 @@ export default function registerAuthRoutes(app, basePath = '') {
 
       if (!ntlmAuthConfig.enabled) {
         return res.status(400).json({ error: 'NTLM authentication is not enabled' });
+      }
+
+      // Mark session to indicate NTLM was explicitly requested
+      if (req.session) {
+        req.session.ntlmRequested = true;
       }
 
       // Check if NTLM data is available from the middleware
@@ -299,6 +384,19 @@ export default function registerAuthRoutes(app, basePath = '') {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax'
     });
+
+    // Clear NTLM session flag to prevent auto-relogin
+    if (req.session) {
+      // Regenerate session to ensure clean state
+      req.session.regenerate(err => {
+        if (err) {
+          console.error('Session regeneration error:', err);
+        }
+        
+        // Set flag in the new session to prevent NTLM auto-login
+        req.session.ntlmRequested = false;
+      });
+    }
 
     // Log the event for analytics
     if (req.user && req.user.id !== 'anonymous') {
