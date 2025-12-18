@@ -10,7 +10,8 @@ const LoginForm = ({ onSuccess, onCancel }) => {
   const { platformConfig } = usePlatformConfig();
   const [formData, setFormData] = useState({
     username: '',
-    password: ''
+    password: '',
+    provider: '' // For LDAP provider selection
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,7 +33,8 @@ const LoginForm = ({ onSuccess, onCancel }) => {
     setIsSubmitting(true);
 
     try {
-      const result = await login(formData.username, formData.password);
+      // Pass provider to login if LDAP is being used
+      const result = await login(formData.username, formData.password, formData.provider);
 
       if (result.success) {
         onSuccess?.();
@@ -52,6 +54,13 @@ const LoginForm = ({ onSuccess, onCancel }) => {
   const oidcProviders = authConfig?.authMethods?.oidc?.providers || [];
   const hasOidcProviders = authConfig?.authMethods?.oidc?.enabled && oidcProviders.length > 0;
   const hasLocalAuth = authConfig?.authMethods?.local?.enabled;
+
+  // Check if LDAP is enabled and has providers
+  const ldapProviders = authConfig?.authMethods?.ldap?.providers || [];
+  const hasLdapAuth = authConfig?.authMethods?.ldap?.enabled && ldapProviders.length > 0;
+
+  // Show username/password form if either local or LDAP auth is enabled
+  const hasUsernamePasswordAuth = hasLocalAuth || hasLdapAuth;
   const showDemoAccounts = platformConfig?.localAuth?.showDemoAccounts === true;
 
   // Provider icon mapping
@@ -103,7 +112,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
             ))}
           </div>
 
-          {hasLocalAuth && (
+          {hasUsernamePasswordAuth && (
             <div className="my-4 flex items-center">
               <div className="flex-grow border-t border-gray-300"></div>
               <span className="px-3 text-sm text-gray-500">{t('auth.login.or', 'or')}</span>
@@ -113,9 +122,33 @@ const LoginForm = ({ onSuccess, onCancel }) => {
         </div>
       )}
 
-      {/* Local Auth Form - only show if local auth is enabled */}
-      {hasLocalAuth && (
+      {/* Username/Password Form - show if local auth OR LDAP auth is enabled */}
+      {hasUsernamePasswordAuth && (
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* LDAP Provider Selection - only show if multiple LDAP providers */}
+          {hasLdapAuth && ldapProviders.length > 1 && (
+            <div>
+              <label htmlFor="provider" className="block text-sm font-medium text-gray-700 mb-1">
+                {t('auth.login.ldapProvider', 'LDAP Provider')}
+              </label>
+              <select
+                id="provider"
+                name="provider"
+                value={formData.provider}
+                onChange={handleInputChange}
+                disabled={isFormLoading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
+              >
+                <option value="">{t('auth.login.selectProvider', 'Auto-detect')}</option>
+                {ldapProviders.map(provider => (
+                  <option key={provider.name} value={provider.name}>
+                    {provider.displayName || provider.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
             <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
               {t('auth.login.username', 'Username or Email')}
@@ -190,7 +223,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
       )}
 
       {/* Show message if no auth methods are available */}
-      {!hasLocalAuth && !hasOidcProviders && (
+      {!hasUsernamePasswordAuth && !hasOidcProviders && (
         <div className="text-center text-gray-500">
           <p>No authentication methods are currently enabled.</p>
           <p className="text-sm mt-2">Please contact your administrator.</p>

@@ -369,15 +369,22 @@ export function AuthProvider({ children }) {
     };
   }, [handleOidcCallback, loadAuthStatus]);
 
-  // Login with username/password (local auth)
-  const login = async (username, password) => {
+  // Login with username/password (local auth or LDAP)
+  const login = async (username, password, provider = null) => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
 
-      const response = await apiClient.post('/auth/login', {
+      const requestBody = {
         username,
         password
-      });
+      };
+
+      // Add provider if specified (for LDAP provider selection)
+      if (provider) {
+        requestBody.provider = provider;
+      }
+
+      const response = await apiClient.post('/auth/login', requestBody);
 
       const data = response.data;
 

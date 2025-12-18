@@ -16,8 +16,8 @@ export default function registerAuthRoutes(app, basePath = '') {
    * @swagger
    * /auth/login:
    *   post:
-   *     summary: Local authentication login
-   *     description: Authenticates a user with username and password using local authentication
+   *     summary: Universal authentication login
+   *     description: Authenticates a user with username and password using local or LDAP authentication
    *     tags:
    *       - Authentication
    *     requestBody:
@@ -36,6 +36,9 @@ export default function registerAuthRoutes(app, basePath = '') {
    *               password:
    *                 type: string
    *                 description: User's password
+   *               provider:
+   *                 type: string
+   *                 description: Optional LDAP provider name (if multiple LDAP providers are configured)
    *     responses:
    *       200:
    *         description: Login successful
@@ -62,7 +65,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    *                   type: number
    *                   description: Token expiration time in seconds
    *       400:
-   *         description: Bad request (missing credentials or local auth disabled)
+   *         description: Bad request (missing credentials or no auth methods enabled)
    *       401:
    *         description: Invalid credentials
    *       500:
@@ -72,18 +75,85 @@ export default function registerAuthRoutes(app, basePath = '') {
     try {
       const platform = app.get('platform') || {};
       const localAuthConfig = platform.localAuth || {};
+      const ldapAuthConfig = platform.ldapAuth || {};
 
-      if (!localAuthConfig.enabled) {
-        return res.status(400).json({ error: 'Local authentication is not enabled' });
-      }
-
-      const { username, password } = req.body;
+      const { username, password, provider } = req.body;
 
       if (!username || !password) {
         return res.status(400).json({ error: 'Username and password are required' });
       }
 
-      const result = await loginUser(username, password, localAuthConfig);
+      let result = null;
+      let lastError = null;
+
+      // Try local authentication first if enabled
+      if (localAuthConfig.enabled) {
+        try {
+          console.log('[Auth] Attempting local authentication for user:', username);
+          result = await loginUser(username, password, localAuthConfig);
+        } catch (error) {
+          console.log('[Auth] Local authentication failed:', error.message);
+          lastError = error;
+          // Continue to try LDAP if enabled
+        }
+      }
+
+      // Try LDAP authentication if local auth failed or is disabled
+      if (!result && ldapAuthConfig.enabled && ldapAuthConfig.providers?.length > 0) {
+        console.log('[Auth] Attempting LDAP authentication for user:', username);
+
+        // If a specific provider was requested, use it
+        if (provider) {
+          const ldapProvider = ldapAuthConfig.providers.find(p => p.name === provider);
+          if (!ldapProvider) {
+            return res.status(400).json({ error: `LDAP provider '${provider}' not found` });
+          }
+
+          try {
+            result = await loginLdapUser(username, password, ldapProvider);
+          } catch (error) {
+            console.log(
+              `[Auth] LDAP authentication failed for provider '${provider}':`,
+              error.message
+            );
+            lastError = error;
+          }
+        } else {
+          // Try each LDAP provider until one succeeds
+          for (const ldapProvider of ldapAuthConfig.providers) {
+            try {
+              console.log(`[Auth] Trying LDAP provider: ${ldapProvider.name}`);
+              result = await loginLdapUser(username, password, ldapProvider);
+              if (result) {
+                console.log(
+                  `[Auth] LDAP authentication succeeded with provider: ${ldapProvider.name}`
+                );
+                break;
+              }
+            } catch (error) {
+              console.log(`[Auth] LDAP provider '${ldapProvider.name}' failed:`, error.message);
+              lastError = error;
+              // Continue to next provider
+            }
+          }
+        }
+      }
+
+      // If no authentication method succeeded
+      if (!result) {
+        if (!localAuthConfig.enabled && !ldapAuthConfig.enabled) {
+          return res.status(400).json({
+            error: 'No authentication methods are enabled. Please contact your administrator.'
+          });
+        }
+
+        // Return the last error or a generic message
+        const errorMessage = lastError?.message || 'Invalid credentials';
+        return res.status(401).json({
+          success: false,
+          error: errorMessage
+        });
+      }
 
       // Set HTTP-only cookie for authentication
       res.cookie('authToken', result.token, {
