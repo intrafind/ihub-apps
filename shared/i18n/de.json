@@ -918,7 +918,10 @@
       "required": "Dieses Feld ist erforderlich",
       "signInWith": "Anmelden mit:",
       "or": "oder",
-      "signingIn": "Anmeldung läuft..."
+      "signingIn": "Anmeldung läuft...",
+      "windowsAuth": "Windows-Authentifizierung",
+      "ldapProvider": "LDAP-Anbieter",
+      "selectProvider": "Automatische Erkennung"
     },
     "logout": "Abmelden",
     "menu": {

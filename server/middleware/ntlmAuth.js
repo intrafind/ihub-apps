@@ -207,6 +207,22 @@ function processNtlmUser(req, ntlmConfig) {
 }
 
 /**
+ * Check if multiple authentication providers are enabled
+ * @param {Object} platform - Platform configuration
+ * @returns {boolean} True if more than one auth provider is enabled
+ */
+function hasMultipleAuthProviders(platform) {
+  const enabledProviders = [
+    platform.localAuth?.enabled,
+    platform.ldapAuth?.enabled,
+    platform.oidcAuth?.enabled,
+    platform.proxyAuth?.enabled
+  ].filter(Boolean).length;
+  
+  return enabledProviders > 0; // NTLM + at least one other provider
+}
+
+/**
  * NTLM authentication middleware - self-contained like other auth middlewares
  * Handles both express-ntlm initialization and user processing
  * @param {Object} req - Express request object
@@ -249,6 +265,21 @@ export function ntlmAuthMiddleware(req, res, next) {
       console.log(
         '[NTLM Debug] Skipping NTLM for Vite proxy (set SKIP_NTLM_VITE_PROXY=false to test NTLM through Vite)'
       );
+    }
+    return next();
+  }
+
+  // When multiple auth providers are configured, NTLM should only activate when explicitly requested
+  // This prevents automatic NTLM SSO from blocking access to local/LDAP login
+  const multipleProviders = hasMultipleAuthProviders(platform);
+  const ntlmRequested = req.query.ntlm === 'true' || req.session?.ntlmRequested === true;
+  
+  // Check if this is the NTLM login endpoint
+  const isNtlmLoginEndpoint = req.url.includes('/api/auth/ntlm/login');
+  
+  if (multipleProviders && !ntlmRequested && !isNtlmLoginEndpoint) {
+    if (isDev) {
+      console.log('[NTLM Debug] Multiple providers configured, skipping auto-NTLM (not explicitly requested)');
     }
     return next();
   }

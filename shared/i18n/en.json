@@ -238,7 +238,10 @@
       "required": "This field is required",
       "signInWith": "Sign in with:",
       "or": "or",
-      "signingIn": "Signing In..."
+      "signingIn": "Signing In...",
+      "windowsAuth": "Windows Authentication",
+      "ldapProvider": "LDAP Provider",
+      "selectProvider": "Auto-detect"
     },
     "logout": "Sign out",
     "menu": {
