@@ -49,6 +49,8 @@ const AdminAuthPage = () => {
       enabled: false,
       domain: '',
       domainController: '',
+      domainControllerUser: '',
+      domainControllerPassword: '',
       type: 'ntlm',
       debug: false,
       getUserInfo: true,

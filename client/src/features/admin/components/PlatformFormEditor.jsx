@@ -1209,6 +1209,40 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
+                Domain Controller User
+              </label>
+              <input
+                type="text"
+                value={config.ntlmAuth?.domainControllerUser || ''}
+                onChange={e =>
+                  updateNestedConfig('ntlmAuth', 'domainControllerUser', e.target.value)
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="CN=Service Account,OU=Users,DC=example,DC=com"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Username for LDAP bind (required for group queries)
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Domain Controller Password
+              </label>
+              <input
+                type="password"
+                value={config.ntlmAuth?.domainControllerPassword || ''}
+                onChange={e =>
+                  updateNestedConfig('ntlmAuth', 'domainControllerPassword', e.target.value)
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="${NTLM_LDAP_PASSWORD}"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Password for domain controller user (use env vars for security)
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Authentication Type
               </label>
               <select

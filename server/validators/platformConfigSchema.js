@@ -129,6 +129,8 @@ export const platformConfigSchema = z
         enabled: z.boolean().default(false),
         domain: z.string().optional(),
         domainController: z.string().optional(),
+        domainControllerUser: z.string().optional(),
+        domainControllerPassword: z.string().optional(),
         type: z.enum(['ntlm', 'negotiate']).default('ntlm'),
         debug: z.boolean().default(false),
         getUserInfo: z.boolean().default(true),

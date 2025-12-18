@@ -216,6 +216,14 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         };
       }
 
+      // Sanitize NTLM domain controller password
+      if (sanitizedConfig.ntlmAuth?.domainControllerPassword) {
+        sanitizedConfig.ntlmAuth = {
+          ...sanitizedConfig.ntlmAuth,
+          domainControllerPassword: '***REDACTED***'
+        };
+      }
+
       res.json(sanitizedConfig);
     } catch (error) {
       console.error('Error getting platform configuration:', error);
