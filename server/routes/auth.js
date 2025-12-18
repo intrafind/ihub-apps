@@ -11,6 +11,43 @@ import { teamsTokenExchange, teamsTabConfigSave } from '../middleware/teamsAuth.
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 
+/**
+ * Sanitize and validate authentication input
+ * @param {string} value - Input value to sanitize
+ * @param {string} fieldName - Name of the field for error messages
+ * @param {number} maxLength - Maximum allowed length
+ * @returns {string} Sanitized value
+ * @throws {Error} If validation fails
+ */
+function sanitizeAuthInput(value, fieldName, maxLength = 255) {
+  // Check if value exists and is a string
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be a string`);
+  }
+
+  // Trim whitespace
+  const trimmed = value.trim();
+
+  // Check if empty after trimming
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  // Check length constraints
+  if (trimmed.length > maxLength) {
+    throw new Error(`${fieldName} exceeds maximum length of ${maxLength} characters`);
+  }
+
+  // Remove null bytes and control characters that could cause issues
+  const sanitized = trimmed.replace(/\0/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+  return sanitized;
+}
+
 export default function registerAuthRoutes(app, basePath = '') {
   /**
    * @swagger
@@ -79,7 +116,20 @@ export default function registerAuthRoutes(app, basePath = '') {
 
       const { username, password, provider } = req.body;
 
-      if (!username || !password) {
+      // Sanitize and validate inputs
+      let sanitizedUsername;
+      let sanitizedPassword;
+      let sanitizedProvider;
+
+      try {
+        sanitizedUsername = sanitizeAuthInput(username, 'Username', 255);
+        sanitizedPassword = sanitizeAuthInput(password, 'Password', 1024);
+        sanitizedProvider = sanitizeAuthInput(provider, 'Provider', 100);
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
+
+      if (!sanitizedUsername || !sanitizedPassword) {
         return res.status(400).json({ error: 'Username and password are required' });
       }
 
@@ -96,7 +146,7 @@ export default function registerAuthRoutes(app, basePath = '') {
       if (localAuthConfig.enabled) {
         try {
           console.log('[Auth] Attempting local authentication');
-          result = await loginUser(username, password, localAuthConfig);
+          result = await loginUser(sanitizedUsername, sanitizedPassword, localAuthConfig);
           console.log('[Auth] Local authentication succeeded');
         } catch (error) {
           console.log('[Auth] Local authentication failed');
@@ -109,24 +159,24 @@ export default function registerAuthRoutes(app, basePath = '') {
         console.log('[Auth] Attempting LDAP authentication');
 
         // If a specific provider was requested, use it
-        if (provider) {
-          const ldapProvider = ldapAuthConfig.providers.find(p => p.name === provider);
+        if (sanitizedProvider) {
+          const ldapProvider = ldapAuthConfig.providers.find(p => p.name === sanitizedProvider);
           if (!ldapProvider) {
-            return res.status(400).json({ error: `LDAP provider '${provider}' not found` });
+            return res.status(400).json({ error: `LDAP provider '${sanitizedProvider}' not found` });
           }
 
           try {
-            result = await loginLdapUser(username, password, ldapProvider);
+            result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
             console.log('[Auth] LDAP authentication succeeded');
           } catch (error) {
-            console.log(`[Auth] LDAP authentication failed for provider '${provider}'`);
+            console.log(`[Auth] LDAP authentication failed for provider '${sanitizedProvider}'`);
           }
         } else {
           // Try each LDAP provider until one succeeds
           for (const ldapProvider of ldapAuthConfig.providers) {
             try {
               console.log(`[Auth] Trying LDAP provider: ${ldapProvider.name}`);
-              result = await loginLdapUser(username, password, ldapProvider);
+              result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
               if (result) {
                 console.log(`[Auth] LDAP authentication succeeded with provider: ${ldapProvider.name}`);
                 break;
