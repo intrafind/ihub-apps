@@ -11,7 +11,7 @@ LDAP authentication was not working with the standard username/password login fo
 
 1. The username/password form did not appear when only LDAP auth was configured
 2. The `/api/auth/login` endpoint only supported local authentication
-3. LDAP login required using a separate endpoint (`/api/auth/ldap/login`)
+3. LDAP login required using a separate endpoint which has now been deprecated
 4. The user experience was confusing and inconsistent
 
 ## Root Cause Analysis
@@ -201,9 +201,9 @@ const response = await fetch('/api/auth/login', {
 - New unified endpoint is backwards compatible
 
 ### For Developers
-- Existing `/api/auth/ldap/login` endpoint still works (legacy support)
-- Recommended to use `/api/auth/login` for new implementations
-- Frontend components automatically support the new behavior
+- The legacy `/api/auth/ldap/login` endpoint has been removed
+- Use `/api/auth/login` for all username/password authentication
+- Frontend components automatically support the unified behavior
 
 ### For Administrators
 - No configuration changes required

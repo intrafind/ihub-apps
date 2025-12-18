@@ -172,59 +172,6 @@ export default function registerAuthRoutes(app, basePath = '') {
   });
 
   /**
-   * LDAP authentication login
-   */
-  app.post(buildServerPath('/api/auth/ldap/login', basePath), async (req, res) => {
-    try {
-      const platform = app.get('platform') || {};
-      const ldapAuthConfig = platform.ldapAuth || {};
-
-      if (!ldapAuthConfig.enabled) {
-        return res.status(400).json({ error: 'LDAP authentication is not enabled' });
-      }
-
-      const { username, password, provider } = req.body;
-
-      if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password are required' });
-      }
-
-      if (!provider) {
-        return res.status(400).json({ error: 'LDAP provider is required' });
-      }
-
-      // Find the specified LDAP provider
-      const ldapProvider = ldapAuthConfig.providers?.find(p => p.name === provider);
-      if (!ldapProvider) {
-        return res.status(400).json({ error: `LDAP provider '${provider}' not found` });
-      }
-
-      const result = await loginLdapUser(username, password, ldapProvider);
-
-      // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: result.expiresIn * 1000
-      });
-
-      res.json({
-        success: true,
-        user: result.user,
-        token: result.token, // Still return token for backward compatibility
-        expiresIn: result.expiresIn
-      });
-    } catch (error) {
-      console.error('LDAP login error:', error);
-      res.status(401).json({
-        success: false,
-        error: error.message || 'LDAP authentication failed'
-      });
-    }
-  });
-
-  /**
    * NTLM authentication login (for API usage)
    */
   app.post(buildServerPath('/api/auth/ntlm/login', basePath), async (req, res) => {

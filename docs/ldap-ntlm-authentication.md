@@ -247,23 +247,6 @@ Content-Type: application/json
 
 **Note**: The `provider` parameter is optional. If not specified and multiple LDAP providers are configured, the system will try each provider until one succeeds.
 
-### LDAP Authentication (Legacy)
-
-The dedicated LDAP endpoint is still available for backwards compatibility.
-
-#### Login
-
-```http
-POST /api/auth/ldap/login
-Content-Type: application/json
-
-{
-  "username": "john.doe",
-  "password": "password123",
-  "provider": "corporate-ldap"
-}
-```
-
 #### Get Providers
 
 ```http
@@ -310,24 +293,6 @@ async function login(username, password, provider = null) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(requestBody)
-  });
-
-  const result = await response.json();
-  if (result.success) {
-    localStorage.setItem('auth_token', result.token);
-    return result.user;
-  }
-  throw new Error(result.error);
-}
-
-// LDAP login (legacy endpoint - still supported)
-async function loginLdap(username, password, provider) {
-  const response = await fetch('/api/auth/ldap/login', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ username, password, provider })
   });
 
   const result = await response.json();

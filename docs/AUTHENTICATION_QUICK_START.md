@@ -191,19 +191,7 @@ Content-Type: application/json
   "password": "password123"
 }
 ```
-Local authentication login.
-
-```http
-POST /api/auth/ldap/login
-Content-Type: application/json
-
-{
-  "username": "john.doe",
-  "password": "password123",
-  "provider": "company-ldap"
-}
-```
-LDAP authentication login.
+Universal authentication login (supports both local and LDAP authentication).
 
 ```http
 POST /api/auth/ntlm/login
