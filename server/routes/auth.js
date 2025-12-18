@@ -162,7 +162,9 @@ export default function registerAuthRoutes(app, basePath = '') {
         if (sanitizedProvider) {
           const ldapProvider = ldapAuthConfig.providers.find(p => p.name === sanitizedProvider);
           if (!ldapProvider) {
-            return res.status(400).json({ error: `LDAP provider '${sanitizedProvider}' not found` });
+            return res
+              .status(400)
+              .json({ error: `LDAP provider '${sanitizedProvider}' not found` });
           }
 
           try {
@@ -178,7 +180,9 @@ export default function registerAuthRoutes(app, basePath = '') {
               console.log(`[Auth] Trying LDAP provider: ${ldapProvider.name}`);
               result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
               if (result) {
-                console.log(`[Auth] LDAP authentication succeeded with provider: ${ldapProvider.name}`);
+                console.log(
+                  `[Auth] LDAP authentication succeeded with provider: ${ldapProvider.name}`
+                );
                 break;
               }
             } catch (error) {
