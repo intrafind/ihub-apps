@@ -1221,7 +1221,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 placeholder="CN=Service Account,OU=Users,DC=example,DC=com"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Username for LDAP bind (required for group queries)
+                Username for domain controller authentication (required for group queries)
               </p>
             </div>
             <div>
