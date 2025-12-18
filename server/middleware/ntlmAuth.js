@@ -274,8 +274,9 @@ export function ntlmAuthMiddleware(req, res, next) {
   const multipleProviders = hasMultipleAuthProviders(platform);
   const ntlmRequested = req.query.ntlm === 'true' || req.session?.ntlmRequested === true;
   
-  // Check if this is the NTLM login endpoint
-  const isNtlmLoginEndpoint = req.url.includes('/api/auth/ntlm/login');
+  // Check if this is the NTLM login endpoint - use exact path matching for security
+  const isNtlmLoginEndpoint = req.path === '/api/auth/ntlm/login' || 
+                               req.path.startsWith('/api/auth/ntlm/login?');
   
   if (multipleProviders && !ntlmRequested && !isNtlmLoginEndpoint) {
     if (isDev) {
