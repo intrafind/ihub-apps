@@ -236,6 +236,8 @@
     "enabled": false,
     "domain": "EXAMPLE",
     "domainController": "dc.example.com",
+    "domainControllerUser": "${NTLM_LDAP_USER}",
+    "domainControllerPassword": "${NTLM_LDAP_PASSWORD}",
     "type": "ntlm",
     "debug": false,
     "getUserInfo": true,
