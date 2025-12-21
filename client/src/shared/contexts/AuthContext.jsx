@@ -257,6 +257,22 @@ export function AuthProvider({ children }) {
   // Handle OIDC callback (extract token from URL)
   const handleOidcCallback = useCallback(async () => {
     try {
+      // Check if early token detection already handled this
+      const fastTracked = sessionStorage.getItem('oidcCallbackFastTrack');
+      if (fastTracked === 'true') {
+        console.log('⚡ Fast-tracked OIDC callback: Token already stored by early detection');
+        sessionStorage.removeItem('oidcCallbackFastTrack');
+
+        // Token was already stored in localStorage by index.html
+        // Just verify it and load auth status
+        const token = localStorage.getItem('authToken');
+        if (token) {
+          // Verify the token is valid
+          const result = await loginWithToken(token);
+          return result;
+        }
+      }
+
       const urlParams = new URLSearchParams(window.location.search);
       const token = urlParams.get('token');
 
@@ -286,12 +302,22 @@ export function AuthProvider({ children }) {
 
   // Load authentication status on mount and handle OIDC callback
   useEffect(() => {
-    // Check if this is an OIDC callback
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('token') && urlParams.get('provider')) {
+    // Check if early token detection already handled the callback
+    const fastTracked = sessionStorage.getItem('oidcCallbackFastTrack');
+
+    if (fastTracked === 'true') {
+      // Token was already stored by early detection script
+      // Process it immediately without checking URL params
+      console.log('⚡ Using fast-tracked OIDC token from early detection');
       handleOidcCallback();
     } else {
-      loadAuthStatus();
+      // Normal flow: Check if this is an OIDC callback
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('token') && urlParams.get('provider')) {
+        handleOidcCallback();
+      } else {
+        loadAuthStatus();
+      }
     }
 
     // Listen for token expiration events from API client
