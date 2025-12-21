@@ -260,11 +260,11 @@ export function AuthProvider({ children }) {
       // Check if early token detection already handled this
       const fastTracked = sessionStorage.getItem('oidcCallbackFastTrack');
       if (fastTracked === 'true') {
-        console.log('⚡ Fast-tracked OIDC callback: Token already stored by early detection');
+        console.log('⚡ Fast-tracked OIDC callback: Token already stored');
         sessionStorage.removeItem('oidcCallbackFastTrack');
 
-        // Token was already stored in localStorage by index.html
-        // Just verify it and load auth status
+        // Token was already stored in localStorage by index.html script
+        // Just verify it
         const token = localStorage.getItem('authToken');
         if (token) {
           // Verify the token is valid
