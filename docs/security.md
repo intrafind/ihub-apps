@@ -300,6 +300,38 @@ export const modelAccessRequired = resourceAccessRequired('model');
 ### API Key Management
 
 #### Secure Key Storage
+
+**1. Encrypted Environment Variables (Recommended)**
+
+For enhanced security, encrypt sensitive values before storing them in `.env` files:
+
+```bash
+# Generate encryption key (if not already set)
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# Add to .env file
+TOKEN_ENCRYPTION_KEY=your_64_character_hex_key
+
+# Encrypt a password or API key
+node server/utils/encryptEnvValue.js "sk-your-api-key-here"
+
+# Add encrypted value to .env
+OPENAI_API_KEY=ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
+```
+
+The system automatically decrypts encrypted values on startup.
+
+**2. Model Configuration Storage**
+
+API keys can also be stored encrypted in model configurations via the Admin UI.
+
+**3. Priority Order**
+```
+1. Model-specific encrypted key (in config)
+2. Model-specific environment variable (plain or encrypted)
+3. Provider-level environment variable (plain or encrypted)
+```
+
 ```javascript
 export async function getApiKeyForModel(modelId) {
   const provider = model.provider;
@@ -315,10 +347,11 @@ export async function getApiKeyForModel(modelId) {
 ```
 
 **Security Requirements:**
-- Store API keys as environment variables only
-- Never hardcode API keys in configuration files
+- Encrypt all sensitive API keys and passwords
+- Never commit plain text secrets to version control
 - Use different keys for different environments
 - Rotate API keys regularly
+- Keep `TOKEN_ENCRYPTION_KEY` secure and backed up
 
 #### Environment Variable Configuration
 ```bash
