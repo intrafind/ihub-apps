@@ -335,6 +335,119 @@ const ModelFormEditor = ({
 
               <div className="col-span-6">
                 <fieldset>
+                  <legend className="text-base font-medium text-gray-900">
+                    {t('admin.models.fields.capabilities', 'Capabilities')}
+                  </legend>
+                  <p className="text-sm text-gray-500 mb-3">
+                    {t('admin.models.fields.capabilitiesDesc', 'Select what this model can do')}
+                  </p>
+                  <div className="mt-4 space-y-4">
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="capability-textGeneration"
+                          name="capabilities.textGeneration"
+                          type="checkbox"
+                          checked={data.capabilities?.textGeneration !== false}
+                          onChange={e => {
+                            handleChange('capabilities', {
+                              ...data.capabilities,
+                              textGeneration: e.target.checked
+                            });
+                          }}
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                        />
+                      </div>
+                      <div className="ml-3 text-sm">
+                        <label htmlFor="capability-textGeneration" className="font-medium text-gray-700">
+                          {t('admin.models.capabilities.textGeneration', 'Text Generation')}
+                        </label>
+                        <p className="text-gray-500">
+                          {t('admin.models.capabilities.textGenerationDesc', 'Generate text responses from prompts')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="capability-imageGeneration"
+                          name="capabilities.imageGeneration"
+                          type="checkbox"
+                          checked={data.capabilities?.imageGeneration === true}
+                          onChange={e => {
+                            handleChange('capabilities', {
+                              ...data.capabilities,
+                              imageGeneration: e.target.checked
+                            });
+                          }}
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                        />
+                      </div>
+                      <div className="ml-3 text-sm">
+                        <label htmlFor="capability-imageGeneration" className="font-medium text-gray-700">
+                          {t('admin.models.capabilities.imageGeneration', 'Image Generation')}
+                        </label>
+                        <p className="text-gray-500">
+                          {t('admin.models.capabilities.imageGenerationDesc', 'Generate images from text prompts')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="capability-vision"
+                          name="capabilities.vision"
+                          type="checkbox"
+                          checked={data.capabilities?.vision === true}
+                          onChange={e => {
+                            handleChange('capabilities', {
+                              ...data.capabilities,
+                              vision: e.target.checked
+                            });
+                          }}
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                        />
+                      </div>
+                      <div className="ml-3 text-sm">
+                        <label htmlFor="capability-vision" className="font-medium text-gray-700">
+                          {t('admin.models.capabilities.vision', 'Vision (Image Understanding)')}
+                        </label>
+                        <p className="text-gray-500">
+                          {t('admin.models.capabilities.visionDesc', 'Analyze and understand images')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="capability-toolCalling"
+                          name="capabilities.toolCalling"
+                          type="checkbox"
+                          checked={data.capabilities?.toolCalling === true}
+                          onChange={e => {
+                            handleChange('capabilities', {
+                              ...data.capabilities,
+                              toolCalling: e.target.checked
+                            });
+                          }}
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                        />
+                      </div>
+                      <div className="ml-3 text-sm">
+                        <label htmlFor="capability-toolCalling" className="font-medium text-gray-700">
+                          {t('admin.models.capabilities.toolCalling', 'Tool Calling')}
+                        </label>
+                        <p className="text-gray-500">
+                          {t('admin.models.capabilities.toolCallingDesc', 'Use external tools and functions')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
+
+              <div className="col-span-6">
+                <fieldset>
                   <legend className="text-base font-medium text-gray-900">Options</legend>
                   <div className="mt-4 space-y-4">
                     <div className="flex items-start">

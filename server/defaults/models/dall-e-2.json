@@ -16,6 +16,12 @@
   "supportsTools": false,
   "enabled": false,
   "default": false,
+  "capabilities": {
+    "textGeneration": false,
+    "imageGeneration": true,
+    "vision": false,
+    "toolCalling": false
+  },
   "imageGeneration": {
     "supportedSizes": ["256x256", "512x512", "1024x1024"],
     "maxPromptLength": 1000,

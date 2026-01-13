@@ -677,7 +677,9 @@
         "supportsTools": "Unterstützt Werkzeuge",
         "enabled": "Aktiviert",
         "defaultModel": "Standardmodell",
-        "apiKey": "API-Schlüssel"
+        "apiKey": "API-Schlüssel",
+        "capabilities": "Fähigkeiten",
+        "capabilitiesDesc": "Wählen Sie aus, was dieses Modell kann"
       },
       "placeholders": {
         "selectProvider": "Anbieter auswählen",
@@ -703,6 +705,16 @@
       },
       "table": {
         "status": "Status"
+      },
+      "capabilities": {
+        "textGeneration": "Textgenerierung",
+        "textGenerationDesc": "Textantworten aus Prompts generieren",
+        "imageGeneration": "Bildgenerierung",
+        "imageGenerationDesc": "Bilder aus Textprompts generieren",
+        "vision": "Vision (Bildverständnis)",
+        "visionDesc": "Bilder analysieren und verstehen",
+        "toolCalling": "Tool-Aufruf",
+        "toolCallingDesc": "Externe Tools und Funktionen verwenden"
       }
     },
     "prompts": {

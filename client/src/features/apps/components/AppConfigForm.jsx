@@ -25,16 +25,34 @@ const AppConfigForm = ({
 }) => {
   const { t } = useTranslation();
 
+  // Helper function to check if model has required capabilities
+  const modelHasRequiredCapabilities = (model, app) => {
+    // If app has imageGenerationOptions, it needs image generation capability
+    if (app?.imageGenerationOptions) {
+      return model.capabilities?.imageGeneration === true;
+    }
+    
+    // Otherwise, model should support text generation
+    // Default to true for backward compatibility with models without capabilities defined
+    return model.capabilities?.textGeneration !== false;
+  };
+
   // Filter models if app has allowedModels specified
   const availableModels =
     app?.allowedModels && app.allowedModels.length > 0
       ? models.filter(model => app.allowedModels.includes(model.id))
       : models;
 
+  // Filter by capabilities
+  const capabilityFilteredModels = availableModels.filter(model => 
+    modelHasRequiredCapabilities(model, app)
+  );
+
+  // Filter by tool support if needed
   const filteredModels =
     app?.tools && app.tools.length > 0
-      ? availableModels.filter(model => model.supportsTools)
-      : availableModels;
+      ? capabilityFilteredModels.filter(model => model.supportsTools)
+      : capabilityFilteredModels;
 
   // Check if selected model supports thinking
   const selectedModelData = models.find(m => m.id === selectedModel);

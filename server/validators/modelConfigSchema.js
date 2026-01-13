@@ -65,6 +65,16 @@ export const modelConfigSchema = z
     enabled: z.boolean().optional().default(true),
     thinking: thinkingSchema.optional(),
 
+    // Model capabilities - what the model can do
+    capabilities: z
+      .object({
+        textGeneration: z.boolean().optional().default(true),
+        imageGeneration: z.boolean().optional().default(false),
+        vision: z.boolean().optional().default(false),
+        toolCalling: z.boolean().optional().default(false)
+      })
+      .optional(),
+
     // Model type - for specialized models like image generation
     type: z.enum(['chat', 'image-generation']).optional(),
 

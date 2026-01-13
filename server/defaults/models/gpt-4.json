@@ -14,5 +14,11 @@
   "tokenLimit": 8192,
   "supportsTools": true,
   "enabled": false,
-  "default": false
+  "default": false,
+  "capabilities": {
+    "textGeneration": true,
+    "imageGeneration": false,
+    "vision": false,
+    "toolCalling": true
+  }
 }

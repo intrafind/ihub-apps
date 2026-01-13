@@ -610,7 +610,9 @@
         "supportsTools": "Supports Tools",
         "enabled": "Enabled",
         "defaultModel": "Default Model",
-        "apiKey": "API Key"
+        "apiKey": "API Key",
+        "capabilities": "Capabilities",
+        "capabilitiesDesc": "Select what this model can do"
       },
       "hints": {
         "modelId": "Unique identifier for this model configuration",
@@ -633,6 +635,16 @@
         "messages": "Messages",
         "tokens": "Tokens",
         "editModel": "Edit Model"
+      },
+      "capabilities": {
+        "textGeneration": "Text Generation",
+        "textGenerationDesc": "Generate text responses from prompts",
+        "imageGeneration": "Image Generation",
+        "imageGenerationDesc": "Generate images from text prompts",
+        "vision": "Vision (Image Understanding)",
+        "visionDesc": "Analyze and understand images",
+        "toolCalling": "Tool Calling",
+        "toolCallingDesc": "Use external tools and functions"
       }
     },
     "prompts": {

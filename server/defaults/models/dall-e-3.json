@@ -16,6 +16,12 @@
   "supportsTools": false,
   "enabled": false,
   "default": false,
+  "capabilities": {
+    "textGeneration": false,
+    "imageGeneration": true,
+    "vision": false,
+    "toolCalling": false
+  },
   "imageGeneration": {
     "supportedSizes": ["1024x1024", "1792x1024", "1024x1792"],
     "supportedQualities": ["standard", "hd"],
