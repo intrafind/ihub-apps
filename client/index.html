@@ -50,6 +50,37 @@
         }
       })();
     </script>
+    <script>
+      // Early OIDC callback token detection and storage
+      // This runs BEFORE React loads to minimize authentication delay
+      (function () {
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          const token = urlParams.get('token');
+          const provider = urlParams.get('provider');
+
+          // If this is an OIDC callback with a token, store it immediately
+          if (token && provider) {
+            console.log('🚀 Early token detection: OIDC callback from', provider);
+
+            // Store token in localStorage immediately
+            localStorage.setItem('authToken', token);
+
+            // Mark this as a fast-tracked OIDC callback to skip redundant API calls
+            sessionStorage.setItem('oidcCallbackFastTrack', 'true');
+
+            // Clean the URL immediately to prevent token exposure
+            const cleanUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+
+            console.log('✅ Token stored, URL cleaned - React will use cached token');
+          }
+        } catch (error) {
+          // Silently fail - don't break the app if this optimization fails
+          console.warn('Early token detection failed:', error);
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="./favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="A platform for AI-powered applications" />
