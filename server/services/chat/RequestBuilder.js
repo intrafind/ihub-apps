@@ -81,11 +81,32 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      const defaultModel = models.find(m => m.default)?.id;
+      // Helper function to check if model matches app requirements
+      const modelMatchesAppRequirements = (model, app) => {
+        // If app has imageGenerationOptions, it needs image generation capability
+        if (app.imageGenerationOptions) {
+          return model.capabilities?.imageGeneration === true;
+        }
+        
+        // For regular apps, check for text generation capability
+        if (!model.capabilities) {
+          return true; // Backward compatibility
+        }
+        
+        return model.capabilities.textGeneration !== false;
+      };
+
+      // Filter to compatible models only
+      const compatibleModels = models.filter(m => modelMatchesAppRequirements(m, app));
+      const defaultModel = compatibleModels.find(m => m.default)?.id;
+      
       let resolvedModelId = modelId || app.preferredModel || defaultModel;
-      if (!models.some(m => m.id === resolvedModelId)) {
-        resolvedModelId = defaultModel;
+      
+      // If resolved model is not compatible, fallback to default or first compatible
+      if (!compatibleModels.some(m => m.id === resolvedModelId)) {
+        resolvedModelId = defaultModel || compatibleModels[0]?.id;
       }
+      
       const model = models.find(m => m.id === resolvedModelId);
 
       if (!model) {

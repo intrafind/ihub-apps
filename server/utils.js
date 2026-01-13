@@ -95,12 +95,17 @@ export async function getApiKeyForModel(modelId) {
     // Third priority: Check for provider-specific API keys from environment
     switch (provider) {
       case 'openai':
+      case 'openai-image':
         return config.OPENAI_API_KEY;
+      case 'azure-openai':
+      case 'azure-openai-image':
+        return config.AZURE_OPENAI_API_KEY;
       case 'anthropic':
         return config.ANTHROPIC_API_KEY;
       case 'mistral':
         return config.MISTRAL_API_KEY;
       case 'google':
+      case 'google-image':
         return config.GOOGLE_API_KEY;
       case 'local':
         // For local models, check if there's a specific LOCAL_API_KEY or return a default empty string
@@ -112,7 +117,9 @@ export async function getApiKeyForModel(modelId) {
         return JWT_AUTH_REQUIRED;
       default:
         // Try to find a generic API key based on provider name (e.g., COHERE_API_KEY for provider 'cohere')
-        const genericKey = config[`${provider.toUpperCase()}_API_KEY`];
+        // Replace hyphens with underscores for environment variable names
+        const normalizedProvider = provider.replace(/-/g, '_');
+        const genericKey = config[`${normalizedProvider.toUpperCase()}_API_KEY`];
         if (genericKey) {
           return genericKey;
         }

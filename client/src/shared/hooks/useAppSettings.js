@@ -59,11 +59,34 @@ const useAppSettings = (appId, app) => {
       setHeaderColor(app.color);
     }
 
-    const defaultModel = models.find(m => m.default);
+    // Helper function to check if model has required capabilities for this app
+    const modelMatchesAppRequirements = (model) => {
+      // If app has imageGenerationOptions, it needs image generation capability
+      if (app.imageGenerationOptions) {
+        return model.capabilities?.imageGeneration === true;
+      }
+      
+      // For regular text generation apps
+      if (!model.capabilities) {
+        // No capabilities defined - assume it's a text generation model (backward compatibility)
+        return true;
+      }
+      
+      // If capabilities exists, check if textGeneration is enabled
+      return model.capabilities.textGeneration !== false;
+    };
+
+    // Filter models to those that match app requirements
+    const compatibleModels = models.filter(modelMatchesAppRequirements);
+    
+    // Find default model among compatible models
+    const defaultModel = compatibleModels.find(m => m.default);
 
     let initialModel = app.preferredModel;
-    if (!models.some(m => m.id === initialModel)) {
-      initialModel = defaultModel ? defaultModel.id : models[0]?.id || null;
+    // Check if preferred model exists and is compatible
+    if (!compatibleModels.some(m => m.id === initialModel)) {
+      // Fallback to default model, or first compatible model
+      initialModel = defaultModel ? defaultModel.id : compatibleModels[0]?.id || null;
     }
 
     // Initialize with app defaults
