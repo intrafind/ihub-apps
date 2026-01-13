@@ -1,0 +1,24 @@
+{
+  "id": "dall-e-2",
+  "modelId": "dall-e-2",
+  "name": {
+    "en": "DALL-E 2",
+    "de": "DALL-E 2"
+  },
+  "description": {
+    "en": "Fast and cost-effective image generation from text descriptions",
+    "de": "Schnelle und kostengünstige Bildgenerierung aus Textbeschreibungen"
+  },
+  "url": "https://api.openai.com/v1/images/generations",
+  "provider": "openai-image",
+  "type": "image-generation",
+  "tokenLimit": 1000,
+  "supportsTools": false,
+  "enabled": false,
+  "default": false,
+  "imageGeneration": {
+    "supportedSizes": ["256x256", "512x512", "1024x1024"],
+    "maxPromptLength": 1000,
+    "defaultSize": "1024x1024"
+  }
+}

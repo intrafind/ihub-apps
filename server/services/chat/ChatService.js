@@ -2,6 +2,7 @@ import RequestBuilder from './RequestBuilder.js';
 import NonStreamingHandler from './NonStreamingHandler.js';
 import StreamingHandler from './StreamingHandler.js';
 import ToolExecutor from './ToolExecutor.js';
+import ImageGenerationHandler from './ImageGenerationHandler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
 
@@ -11,6 +12,7 @@ class ChatService {
     this.nonStreamingHandler = options.nonStreamingHandler || new NonStreamingHandler();
     this.streamingHandler = options.streamingHandler || new StreamingHandler();
     this.toolExecutor = options.toolExecutor || new ToolExecutor();
+    this.imageGenerationHandler = options.imageGenerationHandler || new ImageGenerationHandler();
     this.errorHandler = options.errorHandler || new ErrorHandler();
   }
 
@@ -67,6 +69,20 @@ class ChatService {
       getLocalizedError,
       clientLanguage
     } = params;
+
+    // Check if this is an image generation model
+    if (model.type === 'image-generation') {
+      return await this.imageGenerationHandler.executeImageGeneration({
+        request,
+        res,
+        buildLogData,
+        messageId,
+        model,
+        DEFAULT_TIMEOUT,
+        getLocalizedError,
+        clientLanguage
+      });
+    }
 
     return await this.nonStreamingHandler.executeNonStreamingResponse({
       request,

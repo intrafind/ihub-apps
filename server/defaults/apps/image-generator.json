@@ -1,0 +1,44 @@
+{
+  "id": "image-generator",
+  "order": 100,
+  "category": "creative",
+  "name": {
+    "en": "Image Generator",
+    "de": "Bildgenerator"
+  },
+  "description": {
+    "en": "Generate creative images from text descriptions using AI",
+    "de": "Generiere kreative Bilder aus Textbeschreibungen mit KI"
+  },
+  "color": "#8B5CF6",
+  "icon": "image",
+  "system": {
+    "en": "You are an AI assistant helping users create effective prompts for image generation. When a user describes what they want, help them refine their description to get better results. Be creative and suggest improvements to make the image prompt more detailed and specific.",
+    "de": "Du bist ein KI-Assistent, der Nutzern hilft, effektive Prompts für die Bildgenerierung zu erstellen. Wenn ein Nutzer beschreibt, was er möchte, hilf ihm, seine Beschreibung zu verfeinern, um bessere Ergebnisse zu erzielen. Sei kreativ und schlage Verbesserungen vor, um den Bild-Prompt detaillierter und spezifischer zu machen."
+  },
+  "greeting": {
+    "en": {
+      "title": "🎨 Image Generator",
+      "subtitle": "Describe the image you want to create"
+    },
+    "de": {
+      "title": "🎨 Bildgenerator",
+      "subtitle": "Beschreibe das Bild, das du erstellen möchtest"
+    }
+  },
+  "tokenLimit": 4000,
+  "preferredModel": "dall-e-3",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "normal",
+  "preferredTemperature": 0.7,
+  "sendChatHistory": true,
+  "imageGenerationOptions": {
+    "size": "1024x1024",
+    "quality": "standard",
+    "style": "vivid"
+  },
+  "features": {
+    "shortLinks": false
+  },
+  "enabled": true
+}

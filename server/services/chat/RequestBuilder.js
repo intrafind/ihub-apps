@@ -136,7 +136,9 @@ class RequestBuilder {
 
       const context = { user, chatId, language };
       const tools = await getToolsForApp(app, language, context);
-      const request = createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
+      
+      // Prepare options for the request
+      const requestOptions = {
         temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
         maxTokens: finalTokens,
         stream: !!clientRes,
@@ -148,7 +150,17 @@ class RequestBuilder {
         thinkingEnabled,
         thinkingBudget,
         thinkingThoughts
-      });
+      };
+
+      // Add image generation options if the model supports it
+      if (model.type === 'image-generation' && app.imageGenerationOptions) {
+        requestOptions.size = app.imageGenerationOptions.size;
+        requestOptions.quality = app.imageGenerationOptions.quality;
+        requestOptions.style = app.imageGenerationOptions.style;
+        requestOptions.n = app.imageGenerationOptions.n || 1;
+      }
+
+      const request = createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, requestOptions);
 
       return {
         success: true,

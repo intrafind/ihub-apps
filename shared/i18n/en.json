@@ -961,7 +961,9 @@
     "system": "System",
     "copy": "Copy",
     "copied": "Copied!",
-    "edit": "Edit"
+    "edit": "Edit",
+    "download": "Download",
+    "revisedPrompt": "Revised prompt"
   },
   "serverErrors": {
     "appNotFound": "Application not found",

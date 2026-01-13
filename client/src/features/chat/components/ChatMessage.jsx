@@ -334,6 +334,45 @@ const ChatMessage = ({
       );
     }
 
+    // If message contains generated images, render them
+    if (!isUser && message.images && Array.isArray(message.images) && message.images.length > 0) {
+      return (
+        <div className="flex flex-col gap-3">
+          {message.revised_prompt && (
+            <div className="text-sm text-gray-600 italic mb-2">
+              {t('chatMessage.revisedPrompt', 'Revised prompt')}: {message.revised_prompt}
+            </div>
+          )}
+          {message.images.map((img, index) => (
+            <div key={index} className="flex flex-col gap-2">
+              <img
+                src={img.isBase64 ? `data:image/png;base64,${img.url}` : img.url}
+                alt={img.revised_prompt || `Generated image ${index + 1}`}
+                className="max-w-full rounded-lg shadow-md"
+                style={{ maxHeight: '512px', objectFit: 'contain' }}
+              />
+              {img.revised_prompt && (
+                <div className="text-xs text-gray-500 italic">{img.revised_prompt}</div>
+              )}
+              <div className="flex gap-2">
+                <a
+                  href={img.isBase64 ? `data:image/png;base64,${img.url}` : img.url}
+                  download={`generated-image-${index + 1}.png`}
+                  className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 inline-flex items-center gap-1"
+                >
+                  <Icon name="download" size="sm" />
+                  {t('chatMessage.download', 'Download')}
+                </a>
+              </div>
+            </div>
+          ))}
+          {contentToRender && (
+            <div className="mt-2 text-sm text-gray-700">{contentToRender}</div>
+          )}
+        </div>
+      );
+    }
+
     // If the message contains HTML content with an image tag or file content, render it as HTML
     if (hasHTMLContent && isUser) {
       return (

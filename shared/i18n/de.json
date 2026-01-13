@@ -269,7 +269,9 @@
     "system": "System",
     "copy": "Kopieren",
     "copied": "Kopiert!",
-    "edit": "Bearbeiten"
+    "edit": "Bearbeiten",
+    "download": "Herunterladen",
+    "revisedPrompt": "Überarbeiteter Prompt"
   },
   "errors": {
     "componentError": "Komponenten-Fehler",

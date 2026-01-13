@@ -1,0 +1,28 @@
+{
+  "id": "dall-e-3",
+  "modelId": "dall-e-3",
+  "name": {
+    "en": "DALL-E 3",
+    "de": "DALL-E 3"
+  },
+  "description": {
+    "en": "High-quality image generation from text descriptions with improved understanding",
+    "de": "Hochwertige Bildgenerierung aus Textbeschreibungen mit verbessertem Verständnis"
+  },
+  "url": "https://api.openai.com/v1/images/generations",
+  "provider": "openai-image",
+  "type": "image-generation",
+  "tokenLimit": 4000,
+  "supportsTools": false,
+  "enabled": false,
+  "default": false,
+  "imageGeneration": {
+    "supportedSizes": ["1024x1024", "1792x1024", "1024x1792"],
+    "supportedQualities": ["standard", "hd"],
+    "supportedStyles": ["vivid", "natural"],
+    "maxPromptLength": 4000,
+    "defaultSize": "1024x1024",
+    "defaultQuality": "standard",
+    "defaultStyle": "vivid"
+  }
+}
