@@ -69,7 +69,9 @@ class ImageGenerationHandler {
 
         // Send error via SSE
         if (clientRes && !clientRes.writableEnded) {
-          clientRes.write(`event: error\ndata: ${JSON.stringify({ message: errorResult.message, code: errorResult.code })}\n\n`);
+          clientRes.write(
+            `event: error\ndata: ${JSON.stringify({ message: errorResult.message, code: errorResult.code })}\n\n`
+          );
           clientRes.end();
         }
         return;
@@ -85,12 +87,15 @@ class ImageGenerationHandler {
       );
 
       // Log the request and response
+      // Note: Image generation doesn't use token-based usage tracking.
+      // Instead, track by number of images generated and their specifications.
+      // Tokens are set to 0 for compatibility with existing tracking system.
       const baseLog = buildLogData(true);
       await recordChatRequest({
         userId: baseLog.userSessionId,
         appId: baseLog.appId,
         modelId: model.id,
-        tokens: 0 // Image generation doesn't use tokens in the same way
+        tokens: 0
       });
 
       await recordChatResponse({
@@ -133,7 +138,7 @@ class ImageGenerationHandler {
         const errorMessage = fetchError.message.includes('timed out')
           ? `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`
           : fetchError.message;
-        
+
         clientRes.write(`event: error\ndata: ${JSON.stringify({ message: errorMessage })}\n\n`);
         clientRes.end();
       }

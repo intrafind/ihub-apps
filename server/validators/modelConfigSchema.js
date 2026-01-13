@@ -31,11 +31,15 @@ export const modelConfigSchema = z
     name: localizedStringSchema,
     description: localizedStringSchema,
     url: z.string().url('URL must be a valid URI format'),
-    provider: z.enum(['openai', 'anthropic', 'google', 'mistral', 'local', 'iassistant', 'openai-image'], {
-      errorMap: () => ({
-        message: 'Provider must be one of: openai, anthropic, google, mistral, local, iassistant, openai-image'
-      })
-    }),
+    provider: z.enum(
+      ['openai', 'anthropic', 'google', 'mistral', 'local', 'iassistant', 'openai-image'],
+      {
+        errorMap: () => ({
+          message:
+            'Provider must be one of: openai, anthropic, google, mistral, local, iassistant, openai-image'
+        })
+      }
+    ),
     tokenLimit: z
       .number()
       .int()

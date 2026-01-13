@@ -136,7 +136,7 @@ class RequestBuilder {
 
       const context = { user, chatId, language };
       const tools = await getToolsForApp(app, language, context);
-      
+
       // Prepare options for the request
       const requestOptions = {
         temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
@@ -160,7 +160,12 @@ class RequestBuilder {
         requestOptions.n = app.imageGenerationOptions.n || 1;
       }
 
-      const request = createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, requestOptions);
+      const request = createCompletionRequest(
+        model,
+        llmMessages,
+        apiKeyResult.apiKey,
+        requestOptions
+      );
 
       return {
         success: true,

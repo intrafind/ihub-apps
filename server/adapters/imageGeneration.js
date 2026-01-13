@@ -6,7 +6,7 @@ import { BaseAdapter } from './BaseAdapter.js';
 
 class ImageGenerationAdapter extends BaseAdapter {
   /**
-   * Create an image generation request for OpenAI DALL-E
+   * Create an image generation request
    * @param {Object} model - The model configuration
    * @param {string} prompt - The text prompt for image generation
    * @param {string} apiKey - The API key
@@ -20,8 +20,10 @@ class ImageGenerationAdapter extends BaseAdapter {
       return this.createOpenAIImageRequest(model, prompt, apiKey, options);
     }
 
-    // Fallback to OpenAI format for unknown providers
-    return this.createOpenAIImageRequest(model, prompt, apiKey, options);
+    // For unsupported providers, throw an error to aid debugging
+    throw new Error(
+      `Unsupported image generation provider: ${provider}. Supported providers: openai-image, openai`
+    );
   }
 
   /**
@@ -106,8 +108,11 @@ class ImageGenerationAdapter extends BaseAdapter {
   }
 
   /**
-   * Format messages is not applicable for image generation
-   * This method is here to satisfy the adapter interface
+   * Format messages is not applicable for image generation.
+   * Image generation uses a single prompt instead of a conversation history.
+   * This method is here to satisfy the adapter interface but returns messages unchanged.
+   * @param {Array} messages - Messages array (not used for image generation)
+   * @returns {Array} Messages unchanged
    */
   formatMessages(messages) {
     // For image generation, we don't format messages

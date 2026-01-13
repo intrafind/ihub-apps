@@ -338,11 +338,6 @@ const ChatMessage = ({
     if (!isUser && message.images && Array.isArray(message.images) && message.images.length > 0) {
       return (
         <div className="flex flex-col gap-3">
-          {message.revised_prompt && (
-            <div className="text-sm text-gray-600 italic mb-2">
-              {t('chatMessage.revisedPrompt', 'Revised prompt')}: {message.revised_prompt}
-            </div>
-          )}
           {message.images.map((img, index) => (
             <div key={index} className="flex flex-col gap-2">
               <img
@@ -352,7 +347,9 @@ const ChatMessage = ({
                 style={{ maxHeight: '512px', objectFit: 'contain' }}
               />
               {img.revised_prompt && (
-                <div className="text-xs text-gray-500 italic">{img.revised_prompt}</div>
+                <div className="text-xs text-gray-500 italic">
+                  {t('chatMessage.revisedPrompt', 'Revised prompt')}: {img.revised_prompt}
+                </div>
               )}
               <div className="flex gap-2">
                 <a
@@ -366,9 +363,7 @@ const ChatMessage = ({
               </div>
             </div>
           ))}
-          {contentToRender && (
-            <div className="mt-2 text-sm text-gray-700">{contentToRender}</div>
-          )}
+          {contentToRender && <div className="mt-2 text-sm text-gray-700">{contentToRender}</div>}
         </div>
       );
     }
