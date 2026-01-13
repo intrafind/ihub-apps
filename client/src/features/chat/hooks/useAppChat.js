@@ -101,11 +101,25 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           break;
         case 'done':
           if (lastMessageIdRef.current) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
-              finishReason: data?.finishReason
-            });
-            if (onMessageComplete) {
-              onMessageComplete(fullContent, lastUserMessageRef.current);
+            // Check if this is an image generation response
+            if (data?.type === 'image' && data?.images) {
+              // Handle image generation response
+              updateAssistantMessage(lastMessageIdRef.current, '', false, {
+                finishReason: data.finishReason || 'stop',
+                images: data.images,
+                type: 'image'
+              });
+              if (onMessageComplete) {
+                onMessageComplete('', lastUserMessageRef.current);
+              }
+            } else {
+              // Handle regular text response
+              updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
+                finishReason: data?.finishReason
+              });
+              if (onMessageComplete) {
+                onMessageComplete(fullContent, lastUserMessageRef.current);
+              }
             }
           }
           setProcessing(false);

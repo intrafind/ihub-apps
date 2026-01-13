@@ -31,9 +31,9 @@ export const modelConfigSchema = z
     name: localizedStringSchema,
     description: localizedStringSchema,
     url: z.string().url('URL must be a valid URI format'),
-    provider: z.enum(['openai', 'anthropic', 'google', 'mistral', 'local', 'iassistant'], {
+    provider: z.enum(['openai', 'anthropic', 'google', 'mistral', 'local', 'iassistant', 'openai-image'], {
       errorMap: () => ({
-        message: 'Provider must be one of: openai, anthropic, google, mistral, local, iassistant'
+        message: 'Provider must be one of: openai, anthropic, google, mistral, local, iassistant, openai-image'
       })
     }),
     tokenLimit: z
@@ -60,6 +60,22 @@ export const modelConfigSchema = z
       .optional(),
     enabled: z.boolean().optional().default(true),
     thinking: thinkingSchema.optional(),
+
+    // Model type - for specialized models like image generation
+    type: z.enum(['chat', 'image-generation']).optional(),
+
+    // Image generation specific configuration
+    imageGeneration: z
+      .object({
+        supportedSizes: z.array(z.string()).optional(),
+        supportedQualities: z.array(z.string()).optional(),
+        supportedStyles: z.array(z.string()).optional(),
+        maxPromptLength: z.number().int().optional(),
+        defaultSize: z.string().optional(),
+        defaultQuality: z.string().optional(),
+        defaultStyle: z.string().optional()
+      })
+      .optional(),
 
     // Additional fields for specific providers
     supportsImages: z.boolean().optional(),

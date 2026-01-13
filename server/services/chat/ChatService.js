@@ -110,6 +110,20 @@ class ChatService {
       clientLanguage
     } = params;
 
+    // Check if this is an image generation model
+    if (model.type === 'image-generation') {
+      return await this.imageGenerationHandler.executeImageGenerationSSE({
+        request,
+        chatId,
+        clientRes,
+        buildLogData,
+        model,
+        DEFAULT_TIMEOUT,
+        getLocalizedError,
+        clientLanguage
+      });
+    }
+
     return await this.streamingHandler.executeStreamingResponse({
       request,
       chatId,

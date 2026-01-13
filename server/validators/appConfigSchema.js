@@ -284,6 +284,16 @@ const baseAppConfigSchema = z.object({
   category: z.string().optional(),
   enabled: z.boolean().optional().default(true),
 
+  // Image generation options (for apps using image generation models)
+  imageGenerationOptions: z
+    .object({
+      size: z.string().optional(),
+      quality: z.string().optional(),
+      style: z.string().optional(),
+      n: z.number().int().min(1).max(10).optional()
+    })
+    .optional(),
+
   // Tool-specific configurations
   iassistant: iAssistantConfigSchema,
 

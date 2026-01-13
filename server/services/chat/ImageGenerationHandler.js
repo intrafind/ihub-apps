@@ -10,6 +10,137 @@ class ImageGenerationHandler {
   }
 
   /**
+   * Execute image generation request and send result via SSE
+   * @param {Object} params - Request parameters
+   * @returns {void} Sends SSE events to client
+   */
+  async executeImageGenerationSSE({
+    request,
+    chatId,
+    clientRes,
+    buildLogData,
+    model,
+    DEFAULT_TIMEOUT,
+    getLocalizedError,
+    clientLanguage
+  }) {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT / 1000} seconds`));
+      }, DEFAULT_TIMEOUT);
+    });
+
+    try {
+      const fetchOptions = {
+        method: request.method || 'POST',
+        headers: request.headers,
+        body: JSON.stringify(request.body)
+      };
+
+      console.log('Image generation request (SSE):', {
+        url: request.url,
+        model: model.id,
+        prompt: request.body.prompt
+      });
+
+      const responsePromise = throttledFetch(model.id, request.url, fetchOptions);
+      const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
+      clearTimeout(timeoutId);
+
+      if (!llmResponse.ok) {
+        const errorResult = await this.errorHandler.createEnhancedLLMApiError(
+          llmResponse,
+          model,
+          clientLanguage
+        );
+
+        const errorLog = buildLogData(true, {
+          responseType: 'error',
+          error: {
+            message: errorResult.message,
+            code: errorResult.code,
+            httpStatus: errorResult.httpStatus,
+            details: errorResult.details
+          }
+        });
+
+        await logInteraction('image_generation_error', errorLog);
+
+        // Send error via SSE
+        if (clientRes && !clientRes.writableEnded) {
+          clientRes.write(`event: error\ndata: ${JSON.stringify({ message: errorResult.message, code: errorResult.code })}\n\n`);
+          clientRes.end();
+        }
+        return;
+      }
+
+      const responseData = await llmResponse.json();
+      console.log('Image generation response (SSE):', responseData);
+
+      // Process the image response using the adapter
+      const processedResponse = imageGenerationAdapter.processImageResponse(
+        model.provider,
+        responseData
+      );
+
+      // Log the request and response
+      const baseLog = buildLogData(true);
+      await recordChatRequest({
+        userId: baseLog.userSessionId,
+        appId: baseLog.appId,
+        modelId: model.id,
+        tokens: 0 // Image generation doesn't use tokens in the same way
+      });
+
+      await recordChatResponse({
+        userId: baseLog.userSessionId,
+        appId: baseLog.appId,
+        modelId: model.id,
+        tokens: 0
+      });
+
+      const responseLog = buildLogData(true, {
+        responseType: 'image',
+        imageCount: processedResponse.images?.length || 0,
+        model: model.id
+      });
+      await logInteraction('image_generation_response', responseLog);
+
+      // Send the image data via SSE as a 'done' event with the image info
+      if (clientRes && !clientRes.writableEnded) {
+        const eventData = {
+          type: 'image',
+          images: processedResponse.images,
+          finishReason: 'stop'
+        };
+        clientRes.write(`event: done\ndata: ${JSON.stringify(eventData)}\n\n`);
+        clientRes.end();
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+
+      const errorLog = buildLogData(true, {
+        responseType: 'error',
+        error: {
+          message: fetchError.message,
+          stack: fetchError.stack
+        }
+      });
+      await logInteraction('image_generation_error', errorLog);
+
+      if (clientRes && !clientRes.writableEnded) {
+        const errorMessage = fetchError.message.includes('timed out')
+          ? `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`
+          : fetchError.message;
+        
+        clientRes.write(`event: error\ndata: ${JSON.stringify({ message: errorMessage })}\n\n`);
+        clientRes.end();
+      }
+    }
+  }
+
+  /**
    * Execute image generation request
    * @param {Object} params - Request parameters
    * @returns {Object} Response with generated images
