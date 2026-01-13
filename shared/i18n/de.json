@@ -605,6 +605,14 @@
           "tokenLimitRequired": "Token-Limit ist erforderlich",
           "createFailed": "Fehler beim Erstellen der App"
         }
+      },
+      "edit": {
+        "predefinedValues": "Vordefinierte Werte",
+        "predefinedValuesHint": "Optionale vorgeschlagene Werte, die als Autocomplete-Optionen verwendet werden können.",
+        "predefinedValuesHintSelect": "Optionen, die im Dropdown-Menü verfügbar sein werden.",
+        "option": "Option",
+        "value": "Wert",
+        "addOption": "Option hinzufügen"
       }
     },
     "models": {

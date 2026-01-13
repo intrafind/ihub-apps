@@ -307,7 +307,13 @@
         "preferredModel": "Preferred Model",
         "temperature": "Temperature",
         "searchTools": "Search tools to add...",
-        "toolsHelper": "Search and select tools to add to this app. Click on selected tools to remove them."
+        "toolsHelper": "Search and select tools to add to this app. Click on selected tools to remove them.",
+        "predefinedValues": "Predefined Values",
+        "predefinedValuesHint": "Optional suggested values that can be used as autocomplete options.",
+        "predefinedValuesHintSelect": "Options that will be available in the dropdown menu.",
+        "option": "Option",
+        "value": "Value",
+        "addOption": "Add Option"
       },
       "wizard": {
         "title": "Create New App",
