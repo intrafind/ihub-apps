@@ -29,12 +29,23 @@ const AppConfigForm = ({
   const modelHasRequiredCapabilities = (model, app) => {
     // If app has imageGenerationOptions, it needs image generation capability
     if (app?.imageGenerationOptions) {
+      // Only show models that explicitly have imageGeneration capability enabled
       return model.capabilities?.imageGeneration === true;
     }
     
-    // Otherwise, model should support text generation
-    // Default to true for backward compatibility with models without capabilities defined
-    return model.capabilities?.textGeneration !== false;
+    // For regular text generation apps
+    // Show models that either:
+    // 1. Have textGeneration explicitly set to true, OR
+    // 2. Don't have a capabilities object at all (backward compatibility), OR
+    // 3. Have capabilities object but textGeneration is not explicitly false
+    if (!model.capabilities) {
+      // No capabilities defined - assume it's a text generation model (backward compatibility)
+      return true;
+    }
+    
+    // If capabilities exists, check if textGeneration is enabled
+    // Default to true if not explicitly set, for backward compatibility
+    return model.capabilities.textGeneration !== false;
   };
 
   // Filter models if app has allowedModels specified

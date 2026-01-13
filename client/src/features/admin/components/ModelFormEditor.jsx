@@ -348,7 +348,7 @@ const ModelFormEditor = ({
                           id="capability-textGeneration"
                           name="capabilities.textGeneration"
                           type="checkbox"
-                          checked={data.capabilities?.textGeneration !== false}
+                          checked={data.capabilities?.textGeneration === true}
                           onChange={e => {
                             handleChange('capabilities', {
                               ...data.capabilities,
