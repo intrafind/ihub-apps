@@ -1,14 +1,14 @@
 # Image Generation Feature
 
-iHub Apps now supports AI-powered image generation using models like OpenAI's DALL-E. Users can generate creative images from text descriptions directly within the chat interface.
+iHub Apps now supports AI-powered image generation using models like OpenAI's DALL-E, Azure OpenAI DALL-E, and Google's Imagen. Users can generate creative images from text descriptions directly within the chat interface.
 
 ## Overview
 
 The image generation feature allows users to:
 - Generate images from text prompts
 - Download generated images
-- Use different image generation models (DALL-E 2, DALL-E 3, etc.)
-- Customize image parameters (size, quality, style)
+- Use different image generation models (DALL-E 2, DALL-E 3, Azure DALL-E, Google Imagen)
+- Customize image parameters (size, quality, style, aspect ratio)
 
 ## Supported Models
 
@@ -23,14 +23,38 @@ The image generation feature allows users to:
 - **Fast and cost-effective**
 - Sizes: 256x256, 512x512, 1024x1024
 
+### Azure OpenAI DALL-E 3
+- Same capabilities as OpenAI DALL-E 3
+- Hosted on Azure infrastructure
+- Supports enterprise Azure subscriptions
+- Custom deployment names and endpoints
+
+### Google Imagen 3
+- **Photorealistic** image generation
+- Advanced prompt understanding
+- Aspect ratios: 1:1, 3:4, 4:3, 9:16, 16:9
+- Negative prompts for better control
+- Seed parameter for reproducible results
+
 ## Configuration
 
 ### API Key Setup
 
-Add your OpenAI API key to the `.env` file:
+Add your API keys to the `.env` file:
 
+**For OpenAI:**
 ```bash
 OPENAI_API_KEY=sk-...
+```
+
+**For Azure OpenAI:**
+```bash
+AZURE_OPENAI_API_KEY=your-azure-key
+```
+
+**For Google Imagen:**
+```bash
+GOOGLE_API_KEY=your-google-api-key
 ```
 
 ### Enable Image Generation Models
@@ -52,6 +76,26 @@ Edit the model configuration files in `contents/models/`:
   "enabled": true
 }
 ```
+
+**For Azure DALL-E 3** (`azure-dall-e-3.json`):
+```json
+{
+  "id": "azure-dall-e-3",
+  "url": "https://your-resource-name.openai.azure.com/openai/deployments/your-deployment-id/images/generations?api-version=2024-02-01",
+  "enabled": true
+}
+```
+Note: Replace `{your-resource-name}` and `{deployment-id}` with your Azure OpenAI resource details.
+
+**For Google Imagen 3** (`imagen-3.json`):
+```json
+{
+  "id": "imagen-3",
+  "url": "https://us-central1-aiplatform.googleapis.com/v1/projects/your-project-id/locations/us-central1/publishers/google/models/imagegeneration@006:predict",
+  "enabled": true
+}
+```
+Note: Replace `{project-id}` with your Google Cloud project ID.
 
 ### Create an Image Generation App
 
@@ -115,6 +159,7 @@ Or create your own image generation app:
 
 You can configure default parameters in the app's `imageGenerationOptions`:
 
+**For OpenAI/Azure DALL-E:**
 - **size**: Image dimensions
   - DALL-E 3: `1024x1024`, `1792x1024`, `1024x1792`
   - DALL-E 2: `256x256`, `512x512`, `1024x1024`
@@ -125,6 +170,17 @@ You can configure default parameters in the app's `imageGenerationOptions`:
   - `vivid`: More dramatic, artistic
   - `natural`: More realistic, natural
 - **n**: Number of images to generate (1-10)
+
+**For Google Imagen:**
+- **aspectRatio**: Image aspect ratio
+  - `1:1`: Square (default)
+  - `3:4`: Portrait
+  - `4:3`: Landscape
+  - `9:16`: Vertical
+  - `16:9`: Horizontal
+- **negativePrompt**: What to avoid in the image
+- **seed**: Seed for reproducible results (integer)
+- **n**: Number of images to generate (via sampleCount)
 
 ## Technical Details
 
@@ -189,14 +245,29 @@ The server sends image data via Server-Sent Events (SSE):
 ### Error Messages
 
 **"API key not found":**
-- Add `OPENAI_API_KEY` to your `.env` file
+- For OpenAI: Add `OPENAI_API_KEY` to your `.env` file
+- For Azure: Add `AZURE_OPENAI_API_KEY` to your `.env` file
+- For Google: Add `GOOGLE_API_KEY` to your `.env` file
 
 **"Model not found":**
-- Enable the DALL-E model in Admin > Models
+- Enable the image generation model in Admin > Models
+
+**"Unsupported provider":**
+- Check that the model's `provider` field is set to one of: `openai-image`, `azure-openai-image`, `google-image`
 
 **"Request timed out":**
 - Image generation can take 10-30 seconds
 - Increase `REQUEST_TIMEOUT` in `config.env` if needed
+
+**Azure-specific errors:**
+- Verify your Azure resource name and deployment ID in the model URL
+- Check that your Azure subscription has access to DALL-E models
+- Ensure the API version in the URL is correct (2024-02-01 or later)
+
+**Google-specific errors:**
+- Verify your Google Cloud project ID in the model URL
+- Check that the Vertex AI API is enabled in your project
+- Ensure you have the correct permissions for Imagen
 
 ### Image Quality Issues
 
@@ -237,6 +308,29 @@ You can create multiple apps with different default settings:
 }
 ```
 
+**Azure Enterprise** (Azure OpenAI):
+```json
+{
+  "preferredModel": "azure-dall-e-3",
+  "imageGenerationOptions": {
+    "size": "1024x1024",
+    "quality": "standard",
+    "style": "natural"
+  }
+}
+```
+
+**Google Imagen** (photorealistic):
+```json
+{
+  "preferredModel": "imagen-3",
+  "imageGenerationOptions": {
+    "aspectRatio": "16:9",
+    "negativePrompt": "blurry, low quality"
+  }
+}
+```
+
 ### Custom System Prompts
 
 Use system prompts to guide users:
@@ -260,28 +354,35 @@ Image generation can be combined with other features:
 
 Planned features for future releases:
 - Image editing (variations, inpainting, outpainting)
-- Support for Google Imagen
-- Support for Stable Diffusion (self-hosted)
+- Support for additional providers (Stability AI, Midjourney API)
 - Image-to-image generation
 - Batch generation
 - Gallery view for generated images
+- Fine-tuned control over generation parameters
 
 ## Cost Considerations
 
 Image generation incurs API costs:
 
-**DALL-E 3:**
+**DALL-E 3 (OpenAI & Azure):**
 - Standard 1024×1024: ~$0.040 per image
 - HD 1024×1024: ~$0.080 per image
 - Standard 1792×1024 or 1024×1792: ~$0.080 per image
 - HD 1792×1024 or 1024×1792: ~$0.120 per image
 
-**DALL-E 2:**
+**DALL-E 2 (OpenAI & Azure):**
 - 256×256: ~$0.016 per image
 - 512×512: ~$0.018 per image
 - 1024×1024: ~$0.020 per image
 
-Check OpenAI's [pricing page](https://openai.com/pricing) for current rates.
+**Google Imagen:**
+- Pricing varies by region and usage
+- Check Google Cloud's [Vertex AI pricing](https://cloud.google.com/vertex-ai/pricing)
+
+Check the respective provider's pricing page for current rates:
+- [OpenAI Pricing](https://openai.com/pricing)
+- [Azure OpenAI Pricing](https://azure.microsoft.com/en-us/pricing/details/cognitive-services/openai-service/)
+- [Google Vertex AI Pricing](https://cloud.google.com/vertex-ai/pricing)
 
 ## Security & Privacy
 

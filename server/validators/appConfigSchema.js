@@ -287,10 +287,15 @@ const baseAppConfigSchema = z.object({
   // Image generation options (for apps using image generation models)
   imageGenerationOptions: z
     .object({
+      // OpenAI/Azure DALL-E options
       size: z.string().optional(),
       quality: z.string().optional(),
       style: z.string().optional(),
-      n: z.number().int().min(1).max(10).optional()
+      n: z.number().int().min(1).max(10).optional(),
+      // Google Imagen options
+      aspectRatio: z.string().optional(),
+      negativePrompt: z.string().optional(),
+      seed: z.number().int().optional()
     })
     .optional(),
 

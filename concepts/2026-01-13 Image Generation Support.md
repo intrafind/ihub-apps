@@ -1,19 +1,22 @@
 # Image Generation Support - Step 1
 
 **Date**: 2026-01-13  
-**Status**: In Progress  
+**Status**: Completed  
 **Related Issue**: Support Images - Step 1: Image Generation
 
 ## Overview
 
-This concept document outlines the implementation plan for adding image generation capabilities to iHub Apps. The feature will allow users to generate images from text prompts using models like OpenAI's DALL-E, Google's Imagen, or self-hosted Stable Diffusion models.
+This concept document outlines the implementation plan for adding image generation capabilities to iHub Apps. The feature allows users to generate images from text prompts using models like OpenAI's DALL-E, Azure OpenAI DALL-E, and Google's Imagen.
 
 ## Goals
 
 1. Enable users to generate images from text prompts within the chat interface
 2. Display generated images inline in the chat
 3. Provide download functionality for generated images
-4. Support multiple image generation providers (OpenAI DALL-E, Google Imagen, etc.)
+4. Support multiple image generation providers:
+   - OpenAI DALL-E (2 and 3)
+   - Azure OpenAI DALL-E
+   - Google Imagen (Nano Banana)
 5. Maintain consistency with the existing architecture and adapter pattern
 
 ## Architecture

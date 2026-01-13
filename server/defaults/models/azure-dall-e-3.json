@@ -1,0 +1,28 @@
+{
+  "id": "azure-dall-e-3",
+  "modelId": "dall-e-3",
+  "name": {
+    "en": "Azure DALL-E 3",
+    "de": "Azure DALL-E 3"
+  },
+  "description": {
+    "en": "High-quality image generation from Azure OpenAI with improved understanding",
+    "de": "Hochwertige Bildgenerierung von Azure OpenAI mit verbessertem Verständnis"
+  },
+  "url": "https://{your-resource-name}.openai.azure.com/openai/deployments/{deployment-id}/images/generations?api-version=2024-02-01",
+  "provider": "azure-openai-image",
+  "type": "image-generation",
+  "tokenLimit": 4000,
+  "supportsTools": false,
+  "enabled": false,
+  "default": false,
+  "imageGeneration": {
+    "supportedSizes": ["1024x1024", "1792x1024", "1024x1792"],
+    "supportedQualities": ["standard", "hd"],
+    "supportedStyles": ["vivid", "natural"],
+    "maxPromptLength": 4000,
+    "defaultSize": "1024x1024",
+    "defaultQuality": "standard",
+    "defaultStyle": "vivid"
+  }
+}

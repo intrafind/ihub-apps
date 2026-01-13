@@ -15,7 +15,9 @@ const adapters = {
   mistral: MistralAdapter,
   local: VLLMAdapter, // vLLM uses dedicated adapter with schema sanitization
   iassistant: IAssistantAdapter,
-  'openai-image': ImageGenerationAdapter // Image generation models
+  'openai-image': ImageGenerationAdapter, // OpenAI DALL-E image generation
+  'azure-openai-image': ImageGenerationAdapter, // Azure OpenAI DALL-E image generation
+  'google-image': ImageGenerationAdapter // Google Imagen image generation
 };
 
 /**

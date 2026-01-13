@@ -1,0 +1,24 @@
+{
+  "id": "imagen-3",
+  "modelId": "imagegeneration@006",
+  "name": {
+    "en": "Google Imagen 3",
+    "de": "Google Imagen 3"
+  },
+  "description": {
+    "en": "Google's advanced text-to-image AI model with photorealistic results",
+    "de": "Googles fortschrittliches Text-zu-Bild-KI-Modell mit fotorealistischen Ergebnissen"
+  },
+  "url": "https://us-central1-aiplatform.googleapis.com/v1/projects/{project-id}/locations/us-central1/publishers/google/models/imagegeneration@006:predict",
+  "provider": "google-image",
+  "type": "image-generation",
+  "tokenLimit": 2000,
+  "supportsTools": false,
+  "enabled": false,
+  "default": false,
+  "imageGeneration": {
+    "supportedAspectRatios": ["1:1", "3:4", "4:3", "9:16", "16:9"],
+    "maxPromptLength": 2000,
+    "defaultAspectRatio": "1:1"
+  }
+}

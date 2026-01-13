@@ -20,9 +20,17 @@ class ImageGenerationAdapter extends BaseAdapter {
       return this.createOpenAIImageRequest(model, prompt, apiKey, options);
     }
 
+    if (provider === 'azure-openai-image' || provider === 'azure-openai') {
+      return this.createAzureOpenAIImageRequest(model, prompt, apiKey, options);
+    }
+
+    if (provider === 'google-image' || provider === 'google') {
+      return this.createGoogleImagenRequest(model, prompt, apiKey, options);
+    }
+
     // For unsupported providers, throw an error to aid debugging
     throw new Error(
-      `Unsupported image generation provider: ${provider}. Supported providers: openai-image, openai`
+      `Unsupported image generation provider: ${provider}. Supported providers: openai-image, openai, azure-openai-image, azure-openai, google-image, google`
     );
   }
 
@@ -59,6 +67,78 @@ class ImageGenerationAdapter extends BaseAdapter {
   }
 
   /**
+   * Create Azure OpenAI DALL-E image generation request
+   */
+  createAzureOpenAIImageRequest(model, prompt, apiKey, options = {}) {
+    const body = {
+      prompt: prompt,
+      n: options.n || 1,
+      size: options.size || '1024x1024'
+    };
+
+    // Add quality and style for DALL-E 3
+    if (model.modelId.includes('dall-e-3')) {
+      if (options.quality) {
+        body.quality = options.quality;
+      }
+      if (options.style) {
+        body.style = options.style;
+      }
+    }
+
+    console.log('Azure OpenAI Image Generation request:', JSON.stringify(body, null, 2));
+
+    return {
+      url: model.url,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': apiKey
+      },
+      body
+    };
+  }
+
+  /**
+   * Create Google Imagen (Nano Banana) image generation request
+   */
+  createGoogleImagenRequest(model, prompt, apiKey, options = {}) {
+    const body = {
+      instances: [
+        {
+          prompt: prompt
+        }
+      ],
+      parameters: {
+        sampleCount: options.n || 1
+      }
+    };
+
+    // Add optional parameters
+    if (options.aspectRatio) {
+      body.parameters.aspectRatio = options.aspectRatio;
+    }
+    if (options.negativePrompt) {
+      body.instances[0].negativePrompt = options.negativePrompt;
+    }
+    if (options.seed) {
+      body.parameters.seed = options.seed;
+    }
+
+    console.log('Google Imagen request:', JSON.stringify(body, null, 2));
+
+    return {
+      url: model.url,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
+      body
+    };
+  }
+
+  /**
    * Process image generation response
    * @param {string} provider - The provider name
    * @param {Object} responseData - The response from the API
@@ -67,6 +147,14 @@ class ImageGenerationAdapter extends BaseAdapter {
   processImageResponse(provider, responseData) {
     if (provider === 'openai-image' || provider === 'openai') {
       return this.processOpenAIImageResponse(responseData);
+    }
+
+    if (provider === 'azure-openai-image' || provider === 'azure-openai') {
+      return this.processAzureOpenAIImageResponse(responseData);
+    }
+
+    if (provider === 'google-image' || provider === 'google') {
+      return this.processGoogleImagenResponse(responseData);
     }
 
     // Fallback to OpenAI format
@@ -100,6 +188,76 @@ class ImageGenerationAdapter extends BaseAdapter {
       };
     } catch (error) {
       console.error('Error processing image response:', error);
+      result.error = true;
+      result.errorMessage = `Error processing image response: ${error.message}`;
+    }
+
+    return result;
+  }
+
+  /**
+   * Process Azure OpenAI DALL-E image response
+   */
+  processAzureOpenAIImageResponse(responseData) {
+    const result = {
+      type: 'image',
+      images: [],
+      error: false,
+      errorMessage: null
+    };
+
+    try {
+      if (responseData.data && Array.isArray(responseData.data)) {
+        result.images = responseData.data.map(img => ({
+          url: img.url || img.b64_json,
+          revised_prompt: img.revised_prompt,
+          format: 'png',
+          isBase64: !!img.b64_json
+        }));
+      }
+
+      result.metadata = {
+        created: responseData.created,
+        model: 'azure-dalle'
+      };
+    } catch (error) {
+      console.error('Error processing Azure OpenAI image response:', error);
+      result.error = true;
+      result.errorMessage = `Error processing image response: ${error.message}`;
+    }
+
+    return result;
+  }
+
+  /**
+   * Process Google Imagen (Nano Banana) image response
+   */
+  processGoogleImagenResponse(responseData) {
+    const result = {
+      type: 'image',
+      images: [],
+      error: false,
+      errorMessage: null
+    };
+
+    try {
+      if (responseData.predictions && Array.isArray(responseData.predictions)) {
+        result.images = responseData.predictions.map(prediction => {
+          // Google Imagen returns base64 encoded images in the 'bytesBase64Encoded' field
+          const imageData = prediction.bytesBase64Encoded || prediction.image;
+          return {
+            url: imageData,
+            format: 'png',
+            isBase64: true
+          };
+        });
+      }
+
+      result.metadata = {
+        model: 'imagen'
+      };
+    } catch (error) {
+      console.error('Error processing Google Imagen response:', error);
       result.error = true;
       result.errorMessage = `Error processing image response: ${error.message}`;
     }
