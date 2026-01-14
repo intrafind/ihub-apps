@@ -6,6 +6,20 @@ import { BaseAdapter } from './BaseAdapter.js';
 
 class GoogleAdapterClass extends BaseAdapter {
   /**
+   * Helper to process inline image data from response parts
+   */
+  processInlineImage(part) {
+    if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+      return {
+        mimeType: part.inlineData.mimeType,
+        data: part.inlineData.data,
+        thoughtSignature: part.thoughtSignature || null
+      };
+    }
+    return null;
+  }
+
+  /**
    * Format messages for Google Gemini API, including handling image data
    */
   formatMessages(messages) {
@@ -277,13 +291,9 @@ class GoogleAdapterClass extends BaseAdapter {
                 result.content.push(part.text);
               }
             }
-            if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
-              // Handle generated images
-              result.images.push({
-                mimeType: part.inlineData.mimeType,
-                data: part.inlineData.data,
-                thoughtSignature: part.thoughtSignature || null
-              });
+            const image = this.processInlineImage(part);
+            if (image) {
+              result.images.push(image);
             }
             if (part.functionCall) {
               result.tool_calls.push({
@@ -327,13 +337,9 @@ class GoogleAdapterClass extends BaseAdapter {
                 result.content.push(part.text);
               }
             }
-            if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
-              // Handle generated images in streaming response
-              result.images.push({
-                mimeType: part.inlineData.mimeType,
-                data: part.inlineData.data,
-                thoughtSignature: part.thoughtSignature || null
-              });
+            const image = this.processInlineImage(part);
+            if (image) {
+              result.images.push(image);
             }
             if (part.functionCall) {
               result.tool_calls.push({

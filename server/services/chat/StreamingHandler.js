@@ -15,6 +15,44 @@ class StreamingHandler {
   }
 
   /**
+   * Helper to process and emit images from a result
+   */
+  processImages(result, chatId) {
+    if (result && result.images && result.images.length > 0) {
+      for (const image of result.images) {
+        actionTracker.trackImage(chatId, {
+          mimeType: image.mimeType,
+          data: image.data,
+          thoughtSignature: image.thoughtSignature
+        });
+      }
+    }
+  }
+
+  /**
+   * Helper to process and emit thinking content from a result
+   */
+  processThinking(result, chatId) {
+    if (result && result.thinking && result.thinking.length > 0) {
+      for (const thought of result.thinking) {
+        actionTracker.trackThinking(chatId, { content: thought });
+      }
+    }
+  }
+
+  /**
+   * Helper to process grounding metadata
+   */
+  processGroundingMetadata(result, chatId) {
+    if (result && result.groundingMetadata) {
+      actionTracker.trackAction(chatId, {
+        event: 'grounding',
+        metadata: result.groundingMetadata
+      });
+    }
+  }
+
+  /**
    * Convert response body to Web Streams ReadableStream
    * Handles compatibility between native fetch (Web Streams) and node-fetch (Node.js streams)
    * @param {Response} response - The fetch response object
@@ -230,30 +268,13 @@ class StreamingHandler {
               }
 
               // Handle generated images
-              if (result && result.images && result.images.length > 0) {
-                for (const image of result.images) {
-                  actionTracker.trackImage(chatId, {
-                    mimeType: image.mimeType,
-                    data: image.data,
-                    thoughtSignature: image.thoughtSignature
-                  });
-                }
-              }
+              this.processImages(result, chatId);
 
               // Handle thinking content
-              if (result && result.thinking && result.thinking.length > 0) {
-                for (const thought of result.thinking) {
-                  actionTracker.trackThinking(chatId, { content: thought });
-                }
-              }
+              this.processThinking(result, chatId);
 
               // Handle grounding metadata (for Google Search)
-              if (result && result.groundingMetadata) {
-                actionTracker.trackAction(chatId, {
-                  event: 'grounding',
-                  metadata: result.groundingMetadata
-                });
-              }
+              this.processGroundingMetadata(result, chatId);
 
               if (result && result.error) {
                 await logInteraction(
@@ -315,15 +336,7 @@ class StreamingHandler {
           }
 
           // Handle generated images in remaining buffer
-          if (result && result.images && result.images.length > 0) {
-            for (const image of result.images) {
-              actionTracker.trackImage(chatId, {
-                mimeType: image.mimeType,
-                data: image.data,
-                thoughtSignature: image.thoughtSignature
-              });
-            }
-          }
+          this.processImages(result, chatId);
 
           if (result && result.complete) {
             actionTracker.trackDone(chatId, { finishReason: result.finishReason || 'stop' });
@@ -376,29 +389,13 @@ class StreamingHandler {
             }
 
             // Handle generated images
-            if (result && result.images && result.images.length > 0) {
-              for (const image of result.images) {
-                actionTracker.trackImage(chatId, {
-                  mimeType: image.mimeType,
-                  data: image.data,
-                  thoughtSignature: image.thoughtSignature
-                });
-              }
-            }
+            this.processImages(result, chatId);
 
-            if (result && result.thinking && result.thinking.length > 0) {
-              for (const thinkingContent of result.thinking) {
-                actionTracker.trackThinking(chatId, { content: thinkingContent });
-              }
-            }
+            // Handle thinking
+            this.processThinking(result, chatId);
 
             // Handle grounding metadata
-            if (result && result.groundingMetadata) {
-              actionTracker.trackAction(chatId, {
-                event: 'grounding',
-                metadata: result.groundingMetadata
-              });
-            }
+            this.processGroundingMetadata(result, chatId);
 
             if (result && result.error) {
               await logInteraction(
