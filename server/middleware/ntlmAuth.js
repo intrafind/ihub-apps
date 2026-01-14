@@ -218,7 +218,7 @@ function hasMultipleAuthProviders(platform) {
     platform.oidcAuth?.enabled,
     platform.proxyAuth?.enabled
   ].filter(Boolean).length;
-  
+
   return enabledProviders > 0; // NTLM + at least one other provider
 }
 
@@ -273,14 +273,16 @@ export function ntlmAuthMiddleware(req, res, next) {
   // This prevents automatic NTLM SSO from blocking access to local/LDAP login
   const multipleProviders = hasMultipleAuthProviders(platform);
   const ntlmRequested = req.query.ntlm === 'true' || req.session?.ntlmRequested === true;
-  
+
   // Check if this is the NTLM login endpoint - use exact path matching for security
-  const isNtlmLoginEndpoint = req.path === '/api/auth/ntlm/login' || 
-                               req.path.startsWith('/api/auth/ntlm/login?');
-  
+  const isNtlmLoginEndpoint =
+    req.path === '/api/auth/ntlm/login' || req.path.startsWith('/api/auth/ntlm/login?');
+
   if (multipleProviders && !ntlmRequested && !isNtlmLoginEndpoint) {
     if (isDev) {
-      console.log('[NTLM Debug] Multiple providers configured, skipping auto-NTLM (not explicitly requested)');
+      console.log(
+        '[NTLM Debug] Multiple providers configured, skipping auto-NTLM (not explicitly requested)'
+      );
     }
     return next();
   }

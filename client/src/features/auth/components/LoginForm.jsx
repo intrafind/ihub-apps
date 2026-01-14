@@ -53,7 +53,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
   const handleNtlmLogin = () => {
     // Store current URL for return after NTLM authentication
     const returnUrl = window.location.href;
-    
+
     // Redirect to NTLM login endpoint which will trigger NTLM authentication
     const ntlmLoginUrl = `/api/auth/ntlm/login?returnUrl=${encodeURIComponent(returnUrl)}`;
     window.location.href = ntlmLoginUrl;
