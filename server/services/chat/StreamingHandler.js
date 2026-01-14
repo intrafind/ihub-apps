@@ -229,6 +229,32 @@ class StreamingHandler {
                 }
               }
 
+              // Handle generated images
+              if (result && result.images && result.images.length > 0) {
+                for (const image of result.images) {
+                  actionTracker.trackImage(chatId, {
+                    mimeType: image.mimeType,
+                    data: image.data,
+                    thoughtSignature: image.thoughtSignature
+                  });
+                }
+              }
+
+              // Handle thinking content
+              if (result && result.thinking && result.thinking.length > 0) {
+                for (const thought of result.thinking) {
+                  actionTracker.trackThinking(chatId, { content: thought });
+                }
+              }
+
+              // Handle grounding metadata (for Google Search)
+              if (result && result.groundingMetadata) {
+                actionTracker.trackAction(chatId, {
+                  event: 'grounding',
+                  metadata: result.groundingMetadata
+                });
+              }
+
               if (result && result.error) {
                 await logInteraction(
                   'chat_error',
@@ -288,6 +314,17 @@ class StreamingHandler {
             }
           }
 
+          // Handle generated images in remaining buffer
+          if (result && result.images && result.images.length > 0) {
+            for (const image of result.images) {
+              actionTracker.trackImage(chatId, {
+                mimeType: image.mimeType,
+                data: image.data,
+                thoughtSignature: image.thoughtSignature
+              });
+            }
+          }
+
           if (result && result.complete) {
             actionTracker.trackDone(chatId, { finishReason: result.finishReason || 'stop' });
             doneEmitted = true;
@@ -338,10 +375,29 @@ class StreamingHandler {
               }
             }
 
+            // Handle generated images
+            if (result && result.images && result.images.length > 0) {
+              for (const image of result.images) {
+                actionTracker.trackImage(chatId, {
+                  mimeType: image.mimeType,
+                  data: image.data,
+                  thoughtSignature: image.thoughtSignature
+                });
+              }
+            }
+
             if (result && result.thinking && result.thinking.length > 0) {
               for (const thinkingContent of result.thinking) {
                 actionTracker.trackThinking(chatId, { content: thinkingContent });
               }
+            }
+
+            // Handle grounding metadata
+            if (result && result.groundingMetadata) {
+              actionTracker.trackAction(chatId, {
+                event: 'grounding',
+                metadata: result.groundingMetadata
+              });
             }
 
             if (result && result.error) {

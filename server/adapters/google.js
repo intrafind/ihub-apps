@@ -197,6 +197,32 @@ class GoogleAdapterClass extends BaseAdapter {
       }
     }
 
+    // Add image generation configuration if model supports it
+    if (model.supportsImageGeneration || model.imageGeneration?.enabled) {
+      // Enable image generation by setting responseModalities to include IMAGE
+      requestBody.generationConfig.responseModalities = ['TEXT', 'IMAGE'];
+
+      // Add imageConfig if provided in options or model configuration
+      const imageConfig = options.imageConfig || model.imageGeneration || {};
+
+      if (imageConfig.aspectRatio || imageConfig.imageSize) {
+        requestBody.generationConfig.imageConfig = {};
+
+        if (imageConfig.aspectRatio) {
+          requestBody.generationConfig.imageConfig.aspectRatio = imageConfig.aspectRatio;
+        }
+
+        if (imageConfig.imageSize) {
+          requestBody.generationConfig.imageConfig.imageSize = imageConfig.imageSize;
+        }
+      }
+
+      console.log('Image generation enabled with config:', {
+        responseModalities: requestBody.generationConfig.responseModalities,
+        imageConfig: requestBody.generationConfig.imageConfig
+      });
+    }
+
     console.log('Google request body:', requestBody);
 
     return {
@@ -218,6 +244,9 @@ class GoogleAdapterClass extends BaseAdapter {
         content: [],
         tool_calls: [],
         thinking: [],
+        images: [],
+        thoughtSignatures: [],
+        groundingMetadata: null,
         complete: false,
         error: false,
         errorMessage: null,
@@ -248,6 +277,14 @@ class GoogleAdapterClass extends BaseAdapter {
                 result.content.push(part.text);
               }
             }
+            if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+              // Handle generated images
+              result.images.push({
+                mimeType: part.inlineData.mimeType,
+                data: part.inlineData.data,
+                thoughtSignature: part.thoughtSignature || null
+              });
+            }
             if (part.functionCall) {
               result.tool_calls.push({
                 index: 0,
@@ -258,6 +295,10 @@ class GoogleAdapterClass extends BaseAdapter {
                 }
               });
               if (!result.finishReason) result.finishReason = 'tool_calls';
+            }
+            // Collect thought signatures for multi-turn conversations
+            if (part.thoughtSignature) {
+              result.thoughtSignatures.push(part.thoughtSignature);
             }
           }
           result.complete = true;
@@ -286,6 +327,14 @@ class GoogleAdapterClass extends BaseAdapter {
                 result.content.push(part.text);
               }
             }
+            if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+              // Handle generated images in streaming response
+              result.images.push({
+                mimeType: part.inlineData.mimeType,
+                data: part.inlineData.data,
+                thoughtSignature: part.thoughtSignature || null
+              });
+            }
             if (part.functionCall) {
               result.tool_calls.push({
                 index: idx++,
@@ -297,7 +346,16 @@ class GoogleAdapterClass extends BaseAdapter {
               });
               if (!result.finishReason) result.finishReason = 'tool_calls';
             }
+            // Collect thought signatures for multi-turn conversations
+            if (part.thoughtSignature) {
+              result.thoughtSignatures.push(part.thoughtSignature);
+            }
           }
+        }
+
+        // Extract grounding metadata if present (for Google Search grounding)
+        if (parsed.groundingMetadata) {
+          result.groundingMetadata = parsed.groundingMetadata;
         }
 
         // TODO we should make use of the candidate metadata
