@@ -70,19 +70,63 @@
       "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
     }
   },
-  "starterPrompts": {
-    "en": [
-      "Generate a futuristic cityscape at sunset",
-      "Create a detailed anatomical diagram of a butterfly",
-      "Design a logo for a tech startup",
-      "Visualize the weather forecast for San Francisco"
-    ],
-    "de": [
-      "Generiere eine futuristische Stadtlandschaft bei Sonnenuntergang",
-      "Erstelle ein detailliertes anatomisches Diagramm eines Schmetterlings",
-      "Entwerfe ein Logo für ein Tech-Startup",
-      "Visualisiere die Wettervorhersage für San Francisco"
-    ]
-  },
+  "starterPrompts": [
+    {
+      "title": {
+        "en": "Futuristic cityscape",
+        "de": "Futuristische Stadtlandschaft"
+      },
+      "description": {
+        "en": "Generate a futuristic cityscape at sunset",
+        "de": "Generiere eine futuristische Stadtlandschaft bei Sonnenuntergang"
+      },
+      "message": {
+        "en": "Generate a futuristic cityscape at sunset",
+        "de": "Generiere eine futuristische Stadtlandschaft bei Sonnenuntergang"
+      }
+    },
+    {
+      "title": {
+        "en": "Butterfly diagram",
+        "de": "Schmetterling-Diagramm"
+      },
+      "description": {
+        "en": "Create a detailed anatomical diagram of a butterfly",
+        "de": "Erstelle ein detailliertes anatomisches Diagramm eines Schmetterlings"
+      },
+      "message": {
+        "en": "Create a detailed anatomical diagram of a butterfly",
+        "de": "Erstelle ein detailliertes anatomisches Diagramm eines Schmetterlings"
+      }
+    },
+    {
+      "title": {
+        "en": "Tech startup logo",
+        "de": "Tech-Startup-Logo"
+      },
+      "description": {
+        "en": "Design a logo for a tech startup",
+        "de": "Entwerfe ein Logo für ein Tech-Startup"
+      },
+      "message": {
+        "en": "Design a logo for a tech startup",
+        "de": "Entwerfe ein Logo für ein Tech-Startup"
+      }
+    },
+    {
+      "title": {
+        "en": "Weather forecast",
+        "de": "Wettervorhersage"
+      },
+      "description": {
+        "en": "Visualize the weather forecast for San Francisco",
+        "de": "Visualisiere die Wettervorhersage für San Francisco"
+      },
+      "message": {
+        "en": "Visualize the weather forecast for San Francisco",
+        "de": "Visualisiere die Wettervorhersage für San Francisco"
+      }
+    }
+  ],
   "enabled": true
 }

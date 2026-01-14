@@ -163,6 +163,15 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
             result.content.push(part.text);
           }
         }
+        if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+          // Handle generated images
+          if (!result.images) result.images = [];
+          result.images.push({
+            mimeType: part.inlineData.mimeType,
+            data: part.inlineData.data,
+            thoughtSignature: part.thoughtSignature || null
+          });
+        }
         if (part.functionCall && part.functionCall.name) {
           // Only create tool call if we have a valid name
           result.tool_calls.push(
@@ -175,6 +184,11 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
             )
           );
           if (!result.finishReason) result.finishReason = 'tool_calls';
+        }
+        // Collect thought signatures for multi-turn conversations
+        if (part.thoughtSignature) {
+          if (!result.thoughtSignatures) result.thoughtSignatures = [];
+          result.thoughtSignatures.push(part.thoughtSignature);
         }
       }
       result.complete = true;
@@ -198,6 +212,15 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
             result.content.push(part.text);
           }
         }
+        if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+          // Handle generated images in streaming response
+          if (!result.images) result.images = [];
+          result.images.push({
+            mimeType: part.inlineData.mimeType,
+            data: part.inlineData.data,
+            thoughtSignature: part.thoughtSignature || null
+          });
+        }
         if (part.functionCall && part.functionCall.name) {
           // Only create tool call if we have a valid name (non-empty)
           // This prevents creating tool calls with empty names during streaming
@@ -220,7 +243,17 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
             part.functionCall
           );
         }
+        // Collect thought signatures for multi-turn conversations
+        if (part.thoughtSignature) {
+          if (!result.thoughtSignatures) result.thoughtSignatures = [];
+          result.thoughtSignatures.push(part.thoughtSignature);
+        }
       }
+    }
+
+    // Extract grounding metadata if present (for Google Search grounding)
+    if (parsed.groundingMetadata) {
+      result.groundingMetadata = parsed.groundingMetadata;
     }
 
     if (parsed.candidates && parsed.candidates[0]?.finishReason) {
