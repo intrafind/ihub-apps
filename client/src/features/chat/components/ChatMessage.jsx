@@ -382,7 +382,7 @@ const ChatMessage = ({
       <div className={`chat-widget-message-content whitespace-normal ${isError ? 'error' : ''}`}>
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
-        
+
         {/* Display generated images */}
         {message.images && message.images.length > 0 && (
           <div className="mt-3 space-y-2">

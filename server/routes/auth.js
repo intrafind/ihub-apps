@@ -267,14 +267,14 @@ export default function registerAuthRoutes(app, basePath = '') {
 
       // Validate and sanitize return URL to prevent open redirect attacks
       let returnUrl = req.query.returnUrl || '/';
-      
+
       // Only allow relative URLs (starting with /) and same-origin URLs
       try {
         // If returnUrl is an absolute URL, validate it's same origin
         if (returnUrl.startsWith('http://') || returnUrl.startsWith('https://')) {
           const returnUrlObj = new URL(returnUrl);
           const currentHost = req.get('host');
-          
+
           // Only allow same-origin redirects
           if (returnUrlObj.host !== currentHost) {
             console.warn(`[Security] Blocked open redirect attempt to: ${returnUrl}`);
@@ -284,7 +284,7 @@ export default function registerAuthRoutes(app, basePath = '') {
           // Ensure relative URLs start with /
           returnUrl = '/' + returnUrl;
         }
-        
+
         // Remove any attempts to use protocol-relative URLs (//example.com)
         if (returnUrl.startsWith('//')) {
           returnUrl = '/';
@@ -293,7 +293,7 @@ export default function registerAuthRoutes(app, basePath = '') {
         console.error('[Security] Invalid return URL:', returnUrl, error);
         returnUrl = '/';
       }
-      
+
       // Redirect to the validated return URL with success indicator
       res.redirect(returnUrl + (returnUrl.includes('?') ? '&' : '?') + 'ntlm=success');
     } catch (error) {
@@ -396,7 +396,7 @@ export default function registerAuthRoutes(app, basePath = '') {
         if (err) {
           console.error('Session regeneration error:', err);
         }
-        
+
         // Set flag in the new session to prevent NTLM auto-login
         req.session.ntlmRequested = false;
       });
