@@ -388,9 +388,161 @@ const ModelFormEditor = ({
                         </label>
                       </div>
                     </div>
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="supportsImageGeneration"
+                          name="supportsImageGeneration"
+                          type="checkbox"
+                          checked={data.supportsImageGeneration || false}
+                          onChange={handleInputChange}
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                        />
+                      </div>
+                      <div className="ml-3 text-sm">
+                        <label
+                          htmlFor="supportsImageGeneration"
+                          className="font-medium text-gray-700"
+                        >
+                          {t(
+                            'admin.models.fields.supportsImageGeneration',
+                            'Supports Image Generation'
+                          )}
+                        </label>
+                        <p className="text-gray-500">
+                          {t(
+                            'admin.models.hints.supportsImageGeneration',
+                            'Enable if this model can generate images (e.g., Gemini Image models)'
+                          )}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </fieldset>
               </div>
+
+              {/* Image Generation Configuration */}
+              {data.supportsImageGeneration && (
+                <div className="col-span-6">
+                  <fieldset>
+                    <legend className="text-base font-medium text-gray-900">
+                      {t('admin.models.sections.imageGeneration', 'Image Generation Settings')}
+                    </legend>
+                    <div className="mt-4 grid grid-cols-6 gap-6">
+                      <div className="col-span-6 sm:col-span-3">
+                        <label
+                          htmlFor="imageGeneration.aspectRatio"
+                          className="block text-sm font-medium text-gray-700"
+                        >
+                          {t('admin.models.fields.aspectRatio', 'Aspect Ratio')}
+                        </label>
+                        <select
+                          id="imageGeneration.aspectRatio"
+                          value={data.imageGeneration?.aspectRatio || '1:1'}
+                          onChange={e =>
+                            handleChange('imageGeneration', {
+                              ...(data.imageGeneration || {}),
+                              aspectRatio: e.target.value
+                            })
+                          }
+                          className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        >
+                          <option value="1:1">1:1 (Square)</option>
+                          <option value="16:9">16:9 (Landscape)</option>
+                          <option value="9:16">9:16 (Portrait)</option>
+                          <option value="5:4">5:4</option>
+                          <option value="4:5">4:5</option>
+                          <option value="3:2">3:2</option>
+                          <option value="2:3">2:3</option>
+                        </select>
+                      </div>
+
+                      <div className="col-span-6 sm:col-span-3">
+                        <label
+                          htmlFor="imageGeneration.imageSize"
+                          className="block text-sm font-medium text-gray-700"
+                        >
+                          {t('admin.models.fields.imageSize', 'Image Size')}
+                        </label>
+                        <select
+                          id="imageGeneration.imageSize"
+                          value={data.imageGeneration?.imageSize || '1K'}
+                          onChange={e =>
+                            handleChange('imageGeneration', {
+                              ...(data.imageGeneration || {}),
+                              imageSize: e.target.value
+                            })
+                          }
+                          className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        >
+                          <option value="1K">1K (1024px)</option>
+                          <option value="2K">2K (2048px)</option>
+                          <option value="4K">4K (4096px)</option>
+                        </select>
+                      </div>
+
+                      <div className="col-span-6 sm:col-span-3">
+                        <label
+                          htmlFor="imageGeneration.maxReferenceImages"
+                          className="block text-sm font-medium text-gray-700"
+                        >
+                          {t('admin.models.fields.maxReferenceImages', 'Max Reference Images')}
+                        </label>
+                        <input
+                          type="number"
+                          id="imageGeneration.maxReferenceImages"
+                          value={data.imageGeneration?.maxReferenceImages || 14}
+                          onChange={e =>
+                            handleChange('imageGeneration', {
+                              ...(data.imageGeneration || {}),
+                              maxReferenceImages: parseInt(e.target.value, 10)
+                            })
+                          }
+                          min="1"
+                          max="14"
+                          className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                        />
+                        <p className="mt-2 text-sm text-gray-500">
+                          {t(
+                            'admin.models.hints.maxReferenceImages',
+                            'Maximum number of reference images (1-14)'
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="col-span-6">
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="imageGeneration.enabled"
+                              type="checkbox"
+                              checked={data.imageGeneration?.enabled !== false}
+                              onChange={e =>
+                                handleChange('imageGeneration', {
+                                  ...(data.imageGeneration || {}),
+                                  enabled: e.target.checked
+                                })
+                              }
+                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                            />
+                          </div>
+                          <div className="ml-3 text-sm">
+                            <label
+                              htmlFor="imageGeneration.enabled"
+                              className="font-medium text-gray-700"
+                            >
+                              {t(
+                                'admin.models.fields.imageGenerationEnabled',
+                                'Enable Image Generation'
+                              )}
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </fieldset>
+                </div>
+              )}
             </div>
           </div>
         </div>

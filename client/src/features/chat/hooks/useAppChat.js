@@ -99,6 +99,33 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             updateAssistantMessage(lastMessageIdRef.current, fullContent, true);
           }
           break;
+        case 'image':
+          if (lastMessageIdRef.current) {
+            // Add image to the current assistant message
+            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const existingImages = currentMessage?.images || [];
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              images: [
+                ...existingImages,
+                {
+                  mimeType: data?.mimeType,
+                  data: data?.data,
+                  thoughtSignature: data?.thoughtSignature
+                }
+              ]
+            });
+          }
+          break;
+        case 'thinking':
+          if (lastMessageIdRef.current) {
+            // Add thinking content to the current assistant message
+            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const existingThoughts = currentMessage?.thoughts || [];
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              thoughts: [...existingThoughts, data?.content]
+            });
+          }
+          break;
         case 'done':
           if (lastMessageIdRef.current) {
             updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {

@@ -382,6 +382,35 @@ const ChatMessage = ({
       <div className={`chat-widget-message-content whitespace-normal ${isError ? 'error' : ''}`}>
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
+        
+        {/* Display generated images */}
+        {message.images && message.images.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {message.images.map((image, idx) => (
+              <div key={idx} className="relative inline-block">
+                <img
+                  src={`data:${image.mimeType || 'image/png'};base64,${image.data}`}
+                  alt={t('chatMessage.generatedImage', `Generated image ${idx + 1}`)}
+                  className="max-w-full rounded-lg shadow-md"
+                  style={{ maxHeight: '512px' }}
+                />
+                <button
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = `data:${image.mimeType || 'image/png'};base64,${image.data}`;
+                    link.download = `generated-image-${Date.now()}.png`;
+                    link.click();
+                  }}
+                  className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
+                  title={t('chatMessage.downloadImage', 'Download image')}
+                >
+                  <Icon name="download" size="sm" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {!isUser && message.thoughts && message.thoughts.length > 0 && (
           <div className="mt-1 text-xs text-gray-600">
             <button onClick={() => setShowThoughts(!showThoughts)} className="underline">

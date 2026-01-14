@@ -133,6 +133,8 @@ function useEventSource({ appId, chatId, timeoutDuration = 30000, onEvent, onPro
         'done',
         'error',
         'processing',
+        'image',
+        'thinking',
         'research-start',
         'research-query-analysis',
         'research-round',
