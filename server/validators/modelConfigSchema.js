@@ -20,7 +20,6 @@ const thinkingSchema = z
 // Image generation configuration schema
 const imageGenerationSchema = z
   .object({
-    enabled: z.boolean(),
     aspectRatio: z
       .enum(['1:1', '16:9', '9:16', '5:4', '4:5', '3:2', '2:3'])
       .optional()

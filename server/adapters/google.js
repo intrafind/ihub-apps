@@ -212,7 +212,7 @@ class GoogleAdapterClass extends BaseAdapter {
     }
 
     // Add image generation configuration if model supports it
-    if (model.supportsImageGeneration || model.imageGeneration?.enabled) {
+    if (model.supportsImageGeneration) {
       // Enable image generation by setting responseModalities to include IMAGE
       requestBody.generationConfig.responseModalities = ['TEXT', 'IMAGE'];
 

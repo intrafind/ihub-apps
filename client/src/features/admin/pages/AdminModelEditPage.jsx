@@ -38,6 +38,7 @@ const AdminModelEditPage = () => {
     provider: '',
     tokenLimit: '',
     supportsTools: false,
+    supportsImageGeneration: false,
     enabled: true,
     default: false,
     apiKey: '',
@@ -96,6 +97,7 @@ const AdminModelEditPage = () => {
       };
 
       const formDataObj = {
+        ...model, // Preserve all fields from the loaded model
         id: model.id || '',
         modelId: model.modelId || '',
         name: ensureLocalizedObject(model.name),
