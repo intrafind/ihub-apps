@@ -165,6 +165,12 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
         }
         if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
           // Handle generated images
+          // Skip interim "thought images" - only show the final image
+          // According to Gemini docs, thought images are used for reasoning but not shown
+          if (part.thought === true) {
+            // This is an interim thought image, skip it
+            continue;
+          }
           if (!result.images) result.images = [];
           result.images.push({
             mimeType: part.inlineData.mimeType,
@@ -214,6 +220,12 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
         }
         if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
           // Handle generated images in streaming response
+          // Skip interim "thought images" - only show the final image
+          // According to Gemini docs, thought images are used for reasoning but not shown
+          if (part.thought === true) {
+            // This is an interim thought image, skip it
+            continue;
+          }
           if (!result.images) result.images = [];
           result.images.push({
             mimeType: part.inlineData.mimeType,

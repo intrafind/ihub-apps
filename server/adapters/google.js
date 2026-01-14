@@ -293,7 +293,10 @@ class GoogleAdapterClass extends BaseAdapter {
             }
             const image = this.processInlineImage(part);
             if (image) {
-              result.images.push(image);
+              // Skip interim "thought images" - only show the final image
+              if (part.thought !== true) {
+                result.images.push(image);
+              }
             }
             if (part.functionCall) {
               result.tool_calls.push({
@@ -339,7 +342,10 @@ class GoogleAdapterClass extends BaseAdapter {
             }
             const image = this.processInlineImage(part);
             if (image) {
-              result.images.push(image);
+              // Skip interim "thought images" - only show the final image
+              if (part.thought !== true) {
+                result.images.push(image);
+              }
             }
             if (part.functionCall) {
               result.tool_calls.push({
