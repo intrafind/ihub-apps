@@ -509,36 +509,6 @@ const ModelFormEditor = ({
                           )}
                         </p>
                       </div>
-
-                      <div className="col-span-6">
-                        <div className="flex items-start">
-                          <div className="flex items-center h-5">
-                            <input
-                              id="imageGeneration.enabled"
-                              type="checkbox"
-                              checked={data.imageGeneration?.enabled !== false}
-                              onChange={e =>
-                                handleChange('imageGeneration', {
-                                  ...(data.imageGeneration || {}),
-                                  enabled: e.target.checked
-                                })
-                              }
-                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                            />
-                          </div>
-                          <div className="ml-3 text-sm">
-                            <label
-                              htmlFor="imageGeneration.enabled"
-                              className="font-medium text-gray-700"
-                            >
-                              {t(
-                                'admin.models.fields.imageGenerationEnabled',
-                                'Enable Image Generation'
-                              )}
-                            </label>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </fieldset>
                 </div>
