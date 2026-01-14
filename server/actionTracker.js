@@ -66,6 +66,10 @@ export class ActionTracker extends EventEmitter {
     this.emit('fire-sse', { event: UnifiedEvents.THINKING, chatId, ...data });
   }
 
+  trackImage(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.IMAGE, chatId, ...data });
+  }
+
   trackToolStreamComplete(chatId, data = {}) {
     this.emit('fire-sse', { event: 'tool-stream-complete', chatId, ...data });
   }

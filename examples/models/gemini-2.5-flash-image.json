@@ -1,0 +1,26 @@
+{
+  "id": "gemini-2.5-flash-image",
+  "modelId": "gemini-2.5-flash-image",
+  "name": {
+    "en": "Gemini 2.5 Flash Image",
+    "de": "Gemini 2.5 Flash Bild"
+  },
+  "description": {
+    "en": "Google's fast image generation model (Nano Banana). Supports text-to-image and image editing with quick response times.",
+    "de": "Googles schnelles Bildgenerierungsmodell (Nano Banana). Unterstützt Text-zu-Bild und Bildbearbeitung mit schnellen Antwortzeiten."
+  },
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:streamGenerateContent",
+  "provider": "google",
+  "tokenLimit": 32768,
+  "supportsTools": false,
+  "supportsImages": true,
+  "supportsImageGeneration": true,
+  "imageGeneration": {
+    "enabled": true,
+    "aspectRatio": "1:1",
+    "imageSize": "1K",
+    "maxReferenceImages": 5
+  },
+  "enabled": true,
+  "default": false
+}

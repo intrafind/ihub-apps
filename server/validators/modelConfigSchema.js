@@ -17,6 +17,19 @@ const thinkingSchema = z
   })
   .strict();
 
+// Image generation configuration schema
+const imageGenerationSchema = z
+  .object({
+    enabled: z.boolean(),
+    aspectRatio: z
+      .enum(['1:1', '16:9', '9:16', '5:4', '4:5', '3:2', '2:3'])
+      .optional()
+      .default('1:1'),
+    imageSize: z.enum(['1K', '2K', '4K']).optional().default('1K'),
+    maxReferenceImages: z.number().int().min(1).max(14).optional().default(14)
+  })
+  .strict();
+
 export const modelConfigSchema = z
   .object({
     // Required fields
@@ -63,6 +76,8 @@ export const modelConfigSchema = z
 
     // Additional fields for specific providers
     supportsImages: z.boolean().optional(),
+    supportsImageGeneration: z.boolean().optional().default(false),
+    imageGeneration: imageGenerationSchema.optional(),
     config: z.record(z.any()).optional(), // Allow provider-specific configuration
 
     // API Key configuration - stored encrypted on server
