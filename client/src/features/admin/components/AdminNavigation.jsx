@@ -78,6 +78,13 @@ const AdminNavigation = () => {
           current: location.pathname.startsWith('/admin/prompts')
         },
         {
+          key: 'tools',
+          name: t('admin.nav.tools', 'Tools'),
+          href: '/admin/tools',
+          // icon: 'wrench',
+          current: location.pathname.startsWith('/admin/tools')
+        },
+        {
           key: 'sources',
           name: t('admin.nav.sources', 'Sources'),
           href: '/admin/sources',
