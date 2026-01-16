@@ -6,6 +6,16 @@ import { BaseAdapter } from './BaseAdapter.js';
 
 class OpenAIAdapterClass extends BaseAdapter {
   /**
+   * Check if a model is a GPT-5.x model that uses the new API
+   * @param {string} modelId - The model ID
+   * @returns {boolean} True if the model is GPT-5.x
+   */
+  isGPT5Model(modelId) {
+    // GPT-5.x models include: gpt-5, gpt-5.1, gpt-5.2, gpt-5.2-pro, gpt-5.2-codex,
+    // gpt-5-mini, gpt-5-nano, and their variants
+    return /^gpt-5($|[\.-])/.test(modelId) || /^gpt-5-(mini|nano)/.test(modelId);
+  }
+  /**
    * Format messages for OpenAI API, including handling image data
    * @param {Array} messages - Messages to format
    * @returns {Array} Formatted messages for OpenAI API
@@ -74,13 +84,43 @@ class OpenAIAdapterClass extends BaseAdapter {
     const formattedMessages = this.formatMessages(messages);
     this.debugLogMessages(messages, formattedMessages, 'OpenAI');
 
+    const isGPT5 = this.isGPT5Model(model.modelId);
+
     const body = {
       model: model.modelId,
       messages: formattedMessages,
-      stream,
-      temperature: parseFloat(temperature),
-      max_tokens: maxTokens
+      stream
     };
+
+    // For GPT-5.x models, use new API parameters
+    if (isGPT5) {
+      // GPT-5.x uses max_output_tokens instead of max_tokens
+      body.max_output_tokens = maxTokens;
+
+      // Add reasoning configuration if available
+      const gpt5Config = model.gpt5Reasoning || {};
+      const reasoningEffort = gpt5Config.effort || 'medium';
+      const verbosity = gpt5Config.verbosity || 'medium';
+
+      // Reasoning effort: none, low, medium, high, xhigh
+      body.reasoning = {
+        effort: reasoningEffort
+      };
+
+      // Verbosity: low, medium, high
+      body.text = {
+        verbosity: verbosity
+      };
+
+      // Temperature, top_p, and logprobs only supported with reasoning effort "none"
+      if (reasoningEffort === 'none') {
+        body.temperature = parseFloat(temperature);
+      }
+    } else {
+      // Legacy models (GPT-4.x and earlier) use max_tokens
+      body.max_tokens = maxTokens;
+      body.temperature = parseFloat(temperature);
+    }
 
     if (tools && tools.length > 0) body.tools = convertToolsFromGeneric(tools, 'openai');
     if (toolChoice) body.tool_choice = toolChoice;
