@@ -1,0 +1,23 @@
+{
+  "id": "gpt-5.2",
+  "modelId": "gpt-5.2",
+  "name": {
+    "en": "GPT-5.2",
+    "de": "GPT-5.2"
+  },
+  "description": {
+    "en": "OpenAI's most intelligent model for general and agentic tasks",
+    "de": "OpenAIs intelligentestes Modell für allgemeine und agentische Aufgaben"
+  },
+  "url": "https://api.openai.com/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 128000,
+  "default": false,
+  "supportsTools": true,
+  "supportsImages": true,
+  "gpt5Reasoning": {
+    "effort": "medium",
+    "verbosity": "medium"
+  },
+  "enabled": false
+}

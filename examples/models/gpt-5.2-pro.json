@@ -1,0 +1,23 @@
+{
+  "id": "gpt-5.2-pro",
+  "modelId": "gpt-5.2-pro",
+  "name": {
+    "en": "GPT-5.2 Pro",
+    "de": "GPT-5.2 Pro"
+  },
+  "description": {
+    "en": "GPT-5.2 with maximum reasoning for tough problems",
+    "de": "GPT-5.2 mit maximaler Denkleistung für schwierige Probleme"
+  },
+  "url": "https://api.openai.com/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 128000,
+  "default": false,
+  "supportsTools": true,
+  "supportsImages": true,
+  "gpt5Reasoning": {
+    "effort": "xhigh",
+    "verbosity": "high"
+  },
+  "enabled": false
+}

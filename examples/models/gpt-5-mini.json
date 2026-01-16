@@ -1,0 +1,23 @@
+{
+  "id": "gpt-5-mini",
+  "modelId": "gpt-5-mini",
+  "name": {
+    "en": "GPT-5 Mini",
+    "de": "GPT-5 Mini"
+  },
+  "description": {
+    "en": "Cost-optimized reasoning balancing speed and capability",
+    "de": "Kostenoptimiertes Reasoning-Modell mit Geschwindigkeit und Leistung"
+  },
+  "url": "https://api.openai.com/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 128000,
+  "default": false,
+  "supportsTools": true,
+  "supportsImages": true,
+  "gpt5Reasoning": {
+    "effort": "low",
+    "verbosity": "low"
+  },
+  "enabled": false
+}
