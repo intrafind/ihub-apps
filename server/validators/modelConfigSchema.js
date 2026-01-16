@@ -29,14 +29,6 @@ const imageGenerationSchema = z
   })
   .strict();
 
-// OpenAI GPT-5.x reasoning configuration schema
-const gpt5ReasoningSchema = z
-  .object({
-    effort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional().default('medium'),
-    verbosity: z.enum(['low', 'medium', 'high']).optional().default('medium')
-  })
-  .strict();
-
 export const modelConfigSchema = z
   .object({
     // Required fields
@@ -85,7 +77,6 @@ export const modelConfigSchema = z
     supportsImages: z.boolean().optional(),
     supportsImageGeneration: z.boolean().optional().default(false),
     imageGeneration: imageGenerationSchema.optional(),
-    gpt5Reasoning: gpt5ReasoningSchema.optional(), // GPT-5.x reasoning and verbosity settings
     config: z.record(z.any()).optional(), // Allow provider-specific configuration
 
     // API Key configuration - stored encrypted on server
