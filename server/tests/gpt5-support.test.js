@@ -110,15 +110,10 @@ const gpt5NoneModel = {
   }
 };
 
-const gpt5NoneRequest = OpenAIAdapter.createCompletionRequest(
-  gpt5NoneModel,
-  messages,
-  'test-key',
-  {
-    maxTokens: 1024,
-    temperature: 0.5
-  }
-);
+const gpt5NoneRequest = OpenAIAdapter.createCompletionRequest(gpt5NoneModel, messages, 'test-key', {
+  maxTokens: 1024,
+  temperature: 0.5
+});
 
 // Verify temperature IS included when reasoning effort is "none"
 assert.strictEqual(
@@ -152,11 +147,7 @@ assert.strictEqual(
 );
 
 // Verify temperature is included for legacy models
-assert.strictEqual(
-  legacyRequest.body.temperature,
-  0.7,
-  'Legacy models should include temperature'
-);
+assert.strictEqual(legacyRequest.body.temperature, 0.7, 'Legacy models should include temperature');
 
 // Verify reasoning and verbosity are not included for legacy models
 assert.strictEqual(
