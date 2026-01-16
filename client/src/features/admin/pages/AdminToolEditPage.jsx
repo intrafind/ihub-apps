@@ -56,7 +56,7 @@ const AdminToolEditPage = () => {
     }
   }, [toolId, isNewTool]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const loadScriptForTemplate = async scriptName => {
+  const loadScriptForTemplate = async () => {
     // For template, we don't have a toolId yet, so just set empty
     setScriptContent('// Script template\nexport default async function toolName(params) {\n  // Your code here\n}\n');
   };
@@ -394,7 +394,7 @@ const AdminToolEditPage = () => {
                       try {
                         const parsed = JSON.parse(e.target.value);
                         handleInputChange('parameters', parsed);
-                      } catch (err) {
+                      } catch {
                         // Invalid JSON, just update the raw value
                       }
                     }}
