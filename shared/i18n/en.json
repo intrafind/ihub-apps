@@ -271,6 +271,20 @@
       "auth": "Authentication",
       "logs": "Logs"
     },
+    "home": {
+      "title": "Admin Dashboard",
+      "welcome": "Welcome to the iHub Apps administration center",
+      "sections": {
+        "appsDesc": "Create, edit, and manage applications",
+        "modelsDesc": "Configure and manage AI models",
+        "promptsDesc": "Create and manage prompt templates",
+        "toolsDesc": "Configure and manage function calling tools",
+        "shortlinksDesc": "Manage application short links",
+        "usageDesc": "View application usage statistics and analytics",
+        "systemDesc": "System settings and maintenance tools",
+        "uiDesc": "Customize the appearance, branding, and content of your iHub Apps"
+      }
+    },
     "navigation": {
       "overview": "Overview",
       "apps": "Apps",

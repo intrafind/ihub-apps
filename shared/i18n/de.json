@@ -394,6 +394,20 @@
       "users": "Benutzer",
       "system": "System"
     },
+    "home": {
+      "title": "Admin-Dashboard",
+      "welcome": "Willkommen im iHub Apps Verwaltungscenter",
+      "sections": {
+        "appsDesc": "Anwendungen erstellen, bearbeiten und verwalten",
+        "modelsDesc": "KI-Modelle konfigurieren und verwalten",
+        "promptsDesc": "Prompt-Vorlagen erstellen und verwalten",
+        "toolsDesc": "Function-Calling-Tools konfigurieren und verwalten",
+        "shortlinksDesc": "Anwendungs-Kurzlinks verwalten",
+        "usageDesc": "Anwendungsnutzungsstatistiken und -analysen anzeigen",
+        "systemDesc": "Systemeinstellungen und Wartungs-Tools",
+        "uiDesc": "Das Aussehen, Branding und Inhalte Ihrer iHub Apps anpassen"
+      }
+    },
     "translateField": "Übersetzen",
     "common": {
       "enableAll": "Alle aktivieren",
