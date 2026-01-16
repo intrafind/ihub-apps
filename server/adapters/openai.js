@@ -99,10 +99,29 @@ class OpenAIAdapterClass extends BaseAdapter {
       // GPT-5.x uses max_output_tokens instead of max_tokens
       body.max_output_tokens = maxTokens;
 
-      // Add reasoning configuration if available
-      const gpt5Config = model.gpt5Reasoning || {};
-      const reasoningEffort = gpt5Config.effort || 'medium';
-      const verbosity = gpt5Config.verbosity || 'medium';
+      // Map thinking configuration to GPT-5.x reasoning and verbosity parameters
+      const thinkingEnabled = options.thinkingEnabled ?? model.thinking?.enabled ?? true;
+      const thinkingBudget = options.thinkingBudget ?? model.thinking?.budget ?? -1;
+      const thinkingThoughts = options.thinkingThoughts ?? model.thinking?.thoughts ?? false;
+
+      // Map thinking budget to reasoning effort
+      let reasoningEffort = 'medium'; // default
+      if (!thinkingEnabled || thinkingBudget === 0) {
+        reasoningEffort = 'none';
+      } else if (thinkingBudget === -1) {
+        reasoningEffort = 'medium'; // dynamic budget defaults to medium
+      } else if (thinkingBudget > 0 && thinkingBudget <= 100) {
+        reasoningEffort = 'low';
+      } else if (thinkingBudget > 100 && thinkingBudget <= 500) {
+        reasoningEffort = 'medium';
+      } else if (thinkingBudget > 500 && thinkingBudget <= 1000) {
+        reasoningEffort = 'high';
+      } else if (thinkingBudget > 1000) {
+        reasoningEffort = 'xhigh';
+      }
+
+      // Map thoughts flag to verbosity
+      const verbosity = thinkingThoughts ? 'high' : 'medium';
 
       // Reasoning effort: none, low, medium, high, xhigh
       body.reasoning = {
@@ -113,6 +132,10 @@ class OpenAIAdapterClass extends BaseAdapter {
       body.text = {
         verbosity: verbosity
       };
+
+      console.log(
+        `GPT-5.x reasoning config - effort: ${reasoningEffort}, verbosity: ${verbosity} (from thinking: enabled=${thinkingEnabled}, budget=${thinkingBudget}, thoughts=${thinkingThoughts})`
+      );
 
       // Temperature, top_p, and logprobs only supported with reasoning effort "none"
       if (reasoningEffort === 'none') {

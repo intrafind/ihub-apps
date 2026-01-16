@@ -15,9 +15,10 @@
   "default": false,
   "supportsTools": true,
   "supportsImages": true,
-  "gpt5Reasoning": {
-    "effort": "low",
-    "verbosity": "low"
+  "thinking": {
+    "enabled": true,
+    "budget": 50,
+    "thoughts": false
   },
   "enabled": false
 }

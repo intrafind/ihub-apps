@@ -134,23 +134,20 @@ OpenAI's GPT-5.x model family (including GPT-5, GPT-5.1, GPT-5.2, GPT-5.2-pro, G
 - `gpt-5-mini` - Cost-optimized reasoning and chat
 - `gpt-5-nano` - High-throughput, simple tasks
 
-#### Reasoning Effort
+#### Thinking Configuration for GPT-5.x
 
-The `gpt5Reasoning.effort` parameter controls how many reasoning tokens the model generates before producing a response:
+GPT-5.x models use the same `thinking` configuration as other reasoning models (like Google Gemini). The platform automatically maps thinking parameters to GPT-5.x's reasoning and verbosity controls:
 
-- **none**: Lowest latency, supports temperature/top_p/logprobs parameters
-- **low**: Minimal reasoning, faster responses
-- **medium**: Balanced reasoning (default)
-- **high**: More thorough reasoning
-- **xhigh**: Maximum reasoning effort (GPT-5.2 only)
+**Thinking Budget to Reasoning Effort Mapping:**
+- `thinking.enabled: false` or `budget: 0` → **none** (lowest latency, supports temperature)
+- `budget: 1-100` → **low** (minimal reasoning, faster responses)
+- `budget: -1` (dynamic) or `101-500` → **medium** (balanced reasoning, default)
+- `budget: 501-1000` → **high** (more thorough reasoning)
+- `budget: > 1000` → **xhigh** (maximum reasoning effort, GPT-5.2 only)
 
-#### Verbosity
-
-The `gpt5Reasoning.verbosity` parameter controls the length and detail of model outputs:
-
-- **low**: Concise answers, minimal code commentary
-- **medium**: Balanced output length (default)
-- **high**: Thorough explanations, extensive documentation
+**Thinking Thoughts to Verbosity Mapping:**
+- `thoughts: false` → **medium** verbosity (balanced output length)
+- `thoughts: true` → **high** verbosity (thorough explanations, extensive documentation)
 
 #### Example GPT-5.2 Configuration
 
@@ -171,14 +168,17 @@ The `gpt5Reasoning.verbosity` parameter controls the length and detail of model 
   "tokenLimit": 128000,
   "supportsTools": true,
   "supportsImages": true,
-  "gpt5Reasoning": {
-    "effort": "medium",
-    "verbosity": "medium"
+  "thinking": {
+    "enabled": true,
+    "budget": -1,
+    "thoughts": false
   }
 }
 ```
 
-#### Example GPT-5.2-Pro Configuration (High Reasoning)
+This configuration uses dynamic reasoning budget (mapped to "medium" effort) and medium verbosity.
+
+#### Example GPT-5.2-Pro Configuration (Maximum Reasoning)
 
 For tasks requiring maximum reasoning capability:
 
@@ -199,14 +199,17 @@ For tasks requiring maximum reasoning capability:
   "tokenLimit": 128000,
   "supportsTools": true,
   "supportsImages": true,
-  "gpt5Reasoning": {
-    "effort": "xhigh",
-    "verbosity": "high"
+  "thinking": {
+    "enabled": true,
+    "budget": 1500,
+    "thoughts": true
   }
 }
 ```
 
-#### Example GPT-5-Mini Configuration (Fast Reasoning)
+This configuration uses a high budget (mapped to "xhigh" effort) and includes thoughts (mapped to "high" verbosity).
+
+#### Example GPT-5-Mini Configuration (Low Budget)
 
 For cost-effective tasks:
 
@@ -226,37 +229,42 @@ For cost-effective tasks:
   "provider": "openai",
   "tokenLimit": 128000,
   "supportsTools": true,
-  "gpt5Reasoning": {
-    "effort": "low",
-    "verbosity": "low"
+  "supportsImages": true,
+  "thinking": {
+    "enabled": true,
+    "budget": 50,
+    "thoughts": false
   }
 }
 ```
+
+This configuration uses a low budget (mapped to "low" effort) and medium verbosity.
 
 #### Migration from GPT-4.x
 
 Legacy models (GPT-4, GPT-3.5, o1, o3) continue to work without any configuration changes. The platform automatically detects GPT-5.x models and uses the appropriate API parameters.
 
-When migrating from GPT-4.x to GPT-5.x:
-- Start with default reasoning effort (`medium`) and verbosity (`medium`)
-- Adjust based on your use case:
-  - For faster responses: Use `effort: "low"` or `effort: "none"`
-  - For better accuracy: Use `effort: "high"` or `effort: "xhigh"`
-  - For concise outputs: Use `verbosity: "low"`
-  - For detailed explanations: Use `verbosity: "high"`
+When migrating from GPT-4.x to GPT-5.x, configure the `thinking` parameter:
+- For faster responses: Use `budget: 0` or `enabled: false` (maps to "none" effort)
+- For balanced performance: Use `budget: -1` (maps to "medium" effort, default)
+- For better accuracy: Use `budget: 800` (maps to "high" effort)
+- For maximum reasoning: Use `budget: 1500` (maps to "xhigh" effort)
+- For detailed outputs: Set `thoughts: true` (maps to "high" verbosity)
 
 #### Important Notes
 
-1. **Temperature Compatibility**: The `temperature` parameter is only supported when `reasoning.effort` is set to `"none"`. For other effort levels, the temperature parameter is ignored.
+1. **Temperature Compatibility**: The `temperature` parameter is only supported when reasoning effort is `"none"` (i.e., `thinking.enabled: false` or `budget: 0`). For other effort levels, the temperature parameter is ignored.
 
 2. **API Differences**: GPT-5.x models use `max_output_tokens` instead of the deprecated `max_tokens` parameter. The platform handles this automatically.
 
-3. **Default Configuration**: If `gpt5Reasoning` is not specified for a GPT-5.x model, it defaults to:
+3. **Default Configuration**: If `thinking` is not specified for a GPT-5.x model, it defaults to:
    ```json
    {
-     "effort": "medium",
-     "verbosity": "medium"
+     "enabled": true,
+     "budget": -1,
+     "thoughts": false
    }
    ```
+   This maps to "medium" reasoning effort and "medium" verbosity.
 
-4. **Legacy Model Compatibility**: The `gpt5Reasoning` configuration is ignored for non-GPT-5.x models, ensuring backward compatibility.
+4. **Consistent with Other Models**: The `thinking` configuration works the same way across all reasoning-capable models (Google Gemini, GPT-5.x), providing a unified interface.

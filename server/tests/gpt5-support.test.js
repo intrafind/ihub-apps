@@ -46,16 +46,17 @@ legacyModels.forEach(modelId => {
 
 console.log('✓ GPT-5.x model detection tests passed');
 
-// Test GPT-5.x request parameters
-console.log('Testing GPT-5.x request parameters...');
+// Test GPT-5.x request parameters with thinking configuration
+console.log('Testing GPT-5.x request parameters with thinking configuration...');
 
 const gpt5Model = {
   modelId: 'gpt-5.2',
   url: 'https://api.openai.com/v1/chat/completions',
   provider: 'openai',
-  gpt5Reasoning: {
-    effort: 'high',
-    verbosity: 'low'
+  thinking: {
+    enabled: true,
+    budget: 800, // Should map to "high"
+    thoughts: false // Should map to "medium" verbosity
   }
 };
 
@@ -74,18 +75,18 @@ assert.strictEqual(
 );
 assert.strictEqual(gpt5Request.body.max_tokens, undefined, 'GPT-5.x should not use max_tokens');
 
-// Verify reasoning configuration
+// Verify reasoning configuration (budget 800 should map to "high")
 assert.deepStrictEqual(
   gpt5Request.body.reasoning,
   { effort: 'high' },
-  'GPT-5.x should have reasoning configuration'
+  'GPT-5.x should have reasoning effort "high" for budget 800'
 );
 
-// Verify verbosity configuration
+// Verify verbosity configuration (thoughts: false should map to "medium")
 assert.deepStrictEqual(
   gpt5Request.body.text,
-  { verbosity: 'low' },
-  'GPT-5.x should have verbosity configuration'
+  { verbosity: 'medium' },
+  'GPT-5.x should have verbosity "medium" when thoughts is false'
 );
 
 // Verify temperature is NOT included when reasoning effort is not "none"
@@ -97,16 +98,17 @@ assert.strictEqual(
 
 console.log('✓ GPT-5.x request parameter tests passed');
 
-// Test GPT-5.x with reasoning effort "none"
-console.log('Testing GPT-5.x with reasoning effort "none"...');
+// Test GPT-5.x with thinking disabled (reasoning effort "none")
+console.log('Testing GPT-5.x with thinking disabled (reasoning effort "none")...');
 
 const gpt5NoneModel = {
   modelId: 'gpt-5.2',
   url: 'https://api.openai.com/v1/chat/completions',
   provider: 'openai',
-  gpt5Reasoning: {
-    effort: 'none',
-    verbosity: 'medium'
+  thinking: {
+    enabled: false, // Disabled thinking should map to "none"
+    budget: 0,
+    thoughts: false
   }
 };
 
@@ -114,6 +116,13 @@ const gpt5NoneRequest = OpenAIAdapter.createCompletionRequest(gpt5NoneModel, mes
   maxTokens: 1024,
   temperature: 0.5
 });
+
+// Verify reasoning effort is "none" when thinking is disabled
+assert.deepStrictEqual(
+  gpt5NoneRequest.body.reasoning,
+  { effort: 'none' },
+  'GPT-5.x should have reasoning effort "none" when thinking is disabled'
+);
 
 // Verify temperature IS included when reasoning effort is "none"
 assert.strictEqual(
@@ -163,14 +172,14 @@ assert.strictEqual(
 
 console.log('✓ Legacy model backward compatibility tests passed');
 
-// Test GPT-5.x with default reasoning configuration
-console.log('Testing GPT-5.x with default reasoning configuration...');
+// Test GPT-5.x with default thinking configuration
+console.log('Testing GPT-5.x with default thinking configuration...');
 
 const gpt5DefaultModel = {
   modelId: 'gpt-5.2',
   url: 'https://api.openai.com/v1/chat/completions',
   provider: 'openai'
-  // No gpt5Reasoning configuration
+  // No thinking configuration - should use defaults
 };
 
 const gpt5DefaultRequest = OpenAIAdapter.createCompletionRequest(
@@ -183,19 +192,61 @@ const gpt5DefaultRequest = OpenAIAdapter.createCompletionRequest(
   }
 );
 
-// Verify default reasoning effort is "medium"
+// Verify default reasoning effort is "medium" (from default thinking.enabled=true, budget=-1)
 assert.deepStrictEqual(
   gpt5DefaultRequest.body.reasoning,
   { effort: 'medium' },
   'GPT-5.x should default to medium reasoning effort'
 );
 
-// Verify default verbosity is "medium"
+// Verify default verbosity is "medium" (from default thoughts=false)
 assert.deepStrictEqual(
   gpt5DefaultRequest.body.text,
   { verbosity: 'medium' },
   'GPT-5.x should default to medium verbosity'
 );
+
+console.log('✓ GPT-5.x default configuration tests passed');
+
+// Test GPT-5.x with high thinking budget (xhigh effort)
+console.log('Testing GPT-5.x with high thinking budget...');
+
+const gpt5XHighModel = {
+  modelId: 'gpt-5.2-pro',
+  url: 'https://api.openai.com/v1/chat/completions',
+  provider: 'openai',
+  thinking: {
+    enabled: true,
+    budget: 1500, // Should map to "xhigh"
+    thoughts: true // Should map to "high" verbosity
+  }
+};
+
+const gpt5XHighRequest = OpenAIAdapter.createCompletionRequest(
+  gpt5XHighModel,
+  messages,
+  'test-key',
+  {
+    maxTokens: 1024,
+    temperature: 0.7
+  }
+);
+
+// Verify reasoning effort is "xhigh" for high budget
+assert.deepStrictEqual(
+  gpt5XHighRequest.body.reasoning,
+  { effort: 'xhigh' },
+  'GPT-5.x should have reasoning effort "xhigh" for budget > 1000'
+);
+
+// Verify verbosity is "high" when thoughts is true
+assert.deepStrictEqual(
+  gpt5XHighRequest.body.text,
+  { verbosity: 'high' },
+  'GPT-5.x should have verbosity "high" when thoughts is true'
+);
+
+console.log('✓ GPT-5.x high thinking budget tests passed');
 
 console.log('✓ GPT-5.x default configuration tests passed');
 
