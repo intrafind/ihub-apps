@@ -110,6 +110,30 @@ import { validateIdForPath } from '../../utils/pathSecurity.js';
  *           description: Additional error details
  */
 
+/**
+ * Load raw tools from JSON file (unexpanded)
+ * For admin operations, we need the original tool definitions, not the expanded ones
+ */
+function loadRawTools() {
+  const rootDir = getRootDir();
+  const contentsDir = process.env.CONTENTS_DIR || 'contents';
+  const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
+  
+  let tools = [];
+  if (existsSync(toolsFilePath)) {
+    const fileContent = readFileSync(toolsFilePath, 'utf-8');
+    tools = JSON.parse(fileContent);
+  } else {
+    // Fall back to defaults if no custom config exists
+    const defaultToolsPath = join(rootDir, 'server', 'defaults', 'config', 'tools.json');
+    if (existsSync(defaultToolsPath)) {
+      const fileContent = readFileSync(defaultToolsPath, 'utf-8');
+      tools = JSON.parse(fileContent);
+    }
+  }
+  return tools;
+}
+
 export default function registerAdminToolsRoutes(app, basePath = '') {
   /**
    * @swagger
@@ -154,10 +178,16 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    */
   app.get(buildServerPath('/api/admin/tools', basePath), adminAuth, async (req, res) => {
     try {
-      const { data: tools, etag } = configCache.getTools(true);
+      // Load raw (unexpanded) tools for admin interface
+      const tools = loadRawTools();
+      
       if (!tools) {
         return res.status(500).json({ error: 'Failed to load tools configuration' });
       }
+      
+      // Generate ETag for caching
+      const etag = `"${Buffer.from(JSON.stringify(tools)).toString('base64').substring(0, 27)}"`;
+      
       if (etag) {
         res.setHeader('ETag', etag);
         const clientETag = req.headers['if-none-match'];
@@ -220,8 +250,10 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
         return;
       }
 
-      const { data: tools } = configCache.getTools(true);
+      // Load raw (unexpanded) tools
+      const tools = loadRawTools();
       const tool = tools.find(t => t.id === toolId);
+      
       if (!tool) {
         return res.status(404).json({ error: 'Tool not found' });
       }
@@ -307,8 +339,8 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       const contentsDir = process.env.CONTENTS_DIR || 'contents';
       const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
 
-      // Load existing tools
-      const { data: tools } = configCache.getTools(true);
+      // Load existing tools (raw, unexpanded)
+      const tools = loadRawTools();
       const toolIndex = tools.findIndex(t => t.id === toolId);
 
       if (toolIndex === -1) {
@@ -393,8 +425,8 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       const contentsDir = process.env.CONTENTS_DIR || 'contents';
       const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
 
-      // Load existing tools
-      const { data: tools } = configCache.getTools(true);
+      // Load existing tools (raw, unexpanded)
+      const tools = loadRawTools();
 
       // Check if tool already exists
       if (tools.find(t => t.id === newTool.id)) {
@@ -484,8 +516,8 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       const contentsDir = process.env.CONTENTS_DIR || 'contents';
       const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
 
-      // Load existing tools
-      const { data: tools } = configCache.getTools(true);
+      // Load existing tools (raw, unexpanded)
+      const tools = loadRawTools();
       const toolIndex = tools.findIndex(t => t.id === toolId);
 
       if (toolIndex === -1) {
@@ -595,8 +627,8 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
         const contentsDir = process.env.CONTENTS_DIR || 'contents';
         const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
 
-        // Load existing tools
-        const { data: tools } = configCache.getTools(true);
+        // Load existing tools (raw, unexpanded)
+        const tools = loadRawTools();
         const tool = tools.find(t => t.id === toolId);
 
         if (!tool) {
@@ -676,7 +708,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
           return;
         }
 
-        const { data: tools } = configCache.getTools(true);
+        const tools = loadRawTools();
         const tool = tools.find(t => t.id === toolId);
 
         if (!tool) {
@@ -788,7 +820,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
           return;
         }
 
-        const { data: tools } = configCache.getTools(true);
+        const tools = loadRawTools();
         const tool = tools.find(t => t.id === toolId);
 
         if (!tool) {
