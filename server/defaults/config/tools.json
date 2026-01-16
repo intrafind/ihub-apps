@@ -1,5 +1,22 @@
 [
   {
+    "id": "googleSearch",
+    "name": {
+      "en": "Google Search Grounding",
+      "de": "Google-Suche-Grounding"
+    },
+    "description": {
+      "en": "Ground Gemini's responses with real-time information from Google Search. Provides verifiable, up-to-date answers with citations. Only works with Gemini models.",
+      "de": "Grundiert Geminis Antworten mit Echtzeitinformationen aus der Google-Suche. Liefert überprüfbare, aktuelle Antworten mit Zitaten. Funktioniert nur mit Gemini-Modellen."
+    },
+    "provider": "google",
+    "isSpecialTool": true,
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
     "id": "braveSearch",
     "name": {
       "en": "Brave Web / Internet Search",
