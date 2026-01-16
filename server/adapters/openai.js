@@ -13,7 +13,9 @@ class OpenAIAdapterClass extends BaseAdapter {
   isGPT5Model(modelId) {
     // GPT-5.x models include: gpt-5, gpt-5.1, gpt-5.2, gpt-5.2-pro, gpt-5.2-codex,
     // gpt-5-mini, gpt-5-nano, and their variants
-    return /^gpt-5($|[\.-])/.test(modelId) || /^gpt-5-(mini|nano)/.test(modelId);
+    // Match: gpt-5, gpt-5.x, gpt-5-mini, gpt-5-nano, gpt-5.x-*, etc.
+    // Don't match: gpt-50, gpt-500, etc.
+    return /^gpt-5(\.[0-9]|-(mini|nano)|$)/.test(modelId);
   }
   /**
    * Format messages for OpenAI API, including handling image data
