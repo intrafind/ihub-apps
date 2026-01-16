@@ -53,7 +53,8 @@ The system currently supports the following providers:
 
 1. **OpenAI** (`provider: "openai"`)
    - Compatible with the OpenAI Chat Completions API format
-   - Examples: GPT-3.5 Turbo, GPT-4
+   - Examples: GPT-3.5 Turbo, GPT-4, GPT-5.2
+   - **GPT-5.x Support**: The platform supports OpenAI's GPT-5.x model family with advanced reasoning and verbosity controls. See [GPT-5.x Configuration](#gpt-5x-configuration) for details.
 
 2. **Anthropic** (`provider: "anthropic"`)
    - Compatible with the Anthropic Messages API format
@@ -117,3 +118,145 @@ To add a new model:
 1. Add a new object to the models.json array
 2. Ensure the provider adapter in `server/adapters/` supports the provider
 3. Provide required credentials in your environment variables
+
+### GPT-5.x Configuration
+
+OpenAI's GPT-5.x model family (including GPT-5, GPT-5.1, GPT-5.2, GPT-5.2-pro, GPT-5-mini, and GPT-5-nano) introduces new reasoning and verbosity controls that allow fine-tuning of model behavior.
+
+#### Supported GPT-5.x Models
+
+- `gpt-5` - Base GPT-5 model
+- `gpt-5.1` - GPT-5.1 model
+- `gpt-5.2` - Latest flagship model with best intelligence
+- `gpt-5.2-pro` - Uses more compute for harder thinking
+- `gpt-5.2-codex` - Optimized for coding tasks
+- `gpt-5.2-chat-latest` - Model powering ChatGPT
+- `gpt-5-mini` - Cost-optimized reasoning and chat
+- `gpt-5-nano` - High-throughput, simple tasks
+
+#### Reasoning Effort
+
+The `gpt5Reasoning.effort` parameter controls how many reasoning tokens the model generates before producing a response:
+
+- **none**: Lowest latency, supports temperature/top_p/logprobs parameters
+- **low**: Minimal reasoning, faster responses
+- **medium**: Balanced reasoning (default)
+- **high**: More thorough reasoning
+- **xhigh**: Maximum reasoning effort (GPT-5.2 only)
+
+#### Verbosity
+
+The `gpt5Reasoning.verbosity` parameter controls the length and detail of model outputs:
+
+- **low**: Concise answers, minimal code commentary
+- **medium**: Balanced output length (default)
+- **high**: Thorough explanations, extensive documentation
+
+#### Example GPT-5.2 Configuration
+
+```json
+{
+  "id": "gpt-5.2",
+  "modelId": "gpt-5.2",
+  "name": {
+    "en": "GPT-5.2",
+    "de": "GPT-5.2"
+  },
+  "description": {
+    "en": "OpenAI's most intelligent model for general and agentic tasks",
+    "de": "OpenAIs intelligentestes Modell für allgemeine und agentische Aufgaben"
+  },
+  "url": "https://api.openai.com/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 128000,
+  "supportsTools": true,
+  "supportsImages": true,
+  "gpt5Reasoning": {
+    "effort": "medium",
+    "verbosity": "medium"
+  }
+}
+```
+
+#### Example GPT-5.2-Pro Configuration (High Reasoning)
+
+For tasks requiring maximum reasoning capability:
+
+```json
+{
+  "id": "gpt-5.2-pro",
+  "modelId": "gpt-5.2-pro",
+  "name": {
+    "en": "GPT-5.2 Pro",
+    "de": "GPT-5.2 Pro"
+  },
+  "description": {
+    "en": "GPT-5.2 with maximum reasoning effort for complex problems",
+    "de": "GPT-5.2 mit maximaler Denkleistung für komplexe Probleme"
+  },
+  "url": "https://api.openai.com/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 128000,
+  "supportsTools": true,
+  "supportsImages": true,
+  "gpt5Reasoning": {
+    "effort": "xhigh",
+    "verbosity": "high"
+  }
+}
+```
+
+#### Example GPT-5-Mini Configuration (Fast Reasoning)
+
+For cost-effective tasks:
+
+```json
+{
+  "id": "gpt-5-mini",
+  "modelId": "gpt-5-mini",
+  "name": {
+    "en": "GPT-5 Mini",
+    "de": "GPT-5 Mini"
+  },
+  "description": {
+    "en": "Cost-optimized reasoning model balancing speed and capability",
+    "de": "Kostenoptimiertes Reasoning-Modell mit Geschwindigkeit und Leistung"
+  },
+  "url": "https://api.openai.com/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 128000,
+  "supportsTools": true,
+  "gpt5Reasoning": {
+    "effort": "low",
+    "verbosity": "low"
+  }
+}
+```
+
+#### Migration from GPT-4.x
+
+Legacy models (GPT-4, GPT-3.5, o1, o3) continue to work without any configuration changes. The platform automatically detects GPT-5.x models and uses the appropriate API parameters.
+
+When migrating from GPT-4.x to GPT-5.x:
+- Start with default reasoning effort (`medium`) and verbosity (`medium`)
+- Adjust based on your use case:
+  - For faster responses: Use `effort: "low"` or `effort: "none"`
+  - For better accuracy: Use `effort: "high"` or `effort: "xhigh"`
+  - For concise outputs: Use `verbosity: "low"`
+  - For detailed explanations: Use `verbosity: "high"`
+
+#### Important Notes
+
+1. **Temperature Compatibility**: The `temperature` parameter is only supported when `reasoning.effort` is set to `"none"`. For other effort levels, the temperature parameter is ignored.
+
+2. **API Differences**: GPT-5.x models use `max_output_tokens` instead of the deprecated `max_tokens` parameter. The platform handles this automatically.
+
+3. **Default Configuration**: If `gpt5Reasoning` is not specified for a GPT-5.x model, it defaults to:
+   ```json
+   {
+     "effort": "medium",
+     "verbosity": "medium"
+   }
+   ```
+
+4. **Legacy Model Compatibility**: The `gpt5Reasoning` configuration is ignored for non-GPT-5.x models, ensuring backward compatibility.
