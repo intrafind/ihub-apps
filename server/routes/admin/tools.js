@@ -492,7 +492,23 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
         return res.status(404).json({ error: 'Tool not found' });
       }
 
-      // Remove the tool
+      const tool = tools[toolIndex];
+
+      // Delete the script file if it exists (only for non-special tools)
+      if (tool.script && !tool.isSpecialTool && !tool.provider) {
+        const scriptPath = join(rootDir, 'server', 'tools', tool.script);
+        try {
+          if (existsSync(scriptPath)) {
+            await fs.unlink(scriptPath);
+            console.log(`Deleted script file: ${tool.script}`);
+          }
+        } catch (scriptError) {
+          console.warn(`Failed to delete script file ${tool.script}:`, scriptError);
+          // Continue with config deletion even if script deletion fails
+        }
+      }
+
+      // Remove the tool from config
       tools.splice(toolIndex, 1);
 
       // Ensure directory exists
@@ -504,7 +520,10 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       // Refresh cache
       await configCache.refreshCacheEntry('config/tools.json');
 
-      res.json({ message: 'Tool deleted successfully' });
+      res.json({ 
+        message: 'Tool deleted successfully',
+        scriptDeleted: tool.script ? true : false
+      });
     } catch (error) {
       console.error('Error deleting tool:', error);
       res.status(500).json({ error: 'Failed to delete tool' });
