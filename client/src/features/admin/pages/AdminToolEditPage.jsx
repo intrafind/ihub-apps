@@ -64,7 +64,7 @@ const AdminToolEditPage = () => {
     } else {
       setLoading(false);
     }
-  }, [toolId, isNewTool]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [toolId, isNewTool, loadTool]);
 
   const loadTool = useCallback(async () => {
     try {
