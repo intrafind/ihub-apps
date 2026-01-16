@@ -20,15 +20,29 @@ import {
  * @returns {Object[]} Google formatted tools
  */
 export function convertGenericToolsToGoogle(genericTools = []) {
-  return [
-    {
-      functionDeclarations: genericTools.map(tool => ({
+  const tools = [];
+
+  // Separate Google Search tool from regular function-based tools
+  const googleSearchTool = genericTools.find(tool => tool.id === 'googleSearch');
+  const functionTools = genericTools.filter(tool => tool.id !== 'googleSearch');
+
+  // Add Google Search grounding if present
+  if (googleSearchTool) {
+    tools.push({ google_search: {} });
+  }
+
+  // Add regular function declarations if present
+  if (functionTools.length > 0) {
+    tools.push({
+      functionDeclarations: functionTools.map(tool => ({
         name: normalizeToolName(tool.name),
         description: tool.description,
         parameters: sanitizeSchemaForProvider(tool.parameters, 'google')
       }))
-    }
-  ];
+    });
+  }
+
+  return tools;
 }
 
 /**
