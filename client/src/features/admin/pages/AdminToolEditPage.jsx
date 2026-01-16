@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminNavigation from '../components/AdminNavigation';
 import AdminAuth from '../components/AdminAuth';
+import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import {
   fetchAdminTools,
   createTool,
@@ -22,8 +23,8 @@ const AdminToolEditPage = () => {
 
   const [toolData, setToolData] = useState({
     id: '',
-    name: { en: '', de: '' },
-    description: { en: '', de: '' },
+    name: { en: '' },
+    description: { en: '' },
     script: '',
     enabled: true,
     concurrency: 5,
@@ -72,8 +73,8 @@ const AdminToolEditPage = () => {
       // Ensure proper structure
       setToolData({
         ...tool,
-        name: tool.name || { en: '', de: '' },
-        description: tool.description || { en: '', de: '' },
+        name: tool.name || { en: '' },
+        description: tool.description || { en: '' },
         enabled: tool.enabled !== false,
         concurrency: tool.concurrency || 5,
         parameters: tool.parameters || { type: 'object', properties: {}, required: [] }
@@ -155,16 +156,6 @@ const AdminToolEditPage = () => {
     setToolData(prev => ({
       ...prev,
       [field]: value
-    }));
-  };
-
-  const handleLocalizedChange = (field, lang, value) => {
-    setToolData(prev => ({
-      ...prev,
-      [field]: {
-        ...prev[field],
-        [lang]: value
-      }
     }));
   };
 
@@ -274,60 +265,44 @@ const AdminToolEditPage = () => {
 
                 {/* Name (multilingual) */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('admin.tools.name', 'Name')} <span className="text-red-500">*</span>
-                  </label>
-                  <div className="space-y-2">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">English</label>
-                      <input
-                        type="text"
-                        value={toolData.name.en || ''}
-                        onChange={e => handleLocalizedChange('name', 'en', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="Brave Search"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">German</label>
-                      <input
-                        type="text"
-                        value={toolData.name.de || ''}
-                        onChange={e => handleLocalizedChange('name', 'de', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="Brave-Suche"
-                      />
-                    </div>
-                  </div>
+                  <DynamicLanguageEditor
+                    label={
+                      <>
+                        {t('admin.tools.name', 'Name')}{' '}
+                        <span className="text-red-500">*</span>
+                      </>
+                    }
+                    value={toolData.name}
+                    onChange={value => handleInputChange('name', value)}
+                    required={true}
+                    placeholder={{ en: 'Brave Search', de: 'Brave-Suche' }}
+                  />
+                  <p className="mt-1 text-sm text-gray-500">
+                    {t('admin.tools.nameHelp', 'Display name for the tool in different languages')}
+                  </p>
                 </div>
 
                 {/* Description (multilingual) */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('admin.tools.description', 'Description')} <span className="text-red-500">*</span>
-                  </label>
-                  <div className="space-y-2">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">English</label>
-                      <textarea
-                        value={toolData.description.en || ''}
-                        onChange={e => handleLocalizedChange('description', 'en', e.target.value)}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="Search the web using Brave for up-to-date information"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">German</label>
-                      <textarea
-                        value={toolData.description.de || ''}
-                        onChange={e => handleLocalizedChange('description', 'de', e.target.value)}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="Durchsuchen Sie das Web mit Brave"
-                      />
-                    </div>
-                  </div>
+                  <DynamicLanguageEditor
+                    label={
+                      <>
+                        {t('admin.tools.description', 'Description')}{' '}
+                        <span className="text-red-500">*</span>
+                      </>
+                    }
+                    value={toolData.description}
+                    onChange={value => handleInputChange('description', value)}
+                    required={true}
+                    type="textarea"
+                    placeholder={{ 
+                      en: 'Search the web using Brave for up-to-date information',
+                      de: 'Durchsuchen Sie das Web mit Brave'
+                    }}
+                  />
+                  <p className="mt-1 text-sm text-gray-500">
+                    {t('admin.tools.descriptionHelp', 'Description shown to the LLM for tool selection')}
+                  </p>
                 </div>
 
                 {/* Script filename */}

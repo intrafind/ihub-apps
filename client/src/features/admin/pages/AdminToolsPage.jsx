@@ -30,7 +30,18 @@ const AdminToolsPage = () => {
       const data = await fetchAdminTools();
 
       // Ensure we have an array
-      const toolsArray = Array.isArray(data) ? data : [];
+      let toolsArray = Array.isArray(data) ? data : [];
+      
+      // Filter out expanded multi-function tools (those with _functionName in ID that also have a 'method' property)
+      // We only want to show the original tool definitions, not the expanded ones
+      toolsArray = toolsArray.filter(tool => {
+        // If the tool has a 'method' property, it's an expanded tool - filter it out
+        if (tool.method) {
+          return false;
+        }
+        return true;
+      });
+      
       setTools(toolsArray);
 
       if (toolsArray.length === 0) {
