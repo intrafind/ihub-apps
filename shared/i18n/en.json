@@ -265,6 +265,7 @@
       "apps": "Apps",
       "models": "Models",
       "prompts": "Prompts",
+      "tools": "Tools",
       "pages": "Pages",
       "groups": "Groups",
       "auth": "Authentication",
@@ -634,6 +635,37 @@
         "tokens": "Tokens",
         "editModel": "Edit Model"
       }
+    },
+    "tools": {
+      "title": "Tool Management",
+      "subtitle": "Configure and manage tools for your applications",
+      "addNew": "Add New Tool",
+      "loadError": "Error loading tools",
+      "saveError": "Error saving tool",
+      "searchPlaceholder": "Search tools...",
+      "filterAll": "All Tools",
+      "filterEnabled": "Enabled Only",
+      "filterDisabled": "Disabled Only",
+      "name": "Name",
+      "script": "Script",
+      "table": {
+        "status": "Status"
+      },
+      "actions": "Actions",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "enable": "Enable",
+      "disable": "Disable",
+      "clone": "Clone",
+      "delete": "Delete",
+      "download": "Download Config",
+      "uploadConfig": "Upload Config",
+      "uploading": "Uploading...",
+      "deleteConfirm": "Delete this tool?",
+      "noTools": "No tools found",
+      "noToolsDesc": "Get started by creating a new tool.",
+      "createNew": "Create New Tool",
+      "edit": "Edit Tool"
     },
     "prompts": {
       "title": "Prompt Management",

@@ -37,6 +37,14 @@ const AdminHome = () => {
       color: 'bg-indigo-500'
     },
     {
+      key: 'tools',
+      title: t('admin.nav.tools', 'Tools Management'),
+      description: t('admin.home.sections.toolsDesc', 'Configure and manage function calling tools'),
+      href: '/admin/tools',
+      //icon: 'wrench-screwdriver',
+      color: 'bg-cyan-500'
+    },
+    {
       key: 'shortlinks',
       title: t('admin.nav.shortlinks', 'Short Links'),
       description: t('admin.home.sections.shortlinksDesc', 'Manage application short links'),

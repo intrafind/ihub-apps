@@ -384,6 +384,7 @@
       "apps": "Apps",
       "models": "Modelle",
       "prompts": "Prompts",
+      "tools": "Tools",
       "pages": "Seiten",
       "groups": "Gruppen",
       "auth": "Authentifizierung",
@@ -702,6 +703,37 @@
       "table": {
         "status": "Status"
       }
+    },
+    "tools": {
+      "title": "Tool-Verwaltung",
+      "subtitle": "Tools für Ihre Anwendungen konfigurieren und verwalten",
+      "addNew": "Neues Tool hinzufügen",
+      "loadError": "Fehler beim Laden der Tools",
+      "saveError": "Fehler beim Speichern des Tools",
+      "searchPlaceholder": "Tools durchsuchen...",
+      "filterAll": "Alle Tools",
+      "filterEnabled": "Nur aktivierte",
+      "filterDisabled": "Nur deaktivierte",
+      "name": "Name",
+      "script": "Skript",
+      "table": {
+        "status": "Status"
+      },
+      "actions": "Aktionen",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "enable": "Aktivieren",
+      "disable": "Deaktivieren",
+      "clone": "Klonen",
+      "delete": "Löschen",
+      "download": "Konfiguration herunterladen",
+      "uploadConfig": "Konfiguration hochladen",
+      "uploading": "Hochladen...",
+      "deleteConfirm": "Dieses Tool löschen?",
+      "noTools": "Keine Tools gefunden",
+      "noToolsDesc": "Beginnen Sie mit der Erstellung eines neuen Tools.",
+      "createNew": "Neues Tool erstellen",
+      "edit": "Tool bearbeiten"
     },
     "prompts": {
       "variableTypes": {

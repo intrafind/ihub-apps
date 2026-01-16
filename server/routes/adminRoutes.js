@@ -5,6 +5,7 @@ import registerAdminAppsRoutes from './admin/apps.js';
 import registerAdminModelsRoutes from './admin/models.js';
 import registerAdminPromptsRoutes from './admin/prompts.js';
 import registerAdminSourcesRoutes from './admin/sources.js';
+import registerAdminToolsRoutes from './admin/tools.js';
 import registerAdminGroupRoutes from './admin/groups.js';
 import registerAdminTranslateRoute from './admin/translate.js';
 import registerAdminPagesRoutes from './admin/pages.js';
@@ -21,6 +22,7 @@ export default async function registerAdminRoutes(app, basePath = '') {
   registerAdminModelsRoutes(app, basePath);
   registerAdminPromptsRoutes(app, basePath);
   registerAdminSourcesRoutes(app, basePath);
+  registerAdminToolsRoutes(app, basePath);
   registerAdminGroupRoutes(app, basePath);
   registerAdminTranslateRoute(app, basePath);
   registerAdminPagesRoutes(app, basePath);
