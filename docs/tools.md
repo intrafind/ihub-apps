@@ -20,6 +20,16 @@ Each entry in `config/tools.json` uses the following fields:
 
 Some tools provide comprehensive integrations with external systems:
 
+**Google Search Grounding (Gemini-specific)**
+
+- **Tool ID**: `googleSearch`
+- **Provider**: Google Gemini models only
+- **Description**: Grounds Gemini's responses with real-time information from Google Search, providing verifiable, up-to-date answers with citations
+- **Parameters**: None (automatically enabled when included in app tools)
+- **Authentication**: No additional authentication required (uses Gemini API key)
+- **Special Note**: This is a provider-specific tool that is handled directly by the Gemini API, not executed server-side
+- **Response**: Returns grounding metadata with search queries, sources, and citations
+
 **iFinder Document Management**
 
 - **Tool ID**: `iFinder`
