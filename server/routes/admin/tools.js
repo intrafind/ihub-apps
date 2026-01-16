@@ -325,7 +325,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
 
       // Refresh cache
-      await configCache.refreshCache('config/tools.json');
+      await configCache.refreshCacheEntry('config/tools.json');
 
       res.json({ message: 'Tool updated successfully', tool: updatedTool });
     } catch (error) {
@@ -416,7 +416,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
 
       // Refresh cache
-      await configCache.refreshCache('config/tools.json');
+      await configCache.refreshCacheEntry('config/tools.json');
 
       res.status(201).json({ message: 'Tool created successfully', tool: newTool });
     } catch (error) {
@@ -502,7 +502,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
 
       // Refresh cache
-      await configCache.refreshCache('config/tools.json');
+      await configCache.refreshCacheEntry('config/tools.json');
 
       res.json({ message: 'Tool deleted successfully' });
     } catch (error) {
@@ -594,7 +594,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
         await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
 
         // Refresh cache
-        await configCache.refreshCache('config/tools.json');
+        await configCache.refreshCacheEntry('config/tools.json');
 
         res.json({ message: 'Tool state updated successfully', enabled: tool.enabled });
       } catch (error) {
