@@ -32,7 +32,8 @@ const AdminToolEditPage = () => {
       type: 'object',
       properties: {},
       required: []
-    }
+    },
+    functions: {} // Support for multi-function tools
   });
 
   const [scriptContent, setScriptContent] = useState('');
@@ -77,7 +78,8 @@ const AdminToolEditPage = () => {
         description: tool.description || { en: '' },
         enabled: tool.enabled !== false,
         concurrency: tool.concurrency || 5,
-        parameters: tool.parameters || { type: 'object', properties: {}, required: [] }
+        parameters: tool.parameters || { type: 'object', properties: {}, required: [] },
+        functions: tool.functions || {}
       });
 
       // Load script if available
@@ -108,18 +110,28 @@ const AdminToolEditPage = () => {
         throw new Error('Please fill in all required fields (ID, Name, Description)');
       }
 
-      if (isNewTool) {
-        await createTool(toolData);
+      // For multi-function tools, remove the parameters field as it's defined per function
+      const toolToSave = { ...toolData };
+      if (toolToSave.functions && Object.keys(toolToSave.functions).length > 0) {
+        // Multi-function tool - parameters are per function, not at tool level
+        delete toolToSave.parameters;
       } else {
-        await updateTool(toolId, toolData);
+        // Regular tool - remove empty functions object
+        delete toolToSave.functions;
+      }
+
+      if (isNewTool) {
+        await createTool(toolToSave);
+      } else {
+        await updateTool(toolId, toolToSave);
       }
 
       // Clear cache
       clearApiCache('admin_tools');
 
       // If this is a new tool and we have script content, save it
-      if (isNewTool && scriptContent && toolData.script) {
-        await updateToolScript(toolData.id, scriptContent);
+      if (isNewTool && scriptContent && toolToSave.script) {
+        await updateToolScript(toolToSave.id, scriptContent);
       }
 
       navigate('/admin/tools');
@@ -354,28 +366,98 @@ const AdminToolEditPage = () => {
                   </label>
                 </div>
 
-                {/* Parameters (JSON editor) */}
+                {/* Parameters (JSON editor) - Only for regular tools */}
+                {(!toolData.functions || Object.keys(toolData.functions).length === 0) && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {t('admin.tools.parameters', 'Parameters (JSON Schema)')}
+                    </label>
+                    <textarea
+                      value={JSON.stringify(toolData.parameters, null, 2)}
+                      onChange={e => {
+                        try {
+                          const parsed = JSON.parse(e.target.value);
+                          handleInputChange('parameters', parsed);
+                        } catch {
+                          // Invalid JSON, just update the raw value
+                        }
+                      }}
+                      rows={12}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                      placeholder='{"type": "object", "properties": {}, "required": []}'
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      {t('admin.tools.parametersHelp', 'JSON Schema definition for tool parameters')}
+                    </p>
+                  </div>
+                )}
+
+                {/* Multi-Function Configuration */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('admin.tools.parameters', 'Parameters (JSON Schema)')}
+                    {t('admin.tools.functions', 'Functions (Multi-Function Tool)')}
                   </label>
                   <textarea
-                    value={JSON.stringify(toolData.parameters, null, 2)}
+                    value={JSON.stringify(toolData.functions || {}, null, 2)}
                     onChange={e => {
                       try {
                         const parsed = JSON.parse(e.target.value);
-                        handleInputChange('parameters', parsed);
+                        handleInputChange('functions', parsed);
                       } catch {
                         // Invalid JSON, just update the raw value
                       }
                     }}
-                    rows={12}
+                    rows={15}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
-                    placeholder='{"type": "object", "properties": {}, "required": []}'
+                    placeholder='{}'
                   />
                   <p className="mt-1 text-sm text-gray-500">
-                    {t('admin.tools.parametersHelp', 'JSON Schema definition for tool parameters')}
+                    {t('admin.tools.functionsHelp', 'Define multiple functions for this tool (e.g., findUser, getAllUserDetails). Each function should have description and parameters. Leave empty {} for regular single-function tools.')}
                   </p>
+                  <details className="mt-2">
+                    <summary className="text-sm text-indigo-600 cursor-pointer hover:text-indigo-800">
+                      {t('admin.tools.functionsExample', 'Show example multi-function configuration')}
+                    </summary>
+                    <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-auto">
+{`{
+  "findUser": {
+    "description": {
+      "en": "Find a user by name",
+      "de": "Benutzer nach Name finden"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": {
+            "en": "User name or email"
+          }
+        }
+      },
+      "required": ["name"]
+    }
+  },
+  "getUserDetails": {
+    "description": {
+      "en": "Get user details by ID"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": {
+            "en": "User ID"
+          }
+        }
+      },
+      "required": ["userId"]
+    }
+  }
+}`}
+                    </pre>
+                  </details>
                 </div>
 
                 {/* Save button */}
