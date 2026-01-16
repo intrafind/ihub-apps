@@ -46,26 +46,6 @@ const AdminToolEditPage = () => {
     }
   }, [isNewTool, location.state]);
 
-  useEffect(() => {
-    const loadJsonSchema = async () => {
-      try {
-        const schema = await fetchJsonSchema('tool');
-        setJsonSchema(schema);
-      } catch (err) {
-        console.error('Failed to load tool JSON schema:', err);
-        // Continue without schema - validation will be server-side only
-      }
-    };
-
-    loadJsonSchema();
-
-    if (!isNewTool) {
-      loadTool();
-    } else {
-      setLoading(false);
-    }
-  }, [toolId, isNewTool, loadTool]);
-
   const loadTool = useCallback(async () => {
     try {
       setLoading(true);
@@ -92,6 +72,26 @@ const AdminToolEditPage = () => {
       setLoading(false);
     }
   }, [toolId]);
+
+  useEffect(() => {
+    const loadJsonSchema = async () => {
+      try {
+        const schema = await fetchJsonSchema('tool');
+        setJsonSchema(schema);
+      } catch (err) {
+        console.error('Failed to load tool JSON schema:', err);
+        // Continue without schema - validation will be server-side only
+      }
+    };
+
+    loadJsonSchema();
+
+    if (!isNewTool) {
+      loadTool();
+    } else {
+      setLoading(false);
+    }
+  }, [toolId, isNewTool, loadTool]);
 
   const handleSave = async data => {
     setSaving(true);
