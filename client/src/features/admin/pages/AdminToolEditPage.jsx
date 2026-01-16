@@ -49,17 +49,13 @@ const AdminToolEditPage = () => {
         enabled: tpl.enabled !== false
       });
       if (tpl.script) {
-        loadScriptForTemplate(tpl.script);
+        // For template, we don't have a toolId yet, so just set empty script template
+        setScriptContent('// Script template\nexport default async function toolName(params) {\n  // Your code here\n}\n');
       }
     } else if (!isNewTool) {
       loadTool();
     }
   }, [toolId, isNewTool]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadScriptForTemplate = async () => {
-    // For template, we don't have a toolId yet, so just set empty
-    setScriptContent('// Script template\nexport default async function toolName(params) {\n  // Your code here\n}\n');
-  };
 
   const loadTool = async () => {
     try {

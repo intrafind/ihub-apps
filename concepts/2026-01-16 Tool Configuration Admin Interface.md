@@ -226,7 +226,7 @@ New API methods:
 
 - Tools loaded from `config/tools.json` via configLoader
 - Cached in `configCache` with ETag support
-- Automatic refresh on updates via `configCache.refreshCache('config/tools.json')`
+- Automatic refresh on updates via `configCache.refreshCacheEntry('config/tools.json')`
 - Multi-function tools expanded automatically during cache load
 
 ### Directory Creation
