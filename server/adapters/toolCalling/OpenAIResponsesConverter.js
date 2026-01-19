@@ -163,11 +163,16 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
         console.log('[RESPONSES API DEBUG] Processing delta event, type:', parsed.type);
         
         // The actual chunk data is in the 'delta' field
-        if (parsed.delta) {
+        if (parsed.delta !== undefined && parsed.delta !== null) {
           console.log('[RESPONSES API DEBUG] Delta content:', JSON.stringify(parsed.delta));
           
-          // Handle text content from delta
-          if (parsed.delta.text) {
+          // Handle delta as a direct string (Azure OpenAI format)
+          if (typeof parsed.delta === 'string') {
+            console.log('[RESPONSES API DEBUG] Found delta as string:', parsed.delta);
+            content.push(parsed.delta);
+          }
+          // Handle text content from delta object
+          else if (parsed.delta.text) {
             console.log('[RESPONSES API DEBUG] Found delta.text:', parsed.delta.text);
             content.push(parsed.delta.text);
           }
