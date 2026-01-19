@@ -63,7 +63,7 @@ console.log('✓ Test 2 passed: arguments.delta event handled\n');
 console.log('Test 3: response.function_call_arguments.done provides complete arguments...');
 const argsDone = JSON.stringify({
   type: 'response.function_call_arguments.done',
-  sequence_number: 32,
+  sequence_number: 31,
   item_id: 'fc_02939ee9e3d1d59900696eaf1bed40819588e8b9ba1828005b',
   output_index: 1,
   arguments:
@@ -81,8 +81,44 @@ assert.strictEqual(parsedArgs.maxResults, 3, 'Should have parsed maxResults');
 assert.strictEqual(parsedArgs.contentMaxLength, 3000, 'Should have parsed contentMaxLength');
 console.log('✓ Test 3 passed: arguments.done event handled\n');
 
-// Test 4: Simulate full streaming sequence
-console.log('Test 4: Full streaming sequence from user logs...');
+// Test 4: Handle response.output_item.done event (final complete function call)
+console.log('Test 4: response.output_item.done provides complete function call with name...');
+const outputItemDone = JSON.stringify({
+  type: 'response.output_item.done',
+  sequence_number: 32,
+  output_index: 1,
+  item: {
+    id: 'fc_09ff245f403efcad00696eb1a26108819784ef8f47bda30f79',
+    type: 'function_call',
+    status: 'completed',
+    arguments:
+      '{"query":"Intrafind iHub","extractContent":true,"maxResults":3,"contentMaxLength":3000}',
+    call_id: 'call_Uy1WdAKT2ZA4beABlIYCjLR2',
+    name: 'enhancedWebSearch'
+  }
+});
+
+const result4 = convertOpenaiResponsesResponseToGeneric(outputItemDone);
+console.log('Result:', JSON.stringify(result4, null, 2));
+
+assert.strictEqual(result4.tool_calls.length, 1, 'Should have one complete tool call');
+assert.strictEqual(
+  result4.tool_calls[0].name,
+  'enhancedWebSearch',
+  'Should have function name from output_item.done'
+);
+assert.strictEqual(
+  result4.tool_calls[0].id,
+  'call_Uy1WdAKT2ZA4beABlIYCjLR2',
+  'Should have correct call_id'
+);
+const parsedArgs4 = result4.tool_calls[0].arguments;
+assert.strictEqual(parsedArgs4.query, 'Intrafind iHub', 'Should have parsed query');
+assert.strictEqual(parsedArgs4.extractContent, true, 'Should have parsed extractContent');
+console.log('✓ Test 4 passed: output_item.done event provides complete function call\n');
+
+// Test 5: Simulate full streaming sequence
+console.log('Test 5: Full streaming sequence from user logs...');
 
 const events = [
   {
@@ -121,11 +157,25 @@ const events = [
   },
   {
     type: 'response.function_call_arguments.done',
-    sequence_number: 32,
+    sequence_number: 31,
     item_id: 'fc_02939ee9e3d1d59900696eaf1bed40819588e8b9ba1828005b',
     output_index: 1,
     arguments:
       '{"query":"IntraFind iHub Produkt","extractContent":true,"maxResults":3,"contentMaxLength":3000}'
+  },
+  {
+    type: 'response.output_item.done',
+    sequence_number: 32,
+    output_index: 1,
+    item: {
+      id: 'fc_02939ee9e3d1d59900696eaf1bed40819588e8b9ba1828005b',
+      type: 'function_call',
+      status: 'completed',
+      arguments:
+        '{"query":"IntraFind iHub Produkt","extractContent":true,"maxResults":3,"contentMaxLength":3000}',
+      call_id: 'call_FhLW7AYO3AaZAnbwhQFufUVb',
+      name: 'enhancedWebSearch'
+    }
   }
 ];
 
@@ -160,10 +210,28 @@ assert.strictEqual(
   'Should have complete parsed arguments'
 );
 
-console.log('✓ Test 4 passed: Full streaming sequence handled correctly\n');
+// Verify output_item.done has both name and complete arguments
+assert.strictEqual(
+  results[5].tool_calls.length,
+  1,
+  'output_item.done should have complete function call'
+);
+assert.strictEqual(
+  results[5].tool_calls[0].name,
+  'enhancedWebSearch',
+  'output_item.done should have function name'
+);
+assert.strictEqual(
+  results[5].tool_calls[0].arguments.query,
+  'IntraFind iHub Produkt',
+  'output_item.done should have complete parsed arguments'
+);
+
+console.log('✓ Test 5 passed: Full streaming sequence handled correctly\n');
 
 console.log('✅ All streaming function call tests passed!');
 console.log('\nSupported streaming events:');
 console.log('1. response.output_item.added - Function call initialization');
 console.log('2. response.function_call_arguments.delta - Streaming arguments');
 console.log('3. response.function_call_arguments.done - Complete arguments');
+console.log('4. response.output_item.done - Final complete function call with name');

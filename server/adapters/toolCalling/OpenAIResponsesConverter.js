@@ -324,6 +324,21 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
           complete: true // Mark as complete
         });
       }
+
+      // Event: response.output_item.done - function call completely finished
+      // This provides the final complete function call with both name and arguments
+      if (parsed.type === 'response.output_item.done' && parsed.item?.type === 'function_call') {
+        toolCalls.push({
+          id: parsed.item.call_id || parsed.item.id,
+          type: 'function',
+          index: parsed.output_index || 0,
+          function: {
+            name: parsed.item.name || '',
+            arguments: parsed.item.arguments || ''
+          },
+          complete: true // Mark as complete
+        });
+      }
     }
     // Handle full response object (non-streaming)
     else if (parsed.output && Array.isArray(parsed.output)) {
