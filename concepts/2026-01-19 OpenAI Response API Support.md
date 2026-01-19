@@ -28,6 +28,8 @@ OpenAI released the Response API alongside GPT-5 as an evolution of the Chat Com
 - **Tools**: Internally-tagged format (no nested `function` object), strict by default
 - **Structured Outputs**: Uses `text.format` instead of `response_format`
 - **Token Limit**: Uses `max_output_tokens` instead of `max_tokens`
+- **Temperature**: NOT supported (GPT-5 uses fixed temperature of 1.0)
+- **Control Parameters**: Use `verbosity` and `reasoning.effort` instead of temperature
 - **Statefulness**: `store: true` by default for maintaining conversation context
 
 ### Response Structure
@@ -35,6 +37,17 @@ OpenAI released the Response API alongside GPT-5 as an evolution of the Chat Com
 - **Items**: Union type representing message, function_call, reasoning, etc.
 - **Text Extraction**: `output_text` helper for easy text extraction
 - **Reasoning**: Separate reasoning items with summary (full reasoning encrypted for ZDR)
+
+### Unsupported Parameters (GPT-5)
+The following parameters from Chat Completions are NOT supported:
+- ❌ `temperature` (fixed at 1.0)
+- ❌ `top_p`
+- ❌ `presence_penalty`
+- ❌ `frequency_penalty`
+
+**Alternatives for Output Control:**
+- ✅ `verbosity`: "low", "medium", "high" - Controls detail level
+- ✅ `reasoning.effort`: "minimal", "low", "medium", "high" - Controls reasoning depth
 
 ## Implementation
 
