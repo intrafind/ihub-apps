@@ -33,21 +33,20 @@ const getEnvironmentVariableNames = model => {
     anthropic: 'ANTHROPIC_API_KEY',
     mistral: 'MISTRAL_API_KEY',
     google: 'GOOGLE_API_KEY',
-    local: 'LOCAL_API_KEY',
-    // Note: iAssistant uses JWT tokens (not static API keys), so no env var is shown
-    iassistant: null
+    local: 'LOCAL_API_KEY'
+    // Note: iAssistant uses JWT tokens (not static API keys), handled below
   };
 
   const providerVar = providerMap[model.provider];
   if (providerVar) {
+    // Known provider - show its env var
     envVars.push(providerVar);
-  } else if (model.provider && model.provider !== 'iassistant') {
-    // Generic fallback for unknown providers
+  } else if (model.provider !== 'iassistant') {
+    // Unknown provider - show generic pattern and default fallback
     envVars.push(`${model.provider.toUpperCase()}_API_KEY`);
+    envVars.push('DEFAULT_API_KEY');
   }
-
-  // Priority 3: Default fallback
-  envVars.push('DEFAULT_API_KEY');
+  // For iAssistant, don't add any more variables since it uses JWT tokens
 
   return envVars;
 };
@@ -137,13 +136,15 @@ const ModelFormEditor = ({
     if (!data.id || !data.provider) {
       return null;
     }
-    const envVarsList = getEnvironmentVariableNames(data).join('\n');
+    const envVarsList = getEnvironmentVariableNames({ id: data.id, provider: data.provider }).join(
+      '\n'
+    );
     return t(
       'admin.models.hints.apiKeyEnvVars',
       `Environment variables (in priority order):\n${envVarsList}`,
       { envVars: envVarsList }
     );
-  }, [data, t]);
+  }, [data.id, data.provider, t]);
 
   return (
     <div className="space-y-6">
