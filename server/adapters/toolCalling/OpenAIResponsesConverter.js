@@ -15,18 +15,73 @@ import {
 } from './GenericToolCalling.js';
 
 /**
+ * Add strict mode requirements to a schema for OpenAI Responses API
+ * This adds additionalProperties: false to all object schemas recursively
+ * @param {Object} schema - JSON schema object
+ * @returns {Object} Schema with strict mode requirements
+ */
+function addStrictModeToSchema(schema) {
+  if (!schema || typeof schema !== 'object') {
+    return schema;
+  }
+
+  const strictSchema = JSON.parse(JSON.stringify(schema)); // Deep clone
+
+  function enforceStrictMode(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+
+    // Add additionalProperties: false to all object types
+    if (obj.type === 'object') {
+      obj.additionalProperties = false;
+    }
+
+    // Recursively process nested schemas
+    if (obj.properties) {
+      for (const key in obj.properties) {
+        enforceStrictMode(obj.properties[key]);
+      }
+    }
+
+    // Process array items
+    if (obj.items) {
+      if (Array.isArray(obj.items)) {
+        obj.items.forEach(item => enforceStrictMode(item));
+      } else {
+        enforceStrictMode(obj.items);
+      }
+    }
+
+    // Process anyOf, allOf, oneOf
+    ['anyOf', 'allOf', 'oneOf'].forEach(key => {
+      if (Array.isArray(obj[key])) {
+        obj[key].forEach(item => enforceStrictMode(item));
+      }
+    });
+
+    return obj;
+  }
+
+  return enforceStrictMode(strictSchema);
+}
+
+/**
  * Convert generic tools to OpenAI Responses API format
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} OpenAI Responses API formatted tools
  */
 export function convertGenericToolsToOpenaiResponses(genericTools = []) {
-  return genericTools.map(tool => ({
-    type: 'function',
-    name: tool.id || tool.name,
-    description: tool.description,
-    parameters: sanitizeSchemaForProvider(tool.parameters, 'openai-responses')
-    // Note: strict: true is the default in Responses API, no need to specify
-  }));
+  return genericTools.map(tool => {
+    const sanitizedParams = sanitizeSchemaForProvider(tool.parameters, 'openai-responses');
+    const strictParams = addStrictModeToSchema(sanitizedParams);
+
+    return {
+      type: 'function',
+      name: tool.id || tool.name,
+      description: tool.description,
+      parameters: strictParams,
+      strict: true // Explicitly enable strict mode for tool calling
+    };
+  });
 }
 
 /**
