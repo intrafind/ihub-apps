@@ -103,9 +103,14 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
     const body = {
       model: model.modelId,
       stream,
-      max_output_tokens: maxTokens,
       store: true // Responses are stored by default for statefulness
     };
+
+    // Only set max_output_tokens if a specific limit is requested
+    // 0 or undefined = unlimited (omit parameter, let model use its default maximum)
+    if (maxTokens && maxTokens > 0) {
+      body.max_output_tokens = maxTokens;
+    }
 
     // Note: temperature is NOT supported by GPT-5 models with Responses API
     // GPT-5 models use a fixed temperature of 1.0
