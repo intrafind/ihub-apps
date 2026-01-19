@@ -189,8 +189,7 @@ const AdminNavigation = () => {
           key: 'api',
           name: t('admin.nav.api', 'API Documentation'),
           href: '/api/docs',
-          // icon: 'code-bracket',
-          current: false,
+          current: false, // External links are never marked as current since they navigate away
           external: true
         }
       ]
