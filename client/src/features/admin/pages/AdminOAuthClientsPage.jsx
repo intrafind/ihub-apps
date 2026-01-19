@@ -16,6 +16,9 @@ const AdminOAuthClientsPage = () => {
   const [clients, setClients] = useState([]);
   const [message, setMessage] = useState('');
   const [oauthEnabled, setOAuthEnabled] = useState(false);
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [generatedToken, setGeneratedToken] = useState(null);
+  const [tokenExpirationDays, setTokenExpirationDays] = useState(365);
 
   useEffect(() => {
     checkOAuthStatus();
@@ -199,6 +202,42 @@ const AdminOAuthClientsPage = () => {
         text: `Failed to rotate secret: ${error.message}`
       });
     }
+  };
+
+  const handleGenerateToken = async clientId => {
+    try {
+      const response = await makeAdminApiCall(
+        `/admin/oauth/clients/${clientId}/generate-token`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            expirationDays: tokenExpirationDays
+          })
+        }
+      );
+
+      const data = response.data;
+      setGeneratedToken({
+        token: data.token,
+        expiresAt: data.expiresAt,
+        clientId: clientId
+      });
+      setShowTokenModal(true);
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: `Failed to generate token: ${error.message}`
+      });
+    }
+  };
+
+  const closeTokenModal = () => {
+    setShowTokenModal(false);
+    setGeneratedToken(null);
+    setTokenExpirationDays(365);
   };
 
   const formatDate = dateString => {
@@ -392,6 +431,13 @@ const AdminOAuthClientsPage = () => {
                             <Icon name="pencil" size="sm" />
                           </button>
                           <button
+                            onClick={() => handleGenerateToken(client.clientId)}
+                            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            title={t('admin.auth.oauth.generateToken', 'Generate Long-Term Token')}
+                          >
+                            <Icon name="key" size="sm" />
+                          </button>
+                          <button
                             onClick={() => handleRotateSecret(client.clientId)}
                             className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                             title={t('admin.auth.oauth.rotateSecret', 'Rotate Secret')}
@@ -411,7 +457,7 @@ const AdminOAuthClientsPage = () => {
                                 : t('common.enable', 'Enable')
                             }
                           >
-                            <Icon name={client.active ? 'ban' : 'check'} size="sm" />
+                            <Icon name={client.active ? 'eye-slash' : 'eye'} size="sm" />
                           </button>
                           <button
                             onClick={() => handleDeleteClient(client.clientId)}
@@ -429,6 +475,74 @@ const AdminOAuthClientsPage = () => {
             </div>
           )}
         </div>
+
+        {/* Token Generation Modal */}
+        {showTokenModal && generatedToken && (
+          <div className="fixed z-10 inset-0 overflow-y-auto">
+            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
+
+              <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+              <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                <div>
+                  <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                    <Icon name="check" className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div className="mt-3 text-center sm:mt-5">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900">
+                      {t('admin.auth.oauth.tokenGenerated', 'Long-Term Token Generated')}
+                    </h3>
+                    <div className="mt-4">
+                      <p className="text-sm text-gray-500 mb-4">
+                        {t(
+                          'admin.auth.oauth.tokenWarning',
+                          'Save this token now. It will not be shown again.'
+                        )}
+                      </p>
+                      <div className="bg-gray-50 border border-gray-200 rounded p-3 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          {t('admin.auth.oauth.token', 'Token')}:
+                        </label>
+                        <code className="block text-xs break-all bg-white p-2 rounded border">
+                          {generatedToken.token}
+                        </code>
+                      </div>
+                      <div className="bg-gray-50 border border-gray-200 rounded p-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          {t('admin.auth.oauth.expiresAt', 'Expires At')}:
+                        </label>
+                        <p className="text-sm">{new Date(generatedToken.expiresAt).toLocaleString()}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(generatedToken.token);
+                          setMessage({
+                            type: 'success',
+                            text: t('common.copiedToClipboard', 'Copied to clipboard')
+                          });
+                        }}
+                        className="mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        <Icon name="clipboard" size="sm" className="mr-2" />
+                        {t('common.copyToClipboard', 'Copy to Clipboard')}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-5 sm:mt-6">
+                  <button
+                    type="button"
+                    onClick={closeTokenModal}
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
+                  >
+                    {t('common.close', 'Close')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AdminAuth>
   );
