@@ -147,10 +147,10 @@ export function generateClientId(name) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
-  
+
   // Generate short UUID (first 8 characters)
   const shortUuid = uuidv4().split('-')[0];
-  
+
   return `client_${sanitizedName}_${shortUuid}`;
 }
 

@@ -16,6 +16,7 @@ const AdminOAuthClientEditPage = () => {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [newClientId, setNewClientId] = useState('');
   const [newClientSecret, setNewClientSecret] = useState('');
   const [showSecretModal, setShowSecretModal] = useState(false);
   const [availableApps, setAvailableApps] = useState([]);
@@ -99,6 +100,7 @@ const AdminOAuthClientEditPage = () => {
         });
 
         const data = response.data;
+        setNewClientId(data.client.clientId);
         setNewClientSecret(data.client.clientSecret);
         setShowSecretModal(true);
       } else {
@@ -478,11 +480,11 @@ const AdminOAuthClientEditPage = () => {
                   </label>
                   <div className="flex gap-2">
                     <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm break-all">
-                      {clientId}
+                      {newClientId}
                     </code>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(clientId)}
+                      onClick={() => copyToClipboard(newClientId)}
                       className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
                     >
                       <Icon name="clipboard" size="sm" />

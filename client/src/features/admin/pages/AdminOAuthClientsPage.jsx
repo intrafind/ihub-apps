@@ -206,18 +206,15 @@ const AdminOAuthClientsPage = () => {
 
   const handleGenerateToken = async clientId => {
     try {
-      const response = await makeAdminApiCall(
-        `/admin/oauth/clients/${clientId}/generate-token`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            expirationDays: tokenExpirationDays
-          })
-        }
-      );
+      const response = await makeAdminApiCall(`/admin/oauth/clients/${clientId}/generate-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          expirationDays: tokenExpirationDays
+        })
+      });
 
       const data = response.data;
       setGeneratedToken({
@@ -512,7 +509,9 @@ const AdminOAuthClientsPage = () => {
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           {t('admin.auth.oauth.expiresAt', 'Expires At')}:
                         </label>
-                        <p className="text-sm">{new Date(generatedToken.expiresAt).toLocaleString()}</p>
+                        <p className="text-sm">
+                          {new Date(generatedToken.expiresAt).toLocaleString()}
+                        </p>
                       </div>
                       <button
                         onClick={() => {
