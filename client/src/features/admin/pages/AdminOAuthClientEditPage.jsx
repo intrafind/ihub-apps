@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
+import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
 const AdminOAuthClientEditPage = () => {
-  const { t, i18n } = useTranslation();
-  const currentLanguage = i18n.language;
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { clientId } = useParams();
   const isNew = clientId === 'new';
@@ -32,9 +31,6 @@ const AdminOAuthClientEditPage = () => {
     tokenExpirationMinutes: 60,
     active: true
   });
-
-  const [appInput, setAppInput] = useState('');
-  const [modelInput, setModelInput] = useState('');
 
   useEffect(() => {
     loadAvailableOptions();
@@ -137,37 +133,17 @@ const AdminOAuthClientEditPage = () => {
     }));
   };
 
-  const addApp = appId => {
-    if (appId && !formData.allowedApps.includes(appId)) {
-      setFormData(prev => ({
-        ...prev,
-        allowedApps: [...prev.allowedApps, appId]
-      }));
-      setAppInput('');
-    }
-  };
-
-  const removeApp = app => {
+  const handleAppsChange = selectedApps => {
     setFormData(prev => ({
       ...prev,
-      allowedApps: prev.allowedApps.filter(a => a !== app)
+      allowedApps: selectedApps
     }));
   };
 
-  const addModel = modelId => {
-    if (modelId && !formData.allowedModels.includes(modelId)) {
-      setFormData(prev => ({
-        ...prev,
-        allowedModels: [...prev.allowedModels, modelId]
-      }));
-      setModelInput('');
-    }
-  };
-
-  const removeModel = model => {
+  const handleModelsChange = selectedModels => {
     setFormData(prev => ({
       ...prev,
-      allowedModels: prev.allowedModels.filter(m => m !== model)
+      allowedModels: selectedModels
     }));
   };
 
@@ -327,50 +303,18 @@ const AdminOAuthClientEditPage = () => {
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 {t('admin.auth.oauth.allowedApps', 'Allowed Apps')}
               </h3>
-              <p className="text-sm text-gray-500 mb-2">Leave empty to allow all apps</p>
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <select
-                    value={appInput}
-                    onChange={e => {
-                      const selectedAppId = e.target.value;
-                      if (selectedAppId) {
-                        addApp(selectedAppId);
-                      }
-                    }}
-                    className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  >
-                    <option value="">Select an app...</option>
-                    {availableApps
-                      .filter(app => !formData.allowedApps.includes(app.id))
-                      .map(app => (
-                        <option key={app.id} value={app.id}>
-                          {getLocalizedContent(app.name, currentLanguage) || app.id}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {formData.allowedApps.map(appId => {
-                    const app = availableApps.find(a => a.id === appId);
-                    return (
-                      <span
-                        key={appId}
-                        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-green-100 text-green-800"
-                      >
-                        {app ? getLocalizedContent(app.name, currentLanguage) : appId}
-                        <button
-                          type="button"
-                          onClick={() => removeApp(appId)}
-                          className="ml-2 text-green-600 hover:text-green-800"
-                        >
-                          <Icon name="x" size="sm" />
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
+              <ResourceSelector
+                label={t('admin.auth.oauth.allowedApps', 'Allowed Apps')}
+                resources={availableApps}
+                selectedResources={formData.allowedApps}
+                onSelectionChange={handleAppsChange}
+                placeholder={t('admin.auth.oauth.searchApps', 'Search apps to add...')}
+                emptyMessage={t(
+                  'admin.auth.oauth.noAppsSelected',
+                  'No apps selected - client can access all apps'
+                )}
+                allowWildcard={true}
+              />
             </div>
 
             {/* Allowed Models */}
@@ -378,50 +322,18 @@ const AdminOAuthClientEditPage = () => {
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 {t('admin.auth.oauth.allowedModels', 'Allowed Models')}
               </h3>
-              <p className="text-sm text-gray-500 mb-2">Leave empty to allow all models</p>
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <select
-                    value={modelInput}
-                    onChange={e => {
-                      const selectedModelId = e.target.value;
-                      if (selectedModelId) {
-                        addModel(selectedModelId);
-                      }
-                    }}
-                    className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  >
-                    <option value="">Select a model...</option>
-                    {availableModels
-                      .filter(model => !formData.allowedModels.includes(model.id))
-                      .map(model => (
-                        <option key={model.id} value={model.id}>
-                          {getLocalizedContent(model.name, currentLanguage) || model.id}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {formData.allowedModels.map(modelId => {
-                    const model = availableModels.find(m => m.id === modelId);
-                    return (
-                      <span
-                        key={modelId}
-                        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800"
-                      >
-                        {model ? getLocalizedContent(model.name, currentLanguage) : modelId}
-                        <button
-                          type="button"
-                          onClick={() => removeModel(modelId)}
-                          className="ml-2 text-purple-600 hover:text-purple-800"
-                        >
-                          <Icon name="x" size="sm" />
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
+              <ResourceSelector
+                label={t('admin.auth.oauth.allowedModels', 'Allowed Models')}
+                resources={availableModels}
+                selectedResources={formData.allowedModels}
+                onSelectionChange={handleModelsChange}
+                placeholder={t('admin.auth.oauth.searchModels', 'Search models to add...')}
+                emptyMessage={t(
+                  'admin.auth.oauth.noModelsSelected',
+                  'No models selected - client can access all models'
+                )}
+                allowWildcard={true}
+              />
             </div>
 
             {/* Submit buttons */}
