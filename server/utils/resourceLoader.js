@@ -86,7 +86,7 @@ export function createResourceLoader({
 
         // Validate item if validator is provided
         if (validateItem) {
-          validateItem(resource, filePath);
+          resource = validateItem(resource, filePath);
         }
 
         resources.push(resource);
@@ -156,7 +156,7 @@ export function createResourceLoader({
 
         // Validate item if validator is provided
         if (validateItem) {
-          validateItem(processedResource, `${legacyFilePath}[${idx}]`);
+          processedResource = validateItem(processedResource, `${legacyFilePath}[${idx}]`);
         }
 
         return processedResource;
@@ -310,28 +310,35 @@ function extractResourceType(source) {
  * Helper function to create a schema validation function
  * @param {Object} schema - Zod schema object
  * @param {Array} knownKeys - Array of known valid keys
- * @returns {Function} Schema validation function
+ * @returns {Function} Schema validation function that returns the validated/parsed item
  */
 export function createSchemaValidator(schema, knownKeys = []) {
   return function (item, source) {
     const resourceType = extractResourceType(source);
     const resourceId = item.id || 'unknown';
 
+    let validatedItem = item;
+
     // Validate with schema if provided
     if (schema) {
-      const { success, error } = schema.safeParse(item);
-      if (!success && error) {
-        const messages = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
+      const result = schema.safeParse(item);
+      if (!result.success) {
+        const messages = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
         console.warn(`⚠️  ${resourceType}: ${resourceId} - validation issues: ${messages}`);
+      } else {
+        // Apply the parsed data which includes Zod defaults
+        validatedItem = result.data;
       }
     }
 
     // Check for unknown keys
     if (knownKeys.length > 0) {
-      const unknown = Object.keys(item).filter(key => !knownKeys.includes(key));
+      const unknown = Object.keys(validatedItem).filter(key => !knownKeys.includes(key));
       if (unknown.length > 0) {
         console.warn(`⚠️  ${resourceType}: ${resourceId} - unknown keys: ${unknown.join(', ')}`);
       }
     }
+
+    return validatedItem;
   };
 }
