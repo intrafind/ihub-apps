@@ -180,6 +180,20 @@ const AdminNavigation = () => {
           current: location.pathname === '/admin/system'
         }
       ]
+    },
+    {
+      id: 'developer',
+      name: t('admin.groups.developer', 'Developer'),
+      items: [
+        {
+          key: 'api',
+          name: t('admin.nav.api', 'API Documentation'),
+          href: '/api/docs',
+          // icon: 'code-bracket',
+          current: false,
+          external: true
+        }
+      ]
     }
   ];
 
@@ -215,26 +229,48 @@ const AdminNavigation = () => {
       };
     }, [navGroups, isEnabled]);
 
-  const TabItem = ({ item, isDropdownItem = false }) => (
-    <Link
-      to={item.href}
-      className={
-        isDropdownItem
-          ? `flex items-center w-full px-4 py-2 text-sm hover:bg-gray-100 ${
-              item.current ? 'bg-indigo-50 text-indigo-600 font-medium' : 'text-gray-700'
-            }`
-          : `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-              item.current
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`
-      }
-      onClick={() => isDropdownItem && setShowMoreMenu(false)}
-    >
-      <Icon name={item.icon} className="w-4 h-4 mr-2" />
-      {item.name}
-    </Link>
-  );
+  const TabItem = ({ item, isDropdownItem = false }) => {
+    const content = (
+      <>
+        <Icon name={item.icon} className="w-4 h-4 mr-2" />
+        {item.name}
+      </>
+    );
+
+    const className = isDropdownItem
+      ? `flex items-center w-full px-4 py-2 text-sm hover:bg-gray-100 ${
+          item.current ? 'bg-indigo-50 text-indigo-600 font-medium' : 'text-gray-700'
+        }`
+      : `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+          item.current
+            ? 'border-indigo-500 text-indigo-600'
+            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        }`;
+
+    if (item.external) {
+      return (
+        <a
+          href={item.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={className}
+          onClick={() => isDropdownItem && setShowMoreMenu(false)}
+        >
+          {content}
+        </a>
+      );
+    }
+
+    return (
+      <Link
+        to={item.href}
+        className={className}
+        onClick={() => isDropdownItem && setShowMoreMenu(false)}
+      >
+        {content}
+      </Link>
+    );
+  };
 
   const GroupHeader = ({ groupName }) => (
     <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">

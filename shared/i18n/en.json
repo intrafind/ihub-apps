@@ -268,7 +268,16 @@
       "pages": "Pages",
       "groups": "Groups",
       "auth": "Authentication",
-      "logs": "Logs"
+      "logs": "Logs",
+      "api": "API Documentation"
+    },
+    "groups": {
+      "overview": "Overview",
+      "content": "Content Management",
+      "analytics": "Analytics",
+      "security": "Security & Access",
+      "configuration": "Configuration",
+      "developer": "Developer"
     },
     "navigation": {
       "overview": "Overview",
