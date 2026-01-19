@@ -86,20 +86,11 @@ async function testOAuthFlow() {
       info(`  Token expiration: ${createResponse.data.client.tokenExpirationMinutes} minutes\n`);
     } catch (err) {
       if (err.response?.data?.error === 'OAuth is not enabled on this server') {
-        error('OAuth is not enabled. Enable it in platform.json:');
-        console.log(
-          JSON.stringify(
-            {
-              oauth: {
-                enabled: true,
-                clientsFile: 'contents/config/oauth-clients.json',
-                defaultTokenExpirationMinutes: 60
-              }
-            },
-            null,
-            2
-          )
-        );
+        error('OAuth is not enabled.');
+        console.log('To enable OAuth, update your platform.json configuration, for example:');
+        console.log('- Set "oauth.enabled" to true');
+        console.log('- Configure "oauth.clientsFile" to point to your OAuth clients configuration file');
+        console.log('- Optionally set "oauth.defaultTokenExpirationMinutes" as appropriate for your environment');
         return;
       }
       throw err;
