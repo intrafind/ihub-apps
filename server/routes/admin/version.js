@@ -71,6 +71,16 @@ export default function registerAdminVersionRoutes(app, basePath = '') {
         }
 
         const releaseData = await response.json();
+
+        // Validate tag_name exists
+        if (!releaseData.tag_name) {
+          return res.json({
+            updateAvailable: false,
+            currentVersion,
+            error: 'Invalid release data from GitHub'
+          });
+        }
+
         const latestVersion = releaseData.tag_name.replace(/^v/, ''); // Remove 'v' prefix if present
 
         // Simple version comparison
@@ -102,10 +112,21 @@ export default function registerAdminVersionRoutes(app, basePath = '') {
 /**
  * Compare two semantic versions
  * Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+ * Handles basic semver format (e.g., "1.2.3") and ignores pre-release tags
  */
 function compareVersions(v1, v2) {
-  const parts1 = v1.split('.').map(Number);
-  const parts2 = v2.split('.').map(Number);
+  // Remove pre-release tags (e.g., "1.0.0-beta" -> "1.0.0")
+  const cleanV1 = v1.split('-')[0];
+  const cleanV2 = v2.split('-')[0];
+
+  const parts1 = cleanV1.split('.').map(part => {
+    const num = parseInt(part, 10);
+    return isNaN(num) ? 0 : num;
+  });
+  const parts2 = cleanV2.split('.').map(part => {
+    const num = parseInt(part, 10);
+    return isNaN(num) ? 0 : num;
+  });
 
   for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
     const part1 = parts1[i] || 0;
