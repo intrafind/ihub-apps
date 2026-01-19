@@ -82,6 +82,25 @@ if (parsed.type === 'response.function_call_arguments.done') {
 }
 ```
 
+### 4. Handle `response.output_item.done`
+
+This event provides the final complete function call with both name and arguments. This is critical for ensuring the function name is properly captured:
+
+```javascript
+if (parsed.type === 'response.output_item.done' && parsed.item?.type === 'function_call') {
+  toolCalls.push({
+    id: parsed.item.call_id || parsed.item.id,
+    type: 'function',
+    index: parsed.output_index || 0,
+    function: {
+      name: parsed.item.name || '',
+      arguments: parsed.item.arguments || ''
+    },
+    complete: true
+  });
+}
+```
+
 ## Example Streaming Sequence
 
 From the user's logs, here's a real streaming sequence:
@@ -108,9 +127,22 @@ From the user's logs, here's a real streaming sequence:
 // 3. Complete arguments provided
 {
   "type": "response.function_call_arguments.done",
-  "arguments": "{\"query\":\"IntraFind iHub Produkt\",\"extractContent\":true,\"maxResults\":3,\"contentMaxLength\":3000}"
+  "arguments": "{\"query\":\"Intrafind iHub\",\"extractContent\":true,\"maxResults\":3,\"contentMaxLength\":3000}"
+}
+
+// 4. Final complete function call with name and arguments
+{
+  "type": "response.output_item.done",
+  "item": {
+    "type": "function_call",
+    "call_id": "call_Uy1WdAKT2ZA4beABlIYCjLR2",
+    "name": "enhancedWebSearch",
+    "arguments": "{\"query\":\"Intrafind iHub\",...}"
+  }
 }
 ```
+
+**Important:** The `response.output_item.done` event is crucial because it provides the complete function call with both the function name and the final arguments together. Without handling this event, the function name may not be properly associated with the arguments.
 
 ## Testing
 
@@ -119,7 +151,8 @@ Created comprehensive test coverage in `server/tests/openaiResponsesStreamingFun
 1. ✅ response.output_item.added creates function call
 2. ✅ response.function_call_arguments.delta accumulates arguments
 3. ✅ response.function_call_arguments.done provides complete arguments
-4. ✅ Full streaming sequence from user logs works correctly
+4. ✅ response.output_item.done provides complete function call with name
+5. ✅ Full streaming sequence from user logs works correctly
 
 All tests pass successfully, including existing adapter, finish reason, and strict mode tests.
 
