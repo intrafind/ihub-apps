@@ -822,7 +822,15 @@
       "versionServer": "Backend Version",
       "versionNode": "Node.js Version",
       "versionLoading": "Loading version information...",
-      "versionError": "Failed to load version information"
+      "versionError": "Failed to load version information",
+      "updateCheckTitle": "Update Available",
+      "updateAvailable": "A new version of iHub Apps is available!",
+      "currentVersion": "Current Version",
+      "latestVersion": "Latest Version",
+      "viewRelease": "View Release on GitHub",
+      "checkingUpdate": "Checking for updates...",
+      "updateCheckFailed": "Failed to check for updates",
+      "noUpdateAvailable": "You are running the latest version"
     }
   },
   "components": {
