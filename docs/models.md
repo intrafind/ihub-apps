@@ -54,19 +54,34 @@ The system currently supports the following providers:
 1. **OpenAI** (`provider: "openai"`)
    - Compatible with the OpenAI Chat Completions API format
    - Examples: GPT-3.5 Turbo, GPT-4
+   - Endpoint: `/v1/chat/completions`
 
-2. **Anthropic** (`provider: "anthropic"`)
+2. **OpenAI Responses API** (`provider: "openai-responses"`)
+   - Compatible with the new OpenAI Responses API format for GPT-5 and newer models
+   - Provides enhanced reasoning capabilities, built-in tools, and improved performance
+   - Endpoint: `/v1/responses`
+   - Features:
+     - Better performance with reasoning models like GPT-5
+     - Agentic loop with built-in tools (web search, file search, code interpreter, etc.)
+     - Lower costs due to improved cache utilization (40-80% improvement)
+     - Stateful context with `store: true` by default
+     - Flexible inputs (string or array of messages)
+     - Structured outputs via `text.format`
+   - Examples: GPT-5
+
+3. **Anthropic** (`provider: "anthropic"`)
    - Compatible with the Anthropic Messages API format
    - Examples: Claude 3 Opus, Claude 3 Sonnet
 
-3. **Google** (`provider: "google"`)
+4. **Google** (`provider: "google"`)
    - Compatible with the Google Gemini API format
    - Examples: Gemini 1.5 Flash
 
-4. **Mistral** (`provider: "mistral"`)
+5. **Mistral** (`provider: "mistral"`)
    - Compatible with Mistral's La Plateforme API format
    - Examples: Mistral Small, Mixtral 8x7B
-5. **Local Models** (can use any provider format they're compatible with)
+
+6. **Local Models** (can use any provider format they're compatible with)
    - Self-hosted models accessible via localhost or network
    - Example: Local vLLM implementation
 
@@ -117,3 +132,34 @@ To add a new model:
 1. Add a new object to the models.json array
 2. Ensure the provider adapter in `server/adapters/` supports the provider
 3. Provide required credentials in your environment variables
+
+#### Example: Adding GPT-5 with Responses API
+
+```json
+{
+  "id": "gpt-5",
+  "modelId": "gpt-5",
+  "name": {
+    "en": "GPT-5",
+    "de": "GPT-5"
+  },
+  "description": {
+    "en": "OpenAI's most advanced reasoning model with enhanced capabilities using the Responses API",
+    "de": "OpenAIs fortschrittlichstes Reasoning-Modell mit erweiterten Funktionen über die Responses API"
+  },
+  "url": "https://api.openai.com/v1/responses",
+  "provider": "openai-responses",
+  "tokenLimit": 128000,
+  "supportsTools": true,
+  "enabled": true,
+  "default": false
+}
+```
+
+**Important Notes for OpenAI Responses API:**
+- Use `provider: "openai-responses"` for GPT-5 and newer models
+- The endpoint URL must be `https://api.openai.com/v1/responses`
+- You still need to set `OPENAI_API_KEY` in your environment
+- The adapter automatically handles the conversion between Chat Completions and Responses API formats
+- Responses are stored by default (`store: true`) for stateful conversations
+- For organizations with Zero Data Retention requirements, the adapter can be configured to use encrypted reasoning items
