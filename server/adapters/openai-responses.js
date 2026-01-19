@@ -111,6 +111,37 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
     // GPT-5 models use a fixed temperature of 1.0
     // Use verbosity and reasoning.effort parameters instead for control
 
+    // Configure reasoning effort based on thinking budget
+    const thinkingEnabled = options.thinkingEnabled ?? true;
+    const thinkingBudget = options.thinkingBudget ?? -1;
+    const thinkingThoughts = options.thinkingThoughts ?? false;
+
+    let reasoningEffort = 'medium'; // default
+    if (!thinkingEnabled || thinkingBudget === 0) {
+      reasoningEffort = 'minimal';
+    } else if (thinkingBudget === -1) {
+      reasoningEffort = 'medium'; // dynamic budget defaults to medium
+    } else if (thinkingBudget > 0 && thinkingBudget <= 100) {
+      reasoningEffort = 'low';
+    } else if (thinkingBudget > 100 && thinkingBudget <= 500) {
+      reasoningEffort = 'medium';
+    } else if (thinkingBudget > 500) {
+      reasoningEffort = 'high';
+    }
+
+    // Map thoughts flag to verbosity (controls detail level)
+    const verbosity = thinkingThoughts ? 'high' : 'medium';
+
+    // Add reasoning configuration
+    body.reasoning = {
+      effort: reasoningEffort
+    };
+
+    // Add text verbosity configuration
+    body.text = {
+      verbosity: verbosity
+    };
+
     // Add instructions if present (system messages)
     if (instructions) {
       body.instructions = instructions;
@@ -151,23 +182,20 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       enforceNoExtras(schemaClone);
 
       // Responses API uses text.format instead of response_format
-      body.text = {
-        format: {
-          type: 'json_schema',
-          name: 'response',
-          strict: true,
-          schema: schemaClone
-        }
+      // Merge with existing text configuration
+      body.text.format = {
+        type: 'json_schema',
+        name: 'response',
+        strict: true,
+        schema: schemaClone
       };
       console.log(
         'Using response schema for structured output:',
         JSON.stringify(body.text, null, 2)
       );
     } else if (responseFormat === 'json') {
-      // For simple JSON mode
-      body.text = {
-        format: { type: 'json_object' }
-      };
+      // For simple JSON mode - merge with existing text configuration
+      body.text.format = { type: 'json_object' };
     }
 
     console.log('OpenAI Responses API request body:', JSON.stringify(body, null, 2));
