@@ -146,9 +146,9 @@ export function generateClientId() {
 
 /**
  * Generate a random client secret
- * @returns {string} Client secret (plain text - only shown once)
+ * @returns {Promise<string>} Client secret (plain text - only shown once)
  */
-export function generateClientSecret() {
+export async function generateClientSecret() {
   // Generate a secure random secret (32 bytes = 64 hex characters)
   const crypto = await import('crypto');
   return crypto.randomBytes(32).toString('hex');
@@ -284,6 +284,7 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
   console.log(`[OAuth] Client updated | client_id=${clientId} | updated_by=${updatedBy} | changes=${Object.keys(updates).join(',')}`);
 
   // Return without secret
+  // eslint-disable-next-line no-unused-vars
   const { clientSecret, ...clientWithoutSecret } = client;
   return clientWithoutSecret;
 }
@@ -426,6 +427,7 @@ export async function validateClientCredentials(clientId, clientSecret, clientsF
   });
 
   // Return client without secret
+  // eslint-disable-next-line no-unused-vars
   const { clientSecret: _, ...clientWithoutSecret } = client;
   return clientWithoutSecret;
 }

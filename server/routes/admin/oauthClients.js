@@ -19,8 +19,6 @@ import { validateIdForPath } from '../../utils/pathSecurity.js';
  */
 
 export default function registerAdminOAuthRoutes(app, basePath = '') {
-  const adminAuthMiddleware = adminAuth();
-
   /**
    * @swagger
    * /api/admin/oauth/clients:
@@ -49,10 +47,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *       401:
    *         description: Unauthorized
    */
-  app.get(
-    buildServerPath('/api/admin/oauth/clients', basePath),
-    adminAuthMiddleware,
-    async (req, res) => {
+  app.get(buildServerPath('/api/admin/oauth/clients', basePath), adminAuth, async (req, res) => {
       try {
         const platform = configCache.getPlatform() || {};
         const oauthConfig = platform.oauth || {};
@@ -106,7 +101,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    */
   app.get(
     buildServerPath('/api/admin/oauth/clients/:clientId', basePath),
-    adminAuthMiddleware,
+    adminAuth,
     async (req, res) => {
       try {
         const platform = configCache.getPlatform() || {};
@@ -198,7 +193,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    */
   app.post(
     buildServerPath('/api/admin/oauth/clients', basePath),
-    adminAuthMiddleware,
+    adminAuth,
     async (req, res) => {
       try {
         const platform = configCache.getPlatform() || {};
@@ -313,7 +308,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    */
   app.put(
     buildServerPath('/api/admin/oauth/clients/:clientId', basePath),
-    adminAuthMiddleware,
+    adminAuth,
     async (req, res) => {
       try {
         const platform = configCache.getPlatform() || {};
@@ -395,7 +390,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    */
   app.delete(
     buildServerPath('/api/admin/oauth/clients/:clientId', basePath),
-    adminAuthMiddleware,
+    adminAuth,
     async (req, res) => {
       try {
         const platform = configCache.getPlatform() || {};
@@ -463,7 +458,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    */
   app.post(
     buildServerPath('/api/admin/oauth/clients/:clientId/rotate-secret', basePath),
-    adminAuthMiddleware,
+    adminAuth,
     async (req, res) => {
       try {
         const platform = configCache.getPlatform() || {};
@@ -543,7 +538,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    */
   app.post(
     buildServerPath('/api/admin/oauth/clients/:clientId/generate-token', basePath),
-    adminAuthMiddleware,
+    adminAuth,
     async (req, res) => {
       try {
         const platform = configCache.getPlatform() || {};
@@ -639,7 +634,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    */
   app.post(
     buildServerPath('/api/admin/oauth/clients/:clientId/introspect-token', basePath),
-    adminAuthMiddleware,
+    adminAuth,
     async (req, res) => {
       try {
         const platform = configCache.getPlatform() || {};
