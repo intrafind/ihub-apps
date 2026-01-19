@@ -1,5 +1,6 @@
 // Provider adapters registry
 import OpenAIAdapter from './openai.js';
+import OpenAIResponsesAdapter from './openai-responses.js';
 import AnthropicAdapter from './anthropic.js';
 import GoogleAdapter from './google.js';
 import MistralAdapter from './mistral.js';
@@ -9,6 +10,7 @@ import IAssistantAdapter from './iassistant.js';
 // Adapter registry
 const adapters = {
   openai: OpenAIAdapter,
+  'openai-responses': OpenAIResponsesAdapter,
   anthropic: AnthropicAdapter,
   google: GoogleAdapter,
   mistral: MistralAdapter,

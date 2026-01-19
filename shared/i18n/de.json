@@ -392,7 +392,16 @@
       "shortlinks": "Links",
       "usage": "Nutzungsberichte",
       "users": "Benutzer",
-      "system": "System"
+      "system": "System",
+      "api": "API-Dokumentation"
+    },
+    "groups": {
+      "overview": "Übersicht",
+      "content": "Inhaltsverwaltung",
+      "analytics": "Analysen",
+      "security": "Sicherheit & Zugriff",
+      "configuration": "Konfiguration",
+      "developer": "Entwickler"
     },
     "translateField": "Übersetzen",
     "common": {
@@ -939,7 +948,15 @@
       "versionServer": "Backend-Version",
       "versionNode": "Node.js-Version",
       "versionLoading": "Versionsinformationen werden geladen...",
-      "versionError": "Fehler beim Laden der Versionsinformationen"
+      "versionError": "Fehler beim Laden der Versionsinformationen",
+      "updateCheckTitle": "Update verfügbar",
+      "updateAvailable": "Eine neue Version von iHub Apps ist verfügbar!",
+      "currentVersion": "Aktuelle Version",
+      "latestVersion": "Neueste Version",
+      "viewRelease": "Release auf GitHub ansehen",
+      "checkingUpdate": "Suche nach Updates...",
+      "updateCheckFailed": "Fehler beim Prüfen auf Updates",
+      "noUpdateAvailable": "Sie verwenden die neueste Version"
     }
   },
   "components": {

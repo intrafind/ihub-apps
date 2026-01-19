@@ -1,0 +1,18 @@
+{
+  "id": "gpt-5",
+  "modelId": "gpt-5",
+  "name": {
+    "en": "GPT-5",
+    "de": "GPT-5"
+  },
+  "description": {
+    "en": "OpenAI's most advanced reasoning model with enhanced capabilities using the Responses API",
+    "de": "OpenAIs fortschrittlichstes Reasoning-Modell mit erweiterten Funktionen über die Responses API"
+  },
+  "url": "https://api.openai.com/v1/responses",
+  "provider": "openai-responses",
+  "tokenLimit": 128000,
+  "supportsTools": true,
+  "enabled": false,
+  "default": false
+}

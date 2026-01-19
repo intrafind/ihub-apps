@@ -127,29 +127,15 @@ class StreamingHandler {
 
     console.log(`Sending request for chat ID ${chatId} ${model.id}:`, request.body);
 
-    // DEBUG: Log request details
-    console.debug('🔍 [STREAMING DEBUG] Starting stream for chat ID:', chatId);
-    console.debug('🔍 [STREAMING DEBUG] Model:', model.id);
-    console.debug('🔍 [STREAMING DEBUG] Provider:', model.provider);
-    console.debug('🔍 [STREAMING DEBUG] Request URL:', request.url);
-
     let doneEmitted = false;
     let finishReason = null;
 
     try {
-      console.debug('🔍 [STREAMING DEBUG] Making fetch request to LLM...');
       const llmResponse = await throttledFetch(model.id, request.url, {
         method: 'POST',
         headers: request.headers,
         body: JSON.stringify(request.body),
         signal: controller.signal
-      });
-
-      console.debug('🔍 [STREAMING DEBUG] Received response from LLM:', {
-        ok: llmResponse.ok,
-        status: llmResponse.status,
-        statusText: llmResponse.statusText,
-        headers: Object.fromEntries(llmResponse.headers.entries())
       });
 
       clearTimeout(timeoutId);
@@ -486,18 +472,7 @@ class StreamingHandler {
       clearTimeout(timeoutId);
       if (!doneEmitted) {
         const finalFinishReason = finishReason || 'connection_closed';
-        console.debug('🔍 [STREAMING DEBUG] Stream ended without done event:', {
-          chatId,
-          finishReason: finalFinishReason,
-          doneEmitted
-        });
         actionTracker.trackDone(chatId, { finishReason: finalFinishReason });
-      } else {
-        console.debug('🔍 [STREAMING DEBUG] Stream completed normally:', {
-          chatId,
-          finishReason,
-          doneEmitted
-        });
       }
       if (activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);
