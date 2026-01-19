@@ -34,17 +34,17 @@ export function generateOAuthToken(client, options = {}) {
 
   // Determine scopes for this token
   let tokenScopes = client.scopes || [];
-  
+
   // If specific scopes requested, validate and use them
   if (options.requestedScope) {
     const requestedScopes = options.requestedScope.split(' ').filter(s => s.trim());
-    
+
     // Validate requested scopes against client's allowed scopes
     const invalidScopes = requestedScopes.filter(s => !tokenScopes.includes(s));
     if (invalidScopes.length > 0) {
       throw new Error(`Invalid scopes requested: ${invalidScopes.join(', ')}`);
     }
-    
+
     tokenScopes = requestedScopes;
   }
 
@@ -63,7 +63,7 @@ export function generateOAuthToken(client, options = {}) {
     authMode: 'oauth_client_credentials',
     iat: Math.floor(Date.now() / 1000),
     // OAuth tokens are machine-to-machine, no user context
-    groups: ['oauth_clients'], // Special group for OAuth clients
+    groups: ['oauth_clients'] // Special group for OAuth clients
   };
 
   const token = jwt.sign(tokenPayload, jwtSecret, {
@@ -216,7 +216,9 @@ export function generateStaticApiKey(client, expirationDays = 365) {
     algorithm: 'HS256'
   });
 
-  console.log(`[OAuth] Static API key generated | client_id=${client.clientId} | expires_in_days=${expirationDays}`);
+  console.log(
+    `[OAuth] Static API key generated | client_id=${client.clientId} | expires_in_days=${expirationDays}`
+  );
 
   return {
     api_key: token,

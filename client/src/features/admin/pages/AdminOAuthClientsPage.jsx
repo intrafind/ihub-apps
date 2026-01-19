@@ -39,7 +39,10 @@ const AdminOAuthClientsPage = () => {
       if (error.response?.data?.error?.includes('OAuth is not enabled')) {
         setMessage({
           type: 'warning',
-          text: t('admin.auth.oauth.disabled', 'OAuth is not enabled. Enable it in Authentication settings.')
+          text: t(
+            'admin.auth.oauth.disabled',
+            'OAuth is not enabled. Enable it in Authentication settings.'
+          )
         });
       } else {
         setMessage({
@@ -53,7 +56,14 @@ const AdminOAuthClientsPage = () => {
   };
 
   const handleDeleteClient = async clientId => {
-    if (!window.confirm(t('admin.auth.oauth.deleteConfirm', 'Are you sure you want to delete this OAuth client? All issued tokens will stop working.'))) {
+    if (
+      !window.confirm(
+        t(
+          'admin.auth.oauth.deleteConfirm',
+          'Are you sure you want to delete this OAuth client? All issued tokens will stop working.'
+        )
+      )
+    ) {
       return;
     }
 
@@ -153,7 +163,14 @@ const AdminOAuthClientsPage = () => {
   };
 
   const handleRotateSecret = async clientId => {
-    if (!window.confirm(t('admin.auth.oauth.rotateSecretConfirm', 'Are you sure you want to rotate the secret? The old secret will stop working immediately.'))) {
+    if (
+      !window.confirm(
+        t(
+          'admin.auth.oauth.rotateSecretConfirm',
+          'Are you sure you want to rotate the secret? The old secret will stop working immediately.'
+        )
+      )
+    ) {
       return;
     }
 
@@ -166,8 +183,10 @@ const AdminOAuthClientsPage = () => {
       const newSecret = data.clientSecret;
 
       // Show the new secret in a modal or alert
-      alert(`${t('admin.auth.oauth.rotateSecretSuccess', 'Secret rotated successfully. Save the new secret now.')}\n\n${t('admin.auth.oauth.clientSecret', 'Client Secret')}: ${newSecret}\n\n${t('admin.auth.oauth.clientSecretWarning', 'Save this secret now. It will not be shown again.')}`);
-      
+      alert(
+        `${t('admin.auth.oauth.rotateSecretSuccess', 'Secret rotated successfully. Save the new secret now.')}\n\n${t('admin.auth.oauth.clientSecret', 'Client Secret')}: ${newSecret}\n\n${t('admin.auth.oauth.clientSecretWarning', 'Save this secret now. It will not be shown again.')}`
+      );
+
       loadClients();
     } catch (error) {
       setMessage({
@@ -206,7 +225,10 @@ const AdminOAuthClientsPage = () => {
                   {t('admin.auth.oauth.title', 'OAuth Clients')}
                 </h1>
                 <p className="text-gray-600 mt-1">
-                  {t('admin.auth.oauth.subtitle', 'Manage OAuth 2.0 clients for external API access')}
+                  {t(
+                    'admin.auth.oauth.subtitle',
+                    'Manage OAuth 2.0 clients for external API access'
+                  )}
                 </p>
               </div>
               {oauthEnabled && (
@@ -228,9 +250,7 @@ const AdminOAuthClientsPage = () => {
           <div className="bg-white shadow rounded-lg p-6 mb-6">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <h3 className="text-lg font-medium text-gray-900">
-                  OAuth 2.0 Authentication
-                </h3>
+                <h3 className="text-lg font-medium text-gray-900">OAuth 2.0 Authentication</h3>
                 <p className="mt-1 text-sm text-gray-500">
                   {oauthEnabled
                     ? 'OAuth is currently enabled. External applications can authenticate using client credentials.'
@@ -341,9 +361,7 @@ const AdminOAuthClientsPage = () => {
                             <code className="bg-gray-100 px-2 py-1 rounded text-xs mr-4">
                               {client.clientId}
                             </code>
-                            {client.description && (
-                              <p className="truncate">{client.description}</p>
-                            )}
+                            {client.description && <p className="truncate">{client.description}</p>}
                           </div>
                           <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-500">
                             <div>

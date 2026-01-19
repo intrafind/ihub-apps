@@ -48,33 +48,32 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *         description: Unauthorized
    */
   app.get(buildServerPath('/api/admin/oauth/clients', basePath), adminAuth, async (req, res) => {
-      try {
-        const platform = configCache.getPlatform() || {};
-        const oauthConfig = platform.oauth || {};
+    try {
+      const platform = configCache.getPlatform() || {};
+      const oauthConfig = platform.oauth || {};
 
-        if (!oauthConfig.enabled) {
-          return res.status(400).json({
-            success: false,
-            error: 'OAuth is not enabled on this server'
-          });
-        }
-
-        const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-        const clients = listOAuthClients(clientsFilePath);
-
-        res.json({
-          success: true,
-          clients
-        });
-      } catch (error) {
-        console.error('[OAuth Admin] List clients error:', error);
-        res.status(500).json({
+      if (!oauthConfig.enabled) {
+        return res.status(400).json({
           success: false,
-          error: 'Failed to list OAuth clients'
+          error: 'OAuth is not enabled on this server'
         });
       }
+
+      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clients = listOAuthClients(clientsFilePath);
+
+      res.json({
+        success: true,
+        clients
+      });
+    } catch (error) {
+      console.error('[OAuth Admin] List clients error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to list OAuth clients'
+      });
     }
-  );
+  });
 
   /**
    * @swagger
@@ -191,91 +190,88 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *       400:
    *         description: Invalid request
    */
-  app.post(
-    buildServerPath('/api/admin/oauth/clients', basePath),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const platform = configCache.getPlatform() || {};
-        const oauthConfig = platform.oauth || {};
+  app.post(buildServerPath('/api/admin/oauth/clients', basePath), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const oauthConfig = platform.oauth || {};
 
-        if (!oauthConfig.enabled) {
-          return res.status(400).json({
-            success: false,
-            error: 'OAuth is not enabled on this server'
-          });
-        }
-
-        const {
-          name,
-          description,
-          scopes,
-          allowedApps,
-          allowedModels,
-          tokenExpirationMinutes,
-          metadata
-        } = req.body;
-
-        // Validate required fields
-        if (!name || typeof name !== 'string' || name.trim().length === 0) {
-          return res.status(400).json({
-            success: false,
-            error: 'Client name is required'
-          });
-        }
-
-        // Validate token expiration
-        const maxExpiration = oauthConfig.maxTokenExpirationMinutes || 1440; // 24 hours default
-        if (tokenExpirationMinutes && tokenExpirationMinutes > maxExpiration) {
-          return res.status(400).json({
-            success: false,
-            error: `Token expiration cannot exceed ${maxExpiration} minutes`
-          });
-        }
-
-        const clientData = {
-          name: name.trim(),
-          description: description?.trim() || '',
-          scopes: Array.isArray(scopes) ? scopes : [],
-          allowedApps: Array.isArray(allowedApps) ? allowedApps : [],
-          allowedModels: Array.isArray(allowedModels) ? allowedModels : [],
-          tokenExpirationMinutes:
-            tokenExpirationMinutes || oauthConfig.defaultTokenExpirationMinutes || 60,
-          metadata: metadata || {}
-        };
-
-        const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-        const createdBy = req.user?.id || 'admin';
-
-        const newClient = await createOAuthClient(clientData, clientsFilePath, createdBy);
-
-        // Return client with plain text secret (only time it's shown)
-        res.status(201).json({
-          success: true,
-          message: 'OAuth client created successfully. Save the client_secret - it will not be shown again.',
-          client: {
-            clientId: newClient.clientId,
-            clientSecret: newClient.clientSecret, // Plain text - only shown once
-            name: newClient.name,
-            description: newClient.description,
-            scopes: newClient.scopes,
-            allowedApps: newClient.allowedApps,
-            allowedModels: newClient.allowedModels,
-            tokenExpirationMinutes: newClient.tokenExpirationMinutes,
-            active: newClient.active,
-            createdAt: newClient.createdAt,
-            createdBy: newClient.createdBy
-          }
-        });
-      } catch (error) {
-        console.error('[OAuth Admin] Create client error:', error);
-        res.status(500).json({
+      if (!oauthConfig.enabled) {
+        return res.status(400).json({
           success: false,
-          error: 'Failed to create OAuth client'
+          error: 'OAuth is not enabled on this server'
         });
       }
+
+      const {
+        name,
+        description,
+        scopes,
+        allowedApps,
+        allowedModels,
+        tokenExpirationMinutes,
+        metadata
+      } = req.body;
+
+      // Validate required fields
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Client name is required'
+        });
+      }
+
+      // Validate token expiration
+      const maxExpiration = oauthConfig.maxTokenExpirationMinutes || 1440; // 24 hours default
+      if (tokenExpirationMinutes && tokenExpirationMinutes > maxExpiration) {
+        return res.status(400).json({
+          success: false,
+          error: `Token expiration cannot exceed ${maxExpiration} minutes`
+        });
+      }
+
+      const clientData = {
+        name: name.trim(),
+        description: description?.trim() || '',
+        scopes: Array.isArray(scopes) ? scopes : [],
+        allowedApps: Array.isArray(allowedApps) ? allowedApps : [],
+        allowedModels: Array.isArray(allowedModels) ? allowedModels : [],
+        tokenExpirationMinutes:
+          tokenExpirationMinutes || oauthConfig.defaultTokenExpirationMinutes || 60,
+        metadata: metadata || {}
+      };
+
+      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const createdBy = req.user?.id || 'admin';
+
+      const newClient = await createOAuthClient(clientData, clientsFilePath, createdBy);
+
+      // Return client with plain text secret (only time it's shown)
+      res.status(201).json({
+        success: true,
+        message:
+          'OAuth client created successfully. Save the client_secret - it will not be shown again.',
+        client: {
+          clientId: newClient.clientId,
+          clientSecret: newClient.clientSecret, // Plain text - only shown once
+          name: newClient.name,
+          description: newClient.description,
+          scopes: newClient.scopes,
+          allowedApps: newClient.allowedApps,
+          allowedModels: newClient.allowedModels,
+          tokenExpirationMinutes: newClient.tokenExpirationMinutes,
+          active: newClient.active,
+          createdAt: newClient.createdAt,
+          createdBy: newClient.createdBy
+        }
+      });
+    } catch (error) {
+      console.error('[OAuth Admin] Create client error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to create OAuth client'
+      });
     }
-  );
+  });
 
   /**
    * @swagger
@@ -342,7 +338,12 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
         const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
         const updatedBy = req.user?.id || 'admin';
 
-        const updatedClient = await updateOAuthClient(clientId, updates, clientsFilePath, updatedBy);
+        const updatedClient = await updateOAuthClient(
+          clientId,
+          updates,
+          clientsFilePath,
+          updatedBy
+        );
 
         res.json({
           success: true,
@@ -483,7 +484,8 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
 
         res.json({
           success: true,
-          message: 'Client secret rotated successfully. Save the new secret - it will not be shown again.',
+          message:
+            'Client secret rotated successfully. Save the new secret - it will not be shown again.',
           clientId: result.clientId,
           clientSecret: result.clientSecret, // Plain text - only shown once
           rotatedAt: result.rotatedAt
@@ -587,7 +589,8 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
 
         res.json({
           success: true,
-          message: 'Static API key generated successfully. Save this key - it will not be shown again.',
+          message:
+            'Static API key generated successfully. Save this key - it will not be shown again.',
           ...apiKeyResult
         });
       } catch (error) {

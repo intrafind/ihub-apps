@@ -33,8 +33,12 @@ const AdminSourceEditPage = React.lazy(() => import('./features/admin/pages/Admi
 const AdminPagesPage = React.lazy(() => import('./features/admin/pages/AdminPagesPage'));
 const AdminPageEditPage = React.lazy(() => import('./features/admin/pages/AdminPageEditPage'));
 const AdminAuthPage = React.lazy(() => import('./features/admin/pages/AdminAuthPage'));
-const AdminOAuthClientsPage = React.lazy(() => import('./features/admin/pages/AdminOAuthClientsPage'));
-const AdminOAuthClientEditPage = React.lazy(() => import('./features/admin/pages/AdminOAuthClientEditPage'));
+const AdminOAuthClientsPage = React.lazy(
+  () => import('./features/admin/pages/AdminOAuthClientsPage')
+);
+const AdminOAuthClientEditPage = React.lazy(
+  () => import('./features/admin/pages/AdminOAuthClientEditPage')
+);
 const AdminUsersPage = React.lazy(() => import('./features/admin/pages/AdminUsersPage'));
 const AdminUserEditPage = React.lazy(() => import('./features/admin/pages/AdminUserEditPage'));
 const AdminGroupsPage = React.lazy(() => import('./features/admin/pages/AdminGroupsPage'));

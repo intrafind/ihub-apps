@@ -2,7 +2,7 @@
 
 /**
  * OAuth 2.0 Client Credentials Flow - End-to-End Test
- * 
+ *
  * This script tests the complete OAuth flow:
  * 1. Create OAuth client (admin)
  * 2. Generate access token
@@ -73,7 +73,7 @@ async function testOAuthFlow() {
         },
         {
           headers: {
-            'Authorization': `Bearer ${ADMIN_TOKEN}`,
+            Authorization: `Bearer ${ADMIN_TOKEN}`,
             'Content-Type': 'application/json'
           }
         }
@@ -81,19 +81,25 @@ async function testOAuthFlow() {
 
       clientId = createResponse.data.client.clientId;
       clientSecret = createResponse.data.client.clientSecret;
-      
+
       success(`Client created: ${clientId}`);
       info(`  Token expiration: ${createResponse.data.client.tokenExpirationMinutes} minutes\n`);
     } catch (err) {
       if (err.response?.data?.error === 'OAuth is not enabled on this server') {
         error('OAuth is not enabled. Enable it in platform.json:');
-        console.log(JSON.stringify({
-          oauth: {
-            enabled: true,
-            clientsFile: 'contents/config/oauth-clients.json',
-            defaultTokenExpirationMinutes: 60
-          }
-        }, null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              oauth: {
+                enabled: true,
+                clientsFile: 'contents/config/oauth-clients.json',
+                defaultTokenExpirationMinutes: 60
+              }
+            },
+            null,
+            2
+          )
+        );
         return;
       }
       throw err;
@@ -125,15 +131,12 @@ async function testOAuthFlow() {
     // Step 3: Use Token to Call API (test if token works)
     info('Step 3: Testing token with API call...');
     try {
-      const apiResponse = await axios.get(
-        `${BASE_URL}/api/auth/user`,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
+      const apiResponse = await axios.get(`${BASE_URL}/api/auth/user`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
         }
-      );
+      });
 
       success('Token is valid and working');
       info(`  Authenticated as: ${apiResponse.data.user.name}`);
@@ -179,7 +182,7 @@ async function testOAuthFlow() {
       {},
       {
         headers: {
-            'Authorization': `Bearer ${ADMIN_TOKEN}`,
+          Authorization: `Bearer ${ADMIN_TOKEN}`,
           'Content-Type': 'application/json'
         }
       }
@@ -230,7 +233,7 @@ async function testOAuthFlow() {
 
     // Step 8: Test error handling
     info('Step 8: Testing error handling...');
-    
+
     // Test invalid credentials
     try {
       await axios.post(
@@ -282,21 +285,17 @@ async function testOAuthFlow() {
 
     // Step 9: Clean up
     info('Step 9: Cleaning up test client...');
-    await axios.delete(
-      `${BASE_URL}/api/admin/oauth/clients/${clientId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${ADMIN_TOKEN}`
-        }
+    await axios.delete(`${BASE_URL}/api/admin/oauth/clients/${clientId}`, {
+      headers: {
+        Authorization: `Bearer ${ADMIN_TOKEN}`
       }
-    );
+    });
     success('Test client deleted\n');
 
     // Summary
     log('\n' + '='.repeat(60), 'green');
     success('All OAuth 2.0 Client Credentials tests passed! 🎉');
     log('='.repeat(60) + '\n', 'green');
-
   } catch (err) {
     error('\nTest failed!');
     if (err.response) {
@@ -310,14 +309,11 @@ async function testOAuthFlow() {
     if (clientId) {
       try {
         info('\nCleaning up test client...');
-        await axios.delete(
-          `${BASE_URL}/api/admin/oauth/clients/${clientId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${ADMIN_TOKEN}`
-            }
+        await axios.delete(`${BASE_URL}/api/admin/oauth/clients/${clientId}`, {
+          headers: {
+            Authorization: `Bearer ${ADMIN_TOKEN}`
           }
-        );
+        });
         success('Test client deleted');
       } catch (cleanupErr) {
         warn('Failed to clean up test client');

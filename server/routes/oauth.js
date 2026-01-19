@@ -202,12 +202,7 @@ export default function registerOAuthRoutes(app, basePath = '') {
       } catch (error) {
         // Handle scope validation errors
         if (error.message.includes('Invalid scopes')) {
-          return sendOAuthError(
-            res,
-            400,
-            'invalid_scope',
-            error.message
-          );
+          return sendOAuthError(res, 400, 'invalid_scope', error.message);
         }
         throw error;
       }

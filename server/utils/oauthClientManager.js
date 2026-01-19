@@ -231,7 +231,9 @@ export async function createOAuthClient(clientData, clientsFilePath, createdBy) 
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
   // Log client creation
-  console.log(`[OAuth] Client created | client_id=${clientId} | name=${clientData.name} | created_by=${createdBy}`);
+  console.log(
+    `[OAuth] Client created | client_id=${clientId} | name=${clientData.name} | created_by=${createdBy}`
+  );
 
   // Return client with plain text secret (only time it's shown)
   return {
@@ -281,7 +283,9 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
   // Log client update
-  console.log(`[OAuth] Client updated | client_id=${clientId} | updated_by=${updatedBy} | changes=${Object.keys(updates).join(',')}`);
+  console.log(
+    `[OAuth] Client updated | client_id=${clientId} | updated_by=${updatedBy} | changes=${Object.keys(updates).join(',')}`
+  );
 
   // Return without secret
   // eslint-disable-next-line no-unused-vars
@@ -345,7 +349,9 @@ export async function deleteOAuthClient(clientId, clientsFilePath, deletedBy) {
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
   // Log client deletion
-  console.log(`[OAuth] Client deleted | client_id=${clientId} | name=${clientName} | deleted_by=${deletedBy}`);
+  console.log(
+    `[OAuth] Client deleted | client_id=${clientId} | name=${clientName} | deleted_by=${deletedBy}`
+  );
 }
 
 /**
@@ -378,7 +384,7 @@ export async function updateClientLastUsed(clientId, clientsFilePath) {
     }
 
     const now = new Date().toISOString();
-    
+
     // Only update if it's been more than 1 minute since last update (reduce writes)
     if (!client.lastUsed || new Date(now) - new Date(client.lastUsed) > 60000) {
       client.lastUsed = now;

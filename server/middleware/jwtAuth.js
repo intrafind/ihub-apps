@@ -75,7 +75,10 @@ export default function jwtAuthMiddleware(req, res, next) {
 
     // Create user object based on token payload
     let user;
-    if (decoded.authMode === 'oauth_client_credentials' || decoded.authMode === 'oauth_static_api_key') {
+    if (
+      decoded.authMode === 'oauth_client_credentials' ||
+      decoded.authMode === 'oauth_static_api_key'
+    ) {
       // OAuth client credentials - this is a machine-to-machine token
       user = {
         id: decoded.client_id,

@@ -363,9 +363,7 @@ const AdminOAuthClientEditPage = () => {
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 {t('admin.auth.oauth.allowedApps', 'Allowed Apps')}
               </h3>
-              <p className="text-sm text-gray-500 mb-2">
-                Leave empty to allow all apps
-              </p>
+              <p className="text-sm text-gray-500 mb-2">Leave empty to allow all apps</p>
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <input
@@ -409,9 +407,7 @@ const AdminOAuthClientEditPage = () => {
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 {t('admin.auth.oauth.allowedModels', 'Allowed Models')}
               </h3>
-              <p className="text-sm text-gray-500 mb-2">
-                Leave empty to allow all models
-              </p>
+              <p className="text-sm text-gray-500 mb-2">Leave empty to allow all models</p>
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <input
@@ -492,7 +488,10 @@ const AdminOAuthClientEditPage = () => {
                   <Icon name="warning" className="h-5 w-5 text-yellow-400 mr-3 mt-0.5" />
                   <div>
                     <h4 className="text-sm font-medium text-yellow-800">
-                      {t('admin.auth.oauth.clientSecretWarning', 'Save this secret now. It will not be shown again.')}
+                      {t(
+                        'admin.auth.oauth.clientSecretWarning',
+                        'Save this secret now. It will not be shown again.'
+                      )}
                     </h4>
                   </div>
                 </div>
