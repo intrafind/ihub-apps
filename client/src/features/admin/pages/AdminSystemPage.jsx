@@ -785,53 +785,56 @@ const AdminSystemPage = () => {
                   </p>
 
                   {/* Update Available Banner */}
-                  {!updateCheckLoading && updateInfo && updateInfo.updateAvailable && (
-                    <div className="mb-4 bg-green-50 border border-green-200 rounded-md p-4">
-                      <div className="flex items-start">
-                        <div className="flex-shrink-0">
-                          <Icon name="check-circle" size="md" className="text-green-500 mt-0.5" />
-                        </div>
-                        <div className="ml-3 flex-1">
-                          <h4 className="text-sm font-medium text-green-800">
-                            {t('admin.system.updateCheckTitle', 'Update Available')}
-                          </h4>
-                          <div className="mt-2 text-sm text-green-700">
-                            <p>
-                              {t(
-                                'admin.system.updateAvailable',
-                                'A new version of iHub Apps is available!'
-                              )}
-                            </p>
-                            <div className="mt-2 flex items-center space-x-4">
-                              <span>
-                                <strong>
-                                  {t('admin.system.currentVersion', 'Current Version')}:
-                                </strong>{' '}
-                                {updateInfo.currentVersion}
-                              </span>
-                              <span>
-                                <strong>
-                                  {t('admin.system.latestVersion', 'Latest Version')}:
-                                </strong>{' '}
-                                {updateInfo.latestVersion}
-                              </span>
-                            </div>
+                  {!updateCheckLoading &&
+                    updateInfo &&
+                    updateInfo.updateAvailable &&
+                    !updateInfo.error && (
+                      <div className="mb-4 bg-green-50 border border-green-200 rounded-md p-4">
+                        <div className="flex items-start">
+                          <div className="flex-shrink-0">
+                            <Icon name="check-circle" size="md" className="text-green-500 mt-0.5" />
                           </div>
-                          <div className="mt-3">
-                            <a
-                              href={updateInfo.releaseUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                            >
-                              <Icon name="external-link" size="sm" className="mr-1.5" />
-                              {t('admin.system.viewRelease', 'View Release on GitHub')}
-                            </a>
+                          <div className="ml-3 flex-1">
+                            <h4 className="text-sm font-medium text-green-800">
+                              {t('admin.system.updateCheckTitle', 'Update Available')}
+                            </h4>
+                            <div className="mt-2 text-sm text-green-700">
+                              <p>
+                                {t(
+                                  'admin.system.updateAvailable',
+                                  'A new version of iHub Apps is available!'
+                                )}
+                              </p>
+                              <div className="mt-2 flex items-center space-x-4">
+                                <span>
+                                  <strong>
+                                    {t('admin.system.currentVersion', 'Current Version')}:
+                                  </strong>{' '}
+                                  {updateInfo.currentVersion}
+                                </span>
+                                <span>
+                                  <strong>
+                                    {t('admin.system.latestVersion', 'Latest Version')}:
+                                  </strong>{' '}
+                                  {updateInfo.latestVersion}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="mt-3">
+                              <a
+                                href={updateInfo.releaseUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                              >
+                                <Icon name="external-link" size="sm" className="mr-1.5" />
+                                {t('admin.system.viewRelease', 'View Release on GitHub')}
+                              </a>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   {versionLoading ? (
                     <div className="flex items-center text-gray-600">

@@ -115,6 +115,11 @@ export default function registerAdminVersionRoutes(app, basePath = '') {
  * Handles basic semver format (e.g., "1.2.3") and ignores pre-release tags
  */
 function compareVersions(v1, v2) {
+  // Handle null/undefined inputs
+  if (!v1 || !v2) {
+    return 0;
+  }
+
   // Remove pre-release tags (e.g., "1.0.0-beta" -> "1.0.0")
   const cleanV1 = v1.split('-')[0];
   const cleanV2 = v2.split('-')[0];
