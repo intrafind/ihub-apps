@@ -148,9 +148,11 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
         return createGenericStreamingResponse([], [], [], false, false, null, null);
       }
       
-      // Handle completion event
-      if (parsed.type === 'response.completed' || parsed.type === 'response.done') {
-        console.log('[RESPONSES API DEBUG] Completion event received');
+      // Handle completion events
+      if (parsed.type === 'response.completed' || 
+          parsed.type === 'response.done' || 
+          parsed.type === 'response.output_item.done') {
+        console.log('[RESPONSES API DEBUG] Completion event received:', parsed.type);
         complete = true;
         finishReason = 'stop';
         
