@@ -34,7 +34,8 @@ const getEnvironmentVariableNames = model => {
     mistral: 'MISTRAL_API_KEY',
     google: 'GOOGLE_API_KEY',
     local: 'LOCAL_API_KEY',
-    iassistant: null // iAssistant uses JWT tokens, not static API keys
+    // Note: iAssistant uses JWT tokens (not static API keys), so no env var is shown
+    iassistant: null
   };
 
   const providerVar = providerMap[model.provider];
@@ -259,18 +260,23 @@ const ModelFormEditor = ({
                   <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700">
                     {t('admin.models.fields.apiKey', 'API Key')}
                   </label>
-                  {data.id && data.provider && (
-                    <Icon
-                      name="information-circle"
-                      size="sm"
-                      className="text-gray-400 cursor-help"
-                      title={t(
-                        'admin.models.hints.apiKeyEnvVars',
-                        `Environment variables (in priority order):\n${getEnvironmentVariableNames(data).join('\n')}`,
-                        { envVars: getEnvironmentVariableNames(data).join('\n') }
-                      )}
-                    />
-                  )}
+                  {data.id &&
+                    data.provider &&
+                    (() => {
+                      const envVarsList = getEnvironmentVariableNames(data).join('\n');
+                      return (
+                        <Icon
+                          name="information-circle"
+                          size="sm"
+                          className="text-gray-400 cursor-help"
+                          title={t(
+                            'admin.models.hints.apiKeyEnvVars',
+                            `Environment variables (in priority order):\n${envVarsList}`,
+                            { envVars: envVarsList }
+                          )}
+                        />
+                      );
+                    })()}
                 </div>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <input
