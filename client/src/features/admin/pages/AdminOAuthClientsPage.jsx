@@ -218,8 +218,8 @@ const AdminOAuthClientsPage = () => {
 
       const data = response.data;
       setGeneratedToken({
-        token: data.token,
-        expiresAt: data.expiresAt,
+        token: data.api_key,
+        expiresAt: data.expires_at,
         clientId: clientId
       });
       setShowTokenModal(true);

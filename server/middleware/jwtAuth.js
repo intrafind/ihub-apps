@@ -80,6 +80,58 @@ export default function jwtAuthMiddleware(req, res, next) {
       decoded.authMode === 'oauth_static_api_key'
     ) {
       // OAuth client credentials - this is a machine-to-machine token
+      // Validate that the client is still active and token was issued after last rotation
+      const oauthConfig = platform.oauth || {};
+      if (oauthConfig.enabled) {
+        try {
+          const { loadOAuthClients, findClientById } = await import(
+            '../utils/oauthClientManager.js'
+          );
+          const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+          const clientsConfig = loadOAuthClients(clientsFilePath);
+          const client = findClientById(clientsConfig, decoded.client_id);
+
+          if (!client) {
+            console.warn(
+              `[OAuth] Token rejected: client not found | client_id=${decoded.client_id}`
+            );
+            return res.status(401).json({
+              error: 'invalid_client',
+              error_description: 'OAuth client no longer exists'
+            });
+          }
+
+          if (!client.active) {
+            console.warn(
+              `[OAuth] Token rejected: client suspended | client_id=${decoded.client_id}`
+            );
+            return res.status(403).json({
+              error: 'access_denied',
+              error_description: 'OAuth client has been suspended'
+            });
+          }
+
+          // Check if token was issued before the last secret rotation
+          if (client.lastRotated) {
+            const tokenIssuedAt = decoded.iat * 1000; // Convert to milliseconds
+            const lastRotatedAt = new Date(client.lastRotated).getTime();
+
+            if (tokenIssuedAt < lastRotatedAt) {
+              console.warn(
+                `[OAuth] Token rejected: issued before secret rotation | client_id=${decoded.client_id} | token_iat=${new Date(tokenIssuedAt).toISOString()} | last_rotated=${client.lastRotated}`
+              );
+              return res.status(401).json({
+                error: 'invalid_token',
+                error_description: 'Token was issued before the last secret rotation'
+              });
+            }
+          }
+        } catch (loadError) {
+          console.error('[OAuth] Failed to validate client status:', loadError);
+          // Continue anyway to avoid breaking on config errors
+        }
+      }
+
       user = {
         id: decoded.client_id,
         username: decoded.client_name || decoded.client_id,
