@@ -27,19 +27,26 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
         };
       }
 
+      // Handle assistant messages with tool_calls - convert to function_call format
+      // OpenAI Responses API expects function calls as direct objects, not as assistant messages
+      if (message.role === 'assistant' && message.tool_calls && message.tool_calls.length > 0) {
+        // Convert each tool call to a function_call object
+        // If there are multiple tool calls, we need to return an array, but typically there's one
+        return message.tool_calls.map(toolCall => ({
+          type: 'function_call',
+          call_id: toolCall.id,
+          name: toolCall.function?.name || toolCall.name,
+          arguments: toolCall.function?.arguments || toolCall.arguments || '{}'
+        }));
+      }
+
       // Base message with role and optional tool fields
       const base = { role: message.role };
-      if (message.tool_calls) base.tool_calls = message.tool_calls;
       if (message.tool_call_id) base.tool_call_id = message.tool_call_id;
       if (message.name) base.name = message.name;
 
       // Handle image data in messages
       if (!this.hasImageData(message)) {
-        // For tool calls without content, omit the content field entirely
-        // rather than setting it to null (which can break the API)
-        if (base.tool_calls && (content === undefined || content === '' || content === null)) {
-          return base;
-        }
         return { ...base, content };
       }
 
@@ -77,7 +84,8 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       };
     });
 
-    return formattedMessages;
+    // Flatten the array since assistant messages with tool_calls return arrays
+    return formattedMessages.flat();
   }
 
   /**
