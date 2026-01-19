@@ -25,9 +25,12 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
 
       // Handle image data in messages
       if (!this.hasImageData(message)) {
-        const finalContent =
-          base.tool_calls && (content === undefined || content === '') ? null : content;
-        return { ...base, content: finalContent };
+        // For tool calls without content, omit the content field entirely
+        // rather than setting it to null (which can break the API)
+        if (base.tool_calls && (content === undefined || content === '' || content === null)) {
+          return base;
+        }
+        return { ...base, content };
       }
 
       // Handle multiple images
