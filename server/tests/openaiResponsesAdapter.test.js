@@ -39,6 +39,10 @@ assert.strictEqual(
 // Verify store is true by default
 assert.strictEqual(req.body.store, true, 'Store should be true by default');
 
+// Verify max_output_tokens is used (not max_tokens)
+assert.strictEqual(req.body.max_output_tokens, 1024, 'Should use max_output_tokens parameter');
+assert.strictEqual(req.body.max_tokens, undefined, 'Should not have max_tokens parameter');
+
 console.log('✓ Test 1 passed: Basic message formatting works correctly');
 
 // Test 2: Multiple user messages
