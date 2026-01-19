@@ -52,7 +52,9 @@ const AdminToolEditPage = () => {
       });
       if (tpl.script) {
         // For template, we don't have a toolId yet, so just set empty script template
-        setScriptContent('// Script template\nexport default async function toolName(params) {\n  // Your code here\n}\n');
+        setScriptContent(
+          '// Script template\nexport default async function toolName(params) {\n  // Your code here\n}\n'
+        );
       }
     } else if (!isNewTool) {
       loadTool();
@@ -280,8 +282,7 @@ const AdminToolEditPage = () => {
                   <DynamicLanguageEditor
                     label={
                       <>
-                        {t('admin.tools.name', 'Name')}{' '}
-                        <span className="text-red-500">*</span>
+                        {t('admin.tools.name', 'Name')} <span className="text-red-500">*</span>
                       </>
                     }
                     value={toolData.name}
@@ -307,13 +308,16 @@ const AdminToolEditPage = () => {
                     onChange={value => handleInputChange('description', value)}
                     required={true}
                     type="textarea"
-                    placeholder={{ 
+                    placeholder={{
                       en: 'Search the web using Brave for up-to-date information',
                       de: 'Durchsuchen Sie das Web mit Brave'
                     }}
                   />
                   <p className="mt-1 text-sm text-gray-500">
-                    {t('admin.tools.descriptionHelp', 'Description shown to the LLM for tool selection')}
+                    {t(
+                      'admin.tools.descriptionHelp',
+                      'Description shown to the LLM for tool selection'
+                    )}
                   </p>
                 </div>
 
@@ -330,7 +334,10 @@ const AdminToolEditPage = () => {
                     placeholder="braveSearch.js"
                   />
                   <p className="mt-1 text-sm text-gray-500">
-                    {t('admin.tools.scriptFileHelp', 'JavaScript file in server/tools/ directory (leave empty for special tools)')}
+                    {t(
+                      'admin.tools.scriptFileHelp',
+                      'JavaScript file in server/tools/ directory (leave empty for special tools)'
+                    )}
                   </p>
                 </div>
 
@@ -387,7 +394,10 @@ const AdminToolEditPage = () => {
                       placeholder='{"type": "object", "properties": {}, "required": []}'
                     />
                     <p className="mt-1 text-sm text-gray-500">
-                      {t('admin.tools.parametersHelp', 'JSON Schema definition for tool parameters')}
+                      {t(
+                        'admin.tools.parametersHelp',
+                        'JSON Schema definition for tool parameters'
+                      )}
                     </p>
                   </div>
                 )}
@@ -409,17 +419,23 @@ const AdminToolEditPage = () => {
                     }}
                     rows={15}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
-                    placeholder='{}'
+                    placeholder="{}"
                   />
                   <p className="mt-1 text-sm text-gray-500">
-                    {t('admin.tools.functionsHelp', 'Define multiple functions for this tool (e.g., findUser, getAllUserDetails). Each function should have description and parameters. Leave empty {} for regular single-function tools.')}
+                    {t(
+                      'admin.tools.functionsHelp',
+                      'Define multiple functions for this tool (e.g., findUser, getAllUserDetails). Each function should have description and parameters. Leave empty {} for regular single-function tools.'
+                    )}
                   </p>
                   <details className="mt-2">
                     <summary className="text-sm text-indigo-600 cursor-pointer hover:text-indigo-800">
-                      {t('admin.tools.functionsExample', 'Show example multi-function configuration')}
+                      {t(
+                        'admin.tools.functionsExample',
+                        'Show example multi-function configuration'
+                      )}
                     </summary>
                     <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-auto">
-{`{
+                      {`{
   "findUser": {
     "description": {
       "en": "Find a user by name",
@@ -495,7 +511,10 @@ const AdminToolEditPage = () => {
             <div className="bg-white shadow rounded-lg p-6">
               <div className="mb-4">
                 <p className="text-sm text-gray-600">
-                  {t('admin.tools.scriptEditorInfo', 'Edit the JavaScript code for this tool. Changes will be saved to server/tools/')}{' '}
+                  {t(
+                    'admin.tools.scriptEditorInfo',
+                    'Edit the JavaScript code for this tool. Changes will be saved to server/tools/'
+                  )}{' '}
                   <code className="bg-gray-100 px-2 py-1 rounded text-xs">{toolData.script}</code>
                 </p>
               </div>
