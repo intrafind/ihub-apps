@@ -124,27 +124,50 @@ export default function jwtAuthMiddleware(req, res, next) {
               });
             }
           }
+
+          // Permissions are retrieved from the client config, not the token
+          // This allows revoking access without invalidating tokens
+          user = {
+            id: decoded.client_id,
+            username: decoded.client_name || decoded.client_id,
+            name: decoded.client_name || decoded.client_id,
+            email: '', // OAuth clients don't have email
+            groups: decoded.groups || ['oauth_clients'],
+            authMode: decoded.authMode,
+            timestamp: Date.now(),
+            // OAuth-specific fields
+            isOAuthClient: true,
+            scopes: decoded.scopes || [],
+            allowedApps: client.allowedApps || [],
+            allowedModels: client.allowedModels || [],
+            staticKey: decoded.static_key || false
+          };
         } catch (loadError) {
           console.error('[OAuth] Failed to validate client status:', loadError);
           // Continue anyway to avoid breaking on config errors
+          user = {
+            id: decoded.client_id,
+            username: decoded.client_name || decoded.client_id,
+            name: decoded.client_name || decoded.client_id,
+            email: '',
+            groups: decoded.groups || ['oauth_clients'],
+            authMode: decoded.authMode,
+            timestamp: Date.now(),
+            isOAuthClient: true,
+            scopes: decoded.scopes || [],
+            allowedApps: [],
+            allowedModels: [],
+            staticKey: decoded.static_key || false
+          };
         }
+      } else {
+        // OAuth not enabled, but token is OAuth type - reject
+        console.warn('[OAuth] Token rejected: OAuth not enabled');
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'OAuth authentication is not enabled'
+        });
       }
-
-      user = {
-        id: decoded.client_id,
-        username: decoded.client_name || decoded.client_id,
-        name: decoded.client_name || decoded.client_id,
-        email: '', // OAuth clients don't have email
-        groups: decoded.groups || ['oauth_clients'],
-        authMode: decoded.authMode,
-        timestamp: Date.now(),
-        // OAuth-specific fields
-        isOAuthClient: true,
-        scopes: decoded.scopes || [],
-        allowedApps: decoded.allowedApps || [],
-        allowedModels: decoded.allowedModels || [],
-        staticKey: decoded.static_key || false
-      };
     } else if (decoded.authMode === 'local') {
       // For local auth, the user ID is stored in the 'sub' field
       const userId = decoded.sub || decoded.username || decoded.id;

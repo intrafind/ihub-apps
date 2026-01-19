@@ -53,13 +53,14 @@ export function generateOAuthToken(client, options = {}) {
   const expiresIn = expiresInMinutes * 60; // Convert to seconds
 
   // OAuth token payload
+  // NOTE: allowedApps and allowedModels are NOT stored in the token
+  // They are retrieved from the client configuration at runtime
+  // This allows revoking access without invalidating tokens
   const tokenPayload = {
     sub: client.clientId, // Subject is the client ID
     client_id: client.clientId,
     client_name: client.name,
     scopes: tokenScopes,
-    allowedApps: client.allowedApps || [],
-    allowedModels: client.allowedModels || [],
     authMode: 'oauth_client_credentials',
     iat: Math.floor(Date.now() / 1000),
     // OAuth tokens are machine-to-machine, no user context
@@ -195,13 +196,14 @@ export function generateStaticApiKey(client, expirationDays = 365) {
   const expiresInSeconds = expirationDays * 24 * 60 * 60;
 
   // API key payload (similar to OAuth token but with longer expiration)
+  // NOTE: allowedApps and allowedModels are NOT stored in the token
+  // They are retrieved from the client configuration at runtime
+  // This allows revoking access without invalidating tokens
   const tokenPayload = {
     sub: client.clientId,
     client_id: client.clientId,
     client_name: client.name,
     scopes: client.scopes || [],
-    allowedApps: client.allowedApps || [],
-    allowedModels: client.allowedModels || [],
     authMode: 'oauth_static_api_key',
     iat: Math.floor(Date.now() / 1000),
     groups: ['oauth_clients'],
