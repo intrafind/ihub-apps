@@ -688,7 +688,8 @@
         "modelId": "Eindeutige Kennung für diese Modellkonfiguration",
         "apiModelId": "Die in API-Aufrufen an den Anbieter verwendete Modell-ID",
         "apiKey": "API-Schlüssel für dieses Modell. Falls nicht angegeben, verwendet das System die Umgebungsvariable für den Provider. Schlüssel werden verschlüsselt gespeichert.",
-        "apiKeySet": "✓ API-Schlüssel ist für dieses Modell konfiguriert"
+        "apiKeySet": "✓ API-Schlüssel ist für dieses Modell konfiguriert",
+        "apiKeyEnvVars": "Umgebungsvariablen (in Prioritätsreihenfolge):\n{{envVars}}"
       },
       "status": {
         "enabled": "Aktiviert",

@@ -616,7 +616,8 @@
         "modelId": "Unique identifier for this model configuration",
         "apiModelId": "The actual model ID used in API calls (e.g., gpt-4, claude-3-opus)",
         "apiKey": "API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.",
-        "apiKeySet": "✓ API key is configured for this model"
+        "apiKeySet": "✓ API key is configured for this model",
+        "apiKeyEnvVars": "Environment variables (in priority order):\n{{envVars}}"
       },
       "placeholders": {
         "selectProvider": "Select a provider",

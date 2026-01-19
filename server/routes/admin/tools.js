@@ -119,22 +119,24 @@ function loadRawTools() {
   const rootDir = getRootDir();
   const contentsDir = process.env.CONTENTS_DIR || 'contents';
   const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
-  
+
   let tools = [];
   let needsCleanup = false;
-  
+
   if (existsSync(toolsFilePath)) {
     const fileContent = readFileSync(toolsFilePath, 'utf-8');
     const allTools = JSON.parse(fileContent);
-    
+
     // Filter out expanded tools (those with 'method' property)
     // This handles legacy cases where expanded tools were saved to the config file
     tools = allTools.filter(tool => !tool.method);
-    
+
     // Check if we filtered any tools out
     if (tools.length !== allTools.length) {
       needsCleanup = true;
-      console.log(`⚠️  Detected ${allTools.length - tools.length} expanded tools in ${toolsFilePath}`);
+      console.log(
+        `⚠️  Detected ${allTools.length - tools.length} expanded tools in ${toolsFilePath}`
+      );
       console.log(`✓ Filtered to ${tools.length} raw tool definitions`);
     }
   } else {
@@ -145,7 +147,7 @@ function loadRawTools() {
       tools = JSON.parse(fileContent);
     }
   }
-  
+
   return { tools, needsCleanup, filePath: toolsFilePath };
 }
 
@@ -195,11 +197,11 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
     try {
       // Load raw (unexpanded) tools for admin interface
       const { tools, needsCleanup, filePath } = loadRawTools();
-      
+
       if (!tools) {
         return res.status(500).json({ error: 'Failed to load tools configuration' });
       }
-      
+
       // If we detected expanded tools, clean up the file
       if (needsCleanup && filePath) {
         try {
@@ -213,12 +215,12 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
           // Don't fail the request, just log the error
         }
       }
-      
+
       // Generate ETag for caching using MD5 hash (same as configCache)
       const hash = createHash('md5');
       hash.update(JSON.stringify(tools));
       const etag = `"${hash.digest('hex')}"`;
-      
+
       if (etag) {
         res.setHeader('ETag', etag);
         const clientETag = req.headers['if-none-match'];
@@ -284,7 +286,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       // Load raw (unexpanded) tools
       const { tools } = loadRawTools();
       const tool = tools.find(t => t.id === toolId);
-      
+
       if (!tool) {
         return res.status(404).json({ error: 'Tool not found' });
       }
@@ -583,7 +585,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       // Refresh cache
       await configCache.refreshCacheEntry('config/tools.json');
 
-      res.json({ 
+      res.json({
         message: 'Tool deleted successfully',
         scriptDeleted: tool.script ? true : false
       });

@@ -7,6 +7,49 @@ import {
   errorsToFieldErrors,
   isFieldRequired
 } from '../../../utils/schemaValidation';
+import Icon from '../../../shared/components/Icon';
+
+/**
+ * Generate list of environment variable names that can be used for a model's API key
+ * Based on the priority system in server/utils.js getApiKeyForModel()
+ * @param {Object} model - The model configuration
+ * @returns {Array<string>} List of environment variable names in priority order
+ */
+const getEnvironmentVariableNames = model => {
+  if (!model || !model.id || !model.provider) {
+    return [];
+  }
+
+  const envVars = [];
+
+  // Priority 1: Model-specific environment variable
+  // e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1"
+  const modelSpecificVar = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
+  envVars.push(modelSpecificVar);
+
+  // Priority 2: Provider-specific environment variable
+  const providerMap = {
+    openai: 'OPENAI_API_KEY',
+    anthropic: 'ANTHROPIC_API_KEY',
+    mistral: 'MISTRAL_API_KEY',
+    google: 'GOOGLE_API_KEY',
+    local: 'LOCAL_API_KEY',
+    iassistant: null // iAssistant uses JWT tokens, not static API keys
+  };
+
+  const providerVar = providerMap[model.provider];
+  if (providerVar) {
+    envVars.push(providerVar);
+  } else if (model.provider && model.provider !== 'iassistant') {
+    // Generic fallback for unknown providers
+    envVars.push(`${model.provider.toUpperCase()}_API_KEY`);
+  }
+
+  // Priority 3: Default fallback
+  envVars.push('DEFAULT_API_KEY');
+
+  return envVars;
+};
 
 /**
  * Form-based editor for model configuration
@@ -212,9 +255,23 @@ const ModelFormEditor = ({
               </div>
 
               <div className="col-span-6">
-                <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700">
-                  {t('admin.models.fields.apiKey', 'API Key')}
-                </label>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700">
+                    {t('admin.models.fields.apiKey', 'API Key')}
+                  </label>
+                  {data.id && data.provider && (
+                    <Icon
+                      name="information-circle"
+                      size="sm"
+                      className="text-gray-400 cursor-help"
+                      title={t(
+                        'admin.models.hints.apiKeyEnvVars',
+                        `Environment variables (in priority order):\n${getEnvironmentVariableNames(data).join('\n')}`,
+                        { envVars: getEnvironmentVariableNames(data).join('\n') }
+                      )}
+                    />
+                  )}
+                </div>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <input
                     type="password"

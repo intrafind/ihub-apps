@@ -39,7 +39,10 @@ const AdminHome = () => {
     {
       key: 'tools',
       title: t('admin.nav.tools', 'Tools Management'),
-      description: t('admin.home.sections.toolsDesc', 'Configure and manage AI tools / function calling'),
+      description: t(
+        'admin.home.sections.toolsDesc',
+        'Configure and manage AI tools / function calling'
+      ),
       href: '/admin/tools',
       //icon: 'wrench',
       color: 'bg-amber-500'
