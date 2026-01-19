@@ -137,8 +137,65 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
     let complete = false;
     let finishReason = null;
 
+    // Handle server-sent event format with type field
+    if (parsed.type) {
+      console.log('[RESPONSES API DEBUG] Event type:', parsed.type);
+      
+      // Skip metadata events that don't contain content
+      if (parsed.type === 'response.created' || parsed.type === 'response.in_progress') {
+        console.log('[RESPONSES API DEBUG] Skipping metadata event:', parsed.type);
+        return createGenericStreamingResponse([], [], false, null, null);
+      }
+      
+      // Handle completion event
+      if (parsed.type === 'response.completed' || parsed.type === 'response.done') {
+        console.log('[RESPONSES API DEBUG] Completion event received');
+        complete = true;
+        finishReason = 'stop';
+        
+        // Extract final content from response object if present
+        if (parsed.response?.output && Array.isArray(parsed.response.output)) {
+          for (const item of parsed.response.output) {
+            if (item.type === 'message' && item.content) {
+              for (const contentItem of item.content) {
+                if (contentItem.type === 'output_text' && contentItem.text) {
+                  content.push(contentItem.text);
+                }
+              }
+            }
+          }
+        }
+        
+        return createGenericStreamingResponse(content, [], complete, null, normalizeFinishReason(finishReason));
+      }
+      
+      // Handle content delta events
+      if (parsed.type === 'response.output_chunk.delta') {
+        console.log('[RESPONSES API DEBUG] Processing delta event');
+        
+        // The actual chunk data is in the 'delta' field
+        if (parsed.delta) {
+          if (parsed.delta.type === 'message' && parsed.delta.content) {
+            for (const contentItem of parsed.delta.content) {
+              if (contentItem.type === 'output_text' && contentItem.text) {
+                content.push(contentItem.text);
+              }
+            }
+          } else if (parsed.delta.type === 'function_call' && parsed.delta.function) {
+            toolCalls.push({
+              id: parsed.delta.id,
+              type: 'function',
+              function: {
+                name: parsed.delta.function.name,
+                arguments: parsed.delta.function.arguments
+              }
+            });
+          }
+        }
+      }
+    }
     // Handle full response object (non-streaming)
-    if (parsed.output && Array.isArray(parsed.output)) {
+    else if (parsed.output && Array.isArray(parsed.output)) {
       console.log('[RESPONSES API DEBUG] Processing full output array');
       for (const item of parsed.output) {
         if (item.type === 'message' && item.content) {
@@ -161,9 +218,9 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       complete = true;
       finishReason = 'stop';
     }
-    // Handle streaming chunks
+    // Handle legacy streaming chunks format
     else if (parsed.output_chunk) {
-      console.log('[RESPONSES API DEBUG] Processing output_chunk');
+      console.log('[RESPONSES API DEBUG] Processing legacy output_chunk');
       const chunk = parsed.output_chunk;
       if (chunk.type === 'message' && chunk.delta?.content) {
         for (const contentItem of chunk.delta.content) {
@@ -183,10 +240,10 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
         toolCalls.push(normalized);
       }
     } else {
-      console.log('[RESPONSES API DEBUG] Unknown format - no output or output_chunk found');
+      console.log('[RESPONSES API DEBUG] Unknown format - no recognized event structure');
     }
 
-    // Check for completion
+    // Check for completion in legacy format
     if (parsed.status === 'completed' || parsed.output_status === 'completed') {
       complete = true;
       finishReason = 'stop';
