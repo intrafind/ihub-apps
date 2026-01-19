@@ -31,7 +31,7 @@ const AdminToolsPage = () => {
 
       // Ensure we have an array
       const toolsArray = Array.isArray(data) ? data : [];
-      
+
       setTools(toolsArray);
 
       if (toolsArray.length === 0) {
@@ -114,9 +114,7 @@ const AdminToolsPage = () => {
 
       // Validate required fields
       if (!toolConfig.id || !toolConfig.name || !toolConfig.description) {
-        throw new Error(
-          'Invalid tool config: missing required fields (id, name, description)'
-        );
+        throw new Error('Invalid tool config: missing required fields (id, name, description)');
       }
 
       // Upload the config
@@ -156,7 +154,9 @@ const AdminToolsPage = () => {
   const filteredTools = tools.filter(tool => {
     const matchesSearch =
       searchTerm === '' ||
-      getLocalizedContent(tool.name, currentLanguage).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getLocalizedContent(tool.name, currentLanguage)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
       getLocalizedContent(tool.description, currentLanguage)
         .toLowerCase()
         .includes(searchTerm.toLowerCase()) ||
@@ -167,8 +167,7 @@ const AdminToolsPage = () => {
       (filterEnabled === 'enabled' && tool.enabled !== false) ||
       (filterEnabled === 'disabled' && tool.enabled === false);
 
-    const matchesType =
-      filterType === 'all' || getToolType(tool) === filterType;
+    const matchesType = filterType === 'all' || getToolType(tool) === filterType;
 
     return matchesSearch && matchesFilter && matchesType;
   });
@@ -220,7 +219,10 @@ const AdminToolsPage = () => {
                 {t('admin.tools.title', 'Tool Management')}
               </h1>
               <p className="mt-2 text-sm text-gray-700">
-                {t('admin.tools.subtitle', 'Create, edit, and manage AI tools / function calling for your iHub Apps')}
+                {t(
+                  'admin.tools.subtitle',
+                  'Create, edit, and manage AI tools / function calling for your iHub Apps'
+                )}
               </p>
             </div>
             <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
@@ -294,7 +296,9 @@ const AdminToolsPage = () => {
               >
                 <option value="all">{t('admin.tools.filterAllTypes', 'All Types')}</option>
                 <option value="regular">{t('admin.tools.filterRegular', 'Regular Tools')}</option>
-                <option value="multi-function">{t('admin.tools.filterMultiFunction', 'Multi-Function')}</option>
+                <option value="multi-function">
+                  {t('admin.tools.filterMultiFunction', 'Multi-Function')}
+                </option>
                 <option value="special">{t('admin.tools.filterSpecial', 'Special Tools')}</option>
               </select>
             </div>
@@ -357,7 +361,13 @@ const AdminToolsPage = () => {
                               <div className="flex-shrink-0 h-8 w-8">
                                 <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
                                   <Icon
-                                    name={tool.functions ? 'layers' : tool.isSpecialTool ? 'star' : 'wrench'}
+                                    name={
+                                      tool.functions
+                                        ? 'layers'
+                                        : tool.isSpecialTool
+                                          ? 'star'
+                                          : 'wrench'
+                                    }
                                     className="h-4 w-4 text-indigo-600"
                                   />
                                 </div>
@@ -394,7 +404,9 @@ const AdminToolsPage = () => {
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-900">
                             {tool.script ? (
-                              <code className="text-xs bg-gray-100 px-2 py-1 rounded">{tool.script}</code>
+                              <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                {tool.script}
+                              </code>
                             ) : tool.provider ? (
                               <span className="text-gray-400 text-xs">{tool.provider}</span>
                             ) : (
