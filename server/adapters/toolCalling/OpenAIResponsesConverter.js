@@ -17,6 +17,7 @@ import {
 /**
  * Add strict mode requirements to a schema for OpenAI Responses API
  * This adds additionalProperties: false to all object schemas recursively
+ * and ensures all properties are listed in the required array (strict mode requirement)
  * @param {Object} schema - JSON schema object
  * @returns {Object} Schema with strict mode requirements
  */
@@ -33,6 +34,20 @@ function addStrictModeToSchema(schema) {
     // Add additionalProperties: false to all object types
     if (obj.type === 'object') {
       obj.additionalProperties = false;
+
+      // In strict mode, ALL properties must be in the required array
+      // This is an OpenAI Responses API requirement, not standard JSON Schema
+      if (obj.properties && Object.keys(obj.properties).length > 0) {
+        // Get existing required array or create empty one
+        const existingRequired = Array.isArray(obj.required) ? obj.required : [];
+        const allPropertyKeys = Object.keys(obj.properties);
+
+        // Ensure all property keys are in the required array
+        const requiredSet = new Set(existingRequired);
+        allPropertyKeys.forEach(key => requiredSet.add(key));
+
+        obj.required = Array.from(requiredSet);
+      }
     }
 
     // Recursively process nested schemas
