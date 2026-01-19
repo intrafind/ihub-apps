@@ -117,20 +117,12 @@ export function convertOpenaiResponsesToolCallsToGeneric(responsesToolCalls = []
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
 export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'default') {
-  // Add debugging to see if function is being called and what data is received
-  console.log(
-    '[RESPONSES API DEBUG] convertOpenaiResponsesResponseToGeneric called with data:',
-    data
-  );
-
   if (!data || data === '[DONE]') {
-    console.log('[RESPONSES API DEBUG] Data is null, empty, or [DONE]');
     return createGenericStreamingResponse([], [], [], true, false, null, 'stop');
   }
 
   try {
     const parsed = JSON.parse(data);
-    console.log('[RESPONSES API DEBUG] Parsed chunk:', JSON.stringify(parsed, null, 2));
 
     const content = [];
     const thinking = [];
@@ -140,52 +132,33 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
 
     // Handle server-sent event format with type field
     if (parsed.type) {
-      console.log('[RESPONSES API DEBUG] Event type:', parsed.type);
-
       // Skip metadata events that don't contain content
       if (parsed.type === 'response.created' || parsed.type === 'response.in_progress') {
-        console.log('[RESPONSES API DEBUG] Skipping metadata event:', parsed.type);
         return createGenericStreamingResponse([], [], [], false, false, null, null);
       }
-
+      
       // Handle completion events
-      if (parsed.type === 'response.completed' || parsed.type === 'response.done') {
-        console.log('[RESPONSES API DEBUG] Completion event received:', parsed.type);
+      if (parsed.type === 'response.completed' || 
+          parsed.type === 'response.done' || 
+          parsed.type === 'response.output_item.done') {
         complete = true;
         finishReason = 'stop';
-
+        
         // Don't extract content from completion event - content comes from delta events
         // Just mark the stream as complete
-        return createGenericStreamingResponse(
-          [],
-          [],
-          [],
-          complete,
-          false,
-          null,
-          normalizeFinishReason(finishReason)
-        );
+        return createGenericStreamingResponse([], [], [], complete, false, null, normalizeFinishReason(finishReason));
       }
-
+      
       // Handle content delta events (streaming chunks)
-      if (
-        parsed.type === 'response.output_chunk.delta' ||
-        parsed.type === 'response.output_text.delta'
-      ) {
-        console.log('[RESPONSES API DEBUG] Processing delta event, type:', parsed.type);
-
+      if (parsed.type === 'response.output_chunk.delta' || parsed.type === 'response.output_text.delta') {
         // The actual chunk data is in the 'delta' field
         if (parsed.delta !== undefined && parsed.delta !== null) {
-          console.log('[RESPONSES API DEBUG] Delta content:', JSON.stringify(parsed.delta));
-
           // Handle delta as a direct string (Azure OpenAI format)
           if (typeof parsed.delta === 'string') {
-            console.log('[RESPONSES API DEBUG] Found delta as string:', parsed.delta);
             content.push(parsed.delta);
           }
           // Handle text content from delta object
           else if (parsed.delta.text) {
-            console.log('[RESPONSES API DEBUG] Found delta.text:', parsed.delta.text);
             content.push(parsed.delta.text);
           }
           // Handle message type deltas with content array
@@ -209,10 +182,9 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
           }
         }
       }
-
+      
       // Handle reasoning delta events (thinking/reasoning output)
       if (parsed.type === 'response.output_chunk.delta' && parsed.delta?.type === 'reasoning') {
-        console.log('[RESPONSES API DEBUG] Processing reasoning delta');
         if (parsed.delta.summary && Array.isArray(parsed.delta.summary)) {
           for (const summaryItem of parsed.delta.summary) {
             if (summaryItem.type === 'text' && summaryItem.text) {
@@ -224,7 +196,6 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
     }
     // Handle full response object (non-streaming)
     else if (parsed.output && Array.isArray(parsed.output)) {
-      console.log('[RESPONSES API DEBUG] Processing full output array');
       for (const item of parsed.output) {
         // Handle regular message content
         if (item.type === 'message' && item.content) {
@@ -261,7 +232,6 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
     }
     // Handle legacy streaming chunks format
     else if (parsed.output_chunk) {
-      console.log('[RESPONSES API DEBUG] Processing legacy output_chunk');
       const chunk = parsed.output_chunk;
       if (chunk.type === 'message' && chunk.delta?.content) {
         for (const contentItem of chunk.delta.content) {
@@ -280,8 +250,6 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
         }
         toolCalls.push(normalized);
       }
-    } else {
-      console.log('[RESPONSES API DEBUG] Unknown format - no recognized event structure');
     }
 
     // Check for completion in legacy format
@@ -289,15 +257,6 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       complete = true;
       finishReason = 'stop';
     }
-
-    console.log(
-      '[RESPONSES API DEBUG] Extracted content:',
-      content,
-      'thinking:',
-      thinking,
-      'complete:',
-      complete
-    );
 
     // Convert tool calls to generic format
     const genericToolCalls =
@@ -313,8 +272,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       normalizeFinishReason(finishReason)
     );
   } catch (error) {
-    console.error('[RESPONSES API DEBUG] Error parsing OpenAI Responses API response:', error);
-    console.error('[RESPONSES API DEBUG] Data that caused error:', data);
+    console.error('Error parsing OpenAI Responses API response:', error);
     return createGenericStreamingResponse(
       [],
       [],
