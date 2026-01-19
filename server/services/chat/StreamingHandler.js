@@ -375,11 +375,15 @@ class StreamingHandler {
           if (done) break;
 
           const chunk = decoder.decode(value, { stream: true });
+          console.debug('🔍 [STREAMING DEBUG] Raw chunk received:', chunk);
           parser.feed(chunk);
 
           while (events.length > 0) {
             const evt = events.shift();
+            console.debug('🔍 [STREAMING DEBUG] SSE event:', evt);
+            console.debug('🔍 [STREAMING DEBUG] Event data:', evt.data);
             const result = convertResponseToGeneric(evt.data, model.provider);
+            console.debug('🔍 [STREAMING DEBUG] Converted result:', result);
 
             if (result && result.content && result.content.length > 0) {
               for (const textContent of result.content) {
