@@ -153,20 +153,9 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
         complete = true;
         finishReason = 'stop';
         
-        // Extract final content from response object if present
-        if (parsed.response?.output && Array.isArray(parsed.response.output)) {
-          for (const item of parsed.response.output) {
-            if (item.type === 'message' && item.content) {
-              for (const contentItem of item.content) {
-                if (contentItem.type === 'output_text' && contentItem.text) {
-                  content.push(contentItem.text);
-                }
-              }
-            }
-          }
-        }
-        
-        return createGenericStreamingResponse(content, [], complete, null, normalizeFinishReason(finishReason));
+        // Don't extract content from completion event - content comes from delta events
+        // Just mark the stream as complete
+        return createGenericStreamingResponse([], [], complete, null, normalizeFinishReason(finishReason));
       }
       
       // Handle content delta events
