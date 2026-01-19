@@ -136,21 +136,34 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       if (parsed.type === 'response.created' || parsed.type === 'response.in_progress') {
         return createGenericStreamingResponse([], [], [], false, false, null, null);
       }
-      
+
       // Handle completion events
-      if (parsed.type === 'response.completed' || 
-          parsed.type === 'response.done' || 
-          parsed.type === 'response.output_item.done') {
+      if (
+        parsed.type === 'response.completed' ||
+        parsed.type === 'response.done' ||
+        parsed.type === 'response.output_item.done'
+      ) {
         complete = true;
         finishReason = 'stop';
-        
+
         // Don't extract content from completion event - content comes from delta events
         // Just mark the stream as complete
-        return createGenericStreamingResponse([], [], [], complete, false, null, normalizeFinishReason(finishReason));
+        return createGenericStreamingResponse(
+          [],
+          [],
+          [],
+          complete,
+          false,
+          null,
+          normalizeFinishReason(finishReason)
+        );
       }
-      
+
       // Handle content delta events (streaming chunks)
-      if (parsed.type === 'response.output_chunk.delta' || parsed.type === 'response.output_text.delta') {
+      if (
+        parsed.type === 'response.output_chunk.delta' ||
+        parsed.type === 'response.output_text.delta'
+      ) {
         // The actual chunk data is in the 'delta' field
         if (parsed.delta !== undefined && parsed.delta !== null) {
           // Handle delta as a direct string (Azure OpenAI format)
@@ -182,7 +195,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
           }
         }
       }
-      
+
       // Handle reasoning delta events (thinking/reasoning output)
       if (parsed.type === 'response.output_chunk.delta' && parsed.delta?.type === 'reasoning') {
         if (parsed.delta.summary && Array.isArray(parsed.delta.summary)) {
