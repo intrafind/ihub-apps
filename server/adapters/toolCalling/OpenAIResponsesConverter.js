@@ -140,8 +140,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       // Handle completion events
       if (
         parsed.type === 'response.completed' ||
-        parsed.type === 'response.done' ||
-        parsed.type === 'response.output_item.done'
+        parsed.type === 'response.done'
       ) {
         complete = true;
         finishReason = 'stop';
