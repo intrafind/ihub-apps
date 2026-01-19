@@ -158,19 +158,29 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
         return createGenericStreamingResponse([], [], complete, null, normalizeFinishReason(finishReason));
       }
       
-      // Handle content delta events
-      if (parsed.type === 'response.output_chunk.delta') {
-        console.log('[RESPONSES API DEBUG] Processing delta event');
+      // Handle content delta events (streaming chunks)
+      if (parsed.type === 'response.output_chunk.delta' || parsed.type === 'response.output_text.delta') {
+        console.log('[RESPONSES API DEBUG] Processing delta event, type:', parsed.type);
         
         // The actual chunk data is in the 'delta' field
         if (parsed.delta) {
-          if (parsed.delta.type === 'message' && parsed.delta.content) {
+          console.log('[RESPONSES API DEBUG] Delta content:', JSON.stringify(parsed.delta));
+          
+          // Handle text content from delta
+          if (parsed.delta.text) {
+            console.log('[RESPONSES API DEBUG] Found delta.text:', parsed.delta.text);
+            content.push(parsed.delta.text);
+          }
+          // Handle message type deltas with content array
+          else if (parsed.delta.type === 'message' && parsed.delta.content) {
             for (const contentItem of parsed.delta.content) {
               if (contentItem.type === 'output_text' && contentItem.text) {
                 content.push(contentItem.text);
               }
             }
-          } else if (parsed.delta.type === 'function_call' && parsed.delta.function) {
+          }
+          // Handle function call deltas
+          else if (parsed.delta.type === 'function_call' && parsed.delta.function) {
             toolCalls.push({
               id: parsed.delta.id,
               type: 'function',
