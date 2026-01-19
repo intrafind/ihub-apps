@@ -177,6 +177,25 @@ Potential future enhancements include:
 4. **Previous Response ID**: Support for `previous_response_id` for conversation chains
 5. **Conversations API**: Integration with OpenAI's Conversations API for persistent state
 
+## Known Issues and Fixes
+
+### Tool Calling Fix (2026-01-19)
+
+**Issue**: Tool calling was not working because the finish reason was always set to 'stop' even when tool calls were present.
+
+**Root Cause**: The OpenAI Responses API does NOT include a `finish_reason` field (unlike Chat Completions API). Instead, it uses `status` and `incomplete_details` to indicate completion status. The implementation needs to determine the finish reason by checking if tool calls are present in the output.
+
+**Solution**: Modified both `OpenAIResponsesConverter.js` and `openai-responses.js` to check for the presence of tool calls in the output and set finish reason accordingly:
+- `'tool_calls'` when function_call items are present in the output
+- `'stop'` when no tool calls are present
+
+**Files Modified**:
+- `/server/adapters/openai-responses.js` - Line 319: Check tool_calls array length
+- `/server/adapters/toolCalling/OpenAIResponsesConverter.js` - Lines 146-151, 249, 276: Check for function_call items in output
+
+**Tests Added**:
+- `/server/tests/openaiResponsesFinishReason.test.js` - Comprehensive test coverage for finish reason handling
+
 ## References
 
 - [OpenAI Responses API Documentation](https://platform.openai.com/docs/api-reference/responses)
