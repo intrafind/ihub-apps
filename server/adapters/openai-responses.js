@@ -316,7 +316,9 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
         parsed.output_status === 'completed'
       ) {
         result.complete = true;
-        result.finishReason = 'stop';
+        // The Responses API doesn't have finish_reason field
+        // Determine finish reason based on whether tool calls are present
+        result.finishReason = result.tool_calls.length > 0 ? 'tool_calls' : 'stop';
       } else if (parsed.status === 'failed' || parsed.type === 'response.failed') {
         result.error = true;
         result.errorMessage = parsed.error?.message || 'Response generation failed';

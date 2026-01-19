@@ -138,12 +138,17 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       }
 
       // Handle completion events
-      if (
-        parsed.type === 'response.completed' ||
-        parsed.type === 'response.done'
-      ) {
+      if (parsed.type === 'response.completed' || parsed.type === 'response.done') {
         complete = true;
-        finishReason = 'stop';
+
+        // Check if the completion event contains output with function calls
+        // The Responses API doesn't have finish_reason, so we need to check the output
+        let hasToolCalls = false;
+        if (parsed.response?.output && Array.isArray(parsed.response.output)) {
+          hasToolCalls = parsed.response.output.some(item => item.type === 'function_call');
+        }
+
+        finishReason = hasToolCalls ? 'tool_calls' : 'stop';
 
         // Don't extract content from completion event - content comes from delta events
         // Just mark the stream as complete
@@ -240,7 +245,8 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
         }
       }
       complete = true;
-      finishReason = 'stop';
+      // Set finish reason based on whether tool calls are present
+      finishReason = toolCalls.length > 0 ? 'tool_calls' : 'stop';
     }
     // Handle legacy streaming chunks format
     else if (parsed.output_chunk) {
@@ -267,7 +273,8 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
     // Check for completion in legacy format
     if (parsed.status === 'completed' || parsed.output_status === 'completed') {
       complete = true;
-      finishReason = 'stop';
+      // Set finish reason based on whether tool calls are present
+      finishReason = toolCalls.length > 0 ? 'tool_calls' : 'stop';
     }
 
     // Convert tool calls to generic format
