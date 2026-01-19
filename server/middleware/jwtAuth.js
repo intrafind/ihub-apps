@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import config from '../config.js';
 import configCache from '../configCache.js';
+import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
 
 /**
  * JWT authentication middleware
@@ -84,9 +85,6 @@ export default function jwtAuthMiddleware(req, res, next) {
       const oauthConfig = platform.oauth || {};
       if (oauthConfig.enabled) {
         try {
-          const { loadOAuthClients, findClientById } = await import(
-            '../utils/oauthClientManager.js'
-          );
           const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
           const clientsConfig = loadOAuthClients(clientsFilePath);
           const client = findClientById(clientsConfig, decoded.client_id);
@@ -96,7 +94,7 @@ export default function jwtAuthMiddleware(req, res, next) {
               `[OAuth] Token rejected: client not found | client_id=${decoded.client_id}`
             );
             return res.status(401).json({
-              error: 'invalid_client',
+              error: 'invalid_token',
               error_description: 'OAuth client no longer exists'
             });
           }
