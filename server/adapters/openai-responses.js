@@ -202,7 +202,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
 
     try {
       const parsed = JSON.parse(data);
-      
+
       // Add debugging to see what we're receiving
       console.log('[RESPONSES API DEBUG] Received chunk:', JSON.stringify(parsed, null, 2));
 
@@ -236,7 +236,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       else if (parsed.type === 'response.output_chunk.delta' || parsed.delta) {
         // Extract delta from either parsed.delta or parsed itself
         const delta = parsed.delta || parsed;
-        
+
         if (delta.type === 'message' && delta.content) {
           for (const contentItem of delta.content) {
             if (contentItem.type === 'output_text' && contentItem.text) {
@@ -277,7 +277,11 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       }
 
       // Check for completion
-      if (parsed.type === 'response.completed' || parsed.status === 'completed' || parsed.output_status === 'completed') {
+      if (
+        parsed.type === 'response.completed' ||
+        parsed.status === 'completed' ||
+        parsed.output_status === 'completed'
+      ) {
         result.complete = true;
         result.finishReason = 'stop';
       } else if (parsed.status === 'failed' || parsed.type === 'response.failed') {

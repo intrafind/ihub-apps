@@ -118,8 +118,11 @@ export function convertOpenaiResponsesToolCallsToGeneric(responsesToolCalls = []
  */
 export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'default') {
   // Add debugging to see if function is being called and what data is received
-  console.log('[RESPONSES API DEBUG] convertOpenaiResponsesResponseToGeneric called with data:', data);
-  
+  console.log(
+    '[RESPONSES API DEBUG] convertOpenaiResponsesResponseToGeneric called with data:',
+    data
+  );
+
   if (!data || data === '[DONE]') {
     console.log('[RESPONSES API DEBUG] Data is null, empty, or [DONE]');
     return createGenericStreamingResponse([], [], true, null, 'stop');
@@ -128,7 +131,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
   try {
     const parsed = JSON.parse(data);
     console.log('[RESPONSES API DEBUG] Parsed chunk:', JSON.stringify(parsed, null, 2));
-    
+
     const content = [];
     const toolCalls = [];
     let complete = false;
