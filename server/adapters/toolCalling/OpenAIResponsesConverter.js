@@ -117,12 +117,18 @@ export function convertOpenaiResponsesToolCallsToGeneric(responsesToolCalls = []
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
 export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'default') {
+  // Add debugging to see if function is being called and what data is received
+  console.log('[RESPONSES API DEBUG] convertOpenaiResponsesResponseToGeneric called with data:', data);
+  
   if (!data || data === '[DONE]') {
+    console.log('[RESPONSES API DEBUG] Data is null, empty, or [DONE]');
     return createGenericStreamingResponse([], [], true, null, 'stop');
   }
 
   try {
     const parsed = JSON.parse(data);
+    console.log('[RESPONSES API DEBUG] Parsed chunk:', JSON.stringify(parsed, null, 2));
+    
     const content = [];
     const toolCalls = [];
     let complete = false;
@@ -130,6 +136,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
 
     // Handle full response object (non-streaming)
     if (parsed.output && Array.isArray(parsed.output)) {
+      console.log('[RESPONSES API DEBUG] Processing full output array');
       for (const item of parsed.output) {
         if (item.type === 'message' && item.content) {
           for (const contentItem of item.content) {
@@ -153,6 +160,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
     }
     // Handle streaming chunks
     else if (parsed.output_chunk) {
+      console.log('[RESPONSES API DEBUG] Processing output_chunk');
       const chunk = parsed.output_chunk;
       if (chunk.type === 'message' && chunk.delta?.content) {
         for (const contentItem of chunk.delta.content) {
@@ -171,6 +179,8 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
         }
         toolCalls.push(normalized);
       }
+    } else {
+      console.log('[RESPONSES API DEBUG] Unknown format - no output or output_chunk found');
     }
 
     // Check for completion
@@ -178,6 +188,8 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       complete = true;
       finishReason = 'stop';
     }
+
+    console.log('[RESPONSES API DEBUG] Extracted content:', content, 'complete:', complete);
 
     // Convert tool calls to generic format
     const genericToolCalls =
@@ -191,7 +203,8 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       normalizeFinishReason(finishReason)
     );
   } catch (error) {
-    console.error('Error parsing OpenAI Responses API response:', error);
+    console.error('[RESPONSES API DEBUG] Error parsing OpenAI Responses API response:', error);
+    console.error('[RESPONSES API DEBUG] Data that caused error:', data);
     return createGenericStreamingResponse(
       [],
       [],
