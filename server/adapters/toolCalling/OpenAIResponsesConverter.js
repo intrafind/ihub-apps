@@ -280,6 +280,50 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
           }
         }
       }
+
+      // Handle function call streaming events (new format)
+      // Event: response.output_item.added - when a new function call starts
+      if (parsed.type === 'response.output_item.added' && parsed.item?.type === 'function_call') {
+        // Initialize a new function call with the metadata
+        toolCalls.push({
+          id: parsed.item.call_id || parsed.item.id,
+          type: 'function',
+          index: parsed.output_index || 0,
+          function: {
+            name: parsed.item.name || '',
+            arguments: parsed.item.arguments || ''
+          }
+        });
+      }
+
+      // Event: response.function_call_arguments.delta - streaming function arguments
+      if (parsed.type === 'response.function_call_arguments.delta') {
+        // Accumulate function call arguments as they stream in
+        toolCalls.push({
+          id: parsed.item_id,
+          type: 'function',
+          index: parsed.output_index || 0,
+          function: {
+            name: '', // Name already set in output_item.added
+            arguments: parsed.delta || ''
+          }
+        });
+      }
+
+      // Event: response.function_call_arguments.done - function arguments complete
+      if (parsed.type === 'response.function_call_arguments.done') {
+        // Final complete arguments are available
+        toolCalls.push({
+          id: parsed.item_id,
+          type: 'function',
+          index: parsed.output_index || 0,
+          function: {
+            name: '', // Name already set
+            arguments: parsed.arguments || ''
+          },
+          complete: true // Mark as complete
+        });
+      }
     }
     // Handle full response object (non-streaming)
     else if (parsed.output && Array.isArray(parsed.output)) {
