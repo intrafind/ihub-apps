@@ -2,21 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import { fetchTools } from '../../api/api';
-
-/**
- * Helper function to extract string value from multilingual objects
- * Tools can have name/description as either strings or objects like { en: "...", de: "..." }
- */
-const getStringValue = value => {
-  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-    // Extract from multilingual object - prefer English, then German, then any value
-    return value.en || value.de || Object.values(value)[0] || '';
-  }
-  return value || '';
-};
+import { getLocalizedContent } from '../../utils/localizeContent';
 
 const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const [searchTerm, setSearchTerm] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState([]);
@@ -44,8 +34,8 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
 
   // Filter tools based on search term and exclude already selected
   const filteredTools = availableTools.filter(tool => {
-    const toolName = getStringValue(tool.name) || tool.id;
-    const toolDescription = getStringValue(tool.description) || '';
+    const toolName = getLocalizedContent(tool.name, currentLanguage) || tool.id;
+    const toolDescription = getLocalizedContent(tool.description, currentLanguage) || '';
     const searchableText = `${toolName} ${toolDescription}`.toLowerCase();
     const matchesSearch = searchableText.includes(searchTerm.toLowerCase());
     const notSelected = !selectedTools.includes(tool.id);
@@ -106,7 +96,9 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
         <div className="flex flex-wrap gap-2">
           {selectedTools.map(toolId => {
             const toolInfo = availableTools.find(t => t.id === toolId);
-            const displayName = toolInfo ? getStringValue(toolInfo.name) : toolId;
+            const displayName = toolInfo
+              ? getLocalizedContent(toolInfo.name, currentLanguage)
+              : toolId;
             return (
               <span
                 key={toolId}
@@ -159,10 +151,12 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
                   onClick={() => handleAddTool(tool)}
                   className="w-full text-left px-3 py-3 text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none border-b border-gray-100 last:border-b-0"
                 >
-                  <div className="font-medium text-gray-900">{getStringValue(tool.name)}</div>
+                  <div className="font-medium text-gray-900">
+                    {getLocalizedContent(tool.name, currentLanguage)}
+                  </div>
                   {tool.description && (
                     <div className="text-xs text-gray-500 mt-1 line-clamp-2">
-                      {getStringValue(tool.description)}
+                      {getLocalizedContent(tool.description, currentLanguage)}
                     </div>
                   )}
                 </button>
