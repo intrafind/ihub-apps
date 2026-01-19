@@ -105,6 +105,53 @@ const AdminOAuthClientsPage = () => {
     }
   };
 
+  const handleToggleOAuth = async () => {
+    const newStatus = !oauthEnabled;
+
+    try {
+      // Load current platform config
+      const response = await makeAdminApiCall('/admin/configs/platform');
+      const platformConfig = response.data;
+
+      // Update OAuth enabled status
+      const updatedConfig = {
+        ...platformConfig,
+        oauth: {
+          ...(platformConfig.oauth || {}),
+          enabled: newStatus,
+          clientsFile: platformConfig.oauth?.clientsFile || 'contents/config/oauth-clients.json',
+          defaultTokenExpirationMinutes: platformConfig.oauth?.defaultTokenExpirationMinutes || 60,
+          maxTokenExpirationMinutes: platformConfig.oauth?.maxTokenExpirationMinutes || 1440
+        }
+      };
+
+      // Save updated config
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updatedConfig)
+      });
+
+      setOAuthEnabled(newStatus);
+      setMessage({
+        type: 'success',
+        text: `OAuth ${newStatus ? 'enabled' : 'disabled'} successfully`
+      });
+
+      // Reload clients if enabling
+      if (newStatus) {
+        loadClients();
+      }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: `Failed to ${newStatus ? 'enable' : 'disable'} OAuth: ${error.message}`
+      });
+    }
+  };
+
   const handleRotateSecret = async clientId => {
     if (!window.confirm(t('admin.auth.oauth.rotateSecretConfirm', 'Are you sure you want to rotate the secret? The old secret will stop working immediately.'))) {
       return;
@@ -177,6 +224,35 @@ const AdminOAuthClientsPage = () => {
 
         {/* Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* OAuth Enable/Disable Card */}
+          <div className="bg-white shadow rounded-lg p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h3 className="text-lg font-medium text-gray-900">
+                  OAuth 2.0 Authentication
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  {oauthEnabled
+                    ? 'OAuth is currently enabled. External applications can authenticate using client credentials.'
+                    : 'Enable OAuth to allow external applications to authenticate and access your APIs programmatically.'}
+                </p>
+              </div>
+              <button
+                onClick={handleToggleOAuth}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  oauthEnabled ? 'bg-blue-600' : 'bg-gray-200'
+                }`}
+              >
+                <span className="sr-only">Enable OAuth</span>
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    oauthEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
           {message && (
             <div
               className={`mb-6 p-4 rounded-md ${
@@ -210,28 +286,6 @@ const AdminOAuthClientsPage = () => {
                 >
                   {message.text}
                 </p>
-              </div>
-            </div>
-          )}
-
-          {!oauthEnabled && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-6 mb-6">
-              <div className="flex">
-                <Icon name="warning" className="h-5 w-5 text-yellow-400 mt-0.5 mr-3" />
-                <div>
-                  <h3 className="text-sm font-medium text-yellow-800">
-                    {t('admin.auth.oauth.disabled', 'OAuth is not enabled')}
-                  </h3>
-                  <p className="mt-2 text-sm text-yellow-700">
-                    Enable OAuth in the Authentication settings to create and manage OAuth clients.
-                  </p>
-                  <button
-                    onClick={() => navigate('/admin/auth')}
-                    className="mt-3 text-sm font-medium text-yellow-800 hover:text-yellow-900"
-                  >
-                    {t('admin.nav.auth', 'Go to Authentication settings')} →
-                  </button>
-                </div>
               </div>
             </div>
           )}

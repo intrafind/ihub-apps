@@ -131,18 +131,14 @@ const AdminNavigation = () => {
           // icon: 'shield-check',
           current: location.pathname === '/admin/auth'
         },
-        // OAuth Clients navigation (show if OAuth is enabled)
-        ...(platformConfig?.oauth?.enabled
-          ? [
-              {
-                key: 'oauth',
-                name: t('admin.nav.oauth', 'OAuth Clients'),
-                href: '/admin/oauth/clients',
-                // icon: 'key',
-                current: location.pathname.startsWith('/admin/oauth')
-              }
-            ]
-          : []),
+        // OAuth Clients navigation (always show)
+        {
+          key: 'oauth',
+          name: t('admin.nav.oauth', 'OAuth Clients'),
+          href: '/admin/oauth/clients',
+          // icon: 'key',
+          current: location.pathname.startsWith('/admin/oauth')
+        },
         // Only show Users navigation if authentication is enabled
         ...(platformConfig?.localAuth?.enabled ||
         platformConfig?.oidcAuth?.enabled ||

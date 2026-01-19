@@ -266,18 +266,14 @@ function App() {
                         element={<LazyAdminRoute component={AdminAuthPage} />}
                       />
                     )}
-                    {showAdminPage('oauth') && (
-                      <Route
-                        path="admin/oauth/clients"
-                        element={<LazyAdminRoute component={AdminOAuthClientsPage} />}
-                      />
-                    )}
-                    {showAdminPage('oauth') && (
-                      <Route
-                        path="admin/oauth/clients/:clientId"
-                        element={<LazyAdminRoute component={AdminOAuthClientEditPage} />}
-                      />
-                    )}
+                    <Route
+                      path="admin/oauth/clients"
+                      element={<LazyAdminRoute component={AdminOAuthClientsPage} />}
+                    />
+                    <Route
+                      path="admin/oauth/clients/:clientId"
+                      element={<LazyAdminRoute component={AdminOAuthClientEditPage} />}
+                    />
                     {showAdminPage('users') && (
                       <Route
                         path="admin/users"
