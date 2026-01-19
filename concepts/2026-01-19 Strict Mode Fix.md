@@ -7,83 +7,96 @@
 
 After fixing the finish reason detection, tools were still not being called by GPT-5.2. The model was receiving the tool definitions but choosing not to use them.
 
+### Evolution of the Issue
+
+1. **Initial attempt**: Added `strict: true` and `additionalProperties: false`
+2. **Error encountered**: `Invalid schema for function 'webContentExtractor': In context=(), 'required' is required to be supplied and to be an array including every key in properties. Missing 'maxLength'.`
+3. **Root cause discovered**: In OpenAI Responses API strict mode, **ALL** properties must be listed in the `required` array, not just mandatory ones.
+
 ## Root Cause
 
-According to the OpenAI Responses API documentation, tools must be defined with:
+According to the OpenAI Responses API strict mode requirements, tools must be defined with:
+
 1. **`strict: true`** - Enables strict schema validation
 2. **`additionalProperties: false`** - Required on ALL object schemas (including nested ones)
+3. **All properties in `required` array** - This is the critical requirement that differs from standard JSON Schema
 
-Our implementation was not adding these required fields, causing the model to potentially ignore or misinterpret the tool definitions.
+**Key Insight**: In standard JSON Schema, the `required` array only lists mandatory fields. However, in OpenAI Responses API strict mode, the `required` array must include **every property** defined in `properties`, even optional ones with defaults.
+
+This is a fundamental difference from normal JSON Schema behavior and is specific to OpenAI's strict mode implementation.
 
 ## Solution
 
 Modified `convertGenericToolsToOpenaiResponses` in `OpenAIResponsesConverter.js` to:
 
-1. **Add a helper function** `addStrictModeToSchema` that recursively adds `additionalProperties: false` to all object schemas
+1. **Add a helper function** `addStrictModeToSchema` that:
+   - Recursively adds `additionalProperties: false` to all object schemas
+   - Automatically adds ALL property keys to the `required` array
+   - Processes nested objects, array items, anyOf/allOf/oneOf
+
 2. **Explicitly set** `strict: true` on each tool definition
-3. **Process all nested objects** including those in arrays, anyOf, allOf, and oneOf
 
 ### Code Changes
 
 ```javascript
-// Before
-export function convertGenericToolsToOpenaiResponses(genericTools = []) {
-  return genericTools.map(tool => ({
-    type: 'function',
-    name: tool.id || tool.name,
-    description: tool.description,
-    parameters: sanitizeSchemaForProvider(tool.parameters, 'openai-responses')
-    // Note: strict: true is the default in Responses API, no need to specify
-  }));
-}
+function addStrictModeToSchema(schema) {
+  // ... clone and setup ...
+  
+  function enforceStrictMode(obj) {
+    if (obj.type === 'object') {
+      obj.additionalProperties = false;
 
-// After
-export function convertGenericToolsToOpenaiResponses(genericTools = []) {
-  return genericTools.map(tool => {
-    const sanitizedParams = sanitizeSchemaForProvider(tool.parameters, 'openai-responses');
-    const strictParams = addStrictModeToSchema(sanitizedParams);
-
-    return {
-      type: 'function',
-      name: tool.id || tool.name,
-      description: tool.description,
-      parameters: strictParams,
-      strict: true // Explicitly enable strict mode for tool calling
-    };
-  });
+      // CRITICAL: In strict mode, ALL properties must be in required array
+      if (obj.properties && Object.keys(obj.properties).length > 0) {
+        const existingRequired = Array.isArray(obj.required) ? obj.required : [];
+        const allPropertyKeys = Object.keys(obj.properties);
+        
+        // Ensure all property keys are in required array
+        const requiredSet = new Set(existingRequired);
+        allPropertyKeys.forEach(key => requiredSet.add(key));
+        
+        obj.required = Array.from(requiredSet);
+      }
+    }
+    // ... process nested schemas ...
+  }
 }
 ```
 
 ### Example Tool Output
 
-**Before:**
+**Before (caused error):**
 ```json
 {
   "type": "function",
-  "name": "get_weather",
-  "description": "Get the current weather",
+  "name": "webContentExtractor",
   "parameters": {
     "type": "object",
     "properties": {
-      "location": { "type": "string" }
+      "url": { "type": "string" },
+      "maxLength": { "type": "integer", "default": 5000 },
+      "ignoreSSL": { "type": "boolean", "default": false }
     },
-    "required": ["location"]
-  }
+    "required": ["url"],  // ❌ Missing maxLength and ignoreSSL
+    "additionalProperties": false
+  },
+  "strict": true
 }
 ```
 
-**After:**
+**After (works correctly):**
 ```json
 {
   "type": "function",
-  "name": "get_weather",
-  "description": "Get the current weather",
+  "name": "webContentExtractor",
   "parameters": {
     "type": "object",
     "properties": {
-      "location": { "type": "string" }
+      "url": { "type": "string" },
+      "maxLength": { "type": "integer", "default": 5000 },
+      "ignoreSSL": { "type": "boolean", "default": false }
     },
-    "required": ["location"],
+    "required": ["url", "maxLength", "ignoreSSL"],  // ✅ All properties included
     "additionalProperties": false
   },
   "strict": true
@@ -92,21 +105,44 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
 
 ## Testing
 
-Created comprehensive test coverage in `server/tests/openaiResponsesStrictMode.test.js`:
+Updated comprehensive test coverage in `server/tests/openaiResponsesStrictMode.test.js`:
 
-1. ✅ Simple tool with object parameters gets strict mode
-2. ✅ Nested objects also get additionalProperties: false
-3. ✅ Format matches OpenAI documentation example
+1. ✅ Tool with optional parameters - all properties in required array
+2. ✅ Tool matching webContentExtractor error case - all properties required
+3. ✅ Nested objects also get all properties in required
+4. ✅ Format matches OpenAI strict mode requirements
 
 All tests pass successfully, including existing adapter and tool calling tests.
 
 ## Impact
 
 This change ensures that:
-- All tools sent to GPT-5.x models via Responses API have strict schema validation
-- The tool format matches the official OpenAI documentation requirements
+- All tools sent to GPT-5.x models via Responses API comply with strict mode requirements
+- Optional parameters with defaults are properly included in the required array
 - Nested object schemas are properly validated
-- The model can reliably parse and use tool definitions
+- The model can reliably parse and use tool definitions without validation errors
+
+## Important Note on Optional Parameters
+
+Even though all parameters are now in the `required` array for strict mode compliance, parameters with `default` values are still effectively optional from the caller's perspective. The API will use the default value if the parameter is not provided.
+
+Example:
+```json
+{
+  "maxLength": {
+    "type": "integer",
+    "default": 5000,
+    "minimum": 100,
+    "maximum": 50000
+  }
+}
+```
+
+This parameter:
+- Is in the `required` array (for strict mode)
+- Has a default value of 5000
+- Will use 5000 if not provided in the function call
+- Can be overridden by providing a value
 
 ## Verification Steps
 
@@ -117,6 +153,7 @@ To verify the fix works with a real API:
 3. Verify that tools have:
    - `strict: true` at the tool level
    - `additionalProperties: false` in all object schemas (including nested)
+   - ALL property keys in the `required` array
 
 Example expected output in logs:
 ```json
@@ -130,9 +167,10 @@ Example expected output in logs:
         "type": "object",
         "properties": {
           "url": { "type": "string", "description": "..." },
-          "maxLength": { "type": "integer", "default": 5000 }
+          "maxLength": { "type": "integer", "default": 5000 },
+          "ignoreSSL": { "type": "boolean", "default": false }
         },
-        "required": ["url"],
+        "required": ["url", "maxLength", "ignoreSSL"],
         "additionalProperties": false
       },
       "strict": true
@@ -145,10 +183,10 @@ Example expected output in logs:
 
 - OpenAI Responses API Documentation: https://platform.openai.com/docs/api-reference/responses
 - OpenAI Function Calling Guide: https://platform.openai.com/docs/guides/function-calling
-- User's documentation example showing required format
+- OpenAI Strict Mode Requirements: All properties must be in required array
 
 ## Files Modified
 
-- `/server/adapters/toolCalling/OpenAIResponsesConverter.js` - Added strict mode helper and updated converter
-- `/server/tests/openaiResponsesStrictMode.test.js` - Comprehensive test coverage (new file)
-- `/concepts/2026-01-19 Strict Mode Fix.md` - This documentation (new file)
+- `/server/adapters/toolCalling/OpenAIResponsesConverter.js` - Added strict mode helper with required array handling
+- `/server/tests/openaiResponsesStrictMode.test.js` - Comprehensive test coverage including required array validation
+- `/concepts/2026-01-19 Strict Mode Fix.md` - This documentation
