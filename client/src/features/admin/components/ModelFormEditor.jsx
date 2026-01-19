@@ -30,6 +30,7 @@ const getEnvironmentVariableNames = model => {
   // Priority 2: Provider-specific environment variable
   const providerMap = {
     openai: 'OPENAI_API_KEY',
+    'openai-responses': 'OPENAI_API_KEY',
     anthropic: 'ANTHROPIC_API_KEY',
     mistral: 'MISTRAL_API_KEY',
     google: 'GOOGLE_API_KEY',
@@ -125,6 +126,7 @@ const ModelFormEditor = ({
 
   const providerOptions = [
     { value: 'openai', label: 'OpenAI' },
+    { value: 'openai-responses', label: 'OpenAI (Responses API)' },
     { value: 'anthropic', label: 'Anthropic' },
     { value: 'google', label: 'Google' },
     { value: 'mistral', label: 'Mistral' },
