@@ -149,9 +149,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       }
       
       // Handle completion events
-      if (parsed.type === 'response.completed' || 
-          parsed.type === 'response.done' || 
-          parsed.type === 'response.output_item.done') {
+      if (parsed.type === 'response.completed' || parsed.type === 'response.done') {
         console.log('[RESPONSES API DEBUG] Completion event received:', parsed.type);
         complete = true;
         finishReason = 'stop';
