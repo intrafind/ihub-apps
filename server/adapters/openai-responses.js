@@ -202,6 +202,9 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
 
     try {
       const parsed = JSON.parse(data);
+      
+      // Add debugging to see what we're receiving
+      console.log('[RESPONSES API DEBUG] Received chunk:', JSON.stringify(parsed, null, 2));
 
       // Handle full response object (non-streaming)
       if (parsed.output && Array.isArray(parsed.output)) {
@@ -229,7 +232,28 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
         }
         result.complete = true;
       }
-      // Handle streaming response chunks
+      // Handle streaming delta chunks - Responses API streaming format
+      else if (parsed.type === 'response.output_chunk.delta' || parsed.delta) {
+        // Extract delta from either parsed.delta or parsed itself
+        const delta = parsed.delta || parsed;
+        
+        if (delta.type === 'message' && delta.content) {
+          for (const contentItem of delta.content) {
+            if (contentItem.type === 'output_text' && contentItem.text) {
+              result.content.push(contentItem.text);
+            }
+          }
+        } else if (delta.type === 'function_call' && delta.function) {
+          const normalized = { index: delta.index || 0 };
+          if (delta.id) normalized.id = delta.id;
+          if (delta.function) {
+            normalized.function = { ...delta.function };
+          }
+          normalized.type = 'function';
+          result.tool_calls.push(normalized);
+        }
+      }
+      // Legacy format check for output_chunk
       else if (parsed.output_chunk) {
         const chunk = parsed.output_chunk;
         if (chunk.type === 'message' && chunk.delta) {
@@ -253,15 +277,16 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       }
 
       // Check for completion
-      if (parsed.status === 'completed' || parsed.output_status === 'completed') {
+      if (parsed.type === 'response.completed' || parsed.status === 'completed' || parsed.output_status === 'completed') {
         result.complete = true;
         result.finishReason = 'stop';
-      } else if (parsed.status === 'failed') {
+      } else if (parsed.status === 'failed' || parsed.type === 'response.failed') {
         result.error = true;
         result.errorMessage = parsed.error?.message || 'Response generation failed';
       }
     } catch (error) {
       console.error('Error parsing OpenAI Responses API response chunk:', error);
+      console.error('Data that caused error:', data);
       result.error = true;
       result.errorMessage = `Error parsing OpenAI Responses API response: ${error.message}`;
     }
