@@ -120,9 +120,22 @@ function loadRawTools() {
   const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
   
   let tools = [];
+  let needsCleanup = false;
+  
   if (existsSync(toolsFilePath)) {
     const fileContent = readFileSync(toolsFilePath, 'utf-8');
-    tools = JSON.parse(fileContent);
+    const allTools = JSON.parse(fileContent);
+    
+    // Filter out expanded tools (those with 'method' property)
+    // This handles legacy cases where expanded tools were saved to the config file
+    tools = allTools.filter(tool => !tool.method);
+    
+    // Check if we filtered any tools out
+    if (tools.length !== allTools.length) {
+      needsCleanup = true;
+      console.log(`⚠️  Detected ${allTools.length - tools.length} expanded tools in ${toolsFilePath}`);
+      console.log(`✓ Filtered to ${tools.length} raw tool definitions`);
+    }
   } else {
     // Fall back to defaults if no custom config exists
     const defaultToolsPath = join(rootDir, 'server', 'defaults', 'config', 'tools.json');
@@ -131,7 +144,8 @@ function loadRawTools() {
       tools = JSON.parse(fileContent);
     }
   }
-  return tools;
+  
+  return { tools, needsCleanup, filePath: toolsFilePath };
 }
 
 export default function registerAdminToolsRoutes(app, basePath = '') {
@@ -179,10 +193,24 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/admin/tools', basePath), adminAuth, async (req, res) => {
     try {
       // Load raw (unexpanded) tools for admin interface
-      const tools = loadRawTools();
+      const { tools, needsCleanup, filePath } = loadRawTools();
       
       if (!tools) {
         return res.status(500).json({ error: 'Failed to load tools configuration' });
+      }
+      
+      // If we detected expanded tools, clean up the file
+      if (needsCleanup && filePath) {
+        try {
+          const rootDir = getRootDir();
+          const contentsDir = process.env.CONTENTS_DIR || 'contents';
+          await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
+          await fs.writeFile(filePath, JSON.stringify(tools, null, 2));
+          console.log(`✓ Cleaned up ${filePath} - removed expanded tools`);
+        } catch (cleanupError) {
+          console.error('Failed to cleanup tools file:', cleanupError);
+          // Don't fail the request, just log the error
+        }
       }
       
       // Generate ETag for caching
@@ -251,7 +279,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       }
 
       // Load raw (unexpanded) tools
-      const tools = loadRawTools();
+      const { tools } = loadRawTools();
       const tool = tools.find(t => t.id === toolId);
       
       if (!tool) {
@@ -340,7 +368,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
 
       // Load existing tools (raw, unexpanded)
-      const tools = loadRawTools();
+      const { tools } = loadRawTools();
       const toolIndex = tools.findIndex(t => t.id === toolId);
 
       if (toolIndex === -1) {
@@ -426,7 +454,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
 
       // Load existing tools (raw, unexpanded)
-      const tools = loadRawTools();
+      const { tools } = loadRawTools();
 
       // Check if tool already exists
       if (tools.find(t => t.id === newTool.id)) {
@@ -517,7 +545,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
 
       // Load existing tools (raw, unexpanded)
-      const tools = loadRawTools();
+      const { tools } = loadRawTools();
       const toolIndex = tools.findIndex(t => t.id === toolId);
 
       if (toolIndex === -1) {
@@ -628,7 +656,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
         const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
 
         // Load existing tools (raw, unexpanded)
-        const tools = loadRawTools();
+        const { tools } = loadRawTools();
         const tool = tools.find(t => t.id === toolId);
 
         if (!tool) {
@@ -708,7 +736,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
           return;
         }
 
-        const tools = loadRawTools();
+        const { tools } = loadRawTools();
         const tool = tools.find(t => t.id === toolId);
 
         if (!tool) {
@@ -820,7 +848,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
           return;
         }
 
-        const tools = loadRawTools();
+        const { tools } = loadRawTools();
         const tool = tools.find(t => t.id === toolId);
 
         if (!tool) {
