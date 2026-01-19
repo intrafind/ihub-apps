@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
@@ -8,7 +9,8 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
 const AdminOAuthClientEditPage = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const { clientId } = useParams();
   const isNew = clientId === 'new';
@@ -343,7 +345,7 @@ const AdminOAuthClientEditPage = () => {
                       .filter(app => !formData.allowedApps.includes(app.id))
                       .map(app => (
                         <option key={app.id} value={app.id}>
-                          {app.name || app.id}
+                          {getLocalizedContent(app.name, currentLanguage) || app.id}
                         </option>
                       ))}
                   </select>
@@ -356,7 +358,7 @@ const AdminOAuthClientEditPage = () => {
                         key={appId}
                         className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-green-100 text-green-800"
                       >
-                        {app?.name || appId}
+                        {app ? getLocalizedContent(app.name, currentLanguage) : appId}
                         <button
                           type="button"
                           onClick={() => removeApp(appId)}
@@ -394,7 +396,7 @@ const AdminOAuthClientEditPage = () => {
                       .filter(model => !formData.allowedModels.includes(model.id))
                       .map(model => (
                         <option key={model.id} value={model.id}>
-                          {model.name || model.id}
+                          {getLocalizedContent(model.name, currentLanguage) || model.id}
                         </option>
                       ))}
                   </select>
@@ -407,7 +409,7 @@ const AdminOAuthClientEditPage = () => {
                         key={modelId}
                         className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800"
                       >
-                        {model?.name || modelId}
+                        {model ? getLocalizedContent(model.name, currentLanguage) : modelId}
                         <button
                           type="button"
                           onClick={() => removeModel(modelId)}
