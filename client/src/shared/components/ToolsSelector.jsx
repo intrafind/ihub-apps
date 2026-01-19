@@ -34,9 +34,11 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
 
   // Filter tools based on search term and exclude already selected
   const filteredTools = availableTools.filter(tool => {
-    const toolName = getLocalizedContent(tool.name, currentLanguage) || tool.id;
-    const toolDescription = getLocalizedContent(tool.description, currentLanguage) || '';
-    const searchableText = `${toolName} ${toolDescription}`.toLowerCase();
+    const toolName = (getLocalizedContent(tool.name, currentLanguage) || tool.id).toLowerCase();
+    const toolDescription = (
+      getLocalizedContent(tool.description, currentLanguage) || ''
+    ).toLowerCase();
+    const searchableText = `${toolName} ${toolDescription}`;
     const matchesSearch = searchableText.includes(searchTerm.toLowerCase());
     const notSelected = !selectedTools.includes(tool.id);
     return matchesSearch && notSelected;

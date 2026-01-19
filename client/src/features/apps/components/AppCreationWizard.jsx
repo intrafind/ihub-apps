@@ -1538,8 +1538,10 @@ const ToolsStep = ({ appData, updateAppData }) => {
   };
 
   const filteredTools = availableTools.filter(tool => {
-    const toolName = getLocalizedContent(tool.name, currentLanguage).toLowerCase();
-    const toolDescription = getLocalizedContent(tool.description, currentLanguage).toLowerCase();
+    const toolName = (getLocalizedContent(tool.name, currentLanguage) || '').toLowerCase();
+    const toolDescription = (
+      getLocalizedContent(tool.description, currentLanguage) || ''
+    ).toLowerCase();
     const search = searchTerm.toLowerCase();
     return toolName.includes(search) || toolDescription.includes(search);
   });
