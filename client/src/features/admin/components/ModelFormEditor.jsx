@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
@@ -132,6 +132,19 @@ const ModelFormEditor = ({
     { value: 'local', label: 'Local' }
   ];
 
+  // Memoize environment variables tooltip text for API Key field
+  const apiKeyTooltip = useMemo(() => {
+    if (!data.id || !data.provider) {
+      return null;
+    }
+    const envVarsList = getEnvironmentVariableNames(data).join('\n');
+    return t(
+      'admin.models.hints.apiKeyEnvVars',
+      `Environment variables (in priority order):\n${envVarsList}`,
+      { envVars: envVarsList }
+    );
+  }, [data, t]);
+
   return (
     <div className="space-y-6">
       {/* Basic Information */}
@@ -260,23 +273,14 @@ const ModelFormEditor = ({
                   <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700">
                     {t('admin.models.fields.apiKey', 'API Key')}
                   </label>
-                  {data.id &&
-                    data.provider &&
-                    (() => {
-                      const envVarsList = getEnvironmentVariableNames(data).join('\n');
-                      return (
-                        <Icon
-                          name="information-circle"
-                          size="sm"
-                          className="text-gray-400 cursor-help"
-                          title={t(
-                            'admin.models.hints.apiKeyEnvVars',
-                            `Environment variables (in priority order):\n${envVarsList}`,
-                            { envVars: envVarsList }
-                          )}
-                        />
-                      );
-                    })()}
+                  {apiKeyTooltip && (
+                    <Icon
+                      name="information-circle"
+                      size="sm"
+                      className="text-gray-400 cursor-help"
+                      title={apiKeyTooltip}
+                    />
+                  )}
                 </div>
                 <div className="mt-1 relative rounded-md shadow-sm">
                   <input
