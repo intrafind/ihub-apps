@@ -263,6 +263,8 @@ function capitalize(str) {
   switch (str.toLowerCase()) {
     case 'openai':
       return 'OpenAI';
+    case 'openai-responses':
+      return 'OpenaiResponses';
     case 'local':
       return 'VLLM'; // Local uses VLLM converter functions
     case 'iassistant':
