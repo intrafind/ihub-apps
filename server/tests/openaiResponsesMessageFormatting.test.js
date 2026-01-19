@@ -147,8 +147,8 @@ assert.strictEqual(
 );
 console.log('✓ Test 4 passed: regular message content preserved\n');
 
-// Test 5: Tool result message
-console.log('Test 5: Tool result message...');
+// Test 5: Tool result message converted to function_call_output format
+console.log('Test 5: Tool result message converted to function_call_output...');
 const messages5 = [
   {
     role: 'user',
@@ -184,16 +184,28 @@ assert.strictEqual(
   false,
   'Assistant with tool_calls should not have content'
 );
-assert.strictEqual(formatted5[2].role, 'tool', 'Third message should be tool');
+// Tool result should be converted to function_call_output format
+assert.strictEqual(formatted5[2].type, 'function_call_output', 'Tool result should have type: function_call_output');
 assert.strictEqual(
-  formatted5[2].content,
-  'The weather in Tokyo is sunny, 25°C',
-  'Tool result content should be preserved'
+  formatted5[2].call_id,
+  'call_abc',
+  'Should have call_id field'
 );
-console.log('✓ Test 5 passed: tool result message formatted correctly\n');
+assert.strictEqual(
+  formatted5[2].output,
+  'The weather in Tokyo is sunny, 25°C',
+  'Tool result should be in output field, not content'
+);
+assert.strictEqual(
+  formatted5[2].hasOwnProperty('role'),
+  false,
+  'function_call_output should not have role field'
+);
+console.log('✓ Test 5 passed: tool result converted to function_call_output format\n');
 
 console.log('✅ All message formatting tests passed!');
-console.log('\nKey finding:');
+console.log('\nKey findings:');
 console.log('- Assistant messages with tool_calls and no/empty content: content field OMITTED');
 console.log('- Assistant messages with tool_calls AND content text: content field INCLUDED');
-console.log('- This prevents "content: null" from breaking the OpenAI Responses API');
+console.log('- Tool result messages: converted to type: "function_call_output" with output field');
+console.log('- This matches the OpenAI Responses API format requirements');

@@ -17,6 +17,16 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
     const formattedMessages = messages.map(message => {
       const content = message.content;
 
+      // Handle tool result messages - convert to function_call_output format
+      // OpenAI Responses API uses a different format for tool results
+      if (message.role === 'tool') {
+        return {
+          type: 'function_call_output',
+          call_id: message.tool_call_id,
+          output: content // Tool results go in 'output' field, not 'content'
+        };
+      }
+
       // Base message with role and optional tool fields
       const base = { role: message.role };
       if (message.tool_calls) base.tool_calls = message.tool_calls;
