@@ -49,6 +49,12 @@
     "sessionTimeoutMinutes": 480,
     "jwtSecret": "${JWT_SECRET}"
   },
+  "oauth": {
+    "enabled": false,
+    "clientsFile": "contents/config/oauth-clients.json",
+    "defaultTokenExpirationMinutes": 60,
+    "maxTokenExpirationMinutes": 1440
+  },
   "anonymousAuth": {
     "enabled": true,
     "defaultGroups": ["anonymous"]

@@ -75,7 +75,24 @@ export default function jwtAuthMiddleware(req, res, next) {
 
     // Create user object based on token payload
     let user;
-    if (decoded.authMode === 'local') {
+    if (decoded.authMode === 'oauth_client_credentials' || decoded.authMode === 'oauth_static_api_key') {
+      // OAuth client credentials - this is a machine-to-machine token
+      user = {
+        id: decoded.client_id,
+        username: decoded.client_name || decoded.client_id,
+        name: decoded.client_name || decoded.client_id,
+        email: '', // OAuth clients don't have email
+        groups: decoded.groups || ['oauth_clients'],
+        authMode: decoded.authMode,
+        timestamp: Date.now(),
+        // OAuth-specific fields
+        isOAuthClient: true,
+        scopes: decoded.scopes || [],
+        allowedApps: decoded.allowedApps || [],
+        allowedModels: decoded.allowedModels || [],
+        staticKey: decoded.static_key || false
+      };
+    } else if (decoded.authMode === 'local') {
       // For local auth, the user ID is stored in the 'sub' field
       const userId = decoded.sub || decoded.username || decoded.id;
       user = {
