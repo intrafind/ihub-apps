@@ -141,32 +141,43 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
     // Handle server-sent event format with type field
     if (parsed.type) {
       console.log('[RESPONSES API DEBUG] Event type:', parsed.type);
-      
+
       // Skip metadata events that don't contain content
       if (parsed.type === 'response.created' || parsed.type === 'response.in_progress') {
         console.log('[RESPONSES API DEBUG] Skipping metadata event:', parsed.type);
         return createGenericStreamingResponse([], [], [], false, false, null, null);
       }
-      
+
       // Handle completion events
       if (parsed.type === 'response.completed' || parsed.type === 'response.done') {
         console.log('[RESPONSES API DEBUG] Completion event received:', parsed.type);
         complete = true;
         finishReason = 'stop';
-        
+
         // Don't extract content from completion event - content comes from delta events
         // Just mark the stream as complete
-        return createGenericStreamingResponse([], [], [], complete, false, null, normalizeFinishReason(finishReason));
+        return createGenericStreamingResponse(
+          [],
+          [],
+          [],
+          complete,
+          false,
+          null,
+          normalizeFinishReason(finishReason)
+        );
       }
-      
+
       // Handle content delta events (streaming chunks)
-      if (parsed.type === 'response.output_chunk.delta' || parsed.type === 'response.output_text.delta') {
+      if (
+        parsed.type === 'response.output_chunk.delta' ||
+        parsed.type === 'response.output_text.delta'
+      ) {
         console.log('[RESPONSES API DEBUG] Processing delta event, type:', parsed.type);
-        
+
         // The actual chunk data is in the 'delta' field
         if (parsed.delta !== undefined && parsed.delta !== null) {
           console.log('[RESPONSES API DEBUG] Delta content:', JSON.stringify(parsed.delta));
-          
+
           // Handle delta as a direct string (Azure OpenAI format)
           if (typeof parsed.delta === 'string') {
             console.log('[RESPONSES API DEBUG] Found delta as string:', parsed.delta);
@@ -198,7 +209,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
           }
         }
       }
-      
+
       // Handle reasoning delta events (thinking/reasoning output)
       if (parsed.type === 'response.output_chunk.delta' && parsed.delta?.type === 'reasoning') {
         console.log('[RESPONSES API DEBUG] Processing reasoning delta');
@@ -279,7 +290,14 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       finishReason = 'stop';
     }
 
-    console.log('[RESPONSES API DEBUG] Extracted content:', content, 'thinking:', thinking, 'complete:', complete);
+    console.log(
+      '[RESPONSES API DEBUG] Extracted content:',
+      content,
+      'thinking:',
+      thinking,
+      'complete:',
+      complete
+    );
 
     // Convert tool calls to generic format
     const genericToolCalls =
