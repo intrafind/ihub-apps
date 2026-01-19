@@ -137,11 +137,21 @@ export async function saveOAuthClients(clientsConfig, clientsFilePath) {
 }
 
 /**
- * Generate a random client ID
+ * Generate a client ID from client name
+ * @param {string} name - Client name
  * @returns {string} Client ID
  */
-export function generateClientId() {
-  return `client_${uuidv4().replace(/-/g, '_')}`;
+export function generateClientId(name) {
+  // Sanitize name: lowercase, replace spaces and special chars with underscores
+  const sanitizedName = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
+  
+  // Generate short UUID (first 8 characters)
+  const shortUuid = uuidv4().split('-')[0];
+  
+  return `client_${sanitizedName}_${shortUuid}`;
 }
 
 /**
@@ -202,8 +212,8 @@ export function findClientById(clientsConfig, clientId) {
 export async function createOAuthClient(clientData, clientsFilePath, createdBy) {
   const clientsConfig = loadOAuthClients(clientsFilePath);
 
-  // Generate client ID and secret
-  const clientId = generateClientId();
+  // Generate client ID from name and secret
+  const clientId = generateClientId(clientData.name);
   const clientSecret = await generateClientSecret();
   const hashedSecret = await hashClientSecret(clientSecret);
 

@@ -18,26 +18,47 @@ const AdminOAuthClientEditPage = () => {
   const [message, setMessage] = useState('');
   const [newClientSecret, setNewClientSecret] = useState('');
   const [showSecretModal, setShowSecretModal] = useState(false);
+  const [availableApps, setAvailableApps] = useState([]);
+  const [availableModels, setAvailableModels] = useState([]);
 
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    scopes: [],
     allowedApps: [],
     allowedModels: [],
     tokenExpirationMinutes: 60,
     active: true
   });
 
-  const [scopeInput, setScopeInput] = useState('');
   const [appInput, setAppInput] = useState('');
   const [modelInput, setModelInput] = useState('');
 
   useEffect(() => {
+    loadAvailableOptions();
     if (!isNew) {
       loadClient();
     }
   }, [clientId]);
+
+  const loadAvailableOptions = async () => {
+    try {
+      // Load available apps
+      const appsResponse = await makeAdminApiCall('/admin/apps');
+      const appsData = appsResponse.data;
+      const appsList = Array.isArray(appsData) ? appsData : Object.values(appsData.apps || {});
+      setAvailableApps(appsList);
+
+      // Load available models
+      const modelsResponse = await makeAdminApiCall('/admin/models');
+      const modelsData = modelsResponse.data;
+      const modelsList = Array.isArray(modelsData)
+        ? modelsData
+        : Object.values(modelsData.models || {});
+      setAvailableModels(modelsList);
+    } catch (error) {
+      console.error('Failed to load apps/models:', error);
+    }
+  };
 
   const loadClient = async () => {
     try {
@@ -47,7 +68,6 @@ const AdminOAuthClientEditPage = () => {
       setFormData({
         name: data.client.name || '',
         description: data.client.description || '',
-        scopes: data.client.scopes || [],
         allowedApps: data.client.allowedApps || [],
         allowedModels: data.client.allowedModels || [],
         tokenExpirationMinutes: data.client.tokenExpirationMinutes || 60,
@@ -113,28 +133,11 @@ const AdminOAuthClientEditPage = () => {
     }));
   };
 
-  const addScope = () => {
-    if (scopeInput.trim() && !formData.scopes.includes(scopeInput.trim())) {
+  const addApp = appId => {
+    if (appId && !formData.allowedApps.includes(appId)) {
       setFormData(prev => ({
         ...prev,
-        scopes: [...prev.scopes, scopeInput.trim()]
-      }));
-      setScopeInput('');
-    }
-  };
-
-  const removeScope = scope => {
-    setFormData(prev => ({
-      ...prev,
-      scopes: prev.scopes.filter(s => s !== scope)
-    }));
-  };
-
-  const addApp = () => {
-    if (appInput.trim() && !formData.allowedApps.includes(appInput.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        allowedApps: [...prev.allowedApps, appInput.trim()]
+        allowedApps: [...prev.allowedApps, appId]
       }));
       setAppInput('');
     }
@@ -147,11 +150,11 @@ const AdminOAuthClientEditPage = () => {
     }));
   };
 
-  const addModel = () => {
-    if (modelInput.trim() && !formData.allowedModels.includes(modelInput.trim())) {
+  const addModel = modelId => {
+    if (modelId && !formData.allowedModels.includes(modelId)) {
       setFormData(prev => ({
         ...prev,
-        allowedModels: [...prev.allowedModels, modelInput.trim()]
+        allowedModels: [...prev.allowedModels, modelId]
       }));
       setModelInput('');
     }
@@ -315,49 +318,6 @@ const AdminOAuthClientEditPage = () => {
               </div>
             </div>
 
-            {/* Scopes */}
-            <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {t('admin.auth.oauth.scopes', 'Scopes')}
-              </h3>
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={scopeInput}
-                    onChange={e => setScopeInput(e.target.value)}
-                    onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addScope())}
-                    placeholder="e.g., chat, models, apps"
-                    className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={addScope}
-                    className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                  >
-                    {t('common.add', 'Add')}
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {formData.scopes.map(scope => (
-                    <span
-                      key={scope}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
-                    >
-                      {scope}
-                      <button
-                        type="button"
-                        onClick={() => removeScope(scope)}
-                        className="ml-2 text-blue-600 hover:text-blue-800"
-                      >
-                        <Icon name="x" size="sm" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
             {/* Allowed Apps */}
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">
@@ -366,38 +326,45 @@ const AdminOAuthClientEditPage = () => {
               <p className="text-sm text-gray-500 mb-2">Leave empty to allow all apps</p>
               <div className="space-y-2">
                 <div className="flex gap-2">
-                  <input
-                    type="text"
+                  <select
                     value={appInput}
-                    onChange={e => setAppInput(e.target.value)}
-                    onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addApp())}
-                    placeholder="e.g., chat, summarizer"
+                    onChange={e => {
+                      const selectedAppId = e.target.value;
+                      if (selectedAppId) {
+                        addApp(selectedAppId);
+                      }
+                    }}
                     className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={addApp}
-                    className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                   >
-                    {t('common.add', 'Add')}
-                  </button>
+                    <option value="">Select an app...</option>
+                    {availableApps
+                      .filter(app => !formData.allowedApps.includes(app.id))
+                      .map(app => (
+                        <option key={app.id} value={app.id}>
+                          {app.name || app.id}
+                        </option>
+                      ))}
+                  </select>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {formData.allowedApps.map(app => (
-                    <span
-                      key={app}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-green-100 text-green-800"
-                    >
-                      {app}
-                      <button
-                        type="button"
-                        onClick={() => removeApp(app)}
-                        className="ml-2 text-green-600 hover:text-green-800"
+                  {formData.allowedApps.map(appId => {
+                    const app = availableApps.find(a => a.id === appId);
+                    return (
+                      <span
+                        key={appId}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-green-100 text-green-800"
                       >
-                        <Icon name="x" size="sm" />
-                      </button>
-                    </span>
-                  ))}
+                        {app?.name || appId}
+                        <button
+                          type="button"
+                          onClick={() => removeApp(appId)}
+                          className="ml-2 text-green-600 hover:text-green-800"
+                        >
+                          <Icon name="x" size="sm" />
+                        </button>
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -410,38 +377,45 @@ const AdminOAuthClientEditPage = () => {
               <p className="text-sm text-gray-500 mb-2">Leave empty to allow all models</p>
               <div className="space-y-2">
                 <div className="flex gap-2">
-                  <input
-                    type="text"
+                  <select
                     value={modelInput}
-                    onChange={e => setModelInput(e.target.value)}
-                    onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addModel())}
-                    placeholder="e.g., gpt-4, claude-3"
+                    onChange={e => {
+                      const selectedModelId = e.target.value;
+                      if (selectedModelId) {
+                        addModel(selectedModelId);
+                      }
+                    }}
                     className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={addModel}
-                    className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                   >
-                    {t('common.add', 'Add')}
-                  </button>
+                    <option value="">Select a model...</option>
+                    {availableModels
+                      .filter(model => !formData.allowedModels.includes(model.id))
+                      .map(model => (
+                        <option key={model.id} value={model.id}>
+                          {model.name || model.id}
+                        </option>
+                      ))}
+                  </select>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {formData.allowedModels.map(model => (
-                    <span
-                      key={model}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800"
-                    >
-                      {model}
-                      <button
-                        type="button"
-                        onClick={() => removeModel(model)}
-                        className="ml-2 text-purple-600 hover:text-purple-800"
+                  {formData.allowedModels.map(modelId => {
+                    const model = availableModels.find(m => m.id === modelId);
+                    return (
+                      <span
+                        key={modelId}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800"
                       >
-                        <Icon name="x" size="sm" />
-                      </button>
-                    </span>
-                  ))}
+                        {model?.name || modelId}
+                        <button
+                          type="button"
+                          onClick={() => removeModel(modelId)}
+                          className="ml-2 text-purple-600 hover:text-purple-800"
+                        >
+                          <Icon name="x" size="sm" />
+                        </button>
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             </div>

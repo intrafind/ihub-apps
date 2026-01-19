@@ -6,10 +6,12 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 const AdminOAuthClientsPage = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { refreshConfig } = usePlatformConfig();
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState([]);
   const [message, setMessage] = useState('');
@@ -149,6 +151,9 @@ const AdminOAuthClientsPage = () => {
         type: 'success',
         text: `OAuth ${newStatus ? 'enabled' : 'disabled'} successfully`
       });
+
+      // Refresh platform config to update navigation and other components
+      await refreshConfig();
 
       // Reload clients if enabling
       if (newStatus) {
@@ -363,13 +368,7 @@ const AdminOAuthClientsPage = () => {
                             </code>
                             {client.description && <p className="truncate">{client.description}</p>}
                           </div>
-                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-500">
-                            <div>
-                              <span className="font-medium">
-                                {t('admin.auth.oauth.scopes', 'Scopes')}:
-                              </span>{' '}
-                              {client.scopes?.join(', ') || t('common.none', 'None')}
-                            </div>
+                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-500">
                             <div>
                               <span className="font-medium">
                                 {t('admin.auth.oauth.createdAt', 'Created')}:

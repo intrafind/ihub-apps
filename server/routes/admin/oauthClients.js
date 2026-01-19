@@ -531,7 +531,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *             properties:
    *               expirationDays:
    *                 type: number
-   *                 description: Token expiration in days (default: 365)
+   *                 description: "Token expiration in days (default: 365)"
    *     responses:
    *       200:
    *         description: API key generated successfully
