@@ -106,7 +106,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       max_output_tokens: maxTokens,
       store: true // Responses are stored by default for statefulness
     };
-    
+
     // Note: temperature is NOT supported by GPT-5 models with Responses API
     // GPT-5 models use a fixed temperature of 1.0
     // Use verbosity and reasoning.effort parameters instead for control
