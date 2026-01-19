@@ -28,11 +28,7 @@ const toolCallResponse = JSON.stringify({
 
 const result1 = convertOpenaiResponsesResponseToGeneric(toolCallResponse);
 assert.strictEqual(result1.tool_calls.length, 1, 'Should have one tool call');
-assert.strictEqual(
-  result1.tool_calls[0].name,
-  'get_weather',
-  'Tool name should be get_weather'
-);
+assert.strictEqual(result1.tool_calls[0].name, 'get_weather', 'Tool name should be get_weather');
 assert.strictEqual(result1.finishReason, 'tool_calls', 'Finish reason should be tool_calls');
 assert.strictEqual(result1.complete, true, 'Response should be complete');
 console.log('✓ Test 1 passed: Tool calls detected, finish reason = tool_calls\n');
@@ -194,7 +190,5 @@ assert.strictEqual(result6.complete, true, 'Response should be complete');
 console.log('✓ Test 6 passed: Mixed output with tool calls, finish reason = tool_calls\n');
 
 console.log('✅ All finish reason tests passed!');
-console.log(
-  '\nKey insight: The Responses API does NOT include a finish_reason field.'
-);
+console.log('\nKey insight: The Responses API does NOT include a finish_reason field.');
 console.log('We determine finish reason by checking if tool calls are present in the output.');
