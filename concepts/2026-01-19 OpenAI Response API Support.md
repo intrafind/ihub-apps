@@ -27,6 +27,7 @@ OpenAI released the Response API alongside GPT-5 as an evolution of the Chat Com
 - **Instructions**: Separate `instructions` field for system-level guidance
 - **Tools**: Internally-tagged format (no nested `function` object), strict by default
 - **Structured Outputs**: Uses `text.format` instead of `response_format`
+- **Token Limit**: Uses `max_output_tokens` instead of `max_tokens`
 - **Statefulness**: `store: true` by default for maintaining conversation context
 
 ### Response Structure

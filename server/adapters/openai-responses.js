@@ -104,7 +104,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       model: model.modelId,
       stream,
       temperature: parseFloat(temperature),
-      max_tokens: maxTokens,
+      max_output_tokens: maxTokens,
       store: true // Responses are stored by default for statefulness
     };
 
