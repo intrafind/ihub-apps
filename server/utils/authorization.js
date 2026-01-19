@@ -454,7 +454,9 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
   }
 
   // Check admin access (OAuth clients never have admin access)
-  user.isAdmin = user.isOAuthClient ? false : (hasAdminAccess(user.groups, authConfig) || user.permissions.adminAccess);
+  user.isAdmin = user.isOAuthClient
+    ? false
+    : hasAdminAccess(user.groups, authConfig) || user.permissions.adminAccess;
 
   console.debug('[Authorization] User enhancement complete:', {
     userId: user.id,
