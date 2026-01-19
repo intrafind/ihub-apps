@@ -195,7 +195,7 @@ const sizeClasses = {
 
 // Note: iconBaseUrl is now handled by buildAssetPath utility
 
-const Icon = ({ name, size = 'md', className = '', solid = false }) => {
+const Icon = ({ name, size = 'md', className = '', solid = false, title, ...rest }) => {
   const [imgError, setImgError] = useState(false);
 
   // Handle undefined, null, or empty names
@@ -206,7 +206,13 @@ const Icon = ({ name, size = 'md', className = '', solid = false }) => {
   const iconEntry = iconMap[name];
   if (iconEntry) {
     const IconComponent = solid ? iconEntry.solid : iconEntry.outline;
-    return <IconComponent className={`${sizeClasses[size] || sizeClasses.md} ${className}`} />;
+    return (
+      <IconComponent
+        className={`${sizeClasses[size] || sizeClasses.md} ${className}`}
+        title={title}
+        {...rest}
+      />
+    );
   }
 
   // Don't try to load external SVGs for undefined or invalid names
@@ -220,6 +226,8 @@ const Icon = ({ name, size = 'md', className = '', solid = false }) => {
       alt={name}
       onError={() => setImgError(true)}
       className={`${sizeClasses[size] || sizeClasses.md} ${className}`}
+      title={title}
+      {...rest}
     />
   );
 };
