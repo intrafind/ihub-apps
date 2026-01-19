@@ -3,6 +3,18 @@ import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import { fetchTools } from '../../api/api';
 
+/**
+ * Helper function to extract string value from multilingual objects
+ * Tools can have name/description as either strings or objects like { en: "...", de: "..." }
+ */
+const getStringValue = value => {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    // Extract from multilingual object - prefer English, then German, then any value
+    return value.en || value.de || Object.values(value)[0] || '';
+  }
+  return value || '';
+};
+
 const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
   const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,7 +44,9 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
 
   // Filter tools based on search term and exclude already selected
   const filteredTools = availableTools.filter(tool => {
-    const searchableText = `${tool.name || tool.id} ${tool.description || ''}`.toLowerCase();
+    const toolName = getStringValue(tool.name) || tool.id;
+    const toolDescription = getStringValue(tool.description) || '';
+    const searchableText = `${toolName} ${toolDescription}`.toLowerCase();
     const matchesSearch = searchableText.includes(searchTerm.toLowerCase());
     const notSelected = !selectedTools.includes(tool.id);
     return matchesSearch && notSelected;
@@ -92,7 +106,7 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
         <div className="flex flex-wrap gap-2">
           {selectedTools.map(toolId => {
             const toolInfo = availableTools.find(t => t.id === toolId);
-            const displayName = toolInfo ? toolInfo.name : toolId;
+            const displayName = toolInfo ? getStringValue(toolInfo.name) : toolId;
             return (
               <span
                 key={toolId}
@@ -145,10 +159,10 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
                   onClick={() => handleAddTool(tool)}
                   className="w-full text-left px-3 py-3 text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none border-b border-gray-100 last:border-b-0"
                 >
-                  <div className="font-medium text-gray-900">{tool.name}</div>
+                  <div className="font-medium text-gray-900">{getStringValue(tool.name)}</div>
                   {tool.description && (
                     <div className="text-xs text-gray-500 mt-1 line-clamp-2">
-                      {tool.description}
+                      {getStringValue(tool.description)}
                     </div>
                   )}
                 </button>

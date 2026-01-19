@@ -1512,6 +1512,14 @@ const ToolsStep = ({ appData, updateAppData }) => {
   const [availableTools, setAvailableTools] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Helper function to extract string value from multilingual objects
+  const getStringValue = value => {
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      return value.en || value.de || Object.values(value)[0] || '';
+    }
+    return value || '';
+  };
+
   useEffect(() => {
     // Load available tools
     const loadTools = async () => {
@@ -1536,11 +1544,12 @@ const ToolsStep = ({ appData, updateAppData }) => {
     }
   };
 
-  const filteredTools = availableTools.filter(
-    tool =>
-      tool.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tool.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTools = availableTools.filter(tool => {
+    const toolName = getStringValue(tool.name).toLowerCase();
+    const toolDescription = getStringValue(tool.description).toLowerCase();
+    const search = searchTerm.toLowerCase();
+    return toolName.includes(search) || toolDescription.includes(search);
+  });
 
   return (
     <div className="space-y-6">
@@ -1588,8 +1597,8 @@ const ToolsStep = ({ appData, updateAppData }) => {
               className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
             />
             <div className="ml-3 flex-1">
-              <div className="text-sm font-medium text-gray-900">{tool.name}</div>
-              <div className="text-sm text-gray-500">{tool.description}</div>
+              <div className="text-sm font-medium text-gray-900">{getStringValue(tool.name)}</div>
+              <div className="text-sm text-gray-500">{getStringValue(tool.description)}</div>
             </div>
           </label>
         ))}
