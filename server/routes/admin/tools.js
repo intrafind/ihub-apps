@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { createHash } from 'crypto';
 import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -213,8 +214,10 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
         }
       }
       
-      // Generate ETag for caching
-      const etag = `"${Buffer.from(JSON.stringify(tools)).toString('base64').substring(0, 27)}"`;
+      // Generate ETag for caching using MD5 hash (same as configCache)
+      const hash = createHash('md5');
+      hash.update(JSON.stringify(tools));
+      const etag = `"${hash.digest('hex')}"`;
       
       if (etag) {
         res.setHeader('ETag', etag);
