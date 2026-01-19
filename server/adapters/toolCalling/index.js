@@ -51,6 +51,7 @@ export {
 
 // Export individual provider converters for advanced use cases
 export * as OpenAIConverter from './OpenAIConverter.js';
+export * as OpenAIResponsesConverter from './OpenAIResponsesConverter.js';
 export * as AnthropicConverter from './AnthropicConverter.js';
 export * as GoogleConverter from './GoogleConverter.js';
 export * as MistralConverter from './MistralConverter.js';
