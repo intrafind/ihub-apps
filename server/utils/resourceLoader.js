@@ -279,7 +279,7 @@ export function createResourceLoader({
 /**
  * Helper function to create a simple validation function
  * @param {Array} requiredFields - Array of required field names
- * @returns {Function} Validation function
+ * @returns {Function} Validation function that returns the validated item
  */
 export function createValidator(requiredFields = []) {
   return function (item, source) {
@@ -287,6 +287,7 @@ export function createValidator(requiredFields = []) {
     if (missing.length > 0) {
       console.warn(`⚠️  Missing required fields in ${source}: ${missing.join(', ')}`);
     }
+    return item;
   };
 }
 
@@ -323,7 +324,9 @@ export function createSchemaValidator(schema, knownKeys = []) {
     if (schema) {
       const result = schema.safeParse(item);
       if (!result.success) {
-        const messages = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
+        const messages = result.error.errors
+          .map(e => `${e.path.join('.')}: ${e.message}`)
+          .join('; ');
         console.warn(`⚠️  ${resourceType}: ${resourceId} - validation issues: ${messages}`);
       } else {
         // Apply the parsed data which includes Zod defaults
