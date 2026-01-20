@@ -168,6 +168,7 @@ When grounding is used, the Gemini API returns additional metadata:
 2. **No parameters**: Unlike regular tools, grounding has no configurable parameters
 3. **API availability**: Requires Gemini models that support grounding (2.0+, 2.5+, 3.0+)
 4. **Rate limits**: Subject to Google's API rate limits
+5. **Cannot combine with function calling**: Google's API does not support using `google_search` together with `functionDeclarations` (custom tools). When both are configured, `google_search` takes priority and other tools are skipped with a warning logged to the console
 
 ## Future Enhancements
 
