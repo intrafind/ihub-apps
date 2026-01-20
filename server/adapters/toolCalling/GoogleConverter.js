@@ -29,10 +29,18 @@ export function convertGenericToolsToGoogle(genericTools = []) {
   // Add Google Search grounding if present
   if (googleSearchTool) {
     tools.push({ google_search: {} });
-  }
 
-  // Add regular function declarations if present
-  if (functionTools.length > 0) {
+    // Google API limitation: google_search cannot be combined with functionDeclarations
+    // If both are present, prioritize google_search and warn about skipped function tools
+    if (functionTools.length > 0) {
+      console.warn(
+        `Google API limitation: Cannot combine google_search with function calling. ` +
+          `Skipping ${functionTools.length} function tool(s): ${functionTools.map(t => t.name).join(', ')}`
+      );
+    }
+  }
+  // Only add regular function declarations if google_search is NOT present
+  else if (functionTools.length > 0) {
     tools.push({
       functionDeclarations: functionTools.map(tool => ({
         name: normalizeToolName(tool.name),
