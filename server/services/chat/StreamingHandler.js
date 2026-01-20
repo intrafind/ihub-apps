@@ -7,10 +7,72 @@ import { createParser } from 'eventsource-parser';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
+import { Readable } from 'stream';
 
 class StreamingHandler {
   constructor() {
     this.errorHandler = new ErrorHandler();
+  }
+
+  /**
+   * Helper to process and emit images from a result
+   */
+  processImages(result, chatId) {
+    if (result && result.images && result.images.length > 0) {
+      for (const image of result.images) {
+        actionTracker.trackImage(chatId, {
+          mimeType: image.mimeType,
+          data: image.data,
+          thoughtSignature: image.thoughtSignature
+        });
+      }
+    }
+  }
+
+  /**
+   * Helper to process and emit thinking content from a result
+   */
+  processThinking(result, chatId) {
+    if (result && result.thinking && result.thinking.length > 0) {
+      for (const thought of result.thinking) {
+        actionTracker.trackThinking(chatId, { content: thought });
+      }
+    }
+  }
+
+  /**
+   * Helper to process grounding metadata
+   */
+  processGroundingMetadata(result, chatId) {
+    if (result && result.groundingMetadata) {
+      actionTracker.trackAction(chatId, {
+        event: 'grounding',
+        metadata: result.groundingMetadata
+      });
+    }
+  }
+
+  /**
+   * Convert response body to Web Streams ReadableStream
+   * Handles compatibility between native fetch (Web Streams) and node-fetch (Node.js streams)
+   * @param {Response} response - The fetch response object
+   * @returns {ReadableStream} Web Streams ReadableStream
+   */
+  getReadableStream(response) {
+    // Check if body already has getReader (native fetch with Web Streams API)
+    if (response.body && typeof response.body.getReader === 'function') {
+      return response.body;
+    }
+
+    // node-fetch returns a Node.js stream - convert to Web Streams
+    if (response.body && typeof response.body.pipe === 'function') {
+      // Use Node.js Readable.toWeb() to convert Node.js stream to Web Streams ReadableStream
+      return Readable.toWeb(response.body);
+    }
+
+    throw new Error(
+      'Response body is not a readable stream. Expected Web Streams API or Node.js stream.'
+    );
   }
 
   async executeStreamingResponse({
@@ -128,7 +190,8 @@ class StreamingHandler {
         return;
       }
 
-      const reader = llmResponse.body.getReader();
+      const readableStream = this.getReadableStream(llmResponse);
+      const reader = readableStream.getReader();
       const decoder = new TextDecoder();
       let fullResponse = '';
 
@@ -190,6 +253,15 @@ class StreamingHandler {
                 }
               }
 
+              // Handle generated images
+              this.processImages(result, chatId);
+
+              // Handle thinking content
+              this.processThinking(result, chatId);
+
+              // Handle grounding metadata (for Google Search)
+              this.processGroundingMetadata(result, chatId);
+
               if (result && result.error) {
                 await logInteraction(
                   'chat_error',
@@ -249,6 +321,9 @@ class StreamingHandler {
             }
           }
 
+          // Handle generated images in remaining buffer
+          this.processImages(result, chatId);
+
           if (result && result.complete) {
             actionTracker.trackDone(chatId, { finishReason: result.finishReason || 'stop' });
             doneEmitted = true;
@@ -299,11 +374,14 @@ class StreamingHandler {
               }
             }
 
-            if (result && result.thinking && result.thinking.length > 0) {
-              for (const thinkingContent of result.thinking) {
-                actionTracker.trackThinking(chatId, { content: thinkingContent });
-              }
-            }
+            // Handle generated images
+            this.processImages(result, chatId);
+
+            // Handle thinking
+            this.processThinking(result, chatId);
+
+            // Handle grounding metadata
+            this.processGroundingMetadata(result, chatId);
 
             if (result && result.error) {
               await logInteraction(
@@ -393,7 +471,8 @@ class StreamingHandler {
     } finally {
       clearTimeout(timeoutId);
       if (!doneEmitted) {
-        actionTracker.trackDone(chatId, { finishReason: finishReason || 'connection_closed' });
+        const finalFinishReason = finishReason || 'connection_closed';
+        actionTracker.trackDone(chatId, { finishReason: finalFinishReason });
       }
       if (activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);

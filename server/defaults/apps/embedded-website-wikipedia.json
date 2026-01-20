@@ -1,0 +1,43 @@
+{
+  "id": "embedded-website-intrafind",
+  "order": 100,
+  "name": {
+    "en": "Website IntraFind (embedded)",
+    "de": "Website IntraFind (eingebettet)"
+  },
+  "description": {
+    "en": "Open the IntraFind website within the application.",
+    "de": "Öffnen Sie die IntraFind-Website innerhalb der Anwendung."
+  },
+  "type": "iframe",
+  "iframeConfig": {
+    "url": "https://de.wikipedia.org/wiki/Wikipedia:Hauptseite",
+    "allowFullscreen": true,
+    "sandbox": ["allow-scripts", "allow-same-origin", "allow-forms", "allow-popups"]
+  },
+  "color": "#8B5CF6",
+  "icon": "pencil",
+  "enabled": true,
+  "tools": [],
+  "greeting": {
+    "en": {
+      "title": "👋 Hello!",
+      "subtitle": "How can I help you today?"
+    },
+    "de": {
+      "title": "👋 Hallo!",
+      "subtitle": "Wie kann ich Ihnen heute helfen?"
+    }
+  },
+  "allowEmptyContent": false,
+  "sendChatHistory": true,
+  "inputMode": {
+    "type": "singleline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  }
+}

@@ -7,6 +7,7 @@
  */
 
 import * as OpenAIConverter from './OpenAIConverter.js';
+import * as OpenAIResponsesConverter from './OpenAIResponsesConverter.js';
 import * as AnthropicConverter from './AnthropicConverter.js';
 import * as GoogleConverter from './GoogleConverter.js';
 import * as MistralConverter from './MistralConverter.js';
@@ -20,6 +21,7 @@ import { createGenericStreamingResponse, normalizeFinishReason } from './Generic
  */
 const CONVERTERS = {
   openai: OpenAIConverter,
+  'openai-responses': OpenAIResponsesConverter,
   anthropic: AnthropicConverter,
   google: GoogleConverter,
   mistral: MistralConverter,
@@ -261,6 +263,8 @@ function capitalize(str) {
   switch (str.toLowerCase()) {
     case 'openai':
       return 'OpenAI';
+    case 'openai-responses':
+      return 'OpenaiResponses';
     case 'local':
       return 'VLLM'; // Local uses VLLM converter functions
     case 'iassistant':

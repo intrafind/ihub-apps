@@ -440,16 +440,30 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
   }
 
   // Get permissions for user
-  user.permissions = getPermissionsForUser(user.groups);
+  // For OAuth clients, use their allowedApps/allowedModels directly instead of group permissions
+  if (user.isOAuthClient) {
+    console.debug('[Authorization] OAuth client detected, using client-specific permissions');
+    user.permissions = {
+      apps: new Set(user.allowedApps || []),
+      prompts: new Set(), // OAuth clients don't have prompt permissions
+      models: new Set(user.allowedModels || []),
+      adminAccess: false // OAuth clients never have admin access
+    };
+  } else {
+    user.permissions = getPermissionsForUser(user.groups);
+  }
 
-  // Check admin access
-  user.isAdmin = hasAdminAccess(user.groups, authConfig) || user.permissions.adminAccess;
+  // Check admin access (OAuth clients never have admin access)
+  user.isAdmin = user.isOAuthClient
+    ? false
+    : hasAdminAccess(user.groups, authConfig) || user.permissions.adminAccess;
 
   console.debug('[Authorization] User enhancement complete:', {
     userId: user.id,
     userName: user.name,
     groups: user.groups,
     isAdmin: user.isAdmin,
+    isOAuthClient: user.isOAuthClient || false,
     hasWildcardApps: user.permissions.apps.has('*'),
     appCount: user.permissions.apps.size,
     modelCount: user.permissions.models.size

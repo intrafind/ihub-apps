@@ -96,16 +96,16 @@ const renderStartupState = (app, welcomeMessage, handleStarterPromptClick) => {
   return <NoMessagesView />;
 };
 
-const AppChat = () => {
+const AppChat = ({ preloadedApp = null }) => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { appId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const prefillMessage = searchParams.get('prefill') || '';
-  const [app, setApp] = useState(null);
+  const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!preloadedApp);
   const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
   const [variables, setVariables] = useState({});
@@ -416,6 +416,18 @@ const AppChat = () => {
     let isMounted = true;
 
     const loadData = async () => {
+      // Skip fetching if app data is already preloaded
+      if (preloadedApp) {
+        // Still initialize variables if needed
+        if (preloadedApp.variables && isMounted) {
+          const initialVars = getInitializedVariables(preloadedApp, currentLanguage);
+          if (isMounted) {
+            setVariables(initialVars);
+          }
+        }
+        return;
+      }
+
       try {
         setLoading(true);
 
@@ -469,7 +481,7 @@ const AppChat = () => {
     return () => {
       isMounted = false;
     };
-  }, [appId, currentLanguage, t]);
+  }, [appId, currentLanguage, t, preloadedApp]);
 
   // Load saved variables from sessionStorage when initializing
   useEffect(() => {
@@ -836,16 +848,34 @@ const AppChat = () => {
         content: input,
         promptTemplate: app?.prompt || null,
         variables: { ...validatedVariables },
-        imageData: Array.isArray(fileUploadHandler.selectedFile)
-          ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
-          : fileUploadHandler.selectedFile?.type === 'image'
-            ? fileUploadHandler.selectedFile
-            : null,
-        fileData: Array.isArray(fileUploadHandler.selectedFile)
-          ? fileUploadHandler.selectedFile.filter(f => f.type === 'document')
-          : fileUploadHandler.selectedFile?.type === 'document'
-            ? fileUploadHandler.selectedFile
-            : null
+        imageData: (() => {
+          // Handle image data: convert to object/array/null based on count
+          const imageFiles = Array.isArray(fileUploadHandler.selectedFile)
+            ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
+            : fileUploadHandler.selectedFile?.type === 'image'
+              ? [fileUploadHandler.selectedFile]
+              : [];
+          // Return single object for 1 file, array for multiple, null for none
+          return imageFiles.length === 1
+            ? imageFiles[0]
+            : imageFiles.length > 1
+              ? imageFiles
+              : null;
+        })(),
+        fileData: (() => {
+          // Handle file data: convert to object/array/null based on count
+          const documentFiles = Array.isArray(fileUploadHandler.selectedFile)
+            ? fileUploadHandler.selectedFile.filter(f => f.type === 'document')
+            : fileUploadHandler.selectedFile?.type === 'document'
+              ? [fileUploadHandler.selectedFile]
+              : [];
+          // Return single object for 1 file, array for multiple, null for none
+          return documentFiles.length === 1
+            ? documentFiles[0]
+            : documentFiles.length > 1
+              ? documentFiles
+              : null;
+        })()
       },
       params,
       sendChatHistory,

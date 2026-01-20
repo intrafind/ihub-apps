@@ -5,7 +5,7 @@ import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
 import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
 import PromptsList from './features/prompts/pages/PromptsList';
-import AppChat from './features/apps/pages/AppChat';
+import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
 import AppCanvas from './features/canvas/pages/AppCanvas';
 import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
@@ -26,11 +26,19 @@ const AdminModelEditPage = React.lazy(() => import('./features/admin/pages/Admin
 const AdminModelsPage = React.lazy(() => import('./features/admin/pages/AdminModelsPage'));
 const AdminPromptsPage = React.lazy(() => import('./features/admin/pages/AdminPromptsPage'));
 const AdminPromptEditPage = React.lazy(() => import('./features/admin/pages/AdminPromptEditPage'));
+const AdminToolsPage = React.lazy(() => import('./features/admin/pages/AdminToolsPage'));
+const AdminToolEditPage = React.lazy(() => import('./features/admin/pages/AdminToolEditPage'));
 const AdminSourcesPage = React.lazy(() => import('./features/admin/pages/AdminSourcesPage'));
 const AdminSourceEditPage = React.lazy(() => import('./features/admin/pages/AdminSourceEditPage'));
 const AdminPagesPage = React.lazy(() => import('./features/admin/pages/AdminPagesPage'));
 const AdminPageEditPage = React.lazy(() => import('./features/admin/pages/AdminPageEditPage'));
 const AdminAuthPage = React.lazy(() => import('./features/admin/pages/AdminAuthPage'));
+const AdminOAuthClientsPage = React.lazy(
+  () => import('./features/admin/pages/AdminOAuthClientsPage')
+);
+const AdminOAuthClientEditPage = React.lazy(
+  () => import('./features/admin/pages/AdminOAuthClientEditPage')
+);
 const AdminUsersPage = React.lazy(() => import('./features/admin/pages/AdminUsersPage'));
 const AdminUserEditPage = React.lazy(() => import('./features/admin/pages/AdminUserEditPage'));
 const AdminGroupsPage = React.lazy(() => import('./features/admin/pages/AdminGroupsPage'));
@@ -55,7 +63,7 @@ const TeamsAuthEnd = React.lazy(() => import('./features/teams/TeamsAuthEnd'));
 
 // Create safe versions of components that need error boundaries
 const SafeAppsList = withSafeRoute(AppsList);
-const SafeAppChat = withSafeRoute(AppChat);
+const SafeAppRouterWrapper = withSafeRoute(AppRouterWrapper);
 const SafeAppCanvas = withSafeRoute(AppCanvas);
 const SafeUnifiedPage = withSafeRoute(UnifiedPage);
 const SafePromptsList = withSafeRoute(PromptsList);
@@ -86,6 +94,23 @@ function App() {
   // Initialize runtime base path detection on app start
   useEffect(() => {
     initializeBasePath();
+  }, []);
+
+  // Prevent default drag and drop behavior globally to avoid files opening in browser
+  useEffect(() => {
+    const preventDefaults = e => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    // Prevent default behavior for drag and drop events on the window
+    window.addEventListener('dragover', preventDefaults);
+    window.addEventListener('drop', preventDefaults);
+
+    return () => {
+      window.removeEventListener('dragover', preventDefaults);
+      window.removeEventListener('drop', preventDefaults);
+    };
   }, []);
 
   // Get base path for React Router
@@ -137,7 +162,7 @@ function App() {
                     {uiConfig?.promptsList?.enabled !== false && (
                       <Route path="prompts" element={<SafePromptsList />} />
                     )}
-                    <Route path="apps/:appId" element={<SafeAppChat />} />
+                    <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
                     <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
                     <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
                     {showAdminPage('home') && (
@@ -215,6 +240,18 @@ function App() {
                         element={<LazyAdminRoute component={AdminPromptEditPage} />}
                       />
                     )}
+                    {showAdminPage('tools') && (
+                      <Route
+                        path="admin/tools"
+                        element={<LazyAdminRoute component={AdminToolsPage} />}
+                      />
+                    )}
+                    {showAdminPage('tools') && (
+                      <Route
+                        path="admin/tools/:toolId"
+                        element={<LazyAdminRoute component={AdminToolEditPage} />}
+                      />
+                    )}
                     {showAdminPage('sources') && (
                       <Route
                         path="admin/sources"
@@ -233,6 +270,14 @@ function App() {
                         element={<LazyAdminRoute component={AdminAuthPage} />}
                       />
                     )}
+                    <Route
+                      path="admin/oauth/clients"
+                      element={<LazyAdminRoute component={AdminOAuthClientsPage} />}
+                    />
+                    <Route
+                      path="admin/oauth/clients/:clientId"
+                      element={<LazyAdminRoute component={AdminOAuthClientEditPage} />}
+                    />
                     {showAdminPage('users') && (
                       <Route
                         path="admin/users"

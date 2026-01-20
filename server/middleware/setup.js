@@ -33,6 +33,78 @@ export function checkContentLength(limit) {
 }
 
 /**
+ * Check if the request should bypass authentication
+ * Includes static assets and HTML page requests (for SPA routing)
+ * @param {import('express').Request} req - Express request object
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {boolean} - True if the request should bypass authentication
+ */
+function isStaticAssetRequest(req, platformConfig = {}) {
+  const path = req.path || req.url;
+  const isDevelopment = process.env.NODE_ENV === 'development';
+
+  // Skip auth for API routes - they handle their own authentication
+  if (path.startsWith('/api')) {
+    return false;
+  }
+
+  // Common static assets (production and development)
+  const isCommonStaticAsset =
+    path.startsWith('/assets/') ||
+    path.startsWith('/favicon') ||
+    path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|html)$/);
+
+  // Vite dev server specific paths (development only)
+  const isViteAsset =
+    isDevelopment &&
+    (path.startsWith('/vite/') ||
+      path.startsWith('/@vite/') ||
+      path.startsWith('/@fs/') ||
+      path.startsWith('/node_modules/'));
+
+  // NTLM authentication requires the auth middleware to run on initial page requests
+  // to perform the challenge-response handshake. Do NOT bypass auth for SPA routes
+  // when NTLM is enabled.
+  const isNtlmEnabled = platformConfig?.ntlmAuth?.enabled === true;
+
+  // SPA routes (HTML page requests without file extensions) - let them through
+  // so the catch-all route in staticRoutes.js can serve index.html
+  // This allows direct navigation to routes like /apps/meeting-analyser
+  // EXCEPTION: When NTLM is enabled, SPA routes MUST go through auth middleware
+  const isSPARoute =
+    !isNtlmEnabled && !path.match(/\.[a-z0-9]+$/i) && !path.startsWith('/uploads/');
+
+  return isCommonStaticAsset || isViteAsset || isSPARoute;
+}
+
+/**
+ * Middleware wrapper that skips authentication for static assets
+ * @param {Function[]} authMiddlewares - Array of authentication middleware functions
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {import('express').RequestHandler}
+ */
+function createAuthChain(authMiddlewares, platformConfig = {}) {
+  return (req, res, next) => {
+    // Skip auth for static assets (respects NTLM requirements)
+    if (isStaticAssetRequest(req, platformConfig)) {
+      return next();
+    }
+
+    // Run auth middleware chain
+    let index = 0;
+    const runNext = err => {
+      if (err) return next(err);
+      if (index >= authMiddlewares.length) return next();
+
+      const middleware = authMiddlewares[index++];
+      middleware(req, res, runNext);
+    };
+
+    runNext();
+  };
+}
+
+/**
  * Process CORS origins, replacing environment variables and handling special cases
  * @param {string|Array} origins - CORS origins configuration
  * @returns {Array|string|boolean} - Processed origins
@@ -259,13 +331,23 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Configure OIDC providers based on platform configuration
   configureOidcProviders();
 
-  // Authentication middleware (order matters: proxy auth first, then unified JWT validation)
-  app.use(proxyAuth);
-  app.use(teamsAuthMiddleware);
-  app.use(jwtAuthMiddleware);
-  app.use(localAuthMiddleware); // Now mainly a placeholder for local auth specific logic
-  app.use(ldapAuthMiddleware); // LDAP auth placeholder for any LDAP-specific logic
-  app.use(ntlmAuthMiddleware); // NTLM handles its own initialization internally
+  // Apply authentication middleware chain (skips static assets automatically)
+  // Order matters: proxy auth first, then unified JWT validation
+  // IMPORTANT: When NTLM is enabled, SPA routes will NOT bypass auth to allow
+  // the NTLM challenge-response handshake to complete
+  app.use(
+    createAuthChain(
+      [
+        proxyAuth,
+        teamsAuthMiddleware,
+        jwtAuthMiddleware,
+        localAuthMiddleware, // Now mainly a placeholder for local auth specific logic
+        ldapAuthMiddleware, // LDAP auth placeholder for any LDAP-specific logic
+        ntlmAuthMiddleware // NTLM handles its own initialization internally
+      ],
+      platformConfig // Pass platform config to respect NTLM requirements
+    )
+  );
 
   // Enhance user with permissions after authentication
   app.use((req, res, next) => {

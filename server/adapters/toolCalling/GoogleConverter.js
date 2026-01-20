@@ -20,15 +20,37 @@ import {
  * @returns {Object[]} Google formatted tools
  */
 export function convertGenericToolsToGoogle(genericTools = []) {
-  return [
-    {
-      functionDeclarations: genericTools.map(tool => ({
-        name: normalizeToolName(tool.name),
+  const tools = [];
+
+  // Separate Google Search tool from regular function-based tools
+  const googleSearchTool = genericTools.find(tool => tool.id === 'googleSearch');
+  const functionTools = genericTools.filter(tool => tool.id !== 'googleSearch');
+
+  // Add Google Search grounding if present
+  if (googleSearchTool) {
+    tools.push({ google_search: {} });
+
+    // Google API limitation: google_search cannot be combined with functionDeclarations
+    // If both are present, prioritize google_search and warn about skipped function tools
+    if (functionTools.length > 0) {
+      console.warn(
+        `Google API limitation: Cannot combine google_search with function calling. ` +
+          `Skipping ${functionTools.length} function tool(s): ${functionTools.map(t => t.name).join(', ')}`
+      );
+    }
+  }
+  // Only add regular function declarations if google_search is NOT present
+  else if (functionTools.length > 0) {
+    tools.push({
+      functionDeclarations: functionTools.map(tool => ({
+        name: normalizeToolName(tool.id),
         description: tool.description,
         parameters: sanitizeSchemaForProvider(tool.parameters, 'google')
       }))
-    }
-  ];
+    });
+  }
+
+  return tools;
 }
 
 /**
@@ -163,6 +185,21 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
             result.content.push(part.text);
           }
         }
+        if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+          // Handle generated images
+          // Skip interim "thought images" - only show the final image
+          // According to Gemini docs, thought images are used for reasoning but not shown
+          if (part.thought === true) {
+            // This is an interim thought image, skip it
+            continue;
+          }
+          if (!result.images) result.images = [];
+          result.images.push({
+            mimeType: part.inlineData.mimeType,
+            data: part.inlineData.data,
+            thoughtSignature: part.thoughtSignature || null
+          });
+        }
         if (part.functionCall && part.functionCall.name) {
           // Only create tool call if we have a valid name
           result.tool_calls.push(
@@ -176,11 +213,18 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
           );
           if (!result.finishReason) result.finishReason = 'tool_calls';
         }
+        // Collect thought signatures for multi-turn conversations
+        if (part.thoughtSignature) {
+          if (!result.thoughtSignatures) result.thoughtSignatures = [];
+          result.thoughtSignatures.push(part.thoughtSignature);
+        }
       }
       result.complete = true;
       const fr = parsed.candidates[0].finishReason;
       // Only set finishReason from Google if we don't already have tool_calls
-      if (result.finishReason !== 'tool_calls') {
+      // Check both the finishReason flag AND the actual tool_calls array
+      // This is needed because Gemini 3.0 returns "STOP" even when making function calls
+      if (result.finishReason !== 'tool_calls' && result.tool_calls.length === 0) {
         result.finishReason = normalizeFinishReason(fr, 'google');
       }
     }
@@ -197,6 +241,21 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
             // Regular content
             result.content.push(part.text);
           }
+        }
+        if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+          // Handle generated images in streaming response
+          // Skip interim "thought images" - only show the final image
+          // According to Gemini docs, thought images are used for reasoning but not shown
+          if (part.thought === true) {
+            // This is an interim thought image, skip it
+            continue;
+          }
+          if (!result.images) result.images = [];
+          result.images.push({
+            mimeType: part.inlineData.mimeType,
+            data: part.inlineData.data,
+            thoughtSignature: part.thoughtSignature || null
+          });
         }
         if (part.functionCall && part.functionCall.name) {
           // Only create tool call if we have a valid name (non-empty)
@@ -220,13 +279,25 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
             part.functionCall
           );
         }
+        // Collect thought signatures for multi-turn conversations
+        if (part.thoughtSignature) {
+          if (!result.thoughtSignatures) result.thoughtSignatures = [];
+          result.thoughtSignatures.push(part.thoughtSignature);
+        }
       }
+    }
+
+    // Extract grounding metadata if present (for Google Search grounding)
+    if (parsed.groundingMetadata) {
+      result.groundingMetadata = parsed.groundingMetadata;
     }
 
     if (parsed.candidates && parsed.candidates[0]?.finishReason) {
       const fr = parsed.candidates[0].finishReason;
       // Only set finishReason from Google if we don't already have tool_calls
-      if (result.finishReason !== 'tool_calls') {
+      // Check both the finishReason flag AND the actual tool_calls array
+      // This is needed because Gemini 3.0 returns "STOP" even when making function calls
+      if (result.finishReason !== 'tool_calls' && result.tool_calls.length === 0) {
         result.finishReason = normalizeFinishReason(fr, 'google');
         result.complete = true;
       } else {

@@ -1,0 +1,132 @@
+{
+  "id": "image-generator",
+  "category": "creative",
+  "name": {
+    "en": "Image Generator",
+    "de": "Bildgenerator"
+  },
+  "description": {
+    "en": "Generate high-quality images using Google Gemini's image generation capabilities. Create images from text descriptions, edit existing images, or refine images through multi-turn conversations.",
+    "de": "Generieren Sie hochwertige Bilder mit Google Geminis Bildgenerierungsfunktionen. Erstellen Sie Bilder aus Textbeschreibungen, bearbeiten Sie vorhandene Bilder oder verfeinern Sie Bilder durch mehrfache Konversationen."
+  },
+  "color": "#9333EA",
+  "icon": "photograph",
+  "system": {
+    "en": "You are a creative image generation assistant. Help users create amazing images by:\n\n1. Understanding their vision and requirements\n2. Generating detailed, high-quality images from text descriptions\n3. Editing and refining existing images based on feedback\n4. Supporting iterative improvements through multi-turn conversations\n\nWhen generating images:\n- Be creative and precise in interpreting user requests\n- Provide context about what the image shows\n- Suggest improvements or variations if appropriate\n- Support multi-turn refinement for perfect results\n\nAll generated images include a SynthID watermark for authenticity.",
+    "de": "Sie sind ein kreativer Bildgenerierungs-Assistent. Helfen Sie Benutzern, erstaunliche Bilder zu erstellen durch:\n\n1. Verstehen ihrer Vision und Anforderungen\n2. Generieren detaillierter, hochwertiger Bilder aus Textbeschreibungen\n3. Bearbeiten und Verfeinern vorhandener Bilder basierend auf Feedback\n4. Unterstützen iterativer Verbesserungen durch mehrfache Konversationen\n\nBeim Generieren von Bildern:\n- Seien Sie kreativ und präzise bei der Interpretation von Benutzeranfragen\n- Geben Sie Kontext über den Inhalt des Bildes\n- Schlagen Sie Verbesserungen oder Variationen vor, wenn angebracht\n- Unterstützen Sie mehrfache Verfeinerungen für perfekte Ergebnisse\n\nAlle generierten Bilder enthalten ein SynthID-Wasserzeichen zur Authentizität."
+  },
+  "tokenLimit": 8000,
+  "preferredModel": "gemini-3-pro-image-preview",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "creative",
+  "preferredTemperature": 0.8,
+  "sendChatHistory": true,
+  "greeting": {
+    "en": {
+      "title": "🎨 Image Generator",
+      "subtitle": "Create stunning images with AI. Upload images to edit them, or describe what you want to create!"
+    },
+    "de": {
+      "title": "🎨 Bildgenerator",
+      "subtitle": "Erstellen Sie atemberaubende Bilder mit KI. Laden Sie Bilder hoch, um sie zu bearbeiten, oder beschreiben Sie, was Sie erstellen möchten!"
+    }
+  },
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true,
+      "filter": {
+        "supportsImageGeneration": true
+      }
+    },
+    "style": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": true
+    },
+    "outputFormat": {
+      "enabled": false
+    },
+    "chatHistory": {
+      "enabled": true
+    }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 3,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "upload": {
+    "enabled": true,
+    "imageUpload": {
+      "enabled": true,
+      "resizeImages": false,
+      "maxFileSizeMB": 10,
+      "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+    }
+  },
+  "starterPrompts": [
+    {
+      "title": {
+        "en": "Futuristic cityscape",
+        "de": "Futuristische Stadtlandschaft"
+      },
+      "description": {
+        "en": "Generate a futuristic cityscape at sunset",
+        "de": "Generiere eine futuristische Stadtlandschaft bei Sonnenuntergang"
+      },
+      "message": {
+        "en": "Generate a futuristic cityscape at sunset",
+        "de": "Generiere eine futuristische Stadtlandschaft bei Sonnenuntergang"
+      }
+    },
+    {
+      "title": {
+        "en": "Butterfly diagram",
+        "de": "Schmetterling-Diagramm"
+      },
+      "description": {
+        "en": "Create a detailed anatomical diagram of a butterfly",
+        "de": "Erstelle ein detailliertes anatomisches Diagramm eines Schmetterlings"
+      },
+      "message": {
+        "en": "Create a detailed anatomical diagram of a butterfly",
+        "de": "Erstelle ein detailliertes anatomisches Diagramm eines Schmetterlings"
+      }
+    },
+    {
+      "title": {
+        "en": "Tech startup logo",
+        "de": "Tech-Startup-Logo"
+      },
+      "description": {
+        "en": "Design a logo for a tech startup",
+        "de": "Entwerfe ein Logo für ein Tech-Startup"
+      },
+      "message": {
+        "en": "Design a logo for a tech startup",
+        "de": "Entwerfe ein Logo für ein Tech-Startup"
+      }
+    },
+    {
+      "title": {
+        "en": "Weather forecast",
+        "de": "Wettervorhersage"
+      },
+      "description": {
+        "en": "Visualize the weather forecast for San Francisco",
+        "de": "Visualisiere die Wettervorhersage für San Francisco"
+      },
+      "message": {
+        "en": "Visualize the weather forecast for San Francisco",
+        "de": "Visualisiere die Wettervorhersage für San Francisco"
+      }
+    }
+  ],
+  "enabled": true
+}

@@ -4,6 +4,7 @@
  */
 import configCache from './configCache.js';
 import { enhanceFetchOptions } from './utils/httpConfig.js';
+import nodeFetch from 'node-fetch';
 
 const lastCompleted = new Map(); // id -> timestamp when last request finished
 
@@ -63,10 +64,24 @@ export function throttledFetch(id, url, options = {}) {
           await new Promise(r => setTimeout(r, wait));
         }
 
-        // Apply global SSL configuration
+        // Apply global SSL and proxy configuration
         const requestOptions = enhanceFetchOptions(options, url);
 
-        const res = await fetch(url, requestOptions);
+        /**
+         * Conditional Fetch Selection (Proxy Compatibility Workaround)
+         *
+         * Native Node.js fetch() (introduced in v18+) does NOT support the 'agent' option,
+         * which is required for proxy support via http-proxy-agent/https-proxy-agent.
+         *
+         * Solution: Use node-fetch when an agent is configured (proxy or SSL).
+         * - WITH agent: Use node-fetch (supports agent option for proxy/SSL)
+         * - WITHOUT agent: Use native fetch (optimal performance)
+         *
+         * This ensures proxy configuration works correctly while maintaining performance
+         * for non-proxy scenarios.
+         */
+        const fetchFn = requestOptions.agent ? nodeFetch : fetch;
+        const res = await fetchFn(url, requestOptions);
         resolve(res);
       } catch (err) {
         reject(err);

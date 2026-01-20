@@ -621,7 +621,8 @@ class ToolExecutor {
         DEFAULT_TIMEOUT,
         getLocalizedError,
         clientLanguage,
-        user
+        user,
+        app
       });
     } catch (error) {
       clearTimeout(timeoutId);
@@ -666,7 +667,8 @@ class ToolExecutor {
     DEFAULT_TIMEOUT,
     getLocalizedError,
     clientLanguage,
-    user
+    user,
+    app
   }) {
     const maxIterations = 10; // Prevent infinite loops
     let iteration = 0;

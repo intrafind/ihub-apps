@@ -70,9 +70,174 @@ Controls platform feature flags and capabilities.
 - **usageTracking** (boolean) – Enables or disables recording of usage statistics in `contents/data/usage.json`. Default: `true`
 
 ### **globalPromptVariables**
-Defines variables that are automatically injected into all prompts across the platform.
 
-- **context** (string) – Global context string injected into prompts. Supports dynamic variables like `{{timezone}}`, `{{date}}`, etc.
+Global prompt variables enable platform administrators to inject dynamic context and information into all AI conversations automatically. These variables are resolved at runtime and can be used in app system prompts, user prompts, and the global context string.
+
+#### Configuration
+
+```json
+{
+  "globalPromptVariables": {
+    "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user."
+  }
+}
+```
+
+#### Properties
+
+- **context** (string) – Global context string that is automatically prepended to all system prompts across the platform. This string can include dynamic variable placeholders that are resolved at runtime. The processed context is available via the `{{platform_context}}` variable in app configurations.
+
+#### Available Built-in Variables
+
+The platform automatically provides the following variables that can be used in the `context` string or in any app prompt:
+
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| `{{year}}` | Current year | `"2026"` |
+| `{{month}}` | Current month (zero-padded) | `"01"` |
+| `{{date}}` | Localized full date | `"January 19, 2026"` |
+| `{{time}}` | Localized time | `"7:13:29 PM"` |
+| `{{day_of_week}}` | Localized day of week | `"Sunday"` |
+| `{{timezone}}` | User's timezone | `"America/New_York"` or `"UTC"` |
+| `{{locale}}` | Current language/locale | `"en"`, `"de"` |
+| `{{user_name}}` | Authenticated user's display name | `"John Doe"` (empty for anonymous) |
+| `{{user_email}}` | Authenticated user's email | `"john@example.com"` (empty for anonymous) |
+| `{{model_name}}` | Current model being used | `"gpt-4"` |
+| `{{tone}}` | Selected tone/style setting | `"professional"` |
+| `{{location}}` | User's location (if configured) | `"San Francisco, CA"` |
+| `{{platform_context}}` | The processed global context | Full context string with variables resolved |
+
+**Note:** All date and time variables respect the user's timezone setting. If no timezone is configured for the user, UTC is used as the default.
+
+#### How It Works
+
+1. **Platform Level:** The `context` string in `globalPromptVariables` is processed by replacing all variable placeholders with their actual values
+2. **Variable Resolution:** Built-in variables are automatically populated from user profile, session data, and system state
+3. **App Integration:** Apps can reference the processed context using `{{platform_context}}` in their system prompts
+4. **Automatic Injection:** All variables are available in any prompt template without explicit declaration
+
+#### Use Cases
+
+**1. Date and Time Awareness**
+Ensure AI responses are contextually aware of the current date and time:
+```json
+{
+  "context": "Important: Today is {{date}} ({{day_of_week}}) at {{time}} {{timezone}}. Use this when discussing current events or time-sensitive topics."
+}
+```
+
+**2. Personalization**
+Provide user-specific context in all interactions:
+```json
+{
+  "context": "You are assisting {{user_name}} ({{user_email}}) who is located in {{location}}. Tailor your responses to their context and timezone ({{timezone}})."
+}
+```
+
+**3. Localization Support**
+Ensure responses match the user's language preference:
+```json
+{
+  "context": "The user's preferred language is {{locale}}. Always respond in this language unless explicitly asked otherwise. The user's timezone is {{timezone}} and the current date is {{date}}."
+}
+```
+
+**4. Knowledge Cutoff Awareness**
+Help AI models acknowledge their training data limitations:
+```json
+{
+  "context": "Very important: The current date is {{date}}. Your knowledge cutoff may be before this date. When users ask for 'latest', 'recent', or 'today's' information about events, news, or data, acknowledge that your knowledge may be outdated and suggest alternative approaches if you cannot provide current information."
+}
+```
+
+**5. Compliance and Auditing**
+Include tracking information for enterprise requirements:
+```json
+{
+  "context": "User: {{user_name}} ({{user_email}}), Session Time: {{date}} {{time}} {{timezone}}, Model: {{model_name}}. Ensure all responses comply with company policies."
+}
+```
+
+#### Using Variables in App Configurations
+
+Global variables can be used in any app's `system` prompt or custom prompt templates:
+
+**Example App with Global Variables:**
+```json
+{
+  "id": "research-assistant",
+  "name": { "en": "Research Assistant" },
+  "system": {
+    "en": "{{platform_context}}\n\nYou are a research assistant helping {{user_name}}. Today is {{date}} at {{time}} in {{timezone}}. When providing information, always consider whether it might be outdated relative to today's date."
+  },
+  "prompt": {
+    "en": "Research the following topic: {{topic}}\n\nRemember: Current date is {{date}}, user timezone is {{timezone}}"
+  }
+}
+```
+
+**Using Variables in Prompt Templates:**
+```json
+{
+  "prompt": {
+    "en": "Hello {{user_name}}, analyze this document considering it's {{date}} in {{timezone}}: {{content}}"
+  }
+}
+```
+
+#### Best Practices
+
+1. **Keep Context Concise:** While powerful, avoid creating overly long context strings that consume token budget unnecessarily
+2. **Use Relevant Variables:** Only include variables that add value to your use case
+3. **Consider Privacy:** Be mindful when including user information like email addresses in prompts
+4. **Test Thoroughly:** Verify that variable substitution works correctly across different user scenarios (authenticated, anonymous, different timezones)
+5. **Locale-Aware Formatting:** Date and time formats automatically adapt to the user's locale setting
+6. **Fallback Values:** Most user-specific variables (like `user_name`, `user_email`, `location`) will be empty strings for anonymous users
+
+#### Variable Priority
+
+When the same variable name appears in multiple places:
+
+1. **User-defined variables** (from app variable forms) have highest priority
+2. **Global prompt variables** are used as fallback
+3. Variables in the `context` string are resolved first, then the result is available as `{{platform_context}}`
+
+#### Advanced Configuration
+
+**Dynamic Multi-Language Context:**
+```json
+{
+  "globalPromptVariables": {
+    "context": "IMPORTANT CONTEXT:\n- Current date: {{date}} ({{day_of_week}})\n- Time: {{time}} in {{timezone}}\n- User: {{user_name}}\n- Language: {{locale}}\n- Model: {{model_name}}\n\nWhen users ask about 'today', 'now', 'latest', or 'recent' information, remember that your knowledge may be outdated. The current date is {{date}}."
+  }
+}
+```
+
+**Minimal Context for Token Efficiency:**
+```json
+{
+  "globalPromptVariables": {
+    "context": "Date: {{date}} | TZ: {{timezone}} | Lang: {{locale}}"
+  }
+}
+```
+
+#### Troubleshooting
+
+**Variables Not Resolving:**
+- Ensure variable names are spelled correctly with proper casing
+- Check that variables are wrapped in double curly braces: `{{variable_name}}`
+- Verify the platform configuration is valid JSON
+
+**Empty Values:**
+- `user_name`, `user_email`, and `location` will be empty for anonymous users
+- `tone` will be empty if no style/tone is selected
+- `model_name` may be empty if using default model
+
+**Date/Time Issues:**
+- Verify the user's timezone is properly configured
+- Check that the `defaultLanguage` in platform.json matches your locale expectations
+- Date and time formatting follows the user's locale setting automatically
 
 ### **pdfExport**
 Configuration for PDF export functionality.

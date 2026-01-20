@@ -65,6 +65,7 @@ const AdminAppEditPage = () => {
       // Initialize new app
       setApp({
         id: '',
+        type: 'chat',
         order: 0,
         name: { en: '' },
         description: { en: '' },

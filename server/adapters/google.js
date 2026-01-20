@@ -6,6 +6,20 @@ import { BaseAdapter } from './BaseAdapter.js';
 
 class GoogleAdapterClass extends BaseAdapter {
   /**
+   * Helper to process inline image data from response parts
+   */
+  processInlineImage(part) {
+    if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+      return {
+        mimeType: part.inlineData.mimeType,
+        data: part.inlineData.data,
+        thoughtSignature: part.thoughtSignature || null
+      };
+    }
+    return null;
+  }
+
+  /**
    * Format messages for Google Gemini API, including handling image data
    */
   formatMessages(messages) {
@@ -197,6 +211,32 @@ class GoogleAdapterClass extends BaseAdapter {
       }
     }
 
+    // Add image generation configuration if model supports it
+    if (model.supportsImageGeneration) {
+      // Enable image generation by setting responseModalities to include IMAGE
+      requestBody.generationConfig.responseModalities = ['TEXT', 'IMAGE'];
+
+      // Add imageConfig if provided in options or model configuration
+      const imageConfig = options.imageConfig || model.imageGeneration || {};
+
+      if (imageConfig.aspectRatio || imageConfig.imageSize) {
+        requestBody.generationConfig.imageConfig = {};
+
+        if (imageConfig.aspectRatio) {
+          requestBody.generationConfig.imageConfig.aspectRatio = imageConfig.aspectRatio;
+        }
+
+        if (imageConfig.imageSize) {
+          requestBody.generationConfig.imageConfig.imageSize = imageConfig.imageSize;
+        }
+      }
+
+      console.log('Image generation enabled with config:', {
+        responseModalities: requestBody.generationConfig.responseModalities,
+        imageConfig: requestBody.generationConfig.imageConfig
+      });
+    }
+
     console.log('Google request body:', requestBody);
 
     return {
@@ -218,6 +258,9 @@ class GoogleAdapterClass extends BaseAdapter {
         content: [],
         tool_calls: [],
         thinking: [],
+        images: [],
+        thoughtSignatures: [],
+        groundingMetadata: null,
         complete: false,
         error: false,
         errorMessage: null,
@@ -248,6 +291,13 @@ class GoogleAdapterClass extends BaseAdapter {
                 result.content.push(part.text);
               }
             }
+            const image = this.processInlineImage(part);
+            if (image) {
+              // Skip interim "thought images" - only show the final image
+              if (part.thought !== true) {
+                result.images.push(image);
+              }
+            }
             if (part.functionCall) {
               result.tool_calls.push({
                 index: 0,
@@ -259,11 +309,17 @@ class GoogleAdapterClass extends BaseAdapter {
               });
               if (!result.finishReason) result.finishReason = 'tool_calls';
             }
+            // Collect thought signatures for multi-turn conversations
+            if (part.thoughtSignature) {
+              result.thoughtSignatures.push(part.thoughtSignature);
+            }
           }
           result.complete = true;
           const fr = parsed.candidates[0].finishReason;
           // Only set finishReason from Gemini if we don't already have tool_calls
-          if (result.finishReason !== 'tool_calls') {
+          // Check both the finishReason flag AND the actual tool_calls array
+          // This is needed because Gemini 3.0 returns "STOP" even when making function calls
+          if (result.finishReason !== 'tool_calls' && result.tool_calls.length === 0) {
             if (fr === 'STOP') {
               result.finishReason = 'stop';
             } else if (fr === 'MAX_TOKENS') {
@@ -286,6 +342,13 @@ class GoogleAdapterClass extends BaseAdapter {
                 result.content.push(part.text);
               }
             }
+            const image = this.processInlineImage(part);
+            if (image) {
+              // Skip interim "thought images" - only show the final image
+              if (part.thought !== true) {
+                result.images.push(image);
+              }
+            }
             if (part.functionCall) {
               result.tool_calls.push({
                 index: idx++,
@@ -297,7 +360,16 @@ class GoogleAdapterClass extends BaseAdapter {
               });
               if (!result.finishReason) result.finishReason = 'tool_calls';
             }
+            // Collect thought signatures for multi-turn conversations
+            if (part.thoughtSignature) {
+              result.thoughtSignatures.push(part.thoughtSignature);
+            }
           }
+        }
+
+        // Extract grounding metadata if present (for Google Search grounding)
+        if (parsed.groundingMetadata) {
+          result.groundingMetadata = parsed.groundingMetadata;
         }
 
         // TODO we should make use of the candidate metadata
@@ -316,7 +388,9 @@ class GoogleAdapterClass extends BaseAdapter {
           // Map Gemini finish reasons to normalized values used by the client
           // Documented reasons include STOP, MAX_TOKENS, SAFETY, RECITATION and OTHER
           // Only set finishReason from Gemini if we don't already have tool_calls
-          if (result.finishReason !== 'tool_calls') {
+          // Check both the finishReason flag AND the actual tool_calls array
+          // This is needed because Gemini 3.0 returns "STOP" even when making function calls
+          if (result.finishReason !== 'tool_calls' && result.tool_calls.length === 0) {
             if (fr === 'STOP') {
               result.finishReason = 'stop';
               result.complete = true;

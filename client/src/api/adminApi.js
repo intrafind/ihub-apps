@@ -358,6 +358,68 @@ export const toggleSources = async (ids, enabled) => {
   return response.data;
 };
 
+// Tools API functions
+export const fetchAdminTools = async () => {
+  try {
+    const response = await makeAdminApiCall('/admin/tools');
+    const data = response.data;
+
+    // Ensure we return an array
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error in fetchAdminTools:', error);
+    throw error;
+  }
+};
+
+export const fetchAdminTool = async toolId => {
+  const response = await makeAdminApiCall(`/admin/tools/${toolId}`);
+  return response.data;
+};
+
+export const createTool = async toolData => {
+  const response = await makeAdminApiCall('/admin/tools', {
+    method: 'POST',
+    body: toolData
+  });
+  return response.data;
+};
+
+export const updateTool = async (toolId, toolData) => {
+  const response = await makeAdminApiCall(`/admin/tools/${toolId}`, {
+    method: 'PUT',
+    body: toolData
+  });
+  return response.data;
+};
+
+export const deleteTool = async toolId => {
+  const response = await makeAdminApiCall(`/admin/tools/${toolId}`, {
+    method: 'DELETE'
+  });
+  return response.data;
+};
+
+export const toggleTool = async toolId => {
+  const response = await makeAdminApiCall(`/admin/tools/${toolId}/toggle`, {
+    method: 'POST'
+  });
+  return response.data;
+};
+
+export const fetchToolScript = async toolId => {
+  const response = await makeAdminApiCall(`/admin/tools/${toolId}/script`);
+  return response.data;
+};
+
+export const updateToolScript = async (toolId, content) => {
+  const response = await makeAdminApiCall(`/admin/tools/${toolId}/script`, {
+    method: 'PUT',
+    body: { content }
+  });
+  return response.data;
+};
+
 // Create an adminApi object that contains all the functions for compatibility
 export const adminApi = {
   // Existing functions
@@ -396,5 +458,15 @@ export const adminApi = {
   updateSource,
   deleteSource,
   testSource,
-  toggleSources
+  toggleSources,
+
+  // Tools functions
+  fetchAdminTools,
+  fetchAdminTool,
+  createTool,
+  updateTool,
+  deleteTool,
+  toggleTool,
+  fetchToolScript,
+  updateToolScript
 };

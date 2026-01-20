@@ -207,6 +207,22 @@ function processNtlmUser(req, ntlmConfig) {
 }
 
 /**
+ * Check if multiple authentication providers are enabled
+ * @param {Object} platform - Platform configuration
+ * @returns {boolean} True if more than one auth provider is enabled
+ */
+function hasMultipleAuthProviders(platform) {
+  const enabledProviders = [
+    platform.localAuth?.enabled,
+    platform.ldapAuth?.enabled,
+    platform.oidcAuth?.enabled,
+    platform.proxyAuth?.enabled
+  ].filter(Boolean).length;
+
+  return enabledProviders > 0; // NTLM + at least one other provider
+}
+
+/**
  * NTLM authentication middleware - self-contained like other auth middlewares
  * Handles both express-ntlm initialization and user processing
  * @param {Object} req - Express request object
@@ -219,6 +235,19 @@ export function ntlmAuthMiddleware(req, res, next) {
 
   // Not enabled - skip
   if (!ntlmAuth.enabled) {
+    return next();
+  }
+
+  // Skip if user is already authenticated by a previous middleware (JWT, OAuth, etc.)
+  if (req.user && req.user.id && req.user.id !== 'anonymous') {
+    // Debug logging in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[NTLM Debug] Skipping NTLM - user already authenticated:', {
+        userId: req.user.id,
+        authMode: req.user.authMode,
+        url: req.url
+      });
+    }
     return next();
   }
 
@@ -248,6 +277,24 @@ export function ntlmAuthMiddleware(req, res, next) {
     if (isDev) {
       console.log(
         '[NTLM Debug] Skipping NTLM for Vite proxy (set SKIP_NTLM_VITE_PROXY=false to test NTLM through Vite)'
+      );
+    }
+    return next();
+  }
+
+  // When multiple auth providers are configured, NTLM should only activate when explicitly requested
+  // This prevents automatic NTLM SSO from blocking access to local/LDAP login
+  const multipleProviders = hasMultipleAuthProviders(platform);
+  const ntlmRequested = req.query.ntlm === 'true' || req.session?.ntlmRequested === true;
+
+  // Check if this is the NTLM login endpoint - use exact path matching for security
+  const isNtlmLoginEndpoint =
+    req.path === '/api/auth/ntlm/login' || req.path.startsWith('/api/auth/ntlm/login?');
+
+  if (multipleProviders && !ntlmRequested && !isNtlmLoginEndpoint) {
+    if (isDev) {
+      console.log(
+        '[NTLM Debug] Multiple providers configured, skipping auto-NTLM (not explicitly requested)'
       );
     }
     return next();

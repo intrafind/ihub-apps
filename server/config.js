@@ -13,7 +13,7 @@ const env = cleanEnv(
   {
     PORT: num({ default: 3000 }),
     HOST: str({ default: '0.0.0.0' }),
-    REQUEST_TIMEOUT: num({ default: 60000 }),
+    REQUEST_TIMEOUT: num({ default: 300000 }), // 5 minutes for streaming/generation requests
     WORKERS: num({ default: undefined, optional: true }),
     NUM_WORKERS: num({ default: undefined, optional: true }),
     SSL_KEY: str({ optional: true }),
@@ -41,7 +41,10 @@ const env = cleanEnv(
     PROXY_AUTH_USER_HEADER: str({ optional: true }),
     PROXY_AUTH_GROUPS_HEADER: str({ optional: true }),
     PROXY_AUTH_JWKS: str({ optional: true }),
-    PROXY_AUTH_JWT_HEADER: str({ optional: true })
+    PROXY_AUTH_JWT_HEADER: str({ optional: true }),
+    HTTP_PROXY: str({ optional: true }),
+    HTTPS_PROXY: str({ optional: true }),
+    NO_PROXY: str({ optional: true })
   },
   {
     reporter: () => {}, // Disable envalid's default reporter that shows missing variables
@@ -77,7 +80,10 @@ const config = Object.freeze({
   PROXY_AUTH_USER_HEADER: env.PROXY_AUTH_USER_HEADER,
   PROXY_AUTH_GROUPS_HEADER: env.PROXY_AUTH_GROUPS_HEADER,
   PROXY_AUTH_JWKS: env.PROXY_AUTH_JWKS,
-  PROXY_AUTH_JWT_HEADER: env.PROXY_AUTH_JWT_HEADER
+  PROXY_AUTH_JWT_HEADER: env.PROXY_AUTH_JWT_HEADER,
+  HTTP_PROXY: env.HTTP_PROXY,
+  HTTPS_PROXY: env.HTTPS_PROXY,
+  NO_PROXY: env.NO_PROXY
 });
 
 export default config;

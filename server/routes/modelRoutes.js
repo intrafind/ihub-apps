@@ -14,15 +14,31 @@ export default function registerModelRoutes(app, { getLocalizedError, basePath =
    * /models:
    *   get:
    *     summary: Get available models
-   *     description: Retrieves a list of all available AI models that the user has access to
+   *     description: |
+   *       Retrieves a list of all available AI models that the user has access to.
+   *       Supports conditional requests using ETag for efficient caching.
+   *       Include 'If-None-Match' header with previously received ETag to get 304 Not Modified
+   *       response if the models list hasn't changed.
    *     tags:
    *       - Models
    *     security:
    *       - bearerAuth: []
    *       - sessionAuth: []
+   *     parameters:
+   *       - in: header
+   *         name: If-None-Match
+   *         required: false
+   *         schema:
+   *           type: string
+   *         description: Client ETag for conditional requests (304 response if unchanged)
    *     responses:
    *       200:
    *         description: List of available models
+   *         headers:
+   *           ETag:
+   *             description: Entity tag for cache validation
+   *             schema:
+   *               type: string
    *         content:
    *           application/json:
    *             schema:
@@ -48,6 +64,8 @@ export default function registerModelRoutes(app, { getLocalizedError, basePath =
    *                       enabled:
    *                         type: boolean
    *                         description: Whether the model is enabled
+   *       304:
+   *         description: Not Modified - content hasn't changed (ETag match)
    *       401:
    *         description: Authentication required
    *       500:
@@ -78,7 +96,15 @@ export default function registerModelRoutes(app, { getLocalizedError, basePath =
         return sendFailedOperationError(res, 'load models configuration');
       }
 
-      res.setHeader('ETag', userSpecificEtag);
+      // Handle conditional requests with ETag
+      if (userSpecificEtag) {
+        res.setHeader('ETag', userSpecificEtag);
+        const clientETag = req.headers['if-none-match'];
+        if (clientETag && clientETag === userSpecificEtag) {
+          return res.status(304).end();
+        }
+      }
+
       res.json(models);
     } catch (error) {
       sendInternalError(res, error, 'fetching models');

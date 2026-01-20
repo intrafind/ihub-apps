@@ -3,6 +3,7 @@ title = "iHub Apps Documentation"
 authors = ["IntraFind"]
 description = "iHub Applications Platform - AI-powered applications with LLM integration"
 src = "."
+language = "en"
 
 [build]
 create-missing = false
@@ -16,6 +17,7 @@ edit-url-template = "https://github.com/intrafind/ihub-apps/edit/main/docs/{path
 
 [preprocessor.template]
 command = "mdbook-template"
+optional = true
 
 [preprocessor.mermaid]
 command = "mdbook-mermaid"

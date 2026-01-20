@@ -15,12 +15,13 @@ import {
 
 /**
  * Convert generic tools to Anthropic format
+ * Anthropic requires tool names to match pattern ^[a-zA-Z0-9_-]{1,128}$
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} Anthropic formatted tools
  */
 export function convertGenericToolsToAnthropic(genericTools = []) {
   return genericTools.map(tool => ({
-    name: tool.name,
+    name: tool.id || tool.name,
     description: tool.description,
     input_schema: sanitizeSchemaForProvider(tool.parameters, 'anthropic')
   }));

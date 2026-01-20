@@ -1,0 +1,128 @@
+{
+  "id": "web-chat",
+  "name": {
+    "en": "Web Chat",
+    "de": "Chat mit dem Web"
+  },
+  "description": {
+    "en": "General chat assistant with web search",
+    "de": "Allgemeiner Chat-Assistent mit Websuche"
+  },
+  "color": "#4F46E5",
+  "icon": "chat-bubbles",
+  "system": {
+    "en": "You are a helpful AI assistant with access to enhanced web search tools. You can search the web and automatically extract full content from relevant pages to provide comprehensive, up-to-date information. When the user asks a question:\n\n1. If the user's message contains a URL, use the webContentExtractor tool to load its content.\n2. Use the enhancedWebSearch, google_search or web_search tool to search for additional relevant information and extract content from the top results.\n3. Analyze the extracted content to provide accurate, detailed answers.\n4. Always cite your sources with URLs when providing information.\n\nProvide clear, well-structured answers based on the most current information available.",
+    "de": "Du bist ein hilfreicher KI-Assistent mit Zugriff auf erweiterte Websuch-Tools. Du kannst das Web durchsuchen und automatisch vollständige Inhalte von relevanten Seiten extrahieren, um umfassende, aktuelle Informationen bereitzustellen. Wenn der Benutzer eine Frage stellt:\n\n1. Enthält die Benutzernachricht eine URL, verwende das webContentExtractor-Tool, um den Inhalt dieser Seite zu laden.\n2. Nutze das enhancedWebSearch-Tool, um nach weiteren relevanten Informationen zu suchen und Inhalte aus den Top-Ergebnissen zu extrahieren.\n3. Analysiere die extrahierten Inhalte, um genaue, detaillierte Antworten zu geben.\n4. Zitiere immer deine Quellen mit URLs, wenn du Informationen bereitstellst.\n\nGib klare, gut strukturierte Antworten basierend auf den aktuellsten verfügbaren Informationen."
+  },
+  "tokenLimit": 8000,
+  "preferredModel": "gemini-2.5-flash-preview-05-20",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "normal",
+  "preferredTemperature": 1,
+  "enabled": true,
+  "order": 1,
+  "prompt": {
+    "en": "{{content}}"
+  },
+  "variables": [],
+  "starterPrompts": [],
+  "tools": ["enhancedWebSearch", "webContentExtractor", "googleSearch", "webSearch"],
+  "allowEmptyContent": false,
+  "sendChatHistory": true,
+  "category": "utility",
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": true
+    },
+    "outputFormat": {
+      "enabled": true
+    },
+    "chatHistory": {
+      "enabled": true
+    },
+    "style": {
+      "enabled": true
+    }
+  },
+  "inputMode": {
+    "type": "singleline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "useAI": false,
+  "useTemplate": true,
+  "useManual": false,
+  "parentId": "chat-with-web",
+  "inheritanceLevel": 1,
+  "overriddenFields": [
+    "id",
+    "id",
+    "id",
+    "id",
+    "id",
+    "id",
+    "id",
+    "id",
+    "name",
+    "name",
+    "name",
+    "name",
+    "name",
+    "name",
+    "name",
+    "name",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "system",
+    "preferredTemperature",
+    "preferredTemperature",
+    "preferredTemperature"
+  ],
+  "type": "chat",
+  "greeting": {
+    "en": {
+      "title": "👋 Hello!",
+      "subtitle": "How can I help you today?"
+    },
+    "de": {
+      "title": "👋 Hallo!",
+      "subtitle": "Wie kann ich Ihnen heute helfen?"
+    }
+  },
+  "disallowModelSelection": false,
+  "allowInheritance": false
+}

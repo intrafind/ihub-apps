@@ -35,9 +35,12 @@ class EntraService {
     params.append('grant_type', 'client_credentials');
 
     try {
-      const axiosConfig = enhanceAxiosConfig({
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-      });
+      const axiosConfig = enhanceAxiosConfig(
+        {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        },
+        this.tokenUrl
+      );
       const response = await axios.post(this.tokenUrl, params, axiosConfig);
       const tokenData = response.data;
       this.accessToken = tokenData.access_token;
@@ -54,10 +57,13 @@ class EntraService {
     const token = await this._getAccessToken();
     const url = `${this.graphUrl}${endpoint}`;
     try {
-      const axiosConfig = enhanceAxiosConfig({
-        headers: { Authorization: `Bearer ${token}` },
-        ...options
-      });
+      const axiosConfig = enhanceAxiosConfig(
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          ...options
+        },
+        url
+      );
       const response = await axios.get(url, axiosConfig);
       return response.data;
     } catch (error) {

@@ -116,10 +116,16 @@ class RequestBuilder {
       console.log(
         `Preparing request for App: ${app.id}, Model: ${model.id}, Max Tokens: ${useMaxTokens ? 'Max' : 'Calculated'}`
       );
-      const appTokenLimit = app.tokenLimit || 1024;
-      console.log(`App Token Limit: ${appTokenLimit}`);
-      const modelTokenLimit = model.tokenLimit || appTokenLimit;
+
+      // Determine model token limit (default to 8192 if not specified)
+      const modelTokenLimit = model.tokenLimit || 8192;
       console.log(`Model Token Limit: ${modelTokenLimit}`);
+
+      // If app specifies tokenLimit, use it; otherwise use model's tokenLimit
+      const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
+      console.log(`App Token Limit: ${appTokenLimit}`);
+
+      // Use max tokens if requested, otherwise use the minimum of app and model limits
       const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
       console.log(`Final Token Limit for Request: ${finalTokens}`);
 

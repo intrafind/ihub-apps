@@ -5,7 +5,6 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { fetchToolsBasic, fetchModels } from '../../../api';
 import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
-import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import {
   validateAppId,
   APP_ID_MAX_LENGTH,
@@ -638,7 +637,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
         setLoadingPrompt(true);
         try {
           const response = await makeAdminApiCall(
-            buildApiUrl(`/admin/prompts/app-generator?lang=${selectedLanguage}`)
+            `/admin/prompts/app-generator?lang=${selectedLanguage}`
           );
           setAppGeneratorPrompt(response.data);
         } catch (error) {
@@ -651,7 +650,7 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
           if (selectedLanguage !== DEFAULT_LANGUAGE) {
             try {
               const fallbackResponse = await makeAdminApiCall(
-                buildApiUrl(`/admin/prompts/app-generator?lang=${DEFAULT_LANGUAGE}`)
+                `/admin/prompts/app-generator?lang=${DEFAULT_LANGUAGE}`
               );
               setAppGeneratorPrompt(fallbackResponse.data);
             } catch (fallbackError) {

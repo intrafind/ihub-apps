@@ -1,6 +1,6 @@
 # iHub Apps Documentation
 
-**Version: 3.3.0**
+**Version: 4.2.0**
 
 This book contains configuration details and user instructions for the iHub Apps platform - an AI-powered applications platform with LLM integration.
 

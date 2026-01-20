@@ -35,11 +35,12 @@ cp -r client/dist/* dist/public/
 
 # Step 3: Build documentation
 echo "Building documentation..."
-npm run docs:build
+npm run docs:build:all
 
 # Copy generated docs into dist
-mkdir -p dist/public/help
-cp -r docs/book/* dist/public/help/
+mkdir -p dist/public/help dist/exports
+cp -r docs/book/html/* dist/public/help/ 2>/dev/null || true
+cp docs/book/iHub-Apps-Documentation.md dist/exports/ 2>/dev/null || true
 
 # Step 4: Copy server files
 echo "Copying server files..."

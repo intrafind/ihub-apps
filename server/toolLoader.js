@@ -231,6 +231,13 @@ export async function runTool(toolId, params = {}) {
     throw new Error(`Tool ${toolId} not found`);
   }
 
+  // Check if this is a special tool (like Google Search) that doesn't have a script
+  if (tool.isSpecialTool) {
+    // Special tools are handled by the model provider directly, not executed here
+    console.log(`Special tool ${toolId} is handled by provider, skipping execution`);
+    return { handled_by_provider: true };
+  }
+
   const scriptName = tool.script || `${toolId}.js`;
   if (!/^[A-Za-z0-9_-]+\.js$/.test(scriptName)) {
     throw new Error('Invalid script name');

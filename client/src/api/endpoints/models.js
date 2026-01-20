@@ -1,18 +1,32 @@
 import { apiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
 import { CACHE_KEYS, DEFAULT_CACHE_TTL, buildCacheKey } from '../../utils/cache';
+import cache from '../../utils/cache';
 
 // Models
 export const fetchModels = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : CACHE_KEYS.MODELS_LIST;
 
-  const response = await handleApiResponse(
-    () => apiClient.get('/models'),
+  return handleApiResponse(
+    () => {
+      const headers = {};
+
+      // Add ETag header if we have cached data
+      if (cacheKey) {
+        const cachedData = cache.get(cacheKey);
+        if (cachedData && cachedData.etag) {
+          headers['If-None-Match'] = cachedData.etag;
+        }
+      }
+
+      return apiClient.get('/models', { headers });
+    },
     cacheKey,
-    DEFAULT_CACHE_TTL.MEDIUM
+    DEFAULT_CACHE_TTL.MEDIUM,
+    true,
+    true // Enable ETag handling
   );
-  return response?.data || response || [];
 };
 
 export const fetchModelDetails = async (modelId, options = {}) => {

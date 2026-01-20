@@ -29,13 +29,41 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install mdBook
         uses: peaceiris/actions-mdbook@v1
         with:
           mdbook-version: 'latest'
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Cargo binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-mdbook-${{ hashFiles('**/book.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-mdbook-
+
+      - name: Install mdbook-mermaid
+        run: |
+          if ! command -v mdbook-mermaid &> /dev/null; then
+            echo "Installing mdbook-mermaid..."
+            cargo install mdbook-mermaid
+          else
+            echo "mdbook-mermaid already installed"
+          fi
+        shell: bash
 
       - name: Install dependencies
         run: |
@@ -97,13 +125,41 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install mdBook
         uses: peaceiris/actions-mdbook@v1
         with:
           mdbook-version: 'latest'
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Cargo binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-mdbook-${{ hashFiles('**/book.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-mdbook-
+
+      - name: Install mdbook-mermaid
+        run: |
+          if ! command -v mdbook-mermaid &> /dev/null; then
+            echo "Installing mdbook-mermaid..."
+            cargo install mdbook-mermaid
+          else
+            echo "mdbook-mermaid already installed"
+          fi
+        shell: bash
 
       - name: Install dependencies
         run: |
@@ -249,7 +305,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies

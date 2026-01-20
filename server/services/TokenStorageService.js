@@ -258,6 +258,133 @@ class TokenStorageService {
       throw error;
     }
   }
+
+  /**
+   * Generic encryption for simple strings (e.g., API keys)
+   * Uses AES-256-GCM with unique IV per encryption
+   *
+   * Format: ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
+   * This format makes encrypted values easily identifiable and includes metadata
+   *
+   * Note: Uses GCM mode instead of CBC (used in encryptTokens) because:
+   * - Provides authenticated encryption (integrity + confidentiality)
+   * - No padding oracle vulnerabilities
+   * - Better for simple string encryption without context binding
+   *
+   * @param {string} plaintext - The text to encrypt
+   * @returns {string} Encrypted data in ENC[...] format with metadata
+   */
+  encryptString(plaintext) {
+    if (!plaintext || typeof plaintext !== 'string') {
+      throw new Error('Invalid plaintext: must be a non-empty string');
+    }
+
+    try {
+      const key = Buffer.from(this.encryptionKey, 'hex');
+      const iv = crypto.randomBytes(16);
+
+      // Use AES-256-GCM for authenticated encryption
+      const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+      let encrypted = cipher.update(plaintext, 'utf8', 'base64');
+      encrypted += cipher.final('base64');
+
+      // Get the authentication tag
+      const authTag = cipher.getAuthTag();
+
+      // Format: ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
+      const encryptedValue = `ENC[AES256_GCM,data:${encrypted},iv:${iv.toString('base64')},tag:${authTag.toString('base64')},type:str]`;
+
+      return encryptedValue;
+    } catch (error) {
+      console.error('❌ Error encrypting string:', error.message);
+      throw new Error('Failed to encrypt string');
+    }
+  }
+
+  /**
+   * Generic decryption for simple strings (e.g., API keys)
+   * Supports both new ENC[...] format and legacy base64 format
+   * @param {string} encryptedData - Encrypted data in ENC[...] format or legacy base64
+   * @returns {string} Decrypted plaintext
+   */
+  decryptString(encryptedData) {
+    if (!encryptedData || typeof encryptedData !== 'string') {
+      throw new Error('Invalid encrypted data: must be a non-empty string');
+    }
+
+    try {
+      return this._decrypt(encryptedData);
+    } catch (error) {
+      console.error('❌ Error decrypting string:', error.message);
+      throw new Error('Failed to decrypt string. The encryption key may have changed.');
+    }
+  }
+
+  /**
+   * Decrypt data in ENC[AES256_GCM,data:...,iv:...,tag:...,type:str] format
+   * @private
+   */
+  _decrypt(encryptedData) {
+    // Parse ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
+    const encContent = encryptedData.slice(4, -1); // Remove "ENC[" and "]"
+
+    // Extract algorithm (first part before first comma)
+    const algorithmMatch = encContent.match(/^([^,]+)/);
+    if (!algorithmMatch) {
+      throw new Error('Invalid ENC format: missing algorithm');
+    }
+
+    const algorithm = algorithmMatch[1];
+    if (algorithm !== 'AES256_GCM') {
+      throw new Error(`Unsupported encryption algorithm: ${algorithm}`);
+    }
+
+    // Use specific regex patterns for base64 values
+    // Base64 uses A-Za-z0-9+/= characters
+    const dataMatch = encContent.match(/data:([A-Za-z0-9+/=]+)/);
+    const ivMatch = encContent.match(/iv:([A-Za-z0-9+/=]+)/);
+    const tagMatch = encContent.match(/tag:([A-Za-z0-9+/=]+)/);
+
+    if (!dataMatch || !ivMatch || !tagMatch) {
+      throw new Error('Invalid ENC format: missing required fields');
+    }
+
+    const encrypted = Buffer.from(dataMatch[1], 'base64');
+    const iv = Buffer.from(ivMatch[1], 'base64');
+    const authTag = Buffer.from(tagMatch[1], 'base64');
+
+    const key = Buffer.from(this.encryptionKey, 'hex');
+
+    // Create decipher
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+
+    // Decrypt the data
+    let decrypted = decipher.update(encrypted, undefined, 'utf8');
+    decrypted += decipher.final('utf8');
+
+    return decrypted;
+  }
+
+  /**
+   * Check if a string appears to be encrypted
+   * Supports both ENC[...] format and legacy base64 format
+   * @param {string} value - The value to check
+   * @returns {boolean} True if the value appears to be encrypted
+   */
+  isEncrypted(value) {
+    if (!value || typeof value !== 'string') {
+      return false;
+    }
+
+    // Check for new ENC[...] format
+    if (value.startsWith('ENC[') && value.endsWith(']')) {
+      return true;
+    }
+
+    return false;
+  }
 }
 
 // Export singleton instance

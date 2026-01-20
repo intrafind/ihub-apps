@@ -32,20 +32,21 @@
             basePath = basePath.substring(0, routeIndex);
             break;
           } else if (routeIndex === 0) {
-            // We're at root with a route
-            basePath = '';
+            // We're at root with a route - set base to root
+            basePath = '/';
             break;
           }
         }
 
-        // Only add base tag if we're at a subpath
-        if (basePath && basePath !== '/') {
+        // Add base tag to ensure proper asset loading
+        // Always add base tag when we have a basePath (including '/')
+        if (basePath !== null && basePath !== undefined) {
           const base = document.createElement('base');
-          base.href = basePath + '/';
+          base.href = basePath === '/' || basePath === '' ? '/' : basePath + '/';
           document.head.appendChild(base);
 
           // Store for debugging (same as runtimeBasePath.js)
-          window.__BASE_PATH__ = basePath;
+          window.__BASE_PATH__ = basePath === '/' ? '' : basePath;
         }
       })();
     </script>

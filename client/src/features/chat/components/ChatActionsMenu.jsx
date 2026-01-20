@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import ExportConversationMenu from './ExportConversationMenu';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
 const ChatActionsMenu = ({
   onClearChat,
@@ -21,6 +23,8 @@ const ChatActionsMenu = ({
   chatId
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const menuRef = useRef(null);
@@ -48,6 +52,17 @@ const ChatActionsMenu = ({
       </button>
       {open && (
         <div className="absolute right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-20 min-w-40">
+          {user?.isAdmin && appId && (
+            <button
+              onClick={() => {
+                navigate(`/admin/apps/${appId}`);
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
+            >
+              <Icon name="edit" size="sm" /> {t('pages.appChat.editApp', 'Edit App')}
+            </button>
+          )}
           {showConfigButton && (
             <button
               onClick={() => {

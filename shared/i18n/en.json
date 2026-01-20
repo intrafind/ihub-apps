@@ -106,7 +106,12 @@
       "favorites": "Favorites",
       "clearFilters": "Clear filters",
       "loadMore": "Load More",
-      "showingCountOfTotal": "Showing {{displayed}} of {{total}} apps"
+      "showingCountOfTotal": "Showing {{displayed}} of {{total}} apps",
+      "appTypes": {
+        "chat": "Chat",
+        "redirect": "External",
+        "iframe": "Embedded"
+      }
     },
     "sort": {
       "label": "Sort by",
@@ -147,6 +152,21 @@
       "description": "The page you're looking for doesn't exist.",
       "backHome": "Back to Home"
     },
+    "redirectApp": {
+      "title": "External Application",
+      "externalSite": "External Site",
+      "continueButton": "Continue to {{appName}}",
+      "warning": "You are about to leave iHub Apps",
+      "openingInNewTab": "Opening in new tab...",
+      "redirecting": "Redirecting..."
+    },
+    "iframeApp": {
+      "title": "Embedded Application",
+      "loading": "Loading application...",
+      "loadError": "Failed to load embedded application",
+      "reload": "Reload",
+      "openInNewTab": "Open in new tab"
+    },
     "appChat": {
       "messagePlaceholder": "Type your message here...",
       "send": "Send",
@@ -154,6 +174,7 @@
       "regenerate": "Regenerate response",
       "clear": "Clear chat",
       "confirmClear": "Are you sure you want to clear the chat?",
+      "editApp": "Edit App",
       "shareConversation": "Share app",
       "export": {
         "conversation": "Export conversation",
@@ -217,7 +238,10 @@
       "required": "This field is required",
       "signInWith": "Sign in with:",
       "or": "or",
-      "signingIn": "Signing In..."
+      "signingIn": "Signing In...",
+      "windowsAuth": "Windows Authentication",
+      "ldapProvider": "LDAP Provider",
+      "selectProvider": "Auto-detect"
     },
     "logout": "Sign out",
     "menu": {
@@ -244,7 +268,17 @@
       "pages": "Pages",
       "groups": "Groups",
       "auth": "Authentication",
-      "logs": "Logs"
+      "oauth": "OAuth Clients",
+      "logs": "Logs",
+      "api": "API Documentation"
+    },
+    "groups": {
+      "overview": "Overview",
+      "content": "Content Management",
+      "analytics": "Analytics",
+      "security": "Security & Access",
+      "configuration": "Configuration",
+      "developer": "Developer"
     },
     "navigation": {
       "overview": "Overview",
@@ -286,7 +320,13 @@
         "preferredModel": "Preferred Model",
         "temperature": "Temperature",
         "searchTools": "Search tools to add...",
-        "toolsHelper": "Search and select tools to add to this app. Click on selected tools to remove them."
+        "toolsHelper": "Search and select tools to add to this app. Click on selected tools to remove them.",
+        "predefinedValues": "Predefined Values",
+        "predefinedValuesHint": "Optional suggested values that can be used as autocomplete options.",
+        "predefinedValuesHintSelect": "Options that will be available in the dropdown menu.",
+        "option": "Option",
+        "value": "Value",
+        "addOption": "Add Option"
       },
       "wizard": {
         "title": "Create New App",
@@ -362,6 +402,11 @@
           "color": "Color",
           "icon": "Icon",
           "iconPlaceholder": "e.g., chat-bubbles",
+          "selectIcon": "Select an icon",
+          "searchIcons": "Search icons...",
+          "noIconsFound": "No icons found",
+          "iconCount": "{{count}} icons available",
+          "iconCountFiltered": "{{filtered}} of {{total}} icons",
           "nameLabel": {
             "label": "App Name",
             "placeholder": "Enter app name"
@@ -574,16 +619,22 @@
         "requestDelay": "Request Delay (ms)",
         "supportsTools": "Supports Tools",
         "enabled": "Enabled",
-        "defaultModel": "Default Model"
+        "defaultModel": "Default Model",
+        "apiKey": "API Key"
       },
       "hints": {
         "modelId": "Unique identifier for this model configuration",
-        "apiModelId": "The actual model ID used in API calls (e.g., gpt-4, claude-3-opus)"
+        "apiModelId": "The actual model ID used in API calls (e.g., gpt-4, claude-3-opus)",
+        "apiKey": "API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.",
+        "apiKeySet": "✓ API key is configured for this model",
+        "apiKeyEnvVars": "Environment variables (in priority order):\n{{envVars}}"
       },
       "placeholders": {
         "selectProvider": "Select a provider",
         "apiModelId": "e.g., gpt-4, claude-3-opus",
-        "apiUrl": "https://api.example.com/v1/chat/completions"
+        "apiUrl": "https://api.example.com/v1/chat/completions",
+        "apiKey": "Enter API key (optional - will use environment variable if not set)",
+        "apiKeySet": "API key is set (leave blank to keep current)"
       },
       "status": {
         "enabled": "Enabled",
@@ -730,7 +781,69 @@
       "defaultGroups": "Default Groups",
       "jwtProviders": "JWT Providers",
       "noOidcProviders": "No OIDC providers configured",
-      "addProvider": "Add a provider to enable OIDC authentication"
+      "addProvider": "Add a provider to enable OIDC authentication",
+      "oauth": {
+        "title": "OAuth Clients",
+        "subtitle": "Manage OAuth 2.0 clients for external API access",
+        "enabled": "OAuth Enabled",
+        "disabled": "OAuth Disabled",
+        "noClients": "No OAuth clients configured",
+        "createClient": "Create OAuth Client",
+        "editClient": "Edit OAuth Client",
+        "deleteClient": "Delete OAuth Client",
+        "clientId": "Client ID",
+        "clientSecret": "Client Secret",
+        "clientSecretWarning": "Save this secret now. It will not be shown again.",
+        "clientSecretHidden": "Secret is hidden for security",
+        "name": "Client Name",
+        "description": "Description",
+        "scopes": "Scopes",
+        "allowedApps": "Allowed Apps",
+        "allowedModels": "Allowed Models",
+        "searchApps": "Search apps to add...",
+        "searchModels": "Search models to add...",
+        "noAppsSelected": "No apps selected - client can access all apps",
+        "noModelsSelected": "No models selected - client can access all models",
+        "tokenExpiration": "Token Expiration (minutes)",
+        "active": "Active",
+        "suspended": "Suspended",
+        "createdAt": "Created",
+        "createdBy": "Created By",
+        "lastUsed": "Last Used",
+        "lastRotated": "Secret Last Rotated",
+        "rotateSecret": "Rotate Secret",
+        "rotateSecretConfirm": "Are you sure you want to rotate the secret? The old secret will stop working immediately.",
+        "rotateSecretSuccess": "Secret rotated successfully. Save the new secret now.",
+        "generateToken": "Generate Long-Term Token",
+        "generateTokenDesc": "Select the expiration period for this token and click Generate.",
+        "generating": "Generating...",
+        "generate": "Generate",
+        "expirationRange": "Enter a value between 1 and 3650 days (10 years)",
+        "tokenGenerated": "Long-Term Token Generated",
+        "tokenWarning": "Save this token now. It will not be shown again.",
+        "token": "Token",
+        "staticApiKey": "Static API Key",
+        "expirationDays": "Expiration (days)",
+        "expiresAt": "Expires At",
+        "introspectToken": "Introspect Token",
+        "introspectTokenDesc": "Check token validity and claims",
+        "tokenActive": "Token Active",
+        "tokenInactive": "Token Inactive",
+        "tokenExpired": "Token Expired",
+        "deleteConfirm": "Are you sure you want to delete this OAuth client? All issued tokens will stop working.",
+        "createSuccess": "OAuth client created successfully",
+        "updateSuccess": "OAuth client updated successfully",
+        "deleteSuccess": "OAuth client deleted successfully",
+        "createError": "Failed to create OAuth client",
+        "updateError": "Failed to update OAuth client",
+        "deleteError": "Failed to delete OAuth client",
+        "loadError": "Failed to load OAuth clients",
+        "validation": {
+          "nameRequired": "Client name is required",
+          "tokenExpirationInvalid": "Token expiration must be between 1 and {{max}} minutes",
+          "expirationDaysInvalid": "Expiration must be between 1 and 3650 days"
+        }
+      }
     },
     "system": {
       "title": "System Administration",
@@ -781,7 +894,15 @@
       "versionServer": "Backend Version",
       "versionNode": "Node.js Version",
       "versionLoading": "Loading version information...",
-      "versionError": "Failed to load version information"
+      "versionError": "Failed to load version information",
+      "updateCheckTitle": "Update Available",
+      "updateAvailable": "A new version of iHub Apps is available!",
+      "currentVersion": "Current Version",
+      "latestVersion": "Latest Version",
+      "viewRelease": "View Release on GitHub",
+      "checkingUpdate": "Checking for updates...",
+      "updateCheckFailed": "Failed to check for updates",
+      "noUpdateAvailable": "You are running the latest version"
     }
   },
   "components": {
@@ -891,7 +1012,9 @@
     "appNotFound": "Application not found",
     "missingRequiredFields": "Missing required fields:",
     "streamingError": "An error occurred during streaming",
-    "failedToGenerateResponse": "Failed to generate response. Please try again or select a different model."
+    "failedToGenerateResponse": "Failed to generate response. Please try again or select a different model.",
+    "sessionExpired": "Your session has expired. Please log in again to continue.",
+    "sessionExpiredReconnecting": "Session expired. Reconnecting to authentication provider..."
   },
   "message": {
     "generationCancelled": " [Generation cancelled]"

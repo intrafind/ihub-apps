@@ -22,6 +22,7 @@ import registerMagicPromptRoutes from './routes/magicPromptRoutes.js';
 import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
+import registerOAuthRoutes from './routes/oauth.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import jiraRoutes from './routes/integrations/jira.js';
 import { setDefaultLanguage } from '../shared/localize.js';
@@ -164,6 +165,7 @@ if (cluster.isPrimary && workerCount > 1) {
   const basePath = getBasePath();
 
   registerAuthRoutes(app, basePath);
+  registerOAuthRoutes(app, basePath);
   registerGeneralRoutes(app, { getLocalizedError, basePath });
   registerModelRoutes(app, { getLocalizedError, basePath });
   registerToolRoutes(app, basePath);

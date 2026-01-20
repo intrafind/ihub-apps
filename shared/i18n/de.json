@@ -105,7 +105,12 @@
       "favorites": "Favoriten",
       "clearFilters": "Filter zurücksetzen",
       "loadMore": "Mehr laden",
-      "showingCountOfTotal": "Zeige {{displayed}} von {{total}} Anwendungen"
+      "showingCountOfTotal": "Zeige {{displayed}} von {{total}} Anwendungen",
+      "appTypes": {
+        "chat": "Chat",
+        "redirect": "Extern",
+        "iframe": "Eingebettet"
+      }
     },
     "sort": {
       "label": "Sortieren nach",
@@ -136,6 +141,26 @@
         "relevance": "Relevanz"
       }
     },
+    "notFound": {
+      "title": "Seite nicht gefunden",
+      "message": "Wir konnten die gesuchte Seite nicht finden.",
+      "returnHome": "Zurück zur Startseite"
+    },
+    "redirectApp": {
+      "title": "Externe Anwendung",
+      "externalSite": "Externe Webseite",
+      "continueButton": "Weiter zu {{appName}}",
+      "warning": "Sie verlassen iHub Apps",
+      "openingInNewTab": "Wird in neuem Tab geöffnet...",
+      "redirecting": "Weiterleitung..."
+    },
+    "iframeApp": {
+      "title": "Eingebettete Anwendung",
+      "loading": "Anwendung wird geladen...",
+      "loadError": "Fehler beim Laden der eingebetteten Anwendung",
+      "reload": "Neu laden",
+      "openInNewTab": "In neuem Tab öffnen"
+    },
     "appChat": {
       "messagePlaceholder": "Gib deine Nachricht hier ein...",
       "send": "Senden",
@@ -143,6 +168,7 @@
       "regenerate": "Antwort neu generieren",
       "clear": "Chat löschen",
       "confirmClear": "Möchtest du den Chat wirklich löschen?",
+      "editApp": "App bearbeiten",
       "shareConversation": "App teilen",
       "export": {
         "conversation": "Unterhaltung exportieren",
@@ -166,11 +192,6 @@
       "examplePrompts": "Hier sind einige Beispiel-Prompts zum Einstieg",
       "noMessagesTitle": "Noch keine Nachrichten",
       "noMessagesSubtitle": "Beginne eine Unterhaltung, indem du eine Nachricht sendest!"
-    },
-    "notFound": {
-      "title": "Seite nicht gefunden",
-      "message": "Wir konnten die gesuchte Seite nicht finden.",
-      "returnHome": "Zurück zur Startseite"
     }
   },
   "models": {
@@ -218,7 +239,9 @@
     "appNotFound": "Anwendung nicht gefunden",
     "missingRequiredFields": "Erforderliche Felder fehlen:",
     "streamingError": "Ein Fehler ist beim Streaming aufgetreten",
-    "failedToGenerateResponse": "Fehler beim Generieren der Antwort. Bitte versuchen Sie es erneut oder wählen Sie ein anderes Modell."
+    "failedToGenerateResponse": "Fehler beim Generieren der Antwort. Bitte versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
+    "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an, um fortzufahren.",
+    "sessionExpiredReconnecting": "Sitzung abgelaufen. Verbindung zum Authentifizierungsanbieter wird wiederhergestellt..."
   },
   "message": {
     "generationCancelled": " [Generierung abgebrochen]"
@@ -364,11 +387,21 @@
       "pages": "Seiten",
       "groups": "Gruppen",
       "auth": "Authentifizierung",
+      "oauth": "OAuth-Clients",
       "logs": "Protokolle",
       "shortlinks": "Links",
       "usage": "Nutzungsberichte",
       "users": "Benutzer",
-      "system": "System"
+      "system": "System",
+      "api": "API-Dokumentation"
+    },
+    "groups": {
+      "overview": "Übersicht",
+      "content": "Inhaltsverwaltung",
+      "analytics": "Analysen",
+      "security": "Sicherheit & Zugriff",
+      "configuration": "Konfiguration",
+      "developer": "Entwickler"
     },
     "translateField": "Übersetzen",
     "common": {
@@ -453,6 +486,11 @@
           "color": "Farbe",
           "icon": "Symbol",
           "iconPlaceholder": "z.B. chat-bubbles",
+          "selectIcon": "Symbol auswählen",
+          "searchIcons": "Symbole suchen...",
+          "noIconsFound": "Keine Symbole gefunden",
+          "iconCount": "{{count}} Symbole verfügbar",
+          "iconCountFiltered": "{{filtered}} von {{total}} Symbolen",
           "nameLabel": {
             "label": "App-Name",
             "placeholder": "App-Name eingeben"
@@ -577,6 +615,14 @@
           "tokenLimitRequired": "Token-Limit ist erforderlich",
           "createFailed": "Fehler beim Erstellen der App"
         }
+      },
+      "edit": {
+        "predefinedValues": "Vordefinierte Werte",
+        "predefinedValuesHint": "Optionale vorgeschlagene Werte, die als Autocomplete-Optionen verwendet werden können.",
+        "predefinedValuesHintSelect": "Optionen, die im Dropdown-Menü verfügbar sein werden.",
+        "option": "Option",
+        "value": "Wert",
+        "addOption": "Option hinzufügen"
       }
     },
     "models": {
@@ -638,16 +684,22 @@
         "requestDelay": "Anfrageverzögerung (ms)",
         "supportsTools": "Unterstützt Werkzeuge",
         "enabled": "Aktiviert",
-        "defaultModel": "Standardmodell"
+        "defaultModel": "Standardmodell",
+        "apiKey": "API-Schlüssel"
       },
       "placeholders": {
         "selectProvider": "Anbieter auswählen",
         "apiModelId": "z.B. gpt-4, claude-3-sonnet",
-        "apiUrl": "z.B. https://api.openai.com/v1/chat/completions"
+        "apiUrl": "z.B. https://api.openai.com/v1/chat/completions",
+        "apiKey": "API-Schlüssel eingeben (optional - verwendet Umgebungsvariable falls nicht gesetzt)",
+        "apiKeySet": "API-Schlüssel ist gesetzt (leer lassen um aktuellen zu behalten)"
       },
       "hints": {
         "modelId": "Eindeutige Kennung für diese Modellkonfiguration",
-        "apiModelId": "Die in API-Aufrufen an den Anbieter verwendete Modell-ID"
+        "apiModelId": "Die in API-Aufrufen an den Anbieter verwendete Modell-ID",
+        "apiKey": "API-Schlüssel für dieses Modell. Falls nicht angegeben, verwendet das System die Umgebungsvariable für den Provider. Schlüssel werden verschlüsselt gespeichert.",
+        "apiKeySet": "✓ API-Schlüssel ist für dieses Modell konfiguriert",
+        "apiKeyEnvVars": "Umgebungsvariablen (in Prioritätsreihenfolge):\n{{envVars}}"
       },
       "status": {
         "enabled": "Aktiviert",
@@ -793,7 +845,69 @@
       "defaultGroups": "Standardgruppen",
       "jwtProviders": "JWT-Anbieter",
       "noOidcProviders": "Keine OIDC-Anbieter konfiguriert",
-      "addProvider": "Fügen Sie einen Anbieter hinzu, um OIDC-Authentifizierung zu aktivieren"
+      "addProvider": "Fügen Sie einen Anbieter hinzu, um OIDC-Authentifizierung zu aktivieren",
+      "oauth": {
+        "title": "OAuth-Clients",
+        "subtitle": "OAuth 2.0-Clients für externen API-Zugriff verwalten",
+        "enabled": "OAuth aktiviert",
+        "disabled": "OAuth deaktiviert",
+        "noClients": "Keine OAuth-Clients konfiguriert",
+        "createClient": "OAuth-Client erstellen",
+        "editClient": "OAuth-Client bearbeiten",
+        "deleteClient": "OAuth-Client löschen",
+        "clientId": "Client-ID",
+        "clientSecret": "Client-Secret",
+        "clientSecretWarning": "Speichern Sie dieses Secret jetzt. Es wird nicht erneut angezeigt.",
+        "clientSecretHidden": "Secret ist aus Sicherheitsgründen verborgen",
+        "name": "Client-Name",
+        "description": "Beschreibung",
+        "scopes": "Berechtigungen",
+        "allowedApps": "Erlaubte Apps",
+        "allowedModels": "Erlaubte Modelle",
+        "searchApps": "Apps zum Hinzufügen suchen...",
+        "searchModels": "Modelle zum Hinzufügen suchen...",
+        "noAppsSelected": "Keine Apps ausgewählt - Client kann auf alle Apps zugreifen",
+        "noModelsSelected": "Keine Modelle ausgewählt - Client kann auf alle Modelle zugreifen",
+        "tokenExpiration": "Token-Ablauf (Minuten)",
+        "active": "Aktiv",
+        "suspended": "Gesperrt",
+        "createdAt": "Erstellt",
+        "createdBy": "Erstellt von",
+        "lastUsed": "Zuletzt verwendet",
+        "lastRotated": "Secret zuletzt rotiert",
+        "rotateSecret": "Secret rotieren",
+        "rotateSecretConfirm": "Sind Sie sicher, dass Sie das Secret rotieren möchten? Das alte Secret funktioniert sofort nicht mehr.",
+        "rotateSecretSuccess": "Secret erfolgreich rotiert. Speichern Sie das neue Secret jetzt.",
+        "generateToken": "Langzeit-Token generieren",
+        "generateTokenDesc": "Wählen Sie die Ablaufzeit für diesen Token und klicken Sie auf Generieren.",
+        "generating": "Generiere...",
+        "generate": "Generieren",
+        "expirationRange": "Geben Sie einen Wert zwischen 1 und 3650 Tagen (10 Jahre) ein",
+        "tokenGenerated": "Langzeit-Token generiert",
+        "tokenWarning": "Speichern Sie diesen Token jetzt. Er wird nicht erneut angezeigt.",
+        "token": "Token",
+        "staticApiKey": "Statischer API-Schlüssel",
+        "expirationDays": "Ablauf (Tage)",
+        "expiresAt": "Läuft ab am",
+        "introspectToken": "Token untersuchen",
+        "introspectTokenDesc": "Token-Gültigkeit und Claims prüfen",
+        "tokenActive": "Token aktiv",
+        "tokenInactive": "Token inaktiv",
+        "tokenExpired": "Token abgelaufen",
+        "deleteConfirm": "Sind Sie sicher, dass Sie diesen OAuth-Client löschen möchten? Alle ausgestellten Token funktionieren nicht mehr.",
+        "createSuccess": "OAuth-Client erfolgreich erstellt",
+        "updateSuccess": "OAuth-Client erfolgreich aktualisiert",
+        "deleteSuccess": "OAuth-Client erfolgreich gelöscht",
+        "createError": "Fehler beim Erstellen des OAuth-Clients",
+        "updateError": "Fehler beim Aktualisieren des OAuth-Clients",
+        "deleteError": "Fehler beim Löschen des OAuth-Clients",
+        "loadError": "Fehler beim Laden der OAuth-Clients",
+        "validation": {
+          "nameRequired": "Client-Name ist erforderlich",
+          "tokenExpirationInvalid": "Token-Ablauf muss zwischen 1 und {{max}} Minuten liegen",
+          "expirationDaysInvalid": "Ablauf muss zwischen 1 und 3650 Tagen liegen"
+        }
+      }
     },
     "system": {
       "title": "Systemverwaltung",
@@ -844,7 +958,15 @@
       "versionServer": "Backend-Version",
       "versionNode": "Node.js-Version",
       "versionLoading": "Versionsinformationen werden geladen...",
-      "versionError": "Fehler beim Laden der Versionsinformationen"
+      "versionError": "Fehler beim Laden der Versionsinformationen",
+      "updateCheckTitle": "Update verfügbar",
+      "updateAvailable": "Eine neue Version von iHub Apps ist verfügbar!",
+      "currentVersion": "Aktuelle Version",
+      "latestVersion": "Neueste Version",
+      "viewRelease": "Release auf GitHub ansehen",
+      "checkingUpdate": "Suche nach Updates...",
+      "updateCheckFailed": "Fehler beim Prüfen auf Updates",
+      "noUpdateAvailable": "Sie verwenden die neueste Version"
     }
   },
   "components": {
@@ -877,7 +999,10 @@
       "required": "Dieses Feld ist erforderlich",
       "signInWith": "Anmelden mit:",
       "or": "oder",
-      "signingIn": "Anmeldung läuft..."
+      "signingIn": "Anmeldung läuft...",
+      "windowsAuth": "Windows-Authentifizierung",
+      "ldapProvider": "LDAP-Anbieter",
+      "selectProvider": "Automatische Erkennung"
     },
     "logout": "Abmelden",
     "menu": {
