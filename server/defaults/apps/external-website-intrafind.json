@@ -1,0 +1,43 @@
+{
+  "id": "external-website-intrafind",
+  "order": 99,
+  "name": {
+    "en": "Website IntraFind (external)",
+    "de": "Website IntraFind (extern)"
+  },
+  "description": {
+    "en": "Open the IntraFind website in an external browser.",
+    "de": "Öffnen Sie die IntraFind-Website in einem externen Browser."
+  },
+  "type": "redirect",
+  "redirectConfig": {
+    "url": "https://intrafind.com/ihub",
+    "openInNewTab": true,
+    "showWarning": false
+  },
+  "color": "#10B981",
+  "icon": "pencil",
+  "enabled": true,
+  "tools": [],
+  "greeting": {
+    "en": {
+      "title": "👋 Hello!",
+      "subtitle": "How can I help you today?"
+    },
+    "de": {
+      "title": "👋 Hallo!",
+      "subtitle": "Wie kann ich Ihnen heute helfen?"
+    }
+  },
+  "allowEmptyContent": false,
+  "sendChatHistory": true,
+  "inputMode": {
+    "type": "singleline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  }
+}
