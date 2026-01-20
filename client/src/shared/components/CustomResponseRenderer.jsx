@@ -1,11 +1,6 @@
-import { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-
-// Registry of available custom renderers
-// Add new renderers here as they are created
-const RENDERER_REGISTRY = {
-  NDAResultsRenderer: () => import('./renderers/NDAResultsRenderer')
-};
+import ReactComponentRenderer from './ReactComponentRenderer';
 
 /**
  * CustomResponseRenderer - Renders custom response components for structured app outputs
@@ -13,37 +8,45 @@ const RENDERER_REGISTRY = {
  * This component dynamically loads and renders custom React components
  * to display structured JSON responses in a user-friendly format.
  *
- * @param {string} componentName - Name of the renderer component
+ * Renderers are loaded from the backend API (/api/renderers/:id) which serves
+ * both built-in renderers (from server/defaults/renderers) and customer-specific
+ * renderers (from contents/renderers).
+ *
+ * @param {string} componentName - Name of the renderer component (e.g., 'nda-results')
  * @param {object} data - Parsed JSON data to pass to the component
  * @param {string} className - Optional CSS classes for the container
  */
 const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
-  const [RendererComponent, setRendererComponent] = useState(null);
+  const [rendererCode, setRendererCode] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { t } = useTranslation();
 
   useEffect(() => {
-    const loadComponent = async () => {
+    const loadRendererFromAPI = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Check if renderer exists in registry
-        const rendererLoader = RENDERER_REGISTRY[componentName];
-        if (!rendererLoader) {
-          throw new Error(`Renderer "${componentName}" not found in registry`);
+        // Fetch renderer code from API
+        const response = await fetch(`/api/renderers/${componentName}`);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error(`Renderer "${componentName}" not found`);
+          } else if (response.status === 403) {
+            throw new Error(`Renderer "${componentName}" is disabled`);
+          }
+          throw new Error(`Failed to load renderer: ${response.statusText}`);
         }
 
-        // Dynamically import the component
-        const module = await rendererLoader();
-        const Component = module.default;
-
-        if (!Component) {
-          throw new Error(`No default export found in renderer "${componentName}"`);
+        const renderer = await response.json();
+        
+        if (!renderer.code) {
+          throw new Error(`Renderer "${componentName}" has no code`);
         }
 
-        setRendererComponent(() => Component);
+        setRendererCode(renderer.code);
       } catch (err) {
         console.error('Error loading custom response renderer:', err);
         setError(err.message);
@@ -53,9 +56,22 @@ const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
     };
 
     if (componentName) {
-      loadComponent();
+      loadRendererFromAPI();
     }
   }, [componentName]);
+
+  // Prepare props for the renderer component
+  const componentProps = useMemo(() => ({
+    data,
+    t,
+    // Add React and hooks that the renderer might need
+    React,
+    useState,
+    useEffect,
+    useMemo,
+    useCallback,
+    useRef
+  }), [data, t]);
 
   if (loading) {
     return (
@@ -93,9 +109,9 @@ const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
             {t('common.details', 'Details')}
           </summary>
           <pre className="text-xs text-red-700 bg-red-100 p-3 rounded mt-2 overflow-auto">
-            Component: {componentName}
+            Renderer: {componentName}
             {'\n'}
-            Available renderers: {Object.keys(RENDERER_REGISTRY).join(', ')}
+            Error: {error}
             {'\n'}
             Data: {JSON.stringify(data, null, 2)}
           </pre>
@@ -104,15 +120,15 @@ const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
     );
   }
 
-  if (!RendererComponent) {
+  if (!rendererCode) {
     return (
       <div className="text-center py-8 text-gray-500">
-        {t('errors.noComponentFound', 'No component found')}
+        {t('errors.noComponentFound', 'No renderer found')}
       </div>
     );
   }
 
-  // Render the component with data and translation function
+  // Use ReactComponentRenderer to compile and render the JSX code
   return (
     <div className={className}>
       <Suspense
@@ -122,7 +138,10 @@ const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
           </div>
         }
       >
-        <RendererComponent data={data} t={t} />
+        <ReactComponentRenderer
+          jsxCode={rendererCode}
+          componentProps={componentProps}
+        />
       </Suspense>
     </div>
   );
