@@ -17,6 +17,23 @@
     }
   },
   {
+    "id": "webSearch",
+    "name": {
+      "en": "Web Search",
+      "de": "Websuche"
+    },
+    "description": {
+      "en": "Enable the model to search the web for up-to-date information. Supports GPT-5 and other models with native web search capabilities. Returns answers with citations and sources.",
+      "de": "Ermöglicht dem Modell, das Web nach aktuellen Informationen zu durchsuchen. Unterstützt GPT-5 und andere Modelle mit nativen Websuchfunktionen. Liefert Antworten mit Zitaten und Quellen."
+    },
+    "provider": "openai-responses",
+    "isSpecialTool": true,
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
     "id": "braveSearch",
     "name": {
       "en": "Brave Web / Internet Search",

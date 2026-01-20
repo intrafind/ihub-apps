@@ -85,7 +85,37 @@ function addStrictModeToSchema(schema) {
  * @returns {Object[]} OpenAI Responses API formatted tools
  */
 export function convertGenericToolsToOpenaiResponses(genericTools = []) {
-  return genericTools.map(tool => {
+  const tools = [];
+
+  // Separate web search tool from regular function-based tools
+  const webSearchTool = genericTools.find(tool => tool.id === 'webSearch');
+  const functionTools = genericTools.filter(tool => tool.id !== 'webSearch');
+
+  // Add web search if present
+  if (webSearchTool) {
+    const webSearchConfig = { type: 'web_search' };
+
+    // Add optional parameters if provided in tool metadata
+    // Note: These are typically set at the app level, not per-invocation
+    if (webSearchTool.filters?.allowed_domains) {
+      webSearchConfig.filters = {
+        allowed_domains: webSearchTool.filters.allowed_domains
+      };
+    }
+
+    if (webSearchTool.user_location) {
+      webSearchConfig.user_location = webSearchTool.user_location;
+    }
+
+    if (webSearchTool.external_web_access !== undefined) {
+      webSearchConfig.external_web_access = webSearchTool.external_web_access;
+    }
+
+    tools.push(webSearchConfig);
+  }
+
+  // Add regular function tools
+  const regularTools = functionTools.map(tool => {
     const sanitizedParams = sanitizeSchemaForProvider(tool.parameters, 'openai-responses');
     const strictParams = addStrictModeToSchema(sanitizedParams);
 
@@ -97,6 +127,10 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
       strict: true // Explicitly enable strict mode for tool calling
     };
   });
+
+  tools.push(...regularTools);
+
+  return tools;
 }
 
 /**
@@ -339,6 +373,18 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
           complete: true // Mark as complete
         });
       }
+
+      // Event: response.output_item.done - web search call finished
+      // Handle web search completion events
+      if (parsed.type === 'response.output_item.done' && parsed.item?.type === 'web_search_call') {
+        // Store web search metadata for tracking
+        if (!result.webSearchMetadata) result.webSearchMetadata = [];
+        result.webSearchMetadata.push({
+          id: parsed.item.id,
+          status: parsed.item.status,
+          action: parsed.item.action
+        });
+      }
     }
     // Handle full response object (non-streaming)
     else if (parsed.output && Array.isArray(parsed.output)) {
@@ -348,6 +394,12 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
           for (const contentItem of item.content) {
             if (contentItem.type === 'output_text' && contentItem.text) {
               content.push(contentItem.text);
+              
+              // Handle annotations (citations) from web search results
+              if (contentItem.annotations && Array.isArray(contentItem.annotations)) {
+                if (!result.annotations) result.annotations = [];
+                result.annotations.push(...contentItem.annotations);
+              }
             }
           }
         }
@@ -370,6 +422,16 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
               name: item.function.name,
               arguments: item.function.arguments
             }
+          });
+        }
+        // Handle web search calls
+        else if (item.type === 'web_search_call') {
+          // Store web search metadata for tracking
+          if (!result.webSearchMetadata) result.webSearchMetadata = [];
+          result.webSearchMetadata.push({
+            id: item.id,
+            status: item.status,
+            action: item.action
           });
         }
       }

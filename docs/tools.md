@@ -20,6 +20,18 @@ Each entry in `config/tools.json` uses the following fields:
 
 Some tools provide comprehensive integrations with external systems:
 
+**Web Search (GPT-5 and compatible models)**
+
+- **Tool ID**: `webSearch`
+- **Provider**: OpenAI GPT-5 and models with native web search support via Responses API
+- **Description**: Enables the model to search the web for up-to-date information, providing answers with citations and sources
+- **Parameters**: None (automatically enabled when included in app tools)
+- **Authentication**: No additional authentication required (uses OpenAI API key)
+- **Special Note**: This is a provider-specific tool that is handled directly by the model provider's API, not executed server-side
+- **Response**: Returns responses with inline citations, annotations, and web search metadata including queries, domains, and sources
+- **Use Cases**: Current events, latest news, trending topics, real-time data, fact-checking
+- **Example App**: See `examples/apps/gpt5-web-search.json`
+
 **Google Search Grounding (Gemini-specific)**
 
 - **Tool ID**: `googleSearch`
