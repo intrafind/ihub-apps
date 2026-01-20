@@ -189,13 +189,12 @@ export function convertGenericToolCallsToOpenaiResponses(genericToolCalls = []) 
 }
 
 /**
- * Helper function to add web search metadata to result
- * @param {Object} result - Generic streaming response result
+ * Helper function to add web search metadata
+ * @param {Array} webSearchMetadata - Array to store web search metadata
  * @param {Object} item - Web search call item
  */
-function addWebSearchMetadata(result, item) {
-  if (!result.webSearchMetadata) result.webSearchMetadata = [];
-  result.webSearchMetadata.push({
+function addWebSearchMetadata(webSearchMetadata, item) {
+  webSearchMetadata.push({
     id: item.id,
     status: item.status,
     action: item.action
@@ -205,12 +204,11 @@ function addWebSearchMetadata(result, item) {
 /**
  * Helper function to process annotations from content items
  * @param {Object} contentItem - Content item with potential annotations
- * @param {Object} result - Generic streaming response result
+ * @param {Array} annotations - Array to store annotations
  */
-function processAnnotations(contentItem, result) {
+function processAnnotations(contentItem, annotations) {
   if (contentItem.annotations && Array.isArray(contentItem.annotations)) {
-    if (!result.annotations) result.annotations = [];
-    result.annotations.push(...contentItem.annotations);
+    annotations.push(...contentItem.annotations);
   }
 }
 
@@ -264,6 +262,8 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
     const content = [];
     const thinking = [];
     const toolCalls = [];
+    const webSearchMetadata = [];
+    const annotations = [];
     let complete = false;
     let finishReason = null;
 
@@ -411,7 +411,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       // Handle web search completion events
       if (parsed.type === 'response.output_item.done' && parsed.item?.type === 'web_search_call') {
         // Store web search metadata for tracking
-        addWebSearchMetadata(result, parsed.item);
+        addWebSearchMetadata(webSearchMetadata, parsed.item);
       }
     }
     // Handle full response object (non-streaming)
@@ -424,7 +424,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
               content.push(contentItem.text);
 
               // Handle annotations (citations) from web search results
-              processAnnotations(contentItem, result);
+              processAnnotations(contentItem, annotations);
             }
           }
         }
@@ -452,7 +452,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
         // Handle web search calls
         else if (item.type === 'web_search_call') {
           // Store web search metadata for tracking
-          addWebSearchMetadata(result, item);
+          addWebSearchMetadata(webSearchMetadata, item);
         }
       }
       complete = true;
@@ -492,6 +492,15 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
     const genericToolCalls =
       toolCalls.length > 0 ? convertOpenaiResponsesToolCallsToGeneric(toolCalls) : [];
 
+    // Build metadata object with web search data if available
+    const metadata = {};
+    if (webSearchMetadata.length > 0) {
+      metadata.webSearchMetadata = webSearchMetadata;
+    }
+    if (annotations.length > 0) {
+      metadata.annotations = annotations;
+    }
+
     return createGenericStreamingResponse(
       content,
       thinking,
@@ -499,7 +508,8 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       complete,
       false,
       null,
-      normalizeFinishReason(finishReason)
+      normalizeFinishReason(finishReason),
+      metadata
     );
   } catch (error) {
     console.error('Error parsing OpenAI Responses API response:', error);
