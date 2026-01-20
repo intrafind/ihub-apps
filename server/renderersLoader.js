@@ -95,8 +95,21 @@ export async function loadAllRenderers(verbose = true) {
   const defaultsPath = join(rootDir, 'server', 'defaults', 'renderers');
   const defaultRenderers = await loadRenderersFromDirectory(defaultsPath, 'defaults', verbose);
   
-  // Load from contents directory
+  // Load from contents directory (create if doesn't exist)
   const contentsPath = join(rootDir, 'contents', 'renderers');
+  
+  // Ensure contents/renderers directory exists
+  if (!existsSync(contentsPath)) {
+    try {
+      await fs.mkdir(contentsPath, { recursive: true });
+      if (verbose) {
+        console.log(`📁 Created contents/renderers directory: ${contentsPath}`);
+      }
+    } catch (error) {
+      console.error(`Failed to create contents/renderers directory: ${error.message}`);
+    }
+  }
+  
   const contentRenderers = await loadRenderersFromDirectory(contentsPath, 'contents', verbose);
   
   // Merge renderers - contents overrides defaults
