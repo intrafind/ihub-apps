@@ -34,7 +34,11 @@ const result1 = convertGoogleResponseToGeneric(gemini3ResponseWithToolCall);
 console.log('Result:', JSON.stringify(result1, null, 2));
 assert.strictEqual(result1.finishReason, 'tool_calls', 'Should preserve tool_calls finish reason');
 assert.strictEqual(result1.tool_calls.length, 1, 'Should have one tool call');
-assert.strictEqual(result1.tool_calls[0].name, 'enhancedWebSearch', 'Tool call name should be correct');
+assert.strictEqual(
+  result1.tool_calls[0].name,
+  'enhancedWebSearch',
+  'Tool call name should be correct'
+);
 console.log('✓ Test 1 passed: Function calls are detected and finishReason is preserved\n');
 
 // Test 2: Response without function call and STOP finish reason (normal behavior)
