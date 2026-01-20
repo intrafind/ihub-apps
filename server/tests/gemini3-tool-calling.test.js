@@ -150,7 +150,9 @@ console.log('✓ Test 4 passed: Multiple function calls are handled correctly\n'
 
 console.log('All tests passed! ✓');
 console.log('\nSummary:');
-console.log('- Gemini 3 responses with function calls now correctly preserve finishReason: "tool_calls"');
+console.log(
+  '- Gemini 3 responses with function calls now correctly preserve finishReason: "tool_calls"'
+);
 console.log('- Normal text responses still work as expected');
 console.log('- Streaming responses handle function calls correctly');
 console.log('- Multiple function calls in a single response are supported');

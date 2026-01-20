@@ -259,7 +259,7 @@ iHub Apps provides multiple installation methods to suit different use cases and
 
 | Method     | Best For                               | Setup Time | System Requirements                      | Auto-Updates      |
 | ---------- | -------------------------------------- | ---------- | ---------------------------------------- | ----------------- |
-| **npm**    | Development, customization             | ~5 min     | Node.js 20+, npm 8+                      | Manual            |
+| **npm**    | Development, customization             | ~5 min     | Node.js 22+, npm 8+                      | Manual            |
 | **Docker** | Production, containerized environments | ~2 min     | Docker Engine 24.0+, Docker Compose 2.0+ | Container restart |
 | **Binary** | Quick deployment, no dependencies      | ~1 min     | OS-specific (Windows, macOS, Linux)      | Manual download   |
 
@@ -295,7 +295,7 @@ npm run install:all && npm run electron:dev
 
 **npm Installation:**
 
-- Node.js 20.x or higher
+- Node.js 22.x or higher
 - npm 8.x or higher
 - 2GB RAM, 1GB free disk space
 
@@ -332,7 +332,7 @@ npm run install:all && npm run electron:dev
 
 #### Prerequisites
 
-- Node.js 20.x or higher
+- Node.js 22.x or higher
 - npm 8.x or higher
 
 #### Installation Steps (Development)
@@ -489,7 +489,7 @@ For comprehensive Docker documentation, see [docker/DOCKER.md](docker/DOCKER.md)
 
 #### Prerequisites
 
-- Node.js 20.x or higher (for building)
+- Node.js 22.x or higher (for building)
 - npm 8.x or higher
 
 #### Installation Steps
@@ -640,7 +640,7 @@ npm run start:prod
 
 **For developers:** You can build your own binary from source.
 
-**Prerequisite:** Node.js 20 or newer is required for creating the binary.
+**Prerequisite:** Node.js 22 or newer is required for creating the binary.
 
 ```bash
 # Check Node.js version
