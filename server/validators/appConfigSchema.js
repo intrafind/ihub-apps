@@ -58,7 +58,8 @@ const settingsSchema = z
     enabled: z.boolean().optional().default(true),
     model: z
       .object({
-        enabled: z.boolean().optional().default(true)
+        enabled: z.boolean().optional().default(true),
+        filter: z.record(z.any()).optional() // Allow filtering models by any property
       })
       .optional(),
     temperature: z
