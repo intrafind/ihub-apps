@@ -28,6 +28,8 @@ const AdminToolEditPage = () => {
     script: '',
     enabled: true,
     concurrency: 5,
+    isSpecialTool: false,
+    provider: '',
     parameters: {
       type: 'object',
       properties: {},
@@ -80,6 +82,8 @@ const AdminToolEditPage = () => {
         description: tool.description || { en: '' },
         enabled: tool.enabled !== false,
         concurrency: tool.concurrency || 5,
+        isSpecialTool: tool.isSpecialTool || false,
+        provider: tool.provider || '',
         parameters: tool.parameters || { type: 'object', properties: {}, required: [] },
         functions: tool.functions || {}
       });
@@ -321,25 +325,73 @@ const AdminToolEditPage = () => {
                   </p>
                 </div>
 
-                {/* Script filename */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('admin.tools.scriptFile', 'Script File')}
-                  </label>
-                  <input
-                    type="text"
-                    value={toolData.script || ''}
-                    onChange={e => handleInputChange('script', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="braveSearch.js"
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    {t(
-                      'admin.tools.scriptFileHelp',
-                      'JavaScript file in server/tools/ directory (leave empty for special tools)'
-                    )}
-                  </p>
+                {/* Special Tool Toggle */}
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      type="checkbox"
+                      id="isSpecialTool"
+                      checked={toolData.isSpecialTool}
+                      onChange={e => handleInputChange('isSpecialTool', e.target.checked)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="isSpecialTool" className="font-medium text-gray-700">
+                      {t('admin.tools.isSpecialTool', 'Special Tool')}
+                    </label>
+                    <p className="text-gray-500">
+                      {t(
+                        'admin.tools.isSpecialToolHelp',
+                        'Provider-specific tools that are handled directly by the model provider (e.g., Google Search Grounding, OpenAI Web Search)'
+                      )}
+                    </p>
+                  </div>
                 </div>
+
+                {/* Provider (shown only for special tools) */}
+                {toolData.isSpecialTool && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {t('admin.tools.provider', 'Provider')}
+                    </label>
+                    <input
+                      type="text"
+                      value={toolData.provider || ''}
+                      onChange={e => handleInputChange('provider', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="google, openai, openai-responses"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      {t(
+                        'admin.tools.providerHelp',
+                        'Provider identifier (e.g., "google" for Google Search, "openai" for OpenAI, "openai-responses" for response-based tools)'
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                {/* Script filename (hidden for special tools) */}
+                {!toolData.isSpecialTool && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {t('admin.tools.scriptFile', 'Script File')}
+                    </label>
+                    <input
+                      type="text"
+                      value={toolData.script || ''}
+                      onChange={e => handleInputChange('script', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="braveSearch.js"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      {t(
+                        'admin.tools.scriptFileHelp',
+                        'JavaScript file in server/tools/ directory'
+                      )}
+                    </p>
+                  </div>
+                )}
 
                 {/* Concurrency */}
                 <div>
