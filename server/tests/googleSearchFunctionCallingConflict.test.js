@@ -60,7 +60,7 @@ const bothTools = [
 let warnCalled = false;
 let warnMessage = '';
 const originalWarn = console.warn;
-console.warn = (message) => {
+console.warn = message => {
   warnCalled = true;
   warnMessage = message;
 };
@@ -93,4 +93,6 @@ const result4 = convertGenericToolsToGoogle(emptyTools);
 assert.strictEqual(result4.length, 0, 'Should return empty array for no tools');
 console.log('✓ Test 4: empty tools array handled correctly');
 
-console.log('\n✅ All tests passed! The fix prevents combining google_search with function calling.');
+console.log(
+  '\n✅ All tests passed! The fix prevents combining google_search with function calling.'
+);
