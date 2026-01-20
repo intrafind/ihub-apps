@@ -43,7 +43,7 @@ export function convertGenericToolsToGoogle(genericTools = []) {
   else if (functionTools.length > 0) {
     tools.push({
       functionDeclarations: functionTools.map(tool => ({
-        name: normalizeToolName(tool.name),
+        name: normalizeToolName(tool.id),
         description: tool.description,
         parameters: sanitizeSchemaForProvider(tool.parameters, 'google')
       }))
