@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminNavigation from '../components/AdminNavigation';
 import AdminAuth from '../components/AdminAuth';
-import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import DualModeEditor from '../../../shared/components/DualModeEditor';
+import ToolFormEditor from '../components/ToolFormEditor';
 import {
   fetchAdminTools,
   createTool,
@@ -170,6 +171,10 @@ const AdminToolEditPage = () => {
     }
   };
 
+  const handleToolDataChange = newData => {
+    setToolData(newData);
+  };
+
   const handleInputChange = (field, value) => {
     setToolData(prev => ({
       ...prev,
@@ -261,300 +266,58 @@ const AdminToolEditPage = () => {
 
           {/* Configuration Tab */}
           {activeTab === 'config' && (
-            <div className="bg-white shadow rounded-lg p-6">
-              <div className="space-y-6">
-                {/* Basic Info */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('admin.tools.id', 'Tool ID')} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={toolData.id}
-                    onChange={e => handleInputChange('id', e.target.value)}
-                    disabled={!isNewTool}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
-                    placeholder="braveSearch"
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    {t('admin.tools.idHelp', 'Unique identifier for the tool')}
-                  </p>
-                </div>
+            <DualModeEditor
+              value={toolData}
+              onChange={handleToolDataChange}
+              formComponent={ToolFormEditor}
+              formProps={{
+                isNewTool
+              }}
+              title={
+                isNewTool
+                  ? t('admin.tools.createNew', 'Create New Tool')
+                  : t('admin.tools.editTool', 'Edit Tool')
+              }
+              description={
+                isNewTool
+                  ? t(
+                      'admin.tools.createDescription',
+                      'Create a new AI tool / function using the form interface or JSON editor'
+                    )
+                  : t(
+                      'admin.tools.editDescription',
+                      'Edit tool configuration using the form interface or raw JSON editor'
+                    )
+              }
+            />
+          )}
 
-                {/* Name (multilingual) */}
-                <div>
-                  <DynamicLanguageEditor
-                    label={
-                      <>
-                        {t('admin.tools.name', 'Name')} <span className="text-red-500">*</span>
-                      </>
-                    }
-                    value={toolData.name}
-                    onChange={value => handleInputChange('name', value)}
-                    required={true}
-                    placeholder={{ en: 'Brave Search', de: 'Brave-Suche' }}
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    {t('admin.tools.nameHelp', 'Display name for the tool in different languages')}
-                  </p>
-                </div>
-
-                {/* Description (multilingual) */}
-                <div>
-                  <DynamicLanguageEditor
-                    label={
-                      <>
-                        {t('admin.tools.description', 'Description')}{' '}
-                        <span className="text-red-500">*</span>
-                      </>
-                    }
-                    value={toolData.description}
-                    onChange={value => handleInputChange('description', value)}
-                    required={true}
-                    type="textarea"
-                    placeholder={{
-                      en: 'Search the web using Brave for up-to-date information',
-                      de: 'Durchsuchen Sie das Web mit Brave'
-                    }}
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    {t(
-                      'admin.tools.descriptionHelp',
-                      'Description shown to the LLM for tool selection'
-                    )}
-                  </p>
-                </div>
-
-                {/* Special Tool Toggle */}
-                <div className="flex items-start">
-                  <div className="flex items-center h-5">
-                    <input
-                      type="checkbox"
-                      id="isSpecialTool"
-                      checked={toolData.isSpecialTool}
-                      onChange={e => handleInputChange('isSpecialTool', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                  </div>
-                  <div className="ml-3 text-sm">
-                    <label htmlFor="isSpecialTool" className="font-medium text-gray-700">
-                      {t('admin.tools.isSpecialTool', 'Special Tool')}
-                    </label>
-                    <p className="text-gray-500">
-                      {t(
-                        'admin.tools.isSpecialToolHelp',
-                        'Provider-specific tools that are handled directly by the model provider (e.g., Google Search Grounding, OpenAI Web Search)'
-                      )}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Provider (shown only for special tools) */}
-                {toolData.isSpecialTool && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {t('admin.tools.provider', 'Provider')}
-                    </label>
-                    <input
-                      type="text"
-                      value={toolData.provider || ''}
-                      onChange={e => handleInputChange('provider', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="google, openai, openai-responses"
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                      {t(
-                        'admin.tools.providerHelp',
-                        'Provider identifier (e.g., "google" for Google Search, "openai" for OpenAI, "openai-responses" for response-based tools)'
-                      )}
-                    </p>
-                  </div>
+          {/* Save button for configuration */}
+          {activeTab === 'config' && (
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => navigate('/admin/tools')}
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button
+                onClick={handleSaveConfig}
+                disabled={saving}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />
+                    {t('common.saving', 'Saving...')}
+                  </>
+                ) : (
+                  <>
+                    <Icon name="check" className="h-4 w-4 mr-2" />
+                    {t('common.save', 'Save')}
+                  </>
                 )}
-
-                {/* Script filename (hidden for special tools) */}
-                {!toolData.isSpecialTool && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {t('admin.tools.scriptFile', 'Script File')}
-                    </label>
-                    <input
-                      type="text"
-                      value={toolData.script || ''}
-                      onChange={e => handleInputChange('script', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="braveSearch.js"
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                      {t(
-                        'admin.tools.scriptFileHelp',
-                        'JavaScript file in server/tools/ directory'
-                      )}
-                    </p>
-                  </div>
-                )}
-
-                {/* Concurrency */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('admin.tools.concurrency', 'Concurrency Limit')}
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={toolData.concurrency || 5}
-                    onChange={e => handleInputChange('concurrency', parseInt(e.target.value, 10))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    {t('admin.tools.concurrencyHelp', 'Maximum number of concurrent executions')}
-                  </p>
-                </div>
-
-                {/* Enabled toggle */}
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="enabled"
-                    checked={toolData.enabled}
-                    onChange={e => handleInputChange('enabled', e.target.checked)}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="enabled" className="ml-2 block text-sm text-gray-900">
-                    {t('admin.tools.enabled', 'Enabled')}
-                  </label>
-                </div>
-
-                {/* Parameters (JSON editor) - Only for regular tools */}
-                {(!toolData.functions || Object.keys(toolData.functions).length === 0) && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {t('admin.tools.parameters', 'Parameters (JSON Schema)')}
-                    </label>
-                    <textarea
-                      value={JSON.stringify(toolData.parameters, null, 2)}
-                      onChange={e => {
-                        try {
-                          const parsed = JSON.parse(e.target.value);
-                          handleInputChange('parameters', parsed);
-                        } catch {
-                          // Invalid JSON, just update the raw value
-                        }
-                      }}
-                      rows={12}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
-                      placeholder='{"type": "object", "properties": {}, "required": []}'
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                      {t(
-                        'admin.tools.parametersHelp',
-                        'JSON Schema definition for tool parameters'
-                      )}
-                    </p>
-                  </div>
-                )}
-
-                {/* Multi-Function Configuration */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('admin.tools.functions', 'Functions (Multi-Function Tool)')}
-                  </label>
-                  <textarea
-                    value={JSON.stringify(toolData.functions || {}, null, 2)}
-                    onChange={e => {
-                      try {
-                        const parsed = JSON.parse(e.target.value);
-                        handleInputChange('functions', parsed);
-                      } catch {
-                        // Invalid JSON, just update the raw value
-                      }
-                    }}
-                    rows={15}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
-                    placeholder="{}"
-                  />
-                  <p className="mt-1 text-sm text-gray-500">
-                    {t(
-                      'admin.tools.functionsHelp',
-                      'Define multiple functions for this tool (e.g., findUser, getAllUserDetails). Each function should have description and parameters. Leave empty {} for regular single-function tools.'
-                    )}
-                  </p>
-                  <details className="mt-2">
-                    <summary className="text-sm text-indigo-600 cursor-pointer hover:text-indigo-800">
-                      {t(
-                        'admin.tools.functionsExample',
-                        'Show example multi-function configuration'
-                      )}
-                    </summary>
-                    <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-auto">
-                      {`{
-  "findUser": {
-    "description": {
-      "en": "Find a user by name",
-      "de": "Benutzer nach Name finden"
-    },
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": {
-            "en": "User name or email"
-          }
-        }
-      },
-      "required": ["name"]
-    }
-  },
-  "getUserDetails": {
-    "description": {
-      "en": "Get user details by ID"
-    },
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "userId": {
-          "type": "string",
-          "description": {
-            "en": "User ID"
-          }
-        }
-      },
-      "required": ["userId"]
-    }
-  }
-}`}
-                    </pre>
-                  </details>
-                </div>
-
-                {/* Save button */}
-                <div className="flex justify-end space-x-3">
-                  <button
-                    onClick={() => navigate('/admin/tools')}
-                    className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    {t('common.cancel', 'Cancel')}
-                  </button>
-                  <button
-                    onClick={handleSaveConfig}
-                    disabled={saving}
-                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                  >
-                    {saving ? (
-                      <>
-                        <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />
-                        {t('common.saving', 'Saving...')}
-                      </>
-                    ) : (
-                      <>
-                        <Icon name="check" className="h-4 w-4 mr-2" />
-                        {t('common.save', 'Save')}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+              </button>
             </div>
           )}
 
