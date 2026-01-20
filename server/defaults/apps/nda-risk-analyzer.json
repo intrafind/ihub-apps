@@ -25,7 +25,7 @@
   "preferredOutputFormat": "json",
   "preferredStyle": "professional",
   "sendChatHistory": false,
-  "customResponseRenderer": "NDAResultsRenderer",
+  "customResponseRenderer": "nda-results",
   "messagePlaceholder": {
     "en": "Paste NDA text here or upload a document...",
     "de": "NDA-Text hier einfügen oder Dokument hochladen..."
