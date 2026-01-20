@@ -26,12 +26,7 @@
   },
   "variables": [],
   "starterPrompts": [],
-  "tools": [
-    "enhancedWebSearch",
-    "webContentExtractor",
-    "googleSearch",
-    "webSearch"
-  ],
+  "tools": ["enhancedWebSearch", "webContentExtractor", "googleSearch", "webSearch"],
   "allowEmptyContent": false,
   "sendChatHistory": true,
   "category": "utility",

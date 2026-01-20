@@ -13,12 +13,7 @@
   "iframeConfig": {
     "url": "https://de.wikipedia.org/wiki/Wikipedia:Hauptseite",
     "allowFullscreen": true,
-    "sandbox": [
-      "allow-scripts",
-      "allow-same-origin",
-      "allow-forms",
-      "allow-popups"
-    ]
+    "sandbox": ["allow-scripts", "allow-same-origin", "allow-forms", "allow-popups"]
   },
   "color": "#8B5CF6",
   "icon": "pencil",
