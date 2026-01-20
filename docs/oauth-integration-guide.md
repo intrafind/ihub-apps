@@ -266,6 +266,317 @@ class TokenManager {
 }
 ```
 
+## Testing OAuth with curl
+
+This section provides step-by-step examples for testing OAuth authentication using curl commands.
+
+### Complete Workflow Example
+
+#### Step 1: Generate Access Token
+
+```bash
+# Set environment variables for convenience
+export IHUB_API_URL="http://localhost:3000"  # or https://your-ihub-instance.com
+export CLIENT_ID="client_abc123"
+export CLIENT_SECRET="your_client_secret"
+
+# Request access token
+curl -X POST "$IHUB_API_URL/api/oauth/token" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"grant_type\": \"client_credentials\",
+    \"client_id\": \"$CLIENT_ID\",
+    \"client_secret\": \"$CLIENT_SECRET\"
+  }" | jq .
+```
+
+**Expected Response:**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "chat models"
+}
+```
+
+#### Step 2: Extract and Save Token
+
+```bash
+# Save token to environment variable
+export ACCESS_TOKEN=$(curl -s -X POST "$IHUB_API_URL/api/oauth/token" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"grant_type\": \"client_credentials\",
+    \"client_id\": \"$CLIENT_ID\",
+    \"client_secret\": \"$CLIENT_SECRET\"
+  }" | jq -r '.access_token')
+
+# Verify token was saved
+echo "Token: ${ACCESS_TOKEN:0:50}..."
+```
+
+#### Step 3: Test OpenAI-Compatible Endpoint
+
+Test the `/api/inference/v1/chat/completions` endpoint (OpenAI-compatible):
+
+```bash
+curl -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, this is a test!"
+      }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 100
+  }' | jq .
+```
+
+#### Step 4: Test App-Specific Chat Endpoint
+
+Test the app-specific chat endpoint:
+
+```bash
+curl -X POST "$IHUB_API_URL/api/apps/chat/chat" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Hello, this is a test!",
+    "modelId": "gpt-4",
+    "variables": {}
+  }' | jq .
+```
+
+#### Step 5: List Available Models
+
+```bash
+curl -X GET "$IHUB_API_URL/api/inference/v1/models" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" | jq .
+```
+
+**Expected Response:**
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "model",
+      "id": "gpt-4"
+    },
+    {
+      "object": "model",
+      "id": "claude-3"
+    }
+  ]
+}
+```
+
+### Testing with Static API Keys (Long-Term Tokens)
+
+If you've generated a static API key, you can use it directly without the OAuth flow:
+
+```bash
+# Set your static API key
+export STATIC_API_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+# Test inference endpoint with static key
+curl -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
+  -H "Authorization: Bearer $STATIC_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello with static key!"
+      }
+    ]
+  }' | jq .
+```
+
+### Introspecting Tokens
+
+Check if your token is valid and view its metadata:
+
+```bash
+curl -X POST "$IHUB_API_URL/api/oauth/introspect" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"token\": \"$ACCESS_TOKEN\"
+  }" | jq .
+```
+
+**Expected Response:**
+```json
+{
+  "active": true,
+  "client_id": "client_abc123",
+  "scopes": ["chat", "models"],
+  "exp": 1705664400,
+  "iat": 1705660800
+}
+```
+
+### Common Testing Scenarios
+
+#### Test Invalid Credentials
+```bash
+# Should return 401 Unauthorized
+curl -v -X POST "$IHUB_API_URL/api/oauth/token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "grant_type": "client_credentials",
+    "client_id": "invalid_client",
+    "client_secret": "invalid_secret"
+  }'
+```
+
+#### Test Expired Token
+```bash
+# Use an expired token - should return 401 Unauthorized
+curl -v -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
+  -H "Authorization: Bearer EXPIRED_TOKEN_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Test"}]
+  }'
+```
+
+#### Test Missing Authorization Header
+```bash
+# Should return 401 Unauthorized
+curl -v -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Test"}]
+  }'
+```
+
+### Debugging Tips
+
+#### 1. Verbose Output
+Add `-v` flag to see full request/response details:
+```bash
+curl -v -X POST "$IHUB_API_URL/api/oauth/token" ...
+```
+
+#### 2. Save Response to File
+```bash
+curl -X POST "$IHUB_API_URL/api/oauth/token" \
+  -H "Content-Type: application/json" \
+  -d "{...}" \
+  -o token_response.json
+```
+
+#### 3. Decode JWT Token
+Use [jwt.io](https://jwt.io) or decode in terminal:
+```bash
+# macOS/Linux with base64
+echo "$ACCESS_TOKEN" | cut -d. -f2 | base64 -d | jq .
+```
+
+#### 4. Check Server Logs
+Monitor server logs for authentication issues:
+```bash
+# If running locally
+tail -f server/logs/server.log
+
+# Or check stdout/stderr if running in foreground
+```
+
+### Complete Test Script
+
+Here's a complete bash script to test OAuth authentication:
+
+```bash
+#!/bin/bash
+
+# Configuration
+IHUB_API_URL="${IHUB_API_URL:-http://localhost:3000}"
+CLIENT_ID="${CLIENT_ID:-your_client_id}"
+CLIENT_SECRET="${CLIENT_SECRET:-your_client_secret}"
+
+echo "Testing OAuth Authentication..."
+echo "API URL: $IHUB_API_URL"
+echo "Client ID: $CLIENT_ID"
+echo ""
+
+# Step 1: Get access token
+echo "1. Requesting access token..."
+TOKEN_RESPONSE=$(curl -s -X POST "$IHUB_API_URL/api/oauth/token" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"grant_type\": \"client_credentials\",
+    \"client_id\": \"$CLIENT_ID\",
+    \"client_secret\": \"$CLIENT_SECRET\"
+  }")
+
+ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
+
+if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+  echo "❌ Failed to get access token"
+  echo "$TOKEN_RESPONSE" | jq .
+  exit 1
+fi
+
+echo "✅ Access token obtained: ${ACCESS_TOKEN:0:50}..."
+echo ""
+
+# Step 2: Introspect token
+echo "2. Introspecting token..."
+INTROSPECT_RESPONSE=$(curl -s -X POST "$IHUB_API_URL/api/oauth/introspect" \
+  -H "Content-Type: application/json" \
+  -d "{\"token\": \"$ACCESS_TOKEN\"}")
+
+echo "$INTROSPECT_RESPONSE" | jq .
+echo ""
+
+# Step 3: List models
+echo "3. Listing available models..."
+MODELS_RESPONSE=$(curl -s -X GET "$IHUB_API_URL/api/inference/v1/models" \
+  -H "Authorization: Bearer $ACCESS_TOKEN")
+
+echo "$MODELS_RESPONSE" | jq .
+echo ""
+
+# Step 4: Test chat completion
+echo "4. Testing chat completion..."
+CHAT_RESPONSE=$(curl -s -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say hello in one word"
+      }
+    ],
+    "max_tokens": 10
+  }')
+
+echo "$CHAT_RESPONSE" | jq .
+echo ""
+
+echo "✅ OAuth authentication test completed!"
+```
+
+Save this script as `test-oauth.sh`, make it executable with `chmod +x test-oauth.sh`, and run it:
+
+```bash
+export CLIENT_ID="client_abc123"
+export CLIENT_SECRET="your_secret"
+export IHUB_API_URL="http://localhost:3000"
+./test-oauth.sh
+```
+
 ## Token Management
 
 ### Static API Keys
