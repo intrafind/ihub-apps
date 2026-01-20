@@ -86,10 +86,17 @@ function addStrictModeToSchema(schema) {
  */
 export function convertGenericToolsToOpenaiResponses(genericTools = []) {
   const tools = [];
+  const functionTools = [];
+  let webSearchTool = null;
 
-  // Separate web search tool from regular function-based tools
-  const webSearchTool = genericTools.find(tool => tool.id === 'webSearch');
-  const functionTools = genericTools.filter(tool => tool.id !== 'webSearch');
+  // Single pass to separate web search from regular tools
+  for (const tool of genericTools) {
+    if (tool.id === 'webSearch') {
+      webSearchTool = tool;
+    } else {
+      functionTools.push(tool);
+    }
+  }
 
   // Add web search if present
   if (webSearchTool) {
@@ -179,6 +186,32 @@ export function convertGenericToolCallsToOpenaiResponses(genericToolCalls = []) 
       }
     };
   });
+}
+
+/**
+ * Helper function to add web search metadata to result
+ * @param {Object} result - Generic streaming response result
+ * @param {Object} item - Web search call item
+ */
+function addWebSearchMetadata(result, item) {
+  if (!result.webSearchMetadata) result.webSearchMetadata = [];
+  result.webSearchMetadata.push({
+    id: item.id,
+    status: item.status,
+    action: item.action
+  });
+}
+
+/**
+ * Helper function to process annotations from content items
+ * @param {Object} contentItem - Content item with potential annotations
+ * @param {Object} result - Generic streaming response result
+ */
+function processAnnotations(contentItem, result) {
+  if (contentItem.annotations && Array.isArray(contentItem.annotations)) {
+    if (!result.annotations) result.annotations = [];
+    result.annotations.push(...contentItem.annotations);
+  }
 }
 
 /**
@@ -378,12 +411,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       // Handle web search completion events
       if (parsed.type === 'response.output_item.done' && parsed.item?.type === 'web_search_call') {
         // Store web search metadata for tracking
-        if (!result.webSearchMetadata) result.webSearchMetadata = [];
-        result.webSearchMetadata.push({
-          id: parsed.item.id,
-          status: parsed.item.status,
-          action: parsed.item.action
-        });
+        addWebSearchMetadata(result, parsed.item);
       }
     }
     // Handle full response object (non-streaming)
@@ -394,12 +422,9 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
           for (const contentItem of item.content) {
             if (contentItem.type === 'output_text' && contentItem.text) {
               content.push(contentItem.text);
-              
+
               // Handle annotations (citations) from web search results
-              if (contentItem.annotations && Array.isArray(contentItem.annotations)) {
-                if (!result.annotations) result.annotations = [];
-                result.annotations.push(...contentItem.annotations);
-              }
+              processAnnotations(contentItem, result);
             }
           }
         }
@@ -427,12 +452,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
         // Handle web search calls
         else if (item.type === 'web_search_call') {
           // Store web search metadata for tracking
-          if (!result.webSearchMetadata) result.webSearchMetadata = [];
-          result.webSearchMetadata.push({
-            id: item.id,
-            status: item.status,
-            action: item.action
-          });
+          addWebSearchMetadata(result, item);
         }
       }
       complete = true;
