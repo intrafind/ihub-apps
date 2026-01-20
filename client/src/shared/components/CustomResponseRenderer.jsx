@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactComponentRenderer from './ReactComponentRenderer';
 
@@ -64,13 +64,13 @@ const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
   const componentProps = useMemo(() => ({
     data,
     t,
-    // Add React hooks that the renderer might need
-    React: require('react'),
-    useState: require('react').useState,
-    useEffect: require('react').useEffect,
-    useMemo: require('react').useMemo,
-    useCallback: require('react').useCallback,
-    useRef: require('react').useRef
+    // Add React and hooks that the renderer might need
+    React,
+    useState,
+    useEffect,
+    useMemo,
+    useCallback,
+    useRef
   }), [data, t]);
 
   if (loading) {
