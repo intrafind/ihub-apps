@@ -222,7 +222,9 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
       result.complete = true;
       const fr = parsed.candidates[0].finishReason;
       // Only set finishReason from Google if we don't already have tool_calls
-      if (result.finishReason !== 'tool_calls') {
+      // Check both the finishReason flag AND the actual tool_calls array
+      // This is needed because Gemini 3.0 returns "STOP" even when making function calls
+      if (result.finishReason !== 'tool_calls' && result.tool_calls.length === 0) {
         result.finishReason = normalizeFinishReason(fr, 'google');
       }
     }
@@ -293,7 +295,9 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
     if (parsed.candidates && parsed.candidates[0]?.finishReason) {
       const fr = parsed.candidates[0].finishReason;
       // Only set finishReason from Google if we don't already have tool_calls
-      if (result.finishReason !== 'tool_calls') {
+      // Check both the finishReason flag AND the actual tool_calls array
+      // This is needed because Gemini 3.0 returns "STOP" even when making function calls
+      if (result.finishReason !== 'tool_calls' && result.tool_calls.length === 0) {
         result.finishReason = normalizeFinishReason(fr, 'google');
         result.complete = true;
       } else {

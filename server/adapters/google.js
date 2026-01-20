@@ -317,7 +317,9 @@ class GoogleAdapterClass extends BaseAdapter {
           result.complete = true;
           const fr = parsed.candidates[0].finishReason;
           // Only set finishReason from Gemini if we don't already have tool_calls
-          if (result.finishReason !== 'tool_calls') {
+          // Check both the finishReason flag AND the actual tool_calls array
+          // This is needed because Gemini 3.0 returns "STOP" even when making function calls
+          if (result.finishReason !== 'tool_calls' && result.tool_calls.length === 0) {
             if (fr === 'STOP') {
               result.finishReason = 'stop';
             } else if (fr === 'MAX_TOKENS') {
@@ -386,7 +388,9 @@ class GoogleAdapterClass extends BaseAdapter {
           // Map Gemini finish reasons to normalized values used by the client
           // Documented reasons include STOP, MAX_TOKENS, SAFETY, RECITATION and OTHER
           // Only set finishReason from Gemini if we don't already have tool_calls
-          if (result.finishReason !== 'tool_calls') {
+          // Check both the finishReason flag AND the actual tool_calls array
+          // This is needed because Gemini 3.0 returns "STOP" even when making function calls
+          if (result.finishReason !== 'tool_calls' && result.tool_calls.length === 0) {
             if (fr === 'STOP') {
               result.finishReason = 'stop';
               result.complete = true;
