@@ -238,6 +238,19 @@ export function ntlmAuthMiddleware(req, res, next) {
     return next();
   }
 
+  // Skip if user is already authenticated by a previous middleware (JWT, OAuth, etc.)
+  if (req.user && req.user.id && req.user.id !== 'anonymous') {
+    // Debug logging in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[NTLM Debug] Skipping NTLM - user already authenticated:', {
+        userId: req.user.id,
+        authMode: req.user.authMode,
+        url: req.url
+      });
+    }
+    return next();
+  }
+
   // Debug logging in development
   const isDev = process.env.NODE_ENV === 'development';
   if (isDev) {
