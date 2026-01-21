@@ -20,6 +20,7 @@ The `logRedactor.js` module provides functions to automatically redact sensitive
 Redacts API keys from URLs.
 
 **Patterns Redacted:**
+
 - `?key=xxx` or `&key=xxx`
 - `?api_key=xxx` or `&api_key=xxx`
 - `?apikey=xxx` or `&apikey=xxx`
@@ -27,6 +28,7 @@ Redacts API keys from URLs.
 - `?access_token=xxx` or `&access_token=xxx`
 
 **Example:**
+
 ```javascript
 import { redactUrl } from './utils/logRedactor.js';
 
@@ -40,6 +42,7 @@ console.error('Error with URL:', redactUrl(url));
 Redacts sensitive headers while preserving first 10 characters for debugging.
 
 **Headers Redacted:**
+
 - `authorization`
 - `x-api-key`
 - `api-key`
@@ -48,11 +51,12 @@ Redacts sensitive headers while preserving first 10 characters for debugging.
 - `auth-token`
 
 **Example:**
+
 ```javascript
 import { redactHeaders } from './utils/logRedactor.js';
 
 const headers = {
-  'Authorization': 'Bearer sk-proj-abc123xyz789',
+  Authorization: 'Bearer sk-proj-abc123xyz789',
   'Content-Type': 'application/json'
 };
 console.log('Headers:', redactHeaders(headers));
@@ -64,6 +68,7 @@ console.log('Headers:', redactHeaders(headers));
 Recursively redacts sensitive fields from request bodies.
 
 **Fields Redacted:**
+
 - `api_key`
 - `apiKey`
 - `apikey`
@@ -72,6 +77,7 @@ Recursively redacts sensitive fields from request bodies.
 - `password`
 
 **Example:**
+
 ```javascript
 import { redactRequestBody } from './utils/logRedactor.js';
 
@@ -89,12 +95,14 @@ console.log('Body:', redactRequestBody(body));
 General-purpose string redaction for log messages.
 
 **Patterns Redacted:**
+
 - URLs with API keys
 - Bearer tokens
 - API key patterns (sk-xxx, api-xxx, key-xxx)
 - Long alphanumeric strings that look like keys
 
 **Example:**
+
 ```javascript
 import { redactLogMessage } from './utils/logRedactor.js';
 
@@ -115,7 +123,7 @@ try {
 } catch (error) {
   // GOOD: Redact URL before logging
   console.error('Fetch failed:', redactUrl(request.url), error.message);
-  
+
   // BAD: Don't log raw URLs
   // console.error('Fetch failed:', request.url, error.message);
 }
@@ -199,6 +207,7 @@ cd server && node tests/logRedactor.test.js
 ## Changelog
 
 ### 2026-01-21 - Initial Release
+
 - Created log redaction utility
 - Added comprehensive test suite
 - Applied to all LLM adapters and StreamingHandler
