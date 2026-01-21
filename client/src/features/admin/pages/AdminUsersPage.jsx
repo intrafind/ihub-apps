@@ -11,6 +11,7 @@ const AdminUsersPage = () => {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [message, setMessage] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     loadUsers();
@@ -89,6 +90,30 @@ const AdminUsersPage = () => {
     }
   };
 
+  const clearSearch = () => {
+    setSearchTerm('');
+  };
+
+  // Filter users based on search term
+  const filteredUsers = users.filter(user => {
+    if (!searchTerm) return true;
+
+    const searchLower = searchTerm.toLowerCase();
+    const name = (user.name || '').toLowerCase();
+    const username = (user.username || '').toLowerCase();
+    const email = (user.email || '').toLowerCase();
+    const groups = (user.internalGroups || []).join(' ').toLowerCase();
+    const authMethods = (user.authMethods || ['local']).join(' ').toLowerCase();
+
+    return (
+      name.includes(searchLower) ||
+      username.includes(searchLower) ||
+      email.includes(searchLower) ||
+      groups.includes(searchLower) ||
+      authMethods.includes(searchLower)
+    );
+  });
+
   if (loading) {
     return (
       <AdminAuth>
@@ -154,10 +179,39 @@ const AdminUsersPage = () => {
             </div>
           )}
 
+          {/* Search Bar */}
+          <div className="mb-6">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="search" className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search users by name, username, email, groups, or auth method..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                autoComplete="off"
+              />
+              {searchTerm && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  aria-label="Clear search"
+                >
+                  <Icon name="x" className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Users List */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Users ({users.length})</h3>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Users ({filteredUsers.length}
+                {searchTerm && ` of ${users.length}`})
+              </h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -184,16 +238,25 @@ const AdminUsersPage = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {users.length === 0 ? (
+                  {filteredUsers.length === 0 ? (
                     <tr>
                       <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
                         <Icon name="users" size="lg" className="mx-auto mb-4 text-gray-400" />
-                        <p>No users found</p>
-                        <p className="text-sm">Create your first user to get started</p>
+                        {searchTerm ? (
+                          <>
+                            <p>No users found matching "{searchTerm}"</p>
+                            <p className="text-sm">Try adjusting your search criteria</p>
+                          </>
+                        ) : (
+                          <>
+                            <p>No users found</p>
+                            <p className="text-sm">Create your first user to get started</p>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ) : (
-                    users.map(user => (
+                    filteredUsers.map(user => (
                       <tr key={user.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
