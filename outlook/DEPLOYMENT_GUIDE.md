@@ -1,241 +1,221 @@
-# Deployment Guide for Office Integration
+# Deployment Guide for Outlook Integration
+
+## Quick Start
+
+The Outlook Add-in for iHub Apps is now managed through the **Admin → Integrations** panel. This guide provides a quick overview of the deployment process.
+
+**For comprehensive admin documentation, see: `docs/outlook-integration-admin-guide.md`**
 
 ## Overview
 
-This guide covers deploying the Outlook Add-in integration for iHub Apps on Mac.
+The Outlook integration is automatically deployed with your iHub Apps server and provides:
+- Dynamic manifest generation with correct URLs
+- Admin panel for easy distribution
+- Automatic configuration for end users
 
 ## Prerequisites
 
-- iHub Apps server running with HTTPS enabled
-- Outlook for Mac (version 16.0 or later)  
-- Web server access to host the add-in files
+1. **iHub Apps Server**
+   - Version 4.2.0 or later
+   - HTTPS enabled (required by Office Add-ins)
+   - Admin access
+
+2. **Outlook for Mac**
+   - Version 16.0 or later for end users
+
+3. **Required Apps**
+   - `summarizer` app enabled
+   - `email-composer` app enabled
 
 ## Deployment Steps
 
 ### 1. Server Deployment
 
-The add-in files need to be accessible via HTTPS on your iHub server.
-
-#### Option A: Automatic Deployment (Recommended)
-
-The production build process automatically includes the Outlook integration:
+The Outlook integration is automatically included in production builds:
 
 ```bash
 npm run prod:build
 ```
 
-The Outlook files will be available at:
-- `dist/public/outlook/manifest.xml`
-- `dist/public/outlook/taskpane.html`
-- `dist/public/outlook/commands.html`
-- `dist/public/outlook/src/taskpane.js`
+Files are deployed to: `dist/public/outlook/`
 
-#### Option B: Manual Deployment
+The following endpoints are automatically available:
+- `GET /api/integrations/outlook/manifest.xml` - Dynamically generated manifest
+- `GET /api/integrations/outlook/info` - Integration information
+- Static files at `/outlook/` (taskpane.html, taskpane.js, etc.)
 
-1. Copy the `outlook/` directory to your web server's public directory
-2. Ensure files are accessible at `https://your-ihub-server.com/outlook/`
+### 2. Access Admin Panel
 
-### 2. Configure the Manifest
+1. Log in to iHub Apps as administrator
+2. Navigate to **Admin** → **Integrations**
+3. Find the "Outlook Add-in for Mac" section
 
-Edit `outlook/manifest.xml` and replace all `{{APP_URL}}` placeholders:
+### 3. Download Manifest
 
-```bash
-# Using sed (Linux/Mac)
-sed -i 's/{{APP_URL}}/https:\/\/your-ihub-server.com/g' outlook/manifest.xml
+In the Admin → Integrations page:
+1. Click **Download Manifest**
+2. Save the `ihub-outlook-manifest.xml` file
+3. Distribute to users
 
-# Or manually edit the file
-```
+**Important**: The manifest is dynamically generated with your server's URLs - no manual configuration needed!
 
-### 3. Update Server CORS Configuration
+### 4. Verify Configuration
 
-Add Office Add-in domains to your CORS configuration in `contents/config/platform.json`:
+Before distributing, verify:
+
+#### CORS Configuration
+
+Check `contents/config/platform.json` includes Office domains:
 
 ```json
 {
   "cors": {
     "origin": [
       "https://outlook.office.com",
-      "https://outlook.office365.com", 
+      "https://outlook.office365.com",
       "https://outlook.live.com",
-      "https://your-ihub-server.com",
-      "${ALLOWED_ORIGINS}"
+      "https://your-ihub-server.com"
     ],
-    "credentials": true,
-    "allowedHeaders": [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With"
-    ]
+    "credentials": true
   }
 }
 ```
 
-Restart your server after updating the configuration.
+**Note**: Restart server after modifying `platform.json`
 
-### 4. Enable Required Apps
+#### Required Apps
 
-Ensure the following apps are enabled on your server:
+Verify in **Admin** → **Apps**:
+- ✅ Content Summarizer (summarizer)
+- ✅ Email Composer (email-composer)
 
-1. Copy `examples/apps/summarizer.json` to your active apps directory
-2. Copy `examples/apps/email-composer.json` to your active apps directory
-
-### 5. Test Server Accessibility
-
-Verify the add-in files are accessible:
-
+If missing, copy from examples:
 ```bash
-curl https://your-ihub-server.com/outlook/taskpane.html
-curl https://your-ihub-server.com/outlook/manifest.xml
+cp examples/apps/summarizer.json contents/apps/
+cp examples/apps/email-composer.json contents/apps/
 ```
 
-## Client Installation
+### 5. Distribute to Users
 
-### Installing on Outlook for Mac
+**Option A: Manual Distribution**
+1. Send `ihub-outlook-manifest.xml` to users
+2. Provide installation instructions
 
-1. Open Outlook for Mac
-2. Click **Get Add-ins** from the Home ribbon
-3. Select **My Add-ins** in the left sidebar
-4. Click **Add a Custom Add-in** → **Add from File...**
-5. Browse and select the `manifest.xml` file
-6. Click **Install**
+**Option B: Centralized (Office 365)**
+1. Upload manifest to Microsoft 365 Admin Center
+2. Deploy to users/groups automatically
 
-### Verification
+## User Installation
 
-1. Open any email in Outlook
-2. Look for "iHub AI" buttons in the ribbon
-3. Click "Summarize Email" to test
-4. Enter your iHub server URL in the configuration field
-5. Verify the summary is generated
+Users install the add-in by:
 
-## Distribution to Users
+1. Opening Outlook for Mac
+2. Going to **Get Add-ins** → **My Add-ins**
+3. Clicking **Add a Custom Add-in** → **Add from File**
+4. Selecting the `ihub-outlook-manifest.xml` file
 
-### Option 1: Manual Distribution
+The add-in appears as two ribbon buttons:
+- **Summarize Email**
+- **Generate Reply**
 
-1. Share the configured `manifest.xml` file with users
-2. Provide installation instructions (see Client Installation above)
-3. Users install individually on their Macs
+## Features
 
-### Option 2: Centralized Deployment (Office 365)
+- **Auto-Configuration**: Add-in automatically detects server URL
+- **Email Summarization**: AI-powered summaries
+- **Reply Generation**: Professional responses
+- **Attachment Analysis**: Intelligent attachment insights
+- **Streaming Responses**: Real-time AI output
 
-For Office 365 organizations:
+## Authentication
 
-1. Go to Microsoft 365 Admin Center
-2. Navigate to **Settings** → **Integrated apps**
-3. Click **Upload custom apps**
-4. Upload the `manifest.xml` file
-5. Configure deployment settings
-6. Deploy to specific users or groups
+The add-in uses **server-side authentication**:
+- Same authentication as main iHub app
+- No separate configuration needed
+- Email content sent via authenticated HTTPS requests
 
-## Configuration for End Users
+## Monitoring
 
-After installation, users need to configure the API URL:
+Monitor usage through:
+- **Admin** → **Usage Reports** (summarizer and email-composer apps)
+- Server logs: `tail -f server/server.log`
 
-1. Click any iHub AI button in Outlook
-2. Enter the iHub server URL: `https://your-ihub-server.com`
-3. The configuration is saved in browser localStorage
+## Troubleshooting
 
-## Monitoring and Support
+### Add-in doesn't appear
+- Verify Outlook for Mac 16.0+
+- Try removing and reinstalling
+- Restart Outlook
 
-### Server-Side Logs
+### Connection errors
+- Check HTTPS is enabled
+- Verify CORS configuration
+- Check server logs
 
-Monitor API requests from the Outlook add-in:
+### Summarization fails
+- Verify apps are enabled
+- Check AI model configuration
+- Review server logs
 
-```bash
-tail -f server/server.log | grep "outlook\|/api/chat"
-```
+## Updating
 
-### Client-Side Debugging
+**Minor updates** (UI/functionality): Automatic when server updates
 
-Users can debug issues:
+**Major updates** (manifest changes):
+1. Download new manifest from Admin panel
+2. Redistribute to users
+3. Users reinstall the add-in
 
-1. Right-click in the taskpane
-2. Select "Inspect Element" (if available)
-3. Check browser console for errors
+## Getting Help
 
-### Common Issues
+1. **Comprehensive Admin Guide**: See `docs/outlook-integration-admin-guide.md`
+2. **User Documentation**: See `outlook/README.md`
+3. **Technical Details**: See `concepts/2026-01-21 Office Integration for Outlook on Mac.md`
+4. **Server Logs**: Check `server/server.log` for errors
 
-1. **Add-in doesn't appear**: Verify manifest.xml syntax and HTTPS URLs
-2. **CORS errors**: Check server CORS configuration  
-3. **API connection fails**: Verify server URL and network connectivity
-4. **No streaming response**: Check SSE support in the iHub API
+## API Endpoints Reference
+
+- **`GET /api/integrations/outlook/manifest.xml`**
+  - Generates manifest with correct URLs
+  - Requires authentication
+  - Downloads as `ihub-outlook-manifest.xml`
+
+- **`GET /api/integrations/outlook/info`**
+  - Returns integration configuration
+  - Public endpoint
+  - Includes features, URLs, instructions
+
+- **POST `/api/chat/sessions/summarizer`**
+  - Email summarization
+  - Requires authentication
+
+- **POST `/api/chat/sessions/email-composer`**
+  - Reply generation
+  - Requires authentication
 
 ## Security Considerations
 
-- Always use HTTPS for the iHub server
-- Configure appropriate authentication on the server
-- Review data privacy implications for email content
-- Consider implementing rate limiting for API endpoints
-- Use secure storage for any API keys or tokens
+1. **HTTPS Required**: Office Add-ins mandate HTTPS
+2. **Data Privacy**: Email content sent to server for processing
+3. **Authentication**: Uses existing iHub authentication
+4. **No Permanent Storage**: Email content not stored
+5. **CORS**: Configure properly to allow Office domains
 
-## Updates and Maintenance
+## Best Practices
 
-### Updating the Add-in
+1. ✅ Test yourself before distributing
+2. ✅ Start with a small user group
+3. ✅ Provide user training
+4. ✅ Monitor usage and feedback
+5. ✅ Keep server updated
 
-1. Modify files in the `outlook/` directory
-2. Rebuild: `npm run prod:build`
-3. Deploy updated files to the server
-4. Users will automatically get updates on next load
-5. For manifest changes, users must reinstall the add-in
+## Additional Resources
 
-### Version Management
+- **Admin Panel**: Navigate to Admin → Integrations for current status
+- **Full Admin Guide**: `docs/outlook-integration-admin-guide.md`
+- **User Guide**: `outlook/README.md`
+- **Architecture**: `concepts/2026-01-21 Office Integration for Outlook on Mac.md`
 
-Update the version in `outlook/manifest.xml`:
+---
 
-```xml
-<Version>1.1.0.0</Version>
-```
-
-## Troubleshooting Guide
-
-### Issue: Add-in not loading
-
-**Solution**:
-- Clear Outlook's add-in cache
-- Verify HTTPS certificate is valid
-- Check server accessibility
-
-### Issue: Streaming doesn't work
-
-**Solution**:
-- Verify SSE support in browser
-- Check network proxies
-- Test API endpoint directly
-
-### Issue: CORS errors in console
-
-**Solution**:
-- Update platform.json CORS configuration
-- Restart iHub server
-- Verify credentials: true is set
-
-## Testing Checklist
-
-Before deploying to production:
-
-- [ ] Manifest XML is valid
-- [ ] All URLs use HTTPS
-- [ ] CORS configuration includes Office domains
-- [ ] Required apps (summarizer, email-composer) are enabled
-- [ ] API endpoints are accessible
-- [ ] Streaming responses work correctly
-- [ ] Summarize email function works
-- [ ] Generate reply function works
-- [ ] Analyze attachments function works
-- [ ] Error handling displays appropriate messages
-- [ ] Configuration persists across sessions
-
-## Support Resources
-
-- iHub Apps Documentation: `https://your-ihub-server.com/page/help`
-- Office Add-ins Documentation: https://docs.microsoft.com/office/dev/add-ins/
-- Outlook Add-ins Specific: https://docs.microsoft.com/office/dev/add-ins/outlook/
-
-## Rollback Procedure
-
-If issues occur:
-
-1. Remove the add-in from Outlook (Get Add-ins > My Add-ins > Remove)
-2. Revert server changes
-3. Restart server
-4. Investigate and fix issues
-5. Re-deploy when ready
+**For detailed administrative documentation, troubleshooting, and best practices, refer to:**
+**`docs/outlook-integration-admin-guide.md`**
