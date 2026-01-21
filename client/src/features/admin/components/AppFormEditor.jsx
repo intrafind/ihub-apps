@@ -1426,23 +1426,14 @@ const AppFormEditor = ({
                       onChange={e =>
                         handleInputChange('features', {
                           ...app.features,
-                          magicPrompt: {
-                            ...app.features?.magicPrompt,
-                            model: e.target.value || undefined
-                          }
+                          magicPrompt: { ...app.features?.magicPrompt, enabled: e.target.checked }
                         })
                       }
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    >
-                      <option value="">
-                        {t('admin.apps.edit.selectModel', 'Select model...')}
-                      </option>
-                      {availableModels.map(model => (
-                        <option key={model.id} value={model.id}>
-                          {getLocalizedContent(model.name, currentLanguage)}
-                        </option>
-                      ))}
-                    </select>
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900">
+                      {t('admin.apps.edit.enableMagicPrompt', 'Enable Magic Prompt')}
+                    </label>
                   </div>
 
                   {app.features?.magicPrompt?.enabled && (
