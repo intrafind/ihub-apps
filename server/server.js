@@ -95,6 +95,10 @@ if (cluster.isPrimary && workerCount > 1) {
       setDefaultLanguage(platformConfig.defaultLanguage);
     }
     await initTelemetry(platformConfig?.telemetry || {});
+    
+    // Initialize adapter instrumentation after telemetry is ready
+    const { initializeAdapterInstrumentation } = await import('./adapters/index.js');
+    initializeAdapterInstrumentation();
   } catch (err) {
     console.error('Failed to initialize telemetry:', err);
   }

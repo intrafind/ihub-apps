@@ -6,6 +6,22 @@ import { BaseAdapter } from './BaseAdapter.js';
 
 class GoogleAdapterClass extends BaseAdapter {
   /**
+   * Get provider name for telemetry
+   * @returns {string} Provider name
+   */
+  getProviderName() {
+    return 'google';
+  }
+
+  /**
+   * Get operation name for telemetry
+   * @returns {string} Operation name
+   */
+  getOperationName() {
+    return 'generate_content';
+  }
+
+  /**
    * Helper to process inline image data from response parts
    */
   processInlineImage(part) {
