@@ -292,10 +292,25 @@ const ChatMessage = ({
 
     if (message.loading) {
       // console.log('🔄 Rendering loading state for message:', contentToRender);
+      
+      // Check if we should use custom renderer (prioritize message metadata over app prop)
+      const customRendererName = customRendererFromMessage || app?.customResponseRenderer;
+      const effectiveOutputFormat = outputFormatFromMessage || outputFormat;
+      
+      // For JSON output with custom renderer, show a clean loading indicator
+      if (!isUser && effectiveOutputFormat === 'json' && customRendererName) {
+        return (
+          <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <span className="text-sm">{t('chatMessage.generatingResponse', 'Generating response...')}</span>
+          </div>
+        );
+      }
+      
       // For loading assistant messages with markdown or JSON, use StreamingMarkdown
-      if (!isUser && (outputFormat === 'markdown' || outputFormat === 'json')) {
+      if (!isUser && (effectiveOutputFormat === 'markdown' || effectiveOutputFormat === 'json')) {
         const mdContent =
-          outputFormat === 'json'
+          effectiveOutputFormat === 'json'
             ? `\u0060\u0060\u0060json\n${contentToRender}\n\u0060\u0060\u0060`
             : contentToRender;
         return (
