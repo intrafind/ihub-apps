@@ -21,6 +21,8 @@ dist/
 dist-ssr/
 dist-bin/
 build/
+public/
+!public/.gitkeep
 contents/data/*
 !contents/data/.gitkeep
 

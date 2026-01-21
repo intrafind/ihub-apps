@@ -1,1 +1,0 @@
-import{f as r}from"./index-BImwYGvy.js";import"./vendor-react-9AdXaApd.js";import"./mermaid-DechTdnA.js";import"./vendor-utils-CF1RCcgi.js";import"./teams-CwMtNG0x.js";import"./vendor-ui-lZiltAcz.js";import"./vendor-forms-DyVXvDXu.js";const m=(e=null)=>{e?r.delete(e):r.clear(),console.log(e?`Cleared cache for ${e}`:"Cleared entire API cache")};export{m as clearApiCache};
