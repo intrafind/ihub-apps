@@ -310,6 +310,16 @@
         "de": "pages/de/faq.md"
       }
     },
+    "nda-guide": {
+      "title": {
+        "en": "NDA Risk Analyzer - User Guide",
+        "de": "NDA-Risikoanalyse - Benutzerhandbuch"
+      },
+      "filePath": {
+        "en": "pages/en/nda-guide.md",
+        "de": "pages/de/nda-guide.md"
+      }
+    },
     "opensearch-analysis-script": {
       "title": {
         "en": "OpenSearch Analysis Script",

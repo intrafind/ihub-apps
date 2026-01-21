@@ -9,7 +9,7 @@
   "scripts": {
     "// === DEVELOPMENT ===": "",
     "setup:dev": "cp .env.example .env && npm run install:all && echo '\\n✅ Setup complete! Edit .env with your API keys, then run: npm run dev'",
-    "dev": "NODE_ENV=development concurrently --kill-others-on-fail \"npm run server\" \"sleep 2 && npm run client\"",
+    "dev": "cross-env NODE_ENV=development concurrently --kill-others-on-fail \"npm run server\" \"sleep 2 && npm run client\"",
     "server": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
     "client": "cd client && npm run dev",
     "start": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
@@ -93,6 +93,7 @@
     "test:azure-openai": "cd server && node tests/azure-openai-test.js",
     "test:tool-verification": "cd server && node tests/tool-call-verification.test.js",
     "test:api-documentation": "cd server && node tests/comprehensive-api-documentation.test.js",
+    "test:nda": "cd server && node tests/nda-risk-analyzer.test.js",
     "test:validate-framework": "./tests/validate-framework.sh",
     "// === CODE QUALITY ===": "",
     "lint": "eslint .",
@@ -116,7 +117,7 @@
     "http-proxy-agent": "^7.0.2",
     "https-proxy-agent": "^7.0.6",
     "react-icons": "^5.5.0",
-    "react-resizable-panels": "^3.0.6"
+    "react-resizable-panels": "^3.0.4"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.28.5",
@@ -126,6 +127,7 @@
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^14.5.2",
     "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "electron": "^40.0.0",
     "electron-builder": "^26.5.0",
     "esbuild": "^0.27.0",

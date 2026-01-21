@@ -16,6 +16,7 @@ import registerGeneralRoutes from './routes/generalRoutes.js';
 import registerModelRoutes from './routes/modelRoutes.js';
 import registerToolRoutes from './routes/toolRoutes.js';
 import registerPageRoutes from './routes/pageRoutes.js';
+import registerRendererRoutes from './routes/rendererRoutes.js';
 import registerSessionRoutes from './routes/sessionRoutes.js';
 import registerMagicPromptRoutes from './routes/magicPromptRoutes.js';
 import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
@@ -169,6 +170,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerModelRoutes(app, { getLocalizedError, basePath });
   registerToolRoutes(app, basePath);
   registerPageRoutes(app, basePath);
+  registerRendererRoutes(app, basePath);
   registerSessionRoutes(app, basePath);
   registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT, basePath });
   registerChatRoutes(app, {

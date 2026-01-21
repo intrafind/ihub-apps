@@ -62,10 +62,6 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
         enabled: false
       }
     },
-    // Creation method flags
-    useAI: false,
-    useTemplate: false,
-    useManual: false,
     // Inheritance tracking
     parentId: templateApp?.id || null,
     inheritanceLevel: templateApp ? (templateApp.inheritanceLevel || 0) + 1 : 0,

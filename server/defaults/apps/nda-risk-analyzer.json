@@ -1,0 +1,150 @@
+{
+  "id": "nda-risk-analyzer",
+  "order": 15,
+  "category": "legal",
+  "name": {
+    "en": "NDA Risk Analyzer",
+    "de": "NDA-Risikoanalyse"
+  },
+  "description": {
+    "en": "Analyze NDA documents and identify potential legal risks",
+    "de": "Analysiere NDA-Dokumente und identifiziere potenzielle rechtliche Risiken"
+  },
+  "color": "#DC2626",
+  "icon": "shield-alert",
+  "system": {
+    "en": "You are an expert legal analyst specializing in Non-Disclosure Agreement (NDA) risk assessment.\n\nYou will analyze NDA documents against a defined set of clauses. Each clause will have rules for **RED**, **GREEN** and optionally **YELLOW** risk marker. The rules are defined in the variable additional clauses. ALWAYS evaluate these 8 standard clauses:\n\n1. **Mutuality**: Prefer mutual NDAs over unilateral\n2. **Cooperation Subject**: Clear definition of collaboration purpose\n3. **Confidential Information Definition**: Clear scope of what's confidential\n4. **Duration**: Term length\n5. **Penalties**: Contractual penalties and damages\n6. **Third Party Disclosure**: Rules for sharing with third parties\n7. **Project/Customer Protection**: Protection of business relationships\n8. **Non-Compete**: Competition restrictions\n\nADDITIONALLY: The user will provide custom policy preferences for the risk rules and optionally additional clause types with such rules. Your task is to identify clauses and their rules and to evaluate the document text against them. \n\n**Risk Classification Rules:**\n- **RED**: Problematic clauses that are present and violate the policy preferences, or important clauses that are completely absent\n- **YELLOW**: Unclear definitions, unclear terms, moderate restrictions\n- **GREEN**: Acceptable clauses that meet the policy preferences\n\n**Citation Instructions:**\n- Provide multiple relevant text quotations for each clause in the citation field\n- Include complete clauses and subclauses that relate to the clause\n- For missing clauses, citation can be empty or explain why it's missing\n\n**IMPORTANT**: Return results in the `clauses` array. Include ALL 8 standard clauses PLUS any additional clauses you identify from the policy preferences. Each clause must have: clause_name (str), citation (array of quotes), risk_level (red/yellow/green), and reason (English explanation).\n\nProvide comprehensive analysis with citations and reasoning in English.",
+    "de": "Du bist ein Experte für rechtliche Analysen, spezialisiert auf Risikobewertung von Geheimhaltungsvereinbarungen (NDAs).\n\nDu wirst NDA-Dokumente anhand einer Reihe von vordefinierten Klauseln analysieren. Jede Klausel hat Regeln für die Risikobewertung. Es gibt 3 Risikolevel: **RED**, **GREEN** und optional **YELLOW**. Bewerte IMMER diese 8 Standardklausel:\n\n1. **Gegenseitigkeit**: Bevorzuge gegenseitige NDAs gegenüber einseitigen\n2. **Gegenstand der Zusammenarbeit**: Klare Definition des Kooperationszwecks\n3. **Definition geheimer Informationen**: Klarer Umfang dessen, was vertraulich ist\n4. **Dauer**: Laufzeit\n5. **Vertragsstrafen**: Vertragsstrafen und Schadensersatz\n6. **Herausgabe an Dritte**: Regeln für die Weitergabe an Dritte\n7. **Projekt-/Kundenschutz**: Schutz von Geschäftsbeziehungen\n8. **Wettbewerbsklausel**: Wettbewerbsbeschränkungen\n\nZUSÄTZLICH: Der Benutzer kann benutzerdefinierte Richtlinien-Präferenzen bereitstellen, sowie Klauseln mit ihren Regeln hinzufügen. Extrahiere ALLE Klausel und die entsprechenden Risikoregeln aus diesen Präferenzen und bewerte diese sorgfältig.\n\n**Risikoeinstufungsregeln:**\n- **ROT**: Problematische Klauseln, die vorhanden sind und gegen die Richtlinien-Präferenzen verstoßen, oder wichtige Klauseln, die vollständig fehlen\n- **GELB**: Unklare Definitionen, unklare Begriffe, moderate Einschränkungen\n- **GRÜN**: Akzeptable Klauseln, die den Richtlinien-Präferenzen entsprechen\n\n**Zitier-Anweisungen:**\n- Gib mehrere relevante Textzitate für jede KLausel im Zitat-Feld an\n- Füge vollständige Klauseln und Unterklauseln ein, die sich auf die Klausel beziehen\n- Bei fehlenden Klauseln kann das Zitat leer sein oder erklären, warum es fehlt\n\n**WICHTIG**: Gib die Ergebnisse im `clauses`-Array zurück. Füge ALLE Klauseln hinzu, die du aus den Richtlinien-Präferenzen identifizierst. Jede Klausel muss haben: clause_name (Name), citation (Array von Zitaten), risk_level (red/yellow/green) und reason (deutsche Erklärung).\n\nGib eine umfassende Analyse mit Zitaten und Begründung auf Deutsch an."
+  },
+  "prompt": {
+    "en": "**Policy Preferences to Apply:**\n{{custom_rules}}\n\n**NDA Document to Analyze:**\n{{content}}",
+    "de": "**Anzuwendende Richtlinien-Präferenzen:**\n{{custom_rules}}\n\n**Zu analysierendes NDA-Dokument:**\n{{content}}"
+  },
+  "tokenLimit": 16000,
+  "preferredModel": "gpt-oss-vllm",
+  "preferredOutputFormat": "json",
+  "preferredStyle": "professional",
+  "sendChatHistory": false,
+  "customResponseRenderer": "nda-results",
+  "messagePlaceholder": {
+    "en": "Paste NDA text here or upload a document...",
+    "de": "NDA-Text hier einfügen oder Dokument hochladen..."
+  },
+  "greeting": {
+    "en": {
+      "title": "⚖️ NDA Risk Analyzer",
+      "subtitle": "Upload your NDA document for comprehensive risk assessment. Pre-defined clauses: Mutuality, Cooperation Subject, Confidential Info Definition, Duration, Penalties, Third Party Disclosure, Project/Customer Protection, and Non-Compete. 📖 [View User Guide](/pages/nda-guide)"
+    },
+    "de": {
+      "title": "⚖️ NDA-Risikoanalyse",
+      "subtitle": "Laden Sie Ihr NDA-Dokument hoch für eine umfassende Risikobewertung. Vordefinierte Klauseln: Gegenseitigkeit, Kooperationsgegenstand, Definition vertraulicher Informationen, Laufzeit, Vertragsstrafen, Weitergabe an Dritte, Projekt-/Kundenschutz und Wettbewerbsklausel. 📖 [Benutzerhandbuch anzeigen](/pages/nda-guide)"
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "overall_risk": {
+        "type": "string",
+        "enum": ["red", "yellow", "green"],
+        "description": "Overall risk assessment based on all clauses (red if any red, yellow if any yellow but no red, otherwise green)"
+      },
+      "clauses": {
+        "type": "array",
+        "description": "List of all clauses evaluated - always include the 8 standard clauses defined in the system prompt plus any additional clauses from custom policy preferences",
+        "items": {
+          "type": "object",
+          "properties": {
+            "clause_name": {
+              "type": "string",
+              "description": "Name of the clause"
+            },
+            "citation": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of exact full-sentence or full-paragraph quotations from NDA text related to this clause"
+            },
+            "risk_level": {
+              "type": "string",
+              "enum": ["red", "yellow", "green"],
+              "description": "Risk classification for this clause"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Detailed explanation of why this risk level was assigned"
+            }
+          },
+          "required": ["clause_name", "citation", "risk_level", "reason"],
+          "additionalProperties": false
+        },
+        "minItems": 8
+      }
+    },
+    "required": ["overall_risk", "clauses"],
+    "additionalProperties": false
+  },
+  "upload": {
+    "enabled": true,
+    "fileUpload": {
+      "enabled": true,
+      "maxFileSizeMB": 10,
+      "supportedTextFormats": ["text/plain", "text/markdown", "text/x-markdown"],
+      "supportedPdfFormats": ["application/pdf"]
+    },
+    "imageUpload": {
+      "enabled": false
+    }
+  },
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": false
+    },
+    "outputFormat": {
+      "enabled": false
+    },
+    "chatHistory": {
+      "enabled": false
+    },
+    "style": {
+      "enabled": false
+    }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 8,
+    "microphone": {
+      "enabled": false
+    }
+  },
+  "variables": [
+    {
+      "name": "custom_rules",
+      "label": {
+        "en": "Custom Policy Rules",
+        "de": "Benutzerdefinierte Richtlinien"
+      },
+      "type": "text",
+      "defaultValue": {
+        "en": "- Duration: Maximum months acceptable (RED if > 24 months, GREEN otherwise)\n- Mutuality: Mutual NDAs strongly preferred (RED if unilateral, GREEN if mutual)\n- Cooperation Subject: Clear definition of collaboration purpose (RED if missing, YELLOW if present but not clear, GREEN when clear)\n- Confidential Information Definition: Clear scope of what's confidential (RED if missing, YELLOW if unclear, GREEN when present and clear)\n- Penalties: Should be reasonable and capped (RED if excessive, YELLOW if unclear, GREEN if reasonable or absent)\n- Third Party Disclosure: Rules for sharing with third parties (RED when missing or unclear, GREEN when present and clear)\n- Project/Customer Protection: Protection of business relationships (RED when missing or unenforced, GREEN when present and enforced)\n- Non-Compete: Should be limited in scope and time (RED if broad/unlimited, YELLOW if moderate, GREEN if narrow/absent)",
+        "de": "- Laufzeit: Maximum Monate akzeptabel (ROT wenn > 24 Monate, GRÜN wenn ≤ 24 Monate)\n- Gegenseitigkeit: Gegenseitige NDAs stark bevorzugt (ROT wenn einseitig mit breitem Umfang, GELB wenn einseitig mit begrenztem Umfang, GRÜN wenn gegenseitig)\n- Gegenstand der Zusammenarbeit (ROT wenn fehlt, GELB wenn vorhanden aber nicht klar, GRÜN wenn vorhanden und klar)\n- Definition vertraulicher Informationen (ROT wenn fehlt, GELB wenn unklar, GRÜN wenn vorhanden und klar)\n- Vertragsstrafen: Sollten angemessen und begrenzt sein (ROT wenn übermäßig, GELB wenn unklar, GRÜN wenn angemessen oder nicht vorhanden)\n- Weitergabe an Dritte: Muss vorherige schriftliche Zustimmung erfordern (ROT wenn ohne Zustimmung erlaubt, GELB wenn vage, GRÜN wenn Zustimmung der Parteien erforderlich)\n- Projekt-/Kundenschutz: Schutz von Geschäftsbeziehungen(ROT wenn fehlt, GRÜN wenn vorhanden und klar)\n- Wettbewerbsverbot: Sollte in Umfang und Zeit begrenzt sein (ROT wenn breit/unbegrenzt, GELB wenn moderat, GRÜN wenn eng/nicht vorhanden)"
+      },
+      "description": {
+        "en": "Define your organization's NDA policy preferences. These rules will be used to evaluate the risk level of each clause.",
+        "de": "Definieren Sie die NDA-Richtlinien Ihrer Organisation. Diese Regeln werden verwendet, um das Risikoniveau jedes Klausels zu bewerten."
+      },
+      "placeholder": {
+        "en": "Enter your custom policy rules, one per line...",
+        "de": "Geben Sie Ihre benutzerdefinierten Richtlinien ein, eine pro Zeile..."
+      },
+      "required": false
+    }
+  ],
+  "allowEmptyContent": false,
+  "disallowModelSelection": false,
+  "enabled": true
+}

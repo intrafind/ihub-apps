@@ -27,6 +27,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   const pendingMessageDataRef = useRef(null);
   const lastUserMessageRef = useRef(null);
   const isCancellingRef = useRef(false);
+  const messageMetadataRef = useRef(null); // Store metadata for the current message
 
   const {
     messages,
@@ -128,9 +129,12 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           break;
         case 'done':
           if (lastMessageIdRef.current) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
-              finishReason: data?.finishReason
-            });
+            // Include stored metadata (customResponseRenderer, outputFormat) in the message
+            const metadata = {
+              finishReason: data?.finishReason,
+              ...(messageMetadataRef.current || {})
+            };
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, false, metadata);
             if (onMessageComplete) {
               onMessageComplete(fullContent, lastUserMessageRef.current);
             }
@@ -187,9 +191,10 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
    * @param {Object} apiMessage - Message payload for the API
    * @param {Object} params - Parameters for the request (model, style ...)
    * @param {boolean} sendChatHistory - Include full chat history in request
+   * @param {Object} messageMetadata - Metadata to attach to the assistant message (e.g., customResponseRenderer)
    */
   const sendMessage = useCallback(
-    ({ displayMessage, apiMessage, params, sendChatHistory = true }) => {
+    ({ displayMessage, apiMessage, params, sendChatHistory = true, messageMetadata = null }) => {
       try {
         // Reset cancellation flag when starting a new message
         isCancellingRef.current = false;
@@ -201,6 +206,9 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
 
         // Store the user message content for the onMessageComplete callback
         lastUserMessageRef.current = apiMessage.content;
+
+        // Store message metadata (customResponseRenderer, outputFormat) for completion
+        messageMetadataRef.current = messageMetadata;
 
         // Ensure we extract content properly and default to empty string if needed
         const contentToAdd =

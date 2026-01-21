@@ -42,7 +42,13 @@ export const modelConfigSchema = z
     modelId: z.string().min(1, 'Model ID cannot be empty'),
     name: localizedStringSchema,
     description: localizedStringSchema,
-    url: z.string().url('URL must be a valid URI format'),
+    url: z
+      .string()
+      .min(1, 'URL cannot be empty')
+      .refine(
+        val => val.includes('${') || val.startsWith('http://') || val.startsWith('https://'),
+        'URL must be a valid URI format or environment variable reference'
+      ),
     provider: z.enum(
       ['openai', 'openai-responses', 'anthropic', 'google', 'mistral', 'local', 'iassistant'],
       {
@@ -79,6 +85,7 @@ export const modelConfigSchema = z
 
     // Additional fields for specific providers
     supportsImages: z.boolean().optional(),
+    supportsStructuredOutput: z.boolean().optional(),
     supportsImageGeneration: z.boolean().optional().default(false),
     imageGeneration: imageGenerationSchema.optional(),
     config: z.record(z.any()).optional(), // Allow provider-specific configuration

@@ -282,6 +282,7 @@ const baseAppConfigSchema = z.object({
   allowEmptyContent: z.boolean().optional().default(false),
   tools: z.array(z.string()).optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
+  customResponseRenderer: z.string().optional(),
   category: z.string().optional(),
   enabled: z.boolean().optional().default(true),
 

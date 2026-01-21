@@ -7,6 +7,7 @@ import MessageVariables from './MessageVariables';
 import Icon from '../../../shared/components/Icon';
 import StreamingMarkdown from './StreamingMarkdown';
 import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
+import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import './ChatMessage.css';
 
 const ChatMessage = ({
@@ -22,7 +23,8 @@ const ChatMessage = ({
   compact = false, // New prop to indicate compact mode (for widget or mobile)
   onOpenInCanvas,
   onInsert,
-  canvasEnabled = false
+  canvasEnabled = false,
+  app = null // App configuration for custom response rendering
 }) => {
   const { t } = useTranslation();
 
@@ -52,6 +54,11 @@ const ChatMessage = ({
   const messageRef = useRef(null); // Ref to scope DOM queries to this specific message
   const [showCopyMenu, setShowCopyMenu] = useState(false);
   const copyMenuRef = useRef(null);
+
+  // Get custom renderer info from message metadata (set when message completes)
+  // This survives re-renders and component unmounting/remounting
+  const customRendererFromMessage = message.customResponseRenderer;
+  const outputFormatFromMessage = message.outputFormat;
 
   // Configure marked renderer and copy buttons
   useEffect(() => {
@@ -285,10 +292,28 @@ const ChatMessage = ({
 
     if (message.loading) {
       // console.log('🔄 Rendering loading state for message:', contentToRender);
+
+      // Check if we should use custom renderer (prioritize message metadata over app prop)
+      const customRendererName = customRendererFromMessage || app?.customResponseRenderer;
+      const effectiveOutputFormat = outputFormatFromMessage || outputFormat;
+
+      // For JSON output with custom renderer, OR JSON with empty content, show a clean loading indicator
+      // This prevents empty ```json``` code blocks from appearing before any content arrives
+      if (!isUser && effectiveOutputFormat === 'json' && (customRendererName || !contentToRender)) {
+        return (
+          <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <span className="text-sm">
+              {t('chatMessage.generatingResponse', 'Generating response...')}
+            </span>
+          </div>
+        );
+      }
+
       // For loading assistant messages with markdown or JSON, use StreamingMarkdown
-      if (!isUser && (outputFormat === 'markdown' || outputFormat === 'json')) {
+      if (!isUser && (effectiveOutputFormat === 'markdown' || effectiveOutputFormat === 'json')) {
         const mdContent =
-          outputFormat === 'json'
+          effectiveOutputFormat === 'json'
             ? `\u0060\u0060\u0060json\n${contentToRender}\n\u0060\u0060\u0060`
             : contentToRender;
         return (
@@ -346,7 +371,38 @@ const ChatMessage = ({
 
     if (!isUser && (outputFormat === 'markdown' || outputFormat === 'json')) {
       let mdContent = contentToRender;
-      if (outputFormat === 'json') {
+
+      // Check if we should use custom renderer (prioritize message metadata over app prop)
+      const customRendererName = customRendererFromMessage || app?.customResponseRenderer;
+      const effectiveOutputFormat = outputFormatFromMessage || outputFormat;
+
+      // For JSON output with custom renderer, wait until message is complete
+      if (effectiveOutputFormat === 'json' && customRendererName) {
+        // While streaming, show a loading indicator instead of incomplete JSON
+        if (message.loading) {
+          return (
+            <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <span className="text-sm">
+                {t('chatMessage.generatingResponse', 'Generating response...')}
+              </span>
+            </div>
+          );
+        }
+
+        // Message is complete, try to parse and render with custom renderer
+        try {
+          const parsedData =
+            typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
+
+          return <CustomResponseRenderer componentName={customRendererName} data={parsedData} />;
+        } catch (error) {
+          console.error('Error parsing JSON for custom renderer:', error);
+          // Fall through to default JSON rendering on parse error
+        }
+      }
+
+      if (effectiveOutputFormat === 'json') {
         let jsonString = '';
         try {
           jsonString =
