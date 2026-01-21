@@ -99,7 +99,7 @@ const getRiskLabel = (level, t) => {
  * NDAResultsRenderer - Custom renderer for NDA Risk Analysis JSON output
  * Displays risk assessment results in a user-friendly, color-coded format
  */
-const NDAResultsRenderer = ({ data, t }) => {
+const UserComponent = ({ data, t }) => {
 
   if (!data || !data.clauses) {
     return (
@@ -266,4 +266,4 @@ const ClauseCard = ({ clause, t }) => {
   );
 };
 
-export default NDAResultsRenderer;
+export default UserComponent;
