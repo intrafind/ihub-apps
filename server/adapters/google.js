@@ -3,7 +3,6 @@
  */
 import { convertToolsFromGeneric, normalizeToolName } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
-import { redactUrl } from '../utils/logRedactor.js';
 
 class GoogleAdapterClass extends BaseAdapter {
   /**
