@@ -71,6 +71,13 @@ const AdminNavigation = () => {
           current: location.pathname.startsWith('/admin/models')
         },
         {
+          key: 'providers',
+          name: t('admin.nav.providers', 'Providers'),
+          href: '/admin/providers',
+          // icon: 'key',
+          current: location.pathname.startsWith('/admin/providers')
+        },
+        {
           key: 'prompts',
           name: t('admin.nav.prompts', 'Prompts'),
           href: '/admin/prompts',

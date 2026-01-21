@@ -264,6 +264,7 @@
       "home": "Home",
       "apps": "Apps",
       "models": "Models",
+      "providers": "Providers",
       "prompts": "Prompts",
       "pages": "Pages",
       "groups": "Groups",
@@ -1241,6 +1242,53 @@
       },
       "staticTabs": {
         "name": "iHub Apps"
+      }
+    }
+  },
+  "admin": {
+    "providers": {
+      "title": "Provider Credentials",
+      "description": "Manage API keys for LLM providers. Provider-level keys are used as fallback for models that do not have their own API key configured.",
+      "search": "Search providers...",
+      "noResults": "No providers found matching your search.",
+      "noProviders": "No providers configured.",
+      "configured": "Configured",
+      "notConfigured": "Not Configured",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "configure": "Configure",
+      "backToList": "Back to Providers",
+      "table": {
+        "provider": "Provider",
+        "description": "Description",
+        "apiKey": "API Key",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "edit": {
+        "title": "Configure Provider",
+        "description": "Configure API credentials for this provider",
+        "saved": "Provider configuration saved successfully!",
+        "id": "Provider ID",
+        "name": "Provider Name",
+        "description": "Description",
+        "apiKey": "API Key",
+        "apiKeyOptional": "(Optional - leave empty to use environment variable)",
+        "apiKeyPlaceholder": "Enter new API key or leave unchanged",
+        "apiKeyEnter": "Enter API key",
+        "apiKeySet": "An API key is currently configured",
+        "enabled": "Provider Enabled",
+        "cancel": "Cancel",
+        "save": "Save Changes",
+        "saving": "Saving...",
+        "info": {
+          "title": "About Provider API Keys",
+          "description": "API keys configured here are used as a fallback for all models of this provider that do not have their own API key configured. If you leave this field empty, the system will use the environment variable instead."
+        }
+      },
+      "info": {
+        "title": "API Key Priority",
+        "description": "When a model requests an API key, the system checks in this order: 1) Model-specific API key, 2) Provider-level API key (configured here), 3) Environment variable. This allows you to set a default API key for all models of a provider while still allowing individual models to override it."
       }
     }
   },

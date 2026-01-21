@@ -24,6 +24,10 @@ const AdminShortLinkEditPage = React.lazy(
 );
 const AdminModelEditPage = React.lazy(() => import('./features/admin/pages/AdminModelEditPage'));
 const AdminModelsPage = React.lazy(() => import('./features/admin/pages/AdminModelsPage'));
+const AdminProvidersPage = React.lazy(() => import('./features/admin/pages/AdminProvidersPage'));
+const AdminProviderEditPage = React.lazy(
+  () => import('./features/admin/pages/AdminProviderEditPage')
+);
 const AdminPromptsPage = React.lazy(() => import('./features/admin/pages/AdminPromptsPage'));
 const AdminPromptEditPage = React.lazy(() => import('./features/admin/pages/AdminPromptEditPage'));
 const AdminToolsPage = React.lazy(() => import('./features/admin/pages/AdminToolsPage'));
@@ -214,6 +218,18 @@ function App() {
                       <Route
                         path="admin/models/:modelId"
                         element={<LazyAdminRoute component={AdminModelEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('providers') && (
+                      <Route
+                        path="admin/providers"
+                        element={<LazyAdminRoute component={AdminProvidersPage} />}
+                      />
+                    )}
+                    {showAdminPage('providers') && (
+                      <Route
+                        path="admin/providers/:providerId"
+                        element={<LazyAdminRoute component={AdminProviderEditPage} />}
                       />
                     )}
                     {showAdminPage('pages') && (
