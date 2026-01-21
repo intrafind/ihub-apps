@@ -336,8 +336,16 @@ class GoogleAdapterClass extends BaseAdapter {
               result.thoughtSignatures.push(part.thoughtSignature);
             }
           }
-          result.complete = true;
+          // For non-streaming responses, decide if we should mark as complete
+          // For thinking models: Only mark complete if we have actual content
+          // If we only have thinking content, the model is still working on the response
           const fr = parsed.candidates[0].finishReason;
+          if (fr === 'MAX_TOKENS' && result.content.length === 0 && result.thinking.length > 0) {
+            // Model is still thinking, hasn't produced actual content yet
+            result.complete = false;
+          } else {
+            result.complete = true;
+          }
           // Only set finishReason from Gemini if we don't already have tool_calls
           // Check both the finishReason flag AND the actual tool_calls array
           // This is needed because Gemini 3.0 returns "STOP" even when making function calls
@@ -418,7 +426,11 @@ class GoogleAdapterClass extends BaseAdapter {
               result.complete = true;
             } else if (fr === 'MAX_TOKENS') {
               result.finishReason = 'length';
-              result.complete = true;
+              // For thinking models: Only mark complete if we have actual content
+              // If we only have thinking content, the model is still working on the response
+              if (result.content.length > 0 || result.thinking.length === 0) {
+                result.complete = true;
+              }
             } else if (fr === 'SAFETY' || fr === 'RECITATION') {
               result.finishReason = 'content_filter';
               result.complete = true;

@@ -219,8 +219,21 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
           result.thoughtSignatures.push(part.thoughtSignature);
         }
       }
-      result.complete = true;
+      // For non-streaming responses, decide if we should mark as complete
+      // For thinking models: Only mark complete if we have actual content
+      // If we only have thinking content, the model is still working on the response
       const fr = parsed.candidates[0].finishReason;
+      if (
+        fr === 'MAX_TOKENS' &&
+        result.content.length === 0 &&
+        result.thinking &&
+        result.thinking.length > 0
+      ) {
+        // Model is still thinking, hasn't produced actual content yet
+        result.complete = false;
+      } else {
+        result.complete = true;
+      }
       // Only set finishReason from Google if we don't already have tool_calls
       // Check both the finishReason flag AND the actual tool_calls array
       // This is needed because Gemini 3.0 returns "STOP" even when making function calls
@@ -299,7 +312,15 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
       // This is needed because Gemini 3.0 returns "STOP" even when making function calls
       if (result.finishReason !== 'tool_calls' && result.tool_calls.length === 0) {
         result.finishReason = normalizeFinishReason(fr, 'google');
-        result.complete = true;
+        // For thinking models: Only mark complete if we have actual content
+        // If we only have thinking content, the model is still working on the response
+        if (
+          fr !== 'MAX_TOKENS' ||
+          result.content.length > 0 ||
+          (result.thinking && result.thinking.length === 0)
+        ) {
+          result.complete = true;
+        }
       } else {
         // If we have tool_calls, mark as complete but preserve the tool_calls finish reason
         result.complete = true;
