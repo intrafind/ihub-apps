@@ -200,7 +200,8 @@ class AnthropicAdapterClass extends BaseAdapter {
       requestBody.system = systemPrompt;
     }
 
-    console.log('Anthropic request body:', JSON.stringify(requestBody, null, 2));
+    // Note: Request body logging disabled to prevent exposing sensitive data in logs
+    // console.log('Anthropic request body:', JSON.stringify(requestBody, null, 2));
 
     return {
       url: model.url,

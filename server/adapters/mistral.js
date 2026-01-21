@@ -76,7 +76,8 @@ class MistralAdapterClass extends BaseAdapter {
       body.response_format = { type: 'json_object' };
     }
 
-    console.log('Mistral request body:', body);
+    // Note: Request body logging disabled to prevent exposing sensitive data in logs
+    // console.log('Mistral request body:', body);
 
     return {
       url: model.url,

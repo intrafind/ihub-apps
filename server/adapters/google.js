@@ -3,6 +3,7 @@
  */
 import { convertToolsFromGeneric, normalizeToolName } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
+import { redactUrl } from '../utils/logRedactor.js';
 
 class GoogleAdapterClass extends BaseAdapter {
   /**
@@ -258,7 +259,8 @@ class GoogleAdapterClass extends BaseAdapter {
       });
     }
 
-    console.log('Google request body:', requestBody);
+    // Note: Request body logging disabled to prevent exposing sensitive data in logs
+    // console.log('Google request body:', requestBody);
 
     return {
       url,

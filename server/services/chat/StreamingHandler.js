@@ -8,6 +8,7 @@ import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
 import { Readable } from 'stream';
+import { redactUrl } from '../../utils/logRedactor.js';
 
 class StreamingHandler {
   constructor() {
@@ -144,7 +145,7 @@ class StreamingHandler {
         console.error(`StreamingHandler: HTTP error from ${model.provider}:`, {
           status: llmResponse.status,
           statusText: llmResponse.statusText,
-          url: request.url
+          url: redactUrl(request.url)
         });
 
         const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
