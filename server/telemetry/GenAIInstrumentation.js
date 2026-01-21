@@ -3,7 +3,7 @@
  * Main class for instrumenting GenAI operations
  */
 
-import { trace, SpanStatusCode, context as otelContext } from '@opentelemetry/api';
+import { trace, SpanStatusCode } from '@opentelemetry/api';
 import {
   buildProviderAttributes,
   buildOperationAttributes,
