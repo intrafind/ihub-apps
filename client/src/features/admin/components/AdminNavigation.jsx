@@ -71,13 +71,6 @@ const AdminNavigation = () => {
           current: location.pathname.startsWith('/admin/models')
         },
         {
-          key: 'providers',
-          name: t('admin.nav.providers', 'Providers'),
-          href: '/admin/providers',
-          // icon: 'key',
-          current: location.pathname.startsWith('/admin/providers')
-        },
-        {
           key: 'prompts',
           name: t('admin.nav.prompts', 'Prompts'),
           href: '/admin/prompts',
@@ -131,6 +124,13 @@ const AdminNavigation = () => {
       id: 'security',
       name: t('admin.groups.security', 'Security & Access'),
       items: [
+        {
+          key: 'providers',
+          name: t('admin.nav.providers', 'Providers'),
+          href: '/admin/providers',
+          // icon: 'key',
+          current: location.pathname.startsWith('/admin/providers')
+        },
         {
           key: 'auth',
           name: t('admin.nav.auth', 'Authentication'),
