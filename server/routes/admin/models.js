@@ -141,13 +141,29 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
             return res.status(500).json({ error: 'Failed to encrypt API key' });
           }
         } else {
-          // Masked value - keep existing key from database
-          const { data: models } = configCache.getModels(true);
-          const existingModel = models.find(m => m.id === modelId);
-          if (existingModel && existingModel.apiKey) {
-            updatedModel.apiKey = existingModel.apiKey;
-          } else {
-            // No existing key, remove the masked placeholder
+          // Masked value - need to preserve existing key
+          // CRITICAL FIX: Read from disk, not cache, to ensure we have the apiKey field
+          // The cache might not have the apiKey due to TTL expiration or race conditions
+          const rootDir = getRootDir();
+          const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
+          
+          try {
+            if (existsSync(modelFilePath)) {
+              const existingModelFromDisk = JSON.parse(await fs.readFile(modelFilePath, 'utf8'));
+              if (existingModelFromDisk.apiKey) {
+                // Preserve the existing encrypted API key from disk
+                updatedModel.apiKey = existingModelFromDisk.apiKey;
+              } else {
+                // No existing key on disk, remove the masked placeholder
+                delete updatedModel.apiKey;
+              }
+            } else {
+              // File doesn't exist yet (shouldn't happen in update), remove placeholder
+              delete updatedModel.apiKey;
+            }
+          } catch (error) {
+            console.error('Error reading existing model from disk:', error);
+            // Fallback to removing the masked placeholder
             delete updatedModel.apiKey;
           }
         }
