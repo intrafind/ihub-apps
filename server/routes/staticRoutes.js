@@ -45,8 +45,8 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
     const indexPath = path.join(rootDir, 'public/index.html');
     console.log(`SPA will be served from: ${indexPath}`);
 
-    // Catch-all for SPA routing (but exclude API and docs paths)
-    app.get('*', (req, res, next) => {
+    // SPA routing handler
+    const spaHandler = (req, res, next) => {
       const relativePath = getRelativeRequestPath(req.path);
 
       // Don't serve SPA for API routes
@@ -66,7 +66,15 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       }
 
       res.sendFile(indexPath);
-    });
+    };
+
+    // Catch-all for SPA routing (but exclude API and docs paths)
+    // Register under basePath if configured, otherwise at root
+    if (basePath) {
+      app.get(`${basePath}/*`, spaHandler);
+    } else {
+      app.get('*', spaHandler);
+    }
   } else {
     console.log('Development mode: SPA routing handled by Vite on port 5173');
   }
