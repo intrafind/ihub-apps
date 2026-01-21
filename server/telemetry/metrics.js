@@ -15,6 +15,10 @@ const OPERATION_DURATION_BUCKETS = [
 
 let tokenUsageHistogram = null;
 let operationDurationHistogram = null;
+let appUsageCounter = null;
+let promptUsageCounter = null;
+let errorCounter = null;
+let conversationCounter = null;
 
 /**
  * Initialize metrics with meter provider
@@ -41,6 +45,30 @@ export function initializeMetrics(meterProvider) {
     advice: {
       explicitBucketBoundaries: OPERATION_DURATION_BUCKETS
     }
+  });
+
+  // Create app usage counter
+  appUsageCounter = meter.createCounter('ihub.app.usage', {
+    description: 'Number of times each app is used',
+    unit: '{request}'
+  });
+
+  // Create prompt usage counter
+  promptUsageCounter = meter.createCounter('ihub.prompt.usage', {
+    description: 'Number of times each prompt is used',
+    unit: '{request}'
+  });
+
+  // Create error counter
+  errorCounter = meter.createCounter('ihub.errors', {
+    description: 'Number of errors by type and context',
+    unit: '{error}'
+  });
+
+  // Create conversation counter
+  conversationCounter = meter.createCounter('ihub.conversations', {
+    description: 'Number of conversations and follow-up messages',
+    unit: '{message}'
   });
 
   console.info('GenAI metrics initialized successfully');
@@ -126,6 +154,104 @@ export function recordOperationDuration(durationSeconds, attributes, error = nul
 export function getMetrics() {
   return {
     tokenUsageHistogram,
-    operationDurationHistogram
+    operationDurationHistogram,
+    appUsageCounter,
+    promptUsageCounter,
+    errorCounter,
+    conversationCounter
   };
+}
+
+/**
+ * Record app usage metric
+ * @param {string} appId - Application ID
+ * @param {string} userId - User ID (optional)
+ * @param {Object} additionalAttributes - Additional attributes
+ */
+export function recordAppUsage(appId, userId = null, additionalAttributes = {}) {
+  if (!appUsageCounter) return;
+
+  try {
+    const attributes = {
+      'app.id': appId,
+      ...additionalAttributes
+    };
+
+    if (userId) {
+      attributes['user.id'] = userId;
+    }
+
+    appUsageCounter.add(1, attributes);
+  } catch (error) {
+    console.warn('Failed to record app usage:', error.message);
+  }
+}
+
+/**
+ * Record prompt usage metric
+ * @param {string} promptId - Prompt ID
+ * @param {string} appId - Application ID
+ * @param {Object} additionalAttributes - Additional attributes
+ */
+export function recordPromptUsage(promptId, appId = null, additionalAttributes = {}) {
+  if (!promptUsageCounter) return;
+
+  try {
+    const attributes = {
+      'prompt.id': promptId,
+      ...additionalAttributes
+    };
+
+    if (appId) {
+      attributes['app.id'] = appId;
+    }
+
+    promptUsageCounter.add(1, attributes);
+  } catch (error) {
+    console.warn('Failed to record prompt usage:', error.message);
+  }
+}
+
+/**
+ * Record error metric
+ * @param {string} errorType - Error type
+ * @param {string} context - Error context (e.g., 'llm_call', 'tool_execution', 'validation')
+ * @param {Object} additionalAttributes - Additional attributes
+ */
+export function recordError(errorType, context, additionalAttributes = {}) {
+  if (!errorCounter) return;
+
+  try {
+    const attributes = {
+      'error.type': errorType,
+      'error.context': context,
+      ...additionalAttributes
+    };
+
+    errorCounter.add(1, attributes);
+  } catch (error) {
+    console.warn('Failed to record error metric:', error.message);
+  }
+}
+
+/**
+ * Record conversation metric
+ * @param {string} conversationId - Conversation/chat ID
+ * @param {boolean} isFollowUp - Whether this is a follow-up message
+ * @param {Object} additionalAttributes - Additional attributes
+ */
+export function recordConversation(conversationId, isFollowUp = false, additionalAttributes = {}) {
+  if (!conversationCounter) return;
+
+  try {
+    const attributes = {
+      'conversation.id': conversationId,
+      'conversation.is_follow_up': isFollowUp,
+      ...additionalAttributes
+    };
+
+    conversationCounter.add(1, attributes);
+  } catch (error) {
+    console.warn('Failed to record conversation metric:', error.message);
+  }
 }

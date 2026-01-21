@@ -7,7 +7,7 @@
 const PROVIDER_MAP = {
   openai: 'openai',
   anthropic: 'anthropic',
-  google: 'gcp.gemini',
+  google: 'google',
   mistral: 'mistral_ai',
   vllm: 'openai' // vLLM uses OpenAI-compatible API
 };
@@ -249,6 +249,15 @@ export function buildCustomAttributes(context = {}) {
   // Conversation/session ID
   if (context.conversationId || context.chatId) {
     attributes['gen_ai.conversation.id'] = context.conversationId || context.chatId;
+  }
+
+  // Follow-up message tracking
+  if (context.isFollowUp !== undefined) {
+    attributes['conversation.is_follow_up'] = context.isFollowUp;
+  }
+
+  if (context.messageCount !== undefined) {
+    attributes['conversation.message_count'] = parseInt(context.messageCount, 10);
   }
 
   // Thinking mode (for models that support it)
