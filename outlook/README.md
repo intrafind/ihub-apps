@@ -12,60 +12,46 @@ This directory contains the Office Add-in integration for Outlook on Mac, enabli
 - **Reply Generation**: Generate professional responses with appropriate tone
 - **Attachment Analysis**: Analyze email attachments based on metadata
 - **Streaming Responses**: Real-time streaming of AI responses
-- **Mac Native**: Optimized for Outlook on Mac
+- **Mac Native**: Optimized for Outlook for Mac
+- **Auto-Configuration**: URLs are automatically configured from the server
 
 ## Installation
 
 ### Prerequisites
 
 - Outlook for Mac (version 16.0 or later)
-- Access to an iHub Apps server instance
+- Access to an iHub Apps server instance with admin privileges
 - HTTPS-enabled iHub server (required for Office Add-ins)
 
-### Step 1: Configure the Manifest
+### Step 1: Download the Manifest from Admin Panel
 
-1. Open `manifest.xml` in this directory
-2. Replace all instances of `{{APP_URL}}` with your iHub server URL
-   - Example: `https://ihub.yourcompany.com`
-3. Ensure the URL uses HTTPS (required by Office Add-ins)
+1. Log in to your iHub Apps instance as an administrator
+2. Navigate to **Admin** → **Integrations**
+3. Find the "Outlook Add-in for Mac" section
+4. Click **Download Manifest** button
+5. The manifest file will be downloaded as `ihub-outlook-manifest.xml`
 
-### Step 2: Deploy the Add-in Files
+**Note**: The manifest is dynamically generated with the correct server URLs, so no manual configuration is needed!
 
-You have two options for deployment:
-
-#### Option A: Host on your iHub Server (Recommended)
-
-1. Copy the `outlook/` directory contents to your iHub server's public directory
-2. Ensure the files are accessible at `https://your-ihub-server.com/outlook/`
-3. Test by accessing `https://your-ihub-server.com/outlook/taskpane.html` in a browser
-
-#### Option B: Use the Build Script
-
-The add-in files will be automatically included in production builds:
-
-```bash
-npm run prod:build
-```
-
-The files will be copied to `dist/public/outlook/`
-
-### Step 3: Install the Add-in in Outlook for Mac
+### Step 2: Install the Add-in in Outlook for Mac
 
 1. Open Outlook for Mac
 2. Go to **Get Add-ins** from the Home ribbon
 3. Click **My Add-ins** in the left sidebar
 4. Click **Add a Custom Add-in** → **Add from File...**
-5. Select the `manifest.xml` file from the `outlook/` directory
+5. Select the downloaded `ihub-outlook-manifest.xml` file
 6. Click **Install**
 
-The add-in should now appear in your Outlook ribbon.
+The add-in should now appear in your Outlook ribbon with two buttons:
+- **Summarize Email**
+- **Generate Reply**
 
-### Step 4: Configure the API URL
+### Step 3: Start Using the Add-in
 
 1. Open any email in Outlook
 2. Click one of the iHub AI buttons in the ribbon
-3. In the taskpane, enter your iHub server URL in the configuration field
-4. The URL will be saved for future use
+3. The taskpane will open and automatically connect to your iHub server
+4. Use the AI features to summarize, reply, or analyze attachments
 
 ## Usage
 
@@ -86,14 +72,29 @@ The add-in should now appear in your Outlook ribbon.
 ### Analyzing Attachments
 
 1. Open an email with attachments
-2. Click the **Analyze Attachments** button in the ribbon
+2. Click the **Analyze Attachments** button in the ribbon (available through the taskpane menu)
 3. The AI will provide insights about the attachments
+
+## Authentication
+
+The Outlook Add-in uses **server-side authentication**. This means:
+
+- Authentication is handled by your iHub Apps server
+- The add-in automatically uses the same authentication as your iHub instance
+- Email content is sent to the iHub server for AI processing
+- Ensure proper authentication and authorization are configured on the server
+
+**Important Security Notes:**
+- Email content is transmitted to your iHub server via HTTPS
+- The server processes the content using configured AI models
+- No data is stored permanently on the server
+- Follow your organization's data privacy policies
 
 ## Server-Side Configuration
 
 ### CORS Configuration
 
-Ensure your iHub server allows requests from Office Add-ins. Update `contents/config/platform.json`:
+The iHub server automatically serves the add-in files, but you may need to verify CORS settings in `contents/config/platform.json`:
 
 ```json
 {
@@ -113,24 +114,21 @@ Ensure your iHub server allows requests from Office Add-ins. Update `contents/co
 
 The following apps must be enabled on your iHub server:
 
-1. **summarizer** - For email summarization
-2. **email-composer** - For reply generation
-
-These apps are available in `examples/apps/` and should be copied to your active apps directory.
+1. **summarizer** - For email summarization (from `examples/apps/summarizer.json`)
+2. **email-composer** - For reply generation (from `examples/apps/email-composer.json`)
 
 ## Troubleshooting
 
 ### Add-in doesn't appear in Outlook
 
-- Verify the manifest.xml file has valid XML syntax
-- Check that all URLs in the manifest use HTTPS
+- Verify the manifest.xml file was downloaded correctly
+- Check that Outlook for Mac is version 16.0 or later
 - Try removing and re-adding the add-in
 
 ### API Connection Errors
 
-- Verify the iHub server URL is correct and uses HTTPS
-- Check CORS configuration on the server
-- Ensure the server is accessible from your Mac
+- Verify the iHub server is accessible and using HTTPS
+- Check that you're logged in to the iHub server
 - Check browser console for detailed error messages
 
 ### Streaming doesn't work
@@ -139,81 +137,41 @@ These apps are available in `examples/apps/` and should be copied to your active
 - Check network connectivity
 - Try with a different email or content
 
-## Development
+## Admin Panel Features
 
-### Testing Locally
+Administrators can access the Integrations panel to:
 
-For local development:
-
-1. Use ngrok or similar to create an HTTPS tunnel to your local iHub server:
-   ```bash
-   ngrok http 3000
-   ```
-
-2. Update the manifest.xml with the ngrok URL
-
-3. Install the add-in in Outlook
-
-4. Test your changes
-
-### Debugging
-
-1. Open the taskpane in Outlook
-2. Right-click and select **Inspect Element** (if available on Mac)
-3. Check the browser console for JavaScript errors
-4. Monitor network requests to debug API calls
+1. **Download Manifest**: Get the dynamically generated manifest.xml file
+2. **View Configuration**: See the server URL and endpoint information
+3. **Get Installation Instructions**: Step-by-step guide for end users
+4. **Authentication Info**: Understand how authentication works
 
 ## Architecture
 
-### Files
+The Outlook Add-in uses Office.js APIs to:
 
-- **manifest.xml**: Office Add-in manifest defining the add-in metadata and buttons
-- **taskpane.html**: Main UI for the add-in task pane
-- **src/taskpane.js**: JavaScript logic for Office.js integration and API communication
-- **commands.html**: Required file for function commands (currently unused)
-- **assets/**: Icons for the add-in (to be added)
+1. Extract email content (subject, sender, body)
+2. Send content to iHub chat API (`/api/chat/sessions/{appId}`)
+3. Receive streaming responses via Server-Sent Events (SSE)
+4. Display results in the task pane
 
-### API Integration
-
-The add-in communicates with the iHub server's chat API:
-
+**Data Flow:**
 ```
-POST /api/chat/sessions/{appId}
-{
-  "messages": [{"role": "user", "content": "..."}],
-  "variables": {...},
-  "streamResponse": true
-}
+Outlook Email → Office.js → Taskpane → iHub Chat API → LLM → Streaming Response → Taskpane Display
 ```
-
-Responses are streamed using Server-Sent Events (SSE).
-
-## Security Considerations
-
-- Always use HTTPS for the iHub server
-- API keys (if required) should be configured on the server
-- Email content is sent to the iHub server for processing
-- Consider data privacy implications for sensitive emails
-
-## Future Enhancements
-
-- [ ] Add icons for better visual integration
-- [ ] Support for more apps (translation, analysis, etc.)
-- [ ] Attachment content extraction and analysis
-- [ ] Settings panel for API configuration
-- [ ] Multi-language support
-- [ ] Offline mode with cached responses
-- [ ] Insert generated content directly into email compose window
 
 ## Support
 
 For issues or questions:
 
-1. Check the iHub Apps documentation at `https://your-ihub-server.com/page/help`
-2. Review server logs for API errors
-3. Check Outlook's add-in error logs
-4. Contact your iHub administrator
+1. Check the iHub Apps documentation at `/page/help`
+2. Contact your iHub administrator
+3. Review server logs for API errors
 
-## License
+## Future Enhancements
 
-This Office Add-in integration is part of the iHub Apps platform and follows the same license terms.
+- Direct insertion of generated content into email compose window
+- Support for more apps (translation, formatting, etc.)
+- Attachment content extraction and analysis
+- Multi-language UI support
+- Offline mode with cached responses

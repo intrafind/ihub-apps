@@ -1,14 +1,57 @@
 /* global Office */
 
-// Default API URL - can be configured by the user
-let API_URL = 'https://your-ihub-server.com';
+// API URL will be auto-configured from the server
+let API_URL = '';
+
+// Try to get API URL from window location or config endpoint
+async function initializeApiUrl() {
+  try {
+    // First try to get from current page's origin
+    const currentOrigin = window.location.origin;
+    
+    // Check if we're loaded from the iHub server
+    if (currentOrigin && !currentOrigin.includes('localhost')) {
+      API_URL = currentOrigin;
+      console.log('API URL auto-detected:', API_URL);
+      
+      // Save to localStorage
+      localStorage.setItem('ihub_api_url', API_URL);
+      
+      // Update UI
+      const apiUrlInput = document.getElementById('apiUrl');
+      if (apiUrlInput) {
+        apiUrlInput.value = API_URL;
+      }
+      
+      return API_URL;
+    }
+    
+    // Fall back to localStorage if available
+    const savedUrl = localStorage.getItem('ihub_api_url');
+    if (savedUrl) {
+      API_URL = savedUrl;
+      console.log('API URL from localStorage:', API_URL);
+      return API_URL;
+    }
+    
+    // If nothing works, user will need to configure manually
+    console.log('API URL not configured - user must enter manually');
+  } catch (error) {
+    console.error('Error initializing API URL:', error);
+  }
+  
+  return API_URL;
+}
 
 // Initialize Office.js
-Office.onReady((info) => {
+Office.onReady(async (info) => {
   if (info.host === Office.HostType.Outlook) {
     console.log('iHub Outlook Add-in initialized');
     
-    // Load saved API URL from settings
+    // Initialize API URL
+    await initializeApiUrl();
+    
+    // Load saved settings
     loadSettings();
     
     // Set up event listeners
