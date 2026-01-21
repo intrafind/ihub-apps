@@ -182,7 +182,28 @@ class GoogleAdapterClass extends BaseAdapter {
     if ((responseFormat && responseFormat === 'json') || responseSchema) {
       requestBody.generationConfig.responseMimeType = 'application/json';
       if (responseSchema) {
-        requestBody.generationConfig.response_schema = responseSchema;
+        // Deep clone incoming schema and remove additionalProperties field
+        // Google's API doesn't support the additionalProperties field
+        const schemaClone = JSON.parse(JSON.stringify(responseSchema));
+        const removeAdditionalProperties = node => {
+          if (node && typeof node === 'object') {
+            // Remove additionalProperties field if it exists
+            delete node.additionalProperties;
+
+            // Recursively process all properties
+            if (node.properties) {
+              Object.values(node.properties).forEach(removeAdditionalProperties);
+            }
+
+            // Recursively process array items
+            if (node.items) {
+              const items = Array.isArray(node.items) ? node.items : [node.items];
+              items.forEach(removeAdditionalProperties);
+            }
+          }
+        };
+        removeAdditionalProperties(schemaClone);
+        requestBody.generationConfig.response_schema = schemaClone;
       }
     }
 
