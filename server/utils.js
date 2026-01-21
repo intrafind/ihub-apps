@@ -32,8 +32,9 @@ function sanitizeForLog(input) {
  * Helper function to get API key for a model
  * Checks in this order:
  * 1. Model's stored encrypted API key (from model config)
- * 2. Environment variable for model-specific key
- * 3. Environment variable for provider key
+ * 2. Provider's stored encrypted API key (from providers config)
+ * 3. Environment variable for model-specific key
+ * 4. Environment variable for provider key
  * @param {string} modelId - The model ID
  * @returns {string|null} The API key or null if not found
  */
@@ -83,7 +84,45 @@ export async function getApiKeyForModel(modelId) {
       }
     }
 
-    // Second priority: Check for model-specific API key in environment
+    // Second priority: Check provider-level encrypted API key
+    try {
+      const { data: providers = [] } = configCache.getProviders(true);
+      const providerConfig = providers.find(p => p.id === provider);
+
+      if (providerConfig && providerConfig.apiKey) {
+        try {
+          const isEncrypted = tokenStorageService.isEncrypted(providerConfig.apiKey);
+
+          if (isEncrypted) {
+            const decryptedKey = tokenStorageService.decryptString(providerConfig.apiKey);
+            console.log(
+              `Using stored encrypted provider API key for provider: %s`,
+              sanitizeForLog(provider)
+            );
+            return decryptedKey;
+          } else {
+            // If not encrypted, use as-is (for backwards compatibility during migration)
+            console.log(
+              `Using stored plaintext provider API key for provider: %s`,
+              sanitizeForLog(provider)
+            );
+            return providerConfig.apiKey;
+          }
+        } catch (error) {
+          console.error(
+            'Failed to decrypt provider API key for %s:',
+            sanitizeForLog(provider),
+            error.message
+          );
+          // Continue to fallback options
+        }
+      }
+    } catch (error) {
+      console.error('Error checking provider credentials:', error);
+      // Continue to environment variable fallbacks
+    }
+
+    // Third priority: Check for model-specific API key in environment
     // (e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1")
     const modelSpecificKeyName = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
     const modelSpecificKey = config[modelSpecificKeyName];
@@ -92,7 +131,7 @@ export async function getApiKeyForModel(modelId) {
       return modelSpecificKey;
     }
 
-    // Third priority: Check for provider-specific API keys from environment
+    // Fourth priority: Check for provider-specific API keys from environment
     switch (provider) {
       case 'openai':
         return config.OPENAI_API_KEY;
