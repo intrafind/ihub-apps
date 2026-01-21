@@ -28,6 +28,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000
   },
   server: {
+    // Enable SPA routing fallback for direct navigation to client-side routes
+    historyApiFallback: true,
     proxy: (() => {
       const basePath = process.env.VITE_BASE_PATH || '';
       const proxyConfig = {};
