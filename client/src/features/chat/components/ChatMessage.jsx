@@ -292,22 +292,24 @@ const ChatMessage = ({
 
     if (message.loading) {
       // console.log('🔄 Rendering loading state for message:', contentToRender);
-      
+
       // Check if we should use custom renderer (prioritize message metadata over app prop)
       const customRendererName = customRendererFromMessage || app?.customResponseRenderer;
       const effectiveOutputFormat = outputFormatFromMessage || outputFormat;
-      
+
       // For JSON output with custom renderer, OR JSON with empty content, show a clean loading indicator
       // This prevents empty ```json``` code blocks from appearing before any content arrives
       if (!isUser && effectiveOutputFormat === 'json' && (customRendererName || !contentToRender)) {
         return (
           <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            <span className="text-sm">{t('chatMessage.generatingResponse', 'Generating response...')}</span>
+            <span className="text-sm">
+              {t('chatMessage.generatingResponse', 'Generating response...')}
+            </span>
           </div>
         );
       }
-      
+
       // For loading assistant messages with markdown or JSON, use StreamingMarkdown
       if (!isUser && (effectiveOutputFormat === 'markdown' || effectiveOutputFormat === 'json')) {
         const mdContent =
@@ -381,7 +383,9 @@ const ChatMessage = ({
           return (
             <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-              <span className="text-sm">{t('chatMessage.generatingResponse', 'Generating response...')}</span>
+              <span className="text-sm">
+                {t('chatMessage.generatingResponse', 'Generating response...')}
+              </span>
             </div>
           );
         }

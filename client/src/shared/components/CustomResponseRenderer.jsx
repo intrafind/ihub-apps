@@ -30,7 +30,7 @@ const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
 
         // Fetch renderer code from API
         const response = await fetch(`/api/renderers/${componentName}`);
-        
+
         if (!response.ok) {
           if (response.status === 404) {
             throw new Error(`Renderer "${componentName}" not found`);
@@ -41,7 +41,7 @@ const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
         }
 
         const renderer = await response.json();
-        
+
         if (!renderer.code) {
           throw new Error(`Renderer "${componentName}" has no code`);
         }
@@ -61,17 +61,20 @@ const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
   }, [componentName]);
 
   // Prepare props for the renderer component
-  const componentProps = useMemo(() => ({
-    data,
-    t,
-    // Add React and hooks that the renderer might need
-    React,
-    useState,
-    useEffect,
-    useMemo,
-    useCallback,
-    useRef
-  }), [data, t]);
+  const componentProps = useMemo(
+    () => ({
+      data,
+      t,
+      // Add React and hooks that the renderer might need
+      React,
+      useState,
+      useEffect,
+      useMemo,
+      useCallback,
+      useRef
+    }),
+    [data, t]
+  );
 
   if (loading) {
     return (
@@ -138,10 +141,7 @@ const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
           </div>
         }
       >
-        <ReactComponentRenderer
-          jsxCode={rendererCode}
-          componentProps={componentProps}
-        />
+        <ReactComponentRenderer jsxCode={rendererCode} componentProps={componentProps} />
       </Suspense>
     </div>
   );

@@ -100,7 +100,6 @@ const getRiskLabel = (level, t) => {
  * Displays risk assessment results in a user-friendly, color-coded format
  */
 const UserComponent = ({ data, t }) => {
-
   if (!data || !data.clauses) {
     return (
       <div className="p-4 text-center text-gray-500">

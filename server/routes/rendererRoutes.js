@@ -17,7 +17,7 @@ export default function registerRendererRoutes(app, basePath = '') {
   router.get('/', async (req, res) => {
     try {
       const renderers = await loadAllRenderers(false);
-      
+
       // Return metadata only (without the actual code for list view)
       const rendererList = renderers
         .filter(r => r.enabled)
@@ -26,13 +26,13 @@ export default function registerRendererRoutes(app, basePath = '') {
           filename: r.filename,
           source: r.source
         }));
-      
+
       res.json(rendererList);
     } catch (error) {
       console.error('Error loading renderers:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'Failed to load renderers',
-        message: error.message 
+        message: error.message
       });
     }
   });
@@ -45,28 +45,28 @@ export default function registerRendererRoutes(app, basePath = '') {
     try {
       const { id } = req.params;
       const renderer = await getRendererById(id, false);
-      
+
       if (!renderer) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           error: 'Renderer not found',
-          id 
+          id
         });
       }
-      
+
       if (!renderer.enabled) {
-        return res.status(403).json({ 
+        return res.status(403).json({
           error: 'Renderer is disabled',
-          id 
+          id
         });
       }
-      
+
       // Return full renderer including code
       res.json(renderer);
     } catch (error) {
       console.error('Error loading renderer:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'Failed to load renderer',
-        message: error.message 
+        message: error.message
       });
     }
   });
@@ -74,4 +74,3 @@ export default function registerRendererRoutes(app, basePath = '') {
   // Mount router
   app.use(buildServerPath('/api/renderers'), router);
 }
-

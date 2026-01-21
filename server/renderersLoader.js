@@ -44,10 +44,10 @@ async function loadRenderersFromDirectory(dirPath, source, verbose = true) {
     try {
       const filePath = join(dirPath, file);
       const fileContent = await fs.readFile(filePath, 'utf8');
-      
+
       // Extract renderer ID from filename (remove extension)
       const id = file.replace(/\.(jsx|js)$/, '');
-      
+
       // Create renderer object
       const renderer = {
         id,
@@ -58,7 +58,7 @@ async function loadRenderersFromDirectory(dirPath, source, verbose = true) {
       };
 
       renderers.push(renderer);
-      
+
       if (verbose) {
         loadedItems.push(`   ✅ ${id} (${source})`);
       }
@@ -90,14 +90,14 @@ export async function loadAllRenderers(verbose = true) {
   }
 
   const rootDir = getRootDir();
-  
+
   // Load from defaults directory
   const defaultsPath = join(rootDir, 'server', 'defaults', 'renderers');
   const defaultRenderers = await loadRenderersFromDirectory(defaultsPath, 'defaults', verbose);
-  
+
   // Load from contents directory (create if doesn't exist)
   const contentsPath = join(rootDir, 'contents', 'renderers');
-  
+
   // Ensure contents/renderers directory exists
   if (!existsSync(contentsPath)) {
     try {
@@ -109,17 +109,17 @@ export async function loadAllRenderers(verbose = true) {
       console.error(`Failed to create contents/renderers directory: ${error.message}`);
     }
   }
-  
+
   const contentRenderers = await loadRenderersFromDirectory(contentsPath, 'contents', verbose);
-  
+
   // Merge renderers - contents overrides defaults
   const rendererMap = new Map();
-  
+
   // Add defaults first
   defaultRenderers.forEach(renderer => {
     rendererMap.set(renderer.id, renderer);
   });
-  
+
   // Override with contents (if any)
   contentRenderers.forEach(renderer => {
     if (rendererMap.has(renderer.id) && verbose) {
@@ -127,14 +127,14 @@ export async function loadAllRenderers(verbose = true) {
     }
     rendererMap.set(renderer.id, renderer);
   });
-  
+
   const allRenderers = Array.from(rendererMap.values());
-  
+
   if (verbose) {
     const enabledCount = allRenderers.filter(r => r.enabled).length;
     console.log(`📊 Summary: ${allRenderers.length} total renderers (${enabledCount} enabled)`);
   }
-  
+
   return allRenderers;
 }
 

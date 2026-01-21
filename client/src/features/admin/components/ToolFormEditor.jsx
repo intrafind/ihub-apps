@@ -176,7 +176,11 @@ const ToolFormEditor = ({ value, onChange, isNewTool }) => {
             {t('admin.tools.parameters', 'Parameters (JSON Schema)')}
           </label>
           <textarea
-            value={JSON.stringify(value.parameters || { type: 'object', properties: {}, required: [] }, null, 2)}
+            value={JSON.stringify(
+              value.parameters || { type: 'object', properties: {}, required: [] },
+              null,
+              2
+            )}
             onChange={e => {
               try {
                 const parsed = JSON.parse(e.target.value);

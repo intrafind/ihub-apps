@@ -183,11 +183,17 @@ UserComponent;
 
         // Remove import and export statements since new Function() can't handle them
         let executableCode = transformed.code;
-        
+
         // Remove import statements (Babel transforms them to require() which won't work in new Function())
-        executableCode = executableCode.replace(/(?:^|\n)\s*(?:var|const|let)\s+\w+\s*=\s*require\([^)]+\);?\s*/gm, '');
-        executableCode = executableCode.replace(/(?:^|\n)\s*import\s+.*?from\s+['"][^'"]+['"];?\s*/gm, '');
-        
+        executableCode = executableCode.replace(
+          /(?:^|\n)\s*(?:var|const|let)\s+\w+\s*=\s*require\([^)]+\);?\s*/gm,
+          ''
+        );
+        executableCode = executableCode.replace(
+          /(?:^|\n)\s*import\s+.*?from\s+['"][^'"]+['"];?\s*/gm,
+          ''
+        );
+
         // Remove export statements
         executableCode = executableCode.replace(/export\s+default\s+\w+;?\s*$/, '');
         executableCode = executableCode.replace(/export\s*\{[^}]*\}.*;?\s*$/, '');
