@@ -125,6 +125,13 @@ const AdminNavigation = () => {
       name: t('admin.groups.security', 'Security & Access'),
       items: [
         {
+          key: 'providers',
+          name: t('admin.nav.providers', 'Providers'),
+          href: '/admin/providers',
+          // icon: 'key',
+          current: location.pathname.startsWith('/admin/providers')
+        },
+        {
           key: 'auth',
           name: t('admin.nav.auth', 'Authentication'),
           href: '/admin/auth',

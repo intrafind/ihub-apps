@@ -383,6 +383,7 @@
       "home": "Startseite",
       "apps": "Apps",
       "models": "Modelle",
+      "providers": "Anbieter",
       "prompts": "Prompts",
       "pages": "Seiten",
       "groups": "Gruppen",
@@ -1128,6 +1129,53 @@
       },
       "staticTabs": {
         "name": "iHub Apps"
+      }
+    }
+  },
+  "admin": {
+    "providers": {
+      "title": "Anbieter-Zugangsdaten",
+      "description": "API-Schlüssel für LLM-Anbieter verwalten. Anbieter-Level-Schlüssel werden als Fallback für Modelle verwendet, die keinen eigenen API-Schlüssel konfiguriert haben.",
+      "search": "Anbieter suchen...",
+      "noResults": "Keine Anbieter gefunden, die Ihrer Suche entsprechen.",
+      "noProviders": "Keine Anbieter konfiguriert.",
+      "configured": "Konfiguriert",
+      "notConfigured": "Nicht konfiguriert",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "configure": "Konfigurieren",
+      "backToList": "Zurück zu Anbietern",
+      "table": {
+        "provider": "Anbieter",
+        "description": "Beschreibung",
+        "apiKey": "API-Schlüssel",
+        "status": "Status",
+        "actions": "Aktionen"
+      },
+      "edit": {
+        "title": "Anbieter konfigurieren",
+        "description": "API-Zugangsdaten für diesen Anbieter konfigurieren",
+        "saved": "Anbieter-Konfiguration erfolgreich gespeichert!",
+        "id": "Anbieter-ID",
+        "name": "Anbieter-Name",
+        "description": "Beschreibung",
+        "apiKey": "API-Schlüssel",
+        "apiKeyOptional": "(Optional - leer lassen, um Umgebungsvariable zu verwenden)",
+        "apiKeyPlaceholder": "Neuen API-Schlüssel eingeben oder unverändert lassen",
+        "apiKeyEnter": "API-Schlüssel eingeben",
+        "apiKeySet": "Ein API-Schlüssel ist derzeit konfiguriert",
+        "enabled": "Anbieter aktiviert",
+        "cancel": "Abbrechen",
+        "save": "Änderungen speichern",
+        "saving": "Speichern...",
+        "info": {
+          "title": "Über Anbieter-API-Schlüssel",
+          "description": "API-Schlüssel, die hier konfiguriert werden, werden als Fallback für alle Modelle dieses Anbieters verwendet, die keinen eigenen API-Schlüssel konfiguriert haben. Wenn Sie dieses Feld leer lassen, verwendet das System stattdessen die Umgebungsvariable."
+        }
+      },
+      "info": {
+        "title": "API-Schlüssel-Priorität",
+        "description": "Wenn ein Modell einen API-Schlüssel anfordert, prüft das System in dieser Reihenfolge: 1) Modell-spezifischer API-Schlüssel, 2) Anbieter-Level-API-Schlüssel (hier konfiguriert), 3) Umgebungsvariable. Dies ermöglicht es Ihnen, einen Standard-API-Schlüssel für alle Modelle eines Anbieters festzulegen, während einzelne Modelle ihn überschreiben können."
       }
     }
   },

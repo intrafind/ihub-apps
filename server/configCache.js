@@ -120,7 +120,8 @@ class ConfigCache {
       'config/ui.json',
       'config/groups.json',
       'config/users.json',
-      'config/sources.json'
+      'config/sources.json',
+      'config/providers.json'
     ];
 
     // Built-in locales that should always be preloaded
@@ -540,6 +541,38 @@ class ConfigCache {
   }
 
   /**
+   * Get providers configuration
+   */
+  getProviders(includeDisabled = false) {
+    try {
+      const cached = this.get('config/providers.json');
+      if (!cached) {
+        return { data: [], etag: null };
+      }
+
+      // Handle both array format and object format
+      let providers;
+      if (Array.isArray(cached.data)) {
+        providers = { data: cached.data, etag: cached.etag };
+      } else if (cached.data && cached.data.providers && Array.isArray(cached.data.providers)) {
+        providers = { data: cached.data.providers, etag: cached.etag };
+      } else {
+        return { data: [], etag: null };
+      }
+
+      if (includeDisabled) return providers;
+
+      return {
+        data: providers.data.filter(provider => provider.enabled !== false),
+        etag: providers.etag
+      };
+    } catch (error) {
+      console.error('Error loading providers:', error);
+      return { data: [], etag: null };
+    }
+  }
+
+  /**
    * Get platform configuration
    */
   getPlatform() {
@@ -712,6 +745,24 @@ class ConfigCache {
       return true;
     } catch (error) {
       console.error('❌ Failed to refresh sources cache:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Refresh providers cache
+   * Should be called when providers are modified (create, update, delete, toggle)
+   */
+  async refreshProvidersCache() {
+    console.log('🔄 Refreshing providers cache...');
+
+    try {
+      await this.refreshCacheEntry('config/providers.json');
+      const { data: providers } = this.getProviders(true);
+      console.log(`✅ Providers cache refreshed: ${providers.length} providers loaded`);
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to refresh providers cache:', error);
       return false;
     }
   }
