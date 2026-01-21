@@ -258,7 +258,8 @@ class GoogleAdapterClass extends BaseAdapter {
       });
     }
 
-    console.log('Google request body:', requestBody);
+    // Note: Request body logging disabled to prevent exposing sensitive data in logs
+    // console.log('Google request body:', requestBody);
 
     return {
       url,

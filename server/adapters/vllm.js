@@ -81,7 +81,8 @@ class VLLMAdapterClass extends BaseAdapter {
     }
     // Note: vLLM may not support structured output schemas
 
-    console.log('vLLM request body:', body);
+    // Note: Request body logging disabled to prevent exposing sensitive data in logs
+    // console.log('vLLM request body:', body);
 
     return {
       url: model.url,
