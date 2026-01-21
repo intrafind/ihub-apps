@@ -297,8 +297,9 @@ const ChatMessage = ({
       const customRendererName = customRendererFromMessage || app?.customResponseRenderer;
       const effectiveOutputFormat = outputFormatFromMessage || outputFormat;
       
-      // For JSON output with custom renderer, show a clean loading indicator
-      if (!isUser && effectiveOutputFormat === 'json' && customRendererName) {
+      // For JSON output with custom renderer, OR JSON with empty content, show a clean loading indicator
+      // This prevents empty ```json``` code blocks from appearing before any content arrives
+      if (!isUser && effectiveOutputFormat === 'json' && (customRendererName || !contentToRender)) {
         return (
           <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
