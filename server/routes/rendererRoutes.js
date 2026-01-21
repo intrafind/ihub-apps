@@ -72,6 +72,6 @@ export default function registerRendererRoutes(app, basePath = '') {
   });
 
   // Mount router
-  app.use(buildServerPath(basePath, '/api/renderers'), router);
+  app.use(buildServerPath('/api/renderers'), router);
 }
 

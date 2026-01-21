@@ -358,7 +358,19 @@ const ChatMessage = ({
       const customRendererName = customRendererFromMessage || app?.customResponseRenderer;
       const effectiveOutputFormat = outputFormatFromMessage || outputFormat;
 
+      // For JSON output with custom renderer, wait until message is complete
       if (effectiveOutputFormat === 'json' && customRendererName) {
+        // While streaming, show a loading indicator instead of incomplete JSON
+        if (message.loading) {
+          return (
+            <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <span className="text-sm">{t('chatMessage.generatingResponse', 'Generating response...')}</span>
+            </div>
+          );
+        }
+
+        // Message is complete, try to parse and render with custom renderer
         try {
           const parsedData =
             typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
