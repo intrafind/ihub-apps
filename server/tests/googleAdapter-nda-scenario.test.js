@@ -62,7 +62,10 @@ const req = GoogleAdapter.createCompletionRequest(model, messages, 'test-key', {
 });
 
 console.log('\nAfter processing:');
-console.log('- Root level additionalProperties:', req.body.generationConfig.response_schema.additionalProperties);
+console.log(
+  '- Root level additionalProperties:',
+  req.body.generationConfig.response_schema.additionalProperties
+);
 console.log(
   '- Array items additionalProperties:',
   req.body.generationConfig.response_schema.properties.risks.items.additionalProperties
@@ -83,10 +86,7 @@ assert.strictEqual(
 // Verify the schema structure is preserved
 assert.strictEqual(req.body.generationConfig.response_schema.type, 'object');
 assert.strictEqual(req.body.generationConfig.response_schema.properties.risks.type, 'array');
-assert.strictEqual(
-  req.body.generationConfig.response_schema.properties.risks.items.type,
-  'object'
-);
+assert.strictEqual(req.body.generationConfig.response_schema.properties.risks.items.type, 'object');
 
 // Verify original schema was not mutated
 assert.strictEqual(ndaLikeSchema.additionalProperties, false);
@@ -94,5 +94,9 @@ assert.strictEqual(ndaLikeSchema.properties.risks.items.additionalProperties, fa
 
 console.log('\n✅ NDA Risk Analyzer scenario test passed!');
 console.log('The fix correctly removes additionalProperties that was causing:');
-console.log('  - "Unknown name \\"additionalProperties\\" at \'generation_config.response_schema.properties[1].value.items\'"');
-console.log('  - "Unknown name \\"additionalProperties\\" at \'generation_config.response_schema\'"');
+console.log(
+  '  - "Unknown name \\"additionalProperties\\" at \'generation_config.response_schema.properties[1].value.items\'"'
+);
+console.log(
+  '  - "Unknown name \\"additionalProperties\\" at \'generation_config.response_schema\'"'
+);
