@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Download, ExternalLink, Copy, Check } from 'react-icons/lu';
+import { 
+  ArrowDownTrayIcon, 
+  ArrowTopRightOnSquareIcon, 
+  ClipboardIcon, 
+  CheckIcon 
+} from '@heroicons/react/24/outline';
 import api from '../../../api';
 
 export function IntegrationsPage() {
@@ -151,7 +156,7 @@ export function IntegrationsPage() {
                     onClick={downloadManifest}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                   >
-                    <Download className="w-4 h-4" />
+                    <ArrowDownTrayIcon className="w-4 h-4" />
                     Download Manifest
                   </button>
                 </div>
@@ -179,7 +184,7 @@ export function IntegrationsPage() {
                   className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
                   title="Copy to clipboard"
                 >
-                  {copied ? <Check className="w-5 h-5 text-green-600" /> : <Copy className="w-5 h-5" />}
+                  {copied ? <CheckIcon className="w-5 h-5 text-green-600" /> : <ClipboardIcon className="w-5 h-5" />}
                 </button>
               </div>
 
@@ -197,7 +202,7 @@ export function IntegrationsPage() {
                   className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
                   title="Copy to clipboard"
                 >
-                  <Copy className="w-5 h-5" />
+                  <ClipboardIcon className="w-5 h-5" />
                 </button>
               </div>
             </div>
@@ -254,7 +259,7 @@ export function IntegrationsPage() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
             >
-              <ExternalLink className="w-4 h-4" />
+              <ArrowTopRightOnSquareIcon className="w-4 h-4" />
               View Documentation
             </a>
           </div>
