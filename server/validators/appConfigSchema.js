@@ -281,6 +281,7 @@ const baseAppConfigSchema = z.object({
   disallowModelSelection: z.boolean().optional().default(false),
   allowEmptyContent: z.boolean().optional().default(false),
   tools: z.array(z.string()).optional(),
+  disabledByDefault: z.array(z.string()).optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
   customResponseRenderer: z.string().optional(),
   category: z.string().optional(),

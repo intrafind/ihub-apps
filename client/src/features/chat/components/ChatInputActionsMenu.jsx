@@ -4,10 +4,12 @@ import Icon from '../../../shared/components/Icon';
 import { fetchToolsBasic } from '../../../api/api';
 import { VoiceInputComponent } from '../../voice/components';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
+import { trackToolUsage } from '../../../utils/toolUsageTracker';
 
 /**
  * ChatInputActionsMenu component - unified menu for all chat input actions
  * Consolidates tools, file upload, magic prompt, and voice input into one menu
+ * Supports single action optimization and tool usage tracking
  */
 const ChatInputActionsMenu = ({
   app,
@@ -120,9 +122,13 @@ const ChatInputActionsMenu = ({
 
       if (allEnabled) {
         newEnabledTools = enabledTools.filter(t => !groupTools.includes(t));
+        // Track usage for each tool in the group
+        groupTools.forEach(tool => trackToolUsage(app.id, tool, false));
       } else {
         const toAdd = groupTools.filter(t => !enabledTools.includes(t));
         newEnabledTools = [...enabledTools, ...toAdd];
+        // Track usage for each newly enabled tool
+        toAdd.forEach(tool => trackToolUsage(app.id, tool, true));
       }
 
       onEnabledToolsChange?.(newEnabledTools);
@@ -131,6 +137,10 @@ const ChatInputActionsMenu = ({
       const newEnabledTools = isEnabled
         ? enabledTools.filter(t => t !== toolId)
         : [...enabledTools, toolId];
+      
+      // Track this tool usage
+      trackToolUsage(app.id, toolId, !isEnabled);
+      
       onEnabledToolsChange?.(newEnabledTools);
     }
   };
@@ -139,15 +149,80 @@ const ChatInputActionsMenu = ({
   const toolCount = app?.tools?.length || 0;
   const enabledCount = hasTools ? app.tools.filter(t => enabledTools.includes(t)).length : 0;
 
+  // Count quick actions (non-tools actions)
+  const quickActionCount =
+    (uploadConfig?.enabled === true ? 1 : 0) +
+    (magicPromptEnabled && !showUndoMagicPrompt ? 1 : 0) +
+    (showUndoMagicPrompt ? 1 : 0) +
+    (onVoiceInput ? 1 : 0);
+
   // Check if we have any actions to show
-  const hasActions =
-    hasTools ||
-    uploadConfig?.enabled === true ||
-    magicPromptEnabled ||
-    showUndoMagicPrompt ||
-    onVoiceInput;
+  const hasActions = hasTools || quickActionCount > 0;
 
   if (!hasActions) return null;
+
+  // Single action optimization: if we have exactly one action and no tools,
+  // render that action directly without a menu
+  const totalActions = quickActionCount + (hasTools ? 1 : 0);
+  
+  if (totalActions === 1 && quickActionCount === 1 && !hasTools) {
+    // Render the single action directly
+    if (uploadConfig?.enabled === true) {
+      return (
+        <button
+          type="button"
+          onClick={onToggleUploader}
+          disabled={disabled || isProcessing}
+          title={t('chatActions.attachFile', 'Attach File')}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          <Icon name="paper-clip" size="md" />
+        </button>
+      );
+    }
+
+    if (magicPromptEnabled && !showUndoMagicPrompt) {
+      return (
+        <button
+          type="button"
+          onClick={onMagicPrompt}
+          disabled={disabled || isProcessing}
+          title={t('common.magicPrompt', 'Magic Prompt')}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          {magicPromptLoading ? <MagicPromptLoader /> : <Icon name="sparkles" size="md" />}
+        </button>
+      );
+    }
+
+    if (showUndoMagicPrompt) {
+      return (
+        <button
+          type="button"
+          onClick={onUndoMagicPrompt}
+          disabled={disabled || isProcessing}
+          title={t('common.undo', 'Undo')}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          <Icon name="arrowLeft" size="md" />
+        </button>
+      );
+    }
+
+    if (onVoiceInput) {
+      return (
+        <div className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <VoiceInputComponent
+            app={app}
+            onSpeechResult={onVoiceInput}
+            inputRef={inputRef}
+            disabled={disabled || isProcessing}
+            onCommand={onVoiceCommand}
+          />
+        </div>
+      );
+    }
+  }
 
   return (
     <div className="relative" ref={dropdownRef}>

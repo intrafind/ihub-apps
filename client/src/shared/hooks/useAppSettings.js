@@ -67,6 +67,15 @@ const useAppSettings = (appId, app) => {
       initialModel = defaultModel ? defaultModel.id : models[0]?.id || null;
     }
 
+    // Initialize enabled tools based on app config
+    // Start with all tools, then remove those disabled by default
+    let initialEnabledTools = app.tools || [];
+    if (app.disabledByDefault && app.disabledByDefault.length > 0) {
+      initialEnabledTools = initialEnabledTools.filter(
+        tool => !app.disabledByDefault.includes(tool)
+      );
+    }
+
     // Initialize with app defaults
     const initialState = {
       selectedModel: initialModel,
@@ -77,7 +86,7 @@ const useAppSettings = (appId, app) => {
       thinkingEnabled: app.thinking?.enabled ?? null,
       thinkingBudget: app.thinking?.budget ?? null,
       thinkingThoughts: app.thinking?.thoughts ?? null,
-      enabledTools: app.tools || []
+      enabledTools: initialEnabledTools
     };
 
     // Set initial states
