@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      // Dynamically set base tag for proper asset loading when deployed at subpath
+      // This logic is aligned with client/src/utils/runtimeBasePath.js
+      (function () {
+        // Get the current pathname
+        const pathname = window.location.pathname;
+
+        // Find the base path by looking for where index.html is served
+        // Remove any trailing /index.html or just trailing slash
+        let basePath = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+
+        // If we're at a React route (e.g., /ihub/apps/chat), we need to find the base
+        // We can detect this by checking if there's a known React route pattern
+        const knownRoutes = [
+          '/apps',
+          '/admin',
+          '/auth',
+          '/login',
+          '/chat',
+          '/pages',
+          '/settings',
+          '/s/'
+        ];
+        for (const route of knownRoutes) {
+          const routeIndex = basePath.indexOf(route);
+          if (routeIndex > 0) {
+            // Found a route, so everything before it is the base path
+            basePath = basePath.substring(0, routeIndex);
+            break;
+          } else if (routeIndex === 0) {
+            // We're at root with a route - set base to root
+            basePath = '/';
+            break;
+          }
+        }
+
+        // Add base tag to ensure proper asset loading
+        // Always add base tag when we have a basePath (including '/')
+        if (basePath !== null && basePath !== undefined) {
+          const base = document.createElement('base');
+          base.href = basePath === '/' || basePath === '' ? '/' : basePath + '/';
+          document.head.appendChild(base);
+
+          // Store for debugging (same as runtimeBasePath.js)
+          window.__BASE_PATH__ = basePath === '/' ? '' : basePath;
+        }
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="./favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="A platform for AI-powered applications" />
+    <title>iHub Apps</title>
+    <!-- Import local font -->
+    <link rel="stylesheet" href="./fonts/Inter Web/inter.css" />
+    <style>
+      /* Fallback font settings */
+      body {
+        font-family:
+          'Inter',
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          Oxygen,
+          Ubuntu,
+          Cantarell,
+          'Open Sans',
+          'Helvetica Neue',
+          sans-serif;
+      }
+      /* Support for variable fonts if available */
+      @supports (font-variation-settings: normal) {
+        body {
+          font-family: 'Inter var', sans-serif;
+        }
+      }
+    </style>
+    <script type="module" crossorigin src="./assets/index-CdJiYb_a.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/vendor-react-9AdXaApd.js">
+    <link rel="modulepreload" crossorigin href="./assets/mermaid-DechTdnA.js">
+    <link rel="modulepreload" crossorigin href="./assets/vendor-utils-CF1RCcgi.js">
+    <link rel="modulepreload" crossorigin href="./assets/vendor-ui-lZiltAcz.js">
+    <link rel="modulepreload" crossorigin href="./assets/teams-CwMtNG0x.js">
+    <link rel="modulepreload" crossorigin href="./assets/vendor-forms-DyVXvDXu.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-6Ml9pWqe.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

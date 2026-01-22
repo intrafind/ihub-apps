@@ -441,8 +441,8 @@ export const useMermaidRenderer = ({ t }) => {
           const img = new Image();
 
           img.onload = () => {
-            // Use higher scaling for better PNG quality - 4x for large diagrams, minimum 3x
-            const scaleFactor = Math.max(3, width > 1000 || height > 800 ? 4 : 3);
+            // Use higher scaling for better PNG quality - 4x for large diagrams, 3x for smaller ones
+            const scaleFactor = width > 1000 || height > 800 ? 4 : 3;
             canvas.width = width * scaleFactor;
             canvas.height = height * scaleFactor;
 
