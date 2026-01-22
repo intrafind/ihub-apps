@@ -35,6 +35,8 @@ class ChatService {
       chatId
     } = params;
 
+    console.log('[ChatService.prepareChatRequest] enabledTools received:', enabledTools);
+
     return await this.requestBuilder.prepareChatRequest({
       appId,
       modelId,

@@ -135,7 +135,9 @@ class RequestBuilder {
         return { success: false, error: apiKeyResult.error };
       }
 
+      console.log('[RequestBuilder.prepareChatRequest] enabledTools received:', enabledTools);
       const context = { user, chatId, language, enabledTools };
+      console.log('[RequestBuilder.prepareChatRequest] context created:', context);
       const tools = await getToolsForApp(app, language, context);
       const request = createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
         temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
