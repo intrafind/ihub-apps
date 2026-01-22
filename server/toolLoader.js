@@ -153,6 +153,10 @@ export async function loadTools(language = null) {
  * @param {Object} context - Context object (user, chatId, etc.) for source tool generation
  */
 export async function getToolsForApp(app, language = null, context = {}) {
+  console.log(`[toolLoader] getToolsForApp called for app: ${app.id}`);
+  console.log(`[toolLoader] context.enabledTools:`, context.enabledTools);
+  console.log(`[toolLoader] app.tools:`, app.tools);
+  
   // Get static tools from tool definitions
   const allTools = await loadTools(language);
   let appTools = [];
@@ -219,6 +223,9 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
+  console.log(`[toolLoader] Final tools being returned for app ${app.id}:`, appTools.map(t => t.function?.name || t.id));
+  console.log(`[toolLoader] Total tool count: ${appTools.length}`);
+  
   return appTools;
 }
 
