@@ -83,7 +83,13 @@
     "quote": "Zitat",
     "code": "Code",
     "link": "Link",
-    "redo": "Wiederholen"
+    "redo": "Wiederholen",
+    "language": "de"
+  },
+  "chatActions": {
+    "menu": "Aktionsmenü",
+    "quickActions": "Schnellaktionen",
+    "attachFile": "Datei anhängen"
   },
   "pages": {
     "home": {

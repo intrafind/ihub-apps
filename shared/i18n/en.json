@@ -81,7 +81,13 @@
     "quote": "Quote",
     "code": "Code",
     "link": "Link",
-    "redo": "Redo"
+    "redo": "Redo",
+    "language": "en"
+  },
+  "chatActions": {
+    "menu": "Actions menu",
+    "quickActions": "Quick Actions",
+    "attachFile": "Attach File"
   },
   "pages": {
     "home": {

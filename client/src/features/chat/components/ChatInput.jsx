@@ -1,11 +1,9 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { VoiceInputComponent } from '../../voice/components';
 import Icon from '../../../shared/components/Icon';
-import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import { UnifiedUploader } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
-import ToolsToggle from './ToolsToggle';
+import ChatActionsMenu from './ChatActionsMenu';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
 /**
@@ -214,6 +212,25 @@ const ChatInput = ({
         autoComplete="off"
         className="flex space-x-2 items-center"
       >
+        {/* Chat Actions Menu - positioned before input */}
+        <ChatActionsMenu
+          app={app}
+          enabledTools={enabledTools}
+          onEnabledToolsChange={onEnabledToolsChange}
+          uploadConfig={uploadConfig}
+          onToggleUploader={onToggleUploader || toggleUploader}
+          disabled={disabled}
+          isProcessing={isProcessing}
+          magicPromptEnabled={magicPromptEnabled}
+          onMagicPrompt={onMagicPrompt}
+          showUndoMagicPrompt={showUndoMagicPrompt}
+          onUndoMagicPrompt={onUndoMagicPrompt}
+          magicPromptLoading={magicPromptLoading}
+          onVoiceInput={onVoiceInput}
+          onVoiceCommand={onVoiceCommand}
+          inputRef={actualInputRef}
+        />
+
         <textarea
           autoComplete="off"
           data-lpignore="true"
@@ -250,65 +267,6 @@ const ChatInput = ({
             >
               <Icon name="clearCircle" size="sm" />
             </button>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-1 justify-start">
-          {uploadConfig?.enabled === true && (
-            <button
-              type="button"
-              onClick={toggleUploader}
-              disabled={disabled || isProcessing}
-              className={`image-upload-button ${showUploader ? 'active' : ''} h-fit`}
-              title={t('common.toggleUpload', 'Toggle file upload')}
-              aria-label={t('common.toggleUpload', 'Toggle file upload')}
-            >
-              <Icon name="paper-clip" size="md" />
-            </button>
-          )}
-
-          {magicPromptEnabled && !showUndoMagicPrompt && (
-            <button
-              type="button"
-              onClick={onMagicPrompt}
-              disabled={disabled || isProcessing}
-              className="image-upload-button h-fit"
-              title={t('common.magicPrompt', 'Magic prompt')}
-              aria-label={t('common.magicPrompt', 'Magic prompt')}
-            >
-              {magicPromptLoading ? <MagicPromptLoader /> : <Icon name="sparkles" size="md" />}
-            </button>
-          )}
-
-          {showUndoMagicPrompt && (
-            <button
-              type="button"
-              onClick={onUndoMagicPrompt}
-              disabled={disabled || isProcessing}
-              className="image-upload-button h-fit"
-              title={t('common.undo', 'Undo')}
-              aria-label={t('common.undo', 'Undo')}
-            >
-              <Icon name="arrowLeft" size="md" />
-            </button>
-          )}
-
-          {app?.tools && app.tools.length > 0 && onEnabledToolsChange && (
-            <ToolsToggle
-              app={app}
-              enabledTools={enabledTools}
-              onEnabledToolsChange={onEnabledToolsChange}
-            />
-          )}
-
-          {onVoiceInput && (
-            <VoiceInputComponent
-              app={app}
-              onSpeechResult={onVoiceInput}
-              inputRef={actualInputRef}
-              disabled={disabled || isProcessing}
-              onCommand={onVoiceCommand}
-            />
           )}
         </div>
 
