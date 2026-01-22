@@ -441,10 +441,12 @@ export const useMermaidRenderer = ({ t }) => {
           const img = new Image();
 
           img.onload = () => {
-            canvas.width = width * 2; // 2x for better quality
-            canvas.height = height * 2;
+            // Use higher scaling for better PNG quality - 4x for large diagrams, 3x for smaller ones
+            const scaleFactor = width > 1000 || height > 800 ? 4 : 3;
+            canvas.width = width * scaleFactor;
+            canvas.height = height * scaleFactor;
 
-            // Set high quality rendering
+            // Set highest quality rendering
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
 
@@ -452,8 +454,8 @@ export const useMermaidRenderer = ({ t }) => {
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Scale and draw the image
-            ctx.scale(2, 2);
+            // Scale and draw the image with high quality
+            ctx.scale(scaleFactor, scaleFactor);
             ctx.drawImage(img, 0, 0, width, height);
 
             canvas.toBlob(
