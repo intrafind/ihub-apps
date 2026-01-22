@@ -265,363 +265,110 @@
     }
   },
   "admin": {
-    "title": "Administration",
-    "nav": {
-      "home": "Home",
-      "apps": "Apps",
-      "models": "Models",
-      "providers": "Providers",
-      "prompts": "Prompts",
-      "pages": "Pages",
-      "groups": "Groups",
-      "auth": "Authentication",
-      "oauth": "OAuth Clients",
-      "logs": "Logs",
-      "api": "API Documentation"
-    },
-    "groups": {
-      "management": "Group Management",
-      "subtitle": "Manage user groups, permissions, and external group mappings",
-      "noGroupsFound": "No groups found",
-      "createFirstGroup": "Create your first group to get started",
-      "apps": "Apps:",
-      "noMappings": "No mappings",
-      "error": "Error",
-      "basicInformation": "Basic Information",
-      "basicGroupConfiguration": "Basic group configuration and metadata",
-      "groupId": "Group ID",
-      "protectedSystemGroup": "This is a protected system group",
-      "groupName": "Group Name",
-      "description": "Description",
-      "adminAccess": "Admin Access",
-      "permissions": "Permissions"
-    },
-    "navigation": {
-      "overview": "Overview",
-      "apps": "Apps",
-      "models": "Models",
-      "users": "Users",
-      "settings": "Settings",
-      "logs": "Logs"
-    },
-    "apps": {
-      "title": "Apps Management",
-      "subtitle": "Manage your iHub applications",
-      "createApp": "Create App",
-      "list": {
-        "title": "Applications",
-        "addApp": "Add App",
-        "search": "Search apps...",
-        "noApps": "No apps found",
-        "edit": "Edit",
-        "delete": "Delete",
-        "confirmDelete": "Are you sure you want to delete this app?",
-        "status": "Status",
-        "enabled": "Enabled",
-        "disabled": "Disabled"
-      },
-      "edit": {
-        "title": "Edit App",
-        "create": "Create App",
-        "basicInfo": "Basic Information",
-        "name": "Name",
+    "providers": {
+      "title": "Provider Credentials",
+      "description": "Manage API keys for LLM providers. Provider-level keys are used as fallback for models that do not have their own API key configured.",
+      "search": "Search providers...",
+      "noResults": "No providers found matching your search.",
+      "noProviders": "No providers configured.",
+      "configured": "Configured",
+      "notConfigured": "Not Configured",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "configure": "Configure",
+      "backToList": "Back to Providers",
+      "table": {
+        "provider": "Provider",
         "description": "Description",
-        "color": "Color",
-        "icon": "Icon",
-        "category": "Category",
-        "enabled": "Enabled",
-        "advanced": "Advanced Settings",
-        "systemPrompt": "System Prompt",
-        "tokenLimit": "Token Limit",
-        "preferredModel": "Preferred Model",
-        "temperature": "Temperature",
-        "searchTools": "Search tools to add...",
-        "toolsHelper": "Search and select tools to add to this app. Click on selected tools to remove them.",
-        "predefinedValues": "Predefined Values",
-        "predefinedValuesHint": "Optional suggested values that can be used as autocomplete options.",
-        "predefinedValuesHintSelect": "Options that will be available in the dropdown menu.",
-        "option": "Option",
-        "value": "Value",
-        "addOption": "Add Option"
-      },
-      "wizard": {
-        "title": "Create New App",
-        "basedOn": "Based on",
-        "back": "Back",
-        "next": "Next",
-        "finish": "Finish App",
-        "create": "Create App",
-        "creating": "Creating...",
-        "revert": "Revert to parent",
-        "steps": {
-          "basic": "Basic",
-          "prompt": "Prompt",
-          "advanced": "Advanced",
-          "tools": "Tools",
-          "review": "Review"
-        },
-        "navigation": {
-          "previous": "Previous",
-          "next": "Next",
-          "finish": "Create App",
-          "saving": "Creating..."
-        },
-        "method": {
-          "title": "Creation Method",
-          "description": "How would you like to create your app?",
-          "instruction": "Choose how you want to create your app:",
-          "ai": "AI-Generated",
-          "aiDescription": "Describe what your app should do, and AI will generate the configuration for you.",
-          "manual": "Manual Configuration",
-          "manualDescription": "Configure your app step by step with full control over all settings.",
-          "template": "Based on Template",
-          "templateDescription": "Start with the configuration from \"{templateName}\" and customize it."
-        },
-        "ai": {
-          "title": "AI Generation",
-          "description": "Describe what your app should do",
-          "language": "Language",
-          "prompt": "Describe your app",
-          "promptPlaceholder": "Example: Create a meeting summarizer app that takes meeting notes and extracts key points, action items, and decisions...",
-          "generate": "Generate App",
-          "generating": "Generating...",
-          "loadingPrompt": "Loading prompt configuration...",
-          "success": "App configuration generated successfully! You can review and modify it in the next steps.",
-          "error": {
-            "parse": "Failed to parse generated configuration",
-            "generate": "Failed to generate app configuration",
-            "network": "Network error occurred while generating app"
-          }
-        },
-        "generator": {
-          "title": "AI App Generator",
-          "description": "Describe the app you want to create and I'll generate it for you",
-          "placeholder": "Describe your app idea...",
-          "generate": "Generate App",
-          "generating": "Generating...",
-          "loadingPrompt": "Loading prompt configuration...",
-          "error": {
-            "parse": "Failed to parse generated configuration",
-            "generate": "Failed to generate app configuration",
-            "network": "Network error occurred while generating app"
-          }
-        },
-        "basic": {
-          "title": "Basic Information",
-          "description": "Description",
-          "language": "Language",
-          "appId": "App ID",
-          "appIdPlaceholder": "e.g., my-awesome-app",
-          "name": "App Name",
-          "namePlaceholder": "Enter app name",
-          "descriptionPlaceholder": "Enter app description",
-          "color": "Color",
-          "icon": "Icon",
-          "iconPlaceholder": "e.g., chat-bubbles",
-          "selectIcon": "Select an icon",
-          "searchIcons": "Search icons...",
-          "noIconsFound": "No icons found",
-          "iconCount": "{{count}} icons available",
-          "iconCountFiltered": "{{filtered}} of {{total}} icons",
-          "nameLabel": {
-            "label": "App Name",
-            "placeholder": "Enter app name"
-          },
-          "descriptionLabel": {
-            "label": "Description",
-            "placeholder": "Describe what this app does"
-          },
-          "colorLabel": {
-            "label": "Theme Color",
-            "description": "Choose a color for the app's theme"
-          },
-          "iconLabel": {
-            "label": "Icon",
-            "description": "Select an icon for the app"
-          },
-          "category": {
-            "label": "Category",
-            "placeholder": "Select or enter category"
-          }
-        },
-        "system": {
-          "title": "System Instructions",
-          "description": "Define how your app should behave",
-          "prompt": "System Instructions",
-          "promptPlaceholder": "Enter system instructions that define how the AI should behave...",
-          "messagePlaceholder": "Message Placeholder",
-          "messagePlaceholderPlaceholder": "Enter your message here...",
-          "model": "Preferred Model",
-          "temperature": "Temperature"
-        },
-        "variables": {
-          "title": "Variables",
-          "description": "Add user-configurable variables",
-          "instruction": "Variables allow users to customize the app behavior. They can be used in the prompt template with {{variableName}} syntax.",
-          "variable": "Variable {{index}}",
-          "name": "Name",
-          "namePlaceholder": "e.g., targetLanguage",
-          "type": "Type",
-          "label": "Label",
-          "labelPlaceholder": "e.g., Target Language",
-          "required": "Required",
-          "add": "Add Variable"
-        },
-        "prompt": {
-          "title": "System Prompt",
-          "description": "Define how the AI should behave",
-          "system": {
-            "label": "System Prompt",
-            "placeholder": "You are a helpful assistant that...",
-            "description": "Instructions that define the AI's role and behavior"
-          },
-          "variables": {
-            "title": "Variables",
-            "description": "Add variables that users can configure",
-            "add": "Add Variable",
-            "name": "Name",
-            "label": "Label",
-            "type": "Type",
-            "required": "Required",
-            "defaultValue": "Default Value",
-            "options": "Options (comma-separated)",
-            "placeholder": "Placeholder text"
-          }
-        },
-        "advanced": {
-          "title": "Advanced Settings",
-          "description": "Configure advanced features",
-          "instruction": "Configure advanced settings for your app.",
-          "allowEmptyContent": "Allow Empty Content",
-          "sendChatHistory": "Send Chat History",
-          "imageUpload": "Enable Image Upload",
-          "category": "Category",
-          "order": "Display Order",
-          "model": {
-            "label": "Preferred Model",
-            "description": "Default model for this app"
-          },
-          "tokenLimit": {
-            "label": "Token Limit",
-            "description": "Maximum tokens per request"
-          },
-          "temperature": {
-            "label": "Temperature",
-            "description": "Controls creativity vs consistency"
-          },
-          "outputFormat": {
-            "label": "Output Format",
-            "description": "Default format for responses"
-          }
-        },
-        "review": {
-          "title": "Review & Create",
-          "description": "Review your app configuration before creating",
-          "instruction": "Review your app configuration before creating it.",
-          "basicInfo": "Basic Information",
-          "systemPrompt": "System Prompt",
-          "settings": "Settings",
-          "selectedTools": "Selected Tools",
-          "noTools": "No tools selected",
-          "basedOn": "Based on template: {templateName}",
-          "overridden": "Overridden fields: {fields}",
-          "warning": "Once created, you can edit the app configuration but cannot change its ID. Make sure the ID is unique and descriptive."
-        },
-        "error": {
-          "missingFields": "Please fill in all required fields before proceeding.",
-          "methodRequired": "Please select a creation method",
-          "idRequired": "App ID is required",
-          "nameRequired": "App name is required",
-          "descriptionRequired": "App description is required",
-          "colorRequired": "App color is required",
-          "iconRequired": "App icon is required",
-          "systemRequired": "System instructions are required",
-          "tokenLimitRequired": "Token limit is required",
-          "createFailed": "Failed to create app"
-        },
-        "tools": {
-          "title": "Tools",
-          "description": "Select available tools",
-          "instruction": "Select the tools that will be available to your app. Tools extend the capabilities of the AI assistant.",
-          "searchPlaceholder": "Search tools...",
-          "noResults": "No tools match your search",
-          "noTools": "No tools available"
-        }
-      }
-    },
-    "pages": {
-      "title": "Pages Management",
-      "list": {
-        "title": "Pages",
-        "addPage": "Add Page",
-        "search": "Search pages...",
-        "noPages": "No pages found",
-        "edit": "Edit",
-        "delete": "Delete",
-        "view": "View"
+        "apiKey": "API Key",
+        "status": "Status",
+        "actions": "Actions"
       },
       "edit": {
-        "title": "Edit Page",
-        "create": "Create Page",
-        "id": "Page ID",
-        "idPlaceholder": "page-id (used in URL)",
-        "pageTitle": "Title",
-        "content": "Content",
-        "idRequired": "ID is required",
-        "authRequired": "Authentication Required",
-        "allowedGroups": "Allowed Groups (comma separated, '*' = all)"
+        "title": "Configure Provider",
+        "description": "Description",
+        "saved": "Provider configuration saved successfully!",
+        "id": "Provider ID",
+        "name": "Provider Name",
+        "apiKey": "API Key",
+        "apiKeyOptional": "(Optional - leave empty to use environment variable)",
+        "apiKeyPlaceholder": "Enter new API key or leave unchanged",
+        "apiKeyEnter": "Enter API key",
+        "apiKeySet": "An API key is currently configured",
+        "enabled": "Provider Enabled",
+        "cancel": "Cancel",
+        "save": "Save Changes",
+        "saving": "Saving...",
+        "info": {
+          "title": "About Provider API Keys",
+          "description": "API keys configured here are used as a fallback for all models of this provider that do not have their own API key configured. If you leave this field empty, the system will use the environment variable instead."
+        }
       },
-      "confirmDelete": "Are you sure you want to delete this page?",
-      "contentTypes": {
-        "markdown": "Markdown (.md)",
-        "reactComponent": "React Component (.jsx)",
-        "jsxDescription": "Write JSX code that will be compiled and rendered as a React component",
-        "markdownDescription": "Write standard markdown content with syntax highlighting support"
+      "info": {
+        "title": "API Key Priority",
+        "description": "When a model requests an API key, the system checks in this order: 1) Model-specific API key, 2) Provider-level API key (configured here), 3) Environment variable. This allows you to set a default API key for all models of a provider while still allowing individual models to override it."
       }
     },
     "models": {
       "title": "Model Management",
       "subtitle": "Configure and manage AI models for your applications",
-      "addNew": "Add New Model",
       "loadError": "Error loading models",
+      "addNew": "Add New Model",
+      "uploadConfig": "Upload Config",
+      "uploading": "Uploading...",
       "searchPlaceholder": "Search models...",
       "filterAll": "All Models",
       "filterEnabled": "Enabled Only",
       "filterDisabled": "Disabled Only",
       "name": "Name",
       "provider": "Provider",
-      "actions": "Actions",
       "enabled": "Enabled",
       "disabled": "Disabled",
-      "test": "Test",
+      "default": "Default",
+      "actions": "Actions",
+      "test": {
+        "success": "Test Successful",
+        "failed": "Test Failed"
+      },
       "enable": "Enable",
       "disable": "Disable",
       "clone": "Clone",
+      "download": "Download Config",
       "delete": "Delete",
       "deleteConfirm": "Delete this model?",
       "noModels": "No models found",
       "noModelsDesc": "Get started by creating a new model.",
+      "table": {
+        "status": "Status"
+      },
+      "status": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "details": {
+        "messages": "Messages",
+        "tokens": "Tokens"
+      },
       "edit": {
         "title": "Edit Model",
         "titleNew": "Create New Model",
-        "subtitle": "Editing {{name}}",
+        "subtitle": "Configure model: {{name}}",
         "subtitleNew": "Create a new AI model configuration",
         "backToModels": "Back to Models",
-        "basicInfo": "Basic Information",
-        "basicInfoDesc": "Basic information about the model",
-        "configuration": "Configuration",
-        "configurationDesc": "Advanced configuration options for the model",
-        "saving": "Saving...",
-        "createModel": "Create Model",
-        "saveChanges": "Save Changes",
         "usageStats": "Usage Statistics",
         "noUsageData": "No usage data available",
         "appsUsingModel": "Apps Using This Model",
         "noApps": "No apps are currently using this model",
-        "requiredFields": "Please fill in all required fields",
-        "success": "Model {{action}} successfully",
+        "success": "Model {{action}} successfully!",
         "successCreated": "created",
-        "successUpdated": "updated"
+        "successUpdated": "updated",
+        "saving": "Saving...",
+        "createModel": "Create Model",
+        "saveChanges": "Save Changes",
+        "basicInfo": "Basic Information",
+        "basicInfoDesc": "Basic information about the model",
+        "configuration": "Configuration",
+        "configurationDesc": "Advanced configuration options for the model"
       },
       "fields": {
         "id": "Model ID",
@@ -630,145 +377,36 @@
         "provider": "Provider",
         "modelId": "API Model ID",
         "url": "API URL",
+        "apiKey": "API Key",
         "tokenLimit": "Token Limit",
         "concurrency": "Concurrency",
         "requestDelay": "Request Delay (ms)",
         "supportsTools": "Supports Tools",
         "enabled": "Enabled",
         "defaultModel": "Default Model",
-        "apiKey": "API Key"
+        "supportsImageGeneration": "Supports Image Generation",
+        "aspectRatio": "Aspect Ratio",
+        "imageSize": "Image Size",
+        "maxReferenceImages": "Max Reference Images"
       },
       "hints": {
-        "modelId": "Unique identifier for this model configuration",
-        "apiModelId": "The actual model ID used in API calls (e.g., gpt-4, claude-3-opus)",
+        "modelId": "Unique identifier for the model (cannot be changed after creation)",
+        "apiModelId": "Model identifier used by the provider's API (e.g., gpt-4, claude-3-opus)",
         "apiKey": "API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.",
         "apiKeySet": "✓ API key is configured for this model",
-        "apiKeyEnvVars": "Environment variables (in priority order):\n{{envVars}}"
+        "apiKeyEnvVars": "Environment variables (in priority order):\n{{envVars}}",
+        "supportsImageGeneration": "Enable if this model can generate images (e.g., Gemini Image models)",
+        "maxReferenceImages": "Maximum number of reference images (1-14)"
       },
       "placeholders": {
         "selectProvider": "Select a provider",
         "apiModelId": "e.g., gpt-4, claude-3-opus",
-        "apiUrl": "https://api.example.com/v1/chat/completions",
+        "apiUrl": "https://api.provider.com/v1/chat/completions",
         "apiKey": "Enter API key (optional - will use environment variable if not set)",
         "apiKeySet": "API key is set (leave blank to keep current)"
       },
-      "status": {
-        "enabled": "Enabled",
-        "disabled": "Disabled"
-      },
-      "details": {
-        "messages": "Messages",
-        "tokens": "Tokens",
-        "editModel": "Edit Model"
-      }
-    },
-    "prompts": {
-      "title": "Prompt Management",
-      "subtitle": "Manage and organize prompts for your AI applications",
-      "createNew": "Create New Prompt",
-      "loadError": "Error loading prompts",
-      "searchPlaceholder": "Search prompts...",
-      "filterAll": "All Prompts",
-      "filterEnabled": "Enabled Only",
-      "filterDisabled": "Disabled Only",
-      "name": "Name",
-      "category": "Category",
-      "description": "Description",
-      "order": "Order",
-      "appId": "App ID",
-      "status": "Status",
-      "actions": "Actions",
-      "enabled": "Enabled",
-      "disabled": "Disabled",
-      "enable": "Enable",
-      "disable": "Disable",
-      "clone": "Clone",
-      "edit": "Edit",
-      "delete": "Delete",
-      "deleteConfirm": "Are you sure you want to delete this prompt?",
-      "deleteSuccess": "Prompt deleted successfully",
-      "noPrompts": "No prompts found",
-      "noPromptsDesc": "Get started by creating a new prompt.",
-      "variableTypes": {
-        "string": "String",
-        "number": "Number",
-        "boolean": "Boolean"
-      }
-    },
-    "shortlinks": {
-      "title": "Short Links Management",
-      "subtitle": "Manage and monitor short links for your applications",
-      "addNew": "Add New Link",
-      "loadError": "Error loading short links",
-      "filterByAppId": "Filter by App ID",
-      "filterByUser": "Filter by User",
-      "filter": "Filter",
-      "code": "Code",
-      "appId": "App ID",
-      "userId": "User ID",
-      "usage": "Usage",
-      "createdAt": "Created",
-      "expiresAt": "Expires",
-      "actions": "Actions",
-      "copyLink": "Copy link",
-      "testLink": "Test link",
-      "delete": "Delete",
-      "deleteConfirm": "Delete this link?",
-      "noLinks": "No short links found",
-      "noLinksDesc": "Short links will appear here when created by users."
-    },
-    "dashboard": {
-      "topUsersByMessages": "Top Users by Messages",
-      "topUsersByTokens": "Top Users by Tokens",
-      "topUsersByMagicPrompts": "Top Users by Magic Prompts",
-      "userFeedback": "User Feedback",
-      "totalInvocations": "Total Invocations",
-      "inputTokens": "Input Tokens",
-      "outputTokens": "Output Tokens",
-      "positive": "Positive",
-      "negative": "Negative",
-      "feedbackOverview": "Feedback Overview",
-      "satisfactionRate": "Satisfaction Rate",
-      "aiModel": "AI Model",
-      "messages": "messages",
-      "totalTokens": "Total Tokens",
-      "promptTokens": "Prompt Tokens",
-      "completionTokens": "Completion Tokens",
-      "avgPerMessage": "Avg/Message",
-      "tokenDistribution": "Token Distribution",
-      "activeUsers": "Active Users",
-      "activeApps": "Active Apps",
-      "modelsUsed": "Models Used",
-      "avgTokensPerMsg": "Avg Tokens/Msg",
-      "modelUsageDetails": "Model Usage Details",
-      "systemOverview": "System Overview",
-      "appUsage": "App Usage",
-      "tokenEfficiency": "Token Efficiency",
-      "inputTokenDistribution": "Input Token Distribution",
-      "outputTokenDistribution": "Output Token Distribution",
-      "userFeedbackActivity": "User Feedback Activity",
-      "feedbackByApplication": "Feedback by Application",
-      "feedbackByModel": "Feedback by Model",
-      "averageRating": "Average Rating"
-    },
-    "usage": {
-      "title": "Admin Dashboard",
-      "subtitle": "Usage analytics and system overview",
-      "overview": {
-        "systemOverview": "System Overview",
-        "activeUsers": "Active Users",
-        "activeApps": "Active Apps",
-        "modelsUsed": "Models Used",
-        "avgTokensPerMsg": "Avg Tokens/Msg"
-      },
       "sections": {
-        "appUsage": "App Usage",
-        "tokenEfficiency": "Token Efficiency",
-        "inputTokenDistribution": "Input Token Distribution",
-        "outputTokenDistribution": "Output Token Distribution",
-        "userFeedbackActivity": "User Feedback Activity",
-        "feedbackByApplication": "Feedback by Application",
-        "feedbackByModel": "Feedback by Model"
+        "imageGeneration": "Image Generation Settings"
       }
     },
     "auth": {
@@ -1253,53 +891,6 @@
       },
       "staticTabs": {
         "name": "iHub Apps"
-      }
-    }
-  },
-  "admin": {
-    "providers": {
-      "title": "Provider Credentials",
-      "description": "Manage API keys for LLM providers. Provider-level keys are used as fallback for models that do not have their own API key configured.",
-      "search": "Search providers...",
-      "noResults": "No providers found matching your search.",
-      "noProviders": "No providers configured.",
-      "configured": "Configured",
-      "notConfigured": "Not Configured",
-      "enabled": "Enabled",
-      "disabled": "Disabled",
-      "configure": "Configure",
-      "backToList": "Back to Providers",
-      "table": {
-        "provider": "Provider",
-        "description": "Description",
-        "apiKey": "API Key",
-        "status": "Status",
-        "actions": "Actions"
-      },
-      "edit": {
-        "title": "Configure Provider",
-        "description": "Configure API credentials for this provider",
-        "saved": "Provider configuration saved successfully!",
-        "id": "Provider ID",
-        "name": "Provider Name",
-        "description": "Description",
-        "apiKey": "API Key",
-        "apiKeyOptional": "(Optional - leave empty to use environment variable)",
-        "apiKeyPlaceholder": "Enter new API key or leave unchanged",
-        "apiKeyEnter": "Enter API key",
-        "apiKeySet": "An API key is currently configured",
-        "enabled": "Provider Enabled",
-        "cancel": "Cancel",
-        "save": "Save Changes",
-        "saving": "Saving...",
-        "info": {
-          "title": "About Provider API Keys",
-          "description": "API keys configured here are used as a fallback for all models of this provider that do not have their own API key configured. If you leave this field empty, the system will use the environment variable instead."
-        }
-      },
-      "info": {
-        "title": "API Key Priority",
-        "description": "When a model requests an API key, the system checks in this order: 1) Model-specific API key, 2) Provider-level API key (configured here), 3) Environment variable. This allows you to set a default API key for all models of a provider while still allowing individual models to override it."
       }
     }
   },
