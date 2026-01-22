@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { UnifiedUploader } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
-import ChatActionsMenu from './ChatActionsMenu';
+import ChatInputActionsMenu from './ChatInputActionsMenu';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
 /**
@@ -212,8 +212,8 @@ const ChatInput = ({
         autoComplete="off"
         className="flex space-x-2 items-center"
       >
-        {/* Chat Actions Menu - positioned before input */}
-        <ChatActionsMenu
+        {/* Chat Input Actions Menu - positioned before input */}
+        <ChatInputActionsMenu
           app={app}
           enabledTools={enabledTools}
           onEnabledToolsChange={onEnabledToolsChange}
