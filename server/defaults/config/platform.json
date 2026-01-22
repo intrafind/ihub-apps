@@ -32,7 +32,42 @@
   "requestBodyLimitMB": 50,
   "telemetry": {
     "enabled": false,
-    "logs": true
+    "provider": "console",
+    "exporters": {
+      "otlp": {
+        "endpoint": "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}",
+        "protocol": "http/protobuf",
+        "headers": {}
+      },
+      "prometheus": {
+        "port": 9464,
+        "host": "0.0.0.0"
+      }
+    },
+    "spans": {
+      "enabled": true,
+      "sampleRate": 1.0,
+      "includeOptInAttributes": false
+    },
+    "events": {
+      "enabled": true,
+      "includePrompts": false,
+      "includeCompletions": false,
+      "maxEventSize": 1024
+    },
+    "metrics": {
+      "enabled": true,
+      "exportInterval": 60000
+    },
+    "logs": {
+      "enabled": false,
+      "level": "info"
+    },
+    "resource": {
+      "service.name": "ihub-apps",
+      "service.version": "auto",
+      "deployment.environment": "${NODE_ENV:-production}"
+    }
   },
   "requestConcurrency": 5,
   "refreshSalt": {

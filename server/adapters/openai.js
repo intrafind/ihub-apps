@@ -6,6 +6,22 @@ import { BaseAdapter } from './BaseAdapter.js';
 
 class OpenAIAdapterClass extends BaseAdapter {
   /**
+   * Get provider name for telemetry
+   * @returns {string} Provider name
+   */
+  getProviderName() {
+    return 'openai';
+  }
+
+  /**
+   * Get operation name for telemetry
+   * @returns {string} Operation name
+   */
+  getOperationName() {
+    return 'chat';
+  }
+
+  /**
    * Format messages for OpenAI API, including handling image data
    * @param {Array} messages - Messages to format
    * @returns {Array} Formatted messages for OpenAI API

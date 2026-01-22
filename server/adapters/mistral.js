@@ -8,6 +8,14 @@ import { BaseAdapter } from './BaseAdapter.js';
 
 class MistralAdapterClass extends BaseAdapter {
   /**
+   * Get provider name for telemetry
+   * @returns {string} Provider name
+   */
+  getProviderName() {
+    return 'mistral';
+  }
+
+  /**
    * Format messages for Mistral API, including handling image data
    * @param {Array} messages - Messages to format
    * @returns {Array} Formatted messages for Mistral API

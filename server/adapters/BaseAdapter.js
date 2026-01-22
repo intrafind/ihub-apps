@@ -2,6 +2,45 @@
  * Base adapter class for LLM providers to reduce duplication
  */
 export class BaseAdapter {
+  constructor() {
+    this.instrumentation = null;
+    this.customContext = {};
+  }
+
+  /**
+   * Set OpenTelemetry instrumentation instance
+   * @param {Object} instrumentation - GenAI instrumentation instance
+   */
+  setInstrumentation(instrumentation) {
+    this.instrumentation = instrumentation;
+  }
+
+  /**
+   * Set custom context for telemetry
+   * @param {Object} context - Custom context (appId, userId, etc.)
+   */
+  setCustomContext(context) {
+    this.customContext = context || {};
+  }
+
+  /**
+   * Get provider name for telemetry
+   * Override in subclasses
+   * @returns {string} Provider name
+   */
+  getProviderName() {
+    return 'unknown';
+  }
+
+  /**
+   * Get operation name for telemetry
+   * Override in subclasses if needed
+   * @returns {string} Operation name
+   */
+  getOperationName() {
+    return 'chat';
+  }
+
   /**
    * Common debug logging for messages
    * @param {Array} messages - Original messages
@@ -107,5 +146,34 @@ export class BaseAdapter {
       name: message.name,
       is_error: message.is_error || false
     };
+  }
+
+  /**
+   * Wrap API call with OpenTelemetry instrumentation
+   * @param {Object} model - Model configuration
+   * @param {Array} messages - Messages array
+   * @param {Object} options - Request options
+   * @param {Function} apiCallFn - Async function that makes the API call
+   * @returns {Promise} API response
+   */
+  async withInstrumentation(model, messages, options, apiCallFn) {
+    // If instrumentation is not available or disabled, just call the function
+    if (!this.instrumentation || !this.instrumentation.isEnabled()) {
+      return await apiCallFn();
+    }
+
+    const operation = this.getOperationName();
+    const provider = this.getProviderName();
+
+    // Use the instrumentation wrapper
+    return await this.instrumentation.instrumentOperation(
+      operation,
+      model,
+      provider,
+      messages,
+      options,
+      this.customContext,
+      apiCallFn
+    );
   }
 }

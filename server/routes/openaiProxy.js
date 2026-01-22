@@ -11,6 +11,7 @@ import {
   convertToolsToGeneric
 } from '../adapters/toolCalling/index.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { recordAppUsage, recordError, recordConversation } from '../telemetry/metrics.js';
 
 export default function registerOpenAIProxyRoutes(app, { getLocalizedError, basePath = '' } = {}) {
   const base = buildServerPath('/api/inference', basePath);
@@ -168,6 +169,21 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
       maxTokens
     });
 
+    // Track inference API usage
+    recordAppUsage('inference-api', req.user?.id, {
+      'model.id': modelId,
+      'api.endpoint': '/v1/chat/completions'
+    });
+
+    // Track if this is a follow-up message (more than 1 message in history)
+    const isFollowUp = messages && messages.length > 2;
+    if (messages) {
+      recordConversation('inference-api', isFollowUp, {
+        'model.id': modelId,
+        'message.count': messages.length
+      });
+    }
+
     if (!modelId || !messages) {
       const lang =
         req.headers['accept-language']?.split(',')[0] ||
@@ -264,6 +280,14 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
           statusText: llmResponse.statusText,
           errorText: errorText
         });
+        
+        // Record error metric
+        recordError(`http_${llmResponse.status}`, 'inference_api', {
+          'model.id': modelId,
+          'provider': model.provider,
+          'user.id': req.user?.id
+        });
+        
         const lang =
           req.headers['accept-language']?.split(',')[0] ||
           configCache.getPlatform()?.defaultLanguage ||
