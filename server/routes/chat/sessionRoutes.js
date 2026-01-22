@@ -271,7 +271,6 @@ export default function registerSessionRoutes(
     async (req, res) => {
       try {
         const { appId, chatId } = req.params;
-        console.log('[sessionRoutes] req.body.enabledTools:', req.body.enabledTools);
         const {
           messages,
           modelId,

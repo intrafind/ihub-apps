@@ -153,10 +153,6 @@ export async function loadTools(language = null) {
  * @param {Object} context - Context object (user, chatId, etc.) for source tool generation
  */
 export async function getToolsForApp(app, language = null, context = {}) {
-  console.log(`[toolLoader] getToolsForApp called for app: ${app.id}`);
-  console.log(`[toolLoader] context.enabledTools:`, context.enabledTools);
-  console.log(`[toolLoader] app.tools:`, app.tools);
-  
   // Get static tools from tool definitions
   const allTools = await loadTools(language);
   let appTools = [];
@@ -174,8 +170,6 @@ export async function getToolsForApp(app, language = null, context = {}) {
 
     // Filter by enabledTools if provided in context
     if (context.enabledTools !== undefined && context.enabledTools !== null && Array.isArray(context.enabledTools)) {
-      console.log(`[toolLoader] Filtering tools by enabledTools:`, context.enabledTools);
-      console.log(`[toolLoader] Tools before filtering:`, appTools.map(t => t.id));
       appTools = appTools.filter(t => {
         // Check if tool ID is in enabledTools
         if (context.enabledTools.includes(t.id)) {
@@ -185,7 +179,6 @@ export async function getToolsForApp(app, language = null, context = {}) {
         const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
         return context.enabledTools.includes(baseToolId);
       });
-      console.log(`[toolLoader] Tools after filtering:`, appTools.map(t => t.id));
     }
   }
 
@@ -202,8 +195,6 @@ export async function getToolsForApp(app, language = null, context = {}) {
         
         // Filter source tools by enabledTools if provided in context
         if (context.enabledTools !== undefined && context.enabledTools !== null && Array.isArray(context.enabledTools)) {
-          console.log(`[toolLoader] Filtering source tools by enabledTools:`, context.enabledTools);
-          console.log(`[toolLoader] Source tools before filtering:`, sourceTools.map(t => t.function?.name || t.id));
           sourceTools = sourceTools.filter(t => {
             // Check if tool ID is in enabledTools
             if (context.enabledTools.includes(t.id)) {
@@ -213,7 +204,6 @@ export async function getToolsForApp(app, language = null, context = {}) {
             const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
             return context.enabledTools.includes(baseToolId);
           });
-          console.log(`[toolLoader] Source tools after filtering:`, sourceTools.map(t => t.function?.name || t.id));
         }
         
         appTools = appTools.concat(sourceTools);
@@ -223,9 +213,6 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
-  console.log(`[toolLoader] Final tools being returned for app ${app.id}:`, appTools.map(t => t.function?.name || t.id));
-  console.log(`[toolLoader] Total tool count: ${appTools.length}`);
-  
   return appTools;
 }
 
