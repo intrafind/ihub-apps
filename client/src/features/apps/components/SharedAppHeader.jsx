@@ -32,6 +32,7 @@ const SharedAppHeader = ({
   thinkingEnabled,
   thinkingBudget,
   thinkingThoughts,
+  enabledTools,
   onModelChange,
   onStyleChange,
   onOutputFormatChange,
@@ -40,6 +41,7 @@ const SharedAppHeader = ({
   onThinkingEnabledChange,
   onThinkingBudgetChange,
   onThinkingThoughtsChange,
+  onEnabledToolsChange,
 
   // Config panel state
   showConfig,
@@ -155,6 +157,7 @@ const SharedAppHeader = ({
             thinkingEnabled={thinkingEnabled}
             thinkingBudget={thinkingBudget}
             thinkingThoughts={thinkingThoughts}
+            enabledTools={enabledTools}
             onModelChange={onModelChange}
             onStyleChange={onStyleChange}
             onOutputFormatChange={onOutputFormatChange}
@@ -163,6 +166,7 @@ const SharedAppHeader = ({
             onThinkingEnabledChange={onThinkingEnabledChange}
             onThinkingBudgetChange={onThinkingBudgetChange}
             onThinkingThoughtsChange={onThinkingThoughtsChange}
+            onEnabledToolsChange={onEnabledToolsChange}
             currentLanguage={currentLanguage}
           />
         </div>

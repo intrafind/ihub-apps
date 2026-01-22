@@ -261,7 +261,9 @@
     "systemPromptDescription": "Anweisungen für die KI zu Beginn des Gesprächs.",
     "markdown": "Markdown",
     "plainText": "Klartext",
-    "json": "JSON"
+    "json": "JSON",
+    "toolsSettings": "Werkzeuge",
+    "toolsSettingsHelp": "Aktivieren oder deaktivieren Sie einzelne Werkzeuge für diese Sitzung"
   },
   "chatMessage": {
     "user": "Du",

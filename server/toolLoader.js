@@ -167,6 +167,19 @@ export async function getToolsForApp(app, language = null, context = {}) {
       const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
       return app.tools.includes(baseToolId);
     });
+
+    // Filter by enabledTools if provided in context
+    if (context.enabledTools && Array.isArray(context.enabledTools)) {
+      appTools = appTools.filter(t => {
+        // Check if tool ID is in enabledTools
+        if (context.enabledTools.includes(t.id)) {
+          return true;
+        }
+        // For function-based tools, check if base tool is enabled
+        const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
+        return context.enabledTools.includes(baseToolId);
+      });
+    }
   }
 
   // Add source-generated tools

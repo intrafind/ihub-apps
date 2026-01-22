@@ -124,6 +124,7 @@ const AppChat = ({ preloadedApp = null }) => {
     thinkingEnabled,
     thinkingBudget,
     thinkingThoughts,
+    enabledTools,
     models,
     styles,
     setSelectedModel,
@@ -134,6 +135,7 @@ const AppChat = ({ preloadedApp = null }) => {
     setThinkingEnabled,
     setThinkingBudget,
     setThinkingThoughts,
+    setEnabledTools,
     modelsLoading
   } = useAppSettings(appId, app);
 
@@ -804,7 +806,8 @@ const AppChat = ({ preloadedApp = null }) => {
       ...(useMaxTokens ? { useMaxTokens: true } : {}),
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
       ...(thinkingBudget !== null ? { thinkingBudget } : {}),
-      ...(thinkingThoughts !== null ? { thinkingThoughts } : {})
+      ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
+      ...(enabledTools && enabledTools.length > 0 ? { enabledTools } : {})
     };
 
     console.log('📤 Sending message with params:', params);
@@ -997,6 +1000,7 @@ const AppChat = ({ preloadedApp = null }) => {
         thinkingEnabled={thinkingEnabled}
         thinkingBudget={thinkingBudget}
         thinkingThoughts={thinkingThoughts}
+        enabledTools={enabledTools}
         onModelChange={setSelectedModel}
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
@@ -1005,6 +1009,7 @@ const AppChat = ({ preloadedApp = null }) => {
         onThinkingEnabledChange={setThinkingEnabled}
         onThinkingBudgetChange={setThinkingBudget}
         onThinkingThoughtsChange={setThinkingThoughts}
+        onEnabledToolsChange={setEnabledTools}
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}

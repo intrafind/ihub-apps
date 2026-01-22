@@ -1093,7 +1093,9 @@
     "systemPromptDescription": "Instructions for the AI at the beginning of the conversation.",
     "markdown": "Markdown",
     "plainText": "Plain text",
-    "json": "JSON"
+    "json": "JSON",
+    "toolsSettings": "Tools",
+    "toolsSettingsHelp": "Enable or disable individual tools for this session"
   },
   "chatMessage": {
     "user": "You",
