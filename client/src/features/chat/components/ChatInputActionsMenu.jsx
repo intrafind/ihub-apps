@@ -183,7 +183,7 @@ const ChatInputActionsMenu = ({
                   }}
                   disabled={disabled || isProcessing}
                   title={t('chatActions.attachFile', 'Attach File')}
-                  className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50"
+                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 transition-colors"
                 >
                   <Icon name="paper-clip" size="sm" />
                 </button>
@@ -198,7 +198,7 @@ const ChatInputActionsMenu = ({
                   }}
                   disabled={disabled || isProcessing}
                   title={t('common.magicPrompt', 'Magic Prompt')}
-                  className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50"
+                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 transition-colors"
                 >
                   {magicPromptLoading ? (
                     <MagicPromptLoader />
@@ -216,7 +216,7 @@ const ChatInputActionsMenu = ({
                     setIsOpen(false);
                   }}
                   disabled={disabled || isProcessing}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm disabled:opacity-50"
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm disabled:opacity-50 transition-colors"
                 >
                   <Icon name="arrowLeft" size="sm" />
                   <span>{t('common.undo', 'Undo')}</span>
@@ -224,7 +224,7 @@ const ChatInputActionsMenu = ({
               )}
 
               {onVoiceInput && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                <div className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg">
                   <VoiceInputComponent
                     app={app}
                     onSpeechResult={onVoiceInput}
@@ -276,7 +276,10 @@ const ChatInputActionsMenu = ({
                             {groupName}
                           </div>
                           {groupDesc && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">
+                            <div 
+                              className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1"
+                              title={groupDesc}
+                            >
                               {groupDesc}
                             </div>
                           )}
@@ -314,7 +317,10 @@ const ChatInputActionsMenu = ({
                             {toolName}
                           </div>
                           {toolDescription && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">
+                            <div 
+                              className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1"
+                              title={toolDescription}
+                            >
                               {toolDescription}
                             </div>
                           )}
