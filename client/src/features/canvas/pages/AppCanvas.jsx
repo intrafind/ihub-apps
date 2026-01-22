@@ -44,6 +44,7 @@ const AppCanvas = () => {
     selectedOutputFormat,
     temperature,
     sendChatHistory,
+    enabledTools,
     models,
     styles,
     setSelectedModel,
@@ -51,6 +52,7 @@ const AppCanvas = () => {
     setSelectedOutputFormat,
     setTemperature,
     setSendChatHistory,
+    setEnabledTools,
     modelsLoading
   } = useAppSettings(appId, app);
 
@@ -211,7 +213,8 @@ const AppCanvas = () => {
             temperature,
             outputFormat: selectedOutputFormat,
             language: currentLanguage,
-            bypassAppPrompts: true
+            bypassAppPrompts: true,
+            ...(enabledTools && enabledTools.length > 0 ? { enabledTools } : {})
           },
           sendChatHistory
         });
@@ -577,11 +580,13 @@ const AppCanvas = () => {
         selectedOutputFormat={selectedOutputFormat}
         sendChatHistory={sendChatHistory}
         temperature={temperature}
+        enabledTools={enabledTools}
         onModelChange={setSelectedModel}
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
         onSendChatHistoryChange={setSendChatHistory}
         onTemperatureChange={setTemperature}
+        onEnabledToolsChange={setEnabledTools}
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
         onShare={() => setShowShare(true)}

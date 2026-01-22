@@ -5,19 +5,25 @@
   padding: 8px;
   cursor: pointer;
   color: var(--color-text, #333);
-  border-radius: 4px;
+  border-radius: 0.5rem;
   transition: all 0.2s ease;
-  opacity: 0.7;
 }
 
-.voice-input-button:hover {
-  background-color: var(--color-messageBackground, #f5f5f5);
-  opacity: 1;
+.voice-input-button:hover:not(:disabled) {
+  background-color: rgb(243 244 246);
+}
+
+.voice-input-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+[data-theme='dark'] .voice-input-button:hover:not(:disabled) {
+  background-color: rgb(55 65 81);
 }
 
 .voice-input-button.active {
   color: #dc3545;
-  opacity: 1;
   animation: pulse 2s infinite;
 }
 

@@ -85,6 +85,18 @@ const ChatActionsMenu = ({
               <Icon name="document-text" size="sm" /> {t('pages.appChat.canvas', 'Canvas')}
             </button>
           )}
+          {showParametersButton && (
+            <button
+              onClick={() => {
+                onToggleParameters?.();
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
+            >
+              <Icon name="document-chart-bar" size="sm" />{' '}
+              {parametersVisible ? t('common.hideParameters', 'Hide Parameters') : t('common.showParameters', 'Show Parameters')}
+            </button>
+          )}
           {showClearButton && (
             <button
               onClick={() => {
@@ -94,20 +106,6 @@ const ChatActionsMenu = ({
               className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="trash" size="sm" /> {t('pages.appChat.clear')}
-            </button>
-          )}
-          {showParametersButton && (
-            <button
-              onClick={() => {
-                onToggleParameters?.();
-                setOpen(false);
-              }}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap ${
-                parametersVisible ? 'bg-gray-100' : ''
-              }`}
-              aria-pressed={parametersVisible}
-            >
-              <Icon name="sliders" size="sm" /> {t('pages.appChat.parameters')}
             </button>
           )}
           {showShareButton && (
@@ -121,24 +119,32 @@ const ChatActionsMenu = ({
               <Icon name="share" size="sm" /> {t('pages.appChat.share', 'Share')}
             </button>
           )}
-          <div className="relative">
-            <button
-              onClick={() => setShowExport(v => !v)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
-            >
-              <Icon name="download" size="sm" />
-              {t('pages.appChat.export.conversation', 'Export')}
-            </button>
-            {showExport && (
-              <ExportConversationMenu
-                messages={messages}
-                settings={exportSettings}
-                onClose={() => setShowExport(false)}
-                appId={appId}
-                chatId={chatId}
-              />
-            )}
-          </div>
+          {messages && messages.length > 0 && exportSettings && (
+            <>
+              <div className="border-t border-gray-200 my-1"></div>
+              <button
+                onClick={() => {
+                  setShowExport(!showExport);
+                }}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
+              >
+                <Icon name="download" size="sm" /> {t('common.export', 'Export')}
+                <Icon
+                  name={showExport ? 'chevron-up' : 'chevron-down'}
+                  size="sm"
+                  className="ml-auto"
+                />
+              </button>
+              {showExport && (
+                <ExportConversationMenu
+                  messages={messages}
+                  exportSettings={exportSettings}
+                  appId={appId}
+                  chatId={chatId}
+                />
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

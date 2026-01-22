@@ -19,6 +19,7 @@ const useAppSettings = (appId, app) => {
   const [thinkingEnabled, setThinkingEnabled] = useState(null);
   const [thinkingBudget, setThinkingBudget] = useState(null);
   const [thinkingThoughts, setThinkingThoughts] = useState(null);
+  const [enabledTools, setEnabledTools] = useState([]);
 
   // Models and styles data
   const [models, setModels] = useState([]);
@@ -75,7 +76,8 @@ const useAppSettings = (appId, app) => {
       sendChatHistory: true,
       thinkingEnabled: app.thinking?.enabled ?? null,
       thinkingBudget: app.thinking?.budget ?? null,
-      thinkingThoughts: app.thinking?.thoughts ?? null
+      thinkingThoughts: app.thinking?.thoughts ?? null,
+      enabledTools: app.tools || []
     };
 
     // Set initial states
@@ -87,6 +89,7 @@ const useAppSettings = (appId, app) => {
     setThinkingEnabled(initialState.thinkingEnabled);
     setThinkingBudget(initialState.thinkingBudget);
     setThinkingThoughts(initialState.thinkingThoughts);
+    setEnabledTools(initialState.enabledTools);
 
     // Load saved settings and override defaults if available
     const savedSettings = loadAppSettings(appId);
@@ -105,6 +108,7 @@ const useAppSettings = (appId, app) => {
         setThinkingBudget(savedSettings.thinkingBudget);
       if (savedSettings.thinkingThoughts !== undefined)
         setThinkingThoughts(savedSettings.thinkingThoughts);
+      if (savedSettings.enabledTools !== undefined) setEnabledTools(savedSettings.enabledTools);
     }
   }, [app, appId, setHeaderColor, models, modelsLoading]);
 
@@ -119,7 +123,8 @@ const useAppSettings = (appId, app) => {
         sendChatHistory,
         thinkingEnabled,
         thinkingBudget,
-        thinkingThoughts
+        thinkingThoughts,
+        enabledTools
       });
     }
   }, [
@@ -132,7 +137,8 @@ const useAppSettings = (appId, app) => {
     sendChatHistory,
     thinkingEnabled,
     thinkingBudget,
-    thinkingThoughts
+    thinkingThoughts,
+    enabledTools
   ]);
 
   // Settings object for easy passing to components
@@ -144,7 +150,8 @@ const useAppSettings = (appId, app) => {
     sendChatHistory,
     thinkingEnabled,
     thinkingBudget,
-    thinkingThoughts
+    thinkingThoughts,
+    enabledTools
   };
 
   // Setters object for easy passing to components
@@ -156,7 +163,8 @@ const useAppSettings = (appId, app) => {
     setSendChatHistory,
     setThinkingEnabled,
     setThinkingBudget,
-    setThinkingThoughts
+    setThinkingThoughts,
+    setEnabledTools
   };
 
   return {

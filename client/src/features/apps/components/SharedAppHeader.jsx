@@ -32,6 +32,7 @@ const SharedAppHeader = ({
   thinkingEnabled,
   thinkingBudget,
   thinkingThoughts,
+  enabledTools,
   onModelChange,
   onStyleChange,
   onOutputFormatChange,
@@ -40,6 +41,7 @@ const SharedAppHeader = ({
   onThinkingEnabledChange,
   onThinkingBudgetChange,
   onThinkingThoughtsChange,
+  onEnabledToolsChange,
 
   // Config panel state
   showConfig,
