@@ -11,7 +11,6 @@ import {
   convertToolsToGeneric
 } from '../adapters/toolCalling/index.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { getGenAIInstrumentation } from '../telemetry.js';
 import { recordAppUsage, recordError, recordConversation } from '../telemetry/metrics.js';
 
 export default function registerOpenAIProxyRoutes(app, { getLocalizedError, basePath = '' } = {}) {
