@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { fetchToolsBasic } from '../../../api/api';
-import Icon from '../../../shared/components/Icon';
 
 const AppConfigForm = ({
   app,
