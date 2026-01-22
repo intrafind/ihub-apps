@@ -240,12 +240,9 @@ const ChatInputActionsMenu = ({
           {/* Tools Section */}
           {hasTools && (
             <div className="p-3">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
                 {t('tools.enableDisable', 'Tools')}
               </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                {t('tools.enableDisableSubtitle', 'Enable or disable tools for this chat')}
-              </p>
 
               {toolsLoading ? (
                 <div className="text-sm text-gray-500 dark:text-gray-400">
