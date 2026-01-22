@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, ExternalLink, Copy, CheckCircle } from 'react-icons/lu';
+import { Download, ExternalLink, Copy, Check } from 'react-icons/lu';
 import api from '../../../api';
 
 export function IntegrationsPage() {
@@ -179,7 +179,7 @@ export function IntegrationsPage() {
                   className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
                   title="Copy to clipboard"
                 >
-                  {copied ? <CheckCircle className="w-5 h-5 text-green-600" /> : <Copy className="w-5 h-5" />}
+                  {copied ? <Check className="w-5 h-5 text-green-600" /> : <Copy className="w-5 h-5" />}
                 </button>
               </div>
 
