@@ -5,7 +5,7 @@ import {
   ClipboardIcon, 
   CheckIcon 
 } from '@heroicons/react/24/outline';
-import api from '../../../api';
+import { apiClient } from '../../../api/client';
 
 export function IntegrationsPage() {
   const [outlookInfo, setOutlookInfo] = useState(null);
@@ -20,10 +20,7 @@ export function IntegrationsPage() {
   const loadIntegrationInfo = async () => {
     try {
       setLoading(true);
-      if (!api || typeof api.get !== 'function') {
-        throw new Error('API client is not available.');
-      }
-      const response = await api.get('/api/integrations/outlook/info');
+      const response = await apiClient.get('/api/integrations/outlook/info');
       setOutlookInfo(response.data);
     } catch (err) {
       console.error('Error loading integration info:', err);
