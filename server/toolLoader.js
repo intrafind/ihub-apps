@@ -191,7 +191,21 @@ export async function getToolsForApp(app, language = null, context = {}) {
         const appSources = sourcesConfig.filter(
           source => app.sources.includes(source.id) && source.enabled
         );
-        const sourceTools = sourceManager.generateTools(appSources, context);
+        let sourceTools = sourceManager.generateTools(appSources, context);
+        
+        // Filter source tools by enabledTools if provided in context
+        if (context.enabledTools && Array.isArray(context.enabledTools)) {
+          sourceTools = sourceTools.filter(t => {
+            // Check if tool ID is in enabledTools
+            if (context.enabledTools.includes(t.id)) {
+              return true;
+            }
+            // For function-based tools, check if base tool is enabled
+            const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
+            return context.enabledTools.includes(baseToolId);
+          });
+        }
+        
         appTools = appTools.concat(sourceTools);
       }
     } catch (error) {
