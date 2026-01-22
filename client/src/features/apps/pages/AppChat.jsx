@@ -807,7 +807,7 @@ const AppChat = ({ preloadedApp = null }) => {
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
       ...(thinkingBudget !== null ? { thinkingBudget } : {}),
       ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
-      ...(enabledTools && enabledTools.length > 0 ? { enabledTools } : {})
+      ...(enabledTools !== null && enabledTools !== undefined ? { enabledTools } : {})
     };
 
     console.log('📤 Sending message with params:', params);
