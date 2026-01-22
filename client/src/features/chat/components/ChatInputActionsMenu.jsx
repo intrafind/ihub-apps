@@ -182,10 +182,10 @@ const ChatInputActionsMenu = ({
                     setIsOpen(false);
                   }}
                   disabled={disabled || isProcessing}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm disabled:opacity-50"
+                  title={t('chatActions.attachFile', 'Attach File')}
+                  className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50"
                 >
                   <Icon name="paper-clip" size="sm" />
-                  <span>{t('chatActions.attachFile', 'Attach File')}</span>
                 </button>
               )}
 
@@ -197,14 +197,14 @@ const ChatInputActionsMenu = ({
                     setIsOpen(false);
                   }}
                   disabled={disabled || isProcessing}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm disabled:opacity-50"
+                  title={t('common.magicPrompt', 'Magic Prompt')}
+                  className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50"
                 >
                   {magicPromptLoading ? (
                     <MagicPromptLoader />
                   ) : (
                     <Icon name="sparkles" size="sm" />
                   )}
-                  <span>{t('common.magicPrompt', 'Magic Prompt')}</span>
                 </button>
               )}
 
@@ -276,7 +276,7 @@ const ChatInputActionsMenu = ({
                             {groupName}
                           </div>
                           {groupDesc && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">
                               {groupDesc}
                             </div>
                           )}
@@ -314,7 +314,7 @@ const ChatInputActionsMenu = ({
                             {toolName}
                           </div>
                           {toolDescription && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">
                               {toolDescription}
                             </div>
                           )}
