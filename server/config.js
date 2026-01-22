@@ -1,7 +1,11 @@
 import { cleanEnv, str, num } from 'envalid';
 import dotenv from 'dotenv';
 
+// Load .env file first
 dotenv.config();
+
+// Decrypt any encrypted environment variables immediately after loading .env
+import './envDecryptor.js';
 
 // Configuration supports both provider-specific and model-specific API keys:
 // - Provider-specific: OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.
