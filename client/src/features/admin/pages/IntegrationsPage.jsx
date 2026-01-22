@@ -20,7 +20,7 @@ export function IntegrationsPage() {
   const loadIntegrationInfo = async () => {
     try {
       setLoading(true);
-      if (typeof api.get !== 'function') {
+      if (!api || typeof api.get !== 'function') {
         throw new Error('API client is not available.');
       }
       const response = await api.get('/api/integrations/outlook/info');
