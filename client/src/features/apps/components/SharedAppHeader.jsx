@@ -157,7 +157,6 @@ const SharedAppHeader = ({
             thinkingEnabled={thinkingEnabled}
             thinkingBudget={thinkingBudget}
             thinkingThoughts={thinkingThoughts}
-            enabledTools={enabledTools}
             onModelChange={onModelChange}
             onStyleChange={onStyleChange}
             onOutputFormatChange={onOutputFormatChange}
@@ -166,7 +165,6 @@ const SharedAppHeader = ({
             onThinkingEnabledChange={onThinkingEnabledChange}
             onThinkingBudgetChange={onThinkingBudgetChange}
             onThinkingThoughtsChange={onThinkingThoughtsChange}
-            onEnabledToolsChange={onEnabledToolsChange}
             currentLanguage={currentLanguage}
           />
         </div>

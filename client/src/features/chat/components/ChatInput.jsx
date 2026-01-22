@@ -5,6 +5,7 @@ import Icon from '../../../shared/components/Icon';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import { UnifiedUploader } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
+import ToolsToggle from './ToolsToggle';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
 /**
@@ -32,7 +33,9 @@ const ChatInput = ({
   onMagicPrompt = null,
   showUndoMagicPrompt = false,
   onUndoMagicPrompt = null,
-  magicPromptLoading = false
+  magicPromptLoading = false,
+  enabledTools = [],
+  onEnabledToolsChange = null
 }) => {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -288,6 +291,14 @@ const ChatInput = ({
             >
               <Icon name="arrowLeft" size="md" />
             </button>
+          )}
+
+          {app?.tools && app.tools.length > 0 && onEnabledToolsChange && (
+            <ToolsToggle
+              app={app}
+              enabledTools={enabledTools}
+              onEnabledToolsChange={onEnabledToolsChange}
+            />
           )}
 
           {onVoiceInput && (

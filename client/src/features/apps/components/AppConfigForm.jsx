@@ -1,7 +1,5 @@
-import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { fetchToolsBasic } from '../../../api/api';
 
 const AppConfigForm = ({
   app,
@@ -15,7 +13,6 @@ const AppConfigForm = ({
   thinkingEnabled,
   thinkingBudget,
   thinkingThoughts,
-  enabledTools,
   onModelChange,
   onStyleChange,
   onOutputFormatChange,
@@ -24,32 +21,9 @@ const AppConfigForm = ({
   onThinkingEnabledChange,
   onThinkingBudgetChange,
   onThinkingThoughtsChange,
-  onEnabledToolsChange,
   currentLanguage
 }) => {
   const { t } = useTranslation();
-  const [availableTools, setAvailableTools] = useState([]);
-  const [toolsLoading, setToolsLoading] = useState(false);
-
-  // Load tools when component mounts if app has tools
-  useEffect(() => {
-    const loadTools = async () => {
-      if (!app?.tools || app.tools.length === 0) return;
-
-      try {
-        setToolsLoading(true);
-        const tools = await fetchToolsBasic();
-        setAvailableTools(tools || []);
-      } catch (error) {
-        console.error('Failed to fetch tools:', error);
-        setAvailableTools([]);
-      } finally {
-        setToolsLoading(false);
-      }
-    };
-
-    loadTools();
-  }, [app?.tools]);
 
   // Filter models if app has allowedModels specified
   const availableModels =
@@ -273,65 +247,6 @@ const AppConfigForm = ({
                 </label>
               </div>
             </>
-          )}
-        </>
-      )}
-
-      {/* Tools Selection - Only show if app has tools configured */}
-      {app?.tools && app.tools.length > 0 && app?.settings?.tools?.enabled !== false && (
-        <>
-          <div className="col-span-1 md:col-span-3 mt-4 mb-2">
-            <h3 className="text-sm font-semibold text-gray-700">
-              {t('appConfig.toolsSettings', 'Tools')}
-            </h3>
-            <p className="text-xs text-gray-500 mt-1">
-              {t(
-                'appConfig.toolsSettingsHelp',
-                'Enable or disable individual tools for this session'
-              )}
-            </p>
-          </div>
-
-          {toolsLoading ? (
-            <div className="col-span-1 md:col-span-3 text-sm text-gray-500">
-              {t('common.loading', 'Loading...')}
-            </div>
-          ) : (
-            <div className="col-span-1 md:col-span-3 space-y-2">
-              {app.tools.map(toolId => {
-                const toolInfo = availableTools.find(t => t.id === toolId);
-                const toolName = toolInfo?.name || toolId;
-                const toolDescription = toolInfo?.description;
-                const isEnabled = enabledTools.includes(toolId);
-
-                return (
-                  <div
-                    key={toolId}
-                    className="flex items-start p-2 border border-gray-200 rounded hover:bg-gray-50"
-                  >
-                    <label className="flex items-start cursor-pointer flex-1">
-                      <input
-                        type="checkbox"
-                        checked={isEnabled}
-                        onChange={e => {
-                          const newEnabledTools = e.target.checked
-                            ? [...enabledTools, toolId]
-                            : enabledTools.filter(t => t !== toolId);
-                          onEnabledToolsChange?.(newEnabledTools);
-                        }}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mt-0.5 mr-3 flex-shrink-0"
-                      />
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-900">{toolName}</div>
-                        {toolDescription && (
-                          <div className="text-xs text-gray-500 mt-0.5">{toolDescription}</div>
-                        )}
-                      </div>
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
           )}
         </>
       )}

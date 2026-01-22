@@ -1134,6 +1134,8 @@ const AppChat = ({ preloadedApp = null }) => {
                       showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
                       onUndoMagicPrompt={handleUndoMagicPrompt}
                       magicPromptLoading={magicPromptHandler.magicLoading}
+                      enabledTools={enabledTools}
+                      onEnabledToolsChange={setEnabledTools}
                     />
                   </div>
                 </div>
@@ -1199,6 +1201,8 @@ const AppChat = ({ preloadedApp = null }) => {
                       showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
                       onUndoMagicPrompt={handleUndoMagicPrompt}
                       magicPromptLoading={magicPromptHandler.magicLoading}
+                      enabledTools={enabledTools}
+                      onEnabledToolsChange={setEnabledTools}
                     />
                   </div>
                 </div>
@@ -1264,6 +1268,8 @@ const AppChat = ({ preloadedApp = null }) => {
                     showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
                     onUndoMagicPrompt={handleUndoMagicPrompt}
                     magicPromptLoading={magicPromptHandler.magicLoading}
+                    enabledTools={enabledTools}
+                    onEnabledToolsChange={setEnabledTools}
                   />
                 </div>
               </div>
@@ -1322,6 +1328,8 @@ const AppChat = ({ preloadedApp = null }) => {
                   showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
                   onUndoMagicPrompt={handleUndoMagicPrompt}
                   magicPromptLoading={magicPromptHandler.magicLoading}
+                  enabledTools={enabledTools}
+                  onEnabledToolsChange={setEnabledTools}
                 />
               </div>
             </>

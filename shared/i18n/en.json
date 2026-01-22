@@ -900,6 +900,9 @@
     "tools": {
       "title": "Tool Management",
       "subtitle": "Create, edit, and manage AI tools / function calling for your iHub Apps",
+      "toggle": "Toggle tools",
+      "enableDisable": "Tools",
+      "enableDisableSubtitle": "Enable or disable tools for this chat",
       "createNew": "Create New Tool",
       "uploadConfig": "Upload Config",
       "uploading": "Uploading...",

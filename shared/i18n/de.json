@@ -966,6 +966,9 @@
     "tools": {
       "title": "Tool-Verwaltung",
       "subtitle": "Erstellen, bearbeiten und verwalten Sie KI-Tools / Funktionsaufrufe für Ihre iHub Apps",
+      "toggle": "Werkzeuge umschalten",
+      "enableDisable": "Werkzeuge",
+      "enableDisableSubtitle": "Werkzeuge für diesen Chat aktivieren oder deaktivieren",
       "createNew": "Neues Tool erstellen",
       "uploadConfig": "Konfiguration hochladen",
       "uploading": "Hochladen...",
