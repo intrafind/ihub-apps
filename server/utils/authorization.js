@@ -382,7 +382,6 @@ export function getDefaultAnonymousGroups(platform) {
  * @returns {Object} Enhanced user object with permissions
  */
 export function enhanceUserWithPermissions(user, authConfig, platform) {
-
   if (!user) {
     // Anonymous user
     const defaultGroups = getDefaultAnonymousGroups(platform);
