@@ -42,6 +42,31 @@ async function loadFile(relativePath, { useCache = true, parse = 'text' } = {}) 
     if (error.code === 'ENOENT' && relativePath.includes('locales/')) {
       return null; // Silent fail for missing locale override files
     }
+
+    // For config files, try to load from defaults if the file doesn't exist
+    if (error.code === 'ENOENT' && relativePath.startsWith('config/')) {
+      try {
+        const rootDir = getRootDir();
+        const defaultFilePath = path.join(rootDir, 'server', 'defaults', relativePath);
+        const defaultData = await fs.readFile(defaultFilePath, 'utf8');
+        const result = parse === 'json' ? JSON.parse(defaultData) : defaultData;
+
+        // Cache the default data
+        if (useCache) {
+          cache.set(cacheKey, { data: result, timestamp: Date.now() });
+        }
+
+        console.log(`✓ Loaded default: ${relativePath}`);
+        return result;
+      } catch (defaultError) {
+        console.error(
+          `Error loading ${parse === 'json' ? 'JSON' : 'text'} ${relativePath} (neither custom nor default):`,
+          defaultError
+        );
+        return null;
+      }
+    }
+
     console.error(`Error loading ${parse === 'json' ? 'JSON' : 'text'} ${relativePath}:`, error);
     return null;
   }

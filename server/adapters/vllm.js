@@ -69,9 +69,7 @@ class VLLMAdapterClass extends BaseAdapter {
       if (toolChoice) {
         body.tool_choice = toolChoice;
       }
-      console.log(
-        `[vLLM Adapter] Converted ${tools.length} tools with schema sanitization`
-      );
+      console.log(`[vLLM Adapter] Converted ${tools.length} tools with schema sanitization`);
     } else if (toolChoice) {
       body.tool_choice = toolChoice;
     }

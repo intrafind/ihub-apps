@@ -111,7 +111,9 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
-      console.log(`[OpenAI Responses Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      console.log(
+        `[OpenAI Responses Converter] Filtering out special tool: ${tool.id || tool.name}`
+      );
       continue;
     }
     // Universal tool - include it

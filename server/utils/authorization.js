@@ -254,6 +254,7 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     apps: new Set(),
     prompts: new Set(),
     models: new Set(),
+    tools: new Set(),
     adminAccess: false
   };
 
@@ -289,6 +290,13 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
       groupPerms.models.forEach(model => permissions.models.add(model));
     }
 
+    // Handle wildcards and specific permissions for tools
+    if (groupPerms.tools?.includes('*')) {
+      permissions.tools.add('*');
+    } else if (Array.isArray(groupPerms.tools)) {
+      groupPerms.tools.forEach(tool => permissions.tools.add(tool));
+    }
+
     // Admin access
     if (groupPerms.adminAccess) {
       permissions.adminAccess = true;
@@ -299,6 +307,7 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     apps: Array.from(permissions.apps),
     prompts: Array.from(permissions.prompts),
     models: Array.from(permissions.models),
+    tools: Array.from(permissions.tools),
     adminAccess: permissions.adminAccess
   });
 
@@ -382,7 +391,6 @@ export function getDefaultAnonymousGroups(platform) {
  * @returns {Object} Enhanced user object with permissions
  */
 export function enhanceUserWithPermissions(user, authConfig, platform) {
-
   if (!user) {
     // Anonymous user
     const defaultGroups = getDefaultAnonymousGroups(platform);
@@ -428,6 +436,7 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       apps: new Set(user.allowedApps || []),
       prompts: new Set(), // OAuth clients don't have prompt permissions
       models: new Set(user.allowedModels || []),
+      tools: new Set(), // OAuth clients don't have tool permissions by default
       adminAccess: false // OAuth clients never have admin access
     };
   } else {
