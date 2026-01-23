@@ -22,16 +22,26 @@ export const detectBasePath = () => {
 
   // If we're at a React route (e.g., /ihub/apps/chat), we need to find the base
   // We can detect this by checking if there's a known React route pattern
+  // These are top-level application routes, not deployment subpaths
   const knownRoutes = ['/apps', '/admin', '/auth', '/login', '/chat', '/pages', '/s/'];
+
+  // First check if the path starts with any known route
+  // If it does, the base path is empty (we're at the application root)
+  for (const route of knownRoutes) {
+    if (basePath === route || basePath.startsWith(route + '/')) {
+      // Path starts with a known route, so we're at application root
+      basePath = '';
+      return basePath;
+    }
+  }
+
+  // Otherwise, look for known routes within the path
+  // This handles cases like /ihub/apps/chat where /ihub is the base path
   for (const route of knownRoutes) {
     const routeIndex = basePath.indexOf(route);
     if (routeIndex > 0) {
       // Found a route, so everything before it is the base path
       basePath = basePath.substring(0, routeIndex);
-      break;
-    } else if (routeIndex === 0) {
-      // We're at root with a route
-      basePath = '';
       break;
     }
   }
