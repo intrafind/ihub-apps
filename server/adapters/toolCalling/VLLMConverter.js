@@ -232,9 +232,6 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
 
     // Finalize any pending tool calls when stream ends without explicit finish reason
     if (state.pendingToolCalls.size > 0) {
-      console.log(
-        `[vLLM Converter] Stream ended with [DONE], finalizing ${state.pendingToolCalls.size} pending tool calls`
-      );
       for (const [index, pending] of state.pendingToolCalls.entries()) {
         if (pending.id && pending.name) {
           let parsedArgs = {};
@@ -247,10 +244,6 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
             parsedArgs = { __raw_arguments: pending.arguments };
           }
 
-          console.log(
-            `[vLLM Converter] Adding tool call on [DONE]: ${pending.name} with args:`,
-            parsedArgs
-          );
           result.tool_calls.push(
             createGenericToolCall(pending.id, pending.name, parsedArgs, index, {
               originalFormat: 'vllm',
@@ -276,7 +269,6 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
       result.error = true;
       result.errorMessage = parsed.error.message || 'Unknown error';
       result.complete = true;
-      console.log(`[vLLM Converter] Detected error response: ${result.errorMessage}`);
       return result;
     }
 
@@ -328,11 +320,6 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
           }
         }
 
-        // Log accumulation progress for debugging
-        console.log(
-          `[vLLM Converter] Accumulated tool calls:`,
-          Array.from(state.pendingToolCalls.values())
-        );
       }
     }
 
@@ -342,16 +329,9 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
       state.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'vllm');
       result.finishReason = state.finishReason;
 
-      console.log(
-        `[vLLM Converter] Finish reason: ${state.finishReason}, pending tool calls: ${state.pendingToolCalls.size}`
-      );
-
       // For vLLM, we need to finalize tool calls on any finish reason if we have pending calls
       // vLLM might use "stop" instead of "tool_calls" as finish reason
       if (state.pendingToolCalls.size > 0) {
-        console.log(
-          `[vLLM Converter] Finalizing ${state.pendingToolCalls.size} pending tool calls`
-        );
         for (const [index, pending] of state.pendingToolCalls.entries()) {
           if (pending.id && pending.name) {
             let parsedArgs = {};
@@ -364,10 +344,6 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
               parsedArgs = { __raw_arguments: pending.arguments };
             }
 
-            console.log(
-              `[vLLM Converter] Adding tool call: ${pending.name} with args:`,
-              parsedArgs
-            );
             result.tool_calls.push(
               createGenericToolCall(pending.id, pending.name, parsedArgs, index, {
                 originalFormat: 'vllm',
