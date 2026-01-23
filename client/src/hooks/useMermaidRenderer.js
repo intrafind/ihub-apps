@@ -140,11 +140,9 @@ export const useMermaidRenderer = ({ t }) => {
           // Create the diagram HTML with toolbar and pan-zoom controls
           container.innerHTML = `
             <div class="mermaid-container code-block-container relative group border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
-              <div class="mermaid-diagram-wrapper relative" style="min-height: 250px; max-height: 600px; overflow: hidden;">
-                <div class="mermaid-diagram p-4 bg-white" style="width: 100%; height: 100%;">
-                  <div class="mermaid-svg-container" style="display: flex; justify-content: flex-start; width: 100%; height: 100%;">
-                    ${svg}
-                  </div>
+              <div class="mermaid-diagram p-4 bg-white overflow-x-auto" style="min-height: 200px; width: 100%; max-width: none;">
+                <div class="mermaid-svg-container" style="display: flex; justify-content: flex-start; width: 100%; min-width: 100%;">
+                  ${svg}
                 </div>
                 <div class="pan-zoom-controls absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                   <button class="mermaid-zoom-in p-1.5 rounded bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200" type="button" title="${t ? t('common.zoomIn', 'Zoom In') : 'Zoom In'} (+)">
@@ -168,7 +166,7 @@ export const useMermaidRenderer = ({ t }) => {
                 <div class="flex flex-row items-center gap-2">
                   <span class="text-xs font-medium text-gray-600">Mermaid ${language !== 'mermaid' ? `(${language})` : ''}</span>
                 </div>
-                <div class="flex flex-row items-center gap-1">
+                <div class="flex flex-row items-center gap-2">
                   <button class="mermaid-copy-code p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
                           data-code="${encodeURIComponent(code)}" data-processed-code="${encodeURIComponent(processedCode)}" type="button" title="${t ? t('common.copyCode', 'Copy code') : 'Copy code'}">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
