@@ -63,13 +63,14 @@ class VLLMAdapterClass extends BaseAdapter {
       max_tokens: maxTokens
     };
 
-    // Use vLLM-specific tool conversion with schema sanitization and tool choice handling
+    // Use vLLM-specific tool conversion with schema sanitization
     if (tools && tools.length > 0) {
-      const result = convertToolsFromGeneric(tools, 'local', toolChoice);
-      body.tools = result.tools;
-      body.tool_choice = result.toolChoice;
+      body.tools = convertToolsFromGeneric(tools, 'local');
+      if (toolChoice) {
+        body.tool_choice = toolChoice;
+      }
       console.log(
-        `[vLLM Adapter] Converted ${tools.length} tools with schema sanitization and adjusted tool choice`
+        `[vLLM Adapter] Converted ${tools.length} tools with schema sanitization`
       );
     } else if (toolChoice) {
       body.tool_choice = toolChoice;

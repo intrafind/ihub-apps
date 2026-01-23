@@ -126,7 +126,21 @@ class StreamingHandler {
     };
     setupTimeout();
 
-    console.log(`Sending request for chat ID ${chatId} ${model.id}:`, request.body);
+    // Debug logging for LLM request
+    console.log(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id}`);
+    console.log(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
+    console.log(
+      `[LLM REQUEST DEBUG] Headers:`,
+      JSON.stringify(
+        {
+          ...request.headers,
+          Authorization: request.headers.Authorization ? '[REDACTED]' : undefined
+        },
+        null,
+        2
+      )
+    );
+    console.log(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
 
     let doneEmitted = false;
     let finishReason = null;

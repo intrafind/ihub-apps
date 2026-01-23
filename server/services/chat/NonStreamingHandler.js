@@ -2,6 +2,7 @@ import { getErrorDetails, logInteraction } from '../../utils.js';
 import { recordChatRequest, recordChatResponse } from '../../usageTracker.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
+import { redactUrl } from '../../utils/logRedactor.js';
 
 class NonStreamingHandler {
   constructor() {
@@ -35,6 +36,25 @@ class NonStreamingHandler {
       // Only add body for POST requests
       if (fetchOptions.method === 'POST' && request.body) {
         fetchOptions.body = JSON.stringify(request.body);
+      }
+
+      // Debug logging for LLM request
+      console.log(`[LLM REQUEST DEBUG] Message ID: ${messageId}, Model: ${model.id}`);
+      console.log(`[LLM REQUEST DEBUG] Method: ${fetchOptions.method}`);
+      console.log(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
+      console.log(
+        `[LLM REQUEST DEBUG] Headers:`,
+        JSON.stringify(
+          {
+            ...request.headers,
+            Authorization: request.headers.Authorization ? '[REDACTED]' : undefined
+          },
+          null,
+          2
+        )
+      );
+      if (request.body) {
+        console.log(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
       }
 
       const responsePromise = throttledFetch(model.id, request.url, fetchOptions);

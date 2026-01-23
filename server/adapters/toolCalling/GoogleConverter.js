@@ -16,6 +16,7 @@ import {
 
 /**
  * Convert generic tools to Google format
+ * Filters out provider-specific special tools from other providers (webSearch, etc.)
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} Google formatted tools
  */
@@ -24,7 +25,30 @@ export function convertGenericToolsToGoogle(genericTools = []) {
 
   // Separate Google Search tool from regular function-based tools
   const googleSearchTool = genericTools.find(tool => tool.id === 'googleSearch');
-  const functionTools = genericTools.filter(tool => tool.id !== 'googleSearch');
+
+  // Filter tools for function declarations
+  const functionTools = genericTools.filter(tool => {
+    // Keep googleSearch separate for special handling
+    if (tool.id === 'googleSearch') return false;
+    // If tool specifies this provider, always include it
+    if (tool.provider === 'google') {
+      return true;
+    }
+    // If tool specifies a different provider, exclude it
+    if (tool.provider) {
+      console.log(
+        `[Google Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
+      );
+      return false;
+    }
+    // If tool is marked as special but has no matching provider, exclude it
+    if (tool.isSpecialTool) {
+      console.log(`[Google Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      return false;
+    }
+    // Universal tool - include it
+    return true;
+  });
 
   // Add Google Search grounding if present
   if (googleSearchTool) {

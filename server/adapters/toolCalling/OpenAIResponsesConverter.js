@@ -81,6 +81,7 @@ function addStrictModeToSchema(schema) {
 
 /**
  * Convert generic tools to OpenAI Responses API format
+ * Filters out provider-specific special tools from other providers (googleSearch, etc.)
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} OpenAI Responses API formatted tools
  */
@@ -91,11 +92,30 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
 
   // Single pass to separate web search from regular tools
   for (const tool of genericTools) {
+    // Handle webSearch specially
     if (tool.id === 'webSearch') {
       webSearchTool = tool;
-    } else {
-      functionTools.push(tool);
+      continue;
     }
+    // If tool specifies this provider (or compatible), always include it
+    if (tool.provider === 'openai-responses' || tool.provider === 'openai') {
+      functionTools.push(tool);
+      continue;
+    }
+    // If tool specifies a different provider, exclude it
+    if (tool.provider) {
+      console.log(
+        `[OpenAI Responses Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
+      );
+      continue;
+    }
+    // If tool is marked as special but has no matching provider, exclude it
+    if (tool.isSpecialTool) {
+      console.log(`[OpenAI Responses Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      continue;
+    }
+    // Universal tool - include it
+    functionTools.push(tool);
   }
 
   // Add web search if present

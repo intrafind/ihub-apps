@@ -224,10 +224,8 @@ export function mapExternalGroups(externalGroups) {
   for (const externalGroup of externalGroups) {
     const mappedGroups = groupMapping[externalGroup];
     if (Array.isArray(mappedGroups)) {
-      console.debug(`[Authorization] External group "${externalGroup}" mapped to:`, mappedGroups);
       mappedGroups.forEach(group => internalGroups.add(group));
     } else {
-      console.debug(`[Authorization] No mapping found for external group "${externalGroup}"`);
     }
   }
 
@@ -238,7 +236,6 @@ export function mapExternalGroups(externalGroups) {
   }
 
   const result = Array.from(internalGroups);
-  console.debug('[Authorization] Final mapped internal groups:', result);
   return result;
 }
 
@@ -264,21 +261,12 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     userGroups = ['anonymous'];
   }
 
-  console.debug('[Authorization] Getting permissions for user groups:', userGroups);
-
   for (const group of userGroups) {
     const groupPerms = groupPermissions.groups[group];
     if (!groupPerms) {
       console.debug(`[Authorization] No permissions found for group "${group}"`);
       continue;
     }
-
-    console.debug(`[Authorization] Processing permissions for group "${group}":`, {
-      apps: groupPerms.apps,
-      prompts: groupPerms.prompts,
-      models: groupPerms.models,
-      adminAccess: groupPerms.adminAccess
-    });
 
     // Handle wildcards and specific permissions for apps
     if (groupPerms.apps?.includes('*')) {
@@ -394,13 +382,6 @@ export function getDefaultAnonymousGroups(platform) {
  * @returns {Object} Enhanced user object with permissions
  */
 export function enhanceUserWithPermissions(user, authConfig, platform) {
-  console.debug('[Authorization] Enhancing user with permissions:', {
-    userId: user?.id,
-    userName: user?.name,
-    initialGroups: user?.groups,
-    externalGroups: user?.externalGroups,
-    internalGroups: user?.internalGroups
-  });
 
   if (!user) {
     // Anonymous user

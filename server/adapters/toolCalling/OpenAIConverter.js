@@ -15,11 +15,33 @@ import {
 
 /**
  * Convert generic tools to OpenAI format
+ * Filters out provider-specific special tools from other providers (googleSearch, etc.)
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} OpenAI formatted tools
  */
 export function convertGenericToolsToOpenAI(genericTools = []) {
-  return genericTools.map(tool => ({
+  const filteredTools = genericTools.filter(tool => {
+    // If tool specifies this provider (or compatible), always include it
+    if (tool.provider === 'openai' || tool.provider === 'openai-responses') {
+      return true;
+    }
+    // If tool specifies a different provider, exclude it
+    if (tool.provider) {
+      console.log(
+        `[OpenAI Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
+      );
+      return false;
+    }
+    // If tool is marked as special but has no matching provider, exclude it
+    if (tool.isSpecialTool) {
+      console.log(`[OpenAI Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      return false;
+    }
+    // Universal tool - include it
+    return true;
+  });
+
+  return filteredTools.map(tool => ({
     type: 'function',
     function: {
       name: tool.id || tool.name,

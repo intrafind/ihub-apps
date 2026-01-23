@@ -55,15 +55,36 @@ function sanitizeSchemaForVLLM(schema) {
 
 /**
  * Convert generic tools to vLLM format (OpenAI-compatible with restrictions)
+ * Filters out provider-specific special tools (googleSearch, webSearch, etc.)
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
- * @param {*} toolChoice - Original tool choice for adjustment
- * @returns {Object} Object containing tools and adjusted tool choice
+ * @returns {Object[]} vLLM formatted tools (OpenAI-compatible)
  */
 export function convertGenericToolsToVLLM(genericTools = []) {
-  return genericTools.map(tool => ({
+  const filteredTools = genericTools.filter(tool => {
+    // If tool specifies this provider, always include it
+    if (tool.provider === 'local') {
+      return true;
+    }
+    // If tool specifies a different provider, exclude it
+    if (tool.provider) {
+      console.log(
+        `[vLLM Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
+      );
+      return false;
+    }
+    // If tool is marked as special but has no matching provider, exclude it
+    if (tool.isSpecialTool) {
+      console.log(`[vLLM Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      return false;
+    }
+    // Universal tool - include it
+    return true;
+  });
+
+  return filteredTools.map(tool => ({
     type: 'function',
     function: {
-      name: tool.name,
+      name: tool.id,
       description: tool.description,
       parameters: sanitizeSchemaForVLLM(tool.parameters)
     }
@@ -80,7 +101,7 @@ export function convertVLLMToolsToGeneric(vllmTools = []) {
     // Handle both nested function format and flat format
     if (tool.type === 'function' && tool.function) {
       return createGenericTool(
-        tool.function.name, // Use name as ID
+        tool.function.id,
         tool.function.name,
         tool.function.description || '',
         tool.function.parameters || { type: 'object', properties: {} },
@@ -90,7 +111,7 @@ export function convertVLLMToolsToGeneric(vllmTools = []) {
 
     // Handle flat format (legacy or simplified)
     return createGenericTool(
-      tool.name || tool.id || `tool_${index}`,
+      tool.id || tool.name || `tool_${index}`,
       tool.name || `tool_${index}`,
       tool.description || '',
       tool.parameters || { type: 'object', properties: {} },
@@ -122,7 +143,7 @@ export function convertGenericToolCallsToVLLM(genericToolCalls = []) {
       index: toolCall.index || 0,
       id: toolCall.id,
       function: {
-        name: toolCall.name,
+        name: toolCall.id,
         arguments: args
       }
     };
@@ -198,8 +219,8 @@ export function convertVLLMToolCallsToGeneric(vllmToolCalls = []) {
     })
     .filter(toolCall => {
       return (
-        toolCall.name ||
         toolCall.id ||
+        toolCall.name ||
         (toolCall.metadata?.rawArguments && toolCall.metadata.rawArguments.length > 0) ||
         toolCall.arguments?.__raw_arguments !== undefined
       );

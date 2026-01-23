@@ -16,11 +16,33 @@ import {
 /**
  * Convert generic tools to Anthropic format
  * Anthropic requires tool names to match pattern ^[a-zA-Z0-9_-]{1,128}$
+ * Filters out provider-specific special tools (googleSearch, webSearch, etc.)
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} Anthropic formatted tools
  */
 export function convertGenericToolsToAnthropic(genericTools = []) {
-  return genericTools.map(tool => ({
+  const filteredTools = genericTools.filter(tool => {
+    // If tool specifies this provider, always include it
+    if (tool.provider === 'anthropic') {
+      return true;
+    }
+    // If tool specifies a different provider, exclude it
+    if (tool.provider) {
+      console.log(
+        `[Anthropic Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
+      );
+      return false;
+    }
+    // If tool is marked as special but has no matching provider, exclude it
+    if (tool.isSpecialTool) {
+      console.log(`[Anthropic Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      return false;
+    }
+    // Universal tool - include it
+    return true;
+  });
+
+  return filteredTools.map(tool => ({
     name: tool.id || tool.name,
     description: tool.description,
     input_schema: sanitizeSchemaForProvider(tool.parameters, 'anthropic')

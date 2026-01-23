@@ -9,6 +9,7 @@ import { createParser } from 'eventsource-parser';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import StreamingHandler from './StreamingHandler.js';
+import { redactUrl } from '../../utils/logRedactor.js';
 
 class ToolExecutor {
   constructor() {
@@ -384,6 +385,22 @@ class ToolExecutor {
     setupTimeout();
 
     try {
+      // Debug logging for LLM request (tool execution)
+      console.log(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id} (with tools)`);
+      console.log(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
+      console.log(
+        `[LLM REQUEST DEBUG] Headers:`,
+        JSON.stringify(
+          {
+            ...request.headers,
+            Authorization: request.headers.Authorization ? '[REDACTED]' : undefined
+          },
+          null,
+          2
+        )
+      );
+      console.log(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
+
       const llmResponse = await throttledFetch(model.id, request.url, {
         method: 'POST',
         headers: request.headers,
@@ -721,6 +738,26 @@ class ToolExecutor {
         // Only add body for POST requests
         if (fetchOptions.method === 'POST' && followRequest.body) {
           fetchOptions.body = JSON.stringify(followRequest.body);
+        }
+
+        // Debug logging for LLM request (tool continuation)
+        console.log(
+          `[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id} (tool continuation, iteration ${iteration})`
+        );
+        console.log(`[LLM REQUEST DEBUG] URL: ${redactUrl(followRequest.url)}`);
+        console.log(
+          `[LLM REQUEST DEBUG] Headers:`,
+          JSON.stringify(
+            {
+              ...followRequest.headers,
+              Authorization: followRequest.headers.Authorization ? '[REDACTED]' : undefined
+            },
+            null,
+            2
+          )
+        );
+        if (followRequest.body) {
+          console.log(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(followRequest.body, null, 2));
         }
 
         const llmResponse = await throttledFetch(model.id, followRequest.url, fetchOptions);
