@@ -225,7 +225,7 @@ export const useMermaidRenderer = ({ t }) => {
             svgElement.style.width = '100%';
             svgElement.style.height = 'auto';
             svgElement.style.maxWidth = 'none';
-            
+
             // Remove width/height attributes to prevent conflicts
             svgElement.removeAttribute('width');
             svgElement.removeAttribute('height');
@@ -277,7 +277,7 @@ export const useMermaidRenderer = ({ t }) => {
               }
 
               // Add keyboard shortcuts (+ / - / 0)
-              const handleKeyPress = (e) => {
+              const handleKeyPress = e => {
                 // Only handle if the diagram is in view and not in an input field
                 if (!document.activeElement || document.activeElement.tagName === 'BODY') {
                   if (e.key === '+' || e.key === '=') {
@@ -298,7 +298,6 @@ export const useMermaidRenderer = ({ t }) => {
               // Store handler reference for cleanup
               container.keyPressHandler = handleKeyPress;
               document.addEventListener('keydown', handleKeyPress);
-
             } catch (panZoomError) {
               console.warn('Could not initialize pan-zoom:', panZoomError);
               // Gracefully degrade - diagram still works without pan-zoom
