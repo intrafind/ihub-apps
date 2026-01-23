@@ -2,7 +2,7 @@
 
 /**
  * Manual Test: Model API Key Persistence Fix Verification
- * 
+ *
  * This script verifies that the fix for API key preservation works correctly
  * by simulating the save/update flow that happens in the admin interface.
  */
@@ -32,9 +32,10 @@ async function cleanup() {
 
 async function test1_PreserveEncryptedKeyOnUpdate() {
   console.log('📝 Test 1: Preserve encrypted API key when updating with masked placeholder');
-  
+
   // Step 1: Create model with encrypted API key (simulating initial save with encryption)
-  const encryptedKey = 'ENC[AES256_GCM,data:5L6F6rhHxu5w9qPdzMH4qHe0,iv:agSRTClUGtZpS9oO5TJjTw==,tag:G0F8JxSl1hLzYSD01hl4RA==,type:str]';
+  const encryptedKey =
+    'ENC[AES256_GCM,data:5L6F6rhHxu5w9qPdzMH4qHe0,iv:agSRTClUGtZpS9oO5TJjTw==,tag:G0F8JxSl1hLzYSD01hl4RA==,type:str]';
   const initialModel = {
     id: testModelId,
     modelId: 'gpt-4-test',
@@ -77,7 +78,7 @@ async function test1_PreserveEncryptedKeyOnUpdate() {
 
   // Step 3: Verify the API key was preserved
   const finalModel = JSON.parse(await fs.readFile(testModelPath, 'utf8'));
-  
+
   if (finalModel.apiKey === encryptedKey && finalModel.description.en === 'Updated description') {
     console.log('   ✅ API key correctly preserved!');
     console.log('   ✅ Other fields were updated correctly');
@@ -96,7 +97,7 @@ async function test1_PreserveEncryptedKeyOnUpdate() {
 
 async function test2_RemovePlaceholderWhenNoKey() {
   console.log('\n📝 Test 2: Remove placeholder when no API key exists on disk');
-  
+
   // Step 1: Create model without API key
   const modelWithoutKey = {
     id: testModelId,
@@ -135,7 +136,7 @@ async function test2_RemovePlaceholderWhenNoKey() {
 
   // Step 3: Verify placeholder was removed
   const finalModel = JSON.parse(await fs.readFile(testModelPath, 'utf8'));
-  
+
   if (finalModel.apiKey === undefined) {
     console.log('   ✅ Placeholder correctly removed');
     return true;
@@ -148,9 +149,9 @@ async function test2_RemovePlaceholderWhenNoKey() {
 
 async function test3_MultipleUpdates() {
   console.log('\n📝 Test 3: API key survives multiple sequential updates');
-  
+
   const encryptedKey = 'ENC[AES256_GCM,data:testMultipleUpdates123,iv:test,tag:test,type:str]';
-  
+
   // Create initial model with API key
   const initialModel = {
     id: testModelId,
@@ -162,10 +163,10 @@ async function test3_MultipleUpdates() {
     enabled: true,
     apiKey: encryptedKey
   };
-  
+
   await fs.writeFile(testModelPath, JSON.stringify(initialModel, null, 2), 'utf8');
   console.log('   ✅ Created model with API key');
-  
+
   // Perform 3 updates with masked placeholder
   for (let i = 1; i <= 3; i++) {
     const updateData = {
@@ -174,7 +175,7 @@ async function test3_MultipleUpdates() {
       tokenLimit: 4096 * (i + 1),
       apiKey: '••••••••'
     };
-    
+
     // Apply fix
     if (updateData.apiKey === '••••••••' && existsSync(testModelPath)) {
       const existingModel = JSON.parse(await fs.readFile(testModelPath, 'utf8'));
@@ -184,9 +185,9 @@ async function test3_MultipleUpdates() {
         delete updateData.apiKey;
       }
     }
-    
+
     await fs.writeFile(testModelPath, JSON.stringify(updateData, null, 2), 'utf8');
-    
+
     // Verify after each update
     const savedModel = JSON.parse(await fs.readFile(testModelPath, 'utf8'));
     if (savedModel.apiKey !== encryptedKey) {
@@ -194,7 +195,7 @@ async function test3_MultipleUpdates() {
       return false;
     }
   }
-  
+
   const finalModel = JSON.parse(await fs.readFile(testModelPath, 'utf8'));
   if (finalModel.apiKey === encryptedKey && finalModel.description.en === 'Update 3') {
     console.log('   ✅ API key survived 3 sequential updates!');
@@ -220,7 +221,7 @@ async function runTests() {
     console.log('\n' + '='.repeat(60));
     const passed = results.filter(r => r).length;
     const total = results.length;
-    
+
     if (passed === total) {
       console.log(`✅ All tests passed! (${passed}/${total})`);
       console.log('\n✅ FIX VERIFIED: API keys are now correctly preserved from disk!');

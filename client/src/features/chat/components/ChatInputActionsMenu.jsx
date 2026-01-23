@@ -86,7 +86,7 @@ const ChatInputActionsMenu = ({
   // Get grouped and individual tools
   const getToolsStructure = () => {
     if (!app?.tools || app.tools.length === 0) return { grouped: [], individual: [] };
-    
+
     const grouped = [];
     const individual = [];
     const processedTools = new Set();
@@ -137,10 +137,10 @@ const ChatInputActionsMenu = ({
       const newEnabledTools = isEnabled
         ? enabledTools.filter(t => t !== toolId)
         : [...enabledTools, toolId];
-      
+
       // Track this tool usage
       trackToolUsage(app.id, toolId, !isEnabled);
-      
+
       onEnabledToolsChange?.(newEnabledTools);
     }
   };
@@ -164,7 +164,7 @@ const ChatInputActionsMenu = ({
   // Single action optimization: if we have exactly one action and no tools,
   // render that action directly without a menu
   const totalActions = quickActionCount + (hasTools ? 1 : 0);
-  
+
   if (totalActions === 1 && quickActionCount === 1 && !hasTools) {
     // Render the single action directly
     if (uploadConfig?.enabled === true) {
@@ -275,11 +275,7 @@ const ChatInputActionsMenu = ({
                   title={t('common.magicPrompt', 'Magic Prompt')}
                   className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 transition-colors"
                 >
-                  {magicPromptLoading ? (
-                    <MagicPromptLoader />
-                  ) : (
-                    <Icon name="sparkles" size="sm" />
-                  )}
+                  {magicPromptLoading ? <MagicPromptLoader /> : <Icon name="sparkles" size="sm" />}
                 </button>
               )}
 
@@ -348,7 +344,7 @@ const ChatInputActionsMenu = ({
                             {groupName}
                           </div>
                           {groupDesc && (
-                            <div 
+                            <div
                               className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1"
                               title={groupDesc}
                             >
@@ -389,7 +385,7 @@ const ChatInputActionsMenu = ({
                             {toolName}
                           </div>
                           {toolDescription && (
-                            <div 
+                            <div
                               className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1"
                               title={toolDescription}
                             >

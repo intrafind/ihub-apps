@@ -324,7 +324,9 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
             overriddenFields.push(key);
           }
         });
-        newData.overriddenFields = [...(prev.overriddenFields || []), ...overriddenFields];
+        // Use Set to ensure uniqueness when merging overridden fields
+        const uniqueFields = new Set([...(prev.overriddenFields || []), ...overriddenFields]);
+        newData.overriddenFields = Array.from(uniqueFields);
       }
 
       return newData;

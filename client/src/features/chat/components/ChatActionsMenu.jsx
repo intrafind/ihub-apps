@@ -94,7 +94,9 @@ const ChatActionsMenu = ({
               className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="document-chart-bar" size="sm" />{' '}
-              {parametersVisible ? t('common.hideParameters', 'Hide Parameters') : t('common.showParameters', 'Show Parameters')}
+              {parametersVisible
+                ? t('common.hideParameters', 'Hide Parameters')
+                : t('common.showParameters', 'Show Parameters')}
             </button>
           )}
           {showClearButton && (
