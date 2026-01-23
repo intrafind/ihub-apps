@@ -6,6 +6,7 @@ import {
   CheckIcon
 } from '@heroicons/react/24/outline';
 import { apiClient } from '../../../api/client';
+import { buildPath } from '../../../utils/runtimeBasePath';
 
 export function IntegrationsPage() {
   const [outlookInfo, setOutlookInfo] = useState(null);
@@ -20,7 +21,7 @@ export function IntegrationsPage() {
   const loadIntegrationInfo = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/api/integrations/outlook/info');
+      const response = await apiClient.get('/integrations/outlook/info');
       setOutlookInfo(response.data);
     } catch (err) {
       console.error('Error loading integration info:', err);
@@ -32,7 +33,7 @@ export function IntegrationsPage() {
 
   const downloadManifest = async () => {
     try {
-      const response = await fetch('/api/integrations/outlook/manifest.xml', {
+      const response = await fetch(buildPath('api/integrations/outlook/manifest.xml'), {
         credentials: 'include'
       });
 
