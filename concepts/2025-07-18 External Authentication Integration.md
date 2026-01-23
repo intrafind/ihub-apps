@@ -94,7 +94,7 @@ The chosen mode can be overridden with an `AUTH_MODE` environment variable so de
 
 3. **Local Authentication System** - `server/middleware/localAuth.js`
    - Username/password authentication with JWT tokens
-   - Enhanced bcrypt hashing with user ID salt for unique hashes
+   - Enhanced bcryptjs hashing with user ID salt for unique hashes
    - User management in `contents/config/users.json`
    - Demo users: admin/password123, user/password123
 
@@ -586,7 +586,7 @@ The External Authentication Integration concept has been **fully implemented** w
 - **Three Authentication Modes**: Proxy (SSO), Local (username/password), Anonymous (default)
 - **Zero-Configuration Default**: Works immediately without any setup
 - **Enterprise-Ready**: Corporate SSO integration via reverse proxy
-- **Secure Local Auth**: Enhanced bcrypt with user-specific salting
+- **Secure Local Auth**: Enhanced bcryptjs with user-specific salting
 
 #### **✅ Comprehensive Authorization**
 
@@ -626,7 +626,7 @@ The External Authentication Integration concept core requirements are **fully im
 
 - ✅ **Anonymous Access** - Default zero-config operation with full functionality
 - ✅ **Proxy Authentication** - Corporate SSO integration via reverse proxy (headers/JWT)
-- ✅ **Local Authentication** - Secure username/password with enhanced bcrypt hashing
+- ✅ **Local Authentication** - Secure username/password with enhanced bcryptjs hashing
 - ✅ **Group-Based Authorization** - Comprehensive permission system with resource filtering
 - ✅ **Client-Side Integration** - Complete React components and authentication flows
 - ✅ **API Infrastructure** - Full RESTful authentication endpoints
@@ -681,7 +681,7 @@ The system successfully delivers on all primary objectives and provides a compre
 | Client Components         | ✅ **Complete** | `client/src/features/auth/`                 |
 | API Endpoints             | ✅ **Complete** | `server/routes/auth.js`                     |
 | Configuration Management  | ✅ **Complete** | Environment overrides supported             |
-| Security Implementation   | ✅ **Complete** | JWT validation, bcrypt+userID hashing       |
+| Security Implementation   | ✅ **Complete** | JWT validation, bcryptjs+userID hashing       |
 | Documentation             | ✅ **Complete** | `docs/external-authentication.md`           |
 
 ### **Deployment Scenarios**

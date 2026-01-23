@@ -424,12 +424,12 @@ Users are stored in `contents/config/users.json`:
 ```
 
 **Password Security:**
-The system uses an enhanced bcrypt hashing method that incorporates the user ID:
+The system uses an enhanced bcryptjs hashing method that incorporates the user ID:
 
 - Each password is combined with the user ID before hashing: `userId:password`
 - This ensures every password hash is unique, even if multiple users have the same password
 - Prevents rainbow table attacks and password hash copying between users
-- Uses bcrypt with 12 rounds for strong protection
+- Uses bcryptjs with 12 rounds for strong protection
 
 **Demo Users:**
 
@@ -629,10 +629,10 @@ function AdminComponent() {
 2. **HTTPS**: Always use HTTPS in production
 3. **Token Expiration**: Configure appropriate session timeouts
 4. **Group Validation**: Validate group memberships server-side
-5. **Password Hashing**: Uses bcrypt with user ID salt for unique hashes per user
+5. **Password Hashing**: Uses bcryptjs with user ID salt for unique hashes per user
    - Each password hash is unique even if users have the same password
    - Prevents rainbow table attacks and password hash copying between users
-   - Uses bcrypt rounds 12+ for strong security
+   - Uses bcryptjs rounds 12+ for strong security
 
 ## Admin Authentication Security
 
