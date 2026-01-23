@@ -26,7 +26,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
 
     // Simulate multiple updates to the same field
     let overriddenFields = [];
-    
+
     // First update - change name
     let newData = {
       ...templateApp,
@@ -38,7 +38,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       templateApp,
       newData
     );
-    
+
     // Second update - change name again
     newData = {
       ...newData,
@@ -50,7 +50,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       templateApp,
       newData
     );
-    
+
     // Third update - change name again
     newData = {
       ...newData,
@@ -77,7 +77,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
     };
 
     let overriddenFields = [];
-    
+
     // Update name
     let newData = {
       ...templateApp,
@@ -89,7 +89,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       templateApp,
       newData
     );
-    
+
     // Update system
     newData = {
       ...newData,
@@ -101,7 +101,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       templateApp,
       newData
     );
-    
+
     // Update name again (should not create duplicate)
     newData = {
       ...newData,
@@ -113,7 +113,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       templateApp,
       newData
     );
-    
+
     // Update temperature
     newData = {
       ...newData,
@@ -131,7 +131,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
     expect(overriddenFields).toContain('system');
     expect(overriddenFields).toContain('preferredTemperature');
     expect(overriddenFields.length).toBe(3);
-    
+
     // Verify no duplicates
     const uniqueFields = new Set(overriddenFields);
     expect(uniqueFields.size).toBe(overriddenFields.length);
@@ -145,7 +145,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
     };
 
     let overriddenFields = [];
-    
+
     // Update English name
     let newData = {
       ...templateApp,
@@ -157,7 +157,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       templateApp,
       newData
     );
-    
+
     // Update German name
     newData = {
       ...newData,
@@ -169,7 +169,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       templateApp,
       newData
     );
-    
+
     // Update both languages again
     newData = {
       ...newData,
@@ -197,7 +197,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       ...templateApp,
       name: { en: 'Updated App' }
     };
-    
+
     const overriddenFields = updateOverriddenFields(
       [],
       { name: { en: 'Updated App' } },
@@ -218,7 +218,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       ...templateApp,
       name: { en: 'Updated App' }
     };
-    
+
     const overriddenFields = updateOverriddenFields(
       undefined,
       { name: { en: 'Updated App' } },
@@ -241,7 +241,7 @@ describe('AppCreationWizard - overriddenFields deduplication', () => {
       name: { en: 'Template App' }, // Same as template
       system: { en: 'Updated prompt' } // Different from template
     };
-    
+
     const overriddenFields = updateOverriddenFields(
       [],
       { name: { en: 'Template App' }, system: { en: 'Updated prompt' } },
