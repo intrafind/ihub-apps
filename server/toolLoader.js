@@ -169,7 +169,11 @@ export async function getToolsForApp(app, language = null, context = {}) {
     });
 
     // Filter by enabledTools if provided in context
-    if (context.enabledTools !== undefined && context.enabledTools !== null && Array.isArray(context.enabledTools)) {
+    if (
+      context.enabledTools !== undefined &&
+      context.enabledTools !== null &&
+      Array.isArray(context.enabledTools)
+    ) {
       appTools = appTools.filter(t => {
         // Check if tool ID is in enabledTools
         if (context.enabledTools.includes(t.id)) {
@@ -192,9 +196,13 @@ export async function getToolsForApp(app, language = null, context = {}) {
           source => app.sources.includes(source.id) && source.enabled
         );
         let sourceTools = sourceManager.generateTools(appSources, context);
-        
+
         // Filter source tools by enabledTools if provided in context
-        if (context.enabledTools !== undefined && context.enabledTools !== null && Array.isArray(context.enabledTools)) {
+        if (
+          context.enabledTools !== undefined &&
+          context.enabledTools !== null &&
+          Array.isArray(context.enabledTools)
+        ) {
           sourceTools = sourceTools.filter(t => {
             // Check if tool ID is in enabledTools
             if (context.enabledTools.includes(t.id)) {
@@ -205,7 +213,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
             return context.enabledTools.includes(baseToolId);
           });
         }
-        
+
         appTools = appTools.concat(sourceTools);
       }
     } catch (error) {

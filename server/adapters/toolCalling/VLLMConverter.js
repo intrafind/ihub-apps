@@ -340,7 +340,6 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
             pending.arguments += toolCall.function.arguments;
           }
         }
-
       }
     }
 

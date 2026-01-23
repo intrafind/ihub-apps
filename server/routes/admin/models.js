@@ -146,7 +146,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
           // The cache might not have the apiKey due to TTL expiration or race conditions
           const rootDir = getRootDir();
           const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-          
+
           try {
             if (existsSync(modelFilePath)) {
               const existingModelFromDisk = JSON.parse(await fs.readFile(modelFilePath, 'utf8'));
