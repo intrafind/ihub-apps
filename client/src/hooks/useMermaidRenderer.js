@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { validateMermaidCode, processMermaidCode } from '../utils/markdownHelpers';
+import svgPanZoom from 'svg-pan-zoom';
 
 // A simple debounce utility
 const debounce = (func, delay) => {
@@ -136,17 +137,45 @@ export const useMermaidRenderer = ({ t }) => {
             throw renderError;
           }
 
-          // Create the diagram HTML with toolbar
+          // Create the diagram HTML with toolbar and pan-zoom controls
           container.innerHTML = `
             <div class="mermaid-container code-block-container relative group border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
-              <div class="mermaid-diagram p-4 bg-white overflow-x-auto" style="min-height: 200px; width: 100%; max-width: none;">
-                <div class="mermaid-svg-container" style="display: flex; justify-content: flex-start; width: 100%; min-width: 100%;">
-                  ${svg}
+              <div class="mermaid-diagram-wrapper relative" style="min-height: 250px; max-height: 600px; overflow: hidden;">
+                <div class="mermaid-diagram p-4 bg-white" style="width: 100%; height: 100%;">
+                  <div class="mermaid-svg-container" style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+                    ${svg}
+                  </div>
+                </div>
+                <div class="pan-zoom-controls absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <button class="mermaid-zoom-in p-1.5 rounded bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200" type="button" title="${t ? t('common.zoomIn', 'Zoom In') : 'Zoom In'} (+)">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
+                    </svg>
+                  </button>
+                  <button class="mermaid-zoom-out p-1.5 rounded bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200" type="button" title="${t ? t('common.zoomOut', 'Zoom Out') : 'Zoom Out'} (-)">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"></path>
+                    </svg>
+                  </button>
+                  <button class="mermaid-zoom-reset p-1.5 rounded bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white hover:text-gray-900 shadow-sm transition-all duration-200" type="button" title="${t ? t('common.resetView', 'Reset View') : 'Reset View'} (0)">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                  </button>
                 </div>
               </div>
               <div class="code-block-toolbar flex flex-row items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
                 <div class="flex flex-row items-center gap-2">
-                  <span class="text-xs font-medium text-gray-600">Mermaid ${language !== 'mermaid' ? `(${language})` : ''}</span>
+                  <span class="text-xs font-medium text-gray-600">
+                    <span class="inline-flex items-center gap-1">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
+                      </svg>
+                      ${t ? t('common.interactive', 'Interactive') : 'Interactive'}
+                    </span>
+                    Mermaid ${language !== 'mermaid' ? `(${language})` : ''}
+                  </span>
+                  <span class="text-xs text-gray-400">• ${t ? t('common.panZoomHint', 'Drag to pan, scroll to zoom') : 'Drag to pan, scroll to zoom'}</span>
                 </div>
                 <div class="flex flex-row items-center gap-1">
                   <button class="mermaid-copy-code p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
@@ -189,18 +218,91 @@ export const useMermaidRenderer = ({ t }) => {
             </div>
           `;
 
-          // Make SVG responsive with simple width handling
+          // Make SVG responsive and initialize pan-zoom
           const svgElement = container.querySelector('svg');
           if (svgElement) {
-            // Simple, reliable width handling without dynamic calculations
-            svgElement.style.width = 'auto';
-            svgElement.style.maxWidth = 'none'; // Allow horizontal overflow
-            svgElement.style.minWidth = '600px'; // Ensure minimum readable width
+            // Simple, reliable width handling
+            svgElement.style.width = '100%';
             svgElement.style.height = 'auto';
-
+            svgElement.style.maxWidth = 'none';
+            
             // Remove width/height attributes to prevent conflicts
             svgElement.removeAttribute('width');
             svgElement.removeAttribute('height');
+
+            // Initialize svg-pan-zoom for interactive navigation
+            try {
+              const panZoomInstance = svgPanZoom(svgElement, {
+                zoomEnabled: true,
+                controlIconsEnabled: false, // We use custom controls
+                fit: true,
+                center: true,
+                minZoom: 0.1,
+                maxZoom: 10,
+                zoomScaleSensitivity: 0.3,
+                dblClickZoomEnabled: true,
+                mouseWheelZoomEnabled: true,
+                preventMouseEventsDefault: true,
+                onZoom: () => {
+                  // Optional: Add visual feedback on zoom
+                }
+              });
+
+              // Store instance for cleanup
+              container.panZoomInstance = panZoomInstance;
+
+              // Wire up zoom control buttons
+              const zoomInBtn = container.querySelector('.mermaid-zoom-in');
+              const zoomOutBtn = container.querySelector('.mermaid-zoom-out');
+              const zoomResetBtn = container.querySelector('.mermaid-zoom-reset');
+
+              if (zoomInBtn) {
+                zoomInBtn.addEventListener('click', () => {
+                  panZoomInstance.zoomIn();
+                });
+              }
+
+              if (zoomOutBtn) {
+                zoomOutBtn.addEventListener('click', () => {
+                  panZoomInstance.zoomOut();
+                });
+              }
+
+              if (zoomResetBtn) {
+                zoomResetBtn.addEventListener('click', () => {
+                  panZoomInstance.reset();
+                  panZoomInstance.fit();
+                  panZoomInstance.center();
+                });
+              }
+
+              // Add keyboard shortcuts (+ / - / 0)
+              const handleKeyPress = (e) => {
+                // Only handle if the diagram is in view and not in an input field
+                if (!document.activeElement || document.activeElement.tagName === 'BODY') {
+                  if (e.key === '+' || e.key === '=') {
+                    e.preventDefault();
+                    panZoomInstance.zoomIn();
+                  } else if (e.key === '-' || e.key === '_') {
+                    e.preventDefault();
+                    panZoomInstance.zoomOut();
+                  } else if (e.key === '0') {
+                    e.preventDefault();
+                    panZoomInstance.reset();
+                    panZoomInstance.fit();
+                    panZoomInstance.center();
+                  }
+                }
+              };
+
+              // Store handler reference for cleanup
+              container.keyPressHandler = handleKeyPress;
+              document.addEventListener('keydown', handleKeyPress);
+
+            } catch (panZoomError) {
+              console.warn('Could not initialize pan-zoom:', panZoomError);
+              // Gracefully degrade - diagram still works without pan-zoom
+            }
           }
         } catch (err) {
           console.error('Mermaid rendering error:', err);
@@ -877,6 +979,21 @@ export const useMermaidRenderer = ({ t }) => {
     document.addEventListener('click', handleMermaidInteraction);
 
     return () => {
+      // Clean up pan-zoom instances
+      const containers = document.querySelectorAll('.mermaid-diagram-container');
+      containers.forEach(container => {
+        if (container.panZoomInstance) {
+          try {
+            container.panZoomInstance.destroy();
+          } catch (e) {
+            console.warn('Error destroying pan-zoom instance:', e);
+          }
+        }
+        if (container.keyPressHandler) {
+          document.removeEventListener('keydown', container.keyPressHandler);
+        }
+      });
+
       // Clear any pending timeouts
       timeouts.forEach(clearTimeout);
       observer.disconnect();

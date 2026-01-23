@@ -82,7 +82,16 @@
     "code": "Code",
     "link": "Link",
     "redo": "Redo",
-    "language": "en"
+    "language": "en",
+    "zoomIn": "Zoom In",
+    "zoomOut": "Zoom Out",
+    "resetView": "Reset View",
+    "panZoomHint": "Drag to pan, scroll to zoom",
+    "interactive": "Interactive",
+    "downloadSVG": "Download SVG",
+    "downloadPNG": "Download PNG",
+    "downloadPDF": "Download PDF",
+    "viewFullscreen": "View Fullscreen"
   },
   "chatActions": {
     "menu": "Actions menu",
