@@ -1,5 +1,5 @@
 import configCache from '../configCache.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { loadGroupsConfiguration } from '../utils/authorization.js';
 
 /**

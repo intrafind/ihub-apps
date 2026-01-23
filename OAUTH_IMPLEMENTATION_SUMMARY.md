@@ -10,7 +10,7 @@ This implementation adds OAuth 2.0 Client Credentials grant type authentication 
 
 **New Files Created:**
 
-- `server/utils/oauthClientManager.js` - Client CRUD operations with bcrypt encryption
+- `server/utils/oauthClientManager.js` - Client CRUD operations with bcryptjs encryption
 - `server/utils/oauthTokenService.js` - OAuth-specific token generation and validation
 - `server/routes/oauth.js` - OAuth token endpoints (`/api/oauth/token`, `/api/oauth/introspect`)
 - `server/routes/admin/oauthClients.js` - Admin OAuth client management (8 endpoints)
@@ -45,7 +45,7 @@ This implementation adds OAuth 2.0 Client Credentials grant type authentication 
 
 #### Security Features
 
-- **Encrypted Secrets**: Client secrets stored using bcrypt (10 rounds)
+- **Encrypted Secrets**: Client secrets stored using bcryptjs (10 rounds)
 - **JWT-based Tokens**: Secure, stateless authentication
 - **Scope Validation**: Granular permission control
 - **App/Model Restrictions**: Limit client access to specific resources
@@ -166,7 +166,7 @@ curl -X POST https://your-domain.com/api/chat/completions \
 ### Implemented Security Measures
 
 1. **Secret Protection**
-   - Secrets hashed with bcrypt before storage
+   - Secrets hashed with bcryptjs before storage
    - Secrets never returned after initial creation
    - Secrets visible only once at creation
 
@@ -254,7 +254,7 @@ curl -X POST https://your-domain.com/api/chat/completions \
 ## Performance Impact
 
 - **Minimal**: OAuth operations are independent and don't affect existing auth flows
-- **Token Generation**: <50ms (includes bcrypt validation)
+- **Token Generation**: <50ms (includes bcryptjs validation)
 - **Token Validation**: <5ms (JWT verification)
 - **Storage**: JSON file-based (suitable for <1000 clients)
 

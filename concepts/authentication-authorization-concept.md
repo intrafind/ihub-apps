@@ -29,7 +29,7 @@ This concept outlines a comprehensive authentication and authorization layer for
 
 1. ✅ **Authentication Library Integration** - Implemented Passport.js with multiple authentication strategies
 2. ✅ **OIDC Support** - Added Microsoft Entra, Google, and Auth0 OIDC providers
-3. ✅ **Local Authentication** - Implemented JWT-based local authentication with bcrypt password hashing
+3. ✅ **Local Authentication** - Implemented JWT-based local authentication with bcryptjs password hashing
 4. ✅ **Proxy Authentication** - Added support for proxy header-based authentication
 5. ✅ **Authentication Middleware** - Comprehensive middleware for authentication validation
 6. ✅ **Group Mapping** - Dynamic group mapping and permission enhancement
@@ -53,7 +53,7 @@ This concept outlines a comprehensive authentication and authorization layer for
 
 - **Authentication Bypass Prevention** - All API endpoints protected with `authRequired` middleware
 - **JWT Token Validation** - Comprehensive token verification with expiration checks
-- **Password Security** - bcrypt hashing with user-specific salts
+- **Password Security** - bcryptjs hashing with user-specific salts
 - **Session Management** - Secure logout with comprehensive cache cleanup
 
 #### Authorization Security

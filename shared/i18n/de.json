@@ -615,7 +615,7 @@
       "triggerSuccess": "Erzwungene Aktualisierung erfolgreich ausgelöst! Neuer Salt: {{salt}}. Alle Clients werden beim nächsten Seitenladen aktualisiert.",
       "triggerError": "Fehler beim Auslösen der erzwungenen Aktualisierung",
       "passwordTitle": "Admin-Passwort ändern",
-      "passwordDesc": "Das Admin-Passwort aktualisieren. Das neue Passwort wird mit bcrypt verschlüsselt und sicher gespeichert.",
+      "passwordDesc": "Das Admin-Passwort aktualisieren. Das neue Passwort wird mit bcryptjs verschlüsselt und sicher gespeichert.",
       "newPassword": "Neues Passwort",
       "newPasswordPlaceholder": "Neues Passwort eingeben",
       "confirmPassword": "Neues Passwort bestätigen",

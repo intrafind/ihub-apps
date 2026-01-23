@@ -494,7 +494,7 @@
       "triggerSuccess": "Force refresh triggered successfully! New salt: {{salt}}. All clients will refresh on their next page load.",
       "triggerError": "Failed to trigger force refresh",
       "passwordTitle": "Change Admin Password",
-      "passwordDesc": "Update the admin password. The new password will be encrypted using bcrypt and stored securely.",
+      "passwordDesc": "Update the admin password. The new password will be encrypted using bcryptjs and stored securely.",
       "newPassword": "New Password",
       "newPasswordPlaceholder": "Enter new password",
       "confirmPassword": "Confirm New Password",

@@ -204,7 +204,7 @@ All OAuth errors follow RFC 6749 format:
 ## Security Features
 
 ### Encrypted Storage
-- Client secrets stored using bcrypt hashing
+- Client secrets stored using bcryptjs hashing
 - Secrets never returned in API responses
 - Only displayed once at creation time
 

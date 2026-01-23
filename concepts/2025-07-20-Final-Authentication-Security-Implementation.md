@@ -13,7 +13,7 @@ The iHub Apps authentication and authorization system has been completely implem
 ### Core Authentication System ✅
 
 - **Multi-Mode Authentication**: Anonymous, Local, OIDC, and Proxy authentication fully implemented
-- **JWT Security**: Secure token handling with bcrypt + user-specific salts
+- **JWT Security**: Secure token handling with bcryptjs + user-specific salts
 - **Session Management**: Stateless design with configurable timeouts
 - **Group-Based Authorization**: Dynamic permission system with inheritance support
 
@@ -114,7 +114,7 @@ const token = authToken || adminToken; // Prefer regular auth
 
 - **Multi-Provider Support**: OIDC, Local, Proxy authentication
 - **Token Security**: JWT with expiration and secret rotation
-- **Password Security**: bcrypt + user ID salts (12+ rounds)
+- **Password Security**: bcryptjs + user ID salts (12+ rounds)
 - **Session Management**: Stateless with configurable timeouts
 
 ### Authorization
