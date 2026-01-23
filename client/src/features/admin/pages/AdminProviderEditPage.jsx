@@ -169,10 +169,7 @@ const AdminProviderEditPage = () => {
               {t('admin.providers.edit.title', 'Configure Provider')}
             </h1>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              {t(
-                'admin.providers.edit.description',
-                'Configure API credentials for this provider'
-              )}
+              {t('admin.providers.edit.description', 'Configure API credentials for this provider')}
             </p>
           </div>
 
@@ -274,7 +271,10 @@ const AdminProviderEditPage = () => {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 {t('admin.providers.edit.apiKey', 'API Key')}
                 <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                  {t('admin.providers.edit.apiKeyOptional', '(Optional - leave empty to use environment variable)')}
+                  {t(
+                    'admin.providers.edit.apiKeyOptional',
+                    '(Optional - leave empty to use environment variable)'
+                  )}
                 </span>
               </label>
               <input
@@ -283,7 +283,10 @@ const AdminProviderEditPage = () => {
                 onChange={e => handleChange('apiKey', e.target.value)}
                 placeholder={
                   formData.apiKeySet
-                    ? t('admin.providers.edit.apiKeyPlaceholder', 'Enter new API key or leave unchanged')
+                    ? t(
+                        'admin.providers.edit.apiKeyPlaceholder',
+                        'Enter new API key or leave unchanged'
+                      )
                     : t('admin.providers.edit.apiKeyEnter', 'Enter API key')
                 }
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
