@@ -84,7 +84,16 @@
     "code": "Code",
     "link": "Link",
     "redo": "Wiederholen",
-    "language": "de"
+    "language": "de",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern",
+    "resetView": "Ansicht zurücksetzen",
+    "panZoomHint": "Ziehen zum Verschieben, Scrollen zum Zoomen",
+    "interactive": "Interaktiv",
+    "downloadSVG": "SVG herunterladen",
+    "downloadPNG": "PNG herunterladen",
+    "downloadPDF": "PDF herunterladen",
+    "viewFullscreen": "Vollbild anzeigen"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
