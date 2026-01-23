@@ -142,7 +142,7 @@ export const useMermaidRenderer = ({ t }) => {
             <div class="mermaid-container code-block-container relative group border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
               <div class="mermaid-diagram-wrapper relative" style="min-height: 250px; max-height: 600px; overflow: hidden;">
                 <div class="mermaid-diagram p-4 bg-white" style="width: 100%; height: 100%;">
-                  <div class="mermaid-svg-container" style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+                  <div class="mermaid-svg-container" style="display: flex; justify-content: flex-start; width: 100%; height: 100%;">
                     ${svg}
                   </div>
                 </div>
@@ -166,16 +166,7 @@ export const useMermaidRenderer = ({ t }) => {
               </div>
               <div class="code-block-toolbar flex flex-row items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
                 <div class="flex flex-row items-center gap-2">
-                  <span class="text-xs font-medium text-gray-600">
-                    <span class="inline-flex items-center gap-1">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
-                      </svg>
-                      ${t ? t('common.interactive', 'Interactive') : 'Interactive'}
-                    </span>
-                    Mermaid ${language !== 'mermaid' ? `(${language})` : ''}
-                  </span>
-                  <span class="text-xs text-gray-400">• ${t ? t('common.panZoomHint', 'Drag to pan, scroll to zoom') : 'Drag to pan, scroll to zoom'}</span>
+                  <span class="text-xs font-medium text-gray-600">Mermaid ${language !== 'mermaid' ? `(${language})` : ''}</span>
                 </div>
                 <div class="flex flex-row items-center gap-1">
                   <button class="mermaid-copy-code p-1.5 rounded text-xs bg-transparent text-gray-600 hover:bg-gray-200 hover:text-gray-800 transition-colors duration-200 flex items-center gap-1" 
