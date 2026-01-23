@@ -215,20 +215,18 @@ function registerOutlookIntegrationRoutes(app, { basePath = '' }) {
    *                 instructions:
    *                   type: string
    */
-  app.get(
-    buildServerPath('/api/integrations/outlook/info', basePath),
-    (req, res) => {
-      const protocol = req.protocol;
-      const host = req.get('host');
-      const appUrl = `${protocol}://${host}`;
+  app.get(buildServerPath('/api/integrations/outlook/info', basePath), (req, res) => {
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const appUrl = `${protocol}://${host}`;
 
-      res.json({
-        enabled: true,
-        name: 'Outlook Add-in for Mac',
-        manifestUrl: `${appUrl}/api/integrations/outlook/manifest.xml`,
-        serverUrl: appUrl,
-        taskpaneUrl: `${appUrl}/outlook/taskpane.html`,
-        instructions: `
+    res.json({
+      enabled: true,
+      name: 'Outlook Add-in for Mac',
+      manifestUrl: `${appUrl}/api/integrations/outlook/manifest.xml`,
+      serverUrl: appUrl,
+      taskpaneUrl: `${appUrl}/outlook/taskpane.html`,
+      instructions: `
 1. Download the manifest file from the manifest URL
 2. Open Outlook for Mac
 3. Go to Get Add-ins → My Add-ins
@@ -236,32 +234,31 @@ function registerOutlookIntegrationRoutes(app, { basePath = '' }) {
 5. Select the downloaded manifest file
 6. The add-in will appear in your Outlook ribbon
         `.trim(),
-        authentication: {
-          type: 'server-side',
-          description:
-            'Authentication is handled by the iHub server. The add-in uses the same authentication as the main application.',
-          note: 'Email content is sent to the iHub server for AI processing. Ensure proper authentication and authorization are configured on the server.'
+      authentication: {
+        type: 'server-side',
+        description:
+          'Authentication is handled by the iHub server. The add-in uses the same authentication as the main application.',
+        note: 'Email content is sent to the iHub server for AI processing. Ensure proper authentication and authorization are configured on the server.'
+      },
+      features: [
+        {
+          name: 'Email Summarization',
+          description: 'Summarize emails using AI',
+          app: 'summarizer'
         },
-        features: [
-          {
-            name: 'Email Summarization',
-            description: 'Summarize emails using AI',
-            app: 'summarizer'
-          },
-          {
-            name: 'Reply Generation',
-            description: 'Generate professional email responses',
-            app: 'email-composer'
-          },
-          {
-            name: 'Attachment Analysis',
-            description: 'Analyze email attachments',
-            app: 'summarizer'
-          }
-        ]
-      });
-    }
-  );
+        {
+          name: 'Reply Generation',
+          description: 'Generate professional email responses',
+          app: 'email-composer'
+        },
+        {
+          name: 'Attachment Analysis',
+          description: 'Analyze email attachments',
+          app: 'summarizer'
+        }
+      ]
+    });
+  });
 }
 
 export default registerOutlookIntegrationRoutes;

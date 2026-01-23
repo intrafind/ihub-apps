@@ -9,6 +9,7 @@ The Outlook Add-in for iHub Apps is now managed through the **Admin → Integrat
 ## Overview
 
 The Outlook integration is automatically deployed with your iHub Apps server and provides:
+
 - Dynamic manifest generation with correct URLs
 - Admin panel for easy distribution
 - Automatic configuration for end users
@@ -40,6 +41,7 @@ npm run prod:build
 Files are deployed to: `dist/public/outlook/`
 
 The following endpoints are automatically available:
+
 - `GET /api/integrations/outlook/manifest.xml` - Dynamically generated manifest
 - `GET /api/integrations/outlook/info` - Integration information
 - Static files at `/outlook/` (taskpane.html, taskpane.js, etc.)
@@ -53,6 +55,7 @@ The following endpoints are automatically available:
 ### 3. Download Manifest
 
 In the Admin → Integrations page:
+
 1. Click **Download Manifest**
 2. Save the `ihub-outlook-manifest.xml` file
 3. Distribute to users
@@ -86,10 +89,12 @@ Check `contents/config/platform.json` includes Office domains:
 #### Required Apps
 
 Verify in **Admin** → **Apps**:
+
 - ✅ Content Summarizer (summarizer)
 - ✅ Email Composer (email-composer)
 
 If missing, copy from examples:
+
 ```bash
 cp examples/apps/summarizer.json contents/apps/
 cp examples/apps/email-composer.json contents/apps/
@@ -98,10 +103,12 @@ cp examples/apps/email-composer.json contents/apps/
 ### 5. Distribute to Users
 
 **Option A: Manual Distribution**
+
 1. Send `ihub-outlook-manifest.xml` to users
 2. Provide installation instructions
 
 **Option B: Centralized (Office 365)**
+
 1. Upload manifest to Microsoft 365 Admin Center
 2. Deploy to users/groups automatically
 
@@ -115,6 +122,7 @@ Users install the add-in by:
 4. Selecting the `ihub-outlook-manifest.xml` file
 
 The add-in appears as two ribbon buttons:
+
 - **Summarize Email**
 - **Generate Reply**
 
@@ -129,6 +137,7 @@ The add-in appears as two ribbon buttons:
 ## Authentication
 
 The add-in uses **server-side authentication**:
+
 - Same authentication as main iHub app
 - No separate configuration needed
 - Email content sent via authenticated HTTPS requests
@@ -136,22 +145,26 @@ The add-in uses **server-side authentication**:
 ## Monitoring
 
 Monitor usage through:
+
 - **Admin** → **Usage Reports** (summarizer and email-composer apps)
 - Server logs: `tail -f server/server.log`
 
 ## Troubleshooting
 
 ### Add-in doesn't appear
+
 - Verify Outlook for Mac 16.0+
 - Try removing and reinstalling
 - Restart Outlook
 
 ### Connection errors
+
 - Check HTTPS is enabled
 - Verify CORS configuration
 - Check server logs
 
 ### Summarization fails
+
 - Verify apps are enabled
 - Check AI model configuration
 - Review server logs
@@ -161,6 +174,7 @@ Monitor usage through:
 **Minor updates** (UI/functionality): Automatic when server updates
 
 **Major updates** (manifest changes):
+
 1. Download new manifest from Admin panel
 2. Redistribute to users
 3. Users reinstall the add-in

@@ -3,7 +3,7 @@
 This directory contains the Office Add-in integration for Outlook on Mac, enabling users to:
 
 1. **Summarize emails** using the iHub summarizer app
-2. **Generate replies** using the iHub email-composer app  
+2. **Generate replies** using the iHub email-composer app
 3. **Analyze attachments** using AI
 
 ## Features
@@ -43,6 +43,7 @@ This directory contains the Office Add-in integration for Outlook on Mac, enabli
 6. Click **Install**
 
 The add-in should now appear in your Outlook ribbon with two buttons:
+
 - **Summarize Email**
 - **Generate Reply**
 
@@ -85,6 +86,7 @@ The Outlook Add-in uses **server-side authentication**. This means:
 - Ensure proper authentication and authorization are configured on the server
 
 **Important Security Notes:**
+
 - Email content is transmitted to your iHub server via HTTPS
 - The server processes the content using configured AI models
 - No data is stored permanently on the server
@@ -156,6 +158,7 @@ The Outlook Add-in uses Office.js APIs to:
 4. Display results in the task pane
 
 **Data Flow:**
+
 ```
 Outlook Email → Office.js → Taskpane → iHub Chat API → LLM → Streaming Response → Taskpane Display
 ```

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { 
-  ArrowDownTrayIcon, 
-  ArrowTopRightOnSquareIcon, 
-  ClipboardIcon, 
-  CheckIcon 
+import {
+  ArrowDownTrayIcon,
+  ArrowTopRightOnSquareIcon,
+  ClipboardIcon,
+  CheckIcon
 } from '@heroicons/react/24/outline';
 import { apiClient } from '../../../api/client';
 
@@ -35,11 +35,11 @@ export function IntegrationsPage() {
       const response = await fetch('/api/integrations/outlook/manifest.xml', {
         credentials: 'include'
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to download manifest');
       }
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -55,7 +55,7 @@ export function IntegrationsPage() {
     }
   };
 
-  const copyToClipboard = (text) => {
+  const copyToClipboard = text => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -86,9 +86,7 @@ export function IntegrationsPage() {
   return (
     <div className="p-8 max-w-6xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-          Integrations
-        </h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Integrations</h1>
         <p className="text-gray-600 dark:text-gray-400">
           Configure and manage external integrations for iHub Apps
         </p>
@@ -147,7 +145,8 @@ export function IntegrationsPage() {
               <div className="flex items-start gap-4">
                 <div className="flex-1">
                   <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-                    Download the manifest file and install it in Outlook for Mac to enable AI features.
+                    Download the manifest file and install it in Outlook for Mac to enable AI
+                    features.
                   </p>
                   <button
                     onClick={downloadManifest}
@@ -181,7 +180,11 @@ export function IntegrationsPage() {
                   className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
                   title="Copy to clipboard"
                 >
-                  {copied ? <CheckIcon className="w-5 h-5 text-green-600" /> : <ClipboardIcon className="w-5 h-5" />}
+                  {copied ? (
+                    <CheckIcon className="w-5 h-5 text-green-600" />
+                  ) : (
+                    <ClipboardIcon className="w-5 h-5" />
+                  )}
                 </button>
               </div>
 
@@ -228,8 +231,16 @@ export function IntegrationsPage() {
               <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                 <div className="flex gap-3">
                   <div className="flex-shrink-0">
-                    <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <svg
+                      className="w-5 h-5 text-yellow-600 dark:text-yellow-400"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                   </div>
                   <div className="flex-1">

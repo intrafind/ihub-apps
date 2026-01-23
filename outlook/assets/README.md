@@ -21,6 +21,7 @@ This directory should contain the icon files referenced in the manifest.xml.
 ## Creating Icons
 
 You can create icons using:
+
 1. Graphic design software (Adobe Illustrator, Figma, etc.)
 2. Online icon generators
 3. Export from the main iHub Apps logo
@@ -30,6 +31,7 @@ You can create icons using:
 For development/testing, you can use simple colored squares or the iHub Apps logo resized to appropriate dimensions.
 
 The manifest.xml currently references these files at:
+
 - https://{{APP_URL}}/outlook/assets/icon-16.png
 - https://{{APP_URL}}/outlook/assets/icon-32.png
 - https://{{APP_URL}}/outlook/assets/icon-64.png

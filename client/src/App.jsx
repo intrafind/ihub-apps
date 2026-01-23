@@ -50,9 +50,7 @@ const AdminGroupEditPage = React.lazy(() => import('./features/admin/pages/Admin
 const AdminUICustomization = React.lazy(
   () => import('./features/admin/pages/AdminUICustomization')
 );
-const AdminIntegrationsPage = React.lazy(
-  () => import('./features/admin/pages/IntegrationsPage')
-);
+const AdminIntegrationsPage = React.lazy(() => import('./features/admin/pages/IntegrationsPage'));
 const IntegrationsPage = React.lazy(() => import('./features/settings/pages/IntegrationsPage'));
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
