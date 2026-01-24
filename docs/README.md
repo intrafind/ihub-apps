@@ -56,6 +56,14 @@ This book contains configuration details and user instructions for the iHub Apps
 - [Troubleshooting](troubleshooting.md) - Problem diagnosis and solutions
 - [Frontend Optimization](frontend-optimization-plan.md) - Performance optimization
 
+## Technical Debt & Code Quality
+
+- [Technical Debt Review - Complete ✅](TECHNICAL-DEBT-REVIEW-COMPLETE.md) - 🎉 Review completion report
+- [Technical Debt Quick Reference](TECHNICAL-DEBT-QUICK-REFERENCE.md) - 📋 Quick reference card for developers
+- [Technical Debt Executive Summary](TECHNICAL-DEBT-EXECUTIVE-SUMMARY.md) - 👔 High-level overview for stakeholders
+- [Technical Debt Analysis](TECHNICAL-DEBT-ANALYSIS.md) - 📊 Comprehensive technical debt review
+- [Technical Debt Recommendations](TECHNICAL-DEBT-RECOMMENDATIONS.md) - 🎯 Actionable improvement plan
+
 ---
 
 **Full Documentation Portal**: The complete documentation is also available as an interactive mdBook at `/help` when running the application.
