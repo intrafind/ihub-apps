@@ -16,6 +16,7 @@ import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import ChatInput from '../../chat/components/ChatInput';
+import NextGenChatInput from '../../chat/components/NextGenChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import StarterPromptsView from '../../chat/components/StarterPromptsView';
 import GreetingView from '../../chat/components/GreetingView';
@@ -113,6 +114,9 @@ const AppChat = ({ preloadedApp = null }) => {
   const [showShare, setShowShare] = useState(false);
   const [, setMaxTokens] = useState(4096);
   const shareEnabled = app?.features?.shortLinks !== false;
+  
+  // Use next-gen chat input (can be controlled via app settings or feature flag)
+  const useNextGenInput = true; // Enable by default
 
   // Shared app settings hook
   const {
@@ -957,6 +961,56 @@ const AppChat = ({ preloadedApp = null }) => {
     }
   }, [variables, showParameters]);
 
+  // Helper function to render the appropriate chat input component
+  const renderChatInput = () => {
+    const commonProps = {
+      app,
+      value: input,
+      onChange: handleInputChange,
+      onSubmit: handleSubmit,
+      isProcessing: processing,
+      onCancel: cancelGeneration,
+      onVoiceInput:
+        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+          ? handleVoiceInput
+          : undefined,
+      onVoiceCommand:
+        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+          ? handleVoiceCommand
+          : undefined,
+      onFileSelect: fileUploadHandler.handleFileSelect,
+      uploadConfig: fileUploadHandler.createUploadConfig(app, selectedModel),
+      allowEmptySubmit: app?.allowEmptyContent || fileUploadHandler.selectedFile !== null,
+      inputRef,
+      formRef,
+      selectedFile: fileUploadHandler.selectedFile,
+      showUploader: fileUploadHandler.showUploader,
+      onToggleUploader: fileUploadHandler.toggleUploader,
+      magicPromptEnabled: app?.features?.magicPrompt?.enabled === true,
+      onMagicPrompt: handleMagicPrompt,
+      showUndoMagicPrompt: magicPromptHandler.showUndoMagicPrompt,
+      onUndoMagicPrompt: handleUndoMagicPrompt,
+      magicPromptLoading: magicPromptHandler.magicLoading,
+      enabledTools,
+      onEnabledToolsChange: setEnabledTools
+    };
+
+    if (useNextGenInput) {
+      return (
+        <NextGenChatInput
+          {...commonProps}
+          models={models}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+          currentLanguage={currentLanguage}
+          showModelSelector={app?.disallowModelSelection !== true}
+        />
+      );
+    }
+
+    return <ChatInput {...commonProps} />;
+  };
+
   if (loading) {
     return <LoadingSpinner message={t('app.loading')} />;
   }
@@ -1101,43 +1155,7 @@ const AppChat = ({ preloadedApp = null }) => {
                   )}
                 </div>
                 <div className="flex-shrink-0 px-4 pt-2">
-                  <div className="w-full max-w-4xl mx-auto">
-                    <ChatInput
-                      app={app}
-                      value={input}
-                      onChange={handleInputChange}
-                      onSubmit={handleSubmit}
-                      isProcessing={processing}
-                      onCancel={cancelGeneration}
-                      onVoiceInput={
-                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                          ? handleVoiceInput
-                          : undefined
-                      }
-                      onVoiceCommand={
-                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                          ? handleVoiceCommand
-                          : undefined
-                      }
-                      onFileSelect={fileUploadHandler.handleFileSelect}
-                      uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
-                      allowEmptySubmit={
-                        app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
-                      }
-                      inputRef={inputRef}
-                      formRef={formRef}
-                      selectedFile={fileUploadHandler.selectedFile}
-                      showUploader={fileUploadHandler.showUploader}
-                      onToggleUploader={fileUploadHandler.toggleUploader}
-                      magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
-                      onMagicPrompt={handleMagicPrompt}
-                      showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
-                      onUndoMagicPrompt={handleUndoMagicPrompt}
-                      magicPromptLoading={magicPromptHandler.magicLoading}
-                      enabledTools={enabledTools}
-                      onEnabledToolsChange={setEnabledTools}
-                    />
-                  </div>
+                  <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
                 </div>
               </div>
 
@@ -1168,43 +1186,7 @@ const AppChat = ({ preloadedApp = null }) => {
                       {renderStartupState(app, welcomeMessage, handleStarterPromptClick)}
                     </div>
                   )}
-                  <div>
-                    <ChatInput
-                      app={app}
-                      value={input}
-                      onChange={handleInputChange}
-                      onSubmit={handleSubmit}
-                      isProcessing={processing}
-                      onCancel={cancelGeneration}
-                      onVoiceInput={
-                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                          ? handleVoiceInput
-                          : undefined
-                      }
-                      onVoiceCommand={
-                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                          ? handleVoiceCommand
-                          : undefined
-                      }
-                      onFileSelect={fileUploadHandler.handleFileSelect}
-                      uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
-                      allowEmptySubmit={
-                        app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
-                      }
-                      inputRef={inputRef}
-                      formRef={formRef}
-                      selectedFile={fileUploadHandler.selectedFile}
-                      showUploader={fileUploadHandler.showUploader}
-                      onToggleUploader={fileUploadHandler.toggleUploader}
-                      magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
-                      onMagicPrompt={handleMagicPrompt}
-                      showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
-                      onUndoMagicPrompt={handleUndoMagicPrompt}
-                      magicPromptLoading={magicPromptHandler.magicLoading}
-                      enabledTools={enabledTools}
-                      onEnabledToolsChange={setEnabledTools}
-                    />
-                  </div>
+                  <div>{renderChatInput()}</div>
                 </div>
               </div>
             </>
@@ -1235,43 +1217,7 @@ const AppChat = ({ preloadedApp = null }) => {
                     app={app}
                   />
                 </div>
-                <div className="flex-shrink-0 px-4 pt-2">
-                  <ChatInput
-                    app={app}
-                    value={input}
-                    onChange={handleInputChange}
-                    onSubmit={handleSubmit}
-                    isProcessing={processing}
-                    onCancel={cancelGeneration}
-                    onVoiceInput={
-                      (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                        ? handleVoiceInput
-                        : undefined
-                    }
-                    onVoiceCommand={
-                      (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                        ? handleVoiceCommand
-                        : undefined
-                    }
-                    onFileSelect={fileUploadHandler.handleFileSelect}
-                    uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
-                    allowEmptySubmit={
-                      app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
-                    }
-                    inputRef={inputRef}
-                    formRef={formRef}
-                    selectedFile={fileUploadHandler.selectedFile}
-                    showUploader={fileUploadHandler.showUploader}
-                    onToggleUploader={fileUploadHandler.toggleUploader}
-                    magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
-                    onMagicPrompt={handleMagicPrompt}
-                    showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
-                    onUndoMagicPrompt={handleUndoMagicPrompt}
-                    magicPromptLoading={magicPromptHandler.magicLoading}
-                    enabledTools={enabledTools}
-                    onEnabledToolsChange={setEnabledTools}
-                  />
-                </div>
+                <div className="flex-shrink-0 px-4 pt-2">{renderChatInput()}</div>
               </div>
 
               {/* Desktop layout: normal flex column */}
@@ -1296,41 +1242,7 @@ const AppChat = ({ preloadedApp = null }) => {
                   onConnectIntegration={connectIntegration}
                 />
 
-                <ChatInput
-                  app={app}
-                  value={input}
-                  onChange={handleInputChange}
-                  onSubmit={handleSubmit}
-                  isProcessing={processing}
-                  onCancel={cancelGeneration}
-                  onVoiceInput={
-                    (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                      ? handleVoiceInput
-                      : undefined
-                  }
-                  onVoiceCommand={
-                    (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                      ? handleVoiceCommand
-                      : undefined
-                  }
-                  onFileSelect={fileUploadHandler.handleFileSelect}
-                  uploadConfig={fileUploadHandler.createUploadConfig(app)}
-                  allowEmptySubmit={
-                    app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
-                  }
-                  inputRef={inputRef}
-                  formRef={formRef}
-                  selectedFile={fileUploadHandler.selectedFile}
-                  showUploader={fileUploadHandler.showUploader}
-                  onToggleUploader={fileUploadHandler.toggleUploader}
-                  magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
-                  onMagicPrompt={handleMagicPrompt}
-                  showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
-                  onUndoMagicPrompt={handleUndoMagicPrompt}
-                  magicPromptLoading={magicPromptHandler.magicLoading}
-                  enabledTools={enabledTools}
-                  onEnabledToolsChange={setEnabledTools}
-                />
+                {renderChatInput()}
               </div>
             </>
           )}
