@@ -54,9 +54,11 @@ import {
   BriefcaseIcon,
   PaintBrushIcon,
   ChevronDownIcon,
+  ChevronUpIcon,
   Bars3Icon,
   FaceFrownIcon as OutlineFaceFrownIcon,
-  ArrowTopRightOnSquareIcon
+  ArrowTopRightOnSquareIcon,
+  ArrowUpIcon
 } from '@heroicons/react/24/outline';
 
 import {
@@ -96,8 +98,10 @@ import {
   BriefcaseIcon as SolidBriefcaseIcon,
   PaintBrushIcon as SolidPaintBrushIcon,
   ChevronDownIcon as SolidChevronDownIcon,
+  ChevronUpIcon as SolidChevronUpIcon,
   FaceFrownIcon as SolidFaceFrownIcon,
-  ArrowTopRightOnSquareIcon as SolidArrowTopRightOnSquareIcon
+  ArrowTopRightOnSquareIcon as SolidArrowTopRightOnSquareIcon,
+  ArrowUpIcon as SolidArrowUpIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
@@ -133,6 +137,9 @@ const iconMap = {
   list: { outline: ListBulletIcon, solid: ListBulletIcon },
   menu: { outline: Bars3Icon, solid: Bars3Icon },
   'chevron-down': { outline: ChevronDownIcon, solid: SolidChevronDownIcon },
+  chevronDown: { outline: ChevronDownIcon, solid: SolidChevronDownIcon },
+  'chevron-up': { outline: ChevronUpIcon, solid: SolidChevronUpIcon },
+  chevronUp: { outline: ChevronUpIcon, solid: SolidChevronUpIcon },
   eye: { outline: EyeIcon, solid: SolidEyeIcon },
   'eye-slash': { outline: EyeSlashIcon, solid: SolidEyeSlashIcon },
   play: { outline: PlayIcon, solid: SolidPlayIcon },
@@ -181,7 +188,9 @@ const iconMap = {
   // Add commonly used aliases and missing icons
   save: { outline: OutlineCheckIcon, solid: SolidCheckIcon }, // Use check icon for save
   plus: { outline: PlusCircleIcon, solid: SolidPlusCircleIcon },
-  warning: { outline: OutlineExclamationTriangleIcon, solid: SolidExclamationTriangleIcon }
+  warning: { outline: OutlineExclamationTriangleIcon, solid: SolidExclamationTriangleIcon },
+  send: { outline: ArrowUpIcon, solid: SolidArrowUpIcon },
+  'arrow-up': { outline: ArrowUpIcon, solid: SolidArrowUpIcon }
 };
 
 const sizeClasses = {

@@ -269,6 +269,8 @@
     "title": "Konfiguration",
     "save": "Speichern",
     "cancel": "Abbrechen",
+    "model": "Modell",
+    "selectModel": "Modell auswählen",
     "defaultModel": "Standardmodell",
     "temperature": "Temperatur",
     "temperatureDescription": "Steuert die Zufälligkeit: Niedrigere Werte sind deterministischer, höhere Werte sind kreativer.",

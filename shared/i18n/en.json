@@ -742,6 +742,8 @@
     "title": "Configuration",
     "save": "Save",
     "cancel": "Cancel",
+    "model": "Model",
+    "selectModel": "Select Model",
     "defaultModel": "Default model",
     "temperature": "Temperature",
     "temperatureDescription": "Controls randomness: Lower values are more deterministic, higher values are more creative.",
