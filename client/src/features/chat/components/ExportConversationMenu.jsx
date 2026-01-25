@@ -90,7 +90,7 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
         </button>
 
         {showPdfOptions && (
-          <div className="absolute left-full top-0 ml-2 bg-white border border-gray-200 rounded shadow-lg min-w-[300px] p-3">
+          <div className="absolute right-full top-0 mr-2 bg-white border border-gray-200 rounded shadow-lg min-w-[300px] p-3 z-30">
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
