@@ -5,6 +5,7 @@ import { UnifiedUploader } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
 import ModelSelector from './ModelSelector';
+import { VoiceInputComponent } from '../../voice/components';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
 /**
@@ -220,7 +221,7 @@ const NextGenChatInput = ({
         ref={formRef}
         onSubmit={handleSubmit}
         autoComplete="off"
-        className="flex flex-col border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500"
+        className="flex flex-col border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 mb-1"
       >
         {/* Top line: User input */}
         <div className="relative flex-1">
@@ -233,7 +234,7 @@ const NextGenChatInput = ({
             onChange={onChange}
             onKeyDown={handleKeyDown}
             disabled={disabled || isProcessing}
-            className="w-full p-3 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none dark:text-gray-100"
+            className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none dark:text-gray-100"
             placeholder={defaultPlaceholder}
             ref={actualInputRef}
             style={{
@@ -251,7 +252,7 @@ const NextGenChatInput = ({
           {value && (
             <button
               type="button"
-              className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              className="absolute right-3 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               onClick={handleClearInput}
               title={t('common.clear', 'Clear')}
             >
@@ -261,7 +262,7 @@ const NextGenChatInput = ({
         </div>
 
         {/* Bottom line: Actions menu, model selector, send/stop button */}
-        <div className="flex items-center gap-2 px-3 pb-3 border-t border-gray-200 dark:border-gray-700 pt-2">
+        <div className="flex items-center gap-2 px-3 pb-2 border-t border-gray-100 dark:border-gray-700/50 pt-2">
           {/* Chat Input Actions Menu */}
           <ChatInputActionsMenu
             app={app}
@@ -280,6 +281,32 @@ const NextGenChatInput = ({
             onVoiceCommand={onVoiceCommand}
             inputRef={actualInputRef}
           />
+
+          {/* Upload icon - show directly on desktop if enabled */}
+          {uploadConfig?.enabled === true && (
+            <button
+              type="button"
+              onClick={onToggleUploader || toggleUploader}
+              disabled={disabled || isProcessing}
+              title={t('chatActions.attachFile', 'Attach File')}
+              className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+            >
+              <Icon name="paper-clip" size="md" />
+            </button>
+          )}
+
+          {/* Microphone icon - show directly on desktop if enabled */}
+          {onVoiceInput && (
+            <div className="hidden md:flex">
+              <VoiceInputComponent
+                app={app}
+                onSpeechResult={onVoiceInput}
+                inputRef={actualInputRef}
+                disabled={disabled || isProcessing}
+                onCommand={onVoiceCommand}
+              />
+            </div>
+          )}
 
           <div className="flex-1"></div>
 
