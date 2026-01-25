@@ -1003,7 +1003,9 @@ const AppChat = ({ preloadedApp = null }) => {
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}
           currentLanguage={currentLanguage}
-          showModelSelector={app?.disallowModelSelection !== true}
+          showModelSelector={
+            app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
+          }
         />
       );
     }

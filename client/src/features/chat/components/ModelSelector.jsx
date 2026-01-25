@@ -73,7 +73,11 @@ const ModelSelector = ({
   };
 
   // Don't render if disabled by app settings or if only one model available
-  if (app?.disallowModelSelection || filteredModels.length <= 1) {
+  if (
+    app?.disallowModelSelection ||
+    app?.settings?.model?.enabled === false ||
+    filteredModels.length <= 1
+  ) {
     return null;
   }
 
