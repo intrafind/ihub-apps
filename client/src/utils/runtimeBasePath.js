@@ -23,17 +23,27 @@ export const detectBasePath = () => {
   // If we're at a React route (e.g., /ihub/apps/chat), we need to find the base
   // We can detect this by checking if there's a known React route pattern
   // These are top-level application routes, not deployment subpaths
+  //
+  // ⚠️ IMPORTANT: When adding new top-level routes to App.jsx, you MUST update this array!
+  // This includes any new routes like:
+  // - New feature routes (e.g., /reports, /analytics)
+  // - New page routes (e.g., /help, /docs)
+  // - New API endpoint prefixes that need special handling
+  //
+  // Failure to update this array will cause base path detection to fail for subpath
+  // deployments (e.g., /ihub/newroute will incorrectly detect /ihub/newroute as base path
+  // instead of /ihub).
   const knownRoutes = [
-    '/apps',
-    '/admin',
-    '/auth',
-    '/login',
-    '/chat',
-    '/pages',
-    '/prompts',
-    '/settings',
-    '/teams',
-    '/s'
+    '/apps', // App listing and individual app routes
+    '/admin', // Admin panel routes
+    '/auth', // Authentication routes
+    '/login', // Login page
+    '/chat', // Direct chat routes
+    '/pages', // Dynamic pages
+    '/prompts', // Prompts listing
+    '/settings', // Settings pages (integrations, etc.)
+    '/teams', // Microsoft Teams routes
+    '/s' // Short links
   ];
 
   // Find the first occurrence of any known route at a path boundary

@@ -47,6 +47,25 @@ This document provides guidelines for Gemini models working on the iHub Apps pro
 2.  **New Endpoints**: Follow the established pattern for creating API endpoints.
 3.  **New Components**: Maintain component structure and naming consistency.
 4.  **New Features**: Ensure new features integrate seamlessly with existing ones.
+5.  **New Routes** ⚠️: When adding new top-level routes, update `client/src/utils/runtimeBasePath.js`
+
+### Adding New Routes - CRITICAL
+
+When adding new top-level routes to `client/src/App.jsx`, you **MUST** update the `knownRoutes` array in `client/src/utils/runtimeBasePath.js`.
+
+**Why this matters**:
+
+- Enables correct base path detection for subpath deployments (e.g., `/ihub/apps`)
+- Prevents incorrect redirects during logout
+- Ensures assets load from correct paths
+
+**Steps**:
+
+1. Add route in `App.jsx`: `<Route path="newroute" element={...} />`
+2. Add to `knownRoutes` array: `'/newroute'`
+3. Test both root and subpath deployments
+
+**Current routes**: `/apps`, `/admin`, `/auth`, `/login`, `/chat`, `/pages`, `/prompts`, `/settings`, `/teams`, `/s`
 
 ## Testing Guidelines
 

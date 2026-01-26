@@ -250,6 +250,20 @@ client/src/
 5. **Translations**: Add keys to `shared/i18n/{en,de}.json`
 6. **Documentation**: Update `docs/` and create concept document in `concepts/`
 7. **Testing**: Add tests if modifying critical functionality
+8. **Known Routes** ⚠️: If adding a new top-level route in `App.jsx`, update `client/src/utils/runtimeBasePath.js`
+
+### When Adding New Routes or API Endpoints
+
+**CRITICAL**: When adding new top-level routes to the application, you **MUST** update the `knownRoutes` array in `client/src/utils/runtimeBasePath.js`.
+
+This array is used for base path detection to support subpath deployments (e.g., `/ihub/apps`). Without updating it:
+- Subpath deployments will break
+- Base path detection will fail
+- Logout and navigation may redirect to wrong paths
+
+**Example**: If you add a new route `/reports` in `App.jsx`, add `'/reports'` to the `knownRoutes` array.
+
+**Location**: `client/src/utils/runtimeBasePath.js` - Look for the `knownRoutes` array (around line 26-37).
 
 ### When Working with Authentication
 
