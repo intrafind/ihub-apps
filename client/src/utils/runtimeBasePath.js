@@ -23,7 +23,18 @@ export const detectBasePath = () => {
   // If we're at a React route (e.g., /ihub/apps/chat), we need to find the base
   // We can detect this by checking if there's a known React route pattern
   // These are top-level application routes, not deployment subpaths
-  const knownRoutes = ['/apps', '/admin', '/auth', '/login', '/chat', '/pages', '/s/'];
+  const knownRoutes = [
+    '/apps',
+    '/admin',
+    '/auth',
+    '/login',
+    '/chat',
+    '/pages',
+    '/prompts',
+    '/settings',
+    '/teams',
+    '/s'
+  ];
 
   // Find the first occurrence of any known route at a path boundary
   let firstRouteIndex = -1;
