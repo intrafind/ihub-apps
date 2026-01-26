@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
@@ -122,13 +123,32 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
               return res.status(500).json({ error: 'Failed to encrypt API key' });
             }
           } else {
-            // Masked value - keep existing key from database
-            const { data: providers } = configCache.getProviders(true);
-            const existingProvider = providers.find(p => p.id === providerId);
-            if (existingProvider && existingProvider.apiKey) {
-              updatedProvider.apiKey = existingProvider.apiKey;
-            } else {
-              // No existing key, remove the masked placeholder
+            // Masked value - need to preserve existing key
+            // CRITICAL FIX: Read from disk, not cache, to ensure we have the apiKey field
+            // The cache might not have the apiKey due to TTL expiration or race conditions
+            const rootDir = getRootDir();
+            const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
+
+            try {
+              if (existsSync(providersPath)) {
+                const providersFromDisk = JSON.parse(await fs.readFile(providersPath, 'utf8'));
+                const existingProvider = providersFromDisk.providers?.find(
+                  p => p.id === providerId
+                );
+                if (existingProvider && existingProvider.apiKey) {
+                  // Preserve the existing encrypted API key from disk
+                  updatedProvider.apiKey = existingProvider.apiKey;
+                } else {
+                  // No existing key on disk, remove the masked placeholder
+                  delete updatedProvider.apiKey;
+                }
+              } else {
+                // File doesn't exist yet, remove the masked placeholder
+                delete updatedProvider.apiKey;
+              }
+            } catch (error) {
+              console.error('Error reading existing providers from disk:', error);
+              // Fallback to removing the masked placeholder
               delete updatedProvider.apiKey;
             }
           }
@@ -140,9 +160,13 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
 
         const rootDir = getRootDir();
         const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
+        const providersDir = join(rootDir, 'contents', 'config');
 
-        // Load current providers
-        const { data: providers } = configCache.getProviders(true);
+        // Load current providers and create a deep copy to avoid cache mutation
+        const { data: cachedProviders } = configCache.getProviders(true);
+
+        // Create a deep copy of the providers array to avoid mutating the cache
+        const providers = cachedProviders.map(p => ({ ...p }));
 
         // Find and update the provider
         const index = providers.findIndex(p => p.id === providerId);
@@ -151,6 +175,9 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
         }
 
         providers[index] = updatedProvider;
+
+        // Ensure the directory exists before writing
+        await fs.mkdir(providersDir, { recursive: true });
 
         // Save updated providers
         await fs.writeFile(providersPath, JSON.stringify({ providers }, null, 2));
