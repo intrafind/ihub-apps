@@ -182,7 +182,7 @@ const Layout = () => {
       )}
 
       <main className="flex-grow w-full overflow-y-auto">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-4 h-full">
           <Outlet />
         </div>
       </main>
@@ -205,17 +205,17 @@ const Layout = () => {
                     .filter(link => canAccessLink(link))
                     .map((link, index) => (
                       <Link
-                          key={index}
-                          to={link.url}
-                          onClick={resetHeaderColor}
-                          className="hover:text-gray-300"
-                          target={
-                            link.url.startsWith('http') || link.url.startsWith('mailto:')
-                              ? '_blank'
-                              : undefined
-                          }
-                          rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                        >
+                        key={index}
+                        to={link.url}
+                        onClick={resetHeaderColor}
+                        className="hover:text-gray-300"
+                        target={
+                          link.url.startsWith('http') || link.url.startsWith('mailto:')
+                            ? '_blank'
+                            : undefined
+                        }
+                        rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                      >
                         {getLocalizedContent(link.name, currentLanguage)}
                       </Link>
                     ))}
