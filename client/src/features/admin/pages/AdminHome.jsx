@@ -84,6 +84,17 @@ const AdminHome = () => {
       href: '/admin/ui',
       //icon: 'paint-brush',
       color: 'bg-pink-500'
+    },
+    {
+      key: 'integrations',
+      title: t('admin.nav.integrations', 'Integrations'),
+      description: t(
+        'admin.home.sections.integrationsDesc',
+        'Configure external integrations like Outlook, Teams, and more'
+      ),
+      href: '/admin/integrations',
+      //icon: 'link',
+      color: 'bg-cyan-500'
     }
   ];
 

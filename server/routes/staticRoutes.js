@@ -34,6 +34,12 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
   console.log(`Serving uploaded assets from: ${uploadsPath} at ${buildUploadsPath('/')}`);
   app.use(buildUploadsPath('/'), express.static(uploadsPath));
 
+  // Serve Outlook Add-in files
+  const outlookPath = path.join(rootDir, 'outlook');
+  const outlookRoute = basePath ? `${basePath}/outlook` : '/outlook';
+  console.log(`Serving Outlook Add-in files from: ${outlookPath} at ${outlookRoute}`);
+  app.use(outlookRoute, express.static(outlookPath));
+
   // Serve documentation with authentication
   const docsPath = path.join(rootDir, 'docs/book');
   console.log(`Serving documentation from: ${docsPath} at ${buildDocsPath('/')}`);

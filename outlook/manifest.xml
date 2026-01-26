@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
+           xsi:type="MailApp">
+  
+  <!-- Begin Basic Settings: Add-in metadata, used for all versions of Office unless override provided. -->
+  <Id>f7b5e5c3-4a1b-4e2d-8f3a-9c7d6e5f4a3b</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>iHub Apps</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  
+  <DisplayName DefaultValue="iHub Apps - AI Assistant"/>
+  <Description DefaultValue="Summarize emails, generate replies, and analyze attachments using AI"/>
+  <IconUrl DefaultValue="https://{{APP_URL}}/outlook/assets/icon-64.png"/>
+  <HighResolutionIconUrl DefaultValue="https://{{APP_URL}}/outlook/assets/icon-128.png"/>
+  <SupportUrl DefaultValue="https://{{APP_URL}}/page/help"/>
+  
+  <!-- End Basic Settings. -->
+  
+  <Hosts>
+    <Host Name="Mailbox"/>
+  </Hosts>
+  
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.1"/>
+    </Sets>
+  </Requirements>
+  
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://{{APP_URL}}/outlook/taskpane.html"/>
+        <RequestedHeight>450</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+  
+  <Permissions>ReadWriteItem</Permissions>
+  
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read"/>
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Edit"/>
+  </Rule>
+  
+  <!-- Version Overrides for additional functionality -->
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
+      
+      <Requirements>
+        <bt:Sets DefaultMinVersion="1.3">
+          <bt:Set Name="Mailbox"/>
+        </bt:Sets>
+      </Requirements>
+      
+      <Hosts>
+        <Host xsi:type="MailHost">
+          
+          <!-- Message Read Mode -->
+          <DesktopFormFactor>
+            <FunctionFile resid="Commands.Url"/>
+            
+            <!-- Message Read Command Surface -->
+            <ExtensionPoint xsi:type="MessageReadCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="msgReadGroup">
+                  <Label resid="GroupLabel"/>
+                  
+                  <!-- Summarize Email Button -->
+                  <Control xsi:type="Button" id="msgReadSummarizeButton">
+                    <Label resid="SummarizeButtonLabel"/>
+                    <Supertip>
+                      <Title resid="SummarizeButtonLabel"/>
+                      <Description resid="SummarizeButtonTooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url"/>
+                    </Action>
+                  </Control>
+                  
+                  <!-- Generate Reply Button -->
+                  <Control xsi:type="Button" id="msgReadReplyButton">
+                    <Label resid="ReplyButtonLabel"/>
+                    <Supertip>
+                      <Title resid="ReplyButtonLabel"/>
+                      <Description resid="ReplyButtonTooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="TaskpaneReply.Url"/>
+                    </Action>
+                  </Control>
+                  
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+          </DesktopFormFactor>
+        </Host>
+      </Hosts>
+      
+      <Resources>
+        <bt:Images>
+          <bt:Image id="Icon.16x16" DefaultValue="https://{{APP_URL}}/outlook/assets/icon-16.png"/>
+          <bt:Image id="Icon.32x32" DefaultValue="https://{{APP_URL}}/outlook/assets/icon-32.png"/>
+          <bt:Image id="Icon.80x80" DefaultValue="https://{{APP_URL}}/outlook/assets/icon-80.png"/>
+        </bt:Images>
+        <bt:Urls>
+          <bt:Url id="Commands.Url" DefaultValue="https://{{APP_URL}}/outlook/commands.html"/>
+          <bt:Url id="Taskpane.Url" DefaultValue="https://{{APP_URL}}/outlook/taskpane.html?action=summarize"/>
+          <bt:Url id="TaskpaneReply.Url" DefaultValue="https://{{APP_URL}}/outlook/taskpane.html?action=reply"/>
+        </bt:Urls>
+        <bt:ShortStrings>
+          <bt:String id="GroupLabel" DefaultValue="iHub AI"/>
+          <bt:String id="SummarizeButtonLabel" DefaultValue="Summarize Email"/>
+          <bt:String id="ReplyButtonLabel" DefaultValue="Generate Reply"/>
+        </bt:ShortStrings>
+        <bt:LongStrings>
+          <bt:String id="SummarizeButtonTooltip" DefaultValue="Use AI to summarize this email"/>
+          <bt:String id="ReplyButtonTooltip" DefaultValue="Generate an AI-powered reply to this email"/>
+        </bt:LongStrings>
+      </Resources>
+    </VersionOverrides>
+  </VersionOverrides>
+  
+</OfficeApp>
