@@ -336,11 +336,7 @@ const NextGenChatInput = ({
             }`}
             title={isProcessing ? t('common.cancel', 'Cancel') : t('common.send', 'Send')}
           >
-            {isProcessing ? (
-              <Icon name="close" size="md" />
-            ) : (
-              <Icon name="arrow-up" size="md" />
-            )}
+            {isProcessing ? <Icon name="close" size="md" /> : <Icon name="arrow-up" size="md" />}
           </button>
         </div>
       </form>

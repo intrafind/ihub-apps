@@ -114,7 +114,7 @@ const AppChat = ({ preloadedApp = null }) => {
   const [showShare, setShowShare] = useState(false);
   const [, setMaxTokens] = useState(4096);
   const shareEnabled = app?.features?.shortLinks !== false;
-  
+
   // Use next-gen chat input (can be controlled via app settings or feature flag)
   const useNextGenInput = true; // Enable by default
 
