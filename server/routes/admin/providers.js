@@ -111,6 +111,11 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
           return res.status(400).json({ error: 'Provider ID cannot be changed' });
         }
 
+        // Define paths once at the top
+        const rootDir = getRootDir();
+        const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
+        const providersDir = join(rootDir, 'contents', 'config');
+
         // Handle API key encryption
         if (updatedProvider.apiKey) {
           // Check if this is a new key or unchanged masked value
@@ -126,9 +131,6 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
             // Masked value - need to preserve existing key
             // CRITICAL FIX: Read from disk, not cache, to ensure we have the apiKey field
             // The cache might not have the apiKey due to TTL expiration or race conditions
-            const rootDir = getRootDir();
-            const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
-
             try {
               if (existsSync(providersPath)) {
                 const providersFromDisk = JSON.parse(await fs.readFile(providersPath, 'utf8'));
@@ -157,10 +159,6 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
         // Remove client-side helper fields
         delete updatedProvider.apiKeySet;
         delete updatedProvider.apiKeyMasked;
-
-        const rootDir = getRootDir();
-        const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
-        const providersDir = join(rootDir, 'contents', 'config');
 
         // Load current providers and create a deep copy to avoid cache mutation
         const { data: cachedProviders } = configCache.getProviders(true);
