@@ -182,7 +182,7 @@ const Layout = () => {
       )}
 
       <main className="flex-grow w-full overflow-y-auto">
-        <div className="container mx-auto px-4 h-full">
+        <div className="container mx-auto px-4">
           <Outlet />
         </div>
       </main>
