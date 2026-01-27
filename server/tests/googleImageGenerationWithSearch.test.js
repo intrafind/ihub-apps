@@ -9,6 +9,10 @@ import { convertGoogleResponseToGeneric } from '../adapters/toolCalling/GoogleCo
 
 console.log('Testing Google Image Generation with google_search...');
 
+// Minimal 1x1 pixel PNG for testing (base64-encoded)
+const TEST_IMAGE_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
 // Test 1: Verify that image data is properly extracted from Google's response
 // This simulates a response from Gemini with image generation and google_search
 const imageResponse = {
@@ -22,7 +26,7 @@ const imageResponse = {
           {
             inlineData: {
               mimeType: 'image/png',
-              data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+              data: TEST_IMAGE_BASE64
             }
           }
         ],
@@ -35,7 +39,8 @@ const imageResponse = {
   ],
   groundingMetadata: {
     searchEntryPoint: {
-      renderedContent: '<chunk>IntraFind Software AG is a company based in Munich...</chunk>'
+      renderedContent:
+        '<chunk>IntraFind Software AG is a company based in Munich...</chunk>'
     },
     groundingSupports: [
       {
