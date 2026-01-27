@@ -89,6 +89,17 @@ const NextGenChatInput = ({
     }
   }, [actualInputRef]);
 
+  // Calculate if single-action optimization is active in ChatInputActionsMenu
+  // This logic mirrors the calculation in ChatInputActionsMenu.jsx
+  const hasTools = app?.tools && app.tools.length > 0;
+  const quickActionCount =
+    (uploadConfig?.enabled === true ? 1 : 0) +
+    (magicPromptEnabled && !showUndoMagicPrompt ? 1 : 0) +
+    (showUndoMagicPrompt ? 1 : 0) +
+    (onVoiceInput ? 1 : 0);
+  const totalActions = quickActionCount + (hasTools ? 1 : 0);
+  const isSingleActionOptimization = totalActions === 1 && quickActionCount === 1 && !hasTools;
+
   // When processing finishes, refocus the input field
   useEffect(() => {
     if (!isProcessing) {
@@ -282,9 +293,33 @@ const NextGenChatInput = ({
             inputRef={actualInputRef}
           />
 
-          {/* Upload and voice icons are now ONLY shown via ChatInputActionsMenu */}
-          {/* to avoid duplication. ChatInputActionsMenu handles single-action optimization */}
-          {/* and displays these actions either directly or in a dropdown menu */}
+          {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
+          {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
+          {uploadConfig?.enabled === true && !isSingleActionOptimization && (
+            <button
+              type="button"
+              onClick={onToggleUploader || toggleUploader}
+              disabled={disabled || isProcessing}
+              title={t('chatActions.attachFile', 'Attach File')}
+              className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+            >
+              <Icon name="paper-clip" size="md" />
+            </button>
+          )}
+
+          {/* Microphone icon - show directly on desktop if enabled and NOT in single-action mode */}
+          {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
+          {onVoiceInput && !isSingleActionOptimization && (
+            <div className="hidden md:flex">
+              <VoiceInputComponent
+                app={app}
+                onSpeechResult={onVoiceInput}
+                inputRef={actualInputRef}
+                disabled={disabled || isProcessing}
+                onCommand={onVoiceCommand}
+              />
+            </div>
+          )}
 
           <div className="flex-1"></div>
 
