@@ -5,7 +5,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Dependencies Installation
 # -----------------------------------------------------------------------------
-FROM node:22-alpine AS dependencies
+FROM node:24-alpine AS dependencies
 
 # Install system dependencies required for build
 RUN apk add --update --no-cache \
@@ -76,7 +76,7 @@ CMD ["npm", "run", "dev"]
 # -----------------------------------------------------------------------------
 # Stage 4: Production Runtime
 # -----------------------------------------------------------------------------
-FROM node:22-alpine AS production
+FROM node:24-alpine AS production
 
 # Build arguments for runtime configuration
 ARG BASE_PATH=""
