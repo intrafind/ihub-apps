@@ -482,7 +482,8 @@ export async function simpleCompletion(
     temperature = 0.7,
     maxTokens = 8192,
     responseFormat = null,
-    responseSchema = null
+    responseSchema = null,
+    apiKey = null
   } = {}
 ) {
   const resolvedModelId = modelId || model;
@@ -505,14 +506,19 @@ export async function simpleCompletion(
     throw new Error(`Model ${resolvedModelId} not found`);
   }
 
-  const apiKey = config[`${modelConfig.provider.toUpperCase()}_API_KEY`];
-  if (!apiKey) {
-    throw new Error(`API key for ${modelConfig.provider} not found in environment variables.`);
+  // Use provided API key if available, otherwise get from environment or stored config
+  let resolvedApiKey = apiKey;
+  if (!resolvedApiKey) {
+    // Try to get API key from model/provider configuration or environment
+    resolvedApiKey = await getApiKeyForModel(modelConfig.id);
+    if (!resolvedApiKey) {
+      throw new Error(`API key for ${modelConfig.provider} not found in environment variables.`);
+    }
   }
 
   const msgArray = Array.isArray(messages) ? messages : [{ role: 'user', content: messages }];
 
-  const request = createCompletionRequest(modelConfig, msgArray, apiKey, {
+  const request = createCompletionRequest(modelConfig, msgArray, resolvedApiKey, {
     temperature,
     maxTokens,
     stream: false,

@@ -431,7 +431,10 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
           return;
         }
         try {
-          const result = await simpleCompletion(testMessage, { modelId: model.id });
+          const result = await simpleCompletion(testMessage, {
+            modelId: model.id,
+            apiKey: apiKey
+          });
           res.json({
             success: true,
             message: 'Model test successful',
