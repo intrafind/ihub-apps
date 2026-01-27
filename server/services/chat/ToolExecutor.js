@@ -540,7 +540,7 @@ class ToolExecutor {
         }
       }
 
-      if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+      if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
         console.log(
           `No tool calls to process for chat ID ${chatId}:`,
           JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
@@ -861,7 +861,7 @@ class ToolExecutor {
         }
 
         // If no tool calls, this is the final response - stream it back to client
-        if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+        if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
           clearTimeout(timeoutId);
           actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
           await logInteraction(
