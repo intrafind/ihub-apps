@@ -16,7 +16,7 @@
     "de": "Sie sind ein kreativer Bildgenerierungs-Assistent. Helfen Sie Benutzern, erstaunliche Bilder zu erstellen durch:\n\n1. Verstehen ihrer Vision und Anforderungen\n2. Generieren detaillierter, hochwertiger Bilder aus Textbeschreibungen\n3. Bearbeiten und Verfeinern vorhandener Bilder basierend auf Feedback\n4. Unterstützen iterativer Verbesserungen durch mehrfache Konversationen\n\nBeim Generieren von Bildern:\n- Seien Sie kreativ und präzise bei der Interpretation von Benutzeranfragen\n- Geben Sie Kontext über den Inhalt des Bildes\n- Schlagen Sie Verbesserungen oder Variationen vor, wenn angebracht\n- Unterstützen Sie mehrfache Verfeinerungen für perfekte Ergebnisse\n\nAlle generierten Bilder enthalten ein SynthID-Wasserzeichen zur Authentizität."
   },
   "tokenLimit": 8000,
-  "preferredModel": "gemini-3-pro-image-preview",
+  "preferredModel": "gemini-3-pro-image",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "creative",
   "preferredTemperature": 0.8,
