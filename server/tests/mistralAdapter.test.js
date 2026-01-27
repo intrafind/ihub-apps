@@ -1,5 +1,6 @@
 import assert from 'assert';
 import MistralAdapter from '../adapters/mistral.js';
+import logger from '../utils/logger.js';
 
 const model = {
   modelId: 'mistral-small',
@@ -18,4 +19,4 @@ assert.deepStrictEqual(req.body.response_format, {
   type: 'json_schema',
   json_schema: { schema, name: 'response', strict: true }
 });
-console.log('Mistral adapter structured output test passed');
+logger.info('Mistral adapter structured output test passed');

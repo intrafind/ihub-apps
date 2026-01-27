@@ -8,6 +8,7 @@ import { hashPasswordWithUserId } from '../../middleware/localAuth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
+import logger from '../../utils/logger.js';
 
 /**
  * @swagger
@@ -167,7 +168,7 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
         authenticated: !authRequired || req.headers.authorization?.startsWith('Bearer ')
       });
     } catch (error) {
-      console.error('Error checking admin auth status:', error);
+      logger.error('Error checking admin auth status:', error);
       res.status(500).json({ error: 'Failed to check authentication status' });
     }
   });
@@ -210,7 +211,7 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
     try {
       res.json({ message: 'Admin authentication successful', authenticated: true });
     } catch (error) {
-      console.error('Error testing admin auth:', error);
+      logger.error('Error testing admin auth:', error);
       res.status(500).json({ error: 'Failed to test authentication' });
     }
   });
@@ -289,10 +290,10 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
         platformConfig.admin.encrypted = true;
         await atomicWriteJSON(platformConfigPath, platformConfig);
         await configCache.refreshCacheEntry('config/platform.json');
-        console.log('🔐 Admin password changed and encrypted');
+        logger.info('🔐 Admin password changed and encrypted');
         res.json({ message: 'Admin password changed successfully', encrypted: true });
       } catch (error) {
-        console.error('Error changing admin password:', error);
+        logger.error('Error changing admin password:', error);
         res.status(500).json({ error: 'Failed to change admin password' });
       }
     }
@@ -335,12 +336,12 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
         usersData = JSON.parse(usersFileData);
       } catch {
         // File doesn't exist or is invalid, return empty users
-        console.log('Users file not found or invalid, returning empty list');
+        logger.info('Users file not found or invalid, returning empty list');
       }
 
       res.json(usersData);
     } catch (error) {
-      console.error('Error getting users:', error);
+      logger.error('Error getting users:', error);
       res.status(500).json({ error: 'Failed to get users' });
     }
   });
@@ -477,14 +478,14 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
       // Refresh cache to ensure new user is available in cache
       await configCache.refreshCacheEntry('config/users.json');
 
-      console.log(`👤 Created new user: ${username} (${userId})`);
+      logger.info(`👤 Created new user: ${username} (${userId})`);
 
       // Return user without password hash
       // eslint-disable-next-line no-unused-vars
       const { passwordHash: _passwordHash, ...userResponse } = newUser;
       res.json({ user: userResponse });
     } catch (error) {
-      console.error('Error creating user:', error);
+      logger.error('Error creating user:', error);
       res.status(500).json({ error: 'Failed to create user' });
     }
   });
@@ -608,14 +609,14 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
         // Refresh cache to ensure updated user data is available in cache
         await configCache.refreshCacheEntry('config/users.json');
 
-        console.log(`👤 Updated user: ${user.username} (${userId})`);
+        logger.info(`👤 Updated user: ${user.username} (${userId})`);
 
         // Return user without password hash
         // eslint-disable-next-line no-unused-vars
         const { passwordHash, ...userResponse } = user;
         res.json({ user: userResponse });
       } catch (error) {
-        console.error('Error updating user:', error);
+        logger.error('Error updating user:', error);
         res.status(500).json({ error: 'Failed to update user' });
       }
     }
@@ -704,11 +705,11 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
         // Refresh cache to ensure deleted user is removed from cache
         await configCache.refreshCacheEntry('config/users.json');
 
-        console.log(`👤 Deleted user: ${username} (${userId})`);
+        logger.info(`👤 Deleted user: ${username} (${userId})`);
 
         res.json({ message: 'User deleted successfully' });
       } catch (error) {
-        console.error('Error deleting user:', error);
+        logger.error('Error deleting user:', error);
         res.status(500).json({ error: 'Failed to delete user' });
       }
     }

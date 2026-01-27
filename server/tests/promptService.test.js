@@ -1,7 +1,7 @@
 import assert from 'assert';
 import PromptService from '../services/PromptService.js';
 
-console.log('Testing PromptService prompt template handling...');
+logger.info('Testing PromptService prompt template handling...');
 
 // Mock configCache for tests
 const mockConfigCache = {
@@ -10,6 +10,7 @@ const mockConfigCache = {
 
 // Mock the configCache module
 import configCache from '../configCache.js';
+import logger from '../utils/logger.js';
 Object.assign(configCache, mockConfigCache);
 
 // Test 1: Empty prompt template should still include user content
@@ -49,7 +50,7 @@ async function testEmptyPromptTemplate() {
     'User content should be preserved when template is empty'
   );
 
-  console.log('✓ Empty prompt template test passed');
+  logger.info('✓ Empty prompt template test passed');
 }
 
 // Test 2: Prompt template without {{content}} placeholder should append user content
@@ -86,7 +87,7 @@ async function testPromptTemplateWithoutContentPlaceholder() {
     'User content should be appended when template lacks {{content}}'
   );
 
-  console.log('✓ Prompt template without {{content}} placeholder test passed');
+  logger.info('✓ Prompt template without {{content}} placeholder test passed');
 }
 
 // Test 3: Prompt template with {{content}} placeholder should replace correctly
@@ -123,7 +124,7 @@ async function testPromptTemplateWithContentPlaceholder() {
     'User content should be correctly replaced in template'
   );
 
-  console.log('✓ Prompt template with {{content}} placeholder test passed');
+  logger.info('✓ Prompt template with {{content}} placeholder test passed');
 }
 
 // Test 4: Prompt template with variables and {{content}}
@@ -160,7 +161,7 @@ async function testPromptTemplateWithVariablesAndContent() {
     'Variables and content should both be replaced'
   );
 
-  console.log('✓ Prompt template with variables and {{content}} test passed');
+  logger.info('✓ Prompt template with variables and {{content}} test passed');
 }
 
 // Test 5: Empty content with variables should work
@@ -197,7 +198,7 @@ async function testEmptyContentWithVariables() {
     'Variables should be replaced even with empty content'
   );
 
-  console.log('✓ Empty content with variables test passed');
+  logger.info('✓ Empty content with variables test passed');
 }
 
 // Test 6: String prompt template instead of object
@@ -230,7 +231,7 @@ async function testStringPromptTemplate() {
   assert.strictEqual(result.length, 2, 'Should have 2 messages');
   assert.strictEqual(result[1].content, 'Message: Hello', 'String template should work correctly');
 
-  console.log('✓ String prompt template test passed');
+  logger.info('✓ String prompt template test passed');
 }
 
 // Run all tests
@@ -243,10 +244,10 @@ async function runTests() {
     await testEmptyContentWithVariables();
     await testStringPromptTemplate();
 
-    console.log('\n✅ All PromptService tests passed!');
+    logger.info('\n✅ All PromptService tests passed!');
   } catch (error) {
-    console.error('\n❌ Test failed:', error.message);
-    console.error(error.stack);
+    logger.error('\n❌ Test failed:', error.message);
+    logger.error(error.stack);
     process.exit(1);
   }
 }

@@ -1,5 +1,6 @@
 import assert from 'assert';
 import AnthropicAdapter from '../adapters/anthropic.js';
+import logger from '../utils/logger.js';
 
 const model = {
   modelId: 'claude-4-sonnet',
@@ -18,4 +19,4 @@ assert.ok(jsonTool, 'json tool added');
 assert.deepStrictEqual(jsonTool.input_schema, schema);
 assert.deepStrictEqual(req.body.tool_choice, { type: 'tool', name: 'json' });
 assert.strictEqual(req.body.response_format, undefined);
-console.log('Anthropic adapter structured output test passed');
+logger.info('Anthropic adapter structured output test passed');

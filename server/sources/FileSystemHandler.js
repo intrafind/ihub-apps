@@ -3,6 +3,7 @@ import path from 'path';
 import SourceHandler from './SourceHandler.js';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
+import logger from '../utils/logger.js';
 
 /**
  * Filesystem Source Handler
@@ -17,7 +18,7 @@ class FileSystemHandler extends SourceHandler {
     const rootDir = getRootDir();
     const contentsDir = config.CONTENTS_DIR || 'contents';
     this.basePath = handlerConfig.basePath || path.join(rootDir, contentsDir);
-    console.log(`FileSystemHandler initialized with basePath: ${this.basePath}`);
+    logger.info(`FileSystemHandler initialized with basePath: ${this.basePath}`);
 
     // Ensure sources subdirectory exists
     this.ensureSourcesDirectory();
@@ -28,7 +29,7 @@ class FileSystemHandler extends SourceHandler {
       const sourcesPath = path.join(this.basePath, 'sources');
       await fs.mkdir(sourcesPath, { recursive: true });
     } catch (error) {
-      console.error('Failed to create sources directory:', error);
+      logger.error('Failed to create sources directory:', error);
     }
   }
 

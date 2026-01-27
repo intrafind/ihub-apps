@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { throttledFetch } from './requestThrottler.js';
 import configCache from './configCache.js';
 import tokenStorageService from './services/TokenStorageService.js';
+import logger from './utils/logger.js';
 
 // Constants
 const JWT_AUTH_REQUIRED = 'JWT_AUTH_REQUIRED';
@@ -45,14 +46,14 @@ export async function getApiKeyForModel(modelId) {
     let { data: models = [] } = configCache.getModels();
 
     if (!models) {
-      console.error('Failed to load models configuration');
+      logger.error('Failed to load models configuration');
       return null;
     }
 
     // Find the model by ID
     const model = models.find(m => m.id === modelId);
     if (!model) {
-      console.error(`Model not found: ${sanitizeForLog(modelId)}`);
+      logger.error(`Model not found: ${sanitizeForLog(modelId)}`);
       return null;
     }
 
@@ -67,15 +68,15 @@ export async function getApiKeyForModel(modelId) {
 
         if (isEncrypted) {
           const decryptedKey = tokenStorageService.decryptString(model.apiKey);
-          console.log(`Using stored encrypted API key for model: %s`, sanitizeForLog(modelId));
+          logger.info(`Using stored encrypted API key for model: %s`, sanitizeForLog(modelId));
           return decryptedKey;
         } else {
           // If not encrypted, use as-is (for backwards compatibility during migration)
-          console.log(`Using stored plaintext API key for model: %s`, sanitizeForLog(modelId));
+          logger.info(`Using stored plaintext API key for model: %s`, sanitizeForLog(modelId));
           return model.apiKey;
         }
       } catch (error) {
-        console.error(
+        logger.error(
           'Failed to decrypt API key for model %s:',
           sanitizeForLog(modelId),
           error.message
@@ -95,21 +96,21 @@ export async function getApiKeyForModel(modelId) {
 
           if (isEncrypted) {
             const decryptedKey = tokenStorageService.decryptString(providerConfig.apiKey);
-            console.log(
+            logger.info(
               `Using stored encrypted provider API key for provider: %s`,
               sanitizeForLog(provider)
             );
             return decryptedKey;
           } else {
             // If not encrypted, use as-is (for backwards compatibility during migration)
-            console.log(
+            logger.info(
               `Using stored plaintext provider API key for provider: %s`,
               sanitizeForLog(provider)
             );
             return providerConfig.apiKey;
           }
         } catch (error) {
-          console.error(
+          logger.error(
             'Failed to decrypt provider API key for %s:',
             sanitizeForLog(provider),
             error.message
@@ -118,7 +119,7 @@ export async function getApiKeyForModel(modelId) {
         }
       }
     } catch (error) {
-      console.error('Error checking provider credentials:', error);
+      logger.error('Error checking provider credentials:', error);
       // Continue to environment variable fallbacks
     }
 
@@ -127,7 +128,7 @@ export async function getApiKeyForModel(modelId) {
     const modelSpecificKeyName = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
     const modelSpecificKey = config[modelSpecificKeyName];
     if (modelSpecificKey) {
-      console.log(`Using environment variable API key: %s`, modelSpecificKeyName);
+      logger.info(`Using environment variable API key: %s`, modelSpecificKeyName);
       return modelSpecificKey;
     }
 
@@ -158,17 +159,17 @@ export async function getApiKeyForModel(modelId) {
 
         // Check for a default API key as last resort
         if (config.DEFAULT_API_KEY) {
-          console.log(`Using DEFAULT_API_KEY for provider: ${provider}`);
+          logger.info(`Using DEFAULT_API_KEY for provider: ${provider}`);
           return config.DEFAULT_API_KEY;
         }
 
-        console.error(
+        logger.error(
           `No API key found for provider: ${provider} or model-specific key: ${modelSpecificKeyName}`
         );
         return null;
     }
   } catch (error) {
-    console.error('Error getting API key for model:', error);
+    logger.error('Error getting API key for model:', error);
     return null;
   }
 }
@@ -332,22 +333,22 @@ export async function logInteraction(interactionType, data) {
       : '| User: anonymous';
 
     if (logType === 'feedback') {
-      console.log(
+      logger.info(
         `[FEEDBACK] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo} | Rating: ${data.feedback?.rating || 'unknown'}`
       );
     } else if (logType === 'chat_response') {
-      console.log(
+      logger.info(
         `[CHAT_RESPONSE] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo}`
       );
     } else if (logType === 'chat_request') {
       const queryPreview = logEntry.query
         ? `| Query: ${logEntry.query.substring(0, 50)}${logEntry.query.length > 50 ? '...' : ''}`
         : '';
-      console.log(
+      logger.info(
         `[CHAT_REQUEST] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo} ${queryPreview}`
       );
     } else {
-      console.log(
+      logger.info(
         `[INTERACTION] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo}`
       );
     }
@@ -359,7 +360,7 @@ export async function logInteraction(interactionType, data) {
     return interactionId;
   } catch (error) {
     // Don't let logging errors affect the main application flow
-    console.error('Error logging interaction:', error);
+    logger.error('Error logging interaction:', error);
     return null;
   }
 }
@@ -390,7 +391,7 @@ async function appendToLogFile(logEntry) {
     // Append log entry to file
     await fs.appendFile(logFilePath, JSON.stringify(logEntry) + '\n', 'utf8');
   } catch (error) {
-    console.error('Error writing to log file:', error);
+    logger.error('Error writing to log file:', error);
   }
 }
 
@@ -406,7 +407,7 @@ export function trackSession(chatId, info = {}) {
     // Log chat session start, including both chatId and userSessionId if available
     const userSessionId = info.userSessionId || 'unknown';
 
-    console.log(
+    logger.info(
       `[CHAT STARTED] Chat ID: ${chatId} | User Session: ${userSessionId} | App: ${info.appId || 'unknown'}`
     );
 
@@ -419,12 +420,12 @@ export function trackSession(chatId, info = {}) {
       appId: info.appId || 'unknown',
       userAgent: info.userAgent || 'unknown'
     }).catch(error => {
-      console.error('Error logging chat session start:', error);
+      logger.error('Error logging chat session start:', error);
     });
 
     return chatId;
   } catch (error) {
-    console.error('Error tracking chat session:', error);
+    logger.error('Error tracking chat session:', error);
     return chatId;
   }
 }
@@ -453,13 +454,13 @@ export async function logNewSession(chatId, appId, metadata = {}) {
       referrer: metadata.referrer || 'unknown'
     };
 
-    console.log(`[NEW SESSION] ${timestamp} | Session ID: ${chatId} | App: ${appId}`);
+    logger.info(`[NEW SESSION] ${timestamp} | Session ID: ${chatId} | App: ${appId}`);
 
     // Write to log file
     await appendToLogFile(logEntry);
   } catch (error) {
     // Don't let logging errors affect the main application flow
-    console.error('Error logging new session:', error);
+    logger.error('Error logging new session:', error);
   }
 }
 
@@ -488,20 +489,20 @@ export async function simpleCompletion(
 ) {
   const resolvedModelId = modelId || model;
 
-  console.log('Starting simple completion...', {
+  logger.info('Starting simple completion...', {
     messages: JSON.stringify(messages, null, 2),
     modelId: resolvedModelId,
     temperature
   });
   // Try to get models from cache first
   let { data: models = [] } = configCache.getModels();
-  console.log(
+  logger.info(
     'Available models:',
     models.map(m => m.id)
   );
 
   const modelConfig = models.find(m => m.id === resolvedModelId);
-  console.log('Using model:', modelConfig);
+  logger.info('Using model:', modelConfig);
   if (!modelConfig) {
     throw new Error(`Model ${resolvedModelId} not found`);
   }
@@ -567,7 +568,7 @@ export function resolveModelId(preferredModel = null, toolName = 'unknown') {
 
     // Check if any models are available
     if (!models || models.length === 0) {
-      console.warn(`${toolName}: No models available, using fallback`);
+      logger.warn(`${toolName}: No models available, using fallback`);
       return null;
     }
 
@@ -578,7 +579,7 @@ export function resolveModelId(preferredModel = null, toolName = 'unknown') {
 
     // Log warning if preferred model was specified but not found
     if (preferredModel) {
-      console.warn(
+      logger.warn(
         `${toolName}: Model '${preferredModel}' not found, falling back to default model '${defaultModel}'`
       );
     }
@@ -591,16 +592,16 @@ export function resolveModelId(preferredModel = null, toolName = 'unknown') {
     // Final fallback to first available model
     const firstModel = models[0]?.id;
     if (firstModel) {
-      console.warn(
+      logger.warn(
         `${toolName}: Default model not found, using first available model '${firstModel}'`
       );
       return firstModel;
     }
 
-    console.error(`${toolName}: No models available`);
+    logger.error(`${toolName}: No models available`);
     return null;
   } catch (error) {
-    console.error(`${toolName}: Error resolving model ID:`, error);
+    logger.error(`${toolName}: Error resolving model ID:`, error);
     return null;
   }
 }

@@ -1,5 +1,6 @@
 import assert from 'assert';
 import OpenAIAdapter from '../adapters/openai.js';
+import logger from '../utils/logger.js';
 
 const model = {
   modelId: 'gpt-4',
@@ -13,4 +14,4 @@ const req = OpenAIAdapter.createCompletionRequest(model, messages, 'key', {
 });
 
 assert.deepStrictEqual(req.body.response_format, { type: 'json_object' });
-console.log('OpenAI adapter structured output test passed');
+logger.info('OpenAI adapter structured output test passed');

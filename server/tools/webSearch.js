@@ -1,5 +1,6 @@
 import webSearchService from '../services/WebSearchService.js';
 import config from '../config.js';
+import logger from '../utils/logger.js';
 
 /**
  * Unified Web Search Tool
@@ -41,30 +42,30 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const searchQuery = process.argv.slice(2).join(' ');
 
   if (!searchQuery) {
-    console.error('Usage: node webSearch.js <search term>');
-    console.error('Example: node webSearch.js "JavaScript tutorials"');
+    logger.error('Usage: node webSearch.js <search term>');
+    logger.error('Example: node webSearch.js "JavaScript tutorials"');
     process.exit(1);
   }
 
-  console.log(`Searching for: "${searchQuery}"`);
+  logger.info(`Searching for: "${searchQuery}"`);
 
   try {
     const result = await webSearch({ query: searchQuery });
-    console.log('\nSearch Results:');
-    console.log('===============');
+    logger.info('\nSearch Results:');
+    logger.info('===============');
 
     if (result.results.length === 0) {
-      console.log('No results found.');
+      logger.info('No results found.');
     } else {
       result.results.forEach((item, index) => {
-        console.log(`${index + 1}. ${item.title}`);
-        console.log(`   URL: ${item.url}`);
-        console.log(`   Description: ${item.description}`);
-        console.log('');
+        logger.info(`${index + 1}. ${item.title}`);
+        logger.info(`   URL: ${item.url}`);
+        logger.info(`   Description: ${item.description}`);
+        logger.info('');
       });
     }
   } catch (error) {
-    console.error('Error performing search:', error.message);
+    logger.error('Error performing search:', error.message);
     process.exit(1);
   }
 }

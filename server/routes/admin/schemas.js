@@ -2,6 +2,7 @@ import { getJsonSchemaByType, getAllJsonSchemas } from '../../utils/schemaExport
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { sendFailedOperationError } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import logger from '../../utils/logger.js';
 
 /**
  * @swagger

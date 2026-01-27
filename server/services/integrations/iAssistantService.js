@@ -4,6 +4,7 @@ import { throttledFetch } from '../../requestThrottler.js';
 import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
 import configCache from '../../configCache.js';
 import authDebugService from '../../utils/authDebugService.js';
+import logger from '../../utils/logger.js';
 
 /**
  * iAssistant Service Class
@@ -211,7 +212,7 @@ class IAssistantService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(
+        logger.error(
           `iAssistant Ask: Error for question "${question}" with profile "${actualProfileId}":`,
           errorText
         );
@@ -226,7 +227,7 @@ class IAssistantService {
         return await this.collectStreamingResponse(response);
       }
     } catch (error) {
-      console.error('iAssistant ask error:', error);
+      logger.error('iAssistant ask error:', error);
       this._handleError(error);
     }
   }
@@ -329,7 +330,7 @@ class IAssistantService {
 
       return result;
     } catch (error) {
-      console.error('iAssistant: Error collecting streaming response:', error);
+      logger.error('iAssistant: Error collecting streaming response:', error);
       throw error;
     } finally {
       reader.releaseLock();
@@ -355,7 +356,7 @@ class IAssistantService {
     try {
       // Handle empty or invalid buffer
       if (!buffer || typeof buffer !== 'string') {
-        console.warn('iAssistant: Empty or invalid buffer received');
+        logger.warn('iAssistant: Empty or invalid buffer received');
         return result;
       }
 
@@ -398,7 +399,7 @@ class IAssistantService {
 
       return result;
     } catch (error) {
-      console.error('iAssistant: Error processing streaming buffer:', error.message);
+      logger.error('iAssistant: Error processing streaming buffer:', error.message);
       return {
         ...result,
         error: true,
@@ -462,7 +463,7 @@ class IAssistantService {
           break;
       }
     } catch (error) {
-      console.error(`Error processing iAssistant event ${eventType}:`, error.message);
+      logger.error(`Error processing iAssistant event ${eventType}:`, error.message);
     }
   }
 
@@ -644,7 +645,7 @@ class IAssistantService {
 
       return result;
     } catch (error) {
-      console.error('iAssistant: Error collecting complete response:', error);
+      logger.error('iAssistant: Error collecting complete response:', error);
       throw error;
     } finally {
       reader.releaseLock();

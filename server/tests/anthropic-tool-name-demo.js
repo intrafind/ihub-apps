@@ -4,10 +4,11 @@
  */
 
 import { convertGenericToolsToAnthropic } from '../adapters/toolCalling/AnthropicConverter.js';
+import logger from '../utils/logger.js';
 
-console.log('═══════════════════════════════════════════════════════');
-console.log('  Anthropic Tool Name Validation Fix - Demonstration');
-console.log('═══════════════════════════════════════════════════════\n');
+logger.info('═══════════════════════════════════════════════════════');
+logger.info('  Anthropic Tool Name Validation Fix - Demonstration');
+logger.info('═══════════════════════════════════════════════════════\n');
 
 // Simulating tools as they appear after localization in German
 const toolsAfterLocalization = [
@@ -46,46 +47,46 @@ const toolsAfterLocalization = [
   }
 ];
 
-console.log('📥 BEFORE FIX - Localized Tools (German):');
-console.log('─'.repeat(70));
+logger.info('📥 BEFORE FIX - Localized Tools (German):');
+logger.info('─'.repeat(70));
 toolsAfterLocalization.forEach((tool, i) => {
-  console.log(`\nTool ${i + 1}:`);
-  console.log(`  ID:   "${tool.id}"`);
-  console.log(`  Name: "${tool.name}"`);
-  console.log(
+  logger.info(`\nTool ${i + 1}:`);
+  logger.info(`  ID:   "${tool.id}"`);
+  logger.info(`  Name: "${tool.name}"`);
+  logger.info(
     `  Valid for Anthropic: ${/^[a-zA-Z0-9_-]{1,128}$/.test(tool.name) ? '✓' : '✗ (contains spaces/special chars)'}`
   );
 });
 
-console.log('\n\n📤 AFTER FIX - Converted to Anthropic Format:');
-console.log('─'.repeat(70));
+logger.info('\n\n📤 AFTER FIX - Converted to Anthropic Format:');
+logger.info('─'.repeat(70));
 
 const anthropicTools = convertGenericToolsToAnthropic(toolsAfterLocalization);
 anthropicTools.forEach((tool, i) => {
-  console.log(`\nTool ${i + 1}:`);
-  console.log(`  name: "${tool.name}"`);
-  console.log(
+  logger.info(`\nTool ${i + 1}:`);
+  logger.info(`  name: "${tool.name}"`);
+  logger.info(
     `  Valid for Anthropic: ${/^[a-zA-Z0-9_-]{1,128}$/.test(tool.name) ? '✓ YES' : '✗ NO'}`
   );
-  console.log(`  description: "${tool.description.substring(0, 60)}..."`);
+  logger.info(`  description: "${tool.description.substring(0, 60)}..."`);
 });
 
-console.log('\n\n🔍 VERIFICATION:');
-console.log('─'.repeat(70));
+logger.info('\n\n🔍 VERIFICATION:');
+logger.info('─'.repeat(70));
 
 const allValid = anthropicTools.every(tool => /^[a-zA-Z0-9_-]{1,128}$/.test(tool.name));
 
 if (allValid) {
-  console.log('✅ All tool names are valid for Anthropic API!');
-  console.log('✅ The fix successfully converts localized names to valid identifiers');
-  console.log('✅ Using tool.id instead of tool.name prevents validation errors');
+  logger.info('✅ All tool names are valid for Anthropic API!');
+  logger.info('✅ The fix successfully converts localized names to valid identifiers');
+  logger.info('✅ Using tool.id instead of tool.name prevents validation errors');
 } else {
-  console.log('❌ Some tool names are still invalid!');
+  logger.info('❌ Some tool names are still invalid!');
 }
 
-console.log('\n\n📋 ANTHROPIC API REQUEST EXAMPLE:');
-console.log('─'.repeat(70));
-console.log(
+logger.info('\n\n📋 ANTHROPIC API REQUEST EXAMPLE:');
+logger.info('─'.repeat(70));
+logger.info(
   JSON.stringify(
     {
       model: 'claude-sonnet-4-20250514',
@@ -107,6 +108,6 @@ console.log(
   )
 );
 
-console.log('\n═══════════════════════════════════════════════════════');
-console.log('  ✓ Demonstration Complete');
-console.log('═══════════════════════════════════════════════════════');
+logger.info('\n═══════════════════════════════════════════════════════');
+logger.info('  ✓ Demonstration Complete');
+logger.info('═══════════════════════════════════════════════════════');

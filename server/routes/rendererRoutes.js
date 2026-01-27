@@ -1,6 +1,7 @@
 import express from 'express';
 import { loadAllRenderers, getRendererById } from '../renderersLoader.js';
 import { buildServerPath } from '../utils/basePath.js';
+import logger from '../utils/logger.js';
 
 /**
  * Register renderer routes
@@ -29,7 +30,7 @@ export default function registerRendererRoutes(app, basePath = '') {
 
       res.json(rendererList);
     } catch (error) {
-      console.error('Error loading renderers:', error);
+      logger.error('Error loading renderers:', error);
       res.status(500).json({
         error: 'Failed to load renderers',
         message: error.message
@@ -63,7 +64,7 @@ export default function registerRendererRoutes(app, basePath = '') {
       // Return full renderer including code
       res.json(renderer);
     } catch (error) {
-      console.error('Error loading renderer:', error);
+      logger.error('Error loading renderer:', error);
       res.status(500).json({
         error: 'Failed to load renderer',
         message: error.message

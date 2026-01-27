@@ -1,3 +1,4 @@
+import logger from '../utils/logger.js';
 /**
  * Base adapter class for LLM providers to reduce duplication
  */
@@ -9,11 +10,11 @@ export class BaseAdapter {
    * @param {string} provider - Provider name
    */
   debugLogMessages(messages, formattedMessages, provider) {
-    console.log(
+    logger.info(
       'Original messages:',
       JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData })))
     );
-    console.log(
+    logger.info(
       `Processed ${provider} messages:`,
       JSON.stringify(
         formattedMessages.map(m => ({

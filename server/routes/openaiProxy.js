@@ -11,6 +11,7 @@ import {
   convertToolsToGeneric
 } from '../adapters/toolCalling/index.js';
 import { buildServerPath } from '../utils/basePath.js';
+import logger from '../utils/logger.js';
 
 export default function registerOpenAIProxyRoutes(app, { getLocalizedError, basePath = '' } = {}) {
   const base = buildServerPath('/api/inference', basePath);
@@ -157,7 +158,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
       max_tokens: maxTokens
     } = req.body || {};
 
-    console.log(`[OpenAI Proxy] Incoming request:`, {
+    logger.info(`[OpenAI Proxy] Incoming request:`, {
       modelId,
       messageCount: messages?.length,
       stream,
@@ -182,8 +183,8 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
     const { data: models = [] } = configCache.getModels();
     const model = models.find(m => m.id === modelId);
     if (!model) {
-      console.log(`[OpenAI Proxy] Model not found: ${modelId}`);
-      console.log(
+      logger.info(`[OpenAI Proxy] Model not found: ${modelId}`);
+      logger.info(
         `[OpenAI Proxy] Available models:`,
         models.map(m => m.id)
       );
@@ -228,7 +229,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
       try {
         genericTools = convertToolsToGeneric(tools, 'openai');
       } catch (error) {
-        console.error(`[OpenAI Proxy] Error converting tools to generic format:`, error);
+        logger.error(`[OpenAI Proxy] Error converting tools to generic format:`, error);
         genericTools = tools; // Fallback to original tools
       }
     }
@@ -259,7 +260,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
       //TODO check response status and handle errors
       if (!llmResponse.ok) {
         const errorText = await llmResponse.text();
-        console.error(`[OpenAI Proxy] Error response from ${model.provider}:`, {
+        logger.error(`[OpenAI Proxy] Error response from ${model.provider}:`, {
           status: llmResponse.status,
           statusText: llmResponse.statusText,
           errorText: errorText
@@ -324,7 +325,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
               try {
                 // Debug logging for iAssistant
                 if (model.provider === 'iassistant') {
-                  console.log(
+                  logger.info(
                     '[OpenAI Proxy] Processing iAssistant data:',
                     data.substring(0, 200) + '...'
                   );
@@ -407,7 +408,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
                   }
                 }
               } catch (error) {
-                console.error(`[OpenAI Proxy] Error processing ${model.provider} chunk:`, error);
+                logger.error(`[OpenAI Proxy] Error processing ${model.provider} chunk:`, error);
                 // Continue processing other chunks
               }
             }
@@ -445,7 +446,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
                     res.write(`data: ${JSON.stringify(openAIChunk)}\n\n`);
                   }
                 } catch (error) {
-                  console.error(`[OpenAI Proxy] Error processing ${model.provider} buffer:`, error);
+                  logger.error(`[OpenAI Proxy] Error processing ${model.provider} buffer:`, error);
                 }
               }
             }
@@ -463,7 +464,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
         try {
           // Convert provider response to generic format, then to OpenAI format
           const genericResult = convertResponseToGeneric(data, model.provider);
-          console.log(`[OpenAI Proxy] Generic result:`, JSON.stringify(genericResult, null, 2));
+          logger.info(`[OpenAI Proxy] Generic result:`, JSON.stringify(genericResult, null, 2));
 
           const completionId = `chatcmpl-${Date.now()}${Math.random().toString(36).substring(2, 11)}`;
 
@@ -498,7 +499,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
 
           res.json(openAIResponse);
         } catch (error) {
-          console.error('[OpenAI Proxy] Error processing non-streaming response:', error);
+          logger.error('[OpenAI Proxy] Error processing non-streaming response:', error);
           // Fallback: try to parse as JSON and send as-is
           try {
             const parsed = JSON.parse(data);
@@ -509,7 +510,7 @@ export default function registerOpenAIProxyRoutes(app, { getLocalizedError, base
         }
       }
     } catch (err) {
-      console.error('[OpenAI Proxy] Error occurred:', {
+      logger.error('[OpenAI Proxy] Error occurred:', {
         error: err.message,
         stack: err.stack,
         modelId,

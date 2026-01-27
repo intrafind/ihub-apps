@@ -1,12 +1,13 @@
 import { createCompletionRequest } from '../adapters/index.js';
 import dotenv from 'dotenv';
+import logger from '../utils/logger.js';
 
 // Load environment variables
 dotenv.config({ path: '../.env' });
 
-console.log('🔍 Tool Call Verification Test\n');
-console.log('This test specifically verifies that LLMs actually want to call tools');
-console.log('and documents the exact format differences between providers.\n');
+logger.info('🔍 Tool Call Verification Test\n');
+logger.info('This test specifically verifies that LLMs actually want to call tools');
+logger.info('and documents the exact format differences between providers.\n');
 
 // API configuration
 const apiKeys = {
@@ -102,9 +103,9 @@ async function testProviderToolCall(provider, model, prompt, tools) {
   }
 
   try {
-    console.log(`\n🧪 Testing ${provider.toUpperCase()} - ${prompt.name}`);
-    console.log(`   Message: "${prompt.message}"`);
-    console.log(`   Expected tool call: ${prompt.shouldCallTool ? prompt.expectedTool : 'none'}`);
+    logger.info(`\n🧪 Testing ${provider.toUpperCase()} - ${prompt.name}`);
+    logger.info(`   Message: "${prompt.message}"`);
+    logger.info(`   Expected tool call: ${prompt.shouldCallTool ? prompt.expectedTool : 'none'}`);
 
     // Create request
     const request = createCompletionRequest(
@@ -119,11 +120,11 @@ async function testProviderToolCall(provider, model, prompt, tools) {
       }
     );
 
-    console.log(`\n📤 REQUEST TO ${provider.toUpperCase()}:`);
-    console.log(`   URL: ${request.url}`);
-    console.log(`   Method: ${request.method}`);
-    console.log(`   Headers: ${JSON.stringify(request.headers, null, 4)}`);
-    console.log(`   Body: ${JSON.stringify(request.body, null, 4)}`);
+    logger.info(`\n📤 REQUEST TO ${provider.toUpperCase()}:`);
+    logger.info(`   URL: ${request.url}`);
+    logger.info(`   Method: ${request.method}`);
+    logger.info(`   Headers: ${JSON.stringify(request.headers, null, 4)}`);
+    logger.info(`   Body: ${JSON.stringify(request.body, null, 4)}`);
 
     // Make API call
     const headers = { ...request.headers };
@@ -140,14 +141,14 @@ async function testProviderToolCall(provider, model, prompt, tools) {
 
     const responseText = await response.text();
 
-    console.log(`\n📥 RESPONSE FROM ${provider.toUpperCase()}:`);
-    console.log(`   Status: ${response.status} ${response.statusText}`);
-    console.log(
+    logger.info(`\n📥 RESPONSE FROM ${provider.toUpperCase()}:`);
+    logger.info(`   Status: ${response.status} ${response.statusText}`);
+    logger.info(
       `   Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 4)}`
     );
 
     if (!response.ok) {
-      console.log(`   Body: ${responseText}`);
+      logger.info(`   Body: ${responseText}`);
       return {
         provider,
         prompt: prompt.name,
@@ -160,7 +161,7 @@ async function testProviderToolCall(provider, model, prompt, tools) {
     try {
       responseData = JSON.parse(responseText);
     } catch (e) {
-      console.log(`   Body (raw): ${responseText}`);
+      logger.info(`   Body (raw): ${responseText}`);
       return {
         provider,
         prompt: prompt.name,
@@ -169,27 +170,27 @@ async function testProviderToolCall(provider, model, prompt, tools) {
       };
     }
 
-    console.log(`   Body: ${JSON.stringify(responseData, null, 4)}`);
+    logger.info(`   Body: ${JSON.stringify(responseData, null, 4)}`);
 
     // Analyze response for tool calls
     const analysis = analyzeToolCalls(provider, responseData);
 
-    console.log(`\n🔍 ANALYSIS FOR ${provider.toUpperCase()}:`);
-    console.log(
+    logger.info(`\n🔍 ANALYSIS FOR ${provider.toUpperCase()}:`);
+    logger.info(
       `   Content: "${analysis.content.substring(0, 100)}${analysis.content.length > 100 ? '...' : ''}"`
     );
-    console.log(`   Tool calls found: ${analysis.toolCalls.length}`);
-    console.log(`   Expected tool calls: ${prompt.shouldCallTool ? 1 : 0}`);
-    console.log(
+    logger.info(`   Tool calls found: ${analysis.toolCalls.length}`);
+    logger.info(`   Expected tool calls: ${prompt.shouldCallTool ? 1 : 0}`);
+    logger.info(
       `   Match expectation: ${analysis.toolCalls.length > 0 === prompt.shouldCallTool ? '✅' : '❌'}`
     );
 
     if (analysis.toolCalls.length > 0) {
-      console.log(`   Tool call details:`);
+      logger.info(`   Tool call details:`);
       analysis.toolCalls.forEach((call, index) => {
-        console.log(`     ${index + 1}. Tool: ${call.name || 'unknown'}`);
-        console.log(`        ID: ${call.id || 'none'}`);
-        console.log(`        Arguments: ${JSON.stringify(call.arguments || {}, null, 8)}`);
+        logger.info(`     ${index + 1}. Tool: ${call.name || 'unknown'}`);
+        logger.info(`        ID: ${call.id || 'none'}`);
+        logger.info(`        Arguments: ${JSON.stringify(call.arguments || {}, null, 8)}`);
       });
     }
 
@@ -205,7 +206,7 @@ async function testProviderToolCall(provider, model, prompt, tools) {
       raw_response: responseData
     };
   } catch (error) {
-    console.log(`   ❌ Error: ${error.message}`);
+    logger.info(`   ❌ Error: ${error.message}`);
     return {
       provider,
       prompt: prompt.name,
@@ -269,7 +270,7 @@ function analyzeToolCalls(provider, responseData) {
         break;
     }
   } catch (error) {
-    console.log(`Error analyzing tool calls for ${provider}: ${error.message}`);
+    logger.info(`Error analyzing tool calls for ${provider}: ${error.message}`);
   }
 
   return { toolCalls, content };
@@ -279,7 +280,7 @@ function analyzeToolCalls(provider, responseData) {
  * Generate summary report
  */
 function generateSummaryReport(allResults) {
-  console.log('\n📊 TOOL CALL VERIFICATION SUMMARY\n');
+  logger.info('\n📊 TOOL CALL VERIFICATION SUMMARY\n');
 
   const summary = {
     total_tests: 0,
@@ -313,17 +314,17 @@ function generateSummaryReport(allResults) {
   });
 
   // Print summary
-  console.log(`Total tests run: ${summary.total_tests}`);
-  console.log(`Successful API calls: ${summary.successful_tests}/${summary.total_tests}`);
-  console.log(
+  logger.info(`Total tests run: ${summary.total_tests}`);
+  logger.info(`Successful API calls: ${summary.successful_tests}/${summary.total_tests}`);
+  logger.info(
     `Tests matching expectations: ${summary.matching_expectations}/${summary.successful_tests}`
   );
-  console.log(`Providers tested: ${Array.from(summary.providers_tested).join(', ')}`);
+  logger.info(`Providers tested: ${Array.from(summary.providers_tested).join(', ')}`);
 
-  console.log('\nProvider accuracy:');
+  logger.info('\nProvider accuracy:');
   Object.entries(summary.tool_call_accuracy).forEach(([provider, accuracy]) => {
     const percentage = Math.round((accuracy.correct / accuracy.total) * 100);
-    console.log(`  ${provider}: ${accuracy.correct}/${accuracy.total} (${percentage}%)`);
+    logger.info(`  ${provider}: ${accuracy.correct}/${accuracy.total} (${percentage}%)`);
   });
 
   // Group results by provider
@@ -335,9 +336,9 @@ function generateSummaryReport(allResults) {
     byProvider[result.provider].push(result);
   });
 
-  console.log('\n📋 Detailed Results by Provider:');
+  logger.info('\n📋 Detailed Results by Provider:');
   Object.entries(byProvider).forEach(([provider, results]) => {
-    console.log(`\n${provider.toUpperCase()}:`);
+    logger.info(`\n${provider.toUpperCase()}:`);
     results.forEach(result => {
       const status =
         result.status === 'success'
@@ -347,7 +348,7 @@ function generateSummaryReport(allResults) {
           : result.status === 'skipped'
             ? '⏭️'
             : '💥';
-      console.log(
+      logger.info(
         `  ${status} ${result.prompt}: ${result.status === 'success' ? `${result.actual_tool_calls} tool calls` : result.reason || result.error}`
       );
     });
@@ -360,7 +361,7 @@ function generateSummaryReport(allResults) {
  * Main test execution
  */
 async function runToolCallVerification() {
-  console.log('🚀 Starting tool call verification across all providers...\n');
+  logger.info('🚀 Starting tool call verification across all providers...\n');
 
   const allResults = [];
 
@@ -378,9 +379,9 @@ async function runToolCallVerification() {
   // Generate summary
   const summary = generateSummaryReport(allResults);
 
-  console.log('\n✅ Tool call verification complete!');
+  logger.info('\n✅ Tool call verification complete!');
   return { allResults, summary };
 }
 
 // Run the verification
-runToolCallVerification().catch(console.error);
+runToolCallVerification().catch(logger.error);

@@ -5,6 +5,7 @@ import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
 import ErrorHandler from '../utils/ErrorHandler.js';
+import logger from '../utils/logger.js';
 
 // JWKS client for Microsoft public keys
 const createJwksClient = tenantId => {
@@ -73,7 +74,7 @@ async function verifyTeamsToken(token, teamsConfig) {
     const verified = jwt.verify(token, signingKey, verifyOptions);
     return verified;
   } catch (error) {
-    console.error('Teams token verification failed:', error);
+    logger.error('Teams token verification failed:', error);
     throw error;
   }
 }
@@ -182,7 +183,7 @@ export async function teamsAuthMiddleware(req, res, next) {
 
     next();
   } catch (error) {
-    console.error('Teams authentication failed:', error);
+    logger.error('Teams authentication failed:', error);
 
     // Don't fail the request, just continue without Teams auth
     // This allows fallback to other auth methods
@@ -269,7 +270,7 @@ export async function teamsTokenExchange(req, res) {
       expiresIn
     });
   } catch (error) {
-    console.error('Teams token exchange error:', error);
+    logger.error('Teams token exchange error:', error);
     const errorMessage = await errorHandler.getLocalizedError(
       'TEAMS_INVALID_OR_EXPIRED_TOKEN',
       {},

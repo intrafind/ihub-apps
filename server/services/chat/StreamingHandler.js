@@ -9,6 +9,7 @@ import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
 import { Readable } from 'stream';
 import { redactUrl } from '../../utils/logRedactor.js';
+import logger from '../../utils/logger.js';
 
 class StreamingHandler {
   constructor() {
@@ -127,9 +128,9 @@ class StreamingHandler {
     setupTimeout();
 
     // Debug logging for LLM request
-    console.log(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id}`);
-    console.log(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
-    console.log(
+    logger.info(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id}`);
+    logger.info(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
+    logger.info(
       `[LLM REQUEST DEBUG] Headers:`,
       JSON.stringify(
         {
@@ -140,7 +141,7 @@ class StreamingHandler {
         2
       )
     );
-    console.log(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
+    logger.info(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
 
     let doneEmitted = false;
     let finishReason = null;
@@ -156,7 +157,7 @@ class StreamingHandler {
       clearTimeout(timeoutId);
 
       if (!llmResponse.ok) {
-        console.error(`StreamingHandler: HTTP error from ${model.provider}:`, {
+        logger.error(`StreamingHandler: HTTP error from ${model.provider}:`, {
           status: llmResponse.status,
           statusText: llmResponse.statusText,
           url: redactUrl(request.url)
@@ -184,7 +185,7 @@ class StreamingHandler {
 
         // Log additional info for context window errors
         if (errorInfo.isContextWindowError) {
-          console.warn(`Context window exceeded for model ${model.id} in streaming:`, {
+          logger.warn(`Context window exceeded for model ${model.id} in streaming:`, {
             modelId: model.id,
             tokenLimit: model.tokenLimit,
             httpStatus: errorInfo.httpStatus,
@@ -245,7 +246,7 @@ class StreamingHandler {
               try {
                 result = adapter.processResponseBuffer(completeEvents + '\n\n');
               } catch (processingError) {
-                console.error(
+                logger.error(
                   `StreamingHandler: Error processing buffer with ${model.provider} adapter:`,
                   processingError.message
                 );
@@ -448,12 +449,12 @@ class StreamingHandler {
     } catch (error) {
       clearTimeout(timeoutId);
 
-      console.error(
+      logger.error(
         'StreamingHandler: Caught error in executeStreamingResponse:',
         error.name,
         error.message
       );
-      console.error('StreamingHandler: Full error:', error);
+      logger.error('StreamingHandler: Full error:', error);
 
       // Handle connection termination by remote server specifically for iAssistant
       if (
@@ -461,11 +462,11 @@ class StreamingHandler {
         error.cause?.code === 'UND_ERR_SOCKET' &&
         model.provider === 'iassistant'
       ) {
-        console.error('iAssistant: Connection terminated by remote server. This may indicate:');
-        console.error('- Authentication/authorization failure');
-        console.error('- Invalid request format');
-        console.error('- Server-side error');
-        console.error('- Network connectivity issue');
+        logger.error('iAssistant: Connection terminated by remote server. This may indicate:');
+        logger.error('- Authentication/authorization failure');
+        logger.error('- Invalid request format');
+        logger.error('- Server-side error');
+        logger.error('- Network connectivity issue');
 
         const errorMessage = await getLocalizedError(
           'responseStreamError',

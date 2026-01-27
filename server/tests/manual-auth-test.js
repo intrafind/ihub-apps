@@ -8,6 +8,7 @@
 
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
+import logger from '../utils/logger.js';
 
 const API_BASE = 'http://localhost:3000/api';
 
@@ -44,7 +45,7 @@ const testUsers = [
 ];
 
 async function testLogin(user) {
-  console.log(`\n🧪 Testing login for: ${user.name}`);
+  logger.info(`\n🧪 Testing login for: ${user.name}`);
 
   try {
     const response = await axios.post(`${API_BASE}/auth/login`, {
@@ -53,11 +54,11 @@ async function testLogin(user) {
     });
 
     if (response.data.success && response.data.token) {
-      console.log('✅ Login successful');
+      logger.info('✅ Login successful');
 
       // Decode token to see what's in it
       const decoded = jwt.decode(response.data.token);
-      console.log('📝 Token contents:', {
+      logger.info('📝 Token contents:', {
         id: decoded.id,
         groups: decoded.groups,
         exp: new Date(decoded.exp * 1000).toISOString()
@@ -66,17 +67,17 @@ async function testLogin(user) {
       // Test the token with apps endpoint
       return await testAppsAccess(response.data.token, user);
     } else {
-      console.log('❌ Login failed:', response.data.error);
+      logger.info('❌ Login failed:', response.data.error);
       return false;
     }
   } catch (error) {
-    console.log('❌ Login error:', error.response?.data?.error || error.message);
+    logger.info('❌ Login error:', error.response?.data?.error || error.message);
     return false;
   }
 }
 
 async function testAppsAccess(token, user) {
-  console.log('🔍 Testing apps access with token...');
+  logger.info('🔍 Testing apps access with token...');
 
   try {
     const response = await axios.get(`${API_BASE}/apps`, {
@@ -85,61 +86,61 @@ async function testAppsAccess(token, user) {
       }
     });
 
-    console.log(`📱 Apps returned: ${response.data.length}`);
+    logger.info(`📱 Apps returned: ${response.data.length}`);
     const appIds = response.data.map(app => app.id);
-    console.log('🎯 App IDs:', appIds.slice(0, 10).join(', ') + (appIds.length > 10 ? '...' : ''));
+    logger.info('🎯 App IDs:', appIds.slice(0, 10).join(', ') + (appIds.length > 10 ? '...' : ''));
 
     // Check ETag to ensure it's user-specific
     const etag = response.headers.etag;
-    console.log('🏷️  ETag:', etag);
+    logger.info('🏷️  ETag:', etag);
 
     // Check if user is getting expected access
     if (user.expectedApps.includes('*')) {
-      console.log('✅ Admin user - should see all apps');
+      logger.info('✅ Admin user - should see all apps');
     } else {
-      console.log('🔍 Expected apps:', user.expectedApps.join(', '));
+      logger.info('🔍 Expected apps:', user.expectedApps.join(', '));
       const hasUnexpected = appIds.some(id => !user.expectedApps.includes(id));
       if (hasUnexpected) {
-        console.log('⚠️  User seeing apps they should not have access to!');
-        console.log(
+        logger.info('⚠️  User seeing apps they should not have access to!');
+        logger.info(
           '❗ Unexpected apps:',
           appIds.filter(id => !user.expectedApps.includes(id))
         );
       } else {
-        console.log('✅ User only seeing expected apps');
+        logger.info('✅ User only seeing expected apps');
       }
     }
 
     return true;
   } catch (error) {
-    console.log('❌ Apps access error:', error.response?.data?.error || error.message);
-    console.log('📊 Status:', error.response?.status);
+    logger.info('❌ Apps access error:', error.response?.data?.error || error.message);
+    logger.info('📊 Status:', error.response?.status);
     return false;
   }
 }
 
 async function testAnonymousAccess() {
-  console.log('\n🔓 Testing anonymous access (no token)...');
+  logger.info('\n🔓 Testing anonymous access (no token)...');
 
   try {
     const response = await axios.get(`${API_BASE}/apps`);
-    console.log(`📱 Anonymous apps returned: ${response.data.length}`);
+    logger.info(`📱 Anonymous apps returned: ${response.data.length}`);
     if (response.data.length > 0) {
-      console.log('⚠️  Anonymous users can see apps! Check allowAnonymous setting.');
+      logger.info('⚠️  Anonymous users can see apps! Check allowAnonymous setting.');
     } else {
-      console.log('✅ Anonymous access properly blocked');
+      logger.info('✅ Anonymous access properly blocked');
     }
   } catch (error) {
     if (error.response?.status === 401) {
-      console.log('✅ Anonymous access properly blocked with 401');
+      logger.info('✅ Anonymous access properly blocked with 401');
     } else {
-      console.log('❌ Unexpected error:', error.response?.data?.error || error.message);
+      logger.info('❌ Unexpected error:', error.response?.data?.error || error.message);
     }
   }
 }
 
 async function testInvalidToken() {
-  console.log('\n🔒 Testing invalid token...');
+  logger.info('\n🔒 Testing invalid token...');
 
   try {
     await axios.get(`${API_BASE}/apps`, {
@@ -147,32 +148,32 @@ async function testInvalidToken() {
         Authorization: 'Bearer invalid-token-here'
       }
     });
-    console.log('⚠️  Invalid token was accepted!');
+    logger.info('⚠️  Invalid token was accepted!');
   } catch (error) {
     if (error.response?.status === 401) {
-      console.log('✅ Invalid token properly rejected with 401');
+      logger.info('✅ Invalid token properly rejected with 401');
     } else {
-      console.log('❌ Unexpected error:', error.response?.data?.error || error.message);
+      logger.info('❌ Unexpected error:', error.response?.data?.error || error.message);
     }
   }
 }
 
 async function testPlatformConfig() {
-  console.log('\n⚙️  Testing platform config access...');
+  logger.info('\n⚙️  Testing platform config access...');
 
   try {
     const response = await axios.get(`${API_BASE}/configs/platform`);
-    console.log('✅ Platform config accessible');
-    console.log('🔍 Auth mode:', response.data.auth?.mode);
-    console.log('🔍 Allow anonymous:', response.data.auth?.allowAnonymous);
+    logger.info('✅ Platform config accessible');
+    logger.info('🔍 Auth mode:', response.data.auth?.mode);
+    logger.info('🔍 Allow anonymous:', response.data.auth?.allowAnonymous);
   } catch (error) {
-    console.log('❌ Platform config error:', error.response?.data?.error || error.message);
+    logger.info('❌ Platform config error:', error.response?.data?.error || error.message);
   }
 }
 
 async function runTests() {
-  console.log('🔐 Starting Authentication Test Suite\n');
-  console.log('='.repeat(60));
+  logger.info('🔐 Starting Authentication Test Suite\n');
+  logger.info('='.repeat(60));
 
   // Test platform config first
   await testPlatformConfig();
@@ -188,19 +189,19 @@ async function runTests() {
     await testLogin(user);
   }
 
-  console.log('\n' + '='.repeat(60));
-  console.log('🏁 Authentication tests completed');
-  console.log('\n💡 Check the server logs for permission debugging info');
+  logger.info('\n' + '='.repeat(60));
+  logger.info('🏁 Authentication tests completed');
+  logger.info('\n💡 Check the server logs for permission debugging info');
 }
 
 // Handle errors
 process.on('unhandledRejection', error => {
-  console.error('\n💥 Unhandled error:', error.message);
+  logger.error('\n💥 Unhandled error:', error.message);
   process.exit(1);
 });
 
 // Run tests
 runTests().catch(error => {
-  console.error('\n💥 Test suite failed:', error.message);
+  logger.error('\n💥 Test suite failed:', error.message);
   process.exit(1);
 });

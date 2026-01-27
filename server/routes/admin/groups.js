@@ -6,6 +6,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
+import logger from '../../utils/logger.js';
 
 /**
  * @swagger
@@ -220,12 +221,12 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
       } catch {
-        console.log('Groups file not found or invalid, returning empty list');
+        logger.info('Groups file not found or invalid, returning empty list');
       }
 
       res.json(groupsData);
     } catch (error) {
-      console.error('Error getting groups:', error);
+      logger.error('Error getting groups:', error);
       res.status(500).json({ error: 'Failed to get groups' });
     }
   });
@@ -302,7 +303,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
               name: app.name || { en: app.id, de: app.id }
             });
           } catch (error) {
-            console.warn(`Error reading app file ${file}:`, error.message);
+            logger.warn(`Error reading app file ${file}:`, error.message);
           }
         }
       }
@@ -322,7 +323,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
               name: model.name || { en: model.id, de: model.id }
             });
           } catch (error) {
-            console.warn(`Error reading model file ${file}:`, error.message);
+            logger.warn(`Error reading model file ${file}:`, error.message);
           }
         }
       }
@@ -343,12 +344,12 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
                 name: prompt.name || { en: prompt.id, de: prompt.id }
               });
             } catch (error) {
-              console.warn(`Error reading prompt file ${file}:`, error.message);
+              logger.warn(`Error reading prompt file ${file}:`, error.message);
             }
           }
         }
       } catch {
-        console.log('Prompts directory not found or empty');
+        logger.info('Prompts directory not found or empty');
       }
 
       res.json({
@@ -357,7 +358,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
         prompts: prompts.sort((a, b) => a.id.localeCompare(b.id))
       });
     } catch (error) {
-      console.error('Error getting resources:', error);
+      logger.error('Error getting resources:', error);
       res.status(500).json({ error: 'Failed to get resources' });
     }
   });
@@ -527,11 +528,11 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
-      console.log(`👥 Created new group: ${name} (${id})`);
+      logger.info(`👥 Created new group: ${name} (${id})`);
 
       res.json({ group: newGroup });
     } catch (error) {
-      console.error('Error creating group:', error);
+      logger.error('Error creating group:', error);
       res.status(500).json({ error: 'Failed to create group' });
     }
   });
@@ -660,11 +661,11 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
-      console.log(`👥 Updated group: ${group.name} (${groupId})`);
+      logger.info(`👥 Updated group: ${group.name} (${groupId})`);
 
       res.json({ group });
     } catch (error) {
-      console.error('Error updating group:', error);
+      logger.error('Error updating group:', error);
       res.status(500).json({ error: 'Failed to update group' });
     }
   });
@@ -784,11 +785,11 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
         // Refresh cache
         await configCache.refreshCacheEntry('config/groups.json');
 
-        console.log(`👥 Deleted group: ${groupName} (${groupId})`);
+        logger.info(`👥 Deleted group: ${groupName} (${groupId})`);
 
         res.json({ message: 'Group deleted successfully' });
       } catch (error) {
-        console.error('Error deleting group:', error);
+        logger.error('Error deleting group:', error);
         res.status(500).json({ error: 'Failed to delete group' });
       }
     }

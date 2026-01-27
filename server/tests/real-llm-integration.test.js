@@ -1,12 +1,13 @@
 import { createCompletionRequest } from '../adapters/index.js';
 import { loadConfiguredTools } from '../toolLoader.js';
 import dotenv from 'dotenv';
+import logger from '../utils/logger.js';
 
 // Load environment variables from .env file
 dotenv.config({ path: '../.env' });
 
 // Set up real environment variables
-console.log('🔧 Real LLM Integration Test - Tool Calling with Actual API Calls\n');
+logger.info('🔧 Real LLM Integration Test - Tool Calling with Actual API Calls\n');
 
 // Check if API keys are set
 const apiKeys = {
@@ -16,31 +17,31 @@ const apiKeys = {
   mistral: process.env.MISTRAL_API_KEY
 };
 
-console.log('API Keys Status:');
+logger.info('API Keys Status:');
 Object.entries(apiKeys).forEach(([provider, key]) => {
-  console.log(`${provider}: ${key ? '✅ Set' : '❌ Not set'}`);
+  logger.info(`${provider}: ${key ? '✅ Set' : '❌ Not set'}`);
 });
 
-console.log('\nBase URLs Configuration:');
-console.log(
+logger.info('\nBase URLs Configuration:');
+logger.info(
   `OpenAI: ${process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1/chat/completions (default)'}`
 );
-console.log(
+logger.info(
   `Anthropic: ${process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1/messages (default)'}`
 );
-console.log(
+logger.info(
   `Google: ${process.env.GOOGLE_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent (default)'}`
 );
-console.log(
+logger.info(
   `Mistral: ${process.env.MISTRAL_BASE_URL || 'https://api.mistral.ai/v1/chat/completions (default)'}`
 );
 
-console.log('\nModel IDs:');
-console.log(`OpenAI: ${process.env.OPENAI_MODEL_ID || 'gpt-4o-mini (default)'}`);
-console.log(`Anthropic: ${process.env.ANTHROPIC_MODEL_ID || 'claude-3-haiku-20240307 (default)'}`);
-console.log(`Google: ${process.env.GOOGLE_MODEL_ID || 'gemini-1.5-flash (default)'}`);
-console.log(`Mistral: ${process.env.MISTRAL_MODEL_ID || 'mistral-small-latest (default)'}`);
-console.log();
+logger.info('\nModel IDs:');
+logger.info(`OpenAI: ${process.env.OPENAI_MODEL_ID || 'gpt-4o-mini (default)'}`);
+logger.info(`Anthropic: ${process.env.ANTHROPIC_MODEL_ID || 'claude-3-haiku-20240307 (default)'}`);
+logger.info(`Google: ${process.env.GOOGLE_MODEL_ID || 'gemini-1.5-flash (default)'}`);
+logger.info(`Mistral: ${process.env.MISTRAL_MODEL_ID || 'mistral-small-latest (default)'}`);
+logger.info();
 
 // Test models with configurable base URLs
 const testModels = {
@@ -70,12 +71,12 @@ const testModels = {
 
 async function makeRealAPICall(provider, model, messages, tools) {
   if (!apiKeys[provider]) {
-    console.log(`❌ ${provider}: API key not set, skipping`);
+    logger.info(`❌ ${provider}: API key not set, skipping`);
     return;
   }
 
   try {
-    console.log(`\n🔄 Making real API call to ${provider.toUpperCase()}...`);
+    logger.info(`\n🔄 Making real API call to ${provider.toUpperCase()}...`);
 
     const request = createCompletionRequest(model, messages, apiKeys[provider], {
       tools: tools.slice(0, 2), // Use first 2 tools to avoid overwhelming
@@ -127,30 +128,30 @@ async function makeRealAPICall(provider, model, messages, tools) {
       toolCalls = candidate?.content?.parts?.filter(p => p.functionCall) || [];
     }
 
-    console.log(`✅ ${provider}: SUCCESS`);
-    console.log(`   Content: "${content.substring(0, 100)}${content.length > 100 ? '...' : ''}"`);
-    console.log(`   Tool calls: ${toolCalls.length}`);
+    logger.info(`✅ ${provider}: SUCCESS`);
+    logger.info(`   Content: "${content.substring(0, 100)}${content.length > 100 ? '...' : ''}"`);
+    logger.info(`   Tool calls: ${toolCalls.length}`);
 
     if (toolCalls.length > 0) {
-      console.log(`   Tool called: ${JSON.stringify(toolCalls[0])}`);
+      logger.info(`   Tool called: ${JSON.stringify(toolCalls[0])}`);
     }
 
     return { success: true, toolCalls, content };
   } catch (error) {
-    console.log(`❌ ${provider}: ERROR - ${error.message}`);
+    logger.info(`❌ ${provider}: ERROR - ${error.message}`);
     return { success: false, error: error.message };
   }
 }
 
 async function runRealIntegrationTests() {
-  console.log('\n📋 Loading configured tools...');
+  logger.info('\n📋 Loading configured tools...');
   let tools = [];
 
   try {
     tools = await loadConfiguredTools();
-    console.log(`✅ Loaded ${tools.length} tools`);
+    logger.info(`✅ Loaded ${tools.length} tools`);
   } catch (error) {
-    console.log(`⚠️  Could not load tools: ${error.message}`);
+    logger.info(`⚠️  Could not load tools: ${error.message}`);
     // Create a simple test tool
     tools = [
       {
@@ -166,7 +167,7 @@ async function runRealIntegrationTests() {
         }
       }
     ];
-    console.log('Using fallback test tool');
+    logger.info('Using fallback test tool');
   }
 
   const testMessage = [
@@ -176,7 +177,7 @@ async function runRealIntegrationTests() {
     }
   ];
 
-  console.log('\n📊 Testing Real API Calls with Tool Calling:\n');
+  logger.info('\n📊 Testing Real API Calls with Tool Calling:\n');
 
   const results = {};
 
@@ -185,7 +186,7 @@ async function runRealIntegrationTests() {
     await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limiting
   }
 
-  console.log('\n📈 Test Results Summary:');
+  logger.info('\n📈 Test Results Summary:');
   let successCount = 0;
   let toolCallCount = 0;
 
@@ -198,20 +199,20 @@ async function runRealIntegrationTests() {
     }
   });
 
-  console.log(`✅ Successful API calls: ${successCount}/4`);
-  console.log(`🔧 Providers that made tool calls: ${toolCallCount}/4`);
+  logger.info(`✅ Successful API calls: ${successCount}/4`);
+  logger.info(`🔧 Providers that made tool calls: ${toolCallCount}/4`);
 
   if (successCount === 0) {
-    console.log('\n❌ No successful API calls. Please check your API keys.');
+    logger.info('\n❌ No successful API calls. Please check your API keys.');
   } else if (toolCallCount === 0) {
-    console.log('\n⚠️  No tool calls were made. This might indicate:');
-    console.log('   - Tools are not properly configured');
-    console.log('   - Models chose not to use tools');
-    console.log('   - Tool calling is not enabled for these models');
+    logger.info('\n⚠️  No tool calls were made. This might indicate:');
+    logger.info('   - Tools are not properly configured');
+    logger.info('   - Models chose not to use tools');
+    logger.info('   - Tool calling is not enabled for these models');
   } else {
-    console.log('\n🎉 Tool calling is working across adapters!');
+    logger.info('\n🎉 Tool calling is working across adapters!');
   }
 }
 
 // Run the test
-runRealIntegrationTests().catch(console.error);
+runRealIntegrationTests().catch(logger.error);

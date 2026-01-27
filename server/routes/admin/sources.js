@@ -16,6 +16,7 @@ import {
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Initialize source manager singleton
@@ -1931,7 +1932,7 @@ async function findSourceDependencies(sourceId) {
 
     return dependencies;
   } catch (error) {
-    console.error('Error finding source dependencies:', error);
+    logger.error('Error finding source dependencies:', error);
     return [];
   }
 }

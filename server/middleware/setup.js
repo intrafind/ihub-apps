@@ -12,6 +12,7 @@ import ntlmAuthMiddleware from './ntlmAuth.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
 import config from '../config.js';
+import logger from '../utils/logger.js';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.
@@ -174,7 +175,7 @@ function setupSessionMiddleware(app, platformConfig) {
 
   // Setup OIDC user authentication sessions
   if (needsOidcSessions) {
-    console.log('🔐 Enabling session middleware for OIDC user authentication');
+    logger.info('🔐 Enabling session middleware for OIDC user authentication');
     app.use(
       '/api/auth/oidc',
       session({
@@ -198,7 +199,7 @@ function setupSessionMiddleware(app, platformConfig) {
     const enabledIntegrations = [];
     if (jiraEnabled) enabledIntegrations.push('JIRA');
 
-    console.log(
+    logger.info(
       `🔗 Enabling session middleware for OAuth integrations: ${enabledIntegrations.join(', ')}`
     );
     app.use(
@@ -224,7 +225,7 @@ function setupSessionMiddleware(app, platformConfig) {
   if (!needsOidcSessions && !needsIntegrationSessions) {
     const authConfig = platformConfig.auth || {};
     if (authConfig.mode === 'local' || authConfig.mode === 'ldap') {
-      console.log('🍪 Enabling minimal session middleware for local/LDAP authentication');
+      logger.info('🍪 Enabling minimal session middleware for local/LDAP authentication');
       app.use(
         session({
           secret: config.JWT_SECRET || 'fallback-session-secret',
@@ -255,7 +256,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Debug middleware - log all requests (helpful for debugging NTLM/proxy issues)
   if (process.env.NODE_ENV === 'development') {
     app.use((req, res, next) => {
-      console.log(`[Debug] ${req.method} ${req.url} - Origin: ${req.get('origin') || 'none'}`);
+      logger.info(`[Debug] ${req.method} ${req.url} - Origin: ${req.get('origin') || 'none'}`);
       next();
     });
   }
@@ -356,7 +357,7 @@ export function setupMiddleware(app, platformConfig = {}) {
       const authConfig = platformConfig.auth || {};
       req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
 
-      // console.log('🔍 User permissions enhanced:', {
+      // logger.info('🔍 User permissions enhanced:', {
       //   userId: req.user.id,
       //   groups: req.user.groups,
       //   hasPermissions: !!req.user.permissions,

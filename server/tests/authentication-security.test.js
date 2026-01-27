@@ -14,6 +14,7 @@ import registerAdminRoutes from '../routes/adminRoutes.js';
 import registerAuthRoutes from '../routes/auth.js';
 import { processMessageTemplates, getLocalizedError } from '../serverHelpers.js';
 import jwt from 'jsonwebtoken';
+import logger from '../utils/logger.js';
 
 // Mock configuration for testing
 const mockPlatformConfigAnonymousDisabled = {

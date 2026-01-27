@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import config from '../config.js';
 import configCache from '../configCache.js';
+import logger from './logger.js';
 
 /**
  * OAuth-specific token service for Client Credentials flow
@@ -93,7 +94,7 @@ export function verifyOAuthToken(token) {
     const jwtSecret = config.JWT_SECRET || platform.auth?.jwtSecret;
 
     if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
-      console.warn('[OAuth] JWT secret not configured for token verification');
+      logger.warn('[OAuth] JWT secret not configured for token verification');
       return null;
     }
 
@@ -104,17 +105,17 @@ export function verifyOAuthToken(token) {
 
     // Verify it's an OAuth token
     if (decoded.authMode !== 'oauth_client_credentials') {
-      console.warn('[OAuth] Token is not an OAuth client credentials token');
+      logger.warn('[OAuth] Token is not an OAuth client credentials token');
       return null;
     }
 
     return decoded;
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
-      console.warn('[OAuth] Token expired');
+      logger.warn('[OAuth] Token expired');
       return { error: 'token_expired', expired: true };
     }
-    console.warn('[OAuth] Token verification failed:', error.message);
+    logger.warn('[OAuth] Token verification failed:', error.message);
     return null;
   }
 }
@@ -165,7 +166,7 @@ export function introspectOAuthToken(token) {
       aud: decoded.aud
     };
   } catch (error) {
-    console.error('[OAuth] Token introspection error:', error.message);
+    logger.error('[OAuth] Token introspection error:', error.message);
     return {
       active: false,
       error: 'invalid_token'
@@ -218,7 +219,7 @@ export function generateStaticApiKey(client, expirationDays = 365) {
     algorithm: 'HS256'
   });
 
-  console.log(
+  logger.info(
     `[OAuth] Static API key generated | client_id=${client.clientId} | expires_in_days=${expirationDays}`
   );
 

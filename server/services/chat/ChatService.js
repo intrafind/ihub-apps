@@ -4,6 +4,7 @@ import StreamingHandler from './StreamingHandler.js';
 import ToolExecutor from './ToolExecutor.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
+import logger from '../../utils/logger.js';
 
 class ChatService {
   constructor(options = {}) {
@@ -209,7 +210,7 @@ class ChatService {
         clientLanguage
       });
     } catch (error) {
-      console.error('Error in ChatService.processChat:', error);
+      logger.error('Error in ChatService.processChat:', error);
 
       const errorResponse = this.errorHandler.formatErrorResponse(error);
       if (res && !clientRes) {

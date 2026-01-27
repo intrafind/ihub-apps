@@ -1,5 +1,6 @@
 import assert from 'assert';
 import GoogleAdapter from '../adapters/google.js';
+import logger from '../utils/logger.js';
 
 const model = {
   modelId: 'gemini-pro',
@@ -16,4 +17,4 @@ const req = GoogleAdapter.createCompletionRequest(model, messages, 'key', {
 
 assert.strictEqual(req.body.generationConfig.responseMimeType, 'application/json');
 assert.deepStrictEqual(req.body.generationConfig.response_schema, schema);
-console.log('Google adapter structured output test passed');
+logger.info('Google adapter structured output test passed');

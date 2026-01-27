@@ -7,6 +7,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
+import logger from '../../utils/logger.js';
 
 /**
  * @swagger
@@ -134,10 +135,10 @@ function loadRawTools() {
     // Check if we filtered any tools out
     if (tools.length !== allTools.length) {
       needsCleanup = true;
-      console.log(
+      logger.info(
         `⚠️  Detected ${allTools.length - tools.length} expanded tools in ${toolsFilePath}`
       );
-      console.log(`✓ Filtered to ${tools.length} raw tool definitions`);
+      logger.info(`✓ Filtered to ${tools.length} raw tool definitions`);
     }
   } else {
     // Fall back to defaults if no custom config exists
@@ -209,9 +210,9 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
           const contentsDir = process.env.CONTENTS_DIR || 'contents';
           await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
           await fs.writeFile(filePath, JSON.stringify(tools, null, 2));
-          console.log(`✓ Cleaned up ${filePath} - removed expanded tools`);
+          logger.info(`✓ Cleaned up ${filePath} - removed expanded tools`);
         } catch (cleanupError) {
-          console.error('Failed to cleanup tools file:', cleanupError);
+          logger.error('Failed to cleanup tools file:', cleanupError);
           // Don't fail the request, just log the error
         }
       }
@@ -230,7 +231,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       }
       res.json(tools);
     } catch (error) {
-      console.error('Error fetching all tools:', error);
+      logger.error('Error fetching all tools:', error);
       res.status(500).json({ error: 'Failed to fetch tools' });
     }
   });
@@ -292,7 +293,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
       }
       res.json(tool);
     } catch (error) {
-      console.error('Error fetching tool:', error);
+      logger.error('Error fetching tool:', error);
       res.status(500).json({ error: 'Failed to fetch tool' });
     }
   });
@@ -394,7 +395,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
 
       res.json({ message: 'Tool updated successfully', tool: updatedTool });
     } catch (error) {
-      console.error('Error updating tool:', error);
+      logger.error('Error updating tool:', error);
       res.status(500).json({ error: 'Failed to update tool' });
     }
   });
@@ -485,7 +486,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
 
       res.status(201).json({ message: 'Tool created successfully', tool: newTool });
     } catch (error) {
-      console.error('Error creating tool:', error);
+      logger.error('Error creating tool:', error);
       res.status(500).json({ error: 'Failed to create tool' });
     }
   });
@@ -565,10 +566,10 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
         try {
           if (existsSync(scriptPath)) {
             await fs.unlink(scriptPath);
-            console.log(`Deleted script file: ${tool.script}`);
+            logger.info(`Deleted script file: ${tool.script}`);
           }
         } catch (scriptError) {
-          console.warn(`Failed to delete script file ${tool.script}:`, scriptError);
+          logger.warn(`Failed to delete script file ${tool.script}:`, scriptError);
           // Continue with config deletion even if script deletion fails
         }
       }
@@ -590,7 +591,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
         scriptDeleted: tool.script ? true : false
       });
     } catch (error) {
-      console.error('Error deleting tool:', error);
+      logger.error('Error deleting tool:', error);
       res.status(500).json({ error: 'Failed to delete tool' });
     }
   });
@@ -682,7 +683,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
 
         res.json({ message: 'Tool state updated successfully', enabled: tool.enabled });
       } catch (error) {
-        console.error('Error toggling tool:', error);
+        logger.error('Error toggling tool:', error);
         res.status(500).json({ error: 'Failed to toggle tool' });
       }
     }
@@ -769,7 +770,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
           content
         });
       } catch (error) {
-        console.error('Error reading tool script:', error);
+        logger.error('Error reading tool script:', error);
         res.status(500).json({ error: 'Failed to read tool script' });
       }
     }
@@ -878,7 +879,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
 
         res.json({ message: 'Script updated successfully' });
       } catch (error) {
-        console.error('Error updating tool script:', error);
+        logger.error('Error updating tool script:', error);
         res.status(500).json({ error: 'Failed to update tool script' });
       }
     }

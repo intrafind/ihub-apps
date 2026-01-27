@@ -2,6 +2,7 @@ import FileSystemHandler from './FileSystemHandler.js';
 import URLHandler from './URLHandler.js';
 import IFinderHandler from './IFinderHandler.js';
 import PageHandler from './PageHandler.js';
+import logger from '../utils/logger.js';
 
 // Global registry for source tool functions (persists across SourceManager instances)
 const globalSourceToolRegistry = new Map();
@@ -28,31 +29,31 @@ class SourceManager {
   initializeHandlers() {
     try {
       // Register filesystem handler
-      console.log('Initializing FileSystem handler...');
+      logger.info('Initializing FileSystem handler...');
       this.registerHandler('filesystem', new FileSystemHandler(this.config.filesystem || {}));
-      console.log('✓ FileSystem handler registered successfully');
+      logger.info('✓ FileSystem handler registered successfully');
 
       // Register URL handler
-      console.log('Initializing URL handler...');
+      logger.info('Initializing URL handler...');
       this.registerHandler('url', new URLHandler(this.config.url || {}));
-      console.log('✓ URL handler registered successfully');
+      logger.info('✓ URL handler registered successfully');
 
       // Register iFinder handler
-      console.log('Initializing iFinder handler...');
+      logger.info('Initializing iFinder handler...');
       this.registerHandler('ifinder', new IFinderHandler(this.config.ifinder || {}));
-      console.log('✓ iFinder handler registered successfully');
+      logger.info('✓ iFinder handler registered successfully');
 
       // Register Page handler
-      console.log('Initializing Page handler...');
+      logger.info('Initializing Page handler...');
       this.registerHandler('page', new PageHandler(this.config.page || {}));
-      console.log('✓ Page handler registered successfully');
+      logger.info('✓ Page handler registered successfully');
 
-      console.log(
+      logger.info(
         `✓ All source handlers initialized: ${Array.from(this.handlers.keys()).join(', ')}`
       );
     } catch (error) {
-      console.error('Error initializing source handlers:', error.message);
-      console.error('Stack trace:', error.stack);
+      logger.error('Error initializing source handlers:', error.message);
+      logger.error('Stack trace:', error.stack);
       throw new Error(`Failed to initialize source handlers: ${error.message}`);
     }
   }
@@ -226,7 +227,7 @@ class SourceManager {
           if (tool.name && tool.description && tool.parameters) {
             tools.push(tool);
           } else {
-            console.error(
+            logger.error(
               `Invalid tool generated for source ${source.id}:`,
               JSON.stringify(tool, null, 2)
             );
@@ -450,7 +451,7 @@ class SourceManager {
    */
   validateSourceConfig(source) {
     if (!source || typeof source !== 'object') {
-      console.error('Source configuration must be an object');
+      logger.error('Source configuration must be an object');
       return false;
     }
 
@@ -458,30 +459,30 @@ class SourceManager {
 
     // Required fields
     if (!id || typeof id !== 'string' || id.trim() === '') {
-      console.error('Source configuration must have a valid id string');
+      logger.error('Source configuration must have a valid id string');
       return false;
     }
 
     if (!type || typeof type !== 'string') {
-      console.error(`Source ${id}: type must be a non-empty string`);
+      logger.error(`Source ${id}: type must be a non-empty string`);
       return false;
     }
 
     if (!this.handlers.has(type)) {
-      console.error(
+      logger.error(
         `Source ${id}: unknown handler type '${type}'. Available types: ${Array.from(this.handlers.keys()).join(', ')}`
       );
       return false;
     }
 
     if (!config || typeof config !== 'object') {
-      console.error(`Source ${id}: config must be an object`);
+      logger.error(`Source ${id}: config must be an object`);
       return false;
     }
 
     // Validate exposeAs
     if (exposeAs && !['prompt', 'tool'].includes(exposeAs)) {
-      console.error(`Source ${id}: exposeAs must be either 'prompt' or 'tool', got '${exposeAs}'`);
+      logger.error(`Source ${id}: exposeAs must be either 'prompt' or 'tool', got '${exposeAs}'`);
       return false;
     }
 
@@ -490,11 +491,11 @@ class SourceManager {
       const handler = this.handlers.get(type);
       const isValid = handler.validateConfig(config);
       if (!isValid) {
-        console.error(`Source ${id}: handler-specific configuration validation failed`);
+        logger.error(`Source ${id}: handler-specific configuration validation failed`);
       }
       return isValid;
     } catch (error) {
-      console.error(`Source ${id}: error during handler validation:`, error.message);
+      logger.error(`Source ${id}: error during handler validation:`, error.message);
       return false;
     }
   }

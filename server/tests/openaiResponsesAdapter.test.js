@@ -1,5 +1,6 @@
 import assert from 'assert';
 import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
+import logger from '../utils/logger.js';
 
 // Test basic adapter functionality
 const model = {
@@ -9,7 +10,7 @@ const model = {
 };
 
 // Test 1: Basic message formatting
-console.log('Test 1: Basic message formatting...');
+logger.info('Test 1: Basic message formatting...');
 const messages = [
   { role: 'system', content: 'You are a helpful assistant.' },
   { role: 'user', content: 'Hello!' }
@@ -50,10 +51,10 @@ assert.strictEqual(
   'Should not include temperature parameter (not supported by GPT-5)'
 );
 
-console.log('✓ Test 1 passed: Basic message formatting works correctly');
+logger.info('✓ Test 1 passed: Basic message formatting works correctly');
 
 // Test 2: Multiple user messages
-console.log('\nTest 2: Multiple user messages...');
+logger.info('\nTest 2: Multiple user messages...');
 const multipleMessages = [
   { role: 'system', content: 'You are a helpful assistant.' },
   { role: 'user', content: 'Hello!' },
@@ -69,10 +70,10 @@ const req2 = OpenAIResponsesAdapter.createCompletionRequest(model, multipleMessa
 assert.ok(Array.isArray(req2.body.input), 'Input should be array for multiple messages');
 assert.strictEqual(req2.body.input.length, 3, 'Input should have 3 messages (excluding system)');
 
-console.log('✓ Test 2 passed: Multiple messages handled correctly');
+logger.info('✓ Test 2 passed: Multiple messages handled correctly');
 
 // Test 3: Structured output
-console.log('\nTest 3: Structured output...');
+logger.info('\nTest 3: Structured output...');
 const schema = {
   type: 'object',
   properties: {
@@ -95,10 +96,10 @@ assert.ok(req3.body.text.format, 'Should have text.format field');
 assert.strictEqual(req3.body.text.format.type, 'json_schema', 'Format type should be json_schema');
 assert.ok(req3.body.text.format.schema, 'Should have schema');
 
-console.log('✓ Test 3 passed: Structured output uses text.format');
+logger.info('✓ Test 3 passed: Structured output uses text.format');
 
 // Test 4: Response processing
-console.log('\nTest 4: Response processing...');
+logger.info('\nTest 4: Response processing...');
 
 // Test non-streaming response
 const nonStreamingResponse = JSON.stringify({
@@ -131,10 +132,10 @@ assert.strictEqual(
 );
 assert.strictEqual(result.complete, true, 'Response should be complete');
 
-console.log('✓ Test 4 passed: Response processing works correctly');
+logger.info('✓ Test 4 passed: Response processing works correctly');
 
 // Test 5: Tool calls in response
-console.log('\nTest 5: Tool calls processing...');
+logger.info('\nTest 5: Tool calls processing...');
 
 const toolCallResponse = JSON.stringify({
   id: 'resp_456',
@@ -157,6 +158,6 @@ assert.strictEqual(result2.tool_calls.length, 1, 'Should have one tool call');
 assert.strictEqual(result2.tool_calls[0].function.name, 'get_weather', 'Tool name should match');
 assert.strictEqual(result2.complete, true, 'Response should be complete');
 
-console.log('✓ Test 5 passed: Tool calls processed correctly');
+logger.info('✓ Test 5 passed: Tool calls processed correctly');
 
-console.log('\n✅ All OpenAI Responses adapter tests passed!');
+logger.info('\n✅ All OpenAI Responses adapter tests passed!');

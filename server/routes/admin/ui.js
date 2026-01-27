@@ -8,6 +8,7 @@ import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import logger from '../../utils/logger.js';
 
 export default function registerAdminUIRoutes(app, basePath = '') {
   // Configure multer for file uploads
@@ -101,7 +102,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
           asset: assetInfo
         });
       } catch (error) {
-        console.error('Error uploading asset:', error);
+        logger.error('Error uploading asset:', error);
         res.status(500).json({
           success: false,
           message: 'Failed to upload asset',
@@ -156,7 +157,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
                 isImage: ['.svg', '.png', '.jpg', '.jpeg', '.ico'].includes(ext)
               };
             } catch (statError) {
-              console.warn(`Error reading file stats for ${filename}:`, statError.message);
+              logger.warn(`Error reading file stats for ${filename}:`, statError.message);
               return null;
             }
           })
@@ -165,7 +166,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
 
         res.json({ success: true, assets });
       } catch (error) {
-        console.error('Error listing assets:', error);
+        logger.error('Error listing assets:', error);
         res.status(500).json({
           success: false,
           message: 'Failed to load assets',
@@ -201,7 +202,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
           message: 'Asset deleted successfully'
         });
       } catch (error) {
-        console.error('Error deleting asset:', error);
+        logger.error('Error deleting asset:', error);
         res.status(500).json({
           success: false,
           message: 'Failed to delete asset',
@@ -227,7 +228,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
           config: uiConfig?.data || {}
         });
       } catch (error) {
-        console.error('Error getting UI config:', error);
+        logger.error('Error getting UI config:', error);
         res.status(500).json({
           success: false,
           message: 'Failed to get UI configuration',
@@ -272,7 +273,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
           message: 'UI configuration updated successfully'
         });
       } catch (error) {
-        console.error('Error updating UI config:', error);
+        logger.error('Error updating UI config:', error);
         res.status(500).json({
           success: false,
           message: 'Failed to update UI configuration',
@@ -310,7 +311,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
           backupPath: `backups/ui-config-backup-${timestamp}.json`
         });
       } catch (error) {
-        console.error('Error backing up UI config:', error);
+        logger.error('Error backing up UI config:', error);
         res.status(500).json({
           success: false,
           message: 'Failed to backup UI configuration',

@@ -1,4 +1,5 @@
 import webSearchService from '../services/WebSearchService.js';
+import logger from '../utils/logger.js';
 
 export default async function tavilySearch({
   query,
@@ -26,28 +27,28 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const searchQuery = process.argv.slice(2).join(' ');
 
   if (!searchQuery) {
-    console.error('Usage: node tavilySearch.js <search term>');
-    console.error('Example: node tavilySearch.js "JavaScript tutorials"');
+    logger.error('Usage: node tavilySearch.js <search term>');
+    logger.error('Example: node tavilySearch.js "JavaScript tutorials"');
     process.exit(1);
   }
 
-  console.log(`Searching for: "${searchQuery}"`);
+  logger.info(`Searching for: "${searchQuery}"`);
 
   try {
     const result = await tavilySearch({ query: searchQuery });
-    console.log('\nSearch Results:');
-    console.log('===============');
+    logger.info('\nSearch Results:');
+    logger.info('===============');
 
     if (result.results.length === 0) {
-      console.log('No results found.');
+      logger.info('No results found.');
     } else {
       result.results.forEach((item, index) => {
-        console.log(`${index + 1}. ${item.title}`);
-        console.log(`   URL: ${item.url}\n`);
+        logger.info(`${index + 1}. ${item.title}`);
+        logger.info(`   URL: ${item.url}\n`);
       });
     }
   } catch (error) {
-    console.error('Error performing search:', error.message);
+    logger.error('Error performing search:', error.message);
     process.exit(1);
   }
 }

@@ -6,6 +6,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
+import logger from '../../utils/logger.js';
 
 /**
  * @swagger
@@ -298,7 +299,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
       }
       res.json(prompts);
     } catch (error) {
-      console.error('Error fetching all prompts:', error);
+      logger.error('Error fetching all prompts:', error);
       res.status(500).json({ error: 'Failed to fetch prompts' });
     }
   });
@@ -399,7 +400,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
         }
         res.json(prompt);
       } catch (error) {
-        console.error('Error fetching prompt:', error);
+        logger.error('Error fetching prompt:', error);
         res.status(500).json({ error: 'Failed to fetch prompt' });
       }
     }
@@ -534,7 +535,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
         await configCache.refreshPromptsCache();
         res.json({ message: 'Prompt updated successfully', prompt: updatedPrompt });
       } catch (error) {
-        console.error('Error updating prompt:', error);
+        logger.error('Error updating prompt:', error);
         res.status(500).json({ error: 'Failed to update prompt' });
       }
     }
@@ -661,7 +662,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
       await configCache.refreshPromptsCache();
       res.json({ message: 'Prompt created successfully', prompt: newPrompt });
     } catch (error) {
-      console.error('Error creating prompt:', error);
+      logger.error('Error creating prompt:', error);
       res.status(500).json({ error: 'Failed to create prompt' });
     }
   });
@@ -771,7 +772,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
           enabled: newEnabledState
         });
       } catch (error) {
-        console.error('Error toggling prompt:', error);
+        logger.error('Error toggling prompt:', error);
         res.status(500).json({ error: 'Failed to toggle prompt' });
       }
     }
@@ -920,7 +921,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
           ids: resolvedIds
         });
       } catch (error) {
-        console.error('Error toggling prompts:', error);
+        logger.error('Error toggling prompts:', error);
         res.status(500).json({ error: 'Failed to toggle prompts' });
       }
     }
@@ -1021,7 +1022,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
         await configCache.refreshPromptsCache();
         res.json({ message: 'Prompt deleted successfully' });
       } catch (error) {
-        console.error('Error deleting prompt:', error);
+        logger.error('Error deleting prompt:', error);
         res.status(500).json({ error: 'Failed to delete prompt' });
       }
     }
@@ -1170,7 +1171,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
         maxTokens: maxTokens,
         apiKey: apiKey
       });
-      console.log('Completion result:', JSON.stringify(result, null, 2));
+      logger.info('Completion result:', JSON.stringify(result, null, 2));
       res.json({
         choices: [
           {
@@ -1183,14 +1184,14 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
         usage: result.usage
       });
     } catch (error) {
-      console.error('Error in completions endpoint:', error);
+      logger.error('Error in completions endpoint:', error);
       const { getLocalizedError } = await import('../../serverHelpers.js');
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       let errorMessage = 'Failed to generate completion';
       try {
         errorMessage = await getLocalizedError('internalError', {}, defaultLang);
       } catch (localizationError) {
-        console.warn('Failed to get localized error message:', localizationError);
+        logger.warn('Failed to get localized error message:', localizationError);
       }
       res.status(500).json({ error: errorMessage, details: error.message });
     }
@@ -1296,7 +1297,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
           appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
         res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
       } catch (error) {
-        console.error('Error fetching app-generator prompt:', error);
+        logger.error('Error fetching app-generator prompt:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     }

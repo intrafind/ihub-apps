@@ -2,6 +2,8 @@
  * Centralized response helper functions to reduce duplication
  */
 
+import logger from './logger.js';
+
 /**
  * Send a standardized error response
  * @param {Object} res - Express response object
@@ -16,7 +18,7 @@ export function sendErrorResponse(res, statusCode, message, options = {}) {
   const { error, logPrefix, details } = options;
 
   if (error && logPrefix) {
-    console.error(`${logPrefix}:`, error);
+    logger.error(`${logPrefix}:`, error);
   }
 
   const response = { error: message };

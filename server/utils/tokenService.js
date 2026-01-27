@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import config from '../config.js';
 import configCache from '../configCache.js';
+import logger from './logger.js';
 
 /**
  * Central JWT token service for all authentication methods
@@ -92,7 +93,7 @@ export function verifyJwt(token) {
     const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret;
 
     if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
-      console.warn('JWT secret not configured for token verification');
+      logger.warn('JWT secret not configured for token verification');
       return null;
     }
 
@@ -101,7 +102,7 @@ export function verifyJwt(token) {
       audience: 'ihub-apps'
     });
   } catch (error) {
-    console.warn('JWT verification failed:', error.message);
+    logger.warn('JWT verification failed:', error.message);
     return null;
   }
 }
@@ -115,7 +116,7 @@ export function decodeJwt(token) {
   try {
     return jwt.decode(token, { complete: true });
   } catch (error) {
-    console.warn('JWT decode failed:', error.message);
+    logger.warn('JWT decode failed:', error.message);
     return null;
   }
 }

@@ -14,6 +14,7 @@ import ChatService from '../../services/chat/ChatService.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import logger from '../../utils/logger.js';
 
 export default function registerSessionRoutes(
   app,
@@ -113,7 +114,7 @@ export default function registerSessionRoutes(
           clearTimeout(timeoutId);
           if (!llmResponse.ok) {
             const errorBody = await llmResponse.text();
-            console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
+            logger.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
             return res.status(llmResponse.status).json({
               error: `LLM API request failed with status ${llmResponse.status}`,
               details: errorBody
@@ -140,7 +141,7 @@ export default function registerSessionRoutes(
           });
         }
       } catch (error) {
-        console.error('Error in test chat completion:', error);
+        logger.error('Error in test chat completion:', error);
         res.status(500).json({ error: 'Internal server error', message: error.message });
       }
     }
@@ -166,17 +167,17 @@ export default function registerSessionRoutes(
                 const controller = activeRequests.get(chatId);
                 controller.abort();
                 activeRequests.delete(chatId);
-                console.log(`Aborted request for chat ID: ${chatId}`);
+                logger.info(`Aborted request for chat ID: ${chatId}`);
               } catch (e) {
-                console.error(`Error aborting request for chat ID: ${chatId}`, e);
+                logger.error(`Error aborting request for chat ID: ${chatId}`, e);
               }
             }
             clients.delete(chatId);
-            console.log(`Client disconnected: ${chatId}`);
+            logger.info(`Client disconnected: ${chatId}`);
           }
         });
       } catch (error) {
-        console.error('Error establishing SSE connection:', error);
+        logger.error('Error establishing SSE connection:', error);
         if (!res.headersSent) {
           return res.status(500).json({ error: 'Internal server error' });
         }
@@ -212,7 +213,7 @@ export default function registerSessionRoutes(
     // Handle requests with tools
     if (prep.tools && prep.tools.length > 0) {
       if (streaming) {
-        console.log(`Processing chat with tools for chat ID: ${chatId}`);
+        logger.info(`Processing chat with tools for chat ID: ${chatId}`);
         return await chatService.processChatWithTools({
           prep,
           clientRes,
@@ -293,7 +294,7 @@ export default function registerSessionRoutes(
           const lastMessage = messages[messages.length - 1];
           if (lastMessage && lastMessage.messageId) {
             messageId = lastMessage.messageId;
-            console.log(`Using client-provided messageId: ${messageId}`);
+            logger.info(`Using client-provided messageId: ${messageId}`);
           }
         }
         const userSessionId = req.headers['x-session-id'];
@@ -312,7 +313,7 @@ export default function registerSessionRoutes(
             ...extra
           };
         }
-        console.log(`Processing chat with language: ${clientLanguage}`);
+        logger.info(`Processing chat with language: ${clientLanguage}`);
         if (!messages || !Array.isArray(messages)) {
           const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
           return res.status(400).json({ error: errorMessage });
@@ -323,7 +324,7 @@ export default function registerSessionRoutes(
           timestamp: new Date().toISOString()
         });
         if (!clients.has(chatId)) {
-          console.log(
+          logger.info(
             `No active SSE connection for chat ID: ${chatId}. Creating response without streaming.`
           );
           const prep = await chatService.prepareChatRequest({
@@ -423,7 +424,7 @@ export default function registerSessionRoutes(
           return res.json({ status: 'streaming', chatId });
         }
       } catch (error) {
-        console.error('Error in app chat:', error);
+        logger.error('Error in app chat:', error);
         return res.status(500).json({ error: 'Internal server error', message: error.message });
       }
     }
@@ -440,16 +441,16 @@ export default function registerSessionRoutes(
             const controller = activeRequests.get(chatId);
             controller.abort();
             activeRequests.delete(chatId);
-            console.log(`Aborted request for chat ID: ${chatId}`);
+            logger.info(`Aborted request for chat ID: ${chatId}`);
           } catch (e) {
-            console.error(`Error aborting request for chat ID: ${chatId}`, e);
+            logger.error(`Error aborting request for chat ID: ${chatId}`, e);
           }
         }
         const client = clients.get(chatId);
         actionTracker.trackDisconnected(chatId, { message: 'Chat stream stopped by client' });
         client.response.end();
         clients.delete(chatId);
-        console.log(`Chat stream stopped for chat ID: ${chatId}`);
+        logger.info(`Chat stream stopped for chat ID: ${chatId}`);
         return res.status(200).json({ success: true, message: 'Chat stream stopped' });
       }
       return res.status(404).json({ success: false, message: 'Chat session not found' });

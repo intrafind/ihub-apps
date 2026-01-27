@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import logger from '../utils/logger.js';
 
 // Localized string schema - matches client pattern for language codes
 const localizedStringSchema = z.record(
@@ -171,7 +172,7 @@ export function validateSourceConfig(source) {
 
     return { success: true, data: validated };
   } catch (error) {
-    console.error('Source validation error:', error);
+    logger.error('Source validation error:', error);
     return {
       success: false,
       errors: error.errors || [{ message: error.message }]
@@ -198,7 +199,7 @@ export function validateSourcesArray(sources) {
 
     return { success: true, data: validated };
   } catch (error) {
-    console.error('Sources array validation error:', error);
+    logger.error('Sources array validation error:', error);
     return {
       success: false,
       errors: error.errors || [{ message: error.message }]

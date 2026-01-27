@@ -3,6 +3,7 @@
  * Provides centralized debug logging for authentication flows
  */
 import configCache from '../configCache.js';
+import logger from './logger.js';
 
 /**
  * Check if authentication debug logging is enabled
@@ -13,7 +14,7 @@ function isAuthDebugEnabled() {
   const enabled = platform.auth?.debug === true;
   // Temporary debug log to verify this function is being called
   if (enabled) {
-    console.log('🔍 AUTH DEBUG CHECK: Debug is enabled');
+    logger.info('🔍 AUTH DEBUG CHECK: Debug is enabled');
   }
   return enabled;
 }
@@ -48,9 +49,9 @@ function authDebugLog(context, message, data = {}, req = null) {
     ...data
   };
 
-  console.log(`🔐 AUTH DEBUG [${context}]:`, message);
+  logger.info(`🔐 AUTH DEBUG [${context}]:`, message);
   if (Object.keys(data).length > 0 || Object.keys(requestInfo).length > 0) {
-    console.log(`🔐 AUTH DEBUG [${context}] Data:`, JSON.stringify(logEntry, null, 2));
+    logger.info(`🔐 AUTH DEBUG [${context}] Data:`, JSON.stringify(logEntry, null, 2));
   }
 }
 

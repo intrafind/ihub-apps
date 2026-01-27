@@ -1,4 +1,5 @@
 import configCache from '../configCache.js';
+import logger from './logger.js';
 
 /**
  * Source Dependency Tracker
@@ -37,7 +38,7 @@ class SourceDependencyTracker {
 
       return usedBy;
     } catch (error) {
-      console.error('Error getting source usage:', error);
+      logger.error('Error getting source usage:', error);
       return [];
     }
   }
@@ -211,7 +212,7 @@ class SourceDependencyTracker {
 
       return dependencies;
     } catch (error) {
-      console.error('Error getting all source dependencies:', error);
+      logger.error('Error getting all source dependencies:', error);
       return {};
     }
   }
@@ -269,7 +270,7 @@ class SourceDependencyTracker {
 
       return stats;
     } catch (error) {
-      console.error('Error getting usage statistics:', error);
+      logger.error('Error getting usage statistics:', error);
       return {};
     }
   }
@@ -324,7 +325,7 @@ class SourceDependencyTracker {
 
       return orphaned;
     } catch (error) {
-      console.error('Error finding orphaned sources:', error);
+      logger.error('Error finding orphaned sources:', error);
       return [];
     }
   }

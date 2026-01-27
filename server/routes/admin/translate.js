@@ -3,6 +3,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { simpleCompletion } from '../../utils.js';
 import { verifyApiKey } from '../../serverHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import logger from '../../utils/logger.js';
 
 export default function registerAdminTranslateRoute(app, basePath = '') {
   app.post(buildServerPath('/api/admin/translate', basePath), adminAuth, async (req, res) => {
@@ -42,7 +43,7 @@ export default function registerAdminTranslateRoute(app, basePath = '') {
       });
       res.json({ translation: result.content });
     } catch (error) {
-      console.error('Translation error:', error);
+      logger.error('Translation error:', error);
       res.status(500).json({ error: 'Translation failed' });
     }
   });

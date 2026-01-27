@@ -4,6 +4,7 @@ import { getRootDir } from './pathUtils.js';
 import config from './config.js';
 import { loadJson } from './configLoader.js';
 import { recordTokenUsage } from './telemetry.js';
+import logger from './utils/logger.js';
 
 const contentsDir = config.CONTENTS_DIR;
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'usage.json');
@@ -154,7 +155,7 @@ function scheduleSave() {
     try {
       await saveUsage();
     } catch (e) {
-      console.error('Failed to save usage data', e);
+      logger.error('Failed to save usage data', e);
     }
   }, SAVE_INTERVAL_MS);
 }
@@ -356,5 +357,5 @@ export async function reloadConfig() {
 
 // Start periodic save interval
 setInterval(() => {
-  if (dirty) saveUsage().catch(e => console.error('Usage save error:', e));
+  if (dirty) saveUsage().catch(e => logger.error('Usage save error:', e));
 }, SAVE_INTERVAL_MS);

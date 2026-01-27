@@ -1,5 +1,6 @@
 // Generate a final answer from research results
 import { simpleCompletion, resolveModelId } from '../utils.js';
+import logger from '../utils/logger.js';
 
 function buildKnowledgeStr(items = []) {
   return items
@@ -21,7 +22,7 @@ function buildKnowledgeStr(items = []) {
 export default async function finalizer({ question, results = [], model = null }) {
   const resolvedModel = resolveModelId(model, 'finalizer');
   if (!resolvedModel) {
-    console.error('finalizer: No model available');
+    logger.error('finalizer: No model available');
     return '';
   }
   const knowledge = buildKnowledgeStr(results);
@@ -34,7 +35,7 @@ export default async function finalizer({ question, results = [], model = null }
     const result = await simpleCompletion(prompt, { model: resolvedModel, temperature: 0.7 });
     return result.content;
   } catch (err) {
-    console.error('finalizer failed:', err);
+    logger.error('finalizer failed:', err);
     return '';
   }
 }

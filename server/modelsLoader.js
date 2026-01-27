@@ -1,5 +1,6 @@
 import { createResourceLoader, createSchemaValidator } from './utils/resourceLoader.js';
 import { modelConfigSchema, knownModelKeys } from './validators/modelConfigSchema.js';
+import logger from './utils/logger.js';
 
 /**
  * Models Loader Service
@@ -23,11 +24,11 @@ function ensureOneDefaultModel(models) {
     const enabledModels = models.filter(model => model.enabled === true);
     if (enabledModels.length > 0) {
       enabledModels[0].default = true;
-      console.log(`🎯 Set ${enabledModels[0].id} as default model (no default was configured)`);
+      logger.info(`🎯 Set ${enabledModels[0].id} as default model (no default was configured)`);
     }
   } else if (defaultModels.length > 1) {
     // Multiple default models found, keep only the first one
-    console.warn(`⚠️ Multiple default models found, keeping only ${defaultModels[0].id}`);
+    logger.warn(`⚠️ Multiple default models found, keeping only ${defaultModels[0].id}`);
     for (let i = 1; i < defaultModels.length; i++) {
       defaultModels[i].default = false;
     }

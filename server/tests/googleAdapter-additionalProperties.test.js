@@ -1,5 +1,6 @@
 import assert from 'assert';
 import GoogleAdapter from '../adapters/google.js';
+import logger from '../utils/logger.js';
 
 const model = {
   modelId: 'gemini-3-pro',
@@ -10,7 +11,7 @@ const model = {
 const messages = [{ role: 'user', content: 'test' }];
 
 // Test 1: Schema with additionalProperties at root level
-console.log('Test 1: Schema with additionalProperties at root level');
+logger.info('Test 1: Schema with additionalProperties at root level');
 const schemaWithAdditionalProps = {
   type: 'object',
   properties: {
@@ -31,10 +32,10 @@ assert.strictEqual(req1.body.generationConfig.response_schema.type, 'object');
 assert.deepStrictEqual(req1.body.generationConfig.response_schema.properties, {
   foo: { type: 'string' }
 });
-console.log('✓ Test 1 passed: additionalProperties removed from root level');
+logger.info('✓ Test 1 passed: additionalProperties removed from root level');
 
 // Test 2: Schema with nested additionalProperties
-console.log('\nTest 2: Schema with nested additionalProperties');
+logger.info('\nTest 2: Schema with nested additionalProperties');
 const schemaWithNestedAdditionalProps = {
   type: 'object',
   properties: {
@@ -66,10 +67,10 @@ assert.strictEqual(
   req2.body.generationConfig.response_schema.properties.risks.items.additionalProperties,
   undefined
 );
-console.log('✓ Test 2 passed: additionalProperties removed from nested objects');
+logger.info('✓ Test 2 passed: additionalProperties removed from nested objects');
 
 // Test 3: Verify original schema is not mutated
-console.log('\nTest 3: Verify original schema is not mutated');
+logger.info('\nTest 3: Verify original schema is not mutated');
 const originalSchema = {
   type: 'object',
   properties: {
@@ -87,10 +88,10 @@ const req3 = GoogleAdapter.createCompletionRequest(model, messages, 'key', {
 assert.strictEqual(originalSchema.additionalProperties, false);
 // But the request should not
 assert.strictEqual(req3.body.generationConfig.response_schema.additionalProperties, undefined);
-console.log('✓ Test 3 passed: original schema not mutated');
+logger.info('✓ Test 3 passed: original schema not mutated');
 
 // Test 4: Schema without additionalProperties should work fine
-console.log('\nTest 4: Schema without additionalProperties');
+logger.info('\nTest 4: Schema without additionalProperties');
 const schemaWithoutAdditionalProps = {
   type: 'object',
   properties: {
@@ -106,6 +107,6 @@ const req4 = GoogleAdapter.createCompletionRequest(model, messages, 'key', {
 
 assert.strictEqual(req4.body.generationConfig.response_schema.additionalProperties, undefined);
 assert.strictEqual(req4.body.generationConfig.responseMimeType, 'application/json');
-console.log('✓ Test 4 passed: schema without additionalProperties works');
+logger.info('✓ Test 4 passed: schema without additionalProperties works');
 
-console.log('\n✅ All tests passed! additionalProperties is correctly removed from Google schemas');
+logger.info('\n✅ All tests passed! additionalProperties is correctly removed from Google schemas');

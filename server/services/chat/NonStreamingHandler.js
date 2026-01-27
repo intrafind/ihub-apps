@@ -3,6 +3,7 @@ import { recordChatRequest, recordChatResponse } from '../../usageTracker.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { redactUrl } from '../../utils/logRedactor.js';
+import logger from '../../utils/logger.js';
 
 class NonStreamingHandler {
   constructor() {
@@ -39,10 +40,10 @@ class NonStreamingHandler {
       }
 
       // Debug logging for LLM request
-      console.log(`[LLM REQUEST DEBUG] Message ID: ${messageId}, Model: ${model.id}`);
-      console.log(`[LLM REQUEST DEBUG] Method: ${fetchOptions.method}`);
-      console.log(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
-      console.log(
+      logger.info(`[LLM REQUEST DEBUG] Message ID: ${messageId}, Model: ${model.id}`);
+      logger.info(`[LLM REQUEST DEBUG] Method: ${fetchOptions.method}`);
+      logger.info(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
+      logger.info(
         `[LLM REQUEST DEBUG] Headers:`,
         JSON.stringify(
           {
@@ -54,7 +55,7 @@ class NonStreamingHandler {
         )
       );
       if (request.body) {
-        console.log(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
+        logger.info(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
       }
 
       const responsePromise = throttledFetch(model.id, request.url, fetchOptions);
@@ -85,7 +86,7 @@ class NonStreamingHandler {
 
         // Log additional info for context window errors
         if (errorResult.isContextWindowError) {
-          console.warn(`Context window exceeded for model ${model.id}:`, {
+          logger.warn(`Context window exceeded for model ${model.id}:`, {
             modelId: model.id,
             tokenLimit: model.tokenLimit,
             httpStatus: errorResult.httpStatus,

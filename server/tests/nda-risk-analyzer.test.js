@@ -1,14 +1,15 @@
 import assert from 'assert';
 import configCache from '../configCache.js';
+import logger from '../utils/logger.js';
 
-console.log('Testing NDA Risk Analyzer configuration and prompt logic...\n');
+logger.info('Testing NDA Risk Analyzer configuration and prompt logic...\n');
 
 /**
  * Test Suite 1: Rule Configuration Tests
  * Ensures default rules are loaded correctly from app config
  */
 async function testRuleConfigurationLoaded() {
-  console.log('Test 1: Default rules are loaded from configuration');
+  logger.info('Test 1: Default rules are loaded from configuration');
 
   const { data: apps } = configCache.getApps();
   const appConfig = apps.find(app => app.id === 'nda-risk-analyzer');
@@ -35,11 +36,11 @@ async function testRuleConfigurationLoaded() {
     'Should specify RED flag for duration > 24 months'
   );
   assert.ok(defaultRulesEN.includes('Mutuality'), 'Should include Mutuality rule');
-  console.log('✓ Default rules loaded correctly\n');
+  logger.info('✓ Default rules loaded correctly\n');
 }
 
 async function testRuleVariableStructure() {
-  console.log('Test 2: Rule variable has correct structure');
+  logger.info('Test 2: Rule variable has correct structure');
 
   const { data: apps } = configCache.getApps();
   const appConfig = apps.find(app => app.id === 'nda-risk-analyzer');
@@ -52,7 +53,7 @@ async function testRuleVariableStructure() {
   assert.ok(customRulesVar.description.en, 'Should have English description');
   assert.ok(customRulesVar.description.de, 'Should have German description');
 
-  console.log('✓ Rule variable structure is valid\n');
+  logger.info('✓ Rule variable structure is valid\n');
 }
 
 /**
@@ -60,7 +61,7 @@ async function testRuleVariableStructure() {
  * Ensures variables are correctly substituted in prompts
  */
 async function testPromptTemplateSubstitution() {
-  console.log('Test 3: Custom rules are injected into prompt template');
+  logger.info('Test 3: Custom rules are injected into prompt template');
 
   const { data: apps } = configCache.getApps();
   const appConfig = apps.find(app => app.id === 'nda-risk-analyzer');
@@ -87,11 +88,11 @@ async function testPromptTemplateSubstitution() {
   assert.ok(!finalPrompt.includes('{{custom_rules}}'), 'Template placeholders should be replaced');
   assert.ok(!finalPrompt.includes('{{content}}'), 'Content placeholder should be replaced');
 
-  console.log('✓ Prompt template substitution works correctly\n');
+  logger.info('✓ Prompt template substitution works correctly\n');
 }
 
 async function testPromptTemplateStructure() {
-  console.log('Test 4: Prompt template has correct structure');
+  logger.info('Test 4: Prompt template has correct structure');
 
   const { data: apps } = configCache.getApps();
   const appConfig = apps.find(app => app.id === 'nda-risk-analyzer');
@@ -110,11 +111,11 @@ async function testPromptTemplateStructure() {
     'Template should include content placeholder'
   );
 
-  console.log('✓ Prompt template structure is valid\n');
+  logger.info('✓ Prompt template structure is valid\n');
 }
 
 async function testEmptyRulesHandling() {
-  console.log('Test 5: Empty/whitespace rules should fall back to defaults');
+  logger.info('Test 5: Empty/whitespace rules should fall back to defaults');
 
   const { data: apps } = configCache.getApps();
   const appConfig = apps.find(app => app.id === 'nda-risk-analyzer');
@@ -153,7 +154,7 @@ async function testEmptyRulesHandling() {
     );
   });
 
-  console.log('✓ Empty/whitespace rules correctly fall back to defaults\n');
+  logger.info('✓ Empty/whitespace rules correctly fall back to defaults\n');
 }
 
 /**
@@ -161,7 +162,7 @@ async function testEmptyRulesHandling() {
  * Validates the output schema structure
  */
 async function testOutputSchemaStructure() {
-  console.log('Test 6: Output schema has correct structure');
+  logger.info('Test 6: Output schema has correct structure');
 
   const { data: apps } = configCache.getApps();
   const appConfig = apps.find(app => app.id === 'nda-risk-analyzer');
@@ -190,11 +191,11 @@ async function testOutputSchemaStructure() {
   assert.strictEqual(schema.properties.clauses.type, 'array', 'clauses should be array');
   assert.strictEqual(schema.properties.clauses.minItems, 8, 'clauses should have minimum 8 items');
 
-  console.log('✓ Output schema structure is valid\n');
+  logger.info('✓ Output schema structure is valid\n');
 }
 
 async function testClausesSchemaStructure() {
-  console.log('Test 7: Clauses items schema has correct structure');
+  logger.info('Test 7: Clauses items schema has correct structure');
 
   const { data: apps } = configCache.getApps();
   const appConfig = apps.find(app => app.id === 'nda-risk-analyzer');
@@ -227,7 +228,7 @@ async function testClausesSchemaStructure() {
   );
   assert.strictEqual(clausesSchema.properties.reason.type, 'string', 'reason should be string');
 
-  console.log('✓ Clauses schema structure is valid\n');
+  logger.info('✓ Clauses schema structure is valid\n');
 }
 
 /**
@@ -235,7 +236,7 @@ async function testClausesSchemaStructure() {
  * Validates a sample response structure (not LLM output, just structure)
  */
 async function testFixtureResponseStructure() {
-  console.log('Test 8: Sample response fixture has valid structure');
+  logger.info('Test 8: Sample response fixture has valid structure');
 
   // This is a mock response structure that the renderer expects
   const sampleResponse = {
@@ -278,7 +279,7 @@ async function testFixtureResponseStructure() {
     assert.ok(Array.isArray(clause.citation), `Clause ${idx} should have citation array`);
   });
 
-  console.log('✓ Sample response structure is valid for renderer\n');
+  logger.info('✓ Sample response structure is valid for renderer\n');
 }
 
 /**
@@ -287,7 +288,7 @@ async function testFixtureResponseStructure() {
 async function runAllTests() {
   try {
     // Initialize config cache before running tests
-    console.log('Initializing configuration cache...\n');
+    logger.info('Initializing configuration cache...\n');
     await configCache.initialize();
 
     // Test Suite 1: Rule Configuration
@@ -306,11 +307,11 @@ async function runAllTests() {
     // Test Suite 4: Fixture Response
     await testFixtureResponseStructure();
 
-    console.log('✅ All NDA Risk Analyzer tests passed!\n');
+    logger.info('✅ All NDA Risk Analyzer tests passed!\n');
     process.exit(0);
   } catch (error) {
-    console.error('❌ Test failed:', error.message);
-    console.error(error.stack);
+    logger.error('❌ Test failed:', error.message);
+    logger.error(error.stack);
     process.exit(1);
   }
 }

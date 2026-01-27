@@ -10,6 +10,7 @@ import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import StreamingHandler from './StreamingHandler.js';
 import { redactUrl } from '../../utils/logRedactor.js';
+import logger from '../../utils/logger.js';
 
 class ToolExecutor {
   constructor() {
@@ -33,7 +34,7 @@ class ToolExecutor {
         try {
           args = JSON.parse(finalArgs);
         } catch (e2) {
-          console.error(
+          logger.error(
             'Failed to parse tool arguments even after correction:',
             toolCall.function.arguments,
             e2
@@ -42,7 +43,7 @@ class ToolExecutor {
         }
       }
     } catch (e) {
-      console.error('Failed to parse tool arguments:', toolCall.function.arguments, e);
+      logger.error('Failed to parse tool arguments:', toolCall.function.arguments, e);
     }
 
     actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
@@ -84,7 +85,7 @@ class ToolExecutor {
 
       // Check for imageData in the result and extract it to message level
       if (this.extractImageDataFromResult(result, message)) {
-        console.log(`🖼️ Tool ${toolId} returned image data for vision analysis`);
+        logger.info(`🖼️ Tool ${toolId} returned image data for vision analysis`);
         // For image analysis, replace verbose tool result with simple message
         message.content = `Retrieved image: ${message.imageData?.filename || 'attachment'}`;
       }
@@ -94,7 +95,7 @@ class ToolExecutor {
         message
       };
     } catch (toolError) {
-      console.error(`Tool execution failed for ${toolId}:`, toolError);
+      logger.error(`Tool execution failed for ${toolId}:`, toolError);
 
       const errorResult = {
         error: true,
@@ -157,7 +158,7 @@ class ToolExecutor {
 
       // Check if this object has imageData structure
       if (obj.imageData && obj.imageData.type === 'image' && obj.imageData.base64) {
-        console.log(`🔍 Found imageData at path: ${path}`);
+        logger.info(`🔍 Found imageData at path: ${path}`);
 
         // Move imageData to message level for adapter processing
         message.imageData = {
@@ -297,7 +298,7 @@ class ToolExecutor {
         }
       };
     } catch (toolError) {
-      console.error(`Passthrough tool execution failed for ${toolId}:`, toolError);
+      logger.error(`Passthrough tool execution failed for ${toolId}:`, toolError);
 
       const errorResult = {
         error: true,
@@ -386,9 +387,9 @@ class ToolExecutor {
 
     try {
       // Debug logging for LLM request (tool execution)
-      console.log(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id} (with tools)`);
-      console.log(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
-      console.log(
+      logger.info(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id} (with tools)`);
+      logger.info(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
+      logger.info(
         `[LLM REQUEST DEBUG] Headers:`,
         JSON.stringify(
           {
@@ -399,7 +400,7 @@ class ToolExecutor {
           2
         )
       );
-      console.log(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
+      logger.info(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
 
       const llmResponse = await throttledFetch(model.id, request.url, {
         method: 'POST',
@@ -453,7 +454,7 @@ class ToolExecutor {
             });
           }
 
-          // console.log(`Result for chat ID ${chatId}:`, result);
+          // logger.info(`Result for chat ID ${chatId}:`, result);
           if (result.content?.length > 0) {
             for (const text of result.content) {
               assistantContent += text;
@@ -461,7 +462,7 @@ class ToolExecutor {
             }
           }
 
-          // console.log(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
+          // logger.info(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
           if (result.tool_calls?.length > 0) {
             result.tool_calls.forEach(call => {
               let existingCall = collectedToolCalls.find(c => c.index === call.index);
@@ -515,12 +516,12 @@ class ToolExecutor {
             });
           }
 
-          // console.log(`Finish Reason for chat ID ${chatId}:`, finishReason);
+          // logger.info(`Finish Reason for chat ID ${chatId}:`, finishReason);
           if (result.finishReason) {
             finishReason = result.finishReason;
           }
 
-          // console.log(
+          // logger.info(
           //   `Completed processing for chat ID ${chatId} - done? ${done}:`,
           //   JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
           // );
@@ -532,7 +533,7 @@ class ToolExecutor {
       }
 
       if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
-        console.log(
+        logger.info(
           `No tool calls to process for chat ID ${chatId}:`,
           JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
         );
@@ -557,7 +558,7 @@ class ToolExecutor {
       });
 
       if (validToolCalls.length === 0) {
-        console.log(`No valid tool calls to process for chat ID ${chatId} after filtering`);
+        logger.info(`No valid tool calls to process for chat ID ${chatId} after filtering`);
         clearTimeout(timeoutId);
         actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
         await logInteraction(
@@ -741,11 +742,11 @@ class ToolExecutor {
         }
 
         // Debug logging for LLM request (tool continuation)
-        console.log(
+        logger.info(
           `[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id} (tool continuation, iteration ${iteration})`
         );
-        console.log(`[LLM REQUEST DEBUG] URL: ${redactUrl(followRequest.url)}`);
-        console.log(
+        logger.info(`[LLM REQUEST DEBUG] URL: ${redactUrl(followRequest.url)}`);
+        logger.info(
           `[LLM REQUEST DEBUG] Headers:`,
           JSON.stringify(
             {
@@ -757,7 +758,7 @@ class ToolExecutor {
           )
         );
         if (followRequest.body) {
-          console.log(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(followRequest.body, null, 2));
+          logger.info(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(followRequest.body, null, 2));
         }
 
         const llmResponse = await throttledFetch(model.id, followRequest.url, fetchOptions);
@@ -924,7 +925,7 @@ class ToolExecutor {
 
         // Continue to next iteration for non-streaming tools
 
-        console.log(`--- Tool execution iteration ${iteration} complete ---`);
+        logger.info(`--- Tool execution iteration ${iteration} complete ---`);
         // Continue the loop for the next iteration
       } catch (error) {
         clearTimeout(timeoutId);
@@ -957,7 +958,7 @@ class ToolExecutor {
     }
 
     // If we hit the max iterations, log a warning but don't error
-    console.warn(`Max tool execution iterations (${maxIterations}) reached for chat ${chatId}`);
+    logger.warn(`Max tool execution iterations (${maxIterations}) reached for chat ${chatId}`);
     actionTracker.trackDone(chatId, { finishReason: 'max_iterations' });
   }
 }

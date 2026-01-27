@@ -1,5 +1,6 @@
 import { simpleCompletion, resolveModelId } from '../utils.js';
 import fs from 'fs';
+import logger from '../utils/logger.js';
 
 function getPrompt(answers) {
   return {
@@ -66,7 +67,7 @@ export default async function answerReducer({ answers, model = null, temperature
     }
     return text;
   } catch (err) {
-    console.error('Reducer error:', err);
+    logger.error('Reducer error:', err);
     return answers.join('\n\n');
   }
 }
@@ -75,16 +76,16 @@ export default async function answerReducer({ answers, model = null, temperature
 if (import.meta.url === `file://${process.argv[1]}`) {
   const files = process.argv.slice(2);
   if (files.length === 0) {
-    console.error('Usage: node answerReducer.js <file1> <file2> ...');
+    logger.error('Usage: node answerReducer.js <file1> <file2> ...');
     process.exit(1);
   }
   Promise.all(files.map(f => fs.promises.readFile(f, 'utf8')))
     .then(async contents => {
       const result = await answerReducer({ answers: contents });
-      console.log(result);
+      logger.info(result);
     })
     .catch(err => {
-      console.error('Error:', err);
+      logger.error('Error:', err);
       process.exit(1);
     });
 }

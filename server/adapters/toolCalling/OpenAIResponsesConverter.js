@@ -13,6 +13,7 @@ import {
   normalizeFinishReason,
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Add strict mode requirements to a schema for OpenAI Responses API
@@ -104,14 +105,14 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
     }
     // If tool specifies a different provider, exclude it
     if (tool.provider) {
-      console.log(
+      logger.info(
         `[OpenAI Responses Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
       );
       continue;
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
-      console.log(
+      logger.info(
         `[OpenAI Responses Converter] Filtering out special tool: ${tool.id || tool.name}`
       );
       continue;
@@ -534,7 +535,7 @@ export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'defaul
       metadata
     );
   } catch (error) {
-    console.error('Error parsing OpenAI Responses API response:', error);
+    logger.error('Error parsing OpenAI Responses API response:', error);
     return createGenericStreamingResponse(
       [],
       [],

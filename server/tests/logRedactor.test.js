@@ -3,35 +3,36 @@
  */
 import assert from 'assert';
 import {
+import logger from '../utils/logger.js';
   redactUrl,
   redactHeaders,
   redactRequestBody,
   redactLogMessage
 } from '../utils/logRedactor.js';
 
-console.log('Running log redaction tests...\n');
+logger.info('Running log redaction tests...\n');
 
 // Test redactUrl
-console.log('Testing redactUrl()...');
+logger.info('Testing redactUrl()...');
 {
   const url = 'https://api.google.com/v1/models:generateContent?key=AIzaSyABC123xyz789';
   const redacted = redactUrl(url);
   assert.strictEqual(redacted, 'https://api.google.com/v1/models:generateContent?key=[REDACTED]');
   assert.ok(!redacted.includes('AIzaSyABC123xyz789'), 'API key should be redacted');
-  console.log('✓ Google API keys redacted correctly');
+  logger.info('✓ Google API keys redacted correctly');
 
   const url2 = 'https://api.example.com?key=abc123&token=xyz789';
   const redacted2 = redactUrl(url2);
   assert.strictEqual(redacted2, 'https://api.example.com?key=[REDACTED]&token=[REDACTED]');
-  console.log('✓ Multiple API keys redacted correctly');
+  logger.info('✓ Multiple API keys redacted correctly');
 
   const url3 = 'https://api.example.com/endpoint?param=value';
   assert.strictEqual(redactUrl(url3), url3);
-  console.log('✓ Non-sensitive URLs preserved');
+  logger.info('✓ Non-sensitive URLs preserved');
 }
 
 // Test redactHeaders
-console.log('\nTesting redactHeaders()...');
+logger.info('\nTesting redactHeaders()...');
 {
   const headers = {
     'Content-Type': 'application/json',
@@ -44,18 +45,18 @@ console.log('\nTesting redactHeaders()...');
     !redacted.Authorization.includes('1234567890abcdefghijklmnop'),
     'API key should be hidden'
   );
-  console.log('✓ Authorization header redacted correctly');
+  logger.info('✓ Authorization header redacted correctly');
 
   const headers2 = {
     'x-api-key': 'sk-proj-abcdefghijklmnop1234567890'
   };
   const redacted2 = redactHeaders(headers2);
   assert.ok(redacted2['x-api-key'].includes('[REDACTED]'), 'x-api-key should be redacted');
-  console.log('✓ x-api-key header redacted correctly');
+  logger.info('✓ x-api-key header redacted correctly');
 }
 
 // Test redactRequestBody
-console.log('\nTesting redactRequestBody()...');
+logger.info('\nTesting redactRequestBody()...');
 {
   const body = {
     model: 'gpt-4',
@@ -66,7 +67,7 @@ console.log('\nTesting redactRequestBody()...');
   assert.strictEqual(redacted.model, 'gpt-4');
   assert.strictEqual(redacted.api_key, '[REDACTED]');
   assert.deepStrictEqual(redacted.messages, body.messages);
-  console.log('✓ API key fields redacted in request body');
+  logger.info('✓ API key fields redacted in request body');
 
   const body2 = {
     config: {
@@ -79,38 +80,38 @@ console.log('\nTesting redactRequestBody()...');
   const redacted2 = redactRequestBody(body2);
   assert.strictEqual(redacted2.config.apiKey, '[REDACTED]');
   assert.strictEqual(redacted2.config.settings.token, '[REDACTED]');
-  console.log('✓ Nested sensitive fields redacted correctly');
+  logger.info('✓ Nested sensitive fields redacted correctly');
 
   // Ensure original is not modified
   assert.strictEqual(body.api_key, 'sk-1234567890', 'Original should not be modified');
-  console.log('✓ Original object not modified');
+  logger.info('✓ Original object not modified');
 }
 
 // Test redactLogMessage
-console.log('\nTesting redactLogMessage()...');
+logger.info('\nTesting redactLogMessage()...');
 {
   const message = 'Making request to https://api.google.com?key=AIzaSyABC123';
   const redacted = redactLogMessage(message);
   assert.ok(redacted.includes('?key=[REDACTED]'), 'URL key should be redacted');
   assert.ok(!redacted.includes('AIzaSyABC123'), 'API key should be hidden');
-  console.log('✓ URLs with API keys redacted in messages');
+  logger.info('✓ URLs with API keys redacted in messages');
 
   const message2 = 'Authorization: Bearer sk-1234567890abcdef';
   const redacted2 = redactLogMessage(message2);
   assert.ok(redacted2.includes('Bearer [REDACTED]'), 'Bearer token should be redacted');
   assert.ok(!redacted2.includes('sk-1234567890abcdef'), 'Token should be hidden');
-  console.log('✓ Bearer tokens redacted correctly');
+  logger.info('✓ Bearer tokens redacted correctly');
 
   const message3 = 'Using API key: sk-proj-abcdefghij1234567890';
   const redacted3 = redactLogMessage(message3);
   assert.ok(redacted3.includes('sk-[REDACTED]'), 'API key pattern should be redacted');
   assert.ok(!redacted3.includes('abcdefghij1234567890'), 'Key should be hidden');
-  console.log('✓ API key patterns redacted correctly');
+  logger.info('✓ API key patterns redacted correctly');
 
   const message4 = 'Processing request with model gpt-4 and temperature 0.7';
   const redacted4 = redactLogMessage(message4);
   assert.strictEqual(redacted4, message4);
-  console.log('✓ Normal text preserved');
+  logger.info('✓ Normal text preserved');
 }
 
-console.log('\n✅ All log redaction tests passed!');
+logger.info('\n✅ All log redaction tests passed!');

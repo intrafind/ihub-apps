@@ -8,6 +8,7 @@ import { dirname } from 'path';
 import configCache from '../../configCache.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import logger from '../../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,7 +32,7 @@ async function getAllFiles(dirPath, arrayOfFiles = []) {
       }
     }
   } catch (error) {
-    console.warn(`Warning: Could not read directory ${dirPath}:`, error.message);
+    logger.warn(`Warning: Could not read directory ${dirPath}:`, error.message);
   }
 
   return arrayOfFiles;
@@ -62,11 +63,11 @@ function extractZip(zipPath, extractPath) {
       zipfile.readEntry();
 
       zipfile.on('entry', async entry => {
-        console.log(`📂 ZIP entry: "${entry.fileName}"`);
+        logger.info(`📂 ZIP entry: "${entry.fileName}"`);
 
         // Skip directories
         if (/\/$/.test(entry.fileName)) {
-          console.log(`⏭️  Skipping directory: ${entry.fileName}`);
+          logger.info(`⏭️  Skipping directory: ${entry.fileName}`);
           zipfile.readEntry();
           return;
         }
@@ -77,7 +78,7 @@ function extractZip(zipPath, extractPath) {
           entry.fileName.includes('.DS_Store') ||
           entry.fileName.startsWith('._')
         ) {
-          console.log(`⏭️  Skipping metadata: ${entry.fileName}`);
+          logger.info(`⏭️  Skipping metadata: ${entry.fileName}`);
           zipfile.readEntry();
           return;
         }
@@ -85,7 +86,7 @@ function extractZip(zipPath, extractPath) {
         // Check if this is a contents file (either direct contents/ or nested */contents/)
         const contentsMatch = entry.fileName.match(/(?:^|.*\/)contents\/(.+)$/);
         if (!contentsMatch) {
-          console.log(`⏭️  Skipping non-contents file: ${entry.fileName}`);
+          logger.info(`⏭️  Skipping non-contents file: ${entry.fileName}`);
           zipfile.readEntry();
           return;
         }
@@ -94,7 +95,7 @@ function extractZip(zipPath, extractPath) {
         const relativePath = contentsMatch[1];
         const entryPath = path.join(extractPath, 'contents', relativePath);
 
-        console.log(`✅ Extracting: ${entry.fileName} -> contents/${relativePath}`);
+        logger.info(`✅ Extracting: ${entry.fileName} -> contents/${relativePath}`);
 
         // Ensure the directory exists
         await ensureDir(path.dirname(entryPath));
@@ -135,7 +136,7 @@ function extractZip(zipPath, extractPath) {
  */
 export async function exportConfig(req, res) {
   try {
-    console.log('🔄 Starting configuration export...');
+    logger.info('🔄 Starting configuration export...');
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const filename = `ihub-config-backup-${timestamp}.zip`;
@@ -148,7 +149,7 @@ export async function exportConfig(req, res) {
     });
 
     archive.on('error', err => {
-      console.error('❌ Archive error:', err);
+      logger.error('❌ Archive error:', err);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Failed to create backup archive' });
       }
@@ -168,17 +169,17 @@ export async function exportConfig(req, res) {
         const relativePath = path.relative(path.join(contentsPath, '../'), filePath);
 
         // Debug logging
-        console.log(`📁 Adding to archive: ${relativePath} (from ${filePath})`);
+        logger.info(`📁 Adding to archive: ${relativePath} (from ${filePath})`);
 
         // Add file to archive
         archive.file(filePath, { name: relativePath });
         fileCount++;
       } catch (error) {
-        console.warn(`Warning: Could not add ${filePath} to archive:`, error.message);
+        logger.warn(`Warning: Could not add ${filePath} to archive:`, error.message);
       }
     }
 
-    console.log(`✅ Added ${fileCount} files to backup archive`);
+    logger.info(`✅ Added ${fileCount} files to backup archive`);
 
     // Add metadata file with backup information
     const metadata = {
@@ -192,9 +193,9 @@ export async function exportConfig(req, res) {
     archive.append(JSON.stringify(metadata, null, 2), { name: 'backup-metadata.json' });
 
     await archive.finalize();
-    console.log('✅ Configuration export completed');
+    logger.info('✅ Configuration export completed');
   } catch (error) {
-    console.error('❌ Export error:', error);
+    logger.error('❌ Export error:', error);
     if (!res.headersSent) {
       res.status(500).json({
         error: 'Failed to export configuration',
@@ -212,7 +213,7 @@ export async function importConfig(req, res) {
   let tempExtractPath = null;
 
   try {
-    console.log('🔄 Starting configuration import...');
+    logger.info('🔄 Starting configuration import...');
 
     // Check if file was uploaded
     if (!req.file) {
@@ -222,7 +223,7 @@ export async function importConfig(req, res) {
     tempZipPath = req.file.path;
     tempExtractPath = path.join(path.dirname(tempZipPath), `extract_${Date.now()}`);
 
-    console.log(`📁 Extracting ZIP file to: ${tempExtractPath}`);
+    logger.info(`📁 Extracting ZIP file to: ${tempExtractPath}`);
 
     // Extract ZIP file
     await fs.mkdir(tempExtractPath, { recursive: true });
@@ -230,7 +231,7 @@ export async function importConfig(req, res) {
 
     // Debug: List what was actually extracted
     const extractedItems = await fs.readdir(tempExtractPath, { withFileTypes: true });
-    console.log(
+    logger.info(
       '📋 Extracted items:',
       extractedItems.map(item => `${item.name}${item.isDirectory() ? '/' : ''}`)
     );
@@ -252,9 +253,9 @@ export async function importConfig(req, res) {
       const metadataPath = path.join(tempExtractPath, 'backup-metadata.json');
       const metadataContent = await fs.readFile(metadataPath, 'utf-8');
       metadata = JSON.parse(metadataContent);
-      console.log('📋 Backup metadata:', metadata);
+      logger.info('📋 Backup metadata:', metadata);
     } catch {
-      console.log('ℹ️  No metadata found in backup (this is normal for manual backups)');
+      logger.info('ℹ️  No metadata found in backup (this is normal for manual backups)');
     }
 
     // Create backup of current configuration
@@ -264,18 +265,18 @@ export async function importConfig(req, res) {
       `contents-backup-${backupTimestamp}`
     );
 
-    console.log(`💾 Creating backup of current configuration at: ${currentBackupPath}`);
+    logger.info(`💾 Creating backup of current configuration at: ${currentBackupPath}`);
 
     try {
       await fs.cp(contentsPath, currentBackupPath, { recursive: true });
-      console.log('✅ Current configuration backed up');
+      logger.info('✅ Current configuration backed up');
     } catch (error) {
-      console.error('⚠️  Warning: Could not backup current configuration:', error.message);
+      logger.error('⚠️  Warning: Could not backup current configuration:', error.message);
       // Continue with import but warn user
     }
 
     // Replace contents directory with imported one
-    console.log('🔄 Replacing configuration files...');
+    logger.info('🔄 Replacing configuration files...');
 
     // Remove current contents (but keep backup)
     await fs.rm(contentsPath, { recursive: true, force: true });
@@ -283,13 +284,13 @@ export async function importConfig(req, res) {
     // Copy extracted contents
     await fs.cp(extractedContentsPath, contentsPath, { recursive: true });
 
-    console.log('✅ Configuration files replaced');
+    logger.info('✅ Configuration files replaced');
 
     // Reload configuration cache
-    console.log('🔄 Reloading configuration cache...');
+    logger.info('🔄 Reloading configuration cache...');
     await configCache.clear();
     await configCache.initialize();
-    console.log('✅ Configuration cache reloaded');
+    logger.info('✅ Configuration cache reloaded');
 
     // Count imported files
     const importedFiles = await getAllFiles(contentsPath);
@@ -303,9 +304,9 @@ export async function importConfig(req, res) {
       note: 'All configurations have been replaced and cache has been reloaded. Frontend customizations (CSS, HTML, etc.) are included if they were in the backup.'
     });
 
-    console.log(`✅ Configuration import completed. Imported ${importedFiles.length} files`);
+    logger.info(`✅ Configuration import completed. Imported ${importedFiles.length} files`);
   } catch (error) {
-    console.error('❌ Import error:', error);
+    logger.error('❌ Import error:', error);
 
     res.status(500).json({
       error: 'Failed to import configuration',
@@ -321,7 +322,7 @@ export async function importConfig(req, res) {
         await fs.rm(tempExtractPath, { recursive: true, force: true });
       }
     } catch (error) {
-      console.warn('Warning: Could not clean up temporary files:', error.message);
+      logger.warn('Warning: Could not clean up temporary files:', error.message);
     }
   }
 }

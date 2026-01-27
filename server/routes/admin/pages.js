@@ -7,6 +7,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
+import logger from '../../utils/logger.js';
 
 export default function registerAdminPagesRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/admin/pages', basePath), adminAuth, async (req, res) => {
@@ -21,7 +22,7 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
       }));
       res.json(pages);
     } catch (error) {
-      console.error('Error fetching pages:', error);
+      logger.error('Error fetching pages:', error);
       res.status(500).json({ error: 'Failed to fetch pages' });
     }
   });
@@ -59,7 +60,7 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
         contentType: page.contentType || 'markdown'
       });
     } catch (error) {
-      console.error('Error fetching page:', error);
+      logger.error('Error fetching page:', error);
       res.status(500).json({ error: 'Failed to fetch page' });
     }
   });
@@ -103,7 +104,7 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page created successfully', page: { id, title } });
     } catch (error) {
-      console.error('Error creating page:', error);
+      logger.error('Error creating page:', error);
       res.status(500).json({ error: 'Failed to create page' });
     }
   });
@@ -152,7 +153,7 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page updated successfully', page: { id, title } });
     } catch (error) {
-      console.error('Error updating page:', error);
+      logger.error('Error updating page:', error);
       res.status(500).json({ error: 'Failed to update page' });
     }
   });
@@ -183,7 +184,7 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page deleted successfully' });
     } catch (error) {
-      console.error('Error deleting page:', error);
+      logger.error('Error deleting page:', error);
       res.status(500).json({ error: 'Failed to delete page' });
     }
   });

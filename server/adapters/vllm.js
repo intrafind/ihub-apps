@@ -4,6 +4,7 @@
  */
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
+import logger from '../utils/logger.js';
 
 class VLLMAdapterClass extends BaseAdapter {
   /**
@@ -69,7 +70,7 @@ class VLLMAdapterClass extends BaseAdapter {
       if (toolChoice) {
         body.tool_choice = toolChoice;
       }
-      console.log(`[vLLM Adapter] Converted ${tools.length} tools with schema sanitization`);
+      logger.info(`[vLLM Adapter] Converted ${tools.length} tools with schema sanitization`);
     } else if (toolChoice) {
       body.tool_choice = toolChoice;
     }
@@ -81,7 +82,7 @@ class VLLMAdapterClass extends BaseAdapter {
     // Note: vLLM may not support structured output schemas
 
     // Note: Request body logging disabled to prevent exposing sensitive data in logs
-    // console.log('vLLM request body:', body);
+    // logger.info('vLLM request body:', body);
 
     return {
       url: model.url,
@@ -162,7 +163,7 @@ class VLLMAdapterClass extends BaseAdapter {
         result.finishReason = parsed.choices[0].finish_reason;
       }
     } catch (error) {
-      console.error('Error parsing vLLM response chunk:', error);
+      logger.error('Error parsing vLLM response chunk:', error);
       result.error = true;
       result.errorMessage = `Error parsing vLLM response: ${error.message}`;
     }

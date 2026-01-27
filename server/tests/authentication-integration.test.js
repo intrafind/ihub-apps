@@ -13,6 +13,7 @@ import { setupMiddleware } from '../serverHelpers.js';
 import registerAuthRoutes from '../routes/auth.js';
 import registerAdminRoutes from '../routes/adminRoutes.js';
 import jwt from 'jsonwebtoken';
+import logger from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

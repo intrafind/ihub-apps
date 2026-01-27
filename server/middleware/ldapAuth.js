@@ -2,6 +2,7 @@ import { authenticate } from 'ldap-authentication';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
+import logger from '../utils/logger.js';
 
 /**
  * LDAP authentication configuration and utilities
@@ -43,18 +44,18 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       })
     };
 
-    console.log(`[LDAP Auth] Attempting authentication for user: ${username}`);
-    console.log(`[LDAP Auth] LDAP server: ${ldapConfig.url}`);
+    logger.info(`[LDAP Auth] Attempting authentication for user: ${username}`);
+    logger.info(`[LDAP Auth] LDAP server: ${ldapConfig.url}`);
 
     // Perform LDAP authentication
     const user = await authenticate(options);
 
     if (!user) {
-      console.warn(`[LDAP Auth] Authentication failed for user: ${username}`);
+      logger.warn(`[LDAP Auth] Authentication failed for user: ${username}`);
       return null;
     }
 
-    console.log(`[LDAP Auth] Authentication successful for user: ${username}`);
+    logger.info(`[LDAP Auth] Authentication successful for user: ${username}`);
 
     // Extract groups from LDAP response
     let groups = [];
@@ -98,7 +99,7 @@ async function authenticateLdapUser(username, password, ldapConfig) {
 
     return normalizedUser;
   } catch (error) {
-    console.error(`[LDAP Auth] Authentication error for user ${username}:`, error.message);
+    logger.error(`[LDAP Auth] Authentication error for user ${username}:`, error.message);
     return null;
   }
 }

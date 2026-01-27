@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
+import logger from '../utils/logger.js';
 
 /**
  * JWT authentication middleware
@@ -39,7 +40,7 @@ export default function jwtAuthMiddleware(req, res, next) {
   const jwtSecret = config.JWT_SECRET || platform.auth?.jwtSecret;
 
   if (!jwtSecret) {
-    console.warn('🔐 JWT Auth: No JWT secret configured');
+    logger.warn('🔐 JWT Auth: No JWT secret configured');
     return next(); // No JWT secret configured
   }
 
@@ -51,7 +52,7 @@ export default function jwtAuthMiddleware(req, res, next) {
 
     // Debug: Log JWT payload in development
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔐 JWT User authenticated:', {
+      logger.info('🔐 JWT User authenticated:', {
         userId: decoded.sub || decoded.username || decoded.id,
         name: decoded.name,
         authMode: decoded.authMode
@@ -63,7 +64,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       // For /api/auth/status endpoint, don't return 401 on expired token
       // Allow the endpoint to respond with proper auth status and auto-redirect info
       if (req.path === '/api/auth/status') {
-        console.log('🔐 JWT Auth: Token expired, continuing to status endpoint');
+        logger.info('🔐 JWT Auth: Token expired, continuing to status endpoint');
         return next();
       }
 
@@ -90,7 +91,7 @@ export default function jwtAuthMiddleware(req, res, next) {
           const client = findClientById(clientsConfig, decoded.client_id);
 
           if (!client) {
-            console.warn(
+            logger.warn(
               `[OAuth] Token rejected: client not found | client_id=${decoded.client_id}`
             );
             return res.status(401).json({
@@ -100,7 +101,7 @@ export default function jwtAuthMiddleware(req, res, next) {
           }
 
           if (!client.active) {
-            console.warn(
+            logger.warn(
               `[OAuth] Token rejected: client suspended | client_id=${decoded.client_id}`
             );
             return res.status(403).json({
@@ -115,7 +116,7 @@ export default function jwtAuthMiddleware(req, res, next) {
             const lastRotatedAt = new Date(client.lastRotated).getTime();
 
             if (tokenIssuedAt < lastRotatedAt) {
-              console.warn(
+              logger.warn(
                 `[OAuth] Token rejected: issued before secret rotation | client_id=${decoded.client_id} | token_iat=${new Date(tokenIssuedAt).toISOString()} | last_rotated=${client.lastRotated}`
               );
               return res.status(401).json({
@@ -143,7 +144,7 @@ export default function jwtAuthMiddleware(req, res, next) {
             staticKey: decoded.static_key || false
           };
         } catch (loadError) {
-          console.error('[OAuth] Failed to validate client status:', loadError);
+          logger.error('[OAuth] Failed to validate client status:', loadError);
           // Continue anyway to avoid breaking on config errors
           user = {
             id: decoded.client_id,
@@ -162,7 +163,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
       } else {
         // OAuth not enabled, but token is OAuth type - reject
-        console.warn('[OAuth] Token rejected: OAuth not enabled');
+        logger.warn('[OAuth] Token rejected: OAuth not enabled');
         return res.status(401).json({
           error: 'invalid_token',
           error_description: 'OAuth authentication is not enabled'
@@ -229,11 +230,11 @@ export default function jwtAuthMiddleware(req, res, next) {
     // For /api/auth/status endpoint, allow expired/invalid tokens to pass through
     // so the endpoint can respond with proper auth status and auto-redirect info
     if (req.path === '/api/auth/status' && err.name === 'TokenExpiredError') {
-      console.log('🔐 JWT Auth: Expired token on status endpoint, continuing');
+      logger.info('🔐 JWT Auth: Expired token on status endpoint, continuing');
       return next();
     }
 
-    console.warn('🔐 jwtAuth: Token validation failed:', err.message);
+    logger.warn('🔐 jwtAuth: Token validation failed:', err.message);
     return next();
   }
 }

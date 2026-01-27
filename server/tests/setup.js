@@ -1,3 +1,4 @@
+import logger from '../utils/logger.js';
 /**
  * Jest setup file for authentication security tests
  */
@@ -39,7 +40,7 @@ global.testUtils = {
   })
 };
 
-// Suppress console.log during tests (optional)
+// Suppress logger.info during tests (optional)
 if (process.env.SUPPRESS_LOGS === 'true') {
   global.console = {
     ...console,

@@ -8,6 +8,7 @@ import { authRequired } from '../../middleware/authRequired.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import crypto from 'crypto';
+import logger from '../../utils/logger.js';
 
 /**
  * @swagger
@@ -245,7 +246,7 @@ export default function registerDataRoutes(app, deps = {}) {
       }
       res.json(styles);
     } catch (error) {
-      console.error('Error fetching styles:', error);
+      logger.error('Error fetching styles:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -424,7 +425,7 @@ export default function registerDataRoutes(app, deps = {}) {
 
       res.json(prompts);
     } catch (error) {
-      console.error('Error fetching prompts:', error);
+      logger.error('Error fetching prompts:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -521,14 +522,14 @@ export default function registerDataRoutes(app, deps = {}) {
     let requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      console.log(`[${requestId}] Translation request for language: ${originalLang}`);
+      logger.info(`[${requestId}] Translation request for language: ${originalLang}`);
 
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       let { lang } = req.params;
 
       // Validate language parameter
       if (!/^[a-zA-Z0-9-]{1,10}$/.test(lang)) {
-        console.warn(`[${requestId}] Suspicious language parameter received: ${lang}`);
+        logger.warn(`[${requestId}] Suspicious language parameter received: ${lang}`);
         lang = defaultLang;
       }
 
@@ -537,14 +538,14 @@ export default function registerDataRoutes(app, deps = {}) {
       const baseLanguage = lang.split('-')[0].toLowerCase();
 
       if (!supportedLanguages.includes(lang) && supportedLanguages.includes(baseLanguage)) {
-        console.log(
+        logger.info(
           `[${requestId}] Language '${lang}' not directly supported, falling back to '${baseLanguage}'`
         );
         lang = baseLanguage;
       }
 
       if (!supportedLanguages.includes(lang)) {
-        console.log(
+        logger.info(
           `[${requestId}] Language '${lang}' not supported, falling back to default language '${defaultLang}'`
         );
         lang = defaultLang;
@@ -554,7 +555,7 @@ export default function registerDataRoutes(app, deps = {}) {
       let translations = configCache.getLocalizations(lang);
 
       if (!translations) {
-        console.warn(
+        logger.warn(
           `[${requestId}] Translations not in cache for language: ${lang}, attempting to load...`
         );
 
@@ -563,15 +564,15 @@ export default function registerDataRoutes(app, deps = {}) {
           await configCache.loadAndCacheLocale(lang);
           translations = configCache.getLocalizations(lang);
         } catch (loadError) {
-          console.error(`[${requestId}] Failed to load locale for ${lang}:`, loadError);
+          logger.error(`[${requestId}] Failed to load locale for ${lang}:`, loadError);
         }
       }
 
       if (!translations) {
-        console.error(`[${requestId}] Failed to load translations for language: ${lang}`);
+        logger.error(`[${requestId}] Failed to load translations for language: ${lang}`);
 
         if (lang !== defaultLang) {
-          console.log(`[${requestId}] Attempting fallback to default language: ${defaultLang}`);
+          logger.info(`[${requestId}] Attempting fallback to default language: ${defaultLang}`);
           // Try to get default translations from cache first
           let enTranslations = configCache.getLocalizations(defaultLang);
 
@@ -581,7 +582,7 @@ export default function registerDataRoutes(app, deps = {}) {
               await configCache.loadAndCacheLocale(defaultLang);
               enTranslations = configCache.getLocalizations(defaultLang);
             } catch (fallbackLoadError) {
-              console.error(
+              logger.error(
                 `[${requestId}] Failed to load fallback locale for ${defaultLang}:`,
                 fallbackLoadError
               );
@@ -589,7 +590,7 @@ export default function registerDataRoutes(app, deps = {}) {
           }
 
           if (enTranslations) {
-            console.log(`[${requestId}] Returning fallback translations for ${defaultLang}`);
+            logger.info(`[${requestId}] Returning fallback translations for ${defaultLang}`);
             return res.json(enTranslations);
           }
         }
@@ -600,14 +601,14 @@ export default function registerDataRoutes(app, deps = {}) {
         });
       }
 
-      console.log(`[${requestId}] Successfully returning translations for language: ${lang}`);
+      logger.info(`[${requestId}] Successfully returning translations for language: ${lang}`);
       res.json(translations);
     } catch (error) {
-      console.error(
+      logger.error(
         `[${requestId}] Error fetching translations for language ${originalLang}:`,
         error
       );
-      console.error(`[${requestId}] Stack trace:`, error.stack);
+      logger.error(`[${requestId}] Stack trace:`, error.stack);
 
       try {
         // Try to get default translations from cache first as fallback
@@ -620,16 +621,16 @@ export default function registerDataRoutes(app, deps = {}) {
             await configCache.loadAndCacheLocale(defaultLang);
             enTranslations = configCache.getLocalizations(defaultLang);
           } catch (fallbackLoadError) {
-            console.error(`[${requestId}] Failed to load fallback locale:`, fallbackLoadError);
+            logger.error(`[${requestId}] Failed to load fallback locale:`, fallbackLoadError);
           }
         }
 
         if (enTranslations) {
-          console.log(`[${requestId}] Returning emergency fallback translations`);
+          logger.info(`[${requestId}] Returning emergency fallback translations`);
           return res.json(enTranslations);
         }
       } catch (fallbackError) {
-        console.error(`[${requestId}] Failed to load fallback translations:`, fallbackError);
+        logger.error(`[${requestId}] Failed to load fallback translations:`, fallbackError);
       }
 
       res.status(500).json({
@@ -749,7 +750,7 @@ export default function registerDataRoutes(app, deps = {}) {
       res.setHeader('ETag', uiConfigEtag);
       res.json(enhancedUiConfig);
     } catch (error) {
-      console.error('Error fetching UI configuration:', error);
+      logger.error('Error fetching UI configuration:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -846,7 +847,7 @@ export default function registerDataRoutes(app, deps = {}) {
 
       res.json(cleanedConfig);
     } catch (error) {
-      console.error('Error fetching platform configuration:', error);
+      logger.error('Error fetching platform configuration:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

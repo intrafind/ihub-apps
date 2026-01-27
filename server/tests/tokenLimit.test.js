@@ -1,6 +1,7 @@
 import assert from 'assert';
+import logger from '../utils/logger.js';
 
-console.log('Testing tokenLimit handling in RequestBuilder...');
+logger.info('Testing tokenLimit handling in RequestBuilder...');
 
 /**
  * Test the tokenLimit logic to ensure it follows the expected behavior:
@@ -12,7 +13,7 @@ console.log('Testing tokenLimit handling in RequestBuilder...');
 
 // Test 1: App has tokenLimit, model has tokenLimit
 function testAppWithTokenLimit() {
-  console.log('Test 1: App has tokenLimit (4000), model has tokenLimit (8192)');
+  logger.info('Test 1: App has tokenLimit (4000), model has tokenLimit (8192)');
 
   const app = { tokenLimit: 4000 };
   const model = { tokenLimit: 8192 };
@@ -22,19 +23,19 @@ function testAppWithTokenLimit() {
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
-  console.log(`  Model Token Limit: ${modelTokenLimit}`);
-  console.log(`  App Token Limit: ${appTokenLimit}`);
-  console.log(`  Final Token Limit: ${finalTokens}`);
+  logger.info(`  Model Token Limit: ${modelTokenLimit}`);
+  logger.info(`  App Token Limit: ${appTokenLimit}`);
+  logger.info(`  Final Token Limit: ${finalTokens}`);
 
   assert.strictEqual(modelTokenLimit, 8192, 'Model token limit should be 8192');
   assert.strictEqual(appTokenLimit, 4000, 'App token limit should be 4000');
   assert.strictEqual(finalTokens, 4000, 'Final token limit should be 4000 (min of app and model)');
-  console.log('  ✓ Passed\n');
+  logger.info('  ✓ Passed\n');
 }
 
 // Test 2: App has NO tokenLimit, model has tokenLimit
 function testAppWithoutTokenLimit() {
-  console.log('Test 2: App has NO tokenLimit, model has tokenLimit (8192)');
+  logger.info('Test 2: App has NO tokenLimit, model has tokenLimit (8192)');
 
   const app = {}; // No tokenLimit
   const model = { tokenLimit: 8192 };
@@ -44,9 +45,9 @@ function testAppWithoutTokenLimit() {
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
-  console.log(`  Model Token Limit: ${modelTokenLimit}`);
-  console.log(`  App Token Limit: ${appTokenLimit}`);
-  console.log(`  Final Token Limit: ${finalTokens}`);
+  logger.info(`  Model Token Limit: ${modelTokenLimit}`);
+  logger.info(`  App Token Limit: ${appTokenLimit}`);
+  logger.info(`  Final Token Limit: ${finalTokens}`);
 
   assert.strictEqual(modelTokenLimit, 8192, 'Model token limit should be 8192');
   assert.strictEqual(
@@ -55,12 +56,12 @@ function testAppWithoutTokenLimit() {
     'App token limit should fallback to model token limit (8192)'
   );
   assert.strictEqual(finalTokens, 8192, 'Final token limit should be 8192');
-  console.log('  ✓ Passed\n');
+  logger.info('  ✓ Passed\n');
 }
 
 // Test 3: App has NO tokenLimit, model has NO tokenLimit
 function testNeitherHasTokenLimit() {
-  console.log('Test 3: App has NO tokenLimit, model has NO tokenLimit');
+  logger.info('Test 3: App has NO tokenLimit, model has NO tokenLimit');
 
   const app = {}; // No tokenLimit
   const model = {}; // No tokenLimit
@@ -70,19 +71,19 @@ function testNeitherHasTokenLimit() {
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
-  console.log(`  Model Token Limit: ${modelTokenLimit}`);
-  console.log(`  App Token Limit: ${appTokenLimit}`);
-  console.log(`  Final Token Limit: ${finalTokens}`);
+  logger.info(`  Model Token Limit: ${modelTokenLimit}`);
+  logger.info(`  App Token Limit: ${appTokenLimit}`);
+  logger.info(`  Final Token Limit: ${finalTokens}`);
 
   assert.strictEqual(modelTokenLimit, 8192, 'Model token limit should default to 8192');
   assert.strictEqual(appTokenLimit, 8192, 'App token limit should fallback to default (8192)');
   assert.strictEqual(finalTokens, 8192, 'Final token limit should be 8192');
-  console.log('  ✓ Passed\n');
+  logger.info('  ✓ Passed\n');
 }
 
 // Test 4: useMaxTokens is true
 function testUseMaxTokens() {
-  console.log(
+  logger.info(
     'Test 4: useMaxTokens is true, app has tokenLimit (4000), model has tokenLimit (8192)'
   );
 
@@ -94,9 +95,9 @@ function testUseMaxTokens() {
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
-  console.log(`  Model Token Limit: ${modelTokenLimit}`);
-  console.log(`  App Token Limit: ${appTokenLimit}`);
-  console.log(`  Final Token Limit: ${finalTokens}`);
+  logger.info(`  Model Token Limit: ${modelTokenLimit}`);
+  logger.info(`  App Token Limit: ${appTokenLimit}`);
+  logger.info(`  Final Token Limit: ${finalTokens}`);
 
   assert.strictEqual(modelTokenLimit, 8192, 'Model token limit should be 8192');
   assert.strictEqual(appTokenLimit, 4000, 'App token limit should be 4000');
@@ -105,12 +106,12 @@ function testUseMaxTokens() {
     8192,
     'Final token limit should be 8192 (model max) when useMaxTokens is true'
   );
-  console.log('  ✓ Passed\n');
+  logger.info('  ✓ Passed\n');
 }
 
 // Test 5: App has tokenLimit = 0 (edge case - explicit 0)
 function testAppWithZeroTokenLimit() {
-  console.log('Test 5: App has tokenLimit = 0 (edge case), model has tokenLimit (8192)');
+  logger.info('Test 5: App has tokenLimit = 0 (edge case), model has tokenLimit (8192)');
 
   const app = { tokenLimit: 0 };
   const model = { tokenLimit: 8192 };
@@ -120,19 +121,19 @@ function testAppWithZeroTokenLimit() {
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
-  console.log(`  Model Token Limit: ${modelTokenLimit}`);
-  console.log(`  App Token Limit: ${appTokenLimit}`);
-  console.log(`  Final Token Limit: ${finalTokens}`);
+  logger.info(`  Model Token Limit: ${modelTokenLimit}`);
+  logger.info(`  App Token Limit: ${appTokenLimit}`);
+  logger.info(`  Final Token Limit: ${finalTokens}`);
 
   assert.strictEqual(modelTokenLimit, 8192, 'Model token limit should be 8192');
   assert.strictEqual(appTokenLimit, 0, 'App token limit should be 0 (explicitly set)');
   assert.strictEqual(finalTokens, 0, 'Final token limit should be 0');
-  console.log('  ✓ Passed\n');
+  logger.info('  ✓ Passed\n');
 }
 
 // Test 6: Bug scenario - app has NO tokenLimit, should NOT default to 1024
 function testBugScenarioFixed() {
-  console.log('Test 6: Bug scenario - app has NO tokenLimit, should use model tokenLimit NOT 1024');
+  logger.info('Test 6: Bug scenario - app has NO tokenLimit, should use model tokenLimit NOT 1024');
 
   const app = {}; // No tokenLimit
   const model = { tokenLimit: 64000 }; // Like Claude 4 Sonnet
@@ -147,15 +148,15 @@ function testBugScenarioFixed() {
   const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
   const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
 
-  console.log(`  Model Token Limit: ${modelTokenLimit}`);
-  console.log(`  App Token Limit: ${appTokenLimit}`);
-  console.log(`  Final Token Limit: ${finalTokens}`);
+  logger.info(`  Model Token Limit: ${modelTokenLimit}`);
+  logger.info(`  App Token Limit: ${appTokenLimit}`);
+  logger.info(`  Final Token Limit: ${finalTokens}`);
 
   assert.strictEqual(modelTokenLimit, 64000, 'Model token limit should be 64000');
   assert.strictEqual(appTokenLimit, 64000, 'App token limit should be 64000 (NOT 1024)');
   assert.strictEqual(finalTokens, 64000, 'Final token limit should be 64000 (NOT 1024)');
   assert.notStrictEqual(appTokenLimit, 1024, 'App token limit should NOT be 1024');
-  console.log('  ✓ Passed - Bug is fixed!\n');
+  logger.info('  ✓ Passed - Bug is fixed!\n');
 }
 
 // Run all tests
@@ -167,10 +168,10 @@ try {
   testAppWithZeroTokenLimit();
   testBugScenarioFixed();
 
-  console.log('✅ All tokenLimit tests passed!');
+  logger.info('✅ All tokenLimit tests passed!');
   process.exit(0);
 } catch (error) {
-  console.error('❌ Test failed:', error.message);
-  console.error(error.stack);
+  logger.error('❌ Test failed:', error.message);
+  logger.error(error.stack);
   process.exit(1);
 }

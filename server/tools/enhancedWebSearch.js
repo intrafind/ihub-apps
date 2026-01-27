@@ -1,5 +1,6 @@
 import braveSearch from './braveSearch.js';
 import webContentExtractor from './webContentExtractor.js';
+import logger from '../utils/logger.js';
 
 /**
  * Enhanced web search that combines Brave search with content extraction
@@ -12,7 +13,7 @@ export default async function enhancedWebSearch({
   maxResults = 3,
   contentMaxLength = 3000
 }) {
-  console.log(`Starting enhanced web search for: "${query || q}"`);
+  logger.info(`Starting enhanced web search for: "${query || q}"`);
   // Accept both 'query' and 'q' parameters for flexibility
   const searchQuery = query || q;
 
@@ -22,7 +23,7 @@ export default async function enhancedWebSearch({
 
   try {
     // First, perform the brave search
-    console.log(`Searching for: "${searchQuery}"`);
+    logger.info(`Searching for: "${searchQuery}"`);
     const searchResults = await braveSearch({ query: searchQuery });
 
     if (!searchResults.results || searchResults.results.length === 0) {
@@ -39,12 +40,12 @@ export default async function enhancedWebSearch({
     const extractedContent = [];
 
     if (extractContent) {
-      console.log(`Extracting content from top ${resultsToProcess.length} results...`);
+      logger.info(`Extracting content from top ${resultsToProcess.length} results...`);
 
       // Extract content from each URL in parallel
       const contentPromises = resultsToProcess.map(async result => {
         try {
-          console.log(`Extracting content from: ${result.url}`);
+          logger.info(`Extracting content from: ${result.url}`);
           const content = await webContentExtractor({
             url: result.url,
             maxLength: contentMaxLength
@@ -57,7 +58,7 @@ export default async function enhancedWebSearch({
             extractionError: null
           };
         } catch (error) {
-          console.warn(`Failed to extract content from ${result.url}: ${error.message}`);
+          logger.warn(`Failed to extract content from ${result.url}: ${error.message}`);
           return {
             ...result,
             extractedContent: null,
@@ -138,11 +139,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const query = args.join(' ');
 
   if (!query) {
-    console.error(
-      'Usage: node enhancedWebSearch.js <search term> [--no-extract] [--max-results=N]'
-    );
-    console.error('Example: node enhancedWebSearch.js "JavaScript tutorials"');
-    console.error('Example: node enhancedWebSearch.js "AI news" --no-extract --max-results=5');
+    logger.error('Usage: node enhancedWebSearch.js <search term> [--no-extract] [--max-results=N]');
+    logger.error('Example: node enhancedWebSearch.js "JavaScript tutorials"');
+    logger.error('Example: node enhancedWebSearch.js "AI news" --no-extract --max-results=5');
     process.exit(1);
   }
 
@@ -154,8 +153,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // Remove options from query
   const cleanQuery = args.filter(arg => !arg.startsWith('--')).join(' ');
 
-  console.log(`Enhanced search for: "${cleanQuery}"`);
-  console.log(`Extract content: ${extractContent}, Max results: ${maxResults}`);
+  logger.info(`Enhanced search for: "${cleanQuery}"`);
+  logger.info(`Extract content: ${extractContent}, Max results: ${maxResults}`);
 
   try {
     const result = await enhancedWebSearch({
@@ -164,29 +163,29 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       maxResults
     });
 
-    console.log('\n' + '='.repeat(50));
-    console.log('ENHANCED WEB SEARCH RESULTS');
-    console.log('='.repeat(50));
-    console.log(`Summary: ${result.summary}`);
-    console.log(`Stats: ${JSON.stringify(result.stats, null, 2)}`);
+    logger.info('\n' + '='.repeat(50));
+    logger.info('ENHANCED WEB SEARCH RESULTS');
+    logger.info('='.repeat(50));
+    logger.info(`Summary: ${result.summary}`);
+    logger.info(`Stats: ${JSON.stringify(result.stats, null, 2)}`);
 
     result.extractedContent.forEach((item, index) => {
-      console.log(`\n${index + 1}. ${item.title}`);
-      console.log(`   URL: ${item.url}`);
-      console.log(`   Description: ${item.description}`);
+      logger.info(`\n${index + 1}. ${item.title}`);
+      logger.info(`   URL: ${item.url}`);
+      logger.info(`   Description: ${item.description}`);
 
       if (item.contentExtracted && item.extractedContent) {
-        console.log(`   Content extracted: Yes (${item.extractedContent.wordCount} words)`);
-        console.log(`   Content preview: ${item.extractedContent.content.substring(0, 200)}...`);
+        logger.info(`   Content extracted: Yes (${item.extractedContent.wordCount} words)`);
+        logger.info(`   Content preview: ${item.extractedContent.content.substring(0, 200)}...`);
       } else {
-        console.log('   Content extracted: No');
+        logger.info('   Content extracted: No');
         if (item.extractionError) {
-          console.log(`   Extraction error: ${item.extractionError}`);
+          logger.info(`   Extraction error: ${item.extractionError}`);
         }
       }
     });
   } catch (error) {
-    console.error('Error performing enhanced search:', error.message);
+    logger.error('Error performing enhanced search:', error.message);
     process.exit(1);
   }
 }

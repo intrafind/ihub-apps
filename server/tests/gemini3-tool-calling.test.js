@@ -6,11 +6,12 @@
 
 import assert from 'assert';
 import GoogleAdapter from '../adapters/google.js';
+import logger from '../utils/logger.js';
 
-console.log('Testing Gemini 3 function calling fix...\n');
+logger.info('Testing Gemini 3 function calling fix...\n');
 
 // Test 1: Response with function call and STOP finish reason (Gemini 3 behavior)
-console.log('Test 1: Gemini 3 response with function call and STOP finish reason');
+logger.info('Test 1: Gemini 3 response with function call and STOP finish reason');
 const gemini3ResponseWithToolCall = JSON.stringify({
   candidates: [
     {
@@ -33,7 +34,7 @@ const gemini3ResponseWithToolCall = JSON.stringify({
 
 const result1 = GoogleAdapter.processResponseBuffer(gemini3ResponseWithToolCall);
 
-console.log('Result:', JSON.stringify(result1, null, 2));
+logger.info('Result:', JSON.stringify(result1, null, 2));
 assert.strictEqual(result1.finishReason, 'tool_calls', 'Should preserve tool_calls finish reason');
 assert.strictEqual(result1.tool_calls.length, 1, 'Should have one tool call');
 assert.strictEqual(
@@ -41,10 +42,10 @@ assert.strictEqual(
   'enhancedWebSearch',
   'Tool call name should be correct'
 );
-console.log('✓ Test 1 passed: Function calls are detected and finishReason is preserved\n');
+logger.info('✓ Test 1 passed: Function calls are detected and finishReason is preserved\n');
 
 // Test 2: Response without function call and STOP finish reason (normal behavior)
-console.log('Test 2: Normal response without function call');
+logger.info('Test 2: Normal response without function call');
 const normalResponse = JSON.stringify({
   candidates: [
     {
@@ -64,14 +65,14 @@ const normalResponse = JSON.stringify({
 
 const result2 = GoogleAdapter.processResponseBuffer(normalResponse);
 
-console.log('Result:', JSON.stringify(result2, null, 2));
+logger.info('Result:', JSON.stringify(result2, null, 2));
 assert.strictEqual(result2.finishReason, 'stop', 'Should have stop finish reason for normal text');
 assert.strictEqual(result2.tool_calls.length, 0, 'Should have no tool calls');
 assert.strictEqual(result2.content.length, 1, 'Should have text content');
-console.log('✓ Test 2 passed: Normal responses work correctly\n');
+logger.info('✓ Test 2 passed: Normal responses work correctly\n');
 
 // Test 3: Streaming chunks with function call (Gemini 3 streaming behavior)
-console.log('Test 3: Streaming response with function call');
+logger.info('Test 3: Streaming response with function call');
 const streamingChunkWithToolCall = JSON.stringify({
   candidates: [
     {
@@ -99,7 +100,7 @@ const streamingChunkWithFinish = JSON.stringify({
 
 // First chunk with function call
 const result3a = GoogleAdapter.processResponseBuffer(streamingChunkWithToolCall);
-console.log('Streaming chunk 1:', JSON.stringify(result3a, null, 2));
+logger.info('Streaming chunk 1:', JSON.stringify(result3a, null, 2));
 assert.strictEqual(result3a.tool_calls.length, 1, 'Should have tool call from first chunk');
 assert.strictEqual(
   result3a.finishReason,
@@ -109,12 +110,12 @@ assert.strictEqual(
 
 // Second chunk with STOP finish reason
 const result3b = GoogleAdapter.processResponseBuffer(streamingChunkWithFinish);
-console.log('Streaming chunk 2:', JSON.stringify(result3b, null, 2));
+logger.info('Streaming chunk 2:', JSON.stringify(result3b, null, 2));
 
-console.log('✓ Test 3 passed: Streaming responses work correctly\n');
+logger.info('✓ Test 3 passed: Streaming responses work correctly\n');
 
 // Test 4: Multiple function calls in one response
-console.log('Test 4: Response with multiple function calls');
+logger.info('Test 4: Response with multiple function calls');
 const multipleToolCallsResponse = JSON.stringify({
   candidates: [
     {
@@ -143,16 +144,16 @@ const multipleToolCallsResponse = JSON.stringify({
 
 const result4 = GoogleAdapter.processResponseBuffer(multipleToolCallsResponse);
 
-console.log('Result:', JSON.stringify(result4, null, 2));
+logger.info('Result:', JSON.stringify(result4, null, 2));
 assert.strictEqual(result4.finishReason, 'tool_calls', 'Should preserve tool_calls finish reason');
 assert.strictEqual(result4.tool_calls.length, 2, 'Should have two tool calls');
-console.log('✓ Test 4 passed: Multiple function calls are handled correctly\n');
+logger.info('✓ Test 4 passed: Multiple function calls are handled correctly\n');
 
-console.log('All tests passed! ✓');
-console.log('\nSummary:');
-console.log(
+logger.info('All tests passed! ✓');
+logger.info('\nSummary:');
+logger.info(
   '- Gemini 3 responses with function calls now correctly preserve finishReason: "tool_calls"'
 );
-console.log('- Normal text responses still work as expected');
-console.log('- Streaming responses handle function calls correctly');
-console.log('- Multiple function calls in a single response are supported');
+logger.info('- Normal text responses still work as expected');
+logger.info('- Streaming responses handle function calls correctly');
+logger.info('- Multiple function calls in a single response are supported');

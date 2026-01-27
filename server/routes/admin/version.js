@@ -1,6 +1,7 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
+import logger from '../../utils/logger.js';
 
 export default function registerAdminVersionRoutes(app, basePath = '') {
   /**
@@ -26,7 +27,7 @@ export default function registerAdminVersionRoutes(app, basePath = '') {
         node: process.version
       });
     } catch (error) {
-      console.error('Error getting version information:', error);
+      logger.error('Error getting version information:', error);
       res.status(500).json({ error: 'Failed to get version information' });
     }
   });
@@ -95,7 +96,7 @@ export default function registerAdminVersionRoutes(app, basePath = '') {
           publishedAt: releaseData.published_at
         });
       } catch (error) {
-        console.error('Error checking for updates:', error);
+        logger.error('Error checking for updates:', error);
 
         // Return graceful response with no update available on error
         const currentVersion = getAppVersion();

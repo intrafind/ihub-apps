@@ -3,6 +3,7 @@ import path from 'path';
 import { getRootDir } from './pathUtils.js';
 import config from './config.js';
 import { loadJson } from './configLoader.js';
+import logger from './utils/logger.js';
 
 const contentsDir = config.CONTENTS_DIR;
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'feedback.jsonl');
@@ -39,7 +40,7 @@ function scheduleFlush() {
     try {
       await flushQueue();
     } catch (e) {
-      console.error('Failed to save feedback data', e);
+      logger.error('Failed to save feedback data', e);
     }
   }, SAVE_INTERVAL_MS);
 }
@@ -55,7 +56,7 @@ export function storeFeedback({
 }) {
   // Load config asynchronously if not loaded yet
   if (!configLoaded) {
-    loadConfig().catch(e => console.error('Failed to load feedback config:', e));
+    loadConfig().catch(e => logger.error('Failed to load feedback config:', e));
   }
 
   if (!trackingEnabled || !messageId) return;
@@ -81,6 +82,6 @@ export async function reloadConfig() {
 // Start periodic flush interval
 setInterval(() => {
   if (queue.length > 0) {
-    flushQueue().catch(e => console.error('Feedback save error:', e));
+    flushQueue().catch(e => logger.error('Feedback save error:', e));
   }
 }, SAVE_INTERVAL_MS);

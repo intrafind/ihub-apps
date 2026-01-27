@@ -10,6 +10,7 @@ import { processNtlmLogin, getNtlmConfig } from '../middleware/ntlmAuth.js';
 import { teamsTokenExchange, teamsTabConfigSave } from '../middleware/teamsAuth.js';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
+import logger from '../utils/logger.js';
 
 /**
  * Sanitize and validate authentication input
@@ -145,18 +146,18 @@ export default function registerAuthRoutes(app, basePath = '') {
       // Try local authentication first if enabled
       if (localAuthConfig.enabled) {
         try {
-          console.log('[Auth] Attempting local authentication');
+          logger.info('[Auth] Attempting local authentication');
           result = await loginUser(sanitizedUsername, sanitizedPassword, localAuthConfig);
-          console.log('[Auth] Local authentication succeeded');
+          logger.info('[Auth] Local authentication succeeded');
         } catch (error) {
-          console.log('[Auth] Local authentication failed');
+          logger.info('[Auth] Local authentication failed');
           // Continue to try LDAP if enabled
         }
       }
 
       // Try LDAP authentication if local auth failed or is disabled
       if (!result && ldapAuthConfig.enabled && ldapAuthConfig.providers?.length > 0) {
-        console.log('[Auth] Attempting LDAP authentication');
+        logger.info('[Auth] Attempting LDAP authentication');
 
         // If a specific provider was requested, use it
         if (sanitizedProvider) {
@@ -169,24 +170,24 @@ export default function registerAuthRoutes(app, basePath = '') {
 
           try {
             result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
-            console.log('[Auth] LDAP authentication succeeded');
+            logger.info('[Auth] LDAP authentication succeeded');
           } catch (error) {
-            console.log(`[Auth] LDAP authentication failed for provider '${sanitizedProvider}'`);
+            logger.info(`[Auth] LDAP authentication failed for provider '${sanitizedProvider}'`);
           }
         } else {
           // Try each LDAP provider until one succeeds
           for (const ldapProvider of ldapAuthConfig.providers) {
             try {
-              console.log(`[Auth] Trying LDAP provider: ${ldapProvider.name}`);
+              logger.info(`[Auth] Trying LDAP provider: ${ldapProvider.name}`);
               result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
               if (result) {
-                console.log(
+                logger.info(
                   `[Auth] LDAP authentication succeeded with provider: ${ldapProvider.name}`
                 );
                 break;
               }
             } catch (error) {
-              console.log(`[Auth] LDAP provider '${ldapProvider.name}' failed`);
+              logger.info(`[Auth] LDAP provider '${ldapProvider.name}' failed`);
               // Continue to next provider
             }
           }
@@ -217,7 +218,7 @@ export default function registerAuthRoutes(app, basePath = '') {
         expiresIn: result.expiresIn
       });
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       res.status(401).json({
         success: false,
         error: error.message || 'Authentication failed'
@@ -277,7 +278,7 @@ export default function registerAuthRoutes(app, basePath = '') {
 
           // Only allow same-origin redirects
           if (returnUrlObj.host !== currentHost) {
-            console.warn(`[Security] Blocked open redirect attempt to: ${returnUrl}`);
+            logger.warn(`[Security] Blocked open redirect attempt to: ${returnUrl}`);
             returnUrl = '/';
           }
         } else if (!returnUrl.startsWith('/')) {
@@ -290,14 +291,14 @@ export default function registerAuthRoutes(app, basePath = '') {
           returnUrl = '/';
         }
       } catch (error) {
-        console.error('[Security] Invalid return URL:', returnUrl, error);
+        logger.error('[Security] Invalid return URL:', returnUrl, error);
         returnUrl = '/';
       }
 
       // Redirect to the validated return URL with success indicator
       res.redirect(returnUrl + (returnUrl.includes('?') ? '&' : '?') + 'ntlm=success');
     } catch (error) {
-      console.error('NTLM login error:', error);
+      logger.error('NTLM login error:', error);
       res.status(401).json({
         success: false,
         error: error.message || 'NTLM authentication failed'
@@ -347,7 +348,7 @@ export default function registerAuthRoutes(app, basePath = '') {
         expiresIn: result.expiresIn
       });
     } catch (error) {
-      console.error('NTLM login error:', error);
+      logger.error('NTLM login error:', error);
       res.status(401).json({
         success: false,
         error: error.message || 'NTLM authentication failed'
@@ -394,7 +395,7 @@ export default function registerAuthRoutes(app, basePath = '') {
       // Regenerate session to ensure clean state
       req.session.regenerate(err => {
         if (err) {
-          console.error('Session regeneration error:', err);
+          logger.error('Session regeneration error:', err);
         }
 
         // Set flag in the new session to prevent NTLM auto-login
@@ -404,7 +405,7 @@ export default function registerAuthRoutes(app, basePath = '') {
 
     // Log the event for analytics
     if (req.user && req.user.id !== 'anonymous') {
-      console.log(`User ${req.user.id} logged out`);
+      logger.info(`User ${req.user.id} logged out`);
     }
 
     res.json({
@@ -438,7 +439,7 @@ export default function registerAuthRoutes(app, basePath = '') {
           user: newUser
         });
       } catch (error) {
-        console.error('User creation error:', error);
+        logger.error('User creation error:', error);
         res.status(400).json({
           success: false,
           error: error.message || 'Failed to create user'
