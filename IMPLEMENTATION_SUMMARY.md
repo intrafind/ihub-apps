@@ -9,18 +9,22 @@
 ## Changes Summary
 
 ### Core Fix: `server/utils.js`
+
 Modified the `simpleCompletion()` function to:
+
 - Accept an optional `apiKey` parameter
 - Use provided API key when available
 - Fallback to `getApiKeyForModel()` for proper key resolution
 - Maintains backward compatibility
 
 ### Affected Endpoints (All Fixed)
+
 1. **`server/routes/admin/models.js`** - Model test endpoint
 2. **`server/routes/admin/translate.js`** - Translation endpoint
 3. **`server/routes/admin/prompts.js`** - Prompt test endpoint
 
 All three endpoints now:
+
 - Verify API key using `verifyApiKey()`
 - Pass verified key to `simpleCompletion()`
 - Work consistently with provider-specific keys
@@ -28,11 +32,13 @@ All three endpoints now:
 ## API Key Resolution Chain (Fixed)
 
 Before the fix:
+
 ```
 simpleCompletion() → Environment Variables Only ❌
 ```
 
 After the fix:
+
 ```
 simpleCompletion() → {
   1. Provided API key (if passed)
@@ -48,10 +54,12 @@ simpleCompletion() → {
 ## Testing
 
 ### Manual Tests Created
+
 - `tests/manual-test-model-with-provider-key.js` - Validates the fix
 - `tests/MODEL_TESTING_PROVIDER_KEY_FIX.md` - Complete test documentation
 
 ### Code Quality
+
 - ✅ Linting: Passed (0 errors, 105 warnings - all pre-existing)
 - ✅ Formatting: Passed
 - ✅ Server Startup: Verified
@@ -61,12 +69,14 @@ simpleCompletion() → {
 ## Impact
 
 ### Before
+
 - ❌ Model testing failed with provider-specific API keys
-- ❌ Translate endpoint failed with provider-specific API keys  
+- ❌ Translate endpoint failed with provider-specific API keys
 - ❌ Prompt testing failed with provider-specific API keys
 - ✅ Regular chat worked (used different code path)
 
 ### After
+
 - ✅ Model testing works with provider-specific API keys
 - ✅ Translate endpoint works with provider-specific API keys
 - ✅ Prompt testing works with provider-specific API keys
@@ -85,6 +95,7 @@ simpleCompletion() → {
 ## Backward Compatibility
 
 ✅ **Fully backward compatible**
+
 - Existing calls to `simpleCompletion()` without API key parameter continue to work
 - Fallback to `getApiKeyForModel()` maintains all existing behavior
 - No breaking changes to any APIs

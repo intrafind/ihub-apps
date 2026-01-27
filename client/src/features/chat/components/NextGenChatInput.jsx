@@ -282,31 +282,9 @@ const NextGenChatInput = ({
             inputRef={actualInputRef}
           />
 
-          {/* Upload icon - show directly on desktop if enabled */}
-          {uploadConfig?.enabled === true && (
-            <button
-              type="button"
-              onClick={onToggleUploader || toggleUploader}
-              disabled={disabled || isProcessing}
-              title={t('chatActions.attachFile', 'Attach File')}
-              className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-            >
-              <Icon name="paper-clip" size="md" />
-            </button>
-          )}
-
-          {/* Microphone icon - show directly on desktop if enabled */}
-          {onVoiceInput && (
-            <div className="hidden md:flex">
-              <VoiceInputComponent
-                app={app}
-                onSpeechResult={onVoiceInput}
-                inputRef={actualInputRef}
-                disabled={disabled || isProcessing}
-                onCommand={onVoiceCommand}
-              />
-            </div>
-          )}
+          {/* Upload and voice icons are now ONLY shown via ChatInputActionsMenu */}
+          {/* to avoid duplication. ChatInputActionsMenu handles single-action optimization */}
+          {/* and displays these actions either directly or in a dropdown menu */}
 
           <div className="flex-1"></div>
 
