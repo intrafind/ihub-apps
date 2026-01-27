@@ -354,6 +354,27 @@ The system automatically resolves group inheritance at startup:
 2. **Client Feature**: Create feature module in `client/src/features/`
 3. **Configuration**: Add to relevant JSON config file
 4. **Permissions**: Update `groups.json` if needed
+5. **Known Routes** ⚠️: If adding new top-level route in `App.jsx`, update `client/src/utils/runtimeBasePath.js`
+
+### When Adding New Routes
+
+**CRITICAL**: When adding new top-level routes to `client/src/App.jsx`, you **MUST** update the `knownRoutes` array in `client/src/utils/runtimeBasePath.js`.
+
+This array is essential for:
+
+- Detecting the base path for subpath deployments (e.g., `/ihub/apps`)
+- Preventing incorrect redirects during logout
+- Ensuring assets load from correct paths
+
+**Steps**:
+
+1. Add your route in `App.jsx` (e.g., `<Route path="reports" element={...} />`)
+2. Add the route to `knownRoutes` array in `client/src/utils/runtimeBasePath.js` (e.g., `'/reports'`)
+3. Test both root deployment (`/reports`) and subpath deployment (`/ihub/reports`)
+
+**Example routes that must be in the array**:
+
+- `/apps`, `/admin`, `/auth`, `/login`, `/prompts`, `/settings`, `/teams`, `/s`
 
 ### LLM Provider Integration
 

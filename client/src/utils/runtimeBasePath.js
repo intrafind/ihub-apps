@@ -22,24 +22,104 @@ export const detectBasePath = () => {
 
   // If we're at a React route (e.g., /ihub/apps/chat), we need to find the base
   // We can detect this by checking if there's a known React route pattern
-  const knownRoutes = ['/apps', '/admin', '/auth', '/login', '/chat', '/pages', '/s/'];
+  // These are top-level application routes, not deployment subpaths
+  //
+  // ⚠️ IMPORTANT: When adding new top-level routes to App.jsx, you MUST update this array!
+  // This includes any new routes like:
+  // - New feature routes (e.g., /reports, /analytics)
+  // - New page routes (e.g., /help, /docs)
+  // - New API endpoint prefixes that need special handling
+  //
+  // Failure to update this array will cause base path detection to fail for subpath
+  // deployments (e.g., /ihub/newroute will incorrectly detect /ihub/newroute as base path
+  // instead of /ihub).
+  const knownRoutes = [
+    '/apps', // App listing and individual app routes
+    '/admin', // Admin panel routes
+    '/auth', // Authentication routes
+    '/login', // Login page
+    '/chat', // Direct chat routes
+    '/pages', // Dynamic pages
+    '/prompts', // Prompts listing
+    '/settings', // Settings pages (integrations, etc.)
+    '/teams', // Microsoft Teams routes
+    '/s' // Short links
+  ];
+
+  // Find the first occurrence of any known route at a path boundary
+  let firstRouteIndex = -1;
+  let foundRoute = null;
+
   for (const route of knownRoutes) {
-    const routeIndex = basePath.indexOf(route);
-    if (routeIndex > 0) {
-      // Found a route, so everything before it is the base path
-      basePath = basePath.substring(0, routeIndex);
+    // Check if basePath starts with this route
+    if (basePath === route || basePath.startsWith(route + '/')) {
+      // Route is at the very beginning
+      firstRouteIndex = 0;
+      foundRoute = route;
       break;
-    } else if (routeIndex === 0) {
-      // We're at root with a route
-      basePath = '';
-      break;
+    }
+
+    // Check if route appears after a slash (e.g., /ihub/apps)
+    const searchPattern = route; // e.g., "/apps"
+    let searchIndex = basePath.indexOf(searchPattern);
+
+    // Keep searching for valid occurrences
+    while (searchIndex > 0) {
+      // Check if there's a slash right before this occurrence
+      // (there should be since route starts with /)
+      // This ensures we match /ihub/apps but not /ihubapps
+      const prevChar = basePath[searchIndex - 1];
+      if (prevChar === '/' || searchIndex === 0) {
+        // This is a false match - route already starts with /
+        // so prevChar being / means we have //apps which is wrong
+        searchIndex = basePath.indexOf(searchPattern, searchIndex + 1);
+        continue;
+      }
+
+      // Found a valid route occurrence (not at boundary)
+      // This shouldn't happen with our current logic, skip it
+      searchIndex = basePath.indexOf(searchPattern, searchIndex + 1);
+    }
+
+    // Simpler approach: split by / and check segments
+    const segments = basePath.split('/').filter(s => s); // Remove empty strings
+    const routeSegment = route.substring(1); // Remove leading / from route
+
+    const segmentIndex = segments.indexOf(routeSegment);
+    if (segmentIndex !== -1) {
+      // Calculate the actual string index
+      let actualIndex = 0;
+      for (let i = 0; i < segmentIndex; i++) {
+        actualIndex += segments[i].length + 1; // +1 for the /
+      }
+
+      if (firstRouteIndex === -1 || actualIndex < firstRouteIndex) {
+        firstRouteIndex = actualIndex;
+        foundRoute = route;
+      }
     }
   }
 
-  // In development, we might still have a base path (e.g., when testing subpath deployment)
-  // So don't automatically return empty string for dev mode
+  // If we found a route at the start (index 0), we're at application root
+  if (firstRouteIndex === 0) {
+    return '';
+  }
 
-  return basePath;
+  // If we found a route elsewhere, everything before it is the base path
+  if (firstRouteIndex > 0) {
+    // Build base path from segments
+    const segments = basePath.split('/').filter(s => s);
+    const routeSegment = foundRoute.substring(1);
+    const routeSegmentIndex = segments.indexOf(routeSegment);
+
+    if (routeSegmentIndex > 0) {
+      return '/' + segments.slice(0, routeSegmentIndex).join('/');
+    }
+  }
+
+  // No known routes found, return empty string
+  // (in normal operation, we should always find a route)
+  return '';
 };
 
 /**
