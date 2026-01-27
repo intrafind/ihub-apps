@@ -5,7 +5,8 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import IntegrationAuthPrompts from '../../../shared/components/integrations/IntegrationAuthPrompts';
 
 /**
- * A reusable component to display chat messages with auto-scrolling
+ * A reusable component to display chat messages with smart auto-scrolling
+ * Only auto-scrolls if user is already at the bottom
  * Only renders when there are actual messages to display
  */
 const ChatMessageList = ({
@@ -34,10 +35,17 @@ const ChatMessageList = ({
   const userIcon = uiConfig?.icons?.userMessage || 'user';
   const errorIcon = uiConfig?.icons?.errorMessage || 'exclamation-circle';
 
-  // Auto-scroll to bottom when messages change
+  // Smart auto-scroll: only scroll if user is already at the bottom
   useEffect(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      const container = chatContainerRef.current;
+      const isNearBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+
+      // Only auto-scroll if user is near the bottom (within 100px)
+      if (isNearBottom) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
   }, [messages]);
 
