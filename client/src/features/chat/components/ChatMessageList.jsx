@@ -1,11 +1,12 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import ChatMessage from './ChatMessage';
 import Icon from '../../../shared/components/Icon';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import IntegrationAuthPrompts from '../../../shared/components/integrations/IntegrationAuthPrompts';
 
 /**
- * A reusable component to display chat messages with auto-scrolling
+ * A reusable component to display chat messages with smart auto-scrolling
+ * Auto-scrolls to new messages and during streaming unless user manually scrolls up
  * Only renders when there are actual messages to display
  */
 const ChatMessageList = ({
@@ -29,17 +30,46 @@ const ChatMessageList = ({
 }) => {
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const isUserScrollingRef = useRef(false);
 
   const assistantIcon = uiConfig?.icons?.assistantMessage || 'apps-svg-logo';
   const userIcon = uiConfig?.icons?.userMessage || 'user';
   const errorIcon = uiConfig?.icons?.errorMessage || 'exclamation-circle';
 
-  // Auto-scroll to bottom when messages change
+  // Detect manual scrolling by the user
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    const container = chatContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      // Check if user is near the bottom (within 50px)
+      const isNearBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+
+      // If user scrolls away from bottom, disable auto-scroll
+      // If user scrolls back to bottom, re-enable auto-scroll
+      if (!isUserScrollingRef.current) {
+        isUserScrollingRef.current = true;
+        setTimeout(() => {
+          isUserScrollingRef.current = false;
+        }, 100);
+      }
+
+      setShouldAutoScroll(isNearBottom);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-scroll to bottom when messages change, but only if shouldAutoScroll is true
+  useEffect(() => {
+    if (chatContainerRef.current && shouldAutoScroll) {
+      const container = chatContainerRef.current;
+      container.scrollTop = container.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, shouldAutoScroll]);
 
   // Don't render anything if there are no messages
   if (messages.length === 0) {
