@@ -671,7 +671,44 @@
       "viewRelease": "Release auf GitHub ansehen",
       "checkingUpdate": "Suche nach Updates...",
       "updateCheckFailed": "Fehler beim Prüfen auf Updates",
-      "noUpdateAvailable": "Sie verwenden die neueste Version"
+      "noUpdateAvailable": "Sie verwenden die neueste Version",
+      "logging": {
+        "title": "Logging-Konfiguration",
+        "description": "Konfigurieren Sie Anwendungs-Logging-Stufen und -Ausgabe",
+        "currentLevel": "Aktuelle Log-Stufe",
+        "availableLevels": "Verfügbare Log-Stufen",
+        "changeLevel": "Log-Stufe ändern",
+        "changingLevel": "Log-Stufe wird geändert...",
+        "levelChanged": "Log-Stufe geändert zu {{level}}",
+        "levelChangeError": "Fehler beim Ändern der Log-Stufe",
+        "levels": {
+          "error": "Error - Nur Fehler",
+          "warn": "Warning - Fehler und Warnungen",
+          "info": "Info - Allgemeine Informationen (Standard)",
+          "http": "HTTP - HTTP-Anfragen und -Antworten",
+          "verbose": "Verbose - Detaillierte Informationen",
+          "debug": "Debug - Debugging-Informationen",
+          "silly": "Silly - Alles (sehr detailliert)"
+        },
+        "levelDescriptions": {
+          "error": "Nur Fehler protokollieren",
+          "warn": "Warnungen und Fehler protokollieren",
+          "info": "Allgemeine Informationen, Warnungen und Fehler protokollieren (empfohlen)",
+          "http": "HTTP-Anfragen zusammen mit Infos, Warnungen und Fehlern protokollieren",
+          "verbose": "Detaillierte Informationen zur Fehlerbehebung protokollieren",
+          "debug": "Debugging-Informationen für die Entwicklung protokollieren",
+          "silly": "Alles protokollieren - nur für detailliertes Debugging verwenden"
+        },
+        "fileLogging": "Datei-Logging",
+        "fileLoggingEnabled": "Datei-Logging aktivieren",
+        "fileLoggingPath": "Log-Dateipfad",
+        "fileLoggingMaxSize": "Max. Dateigröße (Bytes)",
+        "fileLoggingMaxFiles": "Max. Anzahl von Log-Dateien",
+        "saveConfig": "Konfiguration speichern",
+        "savingConfig": "Konfiguration wird gespeichert...",
+        "configSaved": "Logging-Konfiguration erfolgreich gespeichert",
+        "configSaveError": "Fehler beim Speichern der Logging-Konfiguration"
+      }
     },
     "tools": {
       "title": "Tool-Verwaltung",
