@@ -26,9 +26,8 @@ async function testModelWithProviderKey() {
   try {
     // 1. Import required modules
     const { simpleCompletion } = await import('../server/utils.js');
-    const { default: tokenStorageService } = await import(
-      '../server/services/TokenStorageService.js'
-    );
+    const { default: tokenStorageService } =
+      await import('../server/services/TokenStorageService.js');
 
     // 2. Read providers.json to check for provider-specific keys
     const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
@@ -75,7 +74,9 @@ async function testModelWithProviderKey() {
       }
 
       // Test 2: simpleCompletion without explicit API key (should use getApiKeyForModel)
-      console.log('\n📝 Test 2: simpleCompletion without explicit API key (fallback to getApiKeyForModel)');
+      console.log(
+        '\n📝 Test 2: simpleCompletion without explicit API key (fallback to getApiKeyForModel)'
+      );
       try {
         const result2 = await simpleCompletion('Say "test2 successful"', {
           modelId: 'gemini-2.5-flash'
