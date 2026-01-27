@@ -89,6 +89,17 @@ const NextGenChatInput = ({
     }
   }, [actualInputRef]);
 
+  // Calculate if single-action optimization is active in ChatInputActionsMenu
+  // This logic mirrors the calculation in ChatInputActionsMenu.jsx
+  const hasTools = app?.tools && app.tools.length > 0;
+  const quickActionCount =
+    (uploadConfig?.enabled === true ? 1 : 0) +
+    (magicPromptEnabled && !showUndoMagicPrompt ? 1 : 0) +
+    (showUndoMagicPrompt ? 1 : 0) +
+    (onVoiceInput ? 1 : 0);
+  const totalActions = quickActionCount + (hasTools ? 1 : 0);
+  const isSingleActionOptimization = totalActions === 1 && quickActionCount === 1 && !hasTools;
+
   // When processing finishes, refocus the input field
   useEffect(() => {
     if (!isProcessing) {
@@ -282,8 +293,9 @@ const NextGenChatInput = ({
             inputRef={actualInputRef}
           />
 
-          {/* Upload icon - show directly on desktop if enabled */}
-          {uploadConfig?.enabled === true && (
+          {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
+          {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
+          {uploadConfig?.enabled === true && !isSingleActionOptimization && (
             <button
               type="button"
               onClick={onToggleUploader || toggleUploader}
@@ -295,8 +307,9 @@ const NextGenChatInput = ({
             </button>
           )}
 
-          {/* Microphone icon - show directly on desktop if enabled */}
-          {onVoiceInput && (
+          {/* Microphone icon - show directly on desktop if enabled and NOT in single-action mode */}
+          {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
+          {onVoiceInput && !isSingleActionOptimization && (
             <div className="hidden md:flex">
               <VoiceInputComponent
                 app={app}

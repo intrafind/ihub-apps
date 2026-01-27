@@ -36,7 +36,7 @@ export default function registerAdminTranslateRoute(app, basePath = '') {
         { role: 'user', content: text }
       ];
 
-      const result = await simpleCompletion(messages, { 
+      const result = await simpleCompletion(messages, {
         modelId: model.id,
         apiKey: apiKey
       });
