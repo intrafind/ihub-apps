@@ -102,5 +102,14 @@
   },
   "ssl": {
     "ignoreInvalidCertificates": false
+  },
+  "logging": {
+    "level": "info",
+    "file": {
+      "enabled": false,
+      "path": "logs/app.log",
+      "maxSize": 10485760,
+      "maxFiles": 5
+    }
   }
 }

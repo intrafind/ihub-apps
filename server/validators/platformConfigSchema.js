@@ -79,6 +79,20 @@ const rateLimitSchema = z.object({
   inferenceApi: rateLimitConfigSchema.partial().default({})
 });
 
+const loggingSchema = z.object({
+  level: z
+    .enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'])
+    .default('info'),
+  file: z
+    .object({
+      enabled: z.boolean().default(false),
+      path: z.string().default('logs/app.log'),
+      maxSize: z.number().default(10485760), // 10MB
+      maxFiles: z.number().default(5)
+    })
+    .default({})
+});
+
 export const platformConfigSchema = z
   .object({
     auth: z
@@ -140,7 +154,8 @@ export const platformConfigSchema = z
       })
       .default({}),
     authDebug: authDebugSchema.default({}),
-    rateLimit: rateLimitSchema.default({})
+    rateLimit: rateLimitSchema.default({}),
+    logging: loggingSchema.default({})
   })
   .passthrough();
 
