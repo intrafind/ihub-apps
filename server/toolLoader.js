@@ -221,6 +221,32 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
+  // Auto-include googleSearch for Google models when web search tools are used
+  // This ensures native grounding is used instead of function-based search for better performance
+  if (context.model && context.model.provider === 'google') {
+    // Check if any web search tools are in the enabled/app tools
+    const webSearchToolIds = ['enhancedWebSearch', 'webSearch', 'braveSearch', 'tavilySearch'];
+    const hasWebSearchTool = appTools.some(t => webSearchToolIds.includes(t.id));
+    const hasGoogleSearch = appTools.some(t => t.id === 'googleSearch');
+
+    // If web search is requested but googleSearch is not included, add it
+    if (hasWebSearchTool && !hasGoogleSearch) {
+      // Check if googleSearch is available in app.tools
+      const googleSearchInApp = Array.isArray(app.tools) && app.tools.includes('googleSearch');
+      
+      if (googleSearchInApp) {
+        // Find googleSearch tool from all tools
+        const googleSearchTool = allTools.find(t => t.id === 'googleSearch');
+        if (googleSearchTool) {
+          console.log(
+            `[Tool Loader] Auto-including googleSearch for Google model ${context.model.id} with web search enabled`
+          );
+          appTools.push(googleSearchTool);
+        }
+      }
+    }
+  }
+
   return appTools;
 }
 
