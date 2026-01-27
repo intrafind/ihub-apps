@@ -80,9 +80,7 @@ const rateLimitSchema = z.object({
 });
 
 const loggingSchema = z.object({
-  level: z
-    .enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'])
-    .default('info'),
+  level: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
   file: z
     .object({
       enabled: z.boolean().default(false),

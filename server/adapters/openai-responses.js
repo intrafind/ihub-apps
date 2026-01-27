@@ -5,6 +5,7 @@
  */
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
+import logger from '../utils/logger.js';
 
 class OpenAIResponsesAdapterClass extends BaseAdapter {
   /**
@@ -193,7 +194,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       // Deep clone incoming schema and enforce additionalProperties:false on all objects
       const schemaClone = JSON.parse(JSON.stringify(responseSchema));
       const enforceNoExtras = node => {
-        console.log('Enforcing no extras on schema node:', node);
+        logger.info('Enforcing no extras on schema node:', node);
         if (node && node.type === 'object') {
           node.additionalProperties = false;
         }
@@ -215,7 +216,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
         strict: true,
         schema: schemaClone
       };
-      console.log(
+      logger.info(
         'Using response schema for structured output:',
         JSON.stringify(body.text, null, 2)
       );
@@ -224,7 +225,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       body.text.format = { type: 'json_object' };
     }
 
-    console.log('OpenAI Responses API request body:', JSON.stringify(body, null, 2));
+    logger.info('OpenAI Responses API request body:', JSON.stringify(body, null, 2));
 
     return {
       url: model.url,
@@ -258,7 +259,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       const parsed = JSON.parse(data);
 
       // Add debugging to see what we're receiving
-      console.log('[RESPONSES API DEBUG] Received chunk:', JSON.stringify(parsed, null, 2));
+      logger.info('[RESPONSES API DEBUG] Received chunk:', JSON.stringify(parsed, null, 2));
 
       // Handle full response object (non-streaming)
       if (parsed.output && Array.isArray(parsed.output)) {
@@ -345,8 +346,8 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
         result.errorMessage = parsed.error?.message || 'Response generation failed';
       }
     } catch (error) {
-      console.error('Error parsing OpenAI Responses API response chunk:', error);
-      console.error('Data that caused error:', data);
+      logger.error('Error parsing OpenAI Responses API response chunk:', error);
+      logger.error('Data that caused error:', data);
       result.error = true;
       result.errorMessage = `Error parsing OpenAI Responses API response: ${error.message}`;
     }

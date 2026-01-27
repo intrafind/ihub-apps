@@ -14,6 +14,7 @@ import {
   sendFailedOperationError
 } from '../utils/responseHelpers.js';
 import { buildServerPath } from '../utils/basePath.js';
+import logger from '../utils/logger.js';
 
 export default function registerShortLinkRoutes(app, basePath = '') {
   app.post(buildServerPath('/api/shortlinks', basePath), authRequired, async (req, res) => {
@@ -90,7 +91,7 @@ export default function registerShortLinkRoutes(app, basePath = '') {
       }
       res.redirect(link.url);
     } catch (e) {
-      console.error('Error redirecting short link:', e);
+      logger.error('Error redirecting short link:', e);
       res.status(500).send('Error');
     }
   });

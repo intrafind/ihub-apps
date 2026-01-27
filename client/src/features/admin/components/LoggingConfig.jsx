@@ -68,9 +68,7 @@ const LoggingConfig = () => {
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.system.logging.title')}
         </h2>
-        <p className="text-gray-600 dark:text-gray-400">
-          {t('common.loading', 'Loading...')}
-        </p>
+        <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
       </div>
     );
   }
@@ -78,7 +76,10 @@ const LoggingConfig = () => {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
       <div className="flex items-start mb-4">
-        <Icon name="AdjustmentsHorizontalIcon" className="w-6 h-6 mr-2 text-blue-500 flex-shrink-0" />
+        <Icon
+          name="AdjustmentsHorizontalIcon"
+          className="w-6 h-6 mr-2 text-blue-500 flex-shrink-0"
+        />
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
             {t('admin.system.logging.title')}
@@ -169,7 +170,10 @@ const LoggingConfig = () => {
             <ul className="list-disc list-inside space-y-1 text-xs">
               <li>Changes take effect immediately across all server processes</li>
               <li>Log level changes are persisted to platform.json configuration</li>
-              <li>Lower levels (error, warn) show fewer messages, higher levels (debug, silly) show more</li>
+              <li>
+                Lower levels (error, warn) show fewer messages, higher levels (debug, silly) show
+                more
+              </li>
               <li>Use &quot;info&quot; level for production, &quot;debug&quot; for development</li>
             </ul>
           </div>

@@ -2,6 +2,7 @@ import config from './config.js';
 import configCache from './configCache.js';
 import { throttledFetch } from './requestThrottler.js';
 import { createSourceManager } from './sources/index.js';
+import logger from './utils/logger.js';
 
 /**
  * Extract language-specific value from a multilingual object or return the value as-is
@@ -98,7 +99,7 @@ export async function loadConfiguredTools(language = null) {
   // Try to get tools from cache first
   const { data: tools } = configCache.getTools();
   if (!tools) {
-    console.warn('Tools could not be loaded');
+    logger.warn('Tools could not be loaded');
     return [];
   }
 
@@ -120,12 +121,12 @@ export async function discoverMcpTools() {
   try {
     const response = await throttledFetch('mcp', `${mcpUrl.replace(/\/$/, '')}/tools`);
     if (!response.ok) {
-      console.error(`Failed to fetch tools from MCP server: ${response.status}`);
+      logger.error(`Failed to fetch tools from MCP server: ${response.status}`);
       return [];
     }
     return await response.json();
   } catch (error) {
-    console.error('Error fetching tools from MCP server:', error);
+    logger.error('Error fetching tools from MCP server:', error);
     return [];
   }
 }
@@ -217,7 +218,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
         appTools = appTools.concat(sourceTools);
       }
     } catch (error) {
-      console.error('Error generating source tools:', error);
+      logger.error('Error generating source tools:', error);
     }
   }
 
@@ -240,7 +241,7 @@ export { localizeTools };
  * @param {object} params - Parameters passed to the tool
  */
 export async function runTool(toolId, params = {}) {
-  console.log(`Running tool: ${toolId} with params:`, JSON.stringify(params, null, 2));
+  logger.info(`Running tool: ${toolId} with params:`, JSON.stringify(params, null, 2));
   if (!/^[A-Za-z0-9_.-]+$/.test(toolId)) {
     throw new Error('Invalid tool id');
   }
@@ -252,7 +253,7 @@ export async function runTool(toolId, params = {}) {
     const sourceToolFn = sourceManager.getToolFunction(toolId);
 
     if (sourceToolFn) {
-      console.log(`Executing source tool: ${toolId}`);
+      logger.info(`Executing source tool: ${toolId}`);
       return await sourceToolFn(params);
     } else {
       throw new Error(`Source tool ${toolId} not found in registry`);
@@ -269,7 +270,7 @@ export async function runTool(toolId, params = {}) {
   // Check if this is a special tool (like Google Search) that doesn't have a script
   if (tool.isSpecialTool) {
     // Special tools are handled by the model provider directly, not executed here
-    console.log(`Special tool ${toolId} is handled by provider, skipping execution`);
+    logger.info(`Special tool ${toolId} is handled by provider, skipping execution`);
     return { handled_by_provider: true };
   }
 
@@ -296,7 +297,7 @@ export async function runTool(toolId, params = {}) {
 
     return await fn(params);
   } catch (err) {
-    console.error(`Failed to execute tool ${toolId}:`, err);
+    logger.error(`Failed to execute tool ${toolId}:`, err);
     throw err;
   }
 }

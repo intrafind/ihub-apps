@@ -6,6 +6,7 @@ import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { generateJwt } from '../utils/tokenService.js';
 import authDebugService from '../utils/authDebugService.js';
+import logger from '../utils/logger.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -28,7 +29,7 @@ export function configureOidcProviders() {
   for (const provider of oidcConfig.providers) {
     // Skip disabled providers
     if (provider.enabled === false) {
-      console.log(`OIDC provider ${provider.name} is disabled, skipping configuration`);
+      logger.info(`OIDC provider ${provider.name} is disabled, skipping configuration`);
       continue;
     }
 
@@ -40,7 +41,7 @@ export function configureOidcProviders() {
       !provider.tokenURL ||
       !provider.userInfoURL
     ) {
-      console.warn(`OIDC provider ${provider.name || 'unnamed'} missing required configuration`);
+      logger.warn(`OIDC provider ${provider.name || 'unnamed'} missing required configuration`);
       continue;
     }
 
@@ -160,7 +161,7 @@ export function configureOidcProviders() {
               sessionId
             );
 
-            console.error(`OIDC user validation error for provider ${provider.name}:`, error);
+            logger.error(`OIDC user validation error for provider ${provider.name}:`, error);
             return done(error, null);
           }
         }
@@ -175,9 +176,9 @@ export function configureOidcProviders() {
         strategyName
       });
 
-      console.log(`OIDC provider configured: ${provider.name}`);
+      logger.info(`OIDC provider configured: ${provider.name}`);
     } catch (error) {
-      console.error(`Failed to configure OIDC provider ${provider.name}:`, error);
+      logger.error(`Failed to configure OIDC provider ${provider.name}:`, error);
     }
   }
 }
@@ -500,14 +501,14 @@ export function createOidcCallbackHandler(providerName) {
             sessionId
           );
 
-          console.error(
+          logger.error(
             '[OIDC Callback] OAuth state verification failed. This might be due to session issues.'
           );
-          console.error('[OIDC Callback] Error details:', err);
-          console.error('[OIDC Callback] Request query:', req.query);
-          console.error('[OIDC Callback] Session ID:', req.sessionID);
-          console.error('[OIDC Callback] Session data:', req.session);
-          console.error('[OIDC Callback] Cookies:', req.headers.cookie);
+          logger.error('[OIDC Callback] Error details:', err);
+          logger.error('[OIDC Callback] Request query:', req.query);
+          logger.error('[OIDC Callback] Session ID:', req.sessionID);
+          logger.error('[OIDC Callback] Session data:', req.session);
+          logger.error('[OIDC Callback] Cookies:', req.headers.cookie);
         }
 
         // Redirect back to the app with error message instead of returning JSON
@@ -530,7 +531,7 @@ export function createOidcCallbackHandler(providerName) {
           sessionId
         );
 
-        console.warn(`OIDC authentication failed for provider ${providerName}:`, info);
+        logger.warn(`OIDC authentication failed for provider ${providerName}:`, info);
 
         // Redirect back to the app with error message
         const errorMessage = encodeURIComponent(info?.message || 'Authentication failed');
@@ -673,7 +674,7 @@ export function createOidcCallbackHandler(providerName) {
           sessionId
         );
 
-        console.error(`JWT token generation error for provider ${providerName}:`, tokenError);
+        logger.error(`JWT token generation error for provider ${providerName}:`, tokenError);
 
         // Redirect back to the app with error message
         const errorMessage = encodeURIComponent('Token generation failed: ' + tokenError.message);
@@ -687,7 +688,7 @@ export function createOidcCallbackHandler(providerName) {
  * Reconfigure providers when platform config changes
  */
 export function reconfigureOidcProviders() {
-  console.log('Reconfiguring OIDC providers...');
+  logger.info('Reconfiguring OIDC providers...');
   configureOidcProviders();
 }
 

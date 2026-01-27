@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from './pathUtils.js';
 import config from './config.js';
+import logger from './utils/logger.js';
 
 const contentsDir = config.CONTENTS_DIR;
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'shortlinks.json');
@@ -49,7 +50,7 @@ function scheduleSave() {
     try {
       await saveLinks();
     } catch (e) {
-      console.error('Failed to save short link data', e);
+      logger.error('Failed to save short link data', e);
     }
   }, SAVE_INTERVAL_MS);
 }
@@ -169,5 +170,5 @@ export async function searchLinks({ appId, userId } = {}) {
 
 loadLinks();
 setInterval(() => {
-  if (dirty) saveLinks().catch(e => console.error('Short link save error:', e));
+  if (dirty) saveLinks().catch(e => logger.error('Short link save error:', e));
 }, SAVE_INTERVAL_MS);

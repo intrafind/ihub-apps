@@ -2,6 +2,7 @@ import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
+import logger from './logger.js';
 
 /**
  * Generic Resource Loader Factory
@@ -49,7 +50,7 @@ export function createResourceLoader({
 
     if (!existsSync(resourceDir)) {
       if (verbose) {
-        console.log(
+        logger.info(
           `📁 ${resourceName} directory not found, skipping individual ${resourceName.toLowerCase()} files`
         );
       }
@@ -61,8 +62,8 @@ export function createResourceLoader({
     const files = dirContents.filter(file => file.endsWith('.json'));
 
     if (verbose && files.length > 0) {
-      console.log(`\n━━━ Loading ${resourceName} ━━━`);
-      console.log(`📱 Found ${files.length} ${resourceName.toLowerCase()} files`);
+      logger.info(`\n━━━ Loading ${resourceName} ━━━`);
+      logger.info(`📱 Found ${files.length} ${resourceName.toLowerCase()} files`);
     }
 
     const loadedItems = [];
@@ -101,10 +102,10 @@ export function createResourceLoader({
 
     // Log all items together for better clustering
     if (verbose && loadedItems.length > 0) {
-      console.log(loadedItems.join('\n'));
+      logger.info(loadedItems.join('\n'));
     }
     if (errorItems.length > 0) {
-      console.log(errorItems.join('\n'));
+      logger.info(errorItems.join('\n'));
     }
 
     return resources;
@@ -121,7 +122,7 @@ export function createResourceLoader({
 
     if (!existsSync(legacyFilePath)) {
       if (verbose) {
-        console.log(`📄 Legacy ${legacyPath} not found, skipping`);
+        logger.info(`📄 Legacy ${legacyPath} not found, skipping`);
       }
       return [];
     }
@@ -131,12 +132,12 @@ export function createResourceLoader({
       let resources = JSON.parse(fileContent);
 
       if (!Array.isArray(resources)) {
-        console.warn(`⚠️  Legacy ${legacyPath} is not an array`);
+        logger.warn(`⚠️  Legacy ${legacyPath} is not an array`);
         return [];
       }
 
       if (verbose) {
-        console.log(
+        logger.info(
           `📄 Loading ${resources.length} ${resourceName.toLowerCase()}s from legacy ${legacyPath}...`
         );
       }
@@ -164,7 +165,7 @@ export function createResourceLoader({
 
       return resources;
     } catch (error) {
-      console.error(`❌ Error loading legacy ${legacyPath}:`, error.message);
+      logger.error(`❌ Error loading legacy ${legacyPath}:`, error.message);
       return [];
     }
   }
@@ -238,7 +239,7 @@ export function createResourceLoader({
     if (verbose) {
       const enabledCount = allResources.filter(r => r.enabled !== false).length;
       const disabledCount = allResources.length - enabledCount;
-      console.log(
+      logger.info(
         `📊 Summary: ${allResources.length} ${resourceName.toLowerCase()}s ` +
           `(${enabledCount} enabled, ${disabledCount} disabled)`
       );
@@ -285,7 +286,7 @@ export function createValidator(requiredFields = []) {
   return function (item, source) {
     const missing = requiredFields.filter(field => !(field in item) || item[field] == null);
     if (missing.length > 0) {
-      console.warn(`⚠️  Missing required fields in ${source}: ${missing.join(', ')}`);
+      logger.warn(`⚠️  Missing required fields in ${source}: ${missing.join(', ')}`);
     }
     return item;
   };
@@ -327,7 +328,7 @@ export function createSchemaValidator(schema, knownKeys = []) {
         const messages = result.error.errors
           .map(e => `${e.path.join('.')}: ${e.message}`)
           .join('; ');
-        console.warn(`⚠️  ${resourceType}: ${resourceId} - validation issues: ${messages}`);
+        logger.warn(`⚠️  ${resourceType}: ${resourceId} - validation issues: ${messages}`);
       } else {
         // Apply the parsed data which includes Zod defaults
         validatedItem = result.data;
@@ -338,7 +339,7 @@ export function createSchemaValidator(schema, knownKeys = []) {
     if (knownKeys.length > 0) {
       const unknown = Object.keys(validatedItem).filter(key => !knownKeys.includes(key));
       if (unknown.length > 0) {
-        console.warn(`⚠️  ${resourceType}: ${resourceId} - unknown keys: ${unknown.join(', ')}`);
+        logger.warn(`⚠️  ${resourceType}: ${resourceId} - unknown keys: ${unknown.join(', ')}`);
       }
     }
 

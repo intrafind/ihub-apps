@@ -4,6 +4,7 @@ import { actionTracker } from '../actionTracker.js';
 import queryRewriter from './queryRewriter.js';
 import finalizer from './finalizer.js';
 import { simpleCompletion, resolveModelId } from '../utils.js';
+import logger from '../utils/logger.js';
 
 /**
  * Perform iterative web research with progress updates via SSE.
@@ -102,7 +103,7 @@ export default async function deepResearch({
           extractedAt: extracted.extractedAt || new Date().toISOString()
         };
         aggregated.push(sourceItem);
-        console.log(`Added source: ${sourceItem.url} - ${sourceItem.title}`);
+        logger.info(`Added source: ${sourceItem.url} - ${sourceItem.title}`);
         sendProgress('research-fetched', { round, url: result.url, title: sourceItem.title });
       } catch (err) {
         sendProgress('research-error', { round, url: result.url, message: err.message });
@@ -143,9 +144,9 @@ export default async function deepResearch({
   sendProgress('research-complete', { sources: aggregated.length });
 
   // Log the final result structure for debugging
-  console.log(`Deep research completed. Query: "${query}", Sources found: ${aggregated.length}`);
+  logger.info(`Deep research completed. Query: "${query}", Sources found: ${aggregated.length}`);
   aggregated.forEach((source, index) => {
-    console.log(`Source ${index + 1}: ${source.url} - "${source.title}"`);
+    logger.info(`Source ${index + 1}: ${source.url} - "${source.title}"`);
   });
 
   // Create a detailed summary for the AI that emphasizes the URLs
@@ -162,7 +163,7 @@ export default async function deepResearch({
     finalAnswer = await finalizer({ question: query, results: aggregated, model: resolvedModel });
     sendProgress('research-finalized', { length: finalAnswer.length });
   } catch (err) {
-    console.error('Failed to finalize answer:', err);
+    logger.error('Failed to finalize answer:', err);
   }
 
   actionTracker.trackToolCallEnd(chatId, {

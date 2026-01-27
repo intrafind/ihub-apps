@@ -1,4 +1,5 @@
 import configCache from '../configCache.js';
+import logger from './logger.js';
 
 class ChatError extends Error {
   constructor(message, code, details = null) {
@@ -93,7 +94,7 @@ class ErrorHandler {
       });
       return message;
     } catch (error) {
-      console.error(`Error getting localized error message for ${errorKey}:`, error);
+      logger.error(`Error getting localized error message for ${errorKey}:`, error);
       return `Error: ${errorKey}`;
     }
   }

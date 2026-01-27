@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
+import logger from './logger.js';
 
 /**
  * Recursively copies files and directories from source to destination,
@@ -48,13 +49,13 @@ async function copyMissingFiles(src, dest, copiedCount = 0) {
         try {
           await fs.stat(destPath);
           // File exists, skip copying
-          console.log(`⏭️  Skipping existing file: ${path.relative(dest, destPath)}`);
+          logger.info(`⏭️  Skipping existing file: ${path.relative(dest, destPath)}`);
         } catch (error) {
           if (error.code === 'ENOENT') {
             // File doesn't exist, copy it
             await fs.copyFile(srcPath, destPath);
             copiedCount++;
-            console.log(`📄 Copied file: ${path.relative(dest, destPath)}`);
+            logger.info(`📄 Copied file: ${path.relative(dest, destPath)}`);
           } else {
             throw error;
           }
@@ -64,7 +65,7 @@ async function copyMissingFiles(src, dest, copiedCount = 0) {
 
     return copiedCount;
   } catch (error) {
-    console.error(`Error copying missing files from ${src} to ${dest}:`, error);
+    logger.error(`Error copying missing files from ${src} to ${dest}:`, error);
     throw error;
   }
 }
@@ -85,13 +86,13 @@ export async function copyDefaultConfiguration() {
       await fs.stat(defaultConfigPath);
     } catch (error) {
       if (error.code === 'ENOENT') {
-        console.warn(`Default configuration directory not found at: ${defaultConfigPath}`);
+        logger.warn(`Default configuration directory not found at: ${defaultConfigPath}`);
         return false;
       }
       throw error;
     }
 
-    console.log(
+    logger.info(
       `📋 Copying missing default configuration files from ${defaultConfigPath} to ${contentsPath}`
     );
 
@@ -99,14 +100,14 @@ export async function copyDefaultConfiguration() {
     const copiedCount = await copyMissingFiles(defaultConfigPath, contentsPath);
 
     if (copiedCount > 0) {
-      console.log(`✅ ${copiedCount} default configuration files copied successfully`);
+      logger.info(`✅ ${copiedCount} default configuration files copied successfully`);
       return true;
     } else {
-      console.log('ℹ️  All default configuration files already exist, no files copied');
+      logger.info('ℹ️  All default configuration files already exist, no files copied');
       return false;
     }
   } catch (error) {
-    console.error('❌ Failed to copy default configuration:', error);
+    logger.error('❌ Failed to copy default configuration:', error);
     throw error;
   }
 }
@@ -118,19 +119,19 @@ export async function copyDefaultConfiguration() {
  */
 export async function performInitialSetup() {
   try {
-    console.log('🔍 Checking for missing default configuration files...');
+    logger.info('🔍 Checking for missing default configuration files...');
 
     const filesCopied = await copyDefaultConfiguration();
 
     if (filesCopied) {
-      console.log('📦 Initial setup completed - missing default files have been copied');
+      logger.info('📦 Initial setup completed - missing default files have been copied');
     } else {
-      console.log('✅ All default configuration files already exist, no setup needed');
+      logger.info('✅ All default configuration files already exist, no setup needed');
     }
 
     return filesCopied;
   } catch (error) {
-    console.error('❌ Error during initial setup:', error);
+    logger.error('❌ Error during initial setup:', error);
     throw error;
   }
 }

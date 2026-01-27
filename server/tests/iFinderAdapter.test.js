@@ -2,6 +2,7 @@
  * Tests for iFinder adapter
  */
 import IFinderAdapter from '../adapters/ifinder.js';
+import logger from '../utils/logger.js';
 
 describe('iFinder Adapter', () => {
   const mockModel = {

@@ -1,6 +1,7 @@
 import { loadText } from '../configLoader.js';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
+import logger from '../utils/logger.js';
 
 export default function registerPageRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/pages/:pageId', basePath), async (req, res) => {
@@ -63,7 +64,7 @@ export default function registerPageRoutes(app, basePath = '') {
         contentType
       });
     } catch (error) {
-      console.error('Error fetching page content:', error);
+      logger.error('Error fetching page content:', error);
       res.status(500).json({ error: 'Failed to fetch page content' });
     }
   });

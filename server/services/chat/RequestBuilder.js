@@ -3,6 +3,7 @@ import { createCompletionRequest } from '../../adapters/index.js';
 import { getToolsForApp } from '../../toolLoader.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
+import logger from '../../utils/logger.js';
 
 function preprocessMessagesWithFileData(messages) {
   return messages.map(msg => {
@@ -114,21 +115,21 @@ class RequestBuilder {
       );
       llmMessages = preprocessMessagesWithFileData(llmMessages);
 
-      console.log(
+      logger.info(
         `Preparing request for App: ${app.id}, Model: ${model.id}, Max Tokens: ${useMaxTokens ? 'Max' : 'Calculated'}`
       );
 
       // Determine model token limit (default to 8192 if not specified)
       const modelTokenLimit = model.tokenLimit || 8192;
-      console.log(`Model Token Limit: ${modelTokenLimit}`);
+      logger.info(`Model Token Limit: ${modelTokenLimit}`);
 
       // If app specifies tokenLimit, use it; otherwise use model's tokenLimit
       const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
-      console.log(`App Token Limit: ${appTokenLimit}`);
+      logger.info(`App Token Limit: ${appTokenLimit}`);
 
       // Use max tokens if requested, otherwise use the minimum of app and model limits
       const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
-      console.log(`Final Token Limit for Request: ${finalTokens}`);
+      logger.info(`Final Token Limit for Request: ${finalTokens}`);
 
       const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, res, clientRes, language);
       if (!apiKeyResult.success) {
@@ -165,7 +166,7 @@ class RequestBuilder {
         }
       };
     } catch (error) {
-      console.error('Error in prepareChatRequest:', error);
+      logger.error('Error in prepareChatRequest:', error);
       const chatError = new Error(error.message || 'Internal server error');
       chatError.code = 'INTERNAL_ERROR';
       return { success: false, error: chatError };

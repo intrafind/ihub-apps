@@ -6,6 +6,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Reconfigure authentication methods when platform configuration changes
@@ -36,7 +37,7 @@ function reconfigureAuthenticationMethods(oldConfig = {}, newConfig = {}) {
       results.reconfigured.push('OIDC providers');
       results.notes.push('OIDC providers reconfigured successfully');
     } catch (error) {
-      console.error('Failed to reconfigure OIDC providers:', error);
+      logger.error('Failed to reconfigure OIDC providers:', error);
       results.notes.push(`OIDC reconfiguration failed: ${error.message}`);
     }
   }
@@ -119,7 +120,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
         platformConfig = JSON.parse(platformConfigData);
       } catch {
-        console.log('Platform config not found, returning default config');
+        logger.info('Platform config not found, returning default config');
         platformConfig = {
           auth: {
             mode: 'proxy',
@@ -218,7 +219,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
 
       res.json(sanitizedConfig);
     } catch (error) {
-      console.error('Error getting platform configuration:', error);
+      logger.error('Error getting platform configuration:', error);
       res.status(500).json({ error: 'Failed to get platform configuration' });
     }
   });
@@ -247,7 +248,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
           existingConfig = JSON.parse(existingConfigData);
         } catch {
           // File doesn't exist, start with empty config
-          console.log('Creating new platform config file');
+          logger.info('Creating new platform config file');
         }
 
         // Merge the authentication-related config with existing config
@@ -276,14 +277,14 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
 
         // Log results
         if (reconfigResults.reconfigured.length > 0) {
-          console.log(`🔄 Reconfigured: ${reconfigResults.reconfigured.join(', ')}`);
+          logger.info(`🔄 Reconfigured: ${reconfigResults.reconfigured.join(', ')}`);
         }
         if (reconfigResults.requiresRestart.length > 0) {
-          console.log(`⚠️  Requires restart: ${reconfigResults.requiresRestart.join(', ')}`);
+          logger.info(`⚠️  Requires restart: ${reconfigResults.requiresRestart.join(', ')}`);
         }
-        reconfigResults.notes.forEach(note => console.log(`ℹ️  ${note}`));
+        reconfigResults.notes.forEach(note => logger.info(`ℹ️  ${note}`));
 
-        console.log('🔧 Platform authentication configuration updated');
+        logger.info('🔧 Platform authentication configuration updated');
 
         res.json({
           message: 'Platform configuration updated successfully',
@@ -295,7 +296,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
           }
         });
       } catch (error) {
-        console.error('Error updating platform configuration:', error);
+        logger.error('Error updating platform configuration:', error);
         res.status(500).json({ error: 'Failed to update platform configuration' });
       }
     }

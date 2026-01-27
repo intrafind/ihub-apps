@@ -6,6 +6,7 @@ import configCache from '../../configCache.js';
 import { getUsage } from '../../usageTracker.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import logger from '../../utils/logger.js';
 
 export default function registerAdminCacheRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/admin/usage', basePath), adminAuth, async (req, res) => {
@@ -13,7 +14,7 @@ export default function registerAdminCacheRoutes(app, basePath = '') {
       const data = await getUsage();
       res.json(data);
     } catch (e) {
-      console.error('Error loading usage data:', e);
+      logger.error('Error loading usage data:', e);
       res.status(500).json({ error: 'Failed to load usage data' });
     }
   });
@@ -23,7 +24,7 @@ export default function registerAdminCacheRoutes(app, basePath = '') {
       const stats = configCache.getStats();
       res.json(stats);
     } catch (e) {
-      console.error('Error getting cache stats:', e);
+      logger.error('Error getting cache stats:', e);
       res.status(500).json({ error: 'Failed to get cache statistics' });
     }
   });
@@ -33,7 +34,7 @@ export default function registerAdminCacheRoutes(app, basePath = '') {
       await configCache.refreshAll();
       res.json({ message: 'Configuration cache refreshed successfully' });
     } catch (e) {
-      console.error('Error refreshing cache:', e);
+      logger.error('Error refreshing cache:', e);
       res.status(500).json({ error: 'Failed to refresh cache' });
     }
   });
@@ -49,7 +50,7 @@ export default function registerAdminCacheRoutes(app, basePath = '') {
       await configCache.initialize();
       res.json({ message: 'Configuration cache cleared successfully' });
     } catch (e) {
-      console.error('Error clearing cache:', e);
+      logger.error('Error clearing cache:', e);
       res.status(500).json({ error: 'Failed to clear cache' });
     }
   });
@@ -73,14 +74,14 @@ export default function registerAdminCacheRoutes(app, basePath = '') {
       await atomicWriteJSON(platformConfigPath, platformConfig);
       await new Promise(resolve => setTimeout(resolve, 100));
       await configCache.refreshCacheEntry('config/platform.json');
-      console.log(`🔄 Force refresh triggered. New admin salt: ${platformConfig.refreshSalt.salt}`);
+      logger.info(`🔄 Force refresh triggered. New admin salt: ${platformConfig.refreshSalt.salt}`);
       res.json({
         message: 'Force refresh triggered successfully',
         newAdminSalt: platformConfig.refreshSalt.salt,
         timestamp: platformConfig.refreshSalt.lastUpdated
       });
     } catch (error) {
-      console.error('Error triggering force refresh:', error);
+      logger.error('Error triggering force refresh:', error);
       res.status(500).json({ error: 'Failed to trigger force refresh' });
     }
   });

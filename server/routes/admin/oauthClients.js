@@ -12,6 +12,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import configCache from '../../configCache.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Admin routes for OAuth client management
@@ -67,7 +68,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
         clients
       });
     } catch (error) {
-      console.error('[OAuth Admin] List clients error:', error);
+      logger.error('[OAuth Admin] List clients error:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to list OAuth clients'
@@ -137,7 +138,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
           client: clientWithoutSecret
         });
       } catch (error) {
-        console.error('[OAuth Admin] Get client error:', error);
+        logger.error('[OAuth Admin] Get client error:', error);
         res.status(500).json({
           success: false,
           error: 'Failed to get OAuth client'
@@ -265,7 +266,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
         }
       });
     } catch (error) {
-      console.error('[OAuth Admin] Create client error:', error);
+      logger.error('[OAuth Admin] Create client error:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to create OAuth client'
@@ -357,7 +358,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
             error: error.message
           });
         }
-        console.error('[OAuth Admin] Update client error:', error);
+        logger.error('[OAuth Admin] Update client error:', error);
         res.status(500).json({
           success: false,
           error: 'Failed to update OAuth client'
@@ -425,7 +426,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
             error: error.message
           });
         }
-        console.error('[OAuth Admin] Delete client error:', error);
+        logger.error('[OAuth Admin] Delete client error:', error);
         res.status(500).json({
           success: false,
           error: 'Failed to delete OAuth client'
@@ -497,7 +498,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
             error: error.message
           });
         }
-        console.error('[OAuth Admin] Rotate secret error:', error);
+        logger.error('[OAuth Admin] Rotate secret error:', error);
         res.status(500).json({
           success: false,
           error: 'Failed to rotate client secret'
@@ -594,7 +595,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
           ...apiKeyResult
         });
       } catch (error) {
-        console.error('[OAuth Admin] Generate token error:', error);
+        logger.error('[OAuth Admin] Generate token error:', error);
         res.status(500).json({
           success: false,
           error: 'Failed to generate static API key'
@@ -678,7 +679,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
           introspection
         });
       } catch (error) {
-        console.error('[OAuth Admin] Introspect token error:', error);
+        logger.error('[OAuth Admin] Introspect token error:', error);
         res.status(500).json({
           success: false,
           error: 'Failed to introspect token'

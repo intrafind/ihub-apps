@@ -9,20 +9,21 @@ import OpenAIAdapter from '../adapters/openai.js';
 import AnthropicAdapter from '../adapters/anthropic.js';
 import GoogleAdapter from '../adapters/google.js';
 import MistralAdapter from '../adapters/mistral.js';
+import logger from '../utils/logger.js';
 
-console.log('🔧 Tool Calling Fixes and Standardization\n');
+logger.info('🔧 Tool Calling Fixes and Standardization\n');
 
 // ============================================================================
 // ISSUE 1: Message Format Inconsistency
 // ============================================================================
 
-console.log('📋 Issue 1: Message Format Inconsistency');
-console.log('');
-console.log('Problem: Different adapters return different formats from formatMessages():');
-console.log('- OpenAI/Mistral: Return array of messages directly');
-console.log('- Anthropic: Returns { messages: array, systemPrompt: string }');
-console.log('- Google: Returns { contents: array, systemInstruction: string }');
-console.log('');
+logger.info('📋 Issue 1: Message Format Inconsistency');
+logger.info('');
+logger.info('Problem: Different adapters return different formats from formatMessages():');
+logger.info('- OpenAI/Mistral: Return array of messages directly');
+logger.info('- Anthropic: Returns { messages: array, systemPrompt: string }');
+logger.info('- Google: Returns { contents: array, systemInstruction: string }');
+logger.info('');
 
 // Proposed fix: Create a unified message formatter
 const UnifiedMessageFormatter = {
@@ -82,31 +83,31 @@ const testMessages = [
   { role: 'assistant', content: 'Hi there!' }
 ];
 
-console.log('✅ Unified Message Format Test:');
+logger.info('✅ Unified Message Format Test:');
 for (const provider of ['openai', 'anthropic', 'google', 'mistral']) {
   try {
     const unified = UnifiedMessageFormatter.formatMessages(testMessages, provider);
-    console.log(
+    logger.info(
       `${provider}: ${unified.messages.length} messages, system: "${unified.systemInstruction}"`
     );
   } catch (error) {
-    console.log(`${provider}: ERROR - ${error.message}`);
+    logger.info(`${provider}: ERROR - ${error.message}`);
   }
 }
 
-console.log('');
+logger.info('');
 
 // ============================================================================
 // ISSUE 2: Tool Call Representation Inconsistency
 // ============================================================================
 
-console.log('📋 Issue 2: Tool Call Representation Inconsistency');
-console.log('');
-console.log('Problem: Different ways to represent tool calls in messages:');
-console.log('- OpenAI/Mistral: tool_calls array with function objects');
-console.log('- Anthropic: content blocks with tool_use type');
-console.log('- Google: parts with functionCall objects');
-console.log('');
+logger.info('📋 Issue 2: Tool Call Representation Inconsistency');
+logger.info('');
+logger.info('Problem: Different ways to represent tool calls in messages:');
+logger.info('- OpenAI/Mistral: tool_calls array with function objects');
+logger.info('- Anthropic: content blocks with tool_use type');
+logger.info('- Google: parts with functionCall objects');
+logger.info('');
 
 // Proposed fix: Create a unified tool call transformer
 const UnifiedToolCallTransformer = {
@@ -204,30 +205,30 @@ const testToolResults = [
   }
 ];
 
-console.log('✅ Unified Tool Call Transformation Test:');
+logger.info('✅ Unified Tool Call Transformation Test:');
 for (const provider of ['openai', 'anthropic', 'google', 'mistral']) {
   try {
     const calls = UnifiedToolCallTransformer.transformToolCalls(testToolCalls, provider);
     const results = UnifiedToolCallTransformer.transformToolResults(testToolResults, provider);
-    console.log(`${provider}: ${calls.length} calls, ${results.length} results`);
+    logger.info(`${provider}: ${calls.length} calls, ${results.length} results`);
   } catch (error) {
-    console.log(`${provider}: ERROR - ${error.message}`);
+    logger.info(`${provider}: ERROR - ${error.message}`);
   }
 }
 
-console.log('');
+logger.info('');
 
 // ============================================================================
 // ISSUE 3: Tool Message Handling Inconsistency
 // ============================================================================
 
-console.log('📋 Issue 3: Tool Message Handling Inconsistency');
-console.log('');
-console.log('Problem: Different ways to handle tool messages in conversations:');
-console.log('- OpenAI/Mistral: Separate "tool" role messages');
-console.log('- Anthropic: tool_result content blocks within assistant messages');
-console.log('- Google: functionResponse parts within user messages');
-console.log('');
+logger.info('📋 Issue 3: Tool Message Handling Inconsistency');
+logger.info('');
+logger.info('Problem: Different ways to handle tool messages in conversations:');
+logger.info('- OpenAI/Mistral: Separate "tool" role messages');
+logger.info('- Anthropic: tool_result content blocks within assistant messages');
+logger.info('- Google: functionResponse parts within user messages');
+logger.info('');
 
 // Proposed fix: Create a unified conversation manager
 const UnifiedConversationManager = {
@@ -368,29 +369,29 @@ const testConversation = [
   }
 ];
 
-console.log('✅ Unified Conversation Management Test:');
+logger.info('✅ Unified Conversation Management Test:');
 for (const provider of ['openai', 'anthropic', 'google', 'mistral']) {
   try {
     const converted = UnifiedConversationManager.convertConversation(testConversation, provider);
-    console.log(`${provider}: ${converted.length} messages in conversation`);
+    logger.info(`${provider}: ${converted.length} messages in conversation`);
   } catch (error) {
-    console.log(`${provider}: ERROR - ${error.message}`);
+    logger.info(`${provider}: ERROR - ${error.message}`);
   }
 }
 
-console.log('');
+logger.info('');
 
 // ============================================================================
 // ISSUE 4: Response Stream Processing Inconsistency
 // ============================================================================
 
-console.log('📋 Issue 4: Response Stream Processing Inconsistency');
-console.log('');
-console.log('Problem: Different stream processing and tool call extraction:');
-console.log('- Each adapter handles streaming differently');
-console.log('- Tool call extraction varies between providers');
-console.log('- Error handling is inconsistent');
-console.log('');
+logger.info('📋 Issue 4: Response Stream Processing Inconsistency');
+logger.info('');
+logger.info('Problem: Different stream processing and tool call extraction:');
+logger.info('- Each adapter handles streaming differently');
+logger.info('- Tool call extraction varies between providers');
+logger.info('- Error handling is inconsistent');
+logger.info('');
 
 // Proposed fix: Create a unified response processor
 const UnifiedResponseProcessor = {
@@ -511,28 +512,28 @@ const mockStreamChunks = {
     'data: {"choices":[{"delta":{"tool_calls":[{"id":"call_1","function":{"name":"search","arguments":"{\\"query\\":\\"AI news\\"}"}}]}}]}'
 };
 
-console.log('✅ Unified Response Processing Test:');
+logger.info('✅ Unified Response Processing Test:');
 for (const [provider, chunk] of Object.entries(mockStreamChunks)) {
   try {
     const processed = UnifiedResponseProcessor.processStreamChunk(chunk, provider);
-    console.log(
+    logger.info(
       `${provider}: ${processed.type} ${processed.toolCalls ? `(${processed.toolCalls.length} tool calls)` : ''}`
     );
   } catch (error) {
-    console.log(`${provider}: ERROR - ${error.message}`);
+    logger.info(`${provider}: ERROR - ${error.message}`);
   }
 }
 
-console.log('');
+logger.info('');
 
 // ============================================================================
 // PROPOSED UNIFIED ADAPTER INTERFACE
 // ============================================================================
 
-console.log('📋 Proposed Unified Adapter Interface');
-console.log('');
-console.log('To solve all these issues, we recommend creating a unified adapter interface:');
-console.log('');
+logger.info('📋 Proposed Unified Adapter Interface');
+logger.info('');
+logger.info('To solve all these issues, we recommend creating a unified adapter interface:');
+logger.info('');
 
 /* 
 const UnifiedAdapterInterface = {
@@ -590,20 +591,20 @@ const UnifiedAdapterInterface = {
 };
 */
 
-console.log('✅ Unified Adapter Interface created');
-console.log('');
-console.log('🎯 Key Benefits:');
-console.log('1. Consistent API across all providers');
-console.log('2. Unified message format handling');
-console.log('3. Standardized tool call representation');
-console.log('4. Consistent error handling');
-console.log('5. Simplified testing and maintenance');
-console.log('');
-console.log('🔧 Implementation Steps:');
-console.log('1. Create the unified interfaces above');
-console.log('2. Update existing adapters to use unified formats internally');
-console.log('3. Add comprehensive tests for all scenarios');
-console.log('4. Update application code to use unified interface');
-console.log('5. Add backward compatibility layer if needed');
-console.log('');
-console.log('🎉 Tool calling standardization analysis completed!');
+logger.info('✅ Unified Adapter Interface created');
+logger.info('');
+logger.info('🎯 Key Benefits:');
+logger.info('1. Consistent API across all providers');
+logger.info('2. Unified message format handling');
+logger.info('3. Standardized tool call representation');
+logger.info('4. Consistent error handling');
+logger.info('5. Simplified testing and maintenance');
+logger.info('');
+logger.info('🔧 Implementation Steps:');
+logger.info('1. Create the unified interfaces above');
+logger.info('2. Update existing adapters to use unified formats internally');
+logger.info('3. Add comprehensive tests for all scenarios');
+logger.info('4. Update application code to use unified interface');
+logger.info('5. Add backward compatibility layer if needed');
+logger.info('');
+logger.info('🎉 Tool calling standardization analysis completed!');

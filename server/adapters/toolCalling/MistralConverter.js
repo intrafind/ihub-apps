@@ -16,6 +16,7 @@ import {
 } from './OpenAIConverter.js';
 
 import { createGenericStreamingResponse, normalizeFinishReason } from './GenericToolCalling.js';
+import logger from '../../utils/logger.js';
 
 // Mistral uses OpenAI format for tools, so we can reuse most OpenAI functions
 export const convertGenericToolsToMistral = convertGenericToolsToOpenAI;
@@ -109,7 +110,7 @@ export function convertMistralResponseToGeneric(data, streamId = 'default') {
       result.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'mistral');
     }
   } catch (error) {
-    console.error('Error parsing Mistral response chunk:', error);
+    logger.error('Error parsing Mistral response chunk:', error);
     result.error = true;
     result.errorMessage = `Error parsing Mistral response: ${error.message}`;
   }

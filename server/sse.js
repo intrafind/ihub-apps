@@ -1,6 +1,7 @@
 export const clients = new Map();
 export const activeRequests = new Map();
 import { actionTracker } from './actionTracker.js';
+import logger from './utils/logger.js';
 
 export function sendSSE(res, event, data) {
   res.write(`event: ${event}\n`);
@@ -15,7 +16,7 @@ actionTracker.on('fire-sse', step => {
     try {
       sendSSE(client, event, step);
     } catch (err) {
-      console.error('Error sending SSE action event:', err);
+      logger.error('Error sending SSE action event:', err);
     }
   }
 });

@@ -1,11 +1,12 @@
 import assert from 'assert';
 import { convertToolsFromGeneric } from '../adapters/toolCalling/index.js';
+import logger from '../utils/logger.js';
 
 // Test tool conversion for OpenAI Responses API
-console.log('Testing OpenAI Responses API tool conversion...\n');
+logger.info('Testing OpenAI Responses API tool conversion...\n');
 
 // Test 1: Generic to Responses API format
-console.log('Test 1: Generic to Responses API format...');
+logger.info('Test 1: Generic to Responses API format...');
 const genericTools = [
   {
     id: 'get_weather',
@@ -43,11 +44,11 @@ assert.strictEqual(
 assert.ok(responsesTools[0].parameters, 'Parameters should be at top level');
 assert.ok(!responsesTools[0].function, 'Should not have nested function object');
 
-console.log('Response API tool format:', JSON.stringify(responsesTools[0], null, 2));
-console.log('✓ Test 1 passed: Tools converted to internally-tagged format\n');
+logger.info('Response API tool format:', JSON.stringify(responsesTools[0], null, 2));
+logger.info('✓ Test 1 passed: Tools converted to internally-tagged format\n');
 
 // Test 2: Compare with Chat Completions format
-console.log('Test 2: Verify difference from Chat Completions format...');
+logger.info('Test 2: Verify difference from Chat Completions format...');
 const chatCompletionsTools = convertToolsFromGeneric(genericTools, 'openai');
 
 // Chat Completions uses externally-tagged format (nested function object)
@@ -58,9 +59,9 @@ assert.strictEqual(
   'Name should be in function object'
 );
 
-console.log('Chat Completions tool format:', JSON.stringify(chatCompletionsTools[0], null, 2));
-console.log('✓ Test 2 passed: Chat Completions format is different (externally-tagged)\n');
+logger.info('Chat Completions tool format:', JSON.stringify(chatCompletionsTools[0], null, 2));
+logger.info('✓ Test 2 passed: Chat Completions format is different (externally-tagged)\n');
 
-console.log('✅ All tool conversion tests passed!');
-console.log('\nKey difference: Responses API uses internally-tagged format (flat structure)');
-console.log('Chat Completions API uses externally-tagged format (nested function object)');
+logger.info('✅ All tool conversion tests passed!');
+logger.info('\nKey difference: Responses API uses internally-tagged format (flat structure)');
+logger.info('Chat Completions API uses externally-tagged format (nested function object)');

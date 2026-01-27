@@ -6,6 +6,7 @@
 import { BaseAdapter } from './BaseAdapter.js';
 import { getIFinderAuthorizationHeader } from '../utils/iFinderJwt.js';
 import iAssistantService from '../services/integrations/iAssistantService.js';
+import logger from '../utils/logger.js';
 
 class IAssistantAdapterClass extends BaseAdapter {
   /**
@@ -89,14 +90,14 @@ class IAssistantAdapterClass extends BaseAdapter {
         });
         headers['Authorization'] = authHeader;
       } catch (error) {
-        console.error('iAssistant: JWT generation failed:', error.message);
+        logger.error('iAssistant: JWT generation failed:', error.message);
         throw new Error(`iAssistant authentication failed: ${error.message}`);
       }
     } else {
       const errorMsg = user
         ? `iAssistant requires authenticated user access - received anonymous user (ID: ${userId})`
         : 'iAssistant requires authenticated user access - no user context provided';
-      console.error('iAssistant authentication error:', errorMsg);
+      logger.error('iAssistant authentication error:', errorMsg);
       throw new Error(errorMsg);
     }
 
@@ -120,7 +121,7 @@ class IAssistantAdapterClass extends BaseAdapter {
 
       // Ensure we have a valid result object
       if (!result || typeof result !== 'object') {
-        console.error('iAssistant: Invalid result from processStreamingBuffer:', result);
+        logger.error('iAssistant: Invalid result from processStreamingBuffer:', result);
         return {
           content: [],
           complete: false,
@@ -136,8 +137,8 @@ class IAssistantAdapterClass extends BaseAdapter {
 
       return result;
     } catch (error) {
-      console.error('iAssistant: Error processing response buffer:', error.message);
-      console.error('iAssistant: Buffer content:', buffer.substring(0, 200) + '...');
+      logger.error('iAssistant: Error processing response buffer:', error.message);
+      logger.error('iAssistant: Buffer content:', buffer.substring(0, 200) + '...');
       return {
         content: [],
         complete: false,

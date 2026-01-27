@@ -6,6 +6,7 @@ import configCache from '../../configCache.js';
 import authDebugService from '../../utils/authDebugService.js';
 import fs from 'fs';
 import path from 'path';
+import logger from '../../utils/logger.js';
 
 /**
  * Unified iFinder Service Class
@@ -104,7 +105,7 @@ class IFinderService {
     const config = this.getConfig();
     const profileId = searchProfile || config.defaultSearchProfile;
 
-    console.log(
+    logger.info(
       `iFinder Search: User ${JSON.stringify(user)}searching for "${query}" in profile "${profileId}"`
     );
 
@@ -167,7 +168,7 @@ class IFinderService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(
+        logger.error(
           `iFinder Search: Error fetching results for "${query}" in profile "${profileId}":`,
           errorText
         );
@@ -279,13 +280,13 @@ class IFinderService {
         });
       }
 
-      console.log(
+      logger.info(
         `iFinder Search: Found ${results.totalFound} results in ${results.took || 'unknown time'}`
       );
-      // console.log('iFinder Search: Results:', JSON.stringify(results, null, 2));
+      // logger.info('iFinder Search: Results:', JSON.stringify(results, null, 2));
       return results;
     } catch (error) {
-      console.error('iFinder search error:', error);
+      logger.error('iFinder search error:', error);
       this._handleError(error);
     }
   }
@@ -322,7 +323,7 @@ class IFinderService {
         .replace('{docId}', encodeURIComponent(documentId));
       const documentUrl = `${config.baseUrl}${documentEndpoint}`;
 
-      console.log(
+      logger.info(
         `iFinder Content: Fetching content for document ${documentId} from profile "${profileId}" as user ${user.email || user.id}`
       );
 
@@ -387,19 +388,19 @@ class IFinderService {
 
       // Validate and truncate content if necessary
       if (result.content.length === 0) {
-        console.warn(`iFinder Content: No content extracted for document ${documentId}`);
+        logger.warn(`iFinder Content: No content extracted for document ${documentId}`);
       } else if (result.content.length > maxLength) {
-        console.warn(`iFinder Content: Content truncated to ${maxLength} characters`);
+        logger.warn(`iFinder Content: Content truncated to ${maxLength} characters`);
         result.content = result.content.substring(0, maxLength) + '... [Content truncated]';
         result.truncated = true;
       }
 
-      console.log(
+      logger.info(
         `iFinder Content: Successfully fetched ${result.contentLength} characters for document ${documentId}`
       );
       return result;
     } catch (error) {
-      console.error('iFinder content fetch error:', error);
+      logger.error('iFinder content fetch error:', error);
       this._handleError(error);
     }
   }
@@ -467,7 +468,7 @@ class IFinderService {
       rawSearchResult: searchResult
     };
 
-    console.log(
+    logger.info(
       `iFinder Metadata: Successfully fetched document ${documentId} metadata in ${metadata.took || 'unknown time'} (score: ${metadata.score})`
     );
 
@@ -513,7 +514,7 @@ class IFinderService {
 
       if (action === 'content') {
         // Return document content info without saving
-        console.log(
+        logger.info(
           `iFinder Download: Fetching document ${documentId} content info for user ${user.email || user.id}`
         );
 
@@ -531,7 +532,7 @@ class IFinderService {
       }
 
       // Server-side save of document content
-      console.log(
+      logger.info(
         `iFinder Download: Saving document ${documentId} content as user ${user.email || user.id}`
       );
 
@@ -629,12 +630,12 @@ class IFinderService {
         localPath: metadataPath
       };
 
-      console.log(
+      logger.info(
         `iFinder Download: Successfully saved document ${documentId} content (${result.sizeFormatted})`
       );
       return result;
     } catch (error) {
-      console.error('iFinder download error:', error);
+      logger.error('iFinder download error:', error);
       this._handleError(error);
     }
   }

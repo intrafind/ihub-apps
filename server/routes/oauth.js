@@ -2,6 +2,7 @@ import { validateClientCredentials } from '../utils/oauthClientManager.js';
 import { generateOAuthToken, introspectOAuthToken } from '../utils/oauthTokenService.js';
 import { buildServerPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
+import logger from '../utils/logger.js';
 
 /**
  * OAuth 2.0 token endpoints
@@ -48,7 +49,7 @@ function sanitizeOAuthInput(value, fieldName, maxLength = 255) {
  * @param {string} description - Human-readable description
  */
 function sendOAuthError(res, status, error, description) {
-  console.log(`[OAuth] Error response | error=${error} | description=${description}`);
+  logger.info(`[OAuth] Error response | error=${error} | description=${description}`);
   res.status(status).json({
     error: error,
     error_description: description
@@ -194,7 +195,7 @@ export default function registerOAuthRoutes(app, basePath = '') {
         });
 
         // Log token issuance
-        console.log(
+        logger.info(
           `[OAuth] Token issued | client_id=${sanitizedClientId} | scopes=${tokenResponse.scope} | expires_in=${tokenResponse.expires_in} | ip=${req.ip}`
         );
 
@@ -207,7 +208,7 @@ export default function registerOAuthRoutes(app, basePath = '') {
         throw error;
       }
     } catch (error) {
-      console.error('[OAuth] Token endpoint error:', error);
+      logger.error('[OAuth] Token endpoint error:', error);
       sendOAuthError(res, 500, 'server_error', 'An internal error occurred');
     }
   });
@@ -286,13 +287,13 @@ export default function registerOAuthRoutes(app, basePath = '') {
       // Introspect token
       const introspection = introspectOAuthToken(sanitizedToken);
 
-      console.log(
+      logger.info(
         `[OAuth] Token introspected | active=${introspection.active} | client_id=${introspection.client_id || 'N/A'} | ip=${req.ip}`
       );
 
       res.json(introspection);
     } catch (error) {
-      console.error('[OAuth] Introspection endpoint error:', error);
+      logger.error('[OAuth] Introspection endpoint error:', error);
       sendOAuthError(res, 500, 'server_error', 'An internal error occurred');
     }
   });

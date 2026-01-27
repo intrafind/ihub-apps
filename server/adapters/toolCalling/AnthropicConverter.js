@@ -12,6 +12,7 @@ import {
   normalizeFinishReason,
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Convert generic tools to Anthropic format
@@ -28,14 +29,14 @@ export function convertGenericToolsToAnthropic(genericTools = []) {
     }
     // If tool specifies a different provider, exclude it
     if (tool.provider) {
-      console.log(
+      logger.info(
         `[Anthropic Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
       );
       return false;
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
-      console.log(`[Anthropic Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      logger.info(`[Anthropic Converter] Filtering out special tool: ${tool.id || tool.name}`);
       return false;
     }
     // Universal tool - include it
@@ -224,7 +225,7 @@ export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
       try {
         parsedArgs = JSON.parse(toolCall.arguments);
       } catch (e) {
-        console.warn('Failed to parse tool arguments:', e);
+        logger.warn('Failed to parse tool arguments:', e);
         parsedArgs = { __raw_arguments: toolCall.arguments };
       }
 
@@ -254,7 +255,7 @@ export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
       streamingState.delete(streamId);
     }
   } catch (parseError) {
-    console.error('Error parsing Anthropic response chunk:', parseError);
+    logger.error('Error parsing Anthropic response chunk:', parseError);
     result.error = true;
     result.errorMessage = `Error parsing Anthropic response: ${parseError.message}`;
   }
@@ -352,7 +353,7 @@ export function processMessageForAnthropic(message) {
             ? JSON.parse(toolCall.function.arguments)
             : toolCall.function.arguments;
       } catch (error) {
-        console.warn('Failed to parse tool call arguments:', error);
+        logger.warn('Failed to parse tool call arguments:', error);
         args = {};
       }
 

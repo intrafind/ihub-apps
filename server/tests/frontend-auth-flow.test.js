@@ -12,6 +12,7 @@ import registerGeneralRoutes from '../routes/generalRoutes.js';
 import registerModelRoutes from '../routes/modelRoutes.js';
 import registerSessionRoutes from '../routes/sessionRoutes.js';
 import { getLocalizedError } from '../serverHelpers.js';
+import logger from '../utils/logger.js';
 
 // Mock platform configuration
 const mockPlatformConfig = {

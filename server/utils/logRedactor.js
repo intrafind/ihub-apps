@@ -1,3 +1,4 @@
+import logger from './logger.js';
 /**
  * Utility for redacting sensitive information from logs
  * Prevents API keys and other secrets from being exposed in log output
@@ -118,7 +119,7 @@ export function redactLogMessage(message) {
 }
 
 /**
- * Create a safe console.log wrapper that redacts sensitive information
+ * Create a safe logger.info wrapper that redacts sensitive information
  * @param {...any} args - Arguments to log
  */
 export function safeLog(...args) {
@@ -139,11 +140,11 @@ export function safeLog(...args) {
     return arg;
   });
 
-  console.log(...redactedArgs);
+  logger.info(...redactedArgs);
 }
 
 /**
- * Create a safe console.error wrapper that redacts sensitive information
+ * Create a safe logger.error wrapper that redacts sensitive information
  * @param {...any} args - Arguments to log
  */
 export function safeError(...args) {
@@ -154,5 +155,5 @@ export function safeError(...args) {
     return arg;
   });
 
-  console.error(...redactedArgs);
+  logger.error(...redactedArgs);
 }

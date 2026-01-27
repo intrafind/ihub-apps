@@ -1,7 +1,7 @@
 import assert from 'assert';
 import PromptService from '../services/PromptService.js';
 
-console.log('Testing empty prompt template scenario (the bug case)...');
+logger.info('Testing empty prompt template scenario (the bug case)...');
 
 // Mock configCache for test
 const mockConfigCache = {
@@ -9,6 +9,7 @@ const mockConfigCache = {
 };
 
 import configCache from '../configCache.js';
+import logger from '../utils/logger.js';
 Object.assign(configCache, mockConfigCache);
 
 async function testEmptyPromptTemplateBugScenario() {
@@ -43,13 +44,13 @@ async function testEmptyPromptTemplateBugScenario() {
     null
   );
 
-  console.log('\nTest Input:');
-  console.log('  User content:', messages[0].content);
-  console.log('  Prompt template:', messages[0].promptTemplate.en || '(empty)');
+  logger.info('\nTest Input:');
+  logger.info('  User content:', messages[0].content);
+  logger.info('  Prompt template:', messages[0].promptTemplate.en || '(empty)');
 
-  console.log('\nResult:');
-  console.log('  System message:', result[0].content.substring(0, 50) + '...');
-  console.log('  User message:', result[1].content);
+  logger.info('\nResult:');
+  logger.info('  System message:', result[0].content.substring(0, 50) + '...');
+  logger.info('  User message:', result[1].content);
 
   // Verify the fix works
   assert.strictEqual(result.length, 2, 'Should have 2 messages (system + user)');
@@ -61,10 +62,10 @@ async function testEmptyPromptTemplateBugScenario() {
   );
   assert.notStrictEqual(result[1].content, '', 'User message must not be empty');
 
-  console.log('\n✅ Bug fix validated: Empty prompt template no longer loses user content!');
+  logger.info('\n✅ Bug fix validated: Empty prompt template no longer loses user content!');
 }
 
 testEmptyPromptTemplateBugScenario().catch(err => {
-  console.error('❌ Test failed:', err);
+  logger.error('❌ Test failed:', err);
   process.exit(1);
 });

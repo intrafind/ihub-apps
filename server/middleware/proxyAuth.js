@@ -5,6 +5,7 @@ import config from '../config.js';
 import configCache from '../configCache.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
+import logger from '../utils/logger.js';
 
 const jwksCache = new Map();
 
@@ -17,7 +18,7 @@ async function getJwks(jwkUrl) {
     jwksCache.set(jwkUrl, jwks);
     return jwks;
   } catch (err) {
-    console.error('Error fetching JWKs', err);
+    logger.error('Error fetching JWKs', err);
     return null;
   }
 }
@@ -37,7 +38,7 @@ async function verifyJwt(token, provider) {
       audience: provider.audience
     });
   } catch (err) {
-    console.error('JWT verification failed', err.message);
+    logger.error('JWT verification failed', err.message);
     return null;
   }
 }
@@ -63,7 +64,7 @@ export async function proxyAuth(req, res, next) {
       // Admin authentication will be handled by the adminAuth middleware
       // Only warn for non-admin routes
       if (!req.path.startsWith('/api/admin/')) {
-        console.warn(`🔐 Token rejected: JWT token not valid in ${currentAuthMode} mode`);
+        logger.warn(`🔐 Token rejected: JWT token not valid in ${currentAuthMode} mode`);
       }
       // Don't set req.user, let it continue as anonymous (admin auth will handle admin routes)
     }
@@ -109,7 +110,7 @@ export async function proxyAuth(req, res, next) {
       }
 
       if (!authMethodEnabled) {
-        console.warn(`🔐 Token rejected: ${tokenPayload.authMode} authentication is disabled`);
+        logger.warn(`🔐 Token rejected: ${tokenPayload.authMode} authentication is disabled`);
         tokenPayload = null; // Invalidate token from disabled auth method
         continue;
       }
@@ -122,7 +123,7 @@ export async function proxyAuth(req, res, next) {
           : [];
 
         if (!enabledProviders.includes(tokenPayload.authProvider)) {
-          console.warn(
+          logger.warn(
             `🔐 Token rejected: OIDC provider '${tokenPayload.authProvider}' is no longer enabled`
           );
           tokenPayload = null; // Invalidate token from disabled provider
@@ -180,7 +181,7 @@ export async function proxyAuth(req, res, next) {
     req.user = user;
     next();
   } catch (error) {
-    console.error('Proxy user validation error:', error.message);
+    logger.error('Proxy user validation error:', error.message);
     // Return a 403 Forbidden with a user-friendly error message
     res.status(403).json({
       error: 'Access Denied',

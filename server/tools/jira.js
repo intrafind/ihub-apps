@@ -2,6 +2,7 @@
 // Provides comprehensive JIRA ticket management capabilities
 
 import JiraService from '../services/integrations/JiraService.js';
+import logger from '../utils/logger.js';
 
 /**
  * Search and list JIRA tickets using JQL queries
@@ -35,7 +36,7 @@ export async function searchTickets({ jql, maxResults = 50, user }) {
       message: `Found ${results.total} tickets matching your query`
     };
   } catch (error) {
-    console.error('❌ Error in searchTickets:', error.message);
+    logger.error('❌ Error in searchTickets:', error.message);
 
     if (error.message.includes('authentication required')) {
       return {
@@ -84,7 +85,7 @@ export async function getTicket({ issueKey, includeComments = true, user }) {
       message: `Retrieved details for ticket ${issueKey}`
     };
   } catch (error) {
-    console.error('❌ Error in getTicket:', error.message);
+    logger.error('❌ Error in getTicket:', error.message);
 
     if (error.message.includes('authentication required')) {
       return {
@@ -129,7 +130,7 @@ export async function addComment({ issueKey, comment, requireConfirmation = true
     // Note: In a real implementation, confirmation would be handled by the UI
     // For now, we'll add a warning in the response
     if (requireConfirmation) {
-      console.log(`⚠️ Adding comment to ${issueKey} requires user confirmation`);
+      logger.info(`⚠️ Adding comment to ${issueKey} requires user confirmation`);
     }
 
     const result = await JiraService.addComment({ issueKey, comment, userId });
@@ -141,7 +142,7 @@ export async function addComment({ issueKey, comment, requireConfirmation = true
       requiresConfirmation: requireConfirmation
     };
   } catch (error) {
-    console.error('❌ Error in addComment:', error.message);
+    logger.error('❌ Error in addComment:', error.message);
 
     if (error.message.includes('authentication required')) {
       return {
@@ -189,7 +190,7 @@ export async function getTransitions({ issueKey, user }) {
       message: `Found ${result.transitions.length} available transitions for ${issueKey}`
     };
   } catch (error) {
-    console.error('❌ Error in getTransitions:', error.message);
+    logger.error('❌ Error in getTransitions:', error.message);
 
     if (error.message.includes('authentication required')) {
       return {
@@ -241,7 +242,7 @@ export async function transitionTicket({
     // Note: In a real implementation, confirmation would be handled by the UI
     // For now, we'll add a warning in the response
     if (requireConfirmation) {
-      console.log(`⚠️ Transitioning ${issueKey} requires user confirmation`);
+      logger.info(`⚠️ Transitioning ${issueKey} requires user confirmation`);
     }
 
     // If transitionId is not a number, try to find the transition by name
@@ -256,7 +257,7 @@ export async function transitionTicket({
 
       if (matchingTransition) {
         actualTransitionId = matchingTransition.id;
-        console.log(`🔄 Resolved transition "${transitionId}" to ID: ${actualTransitionId}`);
+        logger.info(`🔄 Resolved transition "${transitionId}" to ID: ${actualTransitionId}`);
       } else {
         return {
           error: 'INVALID_TRANSITION',
@@ -278,7 +279,7 @@ export async function transitionTicket({
       requiresConfirmation: requireConfirmation
     };
   } catch (error) {
-    console.error('❌ Error in transitionTicket:', error.message);
+    logger.error('❌ Error in transitionTicket:', error.message);
 
     if (error.message.includes('authentication required')) {
       return {
@@ -378,7 +379,7 @@ export async function getAttachment({ attachmentId, returnBase64 = false, user }
       }`
     };
   } catch (error) {
-    console.error('❌ Error in getAttachment:', error.message);
+    logger.error('❌ Error in getAttachment:', error.message);
 
     if (error.message.includes('authentication required')) {
       return {

@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
+import logger from '../utils/logger.js';
 
 /**
  * Centralized Token Storage Service
@@ -17,7 +18,7 @@ class TokenStorageService {
     // Initialize encryption key if not provided
     if (!this.encryptionKey) {
       this.encryptionKey = crypto.randomBytes(32).toString('hex');
-      console.warn('⚠️ Using generated encryption key. Set TOKEN_ENCRYPTION_KEY for production.');
+      logger.warn('⚠️ Using generated encryption key. Set TOKEN_ENCRYPTION_KEY for production.');
     }
 
     this.algorithm = 'aes-256-gcm';
@@ -60,7 +61,7 @@ class TokenStorageService {
         contextHash: context.toString('hex')
       };
     } catch (error) {
-      console.error('❌ Error encrypting tokens:', error.message);
+      logger.error('❌ Error encrypting tokens:', error.message);
       throw new Error('Failed to encrypt tokens');
     }
   }
@@ -97,7 +98,7 @@ class TokenStorageService {
       delete parsedData.context;
       return parsedData;
     } catch (error) {
-      console.error('❌ Error decrypting tokens:', error.message);
+      logger.error('❌ Error decrypting tokens:', error.message);
       throw new Error('Failed to decrypt tokens');
     }
   }
@@ -124,10 +125,10 @@ class TokenStorageService {
       const tokenFile = path.join(tokenDir, `${userId}.json`);
       await fs.writeFile(tokenFile, JSON.stringify(tokenData, null, 2));
 
-      console.log(`✅ ${serviceName} tokens stored for user ${userId}`);
+      logger.info(`✅ ${serviceName} tokens stored for user ${userId}`);
       return true;
     } catch (error) {
-      console.error('❌ Error storing user tokens:', error.message);
+      logger.error('❌ Error storing user tokens:', error.message);
       throw new Error('Failed to store user tokens');
     }
   }
@@ -145,7 +146,7 @@ class TokenStorageService {
       if (error.code === 'ENOENT') {
         throw new Error(`User not authenticated with ${serviceName}`);
       }
-      console.error('❌ Error retrieving user tokens:', error.message);
+      logger.error('❌ Error retrieving user tokens:', error.message);
       throw new Error('Failed to retrieve user tokens');
     }
   }
@@ -188,11 +189,11 @@ class TokenStorageService {
     try {
       const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
       await fs.unlink(tokenFile);
-      console.log(`✅ ${serviceName} tokens deleted for user ${userId}`);
+      logger.info(`✅ ${serviceName} tokens deleted for user ${userId}`);
       return true;
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        console.error('❌ Error deleting user tokens:', error.message);
+        logger.error('❌ Error deleting user tokens:', error.message);
       }
       return false;
     }
@@ -231,7 +232,7 @@ class TokenStorageService {
 
       return services;
     } catch (error) {
-      console.error('❌ Error listing user services:', error.message);
+      logger.error('❌ Error listing user services:', error.message);
       return [];
     }
   }
@@ -297,7 +298,7 @@ class TokenStorageService {
 
       return encryptedValue;
     } catch (error) {
-      console.error('❌ Error encrypting string:', error.message);
+      logger.error('❌ Error encrypting string:', error.message);
       throw new Error('Failed to encrypt string');
     }
   }
@@ -316,7 +317,7 @@ class TokenStorageService {
     try {
       return this._decrypt(encryptedData);
     } catch (error) {
-      console.error('❌ Error decrypting string:', error.message);
+      logger.error('❌ Error decrypting string:', error.message);
       throw new Error('Failed to decrypt string. The encryption key may have changed.');
     }
   }

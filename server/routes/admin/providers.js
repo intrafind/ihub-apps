@@ -7,6 +7,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
+import logger from '../../utils/logger.js';
 
 export default function registerAdminProvidersRoutes(app, basePath = '') {
   /**
@@ -50,7 +51,7 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
       res.setHeader('ETag', providersEtag);
       res.json(maskedProviders);
     } catch (error) {
-      console.error('Error fetching all providers:', error);
+      logger.error('Error fetching all providers:', error);
       res.status(500).json({ error: 'Failed to fetch providers' });
     }
   });
@@ -88,7 +89,7 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
         res.setHeader('ETag', providersEtag);
         res.json(maskedProvider);
       } catch (error) {
-        console.error('Error fetching provider:', error);
+        logger.error('Error fetching provider:', error);
         res.status(500).json({ error: 'Failed to fetch provider' });
       }
     }
@@ -124,7 +125,7 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
             try {
               updatedProvider.apiKey = tokenStorageService.encryptString(updatedProvider.apiKey);
             } catch (error) {
-              console.error('Error encrypting API key:', error);
+              logger.error('Error encrypting API key:', error);
               return res.status(500).json({ error: 'Failed to encrypt API key' });
             }
           } else {
@@ -149,7 +150,7 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
                 delete updatedProvider.apiKey;
               }
             } catch (error) {
-              console.error('Error reading existing providers from disk:', error);
+              logger.error('Error reading existing providers from disk:', error);
               // Fallback to removing the masked placeholder
               delete updatedProvider.apiKey;
             }
@@ -183,7 +184,7 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
 
         res.json({ message: 'Provider updated successfully', provider: updatedProvider });
       } catch (error) {
-        console.error('Error updating provider:', error);
+        logger.error('Error updating provider:', error);
         res.status(500).json({ error: 'Failed to update provider' });
       }
     }

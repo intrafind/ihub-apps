@@ -7,6 +7,7 @@ import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import configCache from '../configCache.js';
 import config from '../config.js';
+import logger from './logger.js';
 
 /**
  * Get SSL configuration from platform config
@@ -19,7 +20,7 @@ export function getSSLConfig() {
   };
   // Log SSL config on first access for debugging
   if (!getSSLConfig._logged) {
-    console.log(
+    logger.info(
       `🔒 SSL Configuration: ignoreInvalidCertificates = ${sslConfig.ignoreInvalidCertificates}`
     );
 
@@ -27,7 +28,7 @@ export function getSSLConfig() {
     // This is necessary for proxy agents (https-proxy-agent v7+) to properly ignore SSL errors
     if (sslConfig.ignoreInvalidCertificates) {
       process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-      console.log(
+      logger.info(
         '⚠️  NODE_TLS_REJECT_UNAUTHORIZED=0 set globally (SSL certificate verification disabled)'
       );
     }
@@ -93,7 +94,7 @@ export function shouldBypassProxy(url, noProxy) {
       // CIDR notation and IP ranges are not fully supported here for simplicity
     }
   } catch (error) {
-    console.warn(`Error parsing URL for proxy bypass: ${error.message}`);
+    logger.warn(`Error parsing URL for proxy bypass: ${error.message}`);
   }
 
   return false;
@@ -116,7 +117,7 @@ export function matchesProxyPattern(url, patterns) {
       }
     }
   } catch (error) {
-    console.warn(`Error matching proxy pattern: ${error.message}`);
+    logger.warn(`Error matching proxy pattern: ${error.message}`);
   }
 
   return false;
@@ -138,7 +139,7 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
 
   // Check if proxy should be bypassed for this URL
   if (proxyConfig.enabled && proxyConfig.noProxy && shouldBypassProxy(url, proxyConfig.noProxy)) {
-    console.log(`Bypassing proxy for URL: ${url}`);
+    logger.info(`Bypassing proxy for URL: ${url}`);
     // Return standard agent with SSL configuration if needed
     if (isHttps && shouldIgnoreSSL) {
       return new https.Agent({ rejectUnauthorized: false });
@@ -153,7 +154,7 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     proxyConfig.urlPatterns.length > 0 &&
     !matchesProxyPattern(url, proxyConfig.urlPatterns)
   ) {
-    console.log(`URL does not match proxy patterns: ${url}`);
+    logger.info(`URL does not match proxy patterns: ${url}`);
     // Return standard agent with SSL configuration if needed
     if (isHttps && shouldIgnoreSSL) {
       return new https.Agent({ rejectUnauthorized: false });
@@ -164,9 +165,9 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
   // Apply proxy configuration
   if (proxyConfig.enabled && ((isHttps && proxyConfig.https) || (isHttp && proxyConfig.http))) {
     const proxyUrl = isHttps ? proxyConfig.https : proxyConfig.http;
-    console.log(`Using proxy ${proxyUrl} for URL: ${url}`);
+    logger.info(`Using proxy ${proxyUrl} for URL: ${url}`);
     if (shouldIgnoreSSL) {
-      console.log(`SSL certificate verification disabled (rejectUnauthorized: false)`);
+      logger.info(`SSL certificate verification disabled (rejectUnauthorized: false)`);
     }
 
     try {
@@ -180,7 +181,7 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
         return new HttpProxyAgent(proxyUrl, agentOptions);
       }
     } catch (error) {
-      console.error(`Failed to create proxy agent: ${error.message}`);
+      logger.error(`Failed to create proxy agent: ${error.message}`);
     }
   }
 
