@@ -26,8 +26,7 @@ async function test1_ApiKeyPersistedOnDisk() {
   console.log('📝 Test 1: Verify API key is persisted on disk');
 
   // Simulate admin saving a provider with encrypted API key
-  const encryptedKey =
-    'ENC[AES256_GCM,data:testKeyForTTL123,iv:testIV456,tag:testTag789,type:str]';
+  const encryptedKey = 'ENC[AES256_GCM,data:testKeyForTTL123,iv:testIV456,tag:testTag789,type:str]';
 
   const providersData = {
     providers: [
@@ -70,8 +69,7 @@ async function test1_ApiKeyPersistedOnDisk() {
 async function test2_SimulateCacheRefresh() {
   console.log('\n📝 Test 2: Simulate cache refresh (TTL expiration)');
 
-  const encryptedKey =
-    'ENC[AES256_GCM,data:cacheRefreshTest,iv:testIV,tag:testTag,type:str]';
+  const encryptedKey = 'ENC[AES256_GCM,data:cacheRefreshTest,iv:testIV,tag:testTag,type:str]';
 
   // Create providers.json with API key
   const providersData = {

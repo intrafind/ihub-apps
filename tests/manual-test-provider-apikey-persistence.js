@@ -104,10 +104,7 @@ async function test1_PreserveEncryptedKeyOnUpdate() {
   const finalProvidersData = JSON.parse(await fs.readFile(providersPath, 'utf8'));
   const finalProvider = finalProvidersData.providers.find(p => p.id === testProviderId);
 
-  if (
-    finalProvider.apiKey === encryptedKey &&
-    finalProvider.name.en === 'Test Provider Updated'
-  ) {
+  if (finalProvider.apiKey === encryptedKey && finalProvider.name.en === 'Test Provider Updated') {
     console.log('   ✅ API key correctly preserved!');
     console.log('   ✅ Other fields were updated correctly');
     return true;
