@@ -1167,7 +1167,8 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
         temperature: temperature,
         responseFormat: responseFormat,
         responseSchema: responseSchema,
-        maxTokens: maxTokens
+        maxTokens: maxTokens,
+        apiKey: apiKey
       });
       console.log('Completion result:', JSON.stringify(result, null, 2));
       res.json({
