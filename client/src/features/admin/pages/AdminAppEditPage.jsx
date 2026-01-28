@@ -287,6 +287,15 @@ const AdminAppEditPage = () => {
       }
     }
 
+    // Remove speechRecognition if it has default/invalid values (no host URI)
+    if (
+      cleanedApp.settings?.speechRecognition &&
+      (!cleanedApp.settings.speechRecognition.host ||
+        cleanedApp.settings.speechRecognition.host.trim() === '')
+    ) {
+      delete cleanedApp.settings.speechRecognition;
+    }
+
     return cleanedApp;
   };
 
