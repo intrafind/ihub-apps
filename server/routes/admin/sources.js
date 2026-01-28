@@ -674,6 +674,19 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
 
       const newSource = validation.data;
 
+      // Additional validation for filesystem sources
+      // Filesystem sources must have content uploaded separately after creation
+      // The client should indicate this by providing a path
+      // An empty path means no content will be provided, which is invalid
+      if (newSource.type === 'filesystem') {
+        if (!newSource.config?.path || newSource.config.path.trim() === '') {
+          return sendBadRequest(
+            res,
+            'Filesystem sources require content. Please upload a file or enter content before creating the source.'
+          );
+        }
+      }
+
       // Check for duplicate ID
       const { data: existingSources } = configCache.getSources(true);
       if (existingSources.some(s => s.id === newSource.id)) {
