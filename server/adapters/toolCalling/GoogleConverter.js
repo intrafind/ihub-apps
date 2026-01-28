@@ -230,6 +230,13 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
           const metadata = { originalFormat: 'google' };
           if (part.thoughtSignature) {
             metadata.thoughtSignature = part.thoughtSignature;
+            console.log(
+              `[GoogleConverter] Extracted thoughtSignature for function call ${part.functionCall.name}: ${part.thoughtSignature.substring(0, 20)}...`
+            );
+          } else {
+            console.log(
+              `[GoogleConverter] No thoughtSignature in response for function call: ${part.functionCall.name}`
+            );
           }
           result.tool_calls.push(
             createGenericToolCall(
@@ -293,6 +300,13 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
           const metadata = { originalFormat: 'google' };
           if (part.thoughtSignature) {
             metadata.thoughtSignature = part.thoughtSignature;
+            console.log(
+              `[GoogleConverter Streaming] Extracted thoughtSignature for function call ${part.functionCall.name}: ${part.thoughtSignature.substring(0, 20)}...`
+            );
+          } else {
+            console.log(
+              `[GoogleConverter Streaming] No thoughtSignature in streaming response for function call: ${part.functionCall.name}`
+            );
           }
           result.tool_calls.push(
             createGenericToolCall(

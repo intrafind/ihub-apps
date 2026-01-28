@@ -79,6 +79,14 @@ class GoogleAdapterClass extends BaseAdapter {
               // Include thoughtSignature if present in metadata (required for Gemini 3 with thinking enabled)
               if (call.metadata && call.metadata.thoughtSignature) {
                 functionCallPart.thoughtSignature = call.metadata.thoughtSignature;
+                console.log(
+                  `[Google Adapter] Including thoughtSignature in function call: ${call.function.name}, signature: ${call.metadata.thoughtSignature.substring(0, 20)}...`
+                );
+              } else {
+                console.log(
+                  `[Google Adapter] No thoughtSignature found for function call: ${call.function.name}, metadata:`,
+                  call.metadata
+                );
               }
 
               parts.push(functionCallPart);

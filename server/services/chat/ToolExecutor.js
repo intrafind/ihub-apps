@@ -840,7 +840,7 @@ class ToolExecutor {
                     existingCall.metadata = { ...existingCall.metadata, ...call.metadata };
                   }
                 } else if (call.index !== undefined) {
-                  collectedToolCalls.push({
+                  const toolCall = {
                     index: call.index,
                     id: call.id || null,
                     type: call.type || 'function',
@@ -850,7 +850,13 @@ class ToolExecutor {
                     },
                     // Preserve metadata for provider-specific requirements (e.g., Gemini thoughtSignatures)
                     metadata: call.metadata || {}
-                  });
+                  };
+                  if (call.metadata?.thoughtSignature) {
+                    console.log(
+                      `[ToolExecutor] Collected tool call with thoughtSignature: ${call.function?.name}, signature: ${call.metadata.thoughtSignature.substring(0, 20)}...`
+                    );
+                  }
+                  collectedToolCalls.push(toolCall);
                 }
               });
             }
