@@ -296,5 +296,57 @@ describe('Gemini ThoughtSignature Handling', () => {
         'thoughtSignature should be preserved through the conversation cycle'
       );
     });
+
+    it('should handle thoughtSignatures in both text and function call parts', () => {
+      // Simulate a response with text content AND function call, both with thoughtSignatures
+      const assistantMessage = {
+        role: 'assistant',
+        content: 'Let me search for that information.',
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'search',
+              arguments: '{"query":"test"}'
+            },
+            metadata: {
+              originalFormat: 'google',
+              thoughtSignature: 'function_sig_123'
+            }
+          }
+        ],
+        thoughtSignatures: ['text_sig_456', 'function_sig_123']
+      };
+
+      const messages = [
+        { role: 'user', content: 'test query' },
+        assistantMessage
+      ];
+
+      const { contents } = GoogleAdapter.formatMessages(messages);
+      const modelMessage = contents.find(msg => msg.role === 'model');
+
+      assert.ok(modelMessage, 'Should have model message');
+      assert.strictEqual(modelMessage.parts.length, 2, 'Should have 2 parts (text + functionCall)');
+
+      // Check text part has its thoughtSignature
+      const textPart = modelMessage.parts.find(part => part.text);
+      assert.ok(textPart, 'Should have text part');
+      assert.strictEqual(
+        textPart.thoughtSignature,
+        'text_sig_456',
+        'Text part should have its thoughtSignature'
+      );
+
+      // Check function call part has its thoughtSignature
+      const functionPart = modelMessage.parts.find(part => part.functionCall);
+      assert.ok(functionPart, 'Should have function call part');
+      assert.strictEqual(
+        functionPart.thoughtSignature,
+        'function_sig_123',
+        'Function call part should have its thoughtSignature'
+      );
+    });
   });
 });

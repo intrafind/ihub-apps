@@ -793,6 +793,7 @@ class ToolExecutor {
 
         let assistantContent = '';
         const collectedToolCalls = [];
+        const collectedThoughtSignatures = []; // Collect all thoughtSignatures from response
         let finishReason = null;
         let done = false;
 
@@ -861,6 +862,14 @@ class ToolExecutor {
               });
             }
 
+            // Collect thoughtSignatures for Google Gemini thinking models
+            if (result.thoughtSignatures && result.thoughtSignatures.length > 0) {
+              collectedThoughtSignatures.push(...result.thoughtSignatures);
+              console.log(
+                `[ToolExecutor] Collected ${result.thoughtSignatures.length} thoughtSignature(s) from response`
+              );
+            }
+
             if (result.finishReason) {
               finishReason = result.finishReason;
             }
@@ -898,6 +907,15 @@ class ToolExecutor {
 
         const assistantMessage = { role: 'assistant', tool_calls: collectedToolCalls };
         assistantMessage.content = assistantContent || null;
+        
+        // Preserve thoughtSignatures for Gemini 3 models (required for multi-turn function calling)
+        if (collectedThoughtSignatures.length > 0) {
+          assistantMessage.thoughtSignatures = collectedThoughtSignatures;
+          console.log(
+            `[ToolExecutor] Added ${collectedThoughtSignatures.length} thoughtSignature(s) to assistant message`
+          );
+        }
+        
         llmMessages.push(assistantMessage);
 
         for (const call of collectedToolCalls) {
