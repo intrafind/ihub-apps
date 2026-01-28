@@ -18,8 +18,10 @@ function useChatMessages(chatId = 'default') {
   // Initialize state from sessionStorage if available
   const loadInitialMessages = () => {
     try {
-      const storedMessages = sessionStorage.getItem(storageKey);
-      const messages = storedMessages ? JSON.parse(storedMessages) : [];
+      const storedData = sessionStorage.getItem(storageKey);
+      console.log('📂 Raw sessionStorage data for key', storageKey, ':', storedData ? storedData.substring(0, 200) + '...' : 'null');
+      
+      const messages = storedData ? JSON.parse(storedData) : [];
       
       // Debug logging for loaded images
       const messagesWithImages = messages.filter(m => m.images && m.images.length > 0);
@@ -30,8 +32,14 @@ function useChatMessages(chatId = 'default') {
           imageDetails: messagesWithImages.map(m => ({
             id: m.id,
             imageCount: m.images.length,
-            loading: m.loading
+            loading: m.loading,
+            hasImageData: m.images.every(img => img.data && img.data.length > 100)
           }))
+        });
+      } else if (messages.length > 0) {
+        console.log('📂 Loading messages (no images):', {
+          totalMessages: messages.length,
+          messageIds: messages.map(m => ({ id: m.id, role: m.role, loading: m.loading }))
         });
       }
       
