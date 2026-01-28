@@ -40,22 +40,6 @@ class GoogleAdapterClass extends BaseAdapter {
 
     // First pass - extract system messages and handle image data
     for (const message of messages) {
-      // Debug: Log assistant messages with tool calls to see their structure
-      if (message.role === 'assistant' && message.tool_calls && message.tool_calls.length > 0) {
-        console.log('[Google Adapter DEBUG] Assistant message with tool calls:', {
-          hasContent: !!message.content,
-          contentLength: message.content?.length,
-          toolCallsCount: message.tool_calls.length,
-          hasThoughtSignatures: !!message.thoughtSignatures,
-          thoughtSignaturesCount: message.thoughtSignatures?.length,
-          toolCallMetadata: message.tool_calls.map(tc => ({
-            name: tc.function?.name,
-            hasMetadata: !!tc.metadata,
-            hasThoughtSignature: !!tc.metadata?.thoughtSignature
-          }))
-        });
-      }
-
       if (message.role === 'tool') {
         let responseObj;
         responseObj = this.safeJsonParse(message.content, message.content);
@@ -104,9 +88,6 @@ class GoogleAdapterClass extends BaseAdapter {
                 if (unusedSignatures.length > 0) {
                   textPart.thoughtSignature = unusedSignatures[0];
                   usedThoughtSignatures.add(unusedSignatures[0]);
-                  console.log(
-                    `[Google Adapter] Including thoughtSignature in text part: ${unusedSignatures[0].substring(0, 20)}...`
-                  );
                 }
               }
 
@@ -127,14 +108,6 @@ class GoogleAdapterClass extends BaseAdapter {
               if (call.metadata && call.metadata.thoughtSignature) {
                 functionCallPart.thoughtSignature = call.metadata.thoughtSignature;
                 usedThoughtSignatures.add(call.metadata.thoughtSignature);
-                console.log(
-                  `[Google Adapter] Including thoughtSignature in function call: ${call.function.name}, signature: ${call.metadata.thoughtSignature.substring(0, 20)}...`
-                );
-              } else {
-                console.log(
-                  `[Google Adapter] No thoughtSignature found for function call: ${call.function.name}, metadata:`,
-                  call.metadata
-                );
               }
 
               parts.push(functionCallPart);
