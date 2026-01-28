@@ -1,24 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 /**
- * Sanitize loaded messages to fix inconsistent states
- * - If a message has images but loading is truthy, set loading=false
- * - This fixes the issue where images don't show after navigating back to app
- * 
- * @param {Array} messages - Messages to sanitize
- * @returns {Array} Sanitized messages
- */
-const sanitizeLoadedMessages = messages => {
-  return messages.map(msg => {
-    // If message has images but is still marked as loading (true, undefined, null), mark it as complete
-    if (msg.images && msg.images.length > 0 && msg.loading) {
-      return { ...msg, loading: false };
-    }
-    return msg;
-  });
-};
-
-/**
  * Custom hook for managing chat messages
  * Messages will persist during page refreshes using sessionStorage
  * Each new browser tab will start with a new chat session
@@ -38,7 +20,22 @@ function useChatMessages(chatId = 'default') {
     try {
       const storedMessages = sessionStorage.getItem(storageKey);
       const messages = storedMessages ? JSON.parse(storedMessages) : [];
-      return sanitizeLoadedMessages(messages);
+      
+      // Debug logging for loaded images
+      const messagesWithImages = messages.filter(m => m.images && m.images.length > 0);
+      if (messagesWithImages.length > 0) {
+        console.log('📂 Loading messages from sessionStorage:', {
+          totalMessages: messages.length,
+          messagesWithImages: messagesWithImages.length,
+          imageDetails: messagesWithImages.map(m => ({
+            id: m.id,
+            imageCount: m.images.length,
+            loading: m.loading
+          }))
+        });
+      }
+      
+      return messages;
     } catch (error) {
       console.error('Error loading messages from sessionStorage:', error);
       return [];
@@ -61,9 +58,24 @@ function useChatMessages(chatId = 'default') {
       const newStorageKey = `ai_hub_chat_messages_${chatId}`;
       try {
         const storedMessages = sessionStorage.getItem(newStorageKey);
-        const messages = storedMessages ? JSON.parse(storedMessages) : [];
-        const sanitizedMessages = sanitizeLoadedMessages(messages);
-        setMessages(sanitizedMessages);
+        const newMessages = storedMessages ? JSON.parse(storedMessages) : [];
+        
+        // Debug logging for loaded images on chatId change
+        const messagesWithImages = newMessages.filter(m => m.images && m.images.length > 0);
+        if (messagesWithImages.length > 0) {
+          console.log('📂 Loading messages for new chatId:', {
+            chatId,
+            totalMessages: newMessages.length,
+            messagesWithImages: messagesWithImages.length,
+            imageDetails: messagesWithImages.map(m => ({
+              id: m.id,
+              imageCount: m.images.length,
+              loading: m.loading
+            }))
+          });
+        }
+        
+        setMessages(newMessages);
       } catch (error) {
         console.error('Error loading messages from sessionStorage for new chatId:', error);
         setMessages([]);
@@ -85,6 +97,20 @@ function useChatMessages(chatId = 'default') {
     try {
       // Filter out greeting messages for persistence
       const persistableMessages = messages.filter(msg => !msg.isGreeting);
+
+      // Debug logging for image persistence
+      const messagesWithImages = persistableMessages.filter(m => m.images && m.images.length > 0);
+      if (messagesWithImages.length > 0) {
+        console.log('💾 Saving messages to sessionStorage:', {
+          totalMessages: persistableMessages.length,
+          messagesWithImages: messagesWithImages.length,
+          imageDetails: messagesWithImages.map(m => ({
+            id: m.id,
+            imageCount: m.images.length,
+            loading: m.loading
+          }))
+        });
+      }
 
       // Only save if we have messages
       if (persistableMessages.length > 0) {
@@ -155,11 +181,14 @@ function useChatMessages(chatId = 'default') {
     if (isLoading === false) {
       console.log('✅ Setting message to completed state:', {
         id,
-        contentLength: content?.length || 0
+        contentLength: content?.length || 0,
+        hasImages: !!extra.images,
+        imageCount: extra.images?.length || 0
       });
     }
 
     setMessages(prev => {
+      const currentMsg = prev.find(m => m.id === id);
       const updatedMessages = prev.map(msg =>
         msg.id === id
           ? {
@@ -172,6 +201,17 @@ function useChatMessages(chatId = 'default') {
             }
           : msg
       );
+
+      // Debug logging to track image persistence
+      const updatedMsg = updatedMessages.find(m => m.id === id);
+      if (currentMsg?.images || extra.images || updatedMsg?.images) {
+        console.log('🖼️ Image update for message', id, ':', {
+          previousImages: currentMsg?.images?.length || 0,
+          extraImages: extra.images?.length || 0,
+          resultImages: updatedMsg?.images?.length || 0,
+          isLoading
+        });
+      }
 
       return updatedMessages;
     });
