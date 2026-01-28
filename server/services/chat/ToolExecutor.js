@@ -461,6 +461,15 @@ class ToolExecutor {
             }
           }
 
+          // Process images (important for image generation with tools like google_search)
+          this.streamingHandler.processImages(result, chatId);
+
+          // Process thinking content
+          this.streamingHandler.processThinking(result, chatId);
+
+          // Process grounding metadata (for Google Search grounding)
+          this.streamingHandler.processGroundingMetadata(result, chatId);
+
           // console.log(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
           if (result.tool_calls?.length > 0) {
             result.tool_calls.forEach(call => {
@@ -531,7 +540,7 @@ class ToolExecutor {
         }
       }
 
-      if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+      if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
         console.log(
           `No tool calls to process for chat ID ${chatId}:`,
           JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
@@ -852,7 +861,7 @@ class ToolExecutor {
         }
 
         // If no tool calls, this is the final response - stream it back to client
-        if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+        if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
           clearTimeout(timeoutId);
           actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
           await logInteraction(
