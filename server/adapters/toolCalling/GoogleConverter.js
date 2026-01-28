@@ -296,6 +296,17 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
         if (part.functionCall && part.functionCall.name) {
           // Only create tool call if we have a valid name (non-empty)
           // This prevents creating tool calls with empty names during streaming
+          // Debug: Log the full part structure to understand thoughtSignature placement
+          console.log(
+            `[GoogleConverter Streaming DEBUG] Function call part structure: ${JSON.stringify({
+              hasFunctionCall: !!part.functionCall,
+              functionName: part.functionCall?.name,
+              hasThoughtSignature: !!part.thoughtSignature,
+              hasThought: !!part.thought,
+              partKeys: Object.keys(part)
+            })}`
+          );
+
           // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
           const metadata = { originalFormat: 'google' };
           if (part.thoughtSignature) {

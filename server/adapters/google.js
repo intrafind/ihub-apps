@@ -55,7 +55,7 @@ class GoogleAdapterClass extends BaseAdapter {
           }))
         });
       }
-      
+
       if (message.role === 'tool') {
         let responseObj;
         responseObj = this.safeJsonParse(message.content, message.content);
@@ -79,27 +79,27 @@ class GoogleAdapterClass extends BaseAdapter {
             message.tool_calls.length > 0
           ) {
             const parts = [];
-            
+
             // Track which thoughtSignatures we've used (from tool_calls metadata)
             const usedThoughtSignatures = new Set();
-            
+
             // Add text content if present
             // If message has thoughtSignatures array, the first one may belong to the text part
             if (message.content) {
               const textPart = { text: message.content };
-              
+
               // Check if there are thoughtSignatures not in tool_calls metadata
               if (message.thoughtSignatures && message.thoughtSignatures.length > 0) {
                 // Get thoughtSignatures from tool_calls
                 const toolCallSignatures = message.tool_calls
                   .map(call => call.metadata?.thoughtSignature)
                   .filter(Boolean);
-                
+
                 // Find thoughtSignatures not in tool calls
                 const unusedSignatures = message.thoughtSignatures.filter(
                   sig => !toolCallSignatures.includes(sig)
                 );
-                
+
                 // If there's an unused signature, it likely belongs to the text part
                 if (unusedSignatures.length > 0) {
                   textPart.thoughtSignature = unusedSignatures[0];
@@ -109,10 +109,10 @@ class GoogleAdapterClass extends BaseAdapter {
                   );
                 }
               }
-              
+
               parts.push(textPart);
             }
-            
+
             for (const call of message.tool_calls) {
               let argsObj;
               argsObj = this.safeJsonParse(call.function.arguments, {});

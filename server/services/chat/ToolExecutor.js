@@ -852,6 +852,13 @@ class ToolExecutor {
                     // Preserve metadata for provider-specific requirements (e.g., Gemini thoughtSignatures)
                     metadata: call.metadata || {}
                   };
+                  // Debug: Log incoming call structure
+                  console.log(
+                    `[ToolExecutor DEBUG] New tool call - Name: ${call.function?.name}, ` +
+                      `Has metadata: ${!!call.metadata}, ` +
+                      `Has thoughtSignature: ${!!call.metadata?.thoughtSignature}, ` +
+                      `Metadata: ${JSON.stringify(call.metadata)}`
+                  );
                   if (call.metadata?.thoughtSignature) {
                     console.log(
                       `[ToolExecutor] Collected tool call with thoughtSignature: ${call.function?.name}, signature: ${call.metadata.thoughtSignature.substring(0, 20)}...`
@@ -907,7 +914,7 @@ class ToolExecutor {
 
         const assistantMessage = { role: 'assistant', tool_calls: collectedToolCalls };
         assistantMessage.content = assistantContent || null;
-        
+
         // Preserve thoughtSignatures for Gemini 3 models (required for multi-turn function calling)
         if (collectedThoughtSignatures.length > 0) {
           assistantMessage.thoughtSignatures = collectedThoughtSignatures;
@@ -915,7 +922,7 @@ class ToolExecutor {
             `[ToolExecutor] Added ${collectedThoughtSignatures.length} thoughtSignature(s) to assistant message`
           );
         }
-        
+
         llmMessages.push(assistantMessage);
 
         for (const call of collectedToolCalls) {

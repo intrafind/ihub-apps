@@ -1,6 +1,6 @@
 /**
  * Test for Gemini 3 thoughtSignature handling in multi-turn tool calling conversations
- * 
+ *
  * This test validates the fix for the issue where Gemini 3 models with thinking enabled
  * require thoughtSignature to be preserved and passed back in continuation requests.
  */
@@ -38,7 +38,7 @@ describe('Gemini ThoughtSignature Handling', () => {
       // Verify tool call was created
       assert.strictEqual(result.tool_calls.length, 1, 'Should have one tool call');
       assert.strictEqual(result.tool_calls[0].name, 'enhancedWebSearch', 'Tool name should match');
-      
+
       // Verify thoughtSignature is preserved in metadata
       assert.ok(result.tool_calls[0].metadata, 'Tool call should have metadata');
       assert.strictEqual(
@@ -48,7 +48,10 @@ describe('Gemini ThoughtSignature Handling', () => {
       );
 
       // Verify backward compatibility - thoughtSignatures array should also exist
-      assert.ok(result.thoughtSignatures, 'Should have thoughtSignatures array for backward compatibility');
+      assert.ok(
+        result.thoughtSignatures,
+        'Should have thoughtSignatures array for backward compatibility'
+      );
       assert.strictEqual(result.thoughtSignatures.length, 1, 'Should have one thoughtSignature');
       assert.strictEqual(result.thoughtSignatures[0], 'AgQKA...', 'thoughtSignature should match');
     });
@@ -319,10 +322,7 @@ describe('Gemini ThoughtSignature Handling', () => {
         thoughtSignatures: ['text_sig_456', 'function_sig_123']
       };
 
-      const messages = [
-        { role: 'user', content: 'test query' },
-        assistantMessage
-      ];
+      const messages = [{ role: 'user', content: 'test query' }, assistantMessage];
 
       const { contents } = GoogleAdapter.formatMessages(messages);
       const modelMessage = contents.find(msg => msg.role === 'model');
