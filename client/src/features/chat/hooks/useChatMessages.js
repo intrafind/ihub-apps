@@ -106,11 +106,28 @@ function useChatMessages(chatId = 'default') {
       // Filter out greeting messages for persistence
       const persistableMessages = messages.filter(msg => !msg.isGreeting);
 
+      // Strip image data to avoid sessionStorage quota issues
+      // Images can be very large (base64 encoded) and exceed the ~5-10MB quota
+      const messagesWithoutImageData = persistableMessages.map(msg => {
+        if (msg.images && msg.images.length > 0) {
+          // Keep metadata but remove the actual image data
+          return {
+            ...msg,
+            images: msg.images.map(img => ({
+              mimeType: img.mimeType,
+              // Mark that image data was present but not persisted
+              _hadImageData: true
+            }))
+          };
+        }
+        return msg;
+      });
+
       // Debug logging for image persistence
       const messagesWithImages = persistableMessages.filter(m => m.images && m.images.length > 0);
       if (messagesWithImages.length > 0) {
-        console.log('💾 Saving messages to sessionStorage:', {
-          totalMessages: persistableMessages.length,
+        console.log('💾 Saving messages to sessionStorage (images excluded to avoid quota issues):', {
+          totalMessages: messagesWithoutImageData.length,
           messagesWithImages: messagesWithImages.length,
           imageDetails: messagesWithImages.map(m => ({
             id: m.id,
@@ -121,14 +138,31 @@ function useChatMessages(chatId = 'default') {
       }
 
       // Only save if we have messages
-      if (persistableMessages.length > 0) {
-        sessionStorage.setItem(storageKey, JSON.stringify(persistableMessages));
+      if (messagesWithoutImageData.length > 0) {
+        sessionStorage.setItem(storageKey, JSON.stringify(messagesWithoutImageData));
       } else {
         // Clear storage if messages are empty
         sessionStorage.removeItem(storageKey);
       }
     } catch (error) {
       console.error('Error saving messages to sessionStorage:', error);
+      // If we still get quota errors, try to save without any images at all
+      if (error.name === 'QuotaExceededError') {
+        console.warn('SessionStorage quota exceeded even after removing images. Saving text-only messages.');
+        try {
+          const textOnlyMessages = messages
+            .filter(msg => !msg.isGreeting)
+            .map(msg => {
+              const { images, ...rest } = msg;
+              return rest;
+            });
+          if (textOnlyMessages.length > 0) {
+            sessionStorage.setItem(storageKey, JSON.stringify(textOnlyMessages));
+          }
+        } catch (fallbackError) {
+          console.error('Failed to save even text-only messages:', fallbackError);
+        }
+      }
     }
   }, [messages, storageKey]);
 
