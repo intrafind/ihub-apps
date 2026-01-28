@@ -479,6 +479,8 @@ class ToolExecutor {
                 // Merge properties into the existing tool call
                 if (call.id) existingCall.id = call.id;
                 if (call.type) existingCall.type = call.type;
+                // Preserve metadata (critical for thoughtSignature in Gemini 3)
+                if (call.metadata) existingCall.metadata = call.metadata;
                 if (call.function) {
                   if (call.function.name) existingCall.function.name = call.function.name;
 
@@ -515,6 +517,7 @@ class ToolExecutor {
                   index: call.index,
                   id: call.id || null,
                   type: call.type || 'function',
+                  metadata: call.metadata || {}, // Preserve metadata (critical for thoughtSignature)
                   function: {
                     name: call.function?.name || '',
                     arguments: initialArgs
@@ -587,6 +590,23 @@ class ToolExecutor {
         action: 'processing',
         message: `Using tool(s): ${toolNames}...`
       });
+
+      // Debug: Log collected tool calls to verify metadata preservation
+      console.log(
+        `[ToolExecutor] Collected ${validToolCalls.length} tool call(s):`,
+        JSON.stringify(
+          validToolCalls.map(c => ({
+            name: c.function?.name,
+            hasMetadata: !!c.metadata,
+            hasThoughtSignature: !!c.metadata?.thoughtSignature,
+            thoughtSignaturePreview: c.metadata?.thoughtSignature
+              ? `${c.metadata.thoughtSignature.substring(0, 20)}...`
+              : undefined
+          })),
+          null,
+          2
+        )
+      );
 
       const assistantMessage = { role: 'assistant', tool_calls: validToolCalls };
       assistantMessage.content = assistantContent || null;
