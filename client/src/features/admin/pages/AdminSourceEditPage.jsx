@@ -149,18 +149,18 @@ const AdminSourceEditPage = () => {
       navigate('/admin/sources');
     } catch (err) {
       console.error('Failed to save source:', err);
-      
+
       // Extract detailed error message from response
       let errorMessage = 'Failed to save source';
-      
+
       if (err.response?.data) {
         const responseData = err.response.data;
-        
+
         // If there's a main error message, use it
         if (responseData.error) {
           errorMessage = responseData.error;
         }
-        
+
         // If there are validation details, append them
         if (responseData.details) {
           if (Array.isArray(responseData.details)) {
@@ -185,7 +185,7 @@ const AdminSourceEditPage = () => {
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
+
       setError(errorMessage);
     } finally {
       setSaving(false);
