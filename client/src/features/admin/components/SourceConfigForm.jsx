@@ -63,8 +63,18 @@ const SourceConfigForm = ({ source, onChange, onSave, saving, isEditing }) => {
 
     // Type-specific validation
     if (formData.type === 'filesystem') {
-      // File path will be set by FileUploader component
-      // No manual validation needed here
+      // Validate that filesystem sources have content
+      // Either path should be set (file uploaded) or there should be tempContent
+      if (
+        !formData.config?.path?.trim() &&
+        !formData.config?.tempContent &&
+        !isEditing
+      ) {
+        errors.file = t(
+          'admin.sources.validation.fileRequired',
+          'Please upload a file or enter content for filesystem sources'
+        );
+      }
     } else if (formData.type === 'url') {
       if (!formData.config?.url?.trim()) {
         errors.url = t('admin.sources.validation.urlRequired', 'URL is required');
@@ -163,6 +173,9 @@ const SourceConfigForm = ({ source, onChange, onSave, saving, isEditing }) => {
         return (
           <div className="space-y-6">
             <FileUploader source={formData} onChange={setFormData} isEditing={isEditing} />
+            {validationErrors.file && (
+              <p className="mt-1 text-sm text-red-600">{validationErrors.file}</p>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
