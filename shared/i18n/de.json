@@ -291,7 +291,7 @@
     "edit": "Bearbeiten",
     "generatedImage": "Generiertes Bild",
     "downloadImage": "Bild herunterladen",
-    "saveImageWarning": "Laden Sie dieses Bild herunter, um es dauerhaft zu speichern. Bilder werden beim Navigieren nicht gespeichert, da Browser-Speicherlimits überschritten werden.",
+    "saveImageWarning": "Laden Sie dieses Bild herunter, Bilder werden nicht gespeichert.",
     "imageNotPersisted": "Bild nicht verfügbar",
     "imageNotPersistedDetail": "Generierte Bilder werden beim Navigieren nicht gespeichert, da Browser-Speicherlimits überschritten werden. Bilder bleiben während der aktiven Sitzung sichtbar."
   },
