@@ -40,6 +40,22 @@ class GoogleAdapterClass extends BaseAdapter {
 
     // First pass - extract system messages and handle image data
     for (const message of messages) {
+      // Debug: Log assistant messages with tool calls to see their structure
+      if (message.role === 'assistant' && message.tool_calls && message.tool_calls.length > 0) {
+        console.log('[Google Adapter DEBUG] Assistant message with tool calls:', {
+          hasContent: !!message.content,
+          contentLength: message.content?.length,
+          toolCallsCount: message.tool_calls.length,
+          hasThoughtSignatures: !!message.thoughtSignatures,
+          thoughtSignaturesCount: message.thoughtSignatures?.length,
+          toolCallMetadata: message.tool_calls.map(tc => ({
+            name: tc.function?.name,
+            hasMetadata: !!tc.metadata,
+            hasThoughtSignature: !!tc.metadata?.thoughtSignature
+          }))
+        });
+      }
+      
       if (message.role === 'tool') {
         let responseObj;
         responseObj = this.safeJsonParse(message.content, message.content);
