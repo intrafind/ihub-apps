@@ -442,28 +442,76 @@ const ChatMessage = ({
         {/* Display generated images */}
         {message.images && message.images.length > 0 && (
           <div className="mt-3 space-y-2">
-            {message.images.map((image, idx) => (
-              <div key={idx} className="relative inline-block">
-                <img
-                  src={`data:${image.mimeType || 'image/png'};base64,${image.data}`}
-                  alt={t('chatMessage.generatedImage', `Generated image ${idx + 1}`)}
-                  className="max-w-full rounded-lg shadow-md"
-                  style={{ maxHeight: '512px' }}
-                />
-                <button
-                  onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = `data:${image.mimeType || 'image/png'};base64,${image.data}`;
-                    link.download = `generated-image-${Date.now()}.png`;
-                    link.click();
-                  }}
-                  className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
-                  title={t('chatMessage.downloadImage', 'Download image')}
-                >
-                  <Icon name="download" size="sm" />
-                </button>
-              </div>
-            ))}
+            {message.images.map((image, idx) => {
+              // Check if image has data or was lost due to storage limitations
+              if (image.data) {
+                return (
+                  <div key={idx} className="space-y-2">
+                    <div className="relative inline-block">
+                      <img
+                        src={`data:${image.mimeType || 'image/png'};base64,${image.data}`}
+                        alt={t('chatMessage.generatedImage', `Generated image ${idx + 1}`)}
+                        className="max-w-full rounded-lg shadow-md"
+                        style={{ maxHeight: '512px' }}
+                      />
+                      <button
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = `data:${image.mimeType || 'image/png'};base64,${image.data}`;
+                          link.download = `generated-image-${Date.now()}.png`;
+                          link.click();
+                        }}
+                        className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
+                        title={t('chatMessage.downloadImage', 'Download image')}
+                      >
+                        <Icon name="download" size="sm" />
+                      </button>
+                    </div>
+                    {/* Proactive warning to save images */}
+                    <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <Icon
+                        name="information-circle"
+                        className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+                        size="sm"
+                      />
+                      <p className="text-xs text-blue-800 dark:text-blue-200">
+                        {t(
+                          'chatMessage.saveImageWarning',
+                          'Download this image to save it permanently. Images are not persisted when you navigate away due to browser storage limitations.'
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                );
+              } else if (image._hadImageData) {
+                // Image was present but not persisted due to storage quota
+                return (
+                  <div
+                    key={idx}
+                    className="mt-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
+                  >
+                    <div className="flex items-start space-x-2">
+                      <Icon
+                        name="exclamation-circle"
+                        className="text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5"
+                      />
+                      <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                        <p className="font-medium">
+                          {t('chatMessage.imageNotPersisted', 'Image not available')}
+                        </p>
+                        <p className="mt-1 text-yellow-700 dark:text-yellow-300">
+                          {t(
+                            'chatMessage.imageNotPersistedDetail',
+                            'Generated images are not persisted when navigating away due to browser storage limitations. Images remain visible during the active session.'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })}
           </div>
         )}
 
