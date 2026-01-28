@@ -279,6 +279,11 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
       // Clean up the app data - remove empty strings for optional fields
       const cleanedAppData = { ...appData };
 
+      // Remove wizard-specific fields that should not be saved
+      delete cleanedAppData.useTemplate;
+      delete cleanedAppData.useAI;
+      delete cleanedAppData.useManual;
+
       // Remove empty multilingual fields
       ['messagePlaceholder', 'prompt'].forEach(field => {
         if (cleanedAppData[field]) {
@@ -295,6 +300,15 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
           }
         }
       });
+
+      // Remove speechRecognition if it has default/invalid values (no host URI)
+      if (
+        cleanedAppData.settings?.speechRecognition &&
+        (!cleanedAppData.settings.speechRecognition.host ||
+          cleanedAppData.settings.speechRecognition.host.trim() === '')
+      ) {
+        delete cleanedAppData.settings.speechRecognition;
+      }
 
       // Create the app
       await makeAdminApiCall('/admin/apps', {
