@@ -835,6 +835,10 @@ class ToolExecutor {
                     if (call.function.arguments)
                       existingCall.function.arguments += call.function.arguments;
                   }
+                  // Merge metadata (important for Gemini thoughtSignatures)
+                  if (call.metadata) {
+                    existingCall.metadata = { ...existingCall.metadata, ...call.metadata };
+                  }
                 } else if (call.index !== undefined) {
                   collectedToolCalls.push({
                     index: call.index,
@@ -843,7 +847,9 @@ class ToolExecutor {
                     function: {
                       name: call.function?.name || '',
                       arguments: call.function?.arguments || ''
-                    }
+                    },
+                    // Preserve metadata for provider-specific requirements (e.g., Gemini thoughtSignatures)
+                    metadata: call.metadata || {}
                   });
                 }
               });

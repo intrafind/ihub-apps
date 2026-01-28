@@ -69,12 +69,19 @@ class GoogleAdapterClass extends BaseAdapter {
             for (const call of message.tool_calls) {
               let argsObj;
               argsObj = this.safeJsonParse(call.function.arguments, {});
-              parts.push({
+              const functionCallPart = {
                 functionCall: {
                   name: normalizeToolName(call.function.name),
                   args: argsObj
                 }
-              });
+              };
+              
+              // Include thoughtSignature if present in metadata (required for Gemini 3 with thinking enabled)
+              if (call.metadata && call.metadata.thoughtSignature) {
+                functionCallPart.thoughtSignature = call.metadata.thoughtSignature;
+              }
+              
+              parts.push(functionCallPart);
             }
 
             geminiContents.push({ role: 'model', parts });
