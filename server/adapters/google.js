@@ -63,18 +63,54 @@ class GoogleAdapterClass extends BaseAdapter {
             message.tool_calls.length > 0
           ) {
             const parts = [];
+
+            // Track which thoughtSignatures we've used (from tool_calls metadata)
+            const usedThoughtSignatures = new Set();
+
+            // Add text content if present
+            // If message has thoughtSignatures array, the first one may belong to the text part
             if (message.content) {
-              parts.push({ text: message.content });
+              const textPart = { text: message.content };
+
+              // Check if there are thoughtSignatures not in tool_calls metadata
+              if (message.thoughtSignatures && message.thoughtSignatures.length > 0) {
+                // Get thoughtSignatures from tool_calls
+                const toolCallSignatures = message.tool_calls
+                  .map(call => call.metadata?.thoughtSignature)
+                  .filter(Boolean);
+
+                // Find thoughtSignatures not in tool calls
+                const unusedSignatures = message.thoughtSignatures.filter(
+                  sig => !toolCallSignatures.includes(sig)
+                );
+
+                // If there's an unused signature, it likely belongs to the text part
+                if (unusedSignatures.length > 0) {
+                  textPart.thoughtSignature = unusedSignatures[0];
+                  usedThoughtSignatures.add(unusedSignatures[0]);
+                }
+              }
+
+              parts.push(textPart);
             }
+
             for (const call of message.tool_calls) {
               let argsObj;
               argsObj = this.safeJsonParse(call.function.arguments, {});
-              parts.push({
+              const functionCallPart = {
                 functionCall: {
                   name: normalizeToolName(call.function.name),
                   args: argsObj
                 }
-              });
+              };
+
+              // Include thoughtSignature if present in metadata (required for Gemini 3 with thinking enabled)
+              if (call.metadata && call.metadata.thoughtSignature) {
+                functionCallPart.thoughtSignature = call.metadata.thoughtSignature;
+                usedThoughtSignatures.add(call.metadata.thoughtSignature);
+              }
+
+              parts.push(functionCallPart);
             }
 
             geminiContents.push({ role: 'model', parts });
