@@ -75,12 +75,12 @@ class GoogleAdapterClass extends BaseAdapter {
                   args: argsObj
                 }
               };
-              
+
               // Include thoughtSignature if present in metadata (required for Gemini 3 with thinking enabled)
               if (call.metadata && call.metadata.thoughtSignature) {
                 functionCallPart.thoughtSignature = call.metadata.thoughtSignature;
               }
-              
+
               parts.push(functionCallPart);
             }
 
