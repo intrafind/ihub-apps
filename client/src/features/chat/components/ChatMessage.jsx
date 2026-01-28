@@ -446,25 +446,37 @@ const ChatMessage = ({
               // Check if image has data or was lost due to storage limitations
               if (image.data) {
                 return (
-                  <div key={idx} className="relative inline-block">
-                    <img
-                      src={`data:${image.mimeType || 'image/png'};base64,${image.data}`}
-                      alt={t('chatMessage.generatedImage', `Generated image ${idx + 1}`)}
-                      className="max-w-full rounded-lg shadow-md"
-                      style={{ maxHeight: '512px' }}
-                    />
-                    <button
-                      onClick={() => {
-                        const link = document.createElement('a');
-                        link.href = `data:${image.mimeType || 'image/png'};base64,${image.data}`;
-                        link.download = `generated-image-${Date.now()}.png`;
-                        link.click();
-                      }}
-                      className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
-                      title={t('chatMessage.downloadImage', 'Download image')}
-                    >
-                      <Icon name="download" size="sm" />
-                    </button>
+                  <div key={idx} className="space-y-2">
+                    <div className="relative inline-block">
+                      <img
+                        src={`data:${image.mimeType || 'image/png'};base64,${image.data}`}
+                        alt={t('chatMessage.generatedImage', `Generated image ${idx + 1}`)}
+                        className="max-w-full rounded-lg shadow-md"
+                        style={{ maxHeight: '512px' }}
+                      />
+                      <button
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = `data:${image.mimeType || 'image/png'};base64,${image.data}`;
+                          link.download = `generated-image-${Date.now()}.png`;
+                          link.click();
+                        }}
+                        className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
+                        title={t('chatMessage.downloadImage', 'Download image')}
+                      >
+                        <Icon name="download" size="sm" />
+                      </button>
+                    </div>
+                    {/* Proactive warning to save images */}
+                    <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <Icon name="information-circle" className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" size="sm" />
+                      <p className="text-xs text-blue-800 dark:text-blue-200">
+                        {t(
+                          'chatMessage.saveImageWarning',
+                          'Download this image to save it permanently. Images are not persisted when you navigate away due to browser storage limitations.'
+                        )}
+                      </p>
+                    </div>
                   </div>
                 );
               } else if (image._hadImageData) {

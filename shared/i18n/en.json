@@ -764,6 +764,7 @@
     "edit": "Edit",
     "generatedImage": "Generated image",
     "downloadImage": "Download image",
+    "saveImageWarning": "Download this image to save it permanently. Images are not persisted when you navigate away due to browser storage limitations.",
     "imageNotPersisted": "Image not available",
     "imageNotPersistedDetail": "Generated images are not persisted when navigating away due to browser storage limitations. Images remain visible during the active session."
   },
