@@ -58,13 +58,13 @@ Added a `sanitizeLoadedMessages()` function in `useChatMessages.js` that:
 ```javascript
 /**
  * Sanitize loaded messages to fix inconsistent states
- * - If a message has images but loading=true, set loading=false
+ * - If a message has images but loading is truthy, set loading=false
  * - This fixes the issue where images don't show after navigating back to app
  */
 const sanitizeLoadedMessages = messages => {
   return messages.map(msg => {
-    // If message has images but is still marked as loading, mark it as complete
-    if (msg.images && msg.images.length > 0 && msg.loading === true) {
+    // If message has images but is still marked as loading (true, undefined, null), mark it as complete
+    if (msg.images && msg.images.length > 0 && msg.loading) {
       return { ...msg, loading: false };
     }
     return msg;
@@ -77,16 +77,6 @@ Applied during:
 2. ChatId changes: `useEffect(() => { ... }, [chatId])`
 
 ## Testing
-
-### Unit Test Results
-
-Created a comprehensive unit test that validates:
-- ✅ Messages with images and `loading: true` are fixed to `loading: false`
-- ✅ Messages with images and `loading: false` remain unchanged
-- ✅ Messages without images are not affected
-- ✅ Multiple messages with mixed states are handled correctly
-
-**All 4 test cases passed.**
 
 ### Manual Testing Scenarios
 
@@ -130,12 +120,12 @@ To manually verify the fix:
 
 ## Validation Checklist
 
-- ✅ Unit tests pass (4/4 test cases)
 - ✅ Server starts successfully
 - ✅ Linting passes (0 errors, only pre-existing warnings)
 - ✅ Code follows project conventions
-- ✅ Fix is minimal and surgical (20 lines changed)
+- ✅ Fix is minimal and surgical (~30 lines changed)
 - ✅ No regressions expected in other features
+- ✅ Code review feedback addressed
 
 ## Related Code
 
@@ -147,9 +137,9 @@ To manually verify the fix:
 
 ### Message Persistence
 **File:** `client/src/features/chat/hooks/useChatMessages.js`
-- Line 64-79: Saves messages to sessionStorage
-- Line 19-43: Loads messages from sessionStorage (now with sanitization)
-- Line 48-70: Handles chatId changes (now with sanitization)
+- Line 80-96: Saves messages to sessionStorage
+- Line 34-54: Loads messages from sessionStorage (now with sanitization)
+- Line 56-78: Handles chatId changes (now with sanitization)
 
 ## Future Considerations
 

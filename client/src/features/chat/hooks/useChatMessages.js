@@ -1,6 +1,24 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 /**
+ * Sanitize loaded messages to fix inconsistent states
+ * - If a message has images but loading is truthy, set loading=false
+ * - This fixes the issue where images don't show after navigating back to app
+ * 
+ * @param {Array} messages - Messages to sanitize
+ * @returns {Array} Sanitized messages
+ */
+const sanitizeLoadedMessages = messages => {
+  return messages.map(msg => {
+    // If message has images but is still marked as loading (true, undefined, null), mark it as complete
+    if (msg.images && msg.images.length > 0 && msg.loading) {
+      return { ...msg, loading: false };
+    }
+    return msg;
+  });
+};
+
+/**
  * Custom hook for managing chat messages
  * Messages will persist during page refreshes using sessionStorage
  * Each new browser tab will start with a new chat session
@@ -14,21 +32,6 @@ function useChatMessages(chatId = 'default') {
 
   // Track the previous chatId to detect changes
   const prevChatIdRef = useRef(chatId);
-
-  /**
-   * Sanitize loaded messages to fix inconsistent states
-   * - If a message has images but loading=true, set loading=false
-   * - This fixes the issue where images don't show after navigating back to app
-   */
-  const sanitizeLoadedMessages = messages => {
-    return messages.map(msg => {
-      // If message has images but is still marked as loading, mark it as complete
-      if (msg.images && msg.images.length > 0 && msg.loading === true) {
-        return { ...msg, loading: false };
-      }
-      return msg;
-    });
-  };
 
   // Initialize state from sessionStorage if available
   const loadInitialMessages = () => {
