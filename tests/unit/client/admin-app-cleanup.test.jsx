@@ -64,6 +64,15 @@ describe('AdminAppEditPage - cleanAppData', () => {
       }
     }
 
+    // Remove speechRecognition if it has default/invalid values (no host URI)
+    if (
+      cleanedApp.settings?.speechRecognition &&
+      (!cleanedApp.settings.speechRecognition.host ||
+        cleanedApp.settings.speechRecognition.host.trim() === '')
+    ) {
+      delete cleanedApp.settings.speechRecognition;
+    }
+
     return cleanedApp;
   };
 
@@ -315,6 +324,98 @@ describe('AdminAppEditPage - cleanAppData', () => {
       const result = cleanAppData(appData);
 
       expect(result.variables[0].predefinedValues).toBeUndefined();
+    });
+  });
+
+  describe('speechRecognition cleanup', () => {
+    test('should remove speechRecognition when host is empty string', () => {
+      const appData = {
+        id: 'test-app',
+        settings: {
+          speechRecognition: {
+            service: 'default',
+            host: ''
+          }
+        }
+      };
+
+      const result = cleanAppData(appData);
+
+      expect(result.settings.speechRecognition).toBeUndefined();
+    });
+
+    test('should remove speechRecognition when host is whitespace only', () => {
+      const appData = {
+        id: 'test-app',
+        settings: {
+          speechRecognition: {
+            service: 'default',
+            host: '   '
+          }
+        }
+      };
+
+      const result = cleanAppData(appData);
+
+      expect(result.settings.speechRecognition).toBeUndefined();
+    });
+
+    test('should remove speechRecognition when host is not provided', () => {
+      const appData = {
+        id: 'test-app',
+        settings: {
+          speechRecognition: {
+            service: 'default'
+          }
+        }
+      };
+
+      const result = cleanAppData(appData);
+
+      expect(result.settings.speechRecognition).toBeUndefined();
+    });
+
+    test('should keep speechRecognition when host has valid URL', () => {
+      const appData = {
+        id: 'test-app',
+        settings: {
+          speechRecognition: {
+            service: 'custom',
+            host: 'https://speech.example.com'
+          }
+        }
+      };
+
+      const result = cleanAppData(appData);
+
+      expect(result.settings.speechRecognition).toBeDefined();
+      expect(result.settings.speechRecognition.service).toBe('custom');
+      expect(result.settings.speechRecognition.host).toBe('https://speech.example.com');
+    });
+
+    test('should handle missing settings object', () => {
+      const appData = {
+        id: 'test-app'
+      };
+
+      const result = cleanAppData(appData);
+
+      expect(result.settings).toBeUndefined();
+    });
+
+    test('should handle missing speechRecognition in settings', () => {
+      const appData = {
+        id: 'test-app',
+        settings: {
+          enabled: true
+        }
+      };
+
+      const result = cleanAppData(appData);
+
+      expect(result.settings).toBeDefined();
+      expect(result.settings.enabled).toBe(true);
+      expect(result.settings.speechRecognition).toBeUndefined();
     });
   });
 });
