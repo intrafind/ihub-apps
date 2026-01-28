@@ -65,11 +65,7 @@ const SourceConfigForm = ({ source, onChange, onSave, saving, isEditing }) => {
     if (formData.type === 'filesystem') {
       // Validate that filesystem sources have content
       // Either path should be set (file uploaded) or there should be tempContent
-      if (
-        !formData.config?.path?.trim() &&
-        !formData.config?.tempContent &&
-        !isEditing
-      ) {
+      if (!formData.config?.path?.trim() && !formData.config?.tempContent && !isEditing) {
         errors.file = t(
           'admin.sources.validation.fileRequired',
           'Please upload a file or enter content for filesystem sources'

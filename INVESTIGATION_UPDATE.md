@@ -7,6 +7,7 @@
 ## Actions Taken
 
 ### 1. Reverted Incorrect Fix (Commit c8c7aa2)
+
 - Removed the `sanitizeLoadedMessages()` function that was setting `loading: false` for messages with images
 - This fix wasn't addressing the real issue since the `done` event IS being received
 
@@ -15,6 +16,7 @@
 Added detailed logging throughout the message lifecycle to track exactly where images are being lost:
 
 **`updateAssistantMessage` function:**
+
 ```javascript
 - Logs when images are added/updated
 - Shows image counts before and after update
@@ -22,6 +24,7 @@ Added detailed logging throughout the message lifecycle to track exactly where i
 ```
 
 **Save to sessionStorage:**
+
 ```javascript
 - Logs when messages with images are saved
 - Shows total message count and how many have images
@@ -29,6 +32,7 @@ Added detailed logging throughout the message lifecycle to track exactly where i
 ```
 
 **Load from sessionStorage:**
+
 ```javascript
 - Logs raw sessionStorage data (first 200 chars)
 - Shows parsed message structure
@@ -37,6 +41,7 @@ Added detailed logging throughout the message lifecycle to track exactly where i
 ```
 
 **ChatId changes:**
+
 ```javascript
 - Logs when loading messages for new chatId
 - Shows same detailed info as initial load
@@ -67,6 +72,7 @@ The images are likely being lost in one of these scenarios:
 ## Expected Console Output Pattern
 
 **When generating second image:**
+
 ```
 🖼️ Image update for message xxx : { previousImages: 1, extraImages: 1, resultImages: 2, isLoading: true }
 ✅ Setting message to completed state: { id: xxx, contentLength: 50, hasImages: false, imageCount: 0 }
@@ -74,6 +80,7 @@ The images are likely being lost in one of these scenarios:
 ```
 
 **When returning to app:**
+
 ```
 📂 Raw sessionStorage data for key ai_hub_chat_messages_chat-xxx : [{"id":"user-...
 📂 Loading messages from sessionStorage: { totalMessages: 4, messagesWithImages: 1, imageDetails: [...] }

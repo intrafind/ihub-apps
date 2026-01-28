@@ -469,7 +469,11 @@ const ChatMessage = ({
                     </div>
                     {/* Proactive warning to save images */}
                     <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <Icon name="information-circle" className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" size="sm" />
+                      <Icon
+                        name="information-circle"
+                        className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+                        size="sm"
+                      />
                       <p className="text-xs text-blue-800 dark:text-blue-200">
                         {t(
                           'chatMessage.saveImageWarning',
@@ -487,7 +491,10 @@ const ChatMessage = ({
                     className="mt-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
                   >
                     <div className="flex items-start space-x-2">
-                      <Icon name="exclamation-circle" className="text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" />
+                      <Icon
+                        name="exclamation-circle"
+                        className="text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5"
+                      />
                       <div className="text-sm text-yellow-800 dark:text-yellow-200">
                         <p className="font-medium">
                           {t('chatMessage.imageNotPersisted', 'Image not available')}

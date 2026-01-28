@@ -19,10 +19,15 @@ function useChatMessages(chatId = 'default') {
   const loadInitialMessages = () => {
     try {
       const storedData = sessionStorage.getItem(storageKey);
-      console.log('📂 Raw sessionStorage data for key', storageKey, ':', storedData ? storedData.substring(0, 200) + '...' : 'null');
-      
+      console.log(
+        '📂 Raw sessionStorage data for key',
+        storageKey,
+        ':',
+        storedData ? storedData.substring(0, 200) + '...' : 'null'
+      );
+
       const messages = storedData ? JSON.parse(storedData) : [];
-      
+
       // Debug logging for loaded images
       const messagesWithImages = messages.filter(m => m.images && m.images.length > 0);
       if (messagesWithImages.length > 0) {
@@ -42,7 +47,7 @@ function useChatMessages(chatId = 'default') {
           messageIds: messages.map(m => ({ id: m.id, role: m.role, loading: m.loading }))
         });
       }
-      
+
       return messages;
     } catch (error) {
       console.error('Error loading messages from sessionStorage:', error);
@@ -67,7 +72,7 @@ function useChatMessages(chatId = 'default') {
       try {
         const storedMessages = sessionStorage.getItem(newStorageKey);
         const newMessages = storedMessages ? JSON.parse(storedMessages) : [];
-        
+
         // Debug logging for loaded images on chatId change
         const messagesWithImages = newMessages.filter(m => m.images && m.images.length > 0);
         if (messagesWithImages.length > 0) {
@@ -82,7 +87,7 @@ function useChatMessages(chatId = 'default') {
             }))
           });
         }
-        
+
         setMessages(newMessages);
       } catch (error) {
         console.error('Error loading messages from sessionStorage for new chatId:', error);
@@ -126,15 +131,18 @@ function useChatMessages(chatId = 'default') {
       // Debug logging for image persistence
       const messagesWithImages = persistableMessages.filter(m => m.images && m.images.length > 0);
       if (messagesWithImages.length > 0) {
-        console.log('💾 Saving messages to sessionStorage (images excluded to avoid quota issues):', {
-          totalMessages: messagesWithoutImageData.length,
-          messagesWithImages: messagesWithImages.length,
-          imageDetails: messagesWithImages.map(m => ({
-            id: m.id,
-            imageCount: m.images.length,
-            loading: m.loading
-          }))
-        });
+        console.log(
+          '💾 Saving messages to sessionStorage (images excluded to avoid quota issues):',
+          {
+            totalMessages: messagesWithoutImageData.length,
+            messagesWithImages: messagesWithImages.length,
+            imageDetails: messagesWithImages.map(m => ({
+              id: m.id,
+              imageCount: m.images.length,
+              loading: m.loading
+            }))
+          }
+        );
       }
 
       // Only save if we have messages
@@ -148,7 +156,9 @@ function useChatMessages(chatId = 'default') {
       console.error('Error saving messages to sessionStorage:', error);
       // If we still get quota errors, try to save without any images at all
       if (error.name === 'QuotaExceededError') {
-        console.warn('SessionStorage quota exceeded even after removing images. Saving text-only messages.');
+        console.warn(
+          'SessionStorage quota exceeded even after removing images. Saving text-only messages.'
+        );
         try {
           const textOnlyMessages = messages
             .filter(msg => !msg.isGreeting)
