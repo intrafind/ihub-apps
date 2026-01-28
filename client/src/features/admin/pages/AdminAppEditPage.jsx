@@ -9,6 +9,7 @@ import { fetchModels, fetchUIConfig } from '../../../api';
 import { fetchJsonSchema } from '../../../utils/schemaService';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
+import { removeInvalidSpeechRecognition } from '../../../utils/appDataCleanup';
 
 const AdminAppEditPage = () => {
   const { t, i18n } = useTranslation();
@@ -288,13 +289,7 @@ const AdminAppEditPage = () => {
     }
 
     // Remove speechRecognition if it has default/invalid values (no host URI)
-    if (
-      cleanedApp.settings?.speechRecognition &&
-      (!cleanedApp.settings.speechRecognition.host ||
-        cleanedApp.settings.speechRecognition.host.trim() === '')
-    ) {
-      delete cleanedApp.settings.speechRecognition;
-    }
+    cleanedApp = removeInvalidSpeechRecognition(cleanedApp);
 
     return cleanedApp;
   };

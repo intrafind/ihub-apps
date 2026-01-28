@@ -3,10 +3,12 @@
  * Tests the cleanup of disabled feature configurations
  */
 
+import { removeInvalidSpeechRecognition } from '../../../client/src/utils/appDataCleanup';
+
 describe('AdminAppEditPage - cleanAppData', () => {
   // Extract and test the cleanAppData logic
   const cleanAppData = appData => {
-    const cleanedApp = { ...appData };
+    let cleanedApp = { ...appData };
 
     // Clean up variables - remove empty defaultValue and predefinedValues
     if (cleanedApp.variables) {
@@ -65,13 +67,7 @@ describe('AdminAppEditPage - cleanAppData', () => {
     }
 
     // Remove speechRecognition if it has default/invalid values (no host URI)
-    if (
-      cleanedApp.settings?.speechRecognition &&
-      (!cleanedApp.settings.speechRecognition.host ||
-        cleanedApp.settings.speechRecognition.host.trim() === '')
-    ) {
-      delete cleanedApp.settings.speechRecognition;
-    }
+    cleanedApp = removeInvalidSpeechRecognition(cleanedApp);
 
     return cleanedApp;
   };
