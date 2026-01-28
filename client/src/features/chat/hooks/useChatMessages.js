@@ -15,11 +15,27 @@ function useChatMessages(chatId = 'default') {
   // Track the previous chatId to detect changes
   const prevChatIdRef = useRef(chatId);
 
+  /**
+   * Sanitize loaded messages to fix inconsistent states
+   * - If a message has images but loading=true, set loading=false
+   * - This fixes the issue where images don't show after navigating back to app
+   */
+  const sanitizeLoadedMessages = messages => {
+    return messages.map(msg => {
+      // If message has images but is still marked as loading, mark it as complete
+      if (msg.images && msg.images.length > 0 && msg.loading === true) {
+        return { ...msg, loading: false };
+      }
+      return msg;
+    });
+  };
+
   // Initialize state from sessionStorage if available
   const loadInitialMessages = () => {
     try {
       const storedMessages = sessionStorage.getItem(storageKey);
-      return storedMessages ? JSON.parse(storedMessages) : [];
+      const messages = storedMessages ? JSON.parse(storedMessages) : [];
+      return sanitizeLoadedMessages(messages);
     } catch (error) {
       console.error('Error loading messages from sessionStorage:', error);
       return [];
@@ -42,8 +58,9 @@ function useChatMessages(chatId = 'default') {
       const newStorageKey = `ai_hub_chat_messages_${chatId}`;
       try {
         const storedMessages = sessionStorage.getItem(newStorageKey);
-        const newMessages = storedMessages ? JSON.parse(storedMessages) : [];
-        setMessages(newMessages);
+        const messages = storedMessages ? JSON.parse(storedMessages) : [];
+        const sanitizedMessages = sanitizeLoadedMessages(messages);
+        setMessages(sanitizedMessages);
       } catch (error) {
         console.error('Error loading messages from sessionStorage for new chatId:', error);
         setMessages([]);
